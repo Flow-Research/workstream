@@ -11,7 +11,8 @@ from uuid import uuid4
 
 import asyncpg
 
-from external_api_drill import ROOT, ProbeFailure, main, page_cases, page_matches, uuid_value
+from external_api_drill import (ROOT, ProbeFailure, catalogue_expectations, main,
+                               page_cases, page_matches, strict_equal, timestamp_value, uuid_value)
 from urllib.parse import urlencode
 
 ROSTER = (
@@ -41,6 +42,16 @@ def one_winner(outcomes):
 
 def exact_role_list(items):
     return len(items) == len(ROLES) and {row["role"] for row in items} == set(ROLES)
+
+
+def one_grant_matches(items, expected, timestamp_fields=("granted_at",)):
+    """Full single-row contract, with only newly observed timestamps as predicates."""
+    if not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict):
+        return False
+    row = items[0]
+    return (row.keys() == expected.keys() | set(timestamp_fields)
+        and strict_equal({key: row[key] for key in expected}, expected)
+        and all(timestamp_value(row[field]) for field in timestamp_fields))
 
 
 class AuthorityDrill:
@@ -231,7 +242,9 @@ class AuthorityDrill:
             allowed = label in (self.admin, self.second, "audit_system")
             route = "/api/v1/authorization/admin-role-definitions"
             if allowed:
-                body = await self.call("role_definitions_" + label, "GET", route, label, values={"total": 5})
+                expected_body = catalogue_expectations()["admin-role-definitions"]
+                body = await self.call("role_definitions_" + label, "GET", route, label,
+                    values=expected_body, exact_fields=expected_body.keys())
                 self.proof("closed_role_list_" + label, exact_role_list(body["items"]))
                 for row in body["items"]:
                     expected = {"system"} if row["role"] in ROLES[:2] else {"system", "project"}
@@ -285,12 +298,32 @@ class AuthorityDrill:
         await self.deny("missing_scope_project", "POST", GRANTS, self.admin,
             payload=body | {"role": "project_manager", "scope_type": "project"}, expected=400)
         key = {"Idempotency-Key": str(uuid4())}
-        result = await self.call("grant_exact", "POST", GRANTS, self.admin, payload=body, headers=key, expected=201)
+        result = await self.call("grant_exact", "POST", GRANTS, self.admin, payload=body, headers=key, expected=201,
+            values={"resource_type": "admin_role_grant", "version": 1, "http_status": 201},
+            checks={"resource_id": uuid_value},
+            exact_fields=("resource_type", "resource_id", "version", "http_status"))
+        history_route = PROFILE + "/admin-role-grants"
+        history_path = f'/api/v1/actors/{self.actors["grant_target"]}/admin-role-grants?scope_type=system&status=all'
+        expected_row = {
+            "grant_id": result["resource_id"], "target_actor_profile_id": self.actors["grant_target"],
+            "role": body["role"], "scope_type": "system", "scope_project_id": None,
+            "status": "active", "version": 1, "granted_by_ref_kind": "actor_profile",
+            "granted_by_ref": self.actors[self.admin],
+            "granted_by_admin_role_grant_id": self.grants[self.admin], "grant_reason": body["reason"],
+            "revoked_by_actor_profile_id": None, "revoked_by_admin_role_grant_id": None,
+            "revoked_reason": None, "revoked_at": None,
+        }
+        active = await self.call("grant_before_replay_full_history", "GET", history_route, self.admin,
+            path=history_path, values={"total": 1, "next_cursor": None},
+            checks={"items": lambda items: one_grant_matches(items, expected_row)},
+            exact_fields=("items", "total", "next_cursor"))
         before = await self.snapshot(audit=True)
         await self.call("grant_exact_replay", "POST", GRANTS, self.admin, payload=body,
                         headers=key, expected=201, values=result)
         # Replay may record decision evidence; authority itself must not change.
         self.proof("grant_replay_no_duplicate", {k:v for k,v in before.items() if k != "audit"} == await self.snapshot())
+        await self.call("grant_replay_full_history_unchanged", "GET", history_route, self.admin,
+            path=history_path, values=active, exact_fields=active.keys())
         await self.deny("grant_key_mismatch", "POST", GRANTS, self.admin,
             payload=body | {"reason": "Different reason"}, headers=key, expected=409, code="idempotency_mismatch")
         await self.deny("grant_duplicate", "POST", GRANTS, self.admin, payload=body, expected=409)
@@ -301,7 +334,7 @@ class AuthorityDrill:
         for label in (self.admin, "audit_system"):
             history = PROFILE + "/admin-role-grants"
             read = await self.call("grant_history_" + label, "GET", history, label,
-                path=f'/api/v1/actors/{self.actors["grant_target"]}/admin-role-grants?scope_type=system&status=all')
+                path=history_path, values=active, exact_fields=active.keys())
             rows = read["items"]
             self.proof("grant_history_exact_" + label, len(rows) == 1 and rows[0]["grant_id"] == result["resource_id"]
                        and rows[0]["role"] == "operator" and rows[0]["status"] == "active"
@@ -313,15 +346,27 @@ class AuthorityDrill:
             path=path, payload=REASON, headers=revoke_key,
             values={"resource_id": result["resource_id"], "version": 2, "http_status": 200})
         self.admin_rows[result["resource_id"]]["status"] = "revoked"
+        expected_revoked = active["items"][0] | {
+            "status": "revoked", "version": 2,
+            "revoked_by_actor_profile_id": self.actors[self.admin],
+            "revoked_by_admin_role_grant_id": self.grants[self.admin], "revoked_reason": REASON["reason"],
+        }
+        del expected_revoked["revoked_at"]
+        revoked_history = await self.call("revoke_before_replay_full_history", "GET", history_route, self.admin,
+            path=history_path, values={"total": 1, "next_cursor": None},
+            checks={"items": lambda items: one_grant_matches(items, expected_revoked, ("revoked_at",))},
+            exact_fields=("items", "total", "next_cursor"))
         before = await self.snapshot()
         await self.call("grant_target_revoke_replay", "POST", route, self.admin,
             path=path, payload=REASON, headers=revoke_key, values=revoked)
         self.proof("revoke_replay_no_change", before == await self.snapshot())
+        await self.call("revoke_replay_full_history_unchanged", "GET", history_route, self.admin,
+            path=history_path, values=revoked_history, exact_fields=revoked_history.keys())
         await self.deny("grant_target_revoke_mismatch", "POST", route, self.admin,
             path=path, payload={"reason": "Changed revoke reason"}, headers=revoke_key,
             expected=409, code="idempotency_mismatch")
         stored = await self.call("revoked_grant_history", "GET", PROFILE + "/admin-role-grants", self.admin,
-            path=f'/api/v1/actors/{self.actors["grant_target"]}/admin-role-grants?scope_type=system&status=all')
+            path=history_path, values=revoked_history, exact_fields=revoked_history.keys())
         self.proof("revocation_history_retained", len(stored["items"]) == 1
                    and stored["items"][0]["status"] == "revoked" and stored["items"][0]["version"] == 2)
         await self.deny("revoked_operator_no_project_access", "GET", PROJECT, "grant_target",

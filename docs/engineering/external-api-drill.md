@@ -174,6 +174,15 @@ The context selector similarly preserves
 [API-DRILL-008](external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
 with a valid-selector and unchanged-project control before continuing. The
 query now rejects NUL before lookup; neither fix changes authorization or storage.
+Catalogue probes compare all 73 permission identifiers and every field of the
+five administrative role definitions against frozen client expectations. Both
+catalogues reject unauthenticated and ungranted callers. The twenty-actor role
+matrix reuses the same complete role definition oracle. A catalogue entry is
+not a claim that its action or downstream API is activated.
+Administrative grant history probes compare the entire single-target public
+row, including grantor/revoker references, reasons, nulls and timestamps. The
+first read happens before replay, followed by exact full-state equality after
+replay. Independent database snapshots continue to detect hidden duplicates.
 Identity-link lifecycle probes additionally reject malformed reason fields and
 unknown fields, compare the entire stored public link view after each denial,
 and preserve every unchanged field across revoke/reactivate. Reactivation must

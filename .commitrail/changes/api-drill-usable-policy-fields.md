@@ -66,6 +66,16 @@ Initial execution step: assert the health body's exact value/shape without
 authentication, and strengthen full-state profile readback after rejected input.
 Reuse existing valid controls and the normal token verifier and rate budget.
 
+Discovery/grant extension: compare all 73 permission identifiers and the exact
+five-role scope/permission matrix against a frozen public-contract oracle, not
+runtime imports or values learned from the response. This proves catalogue
+projection, not activation of every listed permission. Preserve the existing
+twenty-actor authority matrix. Administrative grant history must compare every
+public field, including grantor/revoker lineage and timestamps, before and after
+same-key replay; retain independent stored-state denial checks. Helper mutations
+must reject changed permissions, duplicate roles, extra fields and changed replay
+timestamps. No additional product changes are authorized by this extension.
+
 1. Probe remaining optional field null/type/closed-value behavior, valid nondefault
    values, strict human-review boolean values and omission/default restoration.
    Review-mode omission specifically preserves the current human-review setting;

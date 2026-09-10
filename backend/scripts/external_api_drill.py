@@ -30,6 +30,73 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 METHODS = {"get", "post", "put", "patch", "delete"}
 
+# Frozen client expectations from spec_authorization_service.md and the closed
+# administrative role contract. These are test oracles, never runtime policy.
+# Do not derive them from server responses or import the server implementation.
+EXPECTED_PERMISSIONS = tuple(sorted("""
+actor.profile.read_self actor.profile.update_self actor.profile.read_any
+actor.profile.suspend actor.profile.reactivate actor.profile.deactivate
+actor.identity_link.read actor.identity_link.revoke actor.identity_link.reactivate
+actor.service.provision admin_role.read admin_role.grant admin_role.revoke
+project.create project.read project.setup_diagnostic.read project.effective_policy.read
+project.update project.archive project.guide.manage project.guide_compilation.request
+project.guide_compilation.execute project.effective_policy.manage project.task.manage
+project.review_policy.manage project.role_grant.read project.role_grant.manage
+task.queue.read task.claim submission.create submission.read_own submission.read_for_review
+review.queue.read review.queue.inspect review.claim review.release review.decline_preference
+review.decision review.lease.force_release review.chain.read review.queue.override
+contribution.read_self contribution.read_project compensation.policy.manage
+compensation.adapter_binding.manage compensation.award.read compensation.delivery.reconcile
+operations.status.read operations.timer.run operations.reconcile.run operations.outbox.retry
+operations.projection.rebuild operations.task.start_override operations.submission_gate.repair
+operations.checker.retry artifact.binding.read artifact.replica.read artifact.receipt.read
+artifact.verification_job.read artifact.verification_job.retry artifact.recovery_attempt.read
+artifact.audit.read artifact.guide_source.ingest artifact.binding.create artifact.verification.execute
+artifact.pending_work.scan artifact.put_attempt.resolve artifact.guide_source.read
+artifact.checker_input.materialize artifact.checker_output.write artifact.review_packet.materialize
+audit.read audit.export
+""".split()))
+EXPECTED_ROLE_CONTRACT = (
+    ("access_administrator", ("system",), """actor.profile.read_any actor.profile.suspend actor.profile.reactivate actor.profile.deactivate
+actor.identity_link.read actor.identity_link.revoke actor.identity_link.reactivate actor.service.provision
+admin_role.read admin_role.grant admin_role.revoke audit.read audit.export"""),
+    ("operator", ("system",), """project.read project.setup_diagnostic.read project.effective_policy.read review.queue.inspect
+review.lease.force_release contribution.read_project compensation.award.read operations.status.read
+operations.timer.run operations.reconcile.run operations.outbox.retry operations.projection.rebuild
+operations.task.start_override operations.submission_gate.repair operations.checker.retry
+artifact.binding.read artifact.replica.read artifact.receipt.read artifact.verification_job.read
+artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read audit.read"""),
+    ("project_manager", ("system", "project"), """project.create project.read project.setup_diagnostic.read project.effective_policy.read project.update
+project.archive project.guide.manage project.guide_compilation.request project.effective_policy.manage
+project.task.manage project.review_policy.manage project.role_grant.read project.role_grant.manage
+artifact.guide_source.ingest review.queue.inspect contribution.read_project compensation.award.read audit.read"""),
+    ("finance_authority", ("system", "project"), """project.read contribution.read_project compensation.policy.manage compensation.adapter_binding.manage
+compensation.award.read compensation.delivery.reconcile audit.read"""),
+    ("audit_authority", ("system", "project"), """actor.profile.read_any actor.identity_link.read admin_role.read project.read project.setup_diagnostic.read
+project.effective_policy.read project.role_grant.read review.queue.inspect review.chain.read
+contribution.read_project compensation.award.read audit.read audit.export"""),
+)
+
+
+def catalogue_expectations():
+    """Fresh expected JSON objects; callers cannot mutate the frozen oracle."""
+    return {
+        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 73},
+        "admin-role-definitions": {"items": [
+            {"role": role, "allowed_scopes": list(scopes), "permission_ids": permissions.split()}
+            for role, scopes, permissions in EXPECTED_ROLE_CONTRACT], "total": 5},
+    }
+
+
+async def catalogue_cases(drill, admin, outsider):
+    for name, expected in catalogue_expectations().items():
+        route = "/api/v1/authorization/" + name
+        await drill.call("catalogue_" + name, "GET", route, token=admin,
+            values=expected, exact_fields=expected.keys())
+        await drill.call("catalogue_unauthenticated_" + name, "GET", route, expected=401)
+        await drill.call("catalogue_ungranted_" + name, "GET", route, token=outsider,
+            expected=403, values={"error.code": "permission_not_granted"})
+
 
 class ProbeFailure(Exception):
     """A named assertion failed; never include response bodies or credentials."""
@@ -454,8 +521,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
     grant = await drill.call("grant_manager", "POST", "/api/v1/admin-role-grants", token=admin,
         payload={"target_actor_profile_id": manager_id, "role": "project_manager",
                  "scope_type": "system", "reason": "Isolated external API drill"}, expected=201)
-    for route in ("/api/v1/authorization/permissions", "/api/v1/authorization/admin-role-definitions"):
-        await drill.call("read_" + route.rsplit("/", 1)[1], "GET", route, token=admin)
+    await catalogue_cases(drill, admin, outsider)
     await drill.call("list_system_grants", "GET", "/api/v1/admin-role-grants",
                      path="/api/v1/admin-role-grants?scope_type=system", token=admin)
     payload = {"name": "External drill", "slug": "drill-" + uuid4().hex,

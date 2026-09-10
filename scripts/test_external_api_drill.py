@@ -1,6 +1,7 @@
 """Focused evidence-integrity tests for the standalone external-client drill."""
 
 import importlib.util
+from copy import deepcopy
 import json
 from pathlib import Path
 import tempfile
@@ -17,6 +18,34 @@ SPEC.loader.exec_module(drill)
 
 
 class ContractTests(unittest.TestCase):
+    def test_catalogue_oracle_rejects_nested_changes_and_duplicates(self):
+        expected = drill.catalogue_expectations()
+        self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 73)
+        self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 73)
+        for name, body in expected.items():
+            drill.verify_response(httpx.Response(200, json=body), 200, body, exact_fields=body.keys())
+            variants = []
+            duplicate = deepcopy(body)
+            duplicate["items"].append(deepcopy(duplicate["items"][0]))
+            variants.append(duplicate)
+            missing = deepcopy(body)
+            missing["items"].pop()
+            variants.append(missing)
+            extra = deepcopy(body)
+            extra["items"][0]["unexpected"] = True
+            variants.append(extra)
+            changed = deepcopy(body)
+            if name == "permissions":
+                changed["items"][0]["permission_id"] = "unregistered.permission"
+            else:
+                changed["items"][0]["permission_ids"][0] = "unregistered.permission"
+            variants.append(changed)
+            for mutant in variants:
+                with self.subTest(name=name, mutant=mutant), self.assertRaises(drill.ProbeFailure):
+                    drill.verify_response(httpx.Response(200, json=mutant), 200, body, exact_fields=body.keys())
+        expected["permissions"]["items"].clear()
+        self.assertEqual(len(drill.catalogue_expectations()["permissions"]["items"]), 73)
+
     def test_validation_retryability_is_strict(self):
         expected = {"error.code": "invalid_request", "error.retryable": False}
         drill.verify_response(httpx.Response(422, json={"error": {
