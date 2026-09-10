@@ -88,15 +88,19 @@ async def test_context_nul_rejected_preserving_id_lookup_and_concealment(
     missing = await project_client.get(route, headers=auth_headers(), params={"project_id": str(uuid4())})
     assert missing.status_code == 404, missing.text
     assert missing.json()["error"]["code"] == "project_authorization_resource_not_found"
-    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", f"ungranted-selector-{uuid4()}")
-    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "contributor")
-    get_settings.cache_clear()
-    admitted = await project_client.get("/api/v1/actors/me", headers=auth_headers())
-    assert admitted.status_code == 200
-    for selector in (project["id"], project["slug"]):
-        concealed = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
-        assert concealed.status_code == 404, concealed.text
-        assert concealed.json()["error"]["code"] == "project_authorization_resource_not_found"
+    try:
+        with monkeypatch.context() as scoped:
+            scoped.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", f"ungranted-selector-{uuid4()}")
+            scoped.setenv("WORKSTREAM_DEV_AUTH_ROLES", "contributor")
+            get_settings.cache_clear()
+            admitted = await project_client.get("/api/v1/actors/me", headers=auth_headers())
+            assert admitted.status_code == 200
+            for selector in (project["id"], project["slug"]):
+                concealed = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
+                assert concealed.status_code == 404, concealed.text
+                assert concealed.json()["error"]["code"] == "project_authorization_resource_not_found"
+    finally:
+        get_settings.cache_clear()
 
 
 def maximum_role_request(role: str):
