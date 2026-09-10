@@ -128,6 +128,22 @@ including a populated value for every reference collection, continue afterward.
 
 ## MCP handoff boundary
 
+The active drill scope is **currently usable public APIs**, not every operation
+discovered in OpenAPI. Hidden implementation routes and unfinished lifecycle
+paths are excluded until their owners expose a supported client flow. A public
+route with an unmet prerequisite is not automatically a usable adapter tool;
+an operator-only route is not an ordinary contributor tool. Discovery entries
+remain diagnostic navigation, not a denominator of APIs to certify.
+
+The next field extension stays on the already usable draft-guide review-policy
+and revision-policy PUT operations. It probes optional-field rejection, explicit
+nondefault values, malformed/missing update headers, foreign selectors and
+unauthorized mutations. Fresh authorized successors prove exact generation and
+supersession after denials, not merely cached replay. Omitted ordinary optional
+fields restore defaults; omitted `human_review_required` preserves the selected
+predecessor's mode. Only an explicit setting changes that mode. These checks
+establish policy configuration behavior, not runtime review or acceptance.
+
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include
 its method/path, caller grant requirements, request fields and headers, response

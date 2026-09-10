@@ -448,7 +448,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
         payload={"content_markdown": "# Updated guide", "change_summary": "Updated"},
         values={"content_markdown": "# Updated guide", "change_summary": "Updated"},
         fields=("body.content_markdown", "body.change_summary"))
-    await policy_cases(drill, manager, groute, gpath)
+    await policy_cases(drill, manager, groute, gpath, outsider)
     await project_field_cases(drill, manager, outsider, project, guide, manager_id)
     await project_role_cases(drill, manager, outsider, project, manager_id)
     await authority_cases(drill, admin, manager, outsider, manager_id, project)
@@ -459,7 +459,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
         payload=payload | {"slug": "revoked-" + uuid4().hex}, expected=403)
 
 
-async def policy_cases(drill, manager, groute, gpath):
+async def policy_cases(drill, manager, groute, gpath, outsider):
     """Exercise explicit policy fields, defaults, validation and stored replay."""
     policies = {
         "review-policy": {"human_review_required": True, "review_preference_window_seconds": 3600,
@@ -525,6 +525,83 @@ async def policy_cases(drill, manager, groute, gpath):
         await drill.call("superseded_selector_" + suffix, "PUT", groute + "/" + suffix,
             path=gpath + "/" + suffix, token=manager, payload=body,
             headers={"If-Match": selector}, expected=409)
+        await policy_field_cases(drill, manager, outsider, groute + "/" + suffix,
+                                 gpath + "/" + suffix, suffix, body, defaults[suffix], updated)
+
+
+def policy_selector(policy):
+    """Encode the observed public policy selector without importing product code."""
+    return f'"{policy["id"]}.{policy["policy_generation"]}.{policy["policy_hash"].removeprefix("sha256:")}"'
+
+
+async def policy_field_cases(drill, manager, outsider, route, path, kind, required, defaults, current):
+    """Prove optional fields and rejected-write selected lineage on a usable API."""
+    selector = policy_selector(current)
+    invalids = []
+    for field in defaults:
+        if field != "reviewer_reassignment_rule":
+            invalids.append((field + "_null", required | {field: None}))
+    if kind == "review-policy":
+        invalids += [("mode_" + label, required | {"human_review_required": value})
+                     for label, value in (("integer_zero", 0), ("integer_one", 1), ("string", "false"))]
+        invalids += [("self_review_true", required | {"self_review_allowed": True}),
+                     ("multiple_leases", required | {"max_active_review_leases_per_reviewer": 2}),
+                     ("decision_item", required | {"allowed_decisions": ["approve"]}),
+                     ("finding_item", required | {"minimum_finding_fields": [None]})]
+    else:
+        invalids += [("states_" + label, required | {"allowed_resubmission_states": value})
+                     for label, value in (("empty", []), ("multiple", ["needs_revision"] * 2),
+                                          ("item", ["accept"]))]
+        invalids.append(("reassignment_type", required | {"reviewer_reassignment_rule": {}}))
+    for label, payload in invalids:
+        await drill.call(kind + "_fields_" + label, "PUT", route, path=path, token=manager,
+                         payload=payload, headers={"If-Match": selector}, expected=422)
+    for label, headers, status, code in (
+        ("missing_selector", {"If-Match": None}, 422, "validation_error"),
+        ("unquoted_selector", {"If-Match": selector[1:-1]}, 409, "policy_precondition_invalid"),
+        ("foreign_selector", {"If-Match": f'"{uuid4()}.2.{"0" * 64}"'},
+         409, "policy_precondition_failed"),
+        ("missing_key", {"If-Match": selector, "Idempotency-Key": None}, 422, "validation_error"),
+        ("malformed_key", {"If-Match": selector, "Idempotency-Key": "not-a-uuid"},
+         422, "validation_error"),
+    ):
+        await drill.call(kind + "_fields_" + label, "PUT", route, path=path, token=manager,
+                         payload=required, headers=headers, expected=status, values={"error.code": code})
+    await drill.call(kind + "_fields_unauthorized", "PUT", route, path=path, token=outsider,
+                     payload=required, headers={"If-Match": selector}, expected=403,
+                     values={"error.code": "permission_not_granted"})
+    # A fresh successor, not cached replay, proves the selected predecessor did
+    # not advance. This does not claim that denials wrote no audit/history rows.
+    omitted = {key: value for key, value in required.items() if key != "human_review_required"}
+    expected = defaults | omitted
+    if kind == "review-policy":
+        expected |= {"human_review_required": current["human_review_required"], "semantics_format": "v2"}
+    next_policy = await policy_successor(drill, manager, route, path, kind + "_fields_omission",
+                                        omitted, expected, current)
+    if kind == "review-policy":
+        explicit = required | {"finding_evidence_requirement": "required_for_blocking",
+                               "minimum_finding_fields": ["summary"]}
+        expected = defaults | explicit | {"semantics_format": "v2"}
+    else:
+        explicit = required | {"allowed_resubmission_states": ["needs_revision"],
+                               "reviewer_reassignment_rule": None}
+        expected = defaults | explicit
+    await policy_successor(drill, manager, route, path, kind + "_fields_explicit",
+                           explicit, expected, next_policy)
+
+
+async def policy_successor(drill, token, route, path, name, payload, semantics, previous):
+    """Require exact next selected generation, identity and full policy semantics."""
+    return await drill.call(name, "PUT", route, path=path, token=token, payload=payload,
+        headers={"If-Match": policy_selector(previous)},
+        values=semantics | {"project_id": previous["project_id"], "guide_version": previous["guide_version"],
+                           "policy_generation": previous["policy_generation"] + 1,
+                           "supersedes_policy_id": previous["id"], "semantics_status": "complete"},
+        checks={"id": lambda value: uuid_value(value) and value != previous["id"],
+                "created_at": timestamp_value,
+                "policy_hash": lambda value: isinstance(value, str) and
+                re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None},
+        exact_fields=previous.keys(), fields=tuple("body." + field for field in payload))
 
 
 async def project_field_cases(drill, manager, outsider, project, guide, manager_id):

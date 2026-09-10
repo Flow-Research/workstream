@@ -195,6 +195,11 @@ cannot be reused as post-submission review-gate evidence. See the
   separate value/predicate/shape/request evidence. Remaining field combinations
   and provider-dependent flows still need client proof before inclusion in the
   MCP endpoint-and-field handoff; route discovery alone is not readiness.
+  The public-client drill targets currently usable APIs only; hidden and
+  unfinished lifecycle routes are not completion targets. Draft-guide policy
+  probes additionally cover optional fields, conditional headers and exact
+  selected-lineage preservation after rejection, including preservation of the
+  human-review mode when omitted during replacement.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions

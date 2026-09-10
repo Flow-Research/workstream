@@ -151,6 +151,36 @@ class ContractTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_policy_successor_rejects_changed_generation_or_semantics(self):
+        """A denied-write mutation or wrong replacement cannot become field proof."""
+        from uuid import uuid4
+        previous = {"id": str(uuid4()), "project_id": str(uuid4()), "guide_version": "draft",
+                    "policy_generation": 2, "policy_hash": "sha256:" + "a" * 64,
+                    "supersedes_policy_id": None, "semantics_status": "complete",
+                    "human_review_required": False, "created_at": "2026-01-01T00:00:00Z"}
+        good = previous | {"id": str(uuid4()), "policy_generation": 3,
+                           "supersedes_policy_id": previous["id"]}
+        for change in ({}, {"policy_generation": 4}, {"human_review_required": True},
+                       {"supersedes_policy_id": str(uuid4())}, {"id": previous["id"]}):
+            def handler(request):
+                self.assertEqual(request.headers["If-Match"], drill.policy_selector(previous))
+                return httpx.Response(200, json=good | change, headers={
+                    key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")})
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                         base_url="http://127.0.0.1") as client:
+                report = {}
+                probe = drill.Drill(client, {"paths": {"/policy": {"put": {}}}}, report)
+                async def run_case():
+                    return await drill.policy_successor(probe, "manager", "/policy", "/policy",
+                        "successor", {}, {"human_review_required": False}, previous)
+                if change:
+                    with self.assertRaises(drill.ProbeFailure):
+                        await run_case()
+                    self.assertEqual(report["operations"]["PUT /policy"]["field_cases"], {})
+                    self.assertEqual(report["cases"][0]["result"], "failed")
+                else:
+                    self.assertEqual(await run_case(), good)
+
     async def test_actual_response_assertions_are_mapped_and_header_can_be_omitted(self):
         def handler(request):
             self.assertNotIn("Idempotency-Key", request.headers)
