@@ -1,5 +1,15 @@
 # External-client API drill
 
+Contributor-candidate probes require exactly `actor_profile_id` and
+`display_name` in each row, with a known Unicode name and a privately populated
+contact field in the fixture. They check populated pagination, cursor tampering
+and project/limit binding, invalid query values, unauthenticated and unauthorized
+callers, and exact membership after actor suspension/deactivation and identity-link
+revocation/restoration. The existing twenty-human setup is reused; service-actor
+exclusion is not established by this group. Candidate listing is not a grant of
+task access. Exact row checks are recorded as response predicates, not additional
+nested field-index coverage entries.
+
 Project/guide text probes include all eight NUL-input regressions from
 [API-DRILL-009](external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503).
 They require non-retryable 422 responses and valid same-key recovery. Fresh-key

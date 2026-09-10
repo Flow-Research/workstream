@@ -18,6 +18,22 @@ SPEC.loader.exec_module(drill)
 
 
 class ContractTests(unittest.TestCase):
+    def test_candidate_page_rejects_private_fields_and_wrong_membership(self):
+        row = {"actor_profile_id": "known", "display_name": "Candidate 名"}
+        expected = {"known": {"display_name": "Candidate 名"}}
+        def matches(rows):
+            return drill.page_matches(rows, expected, set(), 100, "actor_profile_id",
+                                      ("actor_profile_id", "display_name"))
+        self.assertTrue(matches([row]))
+        for mutant in ([row | {"contact_email": "private"}], [row | {"status": "active"}],
+                       [row | {"display_name": None}], [row | {"actor_profile_id": "foreign"}],
+                       [{"actor_profile_id": "known"}], [row, row]):
+            with self.subTest(mutant=mutant):
+                self.assertFalse(matches(mutant))
+        # Existing callers may still intentionally assert only a known subset.
+        self.assertTrue(drill.page_matches([row | {"status": "active"}], expected,
+                                          set(), 100, "actor_profile_id"))
+
     def test_catalogue_oracle_rejects_nested_changes_and_duplicates(self):
         expected = drill.catalogue_expectations()
         self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 73)

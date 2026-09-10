@@ -209,6 +209,10 @@ cannot be reused as post-submission review-gate evidence. See the
   definition matrix. Administrative grant probes compare complete provenance,
   reason and timestamp fields across issue/revoke replay, retaining independent
   stored-state checks. Catalogue membership does not imply action activation.
+  Contributor-discovery drill checks enforce the privacy-safe two-field row,
+  cursor scope/limit binding and exact candidate membership across existing
+  actor/link lifecycle transitions. These checks do not equate discovery with
+  contributor authority or certify the entire public API surface.
   [API-DRILL-007](engineering/external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
   records the reproduced self-profile NUL defect and its repair: both editable
   fields reject the unsupported character at request validation with 422 rather

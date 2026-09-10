@@ -265,13 +265,15 @@ def equality_fields(value, prefix):
     return result
 
 
-def page_matches(items, expected_rows, seen, limit, identity):
+def page_matches(items, expected_rows, seen, limit, identity, exact_item_fields=None):
     """Validate page identities and independent expected field values, not totals alone."""
     if not isinstance(items, list) or len(items) > limit:
         return False
     ids = []
     for row in items:
         if not isinstance(row, dict) or not isinstance(row.get(identity), str):
+            return False
+        if exact_item_fields is not None and set(row) != set(exact_item_fields):
             return False
         key = row[identity]
         if key not in expected_rows or key in seen or key in ids:
@@ -284,7 +286,7 @@ def page_matches(items, expected_rows, seen, limit, identity):
 
 
 async def page_cases(drill, name, route, path, token, expected_rows, *,
-                     identity, query=None, limit=1, total=False):
+                     identity, query=None, limit=1, total=False, exact_item_fields=None):
     """Bound traversal by known HTTP-created rows; fail on missing/foreign/repeated rows."""
     seen, cursors = set(), set()
     cursor = first_cursor = None
@@ -293,7 +295,7 @@ async def page_cases(drill, name, route, path, token, expected_rows, *,
         params = query | ({"cursor": cursor} if cursor is not None else {})
         page_ids = set()
         def items_valid(items):
-            valid = page_matches(items, expected_rows, seen, limit, identity)
+            valid = page_matches(items, expected_rows, seen, limit, identity, exact_item_fields)
             if valid:
                 page_ids.update(row[identity] for row in items)
             return valid
