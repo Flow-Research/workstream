@@ -1,5 +1,12 @@
 # External-client API drill
 
+Project-role probes bind grantor and qualification-capture provenance to the
+known HTTP-issued manager authority grant. Both contributor roles use exact
+receipt, grant and qualification shapes, full current-state reads before and
+after replay, malformed outer request/reason checks, and revoke replay/conflict
+controls. Public-state comparisons preserve grant and snapshot timestamps; they
+do not claim every hidden audit or authority table is unchanged.
+
 Contributor-candidate probes require exactly `actor_profile_id` and
 `display_name` in each row, with a known Unicode name and a privately populated
 contact field in the fixture. They check populated pagination, cursor tampering

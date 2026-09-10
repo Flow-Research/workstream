@@ -18,6 +18,45 @@ SPEC.loader.exec_module(drill)
 
 
 class ContractTests(unittest.TestCase):
+    def test_project_grant_contract_rejects_wrong_provenance_and_extra_fields(self):
+        receipt = dict(id="grant", qualification_snapshot_id="snapshot", project_id="project",
+                       actor_profile_id="contributor", role="reviewer", status="active", version=1)
+        qualification = dict(skills_snapshot={"availability": "unavailable", "reference_ids": [],
+                                               "unavailable_reason": "not_collected"},
+                             reputation_snapshot={"availability": "unavailable", "reference_ids": [],
+                                                   "unavailable_reason": "no_record"},
+                             prior_project_work_refs=[], external_expertise_refs=[])
+        contract = drill.project_grant_read_expectations(receipt, qualification, "manager", "manager-grant", "Reason")
+        row = {key: value for key, value in receipt.items() if key != "qualification_snapshot_id"}
+        row.update(grant_method="manual", granted_by_actor_profile_id="manager",
+                   granted_by_admin_role_grant_id="manager-grant", grant_reason="Reason",
+                   granted_at="2026-01-01T00:00:00+00:00", revoked_by_actor_profile_id=None,
+                   revoked_at=None, revoked_reason=None,
+                   qualification_snapshot=dict(id="snapshot", requested_role="reviewer", **qualification,
+                       captured_by_actor_profile_id="manager", captured_by_admin_role_grant_id="manager-grant",
+                       captured_at="2026-01-01T00:00:00+00:00"))
+        def verify(value):
+            return drill.verify_response(httpx.Response(200, json=value), 200,
+                contract["values"], contract["checks"], contract["exact_fields"])
+        verify(row)
+        mutants = [row | {"private": "unexpected"}, row | {"granted_by_admin_role_grant_id": "other-grant"}]
+        for field in ("captured_by_actor_profile_id", "captured_by_admin_role_grant_id", "requested_role", "private"):
+            changed = deepcopy(row)
+            changed["qualification_snapshot"][field] = "wrong"
+            mutants.append(changed)
+        for changed in mutants:
+            with self.subTest(changed=changed), self.assertRaises(drill.ProbeFailure):
+                verify(changed)
+        for field in ("granted_at", "revoked_at"):
+            changed = deepcopy(row)
+            changed[field] = "2026-01-02T00:00:00+00:00"
+            with self.subTest(field=field), self.assertRaises(drill.ProbeFailure):
+                drill.verify_response(httpx.Response(200, json=changed), 200, row, exact_fields=row.keys())
+        changed = deepcopy(row)
+        changed["qualification_snapshot"]["captured_at"] = "2026-01-02T00:00:00+00:00"
+        with self.assertRaises(drill.ProbeFailure):
+            drill.verify_response(httpx.Response(200, json=changed), 200, row, exact_fields=row.keys())
+
     def test_candidate_page_rejects_private_fields_and_wrong_membership(self):
         row = {"actor_profile_id": "known", "display_name": "Candidate 名"}
         expected = {"known": {"display_name": "Candidate 名"}}
@@ -392,9 +431,9 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(drill.ProbeFailure, "response_value_mismatch"):
                 if mutation_status == 500:
                     with patch.object(drill, "qualification_invalids", return_value=()):
-                        await drill.project_role_cases(probe, None, None, {"id": "project"}, "manager")
+                        await drill.project_role_cases(probe, None, None, {"id": "project"}, "manager", "manager-grant")
                 else:
-                    await drill.project_role_cases(probe, None, None, {"id": "project"}, "manager")
+                    await drill.project_role_cases(probe, None, None, {"id": "project"}, "manager", "manager-grant")
             self.assertEqual(report["cases"][-1]["name"], "qualification_failed_state_submitter"
                              if mutation_status == 500 else "qualification_unchanged_missing_skills_snapshot")
             self.assertEqual(report["cases"][-1]["result"], "failed")

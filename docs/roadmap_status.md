@@ -213,6 +213,9 @@ cannot be reused as post-submission review-gate evidence. See the
   cursor scope/limit binding and exact candidate membership across existing
   actor/link lifecycle transitions. These checks do not equate discovery with
   contributor authority or certify the entire public API surface.
+  Project-role field probes bind issuance and qualification capture to the known
+  manager grant and compare complete public state across issue/revoke replay
+  and conflicts for both submitter and reviewer roles.
   [API-DRILL-007](engineering/external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
   records the reproduced self-profile NUL defect and its repair: both editable
   fields reject the unsupported character at request validation with 422 rather

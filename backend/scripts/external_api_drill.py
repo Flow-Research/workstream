@@ -554,7 +554,7 @@ async def project_cases(drill, admin, manager, outsider, manager_id):
     await policy_cases(drill, manager, groute, gpath, outsider)
     await project_field_cases(drill, manager, outsider, project, guide, manager_id)
     await project_guide_nul_cases(drill, manager)
-    await project_role_cases(drill, manager, outsider, project, manager_id)
+    await project_role_cases(drill, manager, outsider, project, manager_id, grant["resource_id"])
     await authority_cases(drill, admin, manager, outsider, manager_id, project)
     await drill.call("revoke_manager", "POST", "/api/v1/admin-role-grants/{grant_id}/revoke",
         path=f'/api/v1/admin-role-grants/{grant["resource_id"]}/revoke', token=admin,
@@ -1031,7 +1031,23 @@ def qualification_invalids(valid):
     yield "extra", valid | {"private_note": "not permitted"}
 
 
-async def project_role_cases(drill, manager, contributor, project, manager_id):
+def project_grant_read_expectations(receipt, qualification, manager_id, manager_grant_id, reason):
+    """Independent full public grant contract from known HTTP-issued authority."""
+    snapshot = dict(id=receipt["qualification_snapshot_id"], requested_role=receipt["role"],
+                    captured_by_actor_profile_id=manager_id,
+                    captured_by_admin_role_grant_id=manager_grant_id, **qualification)
+    values = {key: receipt[key] for key in ("id", "project_id", "actor_profile_id", "role", "status", "version")}
+    values.update(grant_method="manual", granted_by_actor_profile_id=manager_id,
+                  granted_by_admin_role_grant_id=manager_grant_id, grant_reason=reason,
+                  revoked_by_actor_profile_id=None, revoked_at=None, revoked_reason=None)
+    exact_fields = (*values, "granted_at", "qualification_snapshot")
+    values.update({"qualification_snapshot." + key: value for key, value in snapshot.items()})
+    return dict(values=values, exact_fields=exact_fields, checks={
+        "granted_at": timestamp_value, "qualification_snapshot.captured_at": timestamp_value,
+        "qualification_snapshot": lambda row: isinstance(row, dict) and set(row) == set(snapshot) | {"captured_at"}})
+
+
+async def project_role_cases(drill, manager, contributor, project, manager_id, manager_grant_id):
     """Issue exact-project grants, observe actual access, then revoke it."""
     actor = await drill.call("role_target_identity", "GET", "/api/v1/actors/me", token=contributor)
     route = "/api/v1/projects/{project_id}/role-grants"
@@ -1103,6 +1119,27 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
                                 "unavailable_reason": "no_record"},
         "prior_project_work_refs": [], "external_expertise_refs": ["expertise:drill"],
     }
+    receipt_fields = ("id", "qualification_snapshot_id", "project_id", "actor_profile_id", "role", "status", "version")
+    valid_body = dict(target_actor_profile_id=actor["actor_profile_id"], role="submitter",
+                      qualification=qualification, reason="Outer field probe")
+    malformed_reasons = (("missing", {}), ("null", {"reason": None}), ("object", {"reason": {}}),
+                         ("empty", {"reason": ""}), ("padding", {"reason": " padded "}),
+                         ("nul", {"reason": "before\x00after"}), ("overflow", {"reason": "é" * 251}))
+    invalid_bodies = [("missing_" + field, {key: value for key, value in valid_body.items() if key != field})
+                      for field in valid_body]
+    invalid_bodies += [("target_uuid", valid_body | {"target_actor_profile_id": "bad-uuid"}),
+                       ("extra", valid_body | {"status": "active"})]
+    invalid_bodies += [("reason_" + name, valid_body | changes) for name, changes in malformed_reasons if changes]
+    history = await drill.call("project_outer_field_baseline", "GET", route, path=path, token=manager)
+    for name, invalid in invalid_bodies:
+        try:
+            await drill.call("project_issue_" + name, "POST", route, path=path, token=manager,
+                payload=invalid, headers=recovery_key, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        await drill.call("project_issue_" + name + "_unchanged", "GET", route, path=path,
+            token=manager, values=history, exact_fields=history.keys())
     for role in ("submitter", "reviewer"):
         body = {"target_actor_profile_id": actor["actor_profile_id"], "role": role,
                 "qualification": qualification, "reason": "Exact project contribution role"}
@@ -1112,7 +1149,7 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
                 payload=body, headers=key, expected=201,
                 values={"project_id": project["id"], "actor_profile_id": actor["actor_profile_id"],
                         "role": role, "status": "active", "version": 1},
-                checks={"id": uuid_value, "qualification_snapshot_id": uuid_value})
+                checks={"id": uuid_value, "qualification_snapshot_id": uuid_value}, exact_fields=receipt_fields)
         except ProbeFailure:
             await drill.call("failed_grant_no_active_row_" + role, "GET", route,
                 path=path + f"?role={role}&status=active", token=manager,
@@ -1120,23 +1157,14 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
             await drill.call("failed_grant_no_access_" + role, "GET", "/api/v1/projects/{project_id}",
                 path=f'/api/v1/projects/{project["id"]}', token=contributor, expected=404)
             continue
-        await drill.call("replay_project_" + role, "POST", route, path=path, token=manager,
-            payload=body, headers=key, expected=201, values=result)
         read_path = path + "/" + result["id"]
         stored = await drill.call("read_project_" + role, "GET", route + "/{grant_id}",
             path=read_path, token=manager,
-            values={"id": result["id"], "project_id": project["id"], "actor_profile_id": actor["actor_profile_id"],
-                    "role": role, "status": "active", "version": 1, "grant_method": "manual",
-                    "grant_reason": body["reason"], "granted_by_actor_profile_id": manager_id,
-                    "qualification_snapshot.id": result["qualification_snapshot_id"],
-                    "qualification_snapshot.requested_role": role,
-                    "qualification_snapshot.skills_snapshot": qualification["skills_snapshot"],
-                    "qualification_snapshot.reputation_snapshot": qualification["reputation_snapshot"],
-                    "qualification_snapshot.prior_project_work_refs": qualification["prior_project_work_refs"],
-                    "qualification_snapshot.external_expertise_refs": qualification["external_expertise_refs"],
-                    "revoked_by_actor_profile_id": None, "revoked_at": None, "revoked_reason": None},
-            checks={"granted_at": timestamp_value, "granted_by_admin_role_grant_id": uuid_value,
-                    "qualification_snapshot.captured_at": timestamp_value})
+            **project_grant_read_expectations(result, qualification, manager_id, manager_grant_id, body["reason"]))
+        await drill.call("replay_project_" + role, "POST", route, path=path, token=manager,
+            payload=body, headers=key, expected=201, values=result, exact_fields=receipt_fields)
+        await drill.call("project_issue_replay_unchanged_" + role, "GET", route + "/{grant_id}",
+            path=read_path, token=manager, values=stored, exact_fields=stored.keys())
         await drill.call("contributor_project_access_" + role, "GET", "/api/v1/projects/{project_id}",
             path=f'/api/v1/projects/{project["id"]}', token=contributor,
             values={"id": project["id"], "name": project["name"], "status": "draft"},
@@ -1148,15 +1176,37 @@ async def project_role_cases(drill, manager, contributor, project, manager_id):
                     "effective_action_ids": ["project.read"]},
             exact_fields=("actor_profile_id", "project_id", "status", "admin_roles",
                           "project_roles", "effective_action_ids"))
+        revoke_key = {"Idempotency-Key": str(uuid4())}
+        for name, invalid in malformed_reasons:
+            try:
+                await drill.call("project_revoke_" + role + "_" + name, "POST", route + "/{grant_id}/revoke",
+                    path=read_path + "/revoke", token=manager, payload=invalid, headers=revoke_key, expected=422,
+                    values={"error.code": "invalid_request", "error.retryable": False})
+            except ProbeFailure:
+                pass
+            await drill.call("project_revoke_" + role + "_" + name + "_unchanged", "GET", route + "/{grant_id}",
+                path=read_path, token=manager, values=stored, exact_fields=stored.keys())
+        revoke_body = {"reason": "End role probe"}
         revoked = await drill.call("revoke_project_" + role, "POST", route + "/{grant_id}/revoke",
-            path=read_path + "/revoke", token=manager, payload={"reason": "End role probe"},
-            values=result | {"status": "revoked", "version": 2})
-        await drill.call("revoked_grant_readback_" + role, "GET", route + "/{grant_id}",
+            path=read_path + "/revoke", token=manager, payload=revoke_body, headers=revoke_key,
+            values=result | {"status": "revoked", "version": 2}, exact_fields=receipt_fields)
+        revoked_stored = await drill.call("revoked_grant_readback_" + role, "GET", route + "/{grant_id}",
             path=read_path, token=manager,
-            values={key: stored[key] for key in ("id", "role", "project_id", "actor_profile_id", "qualification_snapshot")}
-                   | {"status": revoked["status"], "version": 2, "revoked_reason": "End role probe",
+            values={key: value for key, value in stored.items() if key != "revoked_at"}
+                   | {"status": "revoked", "version": 2, "revoked_reason": "End role probe",
                       "revoked_by_actor_profile_id": manager_id},
-            checks={"revoked_at": timestamp_value})
+            checks={"revoked_at": timestamp_value}, exact_fields=stored.keys())
+        for name, replay_body, replay_key, status, code in (
+            ("replay", revoke_body, revoke_key, 200, None),
+            ("mismatch", {"reason": "Different reason"}, revoke_key, 409, "idempotency_mismatch"),
+            ("already_revoked", revoke_body, {"Idempotency-Key": str(uuid4())}, 409, "project_role_grant_already_revoked"),
+        ):
+            await drill.call("project_revoke_" + role + "_" + name, "POST", route + "/{grant_id}/revoke",
+                path=read_path + "/revoke", token=manager, payload=replay_body, headers=replay_key,
+                expected=status, values={"error.code": code} if code else revoked,
+                exact_fields=None if code else receipt_fields)
+            await drill.call("project_revoke_" + role + "_" + name + "_unchanged", "GET", route + "/{grant_id}",
+                path=read_path, token=manager, values=revoked_stored, exact_fields=revoked_stored.keys())
         await drill.call("revoked_contributor_read_" + role, "GET", "/api/v1/projects/{project_id}",
             path=f'/api/v1/projects/{project["id"]}', token=contributor, expected=404)
         await drill.call("revoked_contributor_context_" + role, "GET", "/api/v1/actors/me/authorization-context",
