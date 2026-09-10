@@ -159,6 +159,15 @@ not database/storage readiness. Profile reads intentionally advance admission
 timestamps, so unchanged-business-state assertions compare every stable field
 and require valid monotonic `updated_at`/`last_seen_at`, not timestamp equality.
 These cases do not certify the remaining endpoint contracts automatically.
+Actor administration additionally checks complete human profile identity and
+lifecycle output fields, exact mutation receipts, same-key replay, and unchanged
+target readbacks after invalid reasons. Lifecycle reasons use a 500-byte UTF-8
+positive boundary and reject 502-byte and NUL inputs. A denied self read/write
+must remain denied while its actor is suspended or deactivated.
+Embedded-NUL self-profile cases preserve
+[API-DRILL-007](external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
+as a failing expectation; independent checks continue only after an unchanged
+profile readback. A run containing that failure is not a passing API handoff.
 
 Prepare the endpoint-and-field handoff from named passing client cases, not the
 OpenAPI route list or aggregate test count. For each selected operation include

@@ -423,10 +423,15 @@ async def profile_cases(drill, issuer, token):
                                               stable | editable, previous)
         for label, value in (("too_long", "x" * (limit + 1)), ("blank", "  "), ("empty", ""),
                              ("type", {"unexpected": True}), ("number", 1), ("bool", True),
-                             ("array", [])):
-            await drill.call(f"{field}_{label}", "PATCH", route, token=token,
-                             payload={field: value}, expected=422, fields=(f"body.{field}",),
-                             values={"error.code": "invalid_request", "error.retryable": False})
+                             ("array", []), ("nul", "before\x00after")):
+            try:
+                await drill.call(f"{field}_{label}", "PATCH", route, token=token,
+                                 payload={field: value}, expected=422, fields=(f"body.{field}",),
+                                 values={"error.code": "invalid_request", "error.retryable": False})
+            except ProbeFailure:
+                # Keep the failed case red, but run independent inputs if the
+                # following full-state control proves the profile is unchanged.
+                pass
             previous = await profile_readback(drill, token, f"{field}_{label}_unchanged",
                                               stable | editable, previous)
         other = "contact_email" if field == "display_name" else "display_name"
@@ -765,17 +770,69 @@ async def authority_cases(drill, admin, manager, outsider, manager_id, project):
         await drill.call("admin_actor_read" + suffix, "GET", "/api/v1/actors/{actor_profile_id}" + suffix,
             path=f"/api/v1/actors/{manager_id}" + suffix + ("?scope_type=system" if suffix == "/admin-role-grants" else ""),
             token=admin)
+    actor_route = "/api/v1/actors/{actor_profile_id}"
+    actor_path = f"/api/v1/actors/{scoped_id}"
+    known = {"actor_profile_id": scoped_id, "actor_kind": "human", "status": "active",
+             "provisioning_method": "automatic_first_access", "service_identity": None,
+             "display_name": None, "created_at": outsider_body["created_at"],
+             "suspended_at": None, "reactivated_at": None, "deactivated_at": None}
+    current = await drill.call("admin_human_profile_fields", "GET", actor_route,
+        path=actor_path, token=admin, values=known,
+        checks={"updated_at": timestamp_value, "last_seen_at": timestamp_value},
+        exact_fields=(*known, "updated_at", "last_seen_at"))
+    for read_route, read_path, name in ((actor_route, actor_path, "profile"),
+                                      (actor_route + "/identity-links", actor_path + "/identity-links", "identity")):
+        await drill.call("admin_" + name + "_unauthenticated", "GET", read_route,
+                         path=read_path, expected=401)
+        await drill.call("admin_" + name + "_ungranted", "GET", read_route,
+                         path=read_path, token=manager, expected=403,
+                         values={"error.code": "permission_not_granted"})
     for action in ("suspend", "reactivate", "deactivate"):
-        await drill.call("actor_" + action, "POST", "/api/v1/actors/{actor_profile_id}/" + action,
-            path=f"/api/v1/actors/{scoped_id}/" + action, token=admin,
-            payload={"reason": "Isolated lifecycle probe"})
+        mutation_route, mutation_path = actor_route + "/" + action, actor_path + "/" + action
+        for label, invalid in (("missing_reason", {}), ("reason_overflow", {"reason": "é" * 251}),
+                               ("reason_nul", {"reason": "before\x00after"})):
+            await drill.call("actor_" + action + "_" + label, "POST", mutation_route,
+                path=mutation_path, token=admin, payload=invalid, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+            await drill.call("actor_" + action + "_" + label + "_unchanged", "GET", actor_route,
+                path=actor_path, token=admin, values=current, exact_fields=current.keys())
+        key = {"Idempotency-Key": str(uuid4())}
+        payload = {"reason": "é" * 250}
+        changed = await drill.call("actor_" + action, "POST", mutation_route,
+            path=mutation_path, token=admin, payload=payload, headers=key,
+            values={"resource_type": "actor_profile", "resource_id": scoped_id,
+                    "version": None, "http_status": 200},
+            exact_fields=("resource_type", "resource_id", "version", "http_status"))
         state = {"suspend": "suspended", "reactivate": "active", "deactivate": "deactivated"}[action]
-        await drill.call("actor_" + action + "_readback", "GET", "/api/v1/actors/{actor_profile_id}",
-            path=f"/api/v1/actors/{scoped_id}", token=admin, values={"status": state})
+        transition_field = {"suspend": "suspended_at", "reactivate": "reactivated_at",
+                            "deactivate": "deactivated_at"}[action]
+        expected = {key: value for key, value in current.items()
+                    if key not in {"updated_at", transition_field}}
+        expected["status"] = state
+        if action == "reactivate":
+            expected["suspended_at"] = None
+        current = await drill.call("actor_" + action + "_readback", "GET", actor_route,
+            path=actor_path, token=admin, values=expected,
+            checks={"updated_at": timestamp_value, transition_field: timestamp_value},
+            exact_fields=current.keys())
+        await drill.call("actor_" + action + "_replay", "POST", mutation_route,
+            path=mutation_path, token=admin, payload=payload, headers=key, values=changed,
+            exact_fields=changed.keys())
+        await drill.call("actor_" + action + "_replay_unchanged", "GET", actor_route,
+            path=actor_path, token=admin, values=current, exact_fields=current.keys())
         if action == "reactivate":
             await drill.call("reactivated_self_write", "PATCH", "/api/v1/actors/me", token=outsider,
                 payload={"display_name": "Reactivated owner"}, values={"display_name": "Reactivated owner"})
+            current = await drill.call("reactivated_admin_readback", "GET", actor_route,
+                path=actor_path, token=admin,
+                values={key: value for key, value in current.items()
+                        if key not in {"display_name", "updated_at", "last_seen_at"}}
+                       | {"display_name": "Reactivated owner"},
+                checks={"updated_at": timestamp_value, "last_seen_at": timestamp_value},
+                exact_fields=current.keys())
         else:
+            await drill.call(action + "_self_read_denied", "GET", "/api/v1/actors/me", token=outsider,
+                expected=403, values={"error.code": "actor_suspended" if action == "suspend" else "actor_deactivated"})
             await drill.call(action + "_self_write_denied", "PATCH", "/api/v1/actors/me", token=outsider,
                 payload={"display_name": "Forbidden change"}, expected=403,
                 values={"error.code": "actor_suspended" if action == "suspend" else "actor_deactivated"})

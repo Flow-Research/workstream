@@ -11,7 +11,8 @@ all three intentional last-admin guard mutants. These counts include negative
 and local evidence cases; they are not endpoint or exhaustive field counts.
 The orchestrator is extending the remaining client field checks before handing
 the verified endpoint-and-field list to the MCP adapter agent. The descriptions
-below remain historical observations, not claims that repaired defects persist.
+for repaired items remain historical observations, not claims that those defects
+persist. API-DRILL-007 below is a separate newly reproduced repair item.
 
 Human-confirmed v0.1 project roles are **submitter** and **reviewer**.
 Adjudication is deferred. Do not implement adjudicator functionality, widen an
@@ -227,6 +228,37 @@ frames and unrelated process memory are outside that diagnostic guarantee.
 Both complete drills must pass on the repaired
 candidate; the original failed runs are historical and remain unchanged outside
 Git. This repair does not certify every other API field or deployed provider.
+
+## API-DRILL-007: embedded NUL in canonical profile fields becomes 503
+
+- Route: `PATCH /api/v1/actors/me`, authenticated human self-profile update.
+- Inputs: `{"display_name":"before\u0000after"}` and, independently,
+  `{"contact_email":"before\u0000after"}`.
+- Expected: 422 `invalid_request` before persistence. PostgreSQL text cannot
+  represent this character; rejecting it is storage-contract validation, not a
+  new profile-format restriction.
+- Observed: both returned 503 `service_unavailable` on clean
+  `54f7343851235290697b801963687e583eb703e1`. Subsequent HTTP reads proved all
+  stable/business profile fields unchanged. Admission timestamps may advance
+  on those successful reads.
+- Cause: `ActorProfileUpdateRequest.normalize_optional_text` accepts embedded
+  NUL; `ActorService.update_self` reaches PostgreSQL, and the route maps the
+  storage failure to service unavailability.
+- Repair owner: actor self-profile schema/service tests. Reject the unsupported
+  character at public validation; preserve valid Unicode, trimming, explicit
+  null, omission, field limits and authorization. Do not sanitize silently,
+  change storage, or weaken the expected status to accommodate the failure.
+- Permanent reproduction: `display_name_nul` and `contact_email_nul` in
+  `backend/scripts/external_api_drill.py`, each followed by full business-state
+  readback. The failed cases remain red while independent probes continue;
+  the overall drill exit must remain nonzero until repaired.
+- Original private evidence: `/tmp/workstream-field-drill.l3LIo4/profile-nul.json`
+  and `profile-nul-db.json`, with the separate reproduction source
+  `probe_profile_nul.py`. Six HTTP cases: four successful controls/readbacks,
+  two failures. Fresh local Flow verifier/Uvicorn/PostgreSQL; no product SQL
+  writes or bypassed guards; isolated database/role cleanup completed. These
+  temporary files are not shared evidence URLs; the inputs above suffice to
+  reproduce the defect.
 
 ## Retest and handoff criteria
 

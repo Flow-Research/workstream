@@ -205,6 +205,10 @@ cannot be reused as post-submission review-gate evidence. See the
   actions/revocation with real foreign-project concealment. These strengthen
   evidence within the selected 29 canonical operations, not obsolete routes or
   an exhaustive API-completion claim.
+  [API-DRILL-007](engineering/external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
+  records an unresolved self-profile validation defect: embedded NUL in either
+  editable text field returns 503 rather than 422; HTTP readback shows no
+  business-field mutation. The profile field contract is not yet signed off.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions
