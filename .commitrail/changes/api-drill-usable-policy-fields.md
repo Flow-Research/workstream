@@ -28,11 +28,12 @@ Allowed: `backend/scripts/external_api_drill.py`,
 `backend/scripts/admin_api_drill.py`, `scripts/test_admin_api_drill.py`,
 this record, and existing ignored local roadmap exports if present.
 The bounded NUL repairs also allow `backend/app/modules/actors/schemas.py`,
-`backend/app/api/routes/auth.py`, and `backend/tests/test_api_drill_repairs.py`.
+`backend/app/api/routes/auth.py`, `backend/app/modules/projects/schemas.py`,
+and `backend/tests/test_api_drill_repairs.py`.
 
 Prohibited: other product changes, migrations, hidden routes,
 direct product SQL writes, enabled unavailable actions, disabled guards, provider
-fakes, CI/coverage changes, and product-builder files. Newly reproduced product
+fakes, CI/coverage changes, and edits in the product-builder worktree. Newly reproduced product
 defects stay failing and are communicated before deciding repair ownership.
 
 Repair design: reject embedded NUL in the existing self-profile text validator
@@ -128,3 +129,14 @@ the findings document, and the roadmap explicitly retains this unresolved gap.
 The private diagnostic uses distinct administrator/manager actors after an
 initial self-grant fixture was correctly denied. No project-builder product
 files are changed; repair ownership must be coordinated before that expansion.
+
+The human subsequently authorized the complete API-DRILL-009 repair here.
+Extend the eight existing request fields with NUL-excluding Pydantic constraints,
+preserving all current lengths, Unicode, nullability and omission semantics.
+Do not change services, database behavior or the future guide contract. The
+product-builder's separate uncommitted removal of guide content fields must not
+be reversed during integration; surviving fields retain the new validation.
+Add parameterized HTTP/PostgreSQL rejection and recovery regressions, permanent
+live drill cases with full public-state controls, and schema-level boundary
+checks. All eight original failing cases must pass unchanged 422 expectations.
+The existing L1 plan and security/QA/test-delta/docs review routing applies.
