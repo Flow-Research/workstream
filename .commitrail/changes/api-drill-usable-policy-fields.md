@@ -203,9 +203,27 @@ all-field certification. The live document pass independently verified two
 stored originals and reached public sufficiency evidence through actual Celery
 delivery. It also reproduced API-DRILL-010, an ART terminal-upload replay defect.
 Keep that assertion failed while observing independent steps, and retain a
-nonzero final result. Product replay repair is outside this record's allowed
-product files and needs repair ownership before the handoff can be verified.
+nonzero final result until repaired. The human subsequently authorized fixing
+API-DRILL-010 here and rerunning the live drill in this same PR.
 The findings document records its reproduction and existing owner path.
+
+API-DRILL-010 repair scope additionally allows
+`backend/app/modules/artifacts/service.py`, existing guide/artifact regression
+tests and their existing fixtures. Extend the existing authorized put resolver:
+after current authority consumption and namespace/fence revalidation, recognize
+an already `object_confirmed` put as completed without trying to claim it as
+unfinished observation work. Preserve all incomplete-put recovery paths. Public
+ingest admission remains responsible for exact actor/project/document/bytes/key
+binding. No new endpoint, compatibility path, authority bypass, migration or
+retained-data rewrite is allowed.
+
+Acceptance: exact successful document replay returns a completed status with
+unchanged hash/size and no second provider write; absent/revoked/foreign authority
+and changed input still deny; unfinished recovery stays covered. Use focused
+HTTP/PostgreSQL/MinIO regression and the existing two-PDF real drill, followed by
+the strengthened findings-lineage read. Risk remains L1. Run focused plan and
+implementation security/architecture plus QA reviews; human focus is legitimate
+replay without a new upload, authorization shortcut or duplicate inference.
 
 QA review additionally required the public findings list to match the completed
 setup's report, project, guide, source snapshot and generation, rather than
