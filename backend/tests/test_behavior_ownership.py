@@ -192,6 +192,19 @@ def test_partition_accepts_only_the_approved_additive_foundation_transition(
     }
 
 
+def test_partition_accepts_exact_guide_drill_addition_not_other_scripts() -> None:
+    retained = "backend/app/core/config.py"
+    addition = "backend/scripts/guide_document_api_drill.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(
+        _partition(sorted([retained, addition])), trusted,
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted([retained, addition, "backend/scripts/unapproved_drill.py"])), trusted,
+        )
+
+
 def test_partition_accepts_only_the_v01_migration_tool_removals() -> None:
     retained = "backend/app/core/config.py"
     removed = sorted(ownership.V01_BASELINE_REMOVED_TARGETS)

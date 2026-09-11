@@ -224,6 +224,10 @@ Remove the retired import edges from the existing AUTH import ledger and module
 private-edge debt inventory; do not permit any new private dependency.
 Register the new guide drill in the existing behavior ownership partition's
 shared group; preserve the ownership validator and all structural limits.
+Its exact path must also join the existing `API_DRILL_PARTITION_TARGETS` list in
+`backend/scripts/behavior_ownership.py`, with positive and unapproved-path
+regressions in `backend/tests/test_behavior_ownership.py`. No wildcard admission
+or exemption from behavior ownership is allowed.
 Factor extended regression setup/state checks into focused helpers rather than
 introducing an oversized test or another structural debt entry.
 Extend the existing authorized put resolver:
