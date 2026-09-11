@@ -275,6 +275,8 @@ def inventory(document):
 
 
 def response_value(body, path):
+    if path == "$":
+        return body
     value = body
     for part in path.split("."):
         if not isinstance(value, dict) or part not in value:
@@ -1512,7 +1514,7 @@ async def run(args, report, *, scenario=None, environment=None):
            "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET": base64.b64encode(os.urandom(32)).decode(),
            "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET": base64.b64encode(os.urandom(32)).decode(),
            "WORKSTREAM_ARTIFACT_STORE_BACKEND": "disabled",
-           "WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART": "false", "PYTHONPATH": str(ROOT)}
+           "PYTHONPATH": str(ROOT)}
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))
     report.update(commit=sha, worktree_dirty=dirty,
         drill_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

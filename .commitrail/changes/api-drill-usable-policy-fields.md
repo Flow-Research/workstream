@@ -196,3 +196,20 @@ content or credentials into the repository. A real worker and uniquely owned
 loopback broker use isolated storage/database credentials. Stop owned processes
 and verify runner cleanup on failure as well as success. Output evidence may
 contain public diagnostic fields but never the provider key or environment file.
+
+Resumed diagnostic outcome: the original 29 HTTP operations have executed
+scenarios across the metadata and twenty-actor administrator passes; this is not
+all-field certification. The live document pass independently verified two
+stored originals and reached public sufficiency evidence through actual Celery
+delivery. It also reproduced API-DRILL-010, an ART terminal-upload replay defect.
+Keep that assertion failed while observing independent steps, and retain a
+nonzero final result. Product replay repair is outside this record's allowed
+product files and needs repair ownership before the handoff can be verified.
+The findings document records its reproduction and existing owner path.
+
+QA review additionally required the public findings list to match the completed
+setup's report, project, guide, source snapshot and generation, rather than
+accepting any HTTP 200 body. Extend the existing response predicate to support
+the JSON root and test empty, duplicated, missing and foreign lineage. Keep
+original shareable-document findings in the private report for later inspection;
+do not print model text or claim earlier runs executed this new predicate.

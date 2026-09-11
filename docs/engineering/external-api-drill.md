@@ -247,7 +247,7 @@ Supply these environment variables to the isolated runner:
 
 - `WORKSTREAM_DRILL_PROVIDER_ENV`: explicitly approved private provider env file.
 - `WORKSTREAM_DRILL_GUIDE_PDFS`: JSON array of two local PDF paths, each at most 10 MiB.
-- `WORKSTREAM_DRILL_BROKER_URL`: disposable loopback Redis broker, not another worker's queue.
+- `WORKSTREAM_DRILL_BROKER_URL`: disposable loopback Redis broker, not another Celery worker's queue.
 - `WORKSTREAM_DRILL_SCRATCH_ROOT`: unique private processing directory.
 - `WORKSTREAM_TEST_MINIO_ENDPOINT`: local MinIO endpoint supported by the isolated runner.
 
@@ -255,12 +255,33 @@ Invoke the guide entry point using the same `--isolation-metadata` and `--report
 arguments. Use a Python environment with the repository's agent dependencies.
 Real model execution can incur provider usage; it requires explicit approval.
 The operator owns broker teardown. The runner verifies database/bucket cleanup;
-the entry point stops its API and worker even when a scenario fails.
+the entry point stops its API and Celery worker even when a scenario fails.
 
 This pass checks partial-upload waiting, exact commitments, replay, ungranted and
 wrong-media denials, independently rereads stored original bytes, and observes
-the real worker through public setup diagnostics. A model finding that a guide
+the real Celery worker through public setup diagnostics. A model finding that a guide
 is insufficient is a product outcome, not automatically an API defect. Finishing
 setup does not certify manager approval, active project policy, submission or
 acceptance. New upload/setup/findings operations are outside the original
 29-operation census and must be reported separately with their actual evidence.
+
+The provider's unresolved outcome can describe an invocation still in flight:
+observe the same setup run through completion or the bounded timeout, without
+retrying inference. Exact upload replay currently reproduces API-DRILL-010;
+those failed assertions remain failed even when independent setup steps finish.
+
+The resumed administrator pass at clean `d85258f8` completed 472 HTTP/local
+evidence cases with twenty actors and ten owner-guard probes, without failures.
+The separate metadata continuation completed 464 cases; the preceding run's
+guide-version recovery assertion mismatch was corrected and replayed there.
+Together these runs exercise the original 29 HTTP operations, not every field
+combination. Do not add the local evidence operations to the API count.
+
+The live guide diagnostic at dirty `ac695417` completed 31 cases with two
+retained replay failures. Both original PDFs were independently reread from
+MinIO, actual broker delivery invoked the configured model, and setup persisted
+a `sufficiency_blocked` report readable through the public API. Database and
+bucket cleanup passed. That run did not inspect findings fields; the later
+report-lineage predicate and private findings capture require a subsequent live
+rerun and are not retroactive evidence. These results do not make the PR or MCP
+handoff fully verified.

@@ -46,7 +46,6 @@ def environment(env, report):
         "WORKSTREAM_CELERY_BROKER_URL": broker,
         "WORKSTREAM_CELERY_TASK_ALWAYS_EAGER": "false",
     })
-    env.pop("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", None)
     for scope, mib in (("TASK", 20), ("PRODUCER", 40), ("PROJECT", 64), ("DEPLOYMENT", 128)):
         env[f"WORKSTREAM_ARTIFACT_ADMISSION_{scope}_MAXIMUM_BYTES"] = str(mib * 1024 * 1024)
     report["limitations"] = [
@@ -82,6 +81,19 @@ async def stored_documents(env, originals):
     if not expected.issubset(hashes):
         raise api.ProbeFailure("uploaded_originals_not_in_storage")
     return len(expected)
+
+
+def sufficiency_matches(reports, setup):
+    """Bind the one fresh guide's report to the completed public setup result."""
+    if not isinstance(reports, list) or len(reports) != 1 or not isinstance(reports[0], dict):
+        return False
+    expected = {"id": setup["output_sufficiency_report_id"],
+                "project_setup_run_id": setup["id"],
+                **{key: setup[key] for key in ("project_id", "guide_id", "guide_version",
+                                               "source_snapshot_id", "setup_generation")}}
+    return (expected["id"] is not None
+            and all(key in reports[0] and api.strict_equal(reports[0][key], value)
+                    for key, value in expected.items()))
 
 
 async def scenario(drill, issuer, env):
@@ -179,8 +191,12 @@ async def scenario(drill, issuer, env):
             if status["finished_at"] is not None:
                 if status["output_sufficiency_report_id"] is None:
                     raise api.ProbeFailure("setup_finished_without_sufficiency")
-                await drill.call("sufficiency_findings", "GET", route + "/{guide_id}/sufficiency-reports",
-                    path=path + "/" + guide["id"] + "/sufficiency-reports", token=manager)
+                reports = await drill.call("sufficiency_findings", "GET", route + "/{guide_id}/sufficiency-reports",
+                    path=path + "/" + guide["id"] + "/sufficiency-reports", token=manager,
+                    checks={"$": lambda value: sufficiency_matches(value, status)})
+                # Original shareable project material only; this report remains
+                # private/out-of-tree. Do not print model-generated findings.
+                report["sufficiency_reports"] = reports
                 return
             # The dispatch fence is recorded before inference, so the public
             # unresolved outcome can also describe an invocation still running.

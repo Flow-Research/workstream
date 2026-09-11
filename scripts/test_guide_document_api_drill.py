@@ -13,6 +13,27 @@ SPEC.loader.exec_module(guide)
 
 
 class IsolationTests(unittest.TestCase):
+    def test_sufficiency_response_rejects_empty_duplicate_or_foreign_lineage(self):
+        setup = {"id": "setup-a", "output_sufficiency_report_id": "report-a",
+                 "project_id": "project-a", "guide_id": "guide-a", "guide_version": "initial",
+                 "source_snapshot_id": "snapshot-a", "setup_generation": 1}
+        expected = {"id": "report-a", "project_setup_run_id": "setup-a",
+                    **{key: value for key, value in setup.items()
+                       if key not in {"id", "output_sufficiency_report_id"}}}
+        self.assertTrue(guide.sufficiency_matches([expected], setup))
+        invalid = [[], {}, [expected, expected], [None], [expected | {"setup_generation": True}]]
+        invalid.extend([expected | {key: "foreign"}] for key in expected)
+        invalid.extend([{key: value for key, value in expected.items() if key != omitted}]
+                       for omitted in expected)
+        import httpx
+        for body in invalid:
+            with self.subTest(body=body):
+                with self.assertRaises(guide.api.ProbeFailure):
+                    guide.api.verify_response(httpx.Response(200, json=body), 200, {},
+                        checks={"$": lambda value: guide.sufficiency_matches(value, setup)})
+        self.assertEqual(guide.api.verify_response(httpx.Response(200, json=[expected]), 200, {},
+            checks={"$": lambda value: guide.sufficiency_matches(value, setup)}), [expected])
+
     def runtime(self):
         return {
             "WORKSTREAM_DRILL_PROVIDER_ENV": "/private/provider.env",

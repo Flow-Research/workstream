@@ -278,7 +278,12 @@ cannot be reused as post-submission review-gate evidence. See the
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
   draft policy outcomes, with exact replay and provider cleanup. Broker delivery
   was scripted in these drills; live Celery transport and broad semantic accuracy
-  are not established by them. Earlier probes omitted task examples and establish
+  are not established by them. A later public-client diagnostic used an isolated
+  Redis broker and actual Celery delivery with two original shareable PDFs;
+  it reached a persisted `sufficiency_blocked` report and verified both stored
+  originals. It did not assess all findings fields or broad semantic accuracy,
+  and its upload replay cases retain the API-DRILL-010 failure noted above.
+  Earlier probes omitted task examples and establish
   execution mechanics only. A subsequent real Terra run with assigned private documents
   and two task examples proved exact example delivery, original access, persisted
   findings, cleanup and replay. It correctly stopped for absent project-wide
