@@ -38,7 +38,6 @@ from app.modules.artifacts.submission_authorization import (
 )
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
-    ArtifactAuthorityDeniedError,
 )
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
@@ -47,7 +46,7 @@ from app.modules.artifacts.authorization import (
     get_guide_artifact_prepared_authorization,
 )
 from app.modules.actors.service_identities import ServiceIdentity
-from app.modules.authorization.api import ActorIdentityFacts, AuthorizationDenied
+from app.modules.authorization.api import ActorIdentityFacts
 
 
 async def get_submission_bundle_preparation_actor(
@@ -209,21 +208,18 @@ def get_guide_artifact_ingest_command(
                     namespace_fingerprint=namespace.namespace_fingerprint,
                 )
             )
-            yield (
-                ArtifactPreparationService(manager),
-                ArtifactAdmissionService(session, settings, namespace),
-                ArtifactStorageOrchestrator(
-                    session,
-                    store,
-                    namespace,
-                    settings,
-                    internal_authority,
-                ),
-            )
-        except AuthorizationDenied:
-            await session.rollback()
-            await internal_authority.persist_denial()
-            raise ArtifactAuthorityDeniedError("guide document authority denied") from None
+            async with internal_authority.denial_boundary():
+                yield (
+                    ArtifactPreparationService(manager),
+                    ArtifactAdmissionService(session, settings, namespace),
+                    ArtifactStorageOrchestrator(
+                        session,
+                        store,
+                        namespace,
+                        settings,
+                        internal_authority,
+                    ),
+                )
         finally:
             manager.close()
             bootstrap.close()

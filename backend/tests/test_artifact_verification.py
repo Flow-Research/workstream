@@ -19,6 +19,7 @@ from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootst
 from app.core.config import Settings, get_settings
 from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
 from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.artifacts.authorization import PreparedArtifactInternalAuthority
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     ArtifactInternalResourceType,
@@ -505,7 +506,10 @@ async def test_internal_operation_rejects_kind_and_restages_denial(
         "get_session_factory",
         Mock(return_value=Mock(return_value=SessionContext())),
     )
-    authority = Mock()
+    authority = PreparedArtifactInternalAuthority(
+        session, service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+        request_id=uuid4(), correlation_id=uuid4(),
+    )
     authority.persist_denial = AsyncMock(side_effect=persist_denial)
     monkeypatch.setattr(
         internal_worker_adapter,
@@ -560,7 +564,10 @@ async def test_pending_scan_returns_count_and_restages_denial(
         Mock(return_value=Mock(return_value=SessionContext())),
     )
     monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
-    authority = Mock()
+    authority = PreparedArtifactInternalAuthority(
+        session, service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
+        request_id=uuid4(), correlation_id=uuid4(),
+    )
     authority.persist_denial = AsyncMock(side_effect=persist_denial)
     monkeypatch.setattr(
         internal_worker_adapter,

@@ -42,8 +42,6 @@ backend/app/modules/actors/service.py
   app.modules.authorization.runtime
 backend/app/modules/audit/schemas.py
   app.modules.authorization.catalogue
-backend/app/adapters/artifacts/internal_workers.py
-  app.modules.authorization.runtime
 backend/app/modules/artifacts/authorization.py
   app.modules.authorization.catalogue
   app.modules.authorization.kernel

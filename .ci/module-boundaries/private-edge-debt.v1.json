@@ -28,12 +28,6 @@
     {
       "source_file": "backend/app/adapters/artifacts/internal_workers.py",
       "target_module": "artifacts",
-      "imported_private_path": "app.modules.artifacts.schemas",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/adapters/artifacts/internal_workers.py",
-      "target_module": "artifacts",
       "imported_private_path": "app.modules.artifacts.service",
       "repair_owner": "WS-ARCH-001-04"
     },

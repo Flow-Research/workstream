@@ -215,6 +215,13 @@ unmapped internal authorization denial after resolver deactivation: map it to
 the existing ART denial at this adapter, after rollback and canonical denial
 restaging, as the existing internal operation adapter already does. Do not add
 a protocol, duplicate authorization decision, or generic exception translation.
+Keep exception translation in the existing ART-owned AUTH adapter in
+`backend/app/modules/artifacts/authorization.py`. Reuse its denial boundary in
+`backend/app/adapters/artifacts/internal_workers.py` and guide composition so
+both callers preserve rollback and audit restaging without another private AUTH
+import or duplicated translation recipe.
+Remove the retired import edges from the existing AUTH import ledger and module
+private-edge debt inventory; do not permit any new private dependency.
 Extend the existing authorized put resolver:
 after current authority consumption and namespace/fence revalidation, recognize
 an already `object_confirmed` put as completed without trying to claim it as

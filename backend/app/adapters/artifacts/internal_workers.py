@@ -26,8 +26,6 @@ from app.modules.artifacts.service import (
     artifact_storage_namespace_spec,
     validate_artifact_storage_namespace_at_startup,
 )
-from app.modules.authorization.runtime import AuthorizationDenied
-from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 
 
 _runtime_condition = Condition()
@@ -128,15 +126,11 @@ async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> str:
                 settings,
                 authority,
             )
-            try:
+            async with authority.denial_boundary():
                 if kind == "put":
                     return await orchestrator.resolve_put_attempt(resource_id)
                 elif kind == "verification":
                     return await orchestrator.verify_object(resource_id)
-            except AuthorizationDenied:
-                await session.rollback()
-                await authority.persist_denial()
-                raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
     raise AssertionError("artifact internal operation did not return")
 
 
@@ -175,7 +169,7 @@ async def scan_artifact_pending_work(
             request_id=request_id,
             correlation_id=request_id,
         )
-        try:
+        async with authority.denial_boundary():
             return await ArtifactPendingWorkScanner(
                 session,
                 settings,
@@ -183,10 +177,6 @@ async def scan_artifact_pending_work(
                 publish_put_attempt,
                 publish_verification_job,
             ).scan()
-        except AuthorizationDenied:
-            await session.rollback()
-            await authority.persist_denial()
-            raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
 
 
 async def scan_guide_setup_continuations(publish_continuation: Callable[[str], Awaitable[None]]) -> int:
