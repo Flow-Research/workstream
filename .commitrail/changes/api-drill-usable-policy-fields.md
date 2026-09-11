@@ -222,6 +222,10 @@ both callers preserve rollback and audit restaging without another private AUTH
 import or duplicated translation recipe.
 Remove the retired import edges from the existing AUTH import ledger and module
 private-edge debt inventory; do not permit any new private dependency.
+Register the new guide drill in the existing behavior ownership partition's
+shared group; preserve the ownership validator and all structural limits.
+Factor extended regression setup/state checks into focused helpers rather than
+introducing an oversized test or another structural debt entry.
 Extend the existing authorized put resolver:
 after current authority consumption and namespace/fence revalidation, recognize
 an already `object_confirmed` put as completed without trying to claim it as

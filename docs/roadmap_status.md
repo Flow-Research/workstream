@@ -236,9 +236,12 @@ cannot be reused as post-submission review-gate evidence. See the
   cover both roles, persistence, replay, conflict and unauthorized rollback.
   The resumed real guide-upload drill reproduced
   [API-DRILL-010](engineering/external-api-drill-findings.md#api-drill-010-successful-guide-document-replay-returns-stale):
-  an exact retry of a successfully stored document returns `stale`. That replay
-  defect remains open; upload exposure does not establish completed field-level
-  client readiness.
+  an exact retry of a successfully stored document returned `stale`. The repair
+  returns the authorized terminal result without another provider operation.
+  The related inactive-resolver denial now returns concealed 404 and retains
+  its canonical audit rather than escaping as 500. Local real PostgreSQL/MinIO
+  regression and genuine-document replay passed; this does not establish
+  complete field-level client readiness.
 - Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at
@@ -281,8 +284,12 @@ cannot be reused as post-submission review-gate evidence. See the
   are not established by them. A later public-client diagnostic used an isolated
   Redis broker and actual Celery delivery with two original shareable PDFs;
   it reached a persisted `sufficiency_blocked` report and verified both stored
-  originals. It did not assess all findings fields or broad semantic accuracy,
-  and its upload replay cases retain the API-DRILL-010 failure noted above.
+  originals. The subsequent clean `869a1d71` public-client run passed 36 cases,
+  including repaired replay, findings-to-setup lineage, and inactive-resolver
+  denial with unchanged setup and stored originals. Its real model identified
+  unsupported archive/content intake checks and post-submit audit evaluation
+  required by that project. This does not establish broad semantic accuracy,
+  manager approval or active project policy.
   Earlier probes omitted task examples and establish
   execution mechanics only. A subsequent real Terra run with assigned private documents
   and two task examples proved exact example delivery, original access, persisted

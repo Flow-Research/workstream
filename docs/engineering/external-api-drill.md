@@ -267,8 +267,8 @@ acceptance. New upload/setup/findings operations are outside the original
 
 The provider's unresolved outcome can describe an invocation still in flight:
 observe the same setup run through completion or the bounded timeout, without
-retrying inference. Exact upload replay currently reproduces API-DRILL-010;
-those failed assertions remain failed even when independent setup steps finish.
+retrying inference. Exact upload replay retains the API-DRILL-010 regression;
+failed assertions remain failed even when independent setup steps finish.
 
 The resumed administrator pass at clean `d85258f8` completed 472 HTTP/local
 evidence cases with twenty actors and ten owner-guard probes, without failures.
@@ -282,6 +282,20 @@ retained replay failures. Both original PDFs were independently reread from
 MinIO, actual broker delivery invoked the configured model, and setup persisted
 a `sufficiency_blocked` report readable through the public API. Database and
 bucket cleanup passed. That run did not inspect findings fields; the later
-report-lineage predicate and private findings capture require a subsequent live
-rerun and are not retroactive evidence. These results do not make the PR or MCP
-handoff fully verified.
+report-lineage predicate and private findings capture were not exercised there.
+
+The subsequent clean `869a1d71` live run passed all 36 cases after the terminal
+replay and denial-mapping repairs. Both exact replays returned `object_confirmed`;
+both original PDFs were independently reread before and after resolver
+deactivation. That deactivation made replay return concealed 404, with unchanged
+public setup. The findings response matched the completed setup's report ID,
+project, guide, source snapshot and generation before private retention.
+Database and bucket cleanup completed. Fourteen focused real PostgreSQL/MinIO
+regressions also passed, including unchanged terminal state and a single durable
+denial audit. These are local execution results, not hosted-suite evidence.
+
+The real model outcome was `sufficiency_blocked`: the original project requests
+archive bounds, content validation and post-submit audit evaluation not supported
+by the selectable catalogue. Those are legitimate project capability gaps, not
+API failures or human acceptance. This pass does not certify manager approval,
+activation, all public API fields, or a complete MCP handoff.

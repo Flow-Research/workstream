@@ -1074,6 +1074,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/guide_document_api_drill.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/legacy_actor_classification.py"
     },
     {

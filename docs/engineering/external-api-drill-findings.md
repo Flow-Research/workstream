@@ -22,7 +22,7 @@ old advertised role pass.
 
 ## API-DRILL-010: successful guide-document replay returns stale
 
-- Open reproduction after integration of merged PRs #396/#397, product main
+- Original reproduction after integration of merged PRs #396/#397, product main
   `53fec2b25590887f333321616ffca5ba59eaaf5f`. The new live guide drill ran
   against local head `ac695417` with uncommitted drill-only assertion changes;
   this is not clean-candidate or hosted verification.
@@ -42,14 +42,37 @@ old advertised role pass.
 - Repair boundary: the existing ART replay operation must return an authorized,
   validated terminal result without creating a second upload, inference or
   storage owner. Preserve unfinished-put recovery, exact ownership/commitment,
-  namespace binding, fencing and atomicity. This drill does not implement that
-  product repair.
-- Keep the replay case failed while observing independent subsequent guide
-  steps. The final drill remains unsuccessful even if those later steps pass.
+  namespace binding, fencing and atomicity. The same bounded repair now returns
+  `object_confirmed` after current authority consumption, before any unfinished
+  observation claim or provider operation. Initial upload remains `document_stored`.
 - Private evidence: `live5-report.json` and `live5-database.json` under
   `/tmp/workstream-api-resume.ipB7lK/`; case `upload_replay_0`, recorded status
-  `stale`. The API exposure is real, but replay is not yet ready for a verified
-  external-client handoff.
+  `stale`. These historical failures are not relabeled as passing.
+- At clean `869a1d71`, fourteen focused PostgreSQL/MinIO regression cases passed;
+  a separate real two-PDF/Celery/model run passed all 36 cases, including both
+  exact replays and independent stored-byte verification. Removing only the
+  terminal-return branch in memory made the regression fail on `stale` versus
+  `object_confirmed`, demonstrating that it detects the original defect.
+
+## API-DRILL-011: inactive guide resolver denial escapes as 500
+
+- Reproduced during the replay repair: upload successfully, deactivate the
+  fixed put-resolver actor through the administrator API, and resend the same
+  upload. AUTH denies correctly, but its internal exception escaped the public
+  guide composition as HTTP 500. The initial mapping caught a distinct public
+  exception class, so rollback and denial restaging were not reached.
+- The existing ART-owned authority adapter now owns a shared denial boundary:
+  roll back denied work, restage canonical AUTH denial evidence, then translate
+  to the existing concealed ART denial. Guide upload and internal workers reuse
+  that operation; no new private AUTH import, permission or generic catch is added.
+- Real HTTP/PostgreSQL/MinIO regression proves 404, unchanged terminal upload
+  fields, no provider operation, no extra dispatch, and exactly one
+  `actor_deactivated` denial audit. The clean `869a1d71` live run additionally
+  proves unchanged public setup and both stored originals after denied replay.
+- Local raw artifacts live under `/tmp/workstream-api-replay.9kz5fH/`:
+  `verified-regression.xml`, `verified-live-report.json` and their runner metadata;
+  database and bucket cleanup completed. These private artifacts are not durable
+  links or hosted CI evidence, and neither repair certifies every public API field.
 
 ## Evidence boundary
 
