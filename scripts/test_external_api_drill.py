@@ -281,6 +281,45 @@ class ContractTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_link_reason_failure_is_retained_and_readback_still_guards_continuation(self):
+        mutation = "/api/v1/actor-identity-links/{identity_link_id}/revoke"
+        actor_route = "/api/v1/actors/{actor_profile_id}"
+        link = {"identity_link_id": "link", "status": "active"}
+        for state_changed in (False, True):
+            with self.subTest(state_changed=state_changed):
+                posts = 0
+
+                def handler(request):
+                    nonlocal posts
+                    if request.method == "POST":
+                        posts += 1
+                        status = 500 if posts == 1 else 422
+                        body = {"error": {"code": "invalid_request", "retryable": False}}
+                    else:
+                        status, body = 200, link | ({"status": "revoked"} if state_changed else {})
+                    return httpx.Response(status, json=body, headers={name: request.headers[name]
+                        for name in ("X-Request-ID", "X-Correlation-ID")})
+
+                async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                            base_url="http://127.0.0.1") as client:
+                    report = {}
+                    probe = drill.Drill(client, {"paths": {mutation: {"post": {}},
+                        actor_route + "/identity-links": {"get": {}}}}, report)
+                    operation = drill.identity_link_reason_cases(
+                        probe, None, "revoke", mutation, "/api/v1/actor-identity-links/link/revoke",
+                        actor_route, "/api/v1/actors/actor", link,
+                    )
+                    if state_changed:
+                        with self.assertRaisesRegex(drill.ProbeFailure, "response_value_mismatch"):
+                            await operation
+                    else:
+                        await operation
+                    self.assertEqual(report["cases"][0]["result"], "failed")
+                    self.assertEqual(report["cases"][1]["name"], "link_revoke_missing_unchanged")
+                    self.assertEqual(posts, 1 if state_changed else 6)
+                    self.assertEqual(len(report["cases"]), 2 if state_changed else 12)
+                    self.assertEqual(report["cases"][-1]["result"], "failed" if state_changed else "success")
+
     async def test_binary_body_is_exact_and_cannot_be_combined_with_json(self):
         original = b"%PDF-1.7\n\x00\xff exact original bytes"
         requests = []

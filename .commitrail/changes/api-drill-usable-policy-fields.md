@@ -138,7 +138,11 @@ product-builder's separate uncommitted removal of guide content fields must not
 be reversed during integration; surviving fields retain the new validation.
 Add parameterized HTTP/PostgreSQL rejection and recovery regressions, permanent
 live drill cases with full public-state controls, and schema-level boundary
-checks. All eight original failing cases must pass unchanged 422 expectations.
+checks. After the guide cutover, require unchanged 422 expectations for the six
+surviving fields: project name, slug and description; guide-create version and
+change_summary; guide-update change_summary. Removed top-level content_markdown
+must instead be rejected as unknown input on both guide operations. Original
+eight-field results remain historical evidence, not authority to restore fields.
 The existing L1 plan and security/QA/test-delta/docs review routing applies.
 
 Contributor-discovery evidence extension: reuse the twenty-actor setup and

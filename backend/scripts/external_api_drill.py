@@ -1442,15 +1442,8 @@ async def service_actor_cases(drill, issuer, admin, outsider):
     for action, state in (("revoke", "revoked"), ("reactivate", "active")):
         mutation = "/api/v1/actor-identity-links/{identity_link_id}/" + action
         path = f'/api/v1/actor-identity-links/{link["identity_link_id"]}/{action}'
-        for label, invalid in (("missing", {}), ("null", {"reason": None}),
-                ("bool", {"reason": True}), ("nul", {"reason": "before\x00after"}),
-                ("overflow", {"reason": "é" * 251}),
-                ("extra", {"reason": "Valid", "unexpected": True})):
-            await drill.call(f"link_{action}_{label}", "POST", mutation, path=path,
-                token=admin, payload=invalid, expected=422,
-                values={"error.code": "invalid_request", "error.retryable": False})
-            await drill.call(f"link_{action}_{label}_unchanged", "GET", actor_route + "/identity-links",
-                path=actor_path + "/identity-links", token=admin, values=link, exact_fields=link.keys())
+        await identity_link_reason_cases(drill, admin, action, mutation, path,
+                                        actor_route, actor_path, link)
         mutation_key = {"Idempotency-Key": str(uuid4())}
         result = await drill.call("service_link_" + action, "POST", mutation,
             path=path, token=admin, payload={"reason": " Verify binding lifecycle "}, headers=mutation_key,
@@ -1472,6 +1465,22 @@ async def service_actor_cases(drill, issuer, admin, outsider):
         await drill.call("service_link_" + action + "_admission", "POST", route, token=service,
             payload=payload, expected=403,
             values={"error.code": "identity_link_revoked" if action == "revoke" else "permission_not_granted"})
+
+
+async def identity_link_reason_cases(drill, admin, action, mutation, path, actor_route, actor_path, link):
+    """Retain each failed reason probe and verify state before continuing."""
+    for label, invalid in (("missing", {}), ("null", {"reason": None}),
+            ("bool", {"reason": True}), ("nul", {"reason": "before\x00after"}),
+            ("overflow", {"reason": "é" * 251}),
+            ("extra", {"reason": "Valid", "unexpected": True})):
+        try:
+            await drill.call(f"link_{action}_{label}", "POST", mutation, path=path,
+                token=admin, payload=invalid, expected=422,
+                values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            pass
+        await drill.call(f"link_{action}_{label}_unchanged", "GET", actor_route + "/identity-links",
+            path=actor_path + "/identity-links", token=admin, values=link, exact_fields=link.keys())
 
 
 async def isolation(metadata_path, *, require_empty=True):

@@ -45,8 +45,7 @@ PROJECT_TEXT_CASES = [
 def test_project_text_schema_rejects_nul_preserving_valid_values(operation: str, field: str) -> None:
     schema, payload = {
         "project": (ProjectCreate, {"name": "Name", "slug": "slug"}),
-        "guide_create": (ProjectGuideCreate, {"version": "initial", "task_examples": [
-            {"content": "Evaluate the assigned claim.", "title": None, "labels": []}]}),
+        "guide_create": (ProjectGuideCreate, complete_guide_payload("initial")),
         "guide_update": (ProjectGuideUpdate, {}),
     }[operation]
     for value in ("\x00leading", "embedded\x00nul", "trailing\x00", "line\n\x00"):
@@ -82,7 +81,7 @@ async def test_project_text_nul_rejected_without_state_and_same_key_recovers(
     if operation != "project":
         project = await create_project(project_client)
         route += f"/{project['id']}/guides"
-        payload = {"version": "initial", "task_examples": [
+        payload = complete_guide_payload("initial") | {"task_examples": [
                        {"content": "Evaluate Unicode 名 claims.", "title": None, "labels": []}],
                    "change_summary": "Initial é summary"}
         if operation == "guide_update":

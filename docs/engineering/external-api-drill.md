@@ -274,8 +274,12 @@ The resumed administrator pass at clean `d85258f8` completed 472 HTTP/local
 evidence cases with twenty actors and ten owner-guard probes, without failures.
 The separate metadata continuation completed 464 cases; the preceding run's
 guide-version recovery assertion mismatch was corrected and replayed there.
-Together these runs exercise the original 29 HTTP operations, not every field
-combination. Do not add the local evidence operations to the API count.
+Those two reports exercise 27 original HTTP operations. The earlier interrupted
+metadata run also exercised both policy contracts; a fresh clean `e98ad76d`
+continuation passed 84 cases: 47 review-policy, 30 revision-policy and seven
+setup calls, with database cleanup complete. Across these passes the original
+29 operations have executed scenarios, not every field combination. Do not add
+the local evidence operations to the API count.
 
 The live guide diagnostic at dirty `ac695417` completed 31 cases with two
 retained replay failures. Both original PDFs were independently reread from
