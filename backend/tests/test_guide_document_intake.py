@@ -312,6 +312,16 @@ async def test_all_documents_stored_dispatches_once_through_minio(
     assert await stored_put_state() == before_state
     assert provider_calls == before_provider_calls
     assert len(deliveries) == 1
+    from app.modules.tasks.models import AuditEvent
+    from app.modules.authorization.catalogue import ActionId
+    async with db_session.get_session_factory()() as session:
+        denials = (await session.scalars(select(AuditEvent).where(
+            AuditEvent.request_id == denied.headers["X-Request-ID"],
+            AuditEvent.action_id == ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE.value,
+        ))).all()
+        assert len(denials) == 1
+        assert denials[0].after_facts["allowed"] is False
+        assert denials[0].denial_code == "actor_deactivated"
 
 
 async def test_create_replay_requires_current_manager_authority(project_client):

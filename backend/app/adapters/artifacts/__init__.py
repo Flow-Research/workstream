@@ -38,6 +38,7 @@ from app.modules.artifacts.submission_authorization import (
 )
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
+    ArtifactAuthorityDeniedError,
 )
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
@@ -46,7 +47,7 @@ from app.modules.artifacts.authorization import (
     get_guide_artifact_prepared_authorization,
 )
 from app.modules.actors.service_identities import ServiceIdentity
-from app.modules.authorization.api import ActorIdentityFacts
+from app.modules.authorization.api import ActorIdentityFacts, AuthorizationDenied
 
 
 async def get_submission_bundle_preparation_actor(
@@ -156,7 +157,7 @@ def create_artifact_scratch_manager(settings: Settings) -> ArtifactScratchManage
 def get_artifact_internal_authority(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ArtifactInternalAuthority:
+) -> PreparedArtifactInternalAuthority:
     """Use the activated fixed-service resolver for post-commit provider work."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     return PreparedArtifactInternalAuthority(
@@ -175,7 +176,7 @@ def get_guide_artifact_ingest_command(
         Depends(get_guide_artifact_prepared_authorization),
     ],
     internal_authority: Annotated[
-        ArtifactInternalAuthority,
+        PreparedArtifactInternalAuthority,
         Depends(get_artifact_internal_authority),
     ],
     targets: GuideDocumentUploadTargetPort,
@@ -219,6 +220,10 @@ def get_guide_artifact_ingest_command(
                     internal_authority,
                 ),
             )
+        except AuthorizationDenied:
+            await session.rollback()
+            await internal_authority.persist_denial()
+            raise ArtifactAuthorityDeniedError("guide document authority denied") from None
         finally:
             manager.close()
             bootstrap.close()

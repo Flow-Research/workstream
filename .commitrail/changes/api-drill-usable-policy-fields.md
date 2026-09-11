@@ -209,7 +209,13 @@ The findings document records its reproduction and existing owner path.
 
 API-DRILL-010 repair scope additionally allows
 `backend/app/modules/artifacts/service.py`, existing guide/artifact regression
-tests and their existing fixtures. Extend the existing authorized put resolver:
+tests and their existing fixtures, and the existing guide-upload composition in
+`backend/app/adapters/artifacts/__init__.py`. The regression also exposed an
+unmapped internal authorization denial after resolver deactivation: map it to
+the existing ART denial at this adapter, after rollback and canonical denial
+restaging, as the existing internal operation adapter already does. Do not add
+a protocol, duplicate authorization decision, or generic exception translation.
+Extend the existing authorized put resolver:
 after current authority consumption and namespace/fence revalidation, recognize
 an already `object_confirmed` put as completed without trying to claim it as
 unfinished observation work. Preserve all incomplete-put recovery paths. Public

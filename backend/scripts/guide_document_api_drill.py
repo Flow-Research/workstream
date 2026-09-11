@@ -120,8 +120,9 @@ async def scenario(drill, issuer, env):
     await drill.call("grant_manager", "POST", "/api/v1/admin-role-grants", token=admin, expected=201,
         payload={"target_actor_profile_id": profiles[1]["actor_profile_id"], "role": "project_manager",
                  "scope_type": "system", "reason": "Public guide upload drill"})
+    service_profiles = {}
     for identity in ("artifact.put_resolver", "artifact.guide_reader", "project.setup"):
-        await drill.call("provision_" + identity, "POST", "/api/v1/service-actors", token=admin, expected=201,
+        service_profiles[identity] = await drill.call("provision_" + identity, "POST", "/api/v1/service-actors", token=admin, expected=201,
             payload={"service_identity": "workstream." + identity,
                      "subject": "drill-" + identity, "reason": "Isolated guide workflow"})
     project = await drill.call("create_project", "POST", "/api/v1/projects", token=manager, expected=201,
@@ -197,6 +198,17 @@ async def scenario(drill, issuer, env):
                 # Original shareable project material only; this report remains
                 # private/out-of-tree. Do not print model-generated findings.
                 report["sufficiency_reports"] = reports
+                resolver_id = service_profiles["artifact.put_resolver"]["actor_profile_id"]
+                await drill.call("deactivate_completed_upload_resolver", "POST",
+                    "/api/v1/actors/{actor_profile_id}/deactivate",
+                    path=f"/api/v1/actors/{resolver_id}/deactivate", token=issuer.issue("admin"),
+                    payload={"reason": "Verify current authority on completed upload replay"})
+                await drill.call("inactive_resolver_replay_denied", "POST", upload_route,
+                    path=upload_path, token=manager, content=content, headers=headers, expected=404,
+                    values={"error.code": "resource_not_found"})
+                await drill.call("setup_unchanged_after_denied_replay", "GET", setup_route,
+                    path=setup_path, token=manager, values=status, exact_fields=status.keys())
+                report["stored_originals_after_denial_verified"] = await stored_documents(env, originals)
                 return
             # The dispatch fence is recorded before inference, so the public
             # unresolved outcome can also describe an invocation still running.
