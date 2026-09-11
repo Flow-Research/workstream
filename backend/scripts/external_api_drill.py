@@ -1524,9 +1524,14 @@ async def run(args, report, *, scenario=None, environment=None):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    process = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory",
-        "--host", "127.0.0.1", "--port", str(port), "--no-access-log"], cwd=ROOT, env=env,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log_fd = os.open(args.report.with_suffix(".server.log"),
+                     os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        process = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:create_app", "--factory",
+            "--host", "127.0.0.1", "--port", str(port), "--no-access-log"], cwd=ROOT, env=env,
+            stdout=log_fd, stderr=log_fd)
+    finally:
+        os.close(log_fd)
     try:
         async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", trust_env=False,
                                      follow_redirects=False, timeout=20) as client:

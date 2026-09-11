@@ -35,6 +35,8 @@ class IsolationTests(unittest.TestCase):
         self.assertEqual(env["WORKSTREAM_AUTH_PROVIDER"], "flow")
         self.assertEqual(env["WORKSTREAM_ARTIFACT_S3_BUCKET"], "owned-bucket")
         self.assertEqual(env["WORKSTREAM_PROJECT_AGENT_MODEL"], "configured-model")
+        for scope in ("TASK", "PRODUCER", "PROJECT", "DEPLOYMENT"):
+            self.assertGreater(int(env[f"WORKSTREAM_ARTIFACT_ADMISSION_{scope}_MAXIMUM_BYTES"]), 0)
         self.assertNotIn("not-a-real-key", str(report))
 
     def test_remote_runtime_is_rejected(self):

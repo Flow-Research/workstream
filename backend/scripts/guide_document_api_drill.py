@@ -46,6 +46,8 @@ def environment(env, report):
         "WORKSTREAM_CELERY_TASK_ALWAYS_EAGER": "false",
     })
     env.pop("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", None)
+    for scope, mib in (("TASK", 20), ("PRODUCER", 40), ("PROJECT", 64), ("DEPLOYMENT", 128)):
+        env[f"WORKSTREAM_ARTIFACT_ADMISSION_{scope}_MAXIMUM_BYTES"] = str(mib * 1024 * 1024)
     report["limitations"] = [
         "local test Flow issuer, not deployed Flow Identity",
         "real isolated MinIO and Celery; approved model provider may incur usage",
