@@ -173,8 +173,28 @@ async def test_all_documents_stored_dispatches_once_through_minio(
     from app.modules.artifacts.models import ArtifactReplica, ArtifactPutAttempt
     from app.workers.project_setup import run_project_guide_compilation
     from app.adapters.artifacts import internal_workers
+    from app.adapters.artifacts.s3_compatible import S3CompatibleArtifactStore
 
     deliveries = []
+    provider_calls = []
+    for operation in ("put", "observe_put_result"):
+        original_method = getattr(S3CompatibleArtifactStore, operation)
+
+        async def traced(self, *args, _method=original_method, _name=operation, **kwargs):
+            provider_calls.append(_name)
+            return await _method(self, *args, **kwargs)
+
+        monkeypatch.setattr(S3CompatibleArtifactStore, operation, traced)
+
+    async def stored_put_state():
+        async with db_session.get_session_factory()() as session:
+            return (await session.execute(select(
+                ArtifactPutAttempt.id, ArtifactPutAttempt.status,
+                ArtifactPutAttempt.execution_generation, ArtifactPutAttempt.observation_count,
+                ArtifactPutAttempt.cas_version, ArtifactPutAttempt.terminal_at,
+                ArtifactPutAttempt.terminal_result_code, ArtifactPutAttempt.receipt_id,
+                ArtifactPutAttempt.replica_id,
+            ).where(ArtifactPutAttempt.project_id == project["id"]).order_by(ArtifactPutAttempt.id))).all()
 
     def publish(*, args, task_id):
         deliveries.append((args, task_id))
@@ -234,12 +254,19 @@ async def test_all_documents_stored_dispatches_once_through_minio(
             assert await internal_workers.scan_guide_setup_continuations(recover) == 1
             assert await internal_workers.scan_guide_setup_continuations(recover) == 0
         assert response.status_code == 202, response.text
+        assert response.json()["status"] == "document_stored"
         assert response.json()["sha256"] == "sha256:" + hashlib.sha256(original).hexdigest()
         assert set(response.json()) == {"document_id", "sha256", "byte_count", "status", "replayed"}
         assert len(deliveries) == index
+        before_state = await stored_put_state()
+        before_provider_calls = list(provider_calls)
+        before_keys = await _stored_keys(get_settings())
         replay = await project_client.post(path, headers=headers, content=original)
         assert replay.status_code == 202, replay.text
-        assert replay.json()["replayed"] is True
+        assert replay.json() == response.json() | {"replayed": True, "status": "object_confirmed"}
+        assert await stored_put_state() == before_state
+        assert provider_calls == before_provider_calls
+        assert await _stored_keys(get_settings()) == before_keys
         assert len(deliveries) == index
         before_keys = await _stored_keys(get_settings())
         changed = await project_client.post(path, headers=headers, content=original + b"changed")
@@ -271,6 +298,20 @@ async def test_all_documents_stored_dispatches_once_through_minio(
     finally:
         store.close()
         bootstrap.close()
+
+    # Even a completed put requires the fixed resolver's current authority.
+    before_state = await stored_put_state()
+    before_provider_calls = list(provider_calls)
+    deactivated = await project_client.post(
+        f"/api/v1/actors/{provision.json()['actor_profile_id']}/deactivate",
+        headers=auth_headers(), json={"reason": "Verify completed upload replay admission"},
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    denied = await project_client.post(path, headers=headers, content=original)
+    assert denied.status_code == 404, denied.text
+    assert await stored_put_state() == before_state
+    assert provider_calls == before_provider_calls
+    assert len(deliveries) == 1
 
 
 async def test_create_replay_requires_current_manager_authority(project_client):

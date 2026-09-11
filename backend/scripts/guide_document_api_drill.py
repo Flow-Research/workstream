@@ -163,7 +163,7 @@ async def scenario(drill, issuer, env):
                 exact_fields=(*commitment, "status"))
             def replay_status(value):
                 report.setdefault("upload_replay_statuses", []).append(value)
-                return value in {"document_stored", "object_confirmed"}
+                return value == "object_confirmed"
             try:
                 await drill.call(f"upload_replay_{index}", "POST", upload_route, path=upload_path,
                     token=manager, content=content, headers=headers, expected=202,
