@@ -7,9 +7,10 @@ This document explains activation custody; historical sequences below do not
 restart completed work or create another contribution-permission system.
 The canonical [authorization specification](../spec_authorization_service.md)
 and typed runtime catalogue define the registered facts and availability.
-After CP03B, AUTH-12B2 and CP05, the catalogue has 73 PermissionIds, 111 ActionIds,
-67 active actions and 44 planned actions. Verify the then-current registry
-when implementing rather than treating an older count as a future gate.
+Verify the current typed registry when implementing rather than treating
+historical catalogue totals as an activation gate. TASK claim/start and its
+work-context operations now use canonical authority; that does not activate
+remaining planned submission, review or recovery operations.
 
 Historical entry evidence is preserved in the
 [original custody record](../../.commitrail/initiatives/WS-AUTH-001/pre-cutover/ACTIVATION_CUSTODY.md).
@@ -77,9 +78,8 @@ gated `artifact.verification_job.retry`
 remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
-reconciles PostgreSQL parity through migration `0036`. After CP03B, AUTH-12B2 and CP05 activation, the
-current catalogue has 73 PermissionIds, 111 ActionIds, 67 active actions, and
-44 planned actions. Its closed registry contains fifteen service identities:
+historically reconciled PostgreSQL parity through migration `0036`, now folded
+into the v0.1 baseline. Its closed registry contains fifteen service identities:
 fourteen action-bearing identities with twenty-three matrix memberships plus
 the target-only `workstream.compensation.adapter` identity.
 CP01A registered four initially unavailable adapter-binding actions and CP01B

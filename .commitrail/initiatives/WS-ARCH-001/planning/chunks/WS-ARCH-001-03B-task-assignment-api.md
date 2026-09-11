@@ -4,6 +4,13 @@ Status: non-executable planning skeleton after 03A. Risk: L1. Outcome: TASKS exp
 assignment, contributor, predecessor and immutable locked-context commands and
 facts without importing PROJECTS or AUTH internals.
 
+The bounded [project-grant repair](../../../../changes/task-project-grant-authorization.md)
+already owns canonical contributor claim/start/work-context, separate management
+work-context and system-Operator start authority. Reuse its command/port and
+assignment transaction, not a second claim implementation. This skeleton still
+owns the missing contribution-policy attempt locks, queues, broader projections
+and invalidation behavior below; it is not completed by that repair.
+
 The TASK readiness command inherits the ContributionPolicyVersion already
 bound to the active Project Guide and locks it once as
 `WorkstreamTask.locked_contribution_policy_version_id` before the task becomes

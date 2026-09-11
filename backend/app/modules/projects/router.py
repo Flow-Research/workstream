@@ -9,7 +9,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.artifacts import get_guide_artifact_ingest_command
+from app.adapters.artifacts import (
+    get_guide_artifact_ingest_command, get_guide_artifact_prepared_authorization,
+    get_artifact_internal_authority, GuideArtifactPreparedAuthorization, ArtifactInternalAuthority,
+)
+from app.modules.projects.document_upload import ProjectGuideDocumentUploadTargets
 from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
@@ -18,15 +22,15 @@ from app.api.deps.authorization import (
     prepared_authorization_service,
 )
 from app.core.permissions import PermissionDenied
-from app.core.api_controls import StructuredHTTPException
+from app.core.api_controls import ApiErrorResponse, StructuredHTTPException
 from app.db.session import get_db_session
+from app.interfaces.artifacts import ArtifactLimitExceededError, ArtifactInputMismatchError, ArtifactStoreError
 from app.interfaces.artifact_operations import (
     GuideArtifactIngestCommand,
 )
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
-from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
-from app.modules.authorization.runtime import AuthorizationContext
+from app.modules.artifacts.service import ArtifactAdmissionRelationshipError, ArtifactAdmissionConflictError
 from app.modules.projects.schemas import (
     ActiveGuideReadResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
@@ -46,6 +50,8 @@ from app.modules.projects.schemas import (
 from app.modules.projects.service import ProjectService, ProjectServiceError
 from app.modules.projects.guide_mutation_router import (
     mutation_conflict_error,
+    require_guide_mutation_key,
+    guide_authorization_actor,
     sufficiency_authorization,
 )
 from app.modules.projects.sufficiency_mutation_service import (
@@ -63,6 +69,7 @@ from app.modules.projects.authorization_reads import (
     authorize_project_diagnostic_read,
     authorize_project_policy_read,
 )
+from app.modules.projects.api.guide_documents import DOCUMENT_EXTENSIONS
 from app.modules.projects.repository import ProjectRepository
 from app.modules.projects.guide_compilation.diagnostics import compilation_setup_response
 from app.modules.authorization.catalogue import ActionId
@@ -224,58 +231,78 @@ async def get_project(
         raise project_http_error(exc) from exc
 
 
+async def guide_upload_context(
+    key: Annotated[UUID, Depends(require_guide_mutation_key)],
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(guide_authorization_actor)],
+):
+    """Reuse the key-gated actor dependency before composing ingest context."""
+    return key, await get_artifact_authorization_context(request, resolved)
+
+
+def guide_document_upload_command(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    authority: Annotated[GuideArtifactPreparedAuthorization, Depends(get_guide_artifact_prepared_authorization)],
+    internal_authority: Annotated[ArtifactInternalAuthority, Depends(get_artifact_internal_authority)],
+) -> GuideArtifactIngestCommand:
+    """Compose the PROJECTS-owned selector lookup with the existing ART command."""
+    return get_guide_artifact_ingest_command(
+        request, session, authority, internal_authority, ProjectGuideDocumentUploadTargets(session),
+    )
+
+
 @router.post(
-    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/items/"
-    "{source_item_id}/artifact",
+    "/{project_id}/guides/{guide_id}/documents/{document_id}/content",
     response_model=GuideArtifactIngestResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    include_in_schema=False,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.ARTIFACT_GUIDE_SOURCE_INGEST.value,
+        "requestBody": {"required": True, "content": {
+            media_type: {"schema": {"type": "string", "format": "binary"}}
+            for media_type in DOCUMENT_EXTENSIONS
+        }},
+    },
+    responses={404: {"model": ApiErrorResponse, "description": "Document unavailable"},
+               409: {"model": ApiErrorResponse, "description": "Upload conflicts with committed document"},
+               413: {"model": ApiErrorResponse, "description": "Document exceeds configured byte limit"},
+               422: {"model": ApiErrorResponse, "description": "Invalid upload metadata or bytes"},
+               503: {"model": ApiErrorResponse, "description": "Artifact storage unavailable"}},
 )
-async def ingest_guide_source_artifact(
-    project_id: str,
-    guide_id: str,
-    source_snapshot_id: str,
-    source_item_id: str,
+async def upload_guide_document(
+    project_id: UUID,
+    guide_id: UUID,
+    document_id: UUID,
     request: Request,
-    context: Annotated[AuthorizationContext, Depends(get_artifact_authorization_context)],
-    ingest: Annotated[
-        GuideArtifactIngestCommand,
-        Depends(get_guide_artifact_ingest_command),
-    ],
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    authorization: Annotated[tuple, Depends(guide_upload_context)],
+    ingest: Annotated[GuideArtifactIngestCommand, Depends(guide_document_upload_command)],
+    content_type: Annotated[str, Header(alias="Content-Type", min_length=1)],
+    content_length: Annotated[int | None, Header(alias="Content-Length", ge=0)] = None,
 ) -> GuideArtifactIngestResponse:
-    """Stream one guide source through hidden, fail-closed ART ingestion."""
-    try:
-        identifiers = (
-            UUID(project_id),
-            UUID(guide_id),
-            UUID(source_snapshot_id),
-            UUID(source_item_id),
-            UUID(idempotency_key or ""),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="Guide source not found") from exc
+    """Store one declared original; complete membership gates automatic setup."""
+    key, context = authorization
     try:
         result = await ingest.ingest(
-            authorization_context=context,
-            project_id=identifiers[0],
-            guide_id=identifiers[1],
-            guide_source_snapshot_id=identifiers[2],
-            source_item_id=identifiers[3],
-            idempotency_key=identifiers[4],
+            authorization_context=context, project_id=project_id, guide_id=guide_id,
+            source_item_id=document_id, idempotency_key=key,
+            content_type=content_type.partition(";")[0].strip().lower(),
+            content_length=content_length,
             byte_source=request.stream(),
         )
-    except (
-        ArtifactAdmissionRelationshipError,
-        ArtifactAuthorityDeniedError,
-    ) as exc:
-        LOGGER.warning(
-            "guide_source_artifact_ingest_rejected type=%s reason=%s",
-            type(exc).__name__,
-            str(exc),
-        )
-        raise HTTPException(status_code=404, detail="Guide source not found") from exc
-    return GuideArtifactIngestResponse.model_validate(result, from_attributes=True)
+    except (ArtifactAdmissionRelationshipError, ArtifactAuthorityDeniedError) as exc:
+        raise HTTPException(status_code=404, detail="Guide document not found") from exc
+    except ArtifactAdmissionConflictError as exc:
+        raise HTTPException(status_code=409, detail="Guide document upload conflicts") from exc
+    except ArtifactLimitExceededError as exc:
+        raise HTTPException(status_code=413, detail="Guide document exceeds byte limit") from exc
+    except ArtifactInputMismatchError as exc:
+        raise HTTPException(status_code=422, detail="Invalid guide document bytes") from exc
+    except ArtifactStoreError as exc:
+        raise HTTPException(status_code=503, detail="Guide document storage unavailable") from exc
+    return GuideArtifactIngestResponse(
+        document_id=document_id, sha256=result.sha256, byte_count=result.byte_count,
+        status=result.status, replayed=result.replayed,
+    )
 
 
 @router.get(

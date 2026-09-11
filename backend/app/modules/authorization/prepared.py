@@ -94,18 +94,16 @@ from app.modules.authorization.runtime import (
     ServiceAuthorizationContext,
 )
 from app.modules.authorization.submission_preparation import (
-    parse_submission_preparation_or_invalid,
-    submission_preparation_binding_fields,
     submission_preparation_binding_matches,
     SubmissionBundlePreparationPreflightResourceContext,
     SubmissionBundlePreparationResourceContext,
 )
-from app.modules.authorization.submission_consumption import parse_consumption_binding
+from app.modules.authorization.domain.task_authority import (
+    TASK_ACTIONS, TaskAuthorityResourceContext, parse_task_authority_binding,
+)
 from app.modules.authorization.pre_submit_materialization import (
-    initialize_artifact_bindings,
-    parse_materialization_binding,
+    parse_prepared_artifact_bindings,
     parse_project_create_binding,
-    parse_submission_binding,
 )
 
 
@@ -167,6 +165,7 @@ class _PreparedAuthorizationBinding:
     scope: PreparedAuthorityScope
     idempotency_key: UUID
     request_digest: str
+    task_authority_context: TaskAuthorityResourceContext | None = None
     project_create_operation_id: UUID | None = None
     project_create_project_id: UUID | None = None
     project_create_generation: int | None = None
@@ -468,6 +467,15 @@ class PreparedAuthorizationService:
         finally:
             self._authorization._discard_prelocked(authority)
 
+    def _live_issuance(self, handle: PreparedAuthorizationHandle) -> _Issuance:
+        """Reject foreign, consumed and closed-session handles at the shared entry boundary."""
+        if self._closed or type(handle) is not PreparedAuthorizationHandle:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        issuance = self._issued.get(handle)
+        if not isinstance(issuance, _Issuance):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        return issuance
+
     async def consume(
         self,
         handle: PreparedAuthorizationHandle,
@@ -476,11 +484,7 @@ class PreparedAuthorizationService:
         final_resource_context: AuthorizationResourceContext,
     ) -> AuthorizationDecision:
         """Consume one exact capability before evaluating and evidencing final facts."""
-        if self._closed or type(handle) is not PreparedAuthorizationHandle:
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        issuance = self._issued.get(handle)
-        if issuance is None or issuance is _CONSUMED:
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        issuance = self._live_issuance(handle)
         if expected_action_id is not issuance.binding.action_id:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         rebound = self._binding(expected_action_id, caller_input, issuance.binding.scope)
@@ -491,6 +495,11 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         final_scope = self._scope_from_resource(expected_action_id, final_resource_context)
         if final_scope != issuance.binding.scope:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if expected_action_id in TASK_ACTIONS and (
+            not isinstance(final_resource_context, TaskAuthorityResourceContext)
+            or issuance.binding.task_authority_context != final_resource_context
+        ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         if isinstance(final_resource_context, ProjectCreateResourceContext) and not (
             _project_create_binding_matches(issuance.binding, final_resource_context)
@@ -576,11 +585,7 @@ class PreparedAuthorizationService:
         final_resource_context: AuthorizationResourceContext,
         stored_decision_id: UUID,
     ) -> None:
-        if self._closed or type(handle) is not PreparedAuthorizationHandle:
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        issuance = self._issued.get(handle)
-        if not isinstance(issuance, _Issuance):
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
             await validate_projection_replay(
@@ -682,25 +687,7 @@ class PreparedAuthorizationService:
         policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
         submission_policy_context = submission_policy_resource_digest = None
-        exact_artifact_context, exact_artifact_resource_digest, submission_preparation_context, submission_preparation_resource_digest, submission_preparation_final_context, submission_preparation_final_digest = initialize_artifact_bindings()
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
-        if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
-            exact_artifact_context, exact_artifact_resource_digest = parse_materialization_binding(
-                dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
-            )
-        consumption_resource = parse_consumption_binding(
-            action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid
-        )
-        if consumption_resource is not None:
-            exact_artifact_context = consumption_resource.model_dump(mode="json")
-            exact_artifact_resource_digest = authorization_resource_digest(consumption_resource)
-        if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
-            (submission_preparation_context, submission_preparation_resource_digest,
-             submission_preparation_final_context, submission_preparation_final_digest) = parse_submission_binding(
-                dict(caller_input.request_value),
-                PreparedAuthorizationHandleInvalid,
-                parse_submission_preparation_or_invalid,
-            )
         if action_id is ActionId.PROJECT_CREATE:
             operation_id, project_id, operation_generation = parse_project_create_binding(
                 dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
@@ -890,15 +877,11 @@ class PreparedAuthorizationService:
             ),
             submission_policy_context=submission_policy_context,
             submission_policy_resource_digest=submission_policy_resource_digest,
-            exact_artifact_context=exact_artifact_context,
-            exact_artifact_resource_digest=exact_artifact_resource_digest,
-            **submission_preparation_binding_fields(
-                (
-                    submission_preparation_context,
-                    submission_preparation_resource_digest,
-                    submission_preparation_final_context,
-                    submission_preparation_final_digest,
-                )
+            task_authority_context=parse_task_authority_binding(
+                action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
+            ),
+            **parse_prepared_artifact_bindings(
+                action_id, dict(caller_input.request_value), PreparedAuthorizationHandleInvalid,
             ),
             **parse_prepared_adapter_binding(action_id, caller_input.request_value),
             **parse_prepared_contribution_policy(action_id, caller_input.request_value),
@@ -931,9 +914,11 @@ class PreparedAuthorizationService:
             )
         if admin_scope := _admin_prepared_scope(action_id, resource):
             return admin_scope
-        expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
-            action_id
-        ) or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
+        expected_project_resource = (
+            PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
+            or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
+            or (TaskAuthorityResourceContext if action_id in TASK_ACTIONS else None)
+        )
         if action_id in CONTRIBUTION_POLICY_MUTATION_ACTIONS and isinstance(resource, ContributionPolicyMutationResourceContext):
             return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=resource.scope_project_id)
         if action_id in ADAPTER_BINDING_MUTATION_ACTIONS and isinstance(
@@ -960,8 +945,8 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,
             )
-        if expected_project_mutation is not None and isinstance(
-            resource, expected_project_mutation
+        if expected_project_resource is not None and isinstance(
+            resource, expected_project_resource
         ):
             if isinstance(resource, ProjectCreateResourceContext):
                 return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)

@@ -92,7 +92,7 @@ class LifecycleAuditParticipant:
             claim_snapshot={},
             auth_source=LIFECYCLE_AUTH_SOURCE,
             is_dev_auth=False,
-            reason=value.reason.value,
+            reason=value.task_reason if value.task_reason is not None else value.reason.value,
             event_payload={"references": references},
             event_domain="legacy_lifecycle",
             event_version=None,

@@ -14,9 +14,13 @@ role-only fallback or public Submission cutover.
 
 ## Proposed exact surface/action manifest
 
-These are proposed registrations, not claims that these ActionIds exist now.
-Only `operations.task.start_override` already has an ActionId; the other
-named task permissions exist but their actions must be added explicitly.
+The bounded [project-grant repair](../../../../changes/task-project-grant-authorization.md)
+owns the active `task.claim`, `task.start`, `task.work_context.read`,
+`project.task.work_context.read` and `operations.task.start_override` actions.
+Reuse those registrations and extend their exact locked-context proof when
+03B delivers contribution-policy attempt lineage. The other rows below remain
+proposed registrations, not claims of usable actions. This repair does not
+activate the queue, remaining projections or invalidation handler.
 
 | Surface | Proposed action | Permission / principal |
 |---|---|---|
@@ -43,7 +47,7 @@ named task permissions exist but their actions must be added explicitly.
 Normal start reuses the existing submitter claim entitlement, with a separate
 action and stricter active-assignment guard; this proposes no separately
 grantable start permission. Security/product review must check that mapping
-against the canonical role matrix before this design is locked. Give the three
+against the canonical role matrix when extending the attempt lineage. Give the three
 locked-context projections separate declared surfaces under project,
 operations and audit routing, with permission-appropriate fields; do not make
 one action switch permission according to a token role.

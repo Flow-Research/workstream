@@ -66,6 +66,16 @@ async def seed_guide_snapshot_rows(connection, *, project_id: str, guide_id: str
     ), params)
 
 
+# Creation-only exclusions for downstream fixtures; live guide tests never use these.
+GUIDE_CREATION_CUSTODY_TRIGGERS = (
+    ("project_guides", "guide_mutation_product_custody"),
+    ("project_guides", "guide_task_examples_create_custody"),
+    ("project_guides", "require_document_creation_pair"),
+    ("guide_source_snapshots", "source_snapshot_product_custody"),
+    ("guide_source_snapshots", "require_document_creation_pair"),
+)
+
+
 _ISOLATED_DATABASE_RE = re.compile(r"workstream_test_([a-f0-9]{12})")
 _ISOLATED_ROLE_RE = re.compile(r"workstream_role_([a-f0-9]{12})")
 
@@ -82,9 +92,10 @@ async def suspend_historical_product_custody(
         "project_guides": {
             "guide_mutation_product_custody",
             "guide_task_examples_create_custody",
+            "require_document_creation_pair",
             "guide_lineage_lifecycle_guard",
         },
-        "guide_source_snapshots": {"source_snapshot_product_custody"},
+        "guide_source_snapshots": {"source_snapshot_product_custody", "require_document_creation_pair"},
         "guide_source_snapshot_items": {"guide_source_snapshot_items_custody"},
         "project_setup_runs": {"source_setup_run_custody"},
         "review_policies": {"review_policy_mutation_custody"},

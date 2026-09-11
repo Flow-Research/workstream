@@ -49,7 +49,7 @@ async def test_agent_token_is_denied_by_actor_admission(rsa_signing_material):
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {agent_token}"}
+            "/api/v1/actors/me", headers={"Authorization": f"Bearer {agent_token}"}
         )
 
     assert response.status_code == 403

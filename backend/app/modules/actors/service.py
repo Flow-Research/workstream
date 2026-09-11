@@ -1,4 +1,4 @@
-"""Canonical actor resolution and bounded legacy workflow compatibility."""
+"""Canonical actor resolution and identity lifecycle checks."""
 
 from __future__ import annotations
 
@@ -8,14 +8,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import require_any_role
 from app.modules.actors.models import (
-    GLOBAL_PROFILE_SCOPE_ID,
-    GLOBAL_PROFILE_SCOPE_TYPE,
     ActorIdentityLink,
     ActorProfile,
     LegacyActorIdentity,
-    LegacyWorkflowEligibility,
 )
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.schemas import (
@@ -23,11 +19,8 @@ from app.modules.actors.schemas import (
     ActorProfileAdminResponse,
     ActorProfileSelfResponse,
     ActorProfileUpdateRequest,
-    LegacyWorkflowEligibilityActivationRequest,
-    LegacyWorkflowEligibilityResponse,
 )
 from app.modules.actors.service_identities import ServiceIdentity
-from app.modules.audit.repository import AuditRepository
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,
@@ -35,7 +28,6 @@ from app.modules.audit.schemas import (
 )
 from app.modules.audit.service import AuditService
 from app.modules.authorization.runtime import ActorSelfResourceContext
-from app.modules.tasks.models import AuditEvent
 from app.schemas.auth import ActorContext, VerifiedIssuerToken, actor_id_from_external_identity
 
 
@@ -71,24 +63,6 @@ class ActorDeactivated(ActorRegistryError):
     code = "actor_deactivated"
 
 
-class ActorProfileDisabled(ActorRegistryError):
-    """Temporary compatibility denial for a disabled eligibility row."""
-
-    status_code = 403
-    code = "legacy_workflow_eligibility_disabled"
-
-
-class ActiveHumanWriteActorRequired(ActorRegistryError):
-    """The exact canonical caller is not currently eligible to write."""
-
-    status_code = 403
-    code = "active_contributor_required"
-
-
-class CanonicalWriteActorUnavailable(RuntimeError):
-    """Canonical profile/link state is missing or internally inconsistent."""
-
-
 @dataclass(frozen=True)
 class ResolvedActor:
     """Canonical profile and exact verified identity link for one request."""
@@ -117,7 +91,6 @@ class ActorService:
         self._session = session
         self._repo = ActorRepository(session)
         self._audit = AuditService(session)
-        self._legacy_audit = AuditRepository(session)
 
     async def lock_admission_proof(
         self,
@@ -293,26 +266,6 @@ class ActorService:
         """Lock the exact profile then its link and reject identity drift."""
         return await self.lock_actor_for_authorization(resolved)
 
-    async def require_active_human_write_actor(self, actor: ActorContext) -> None:
-        """Lock and revalidate one exact human caller in the current transaction."""
-        profile = await self._repo.get_actor_profile(actor.actor_id, for_update=True)
-        if profile is None:
-            raise CanonicalWriteActorUnavailable("canonical actor profile is missing")
-        if profile.actor_kind != "human" or profile.status != "active":
-            raise ActiveHumanWriteActorRequired("active contributor identity required")
-
-        link = await self._repo.get_identity_link(
-            actor.external_issuer,
-            actor.external_subject,
-            for_update=True,
-        )
-        if link is None:
-            raise CanonicalWriteActorUnavailable("canonical identity link is missing")
-        if link.actor_profile_id != profile.id or link.subject_kind != "human":
-            raise CanonicalWriteActorUnavailable("canonical identity link is inconsistent")
-        if link.status != "active":
-            raise ActiveHumanWriteActorRequired("active contributor identity required")
-
     async def update_self(
         self,
         resolved: ResolvedActor,
@@ -398,84 +351,6 @@ class ActorService:
         identity = await self._repo.upsert_legacy_identity(self._legacy_identity_from_actor(actor))
         await self._session.commit()
         return identity
-
-    async def activate_legacy_workflow_eligibility(
-        self,
-        actor: ActorContext,
-        payload: LegacyWorkflowEligibilityActivationRequest,
-    ) -> LegacyWorkflowEligibilityResponse:
-        """Activate temporary submitter intake metadata without creating authority."""
-        require_any_role(actor, {"worker"})
-        await self._repo.lock_external_identity(
-            actor.external_issuer,
-            actor.external_subject,
-        )
-        identity = await self._repo.upsert_legacy_identity(self._legacy_identity_from_actor(actor))
-        eligibility = await self._repo.get_legacy_eligibility(
-            actor.actor_id,
-            "worker",
-            GLOBAL_PROFILE_SCOPE_TYPE,
-            GLOBAL_PROFILE_SCOPE_ID,
-        )
-        previous_status = None
-        previous_tags: list[str] = []
-        inserted = False
-        if eligibility is None:
-            eligibility = LegacyWorkflowEligibility(
-                id=str(uuid4()),
-                actor_id=actor.actor_id,
-                profile_type="worker",
-                status="active",
-                skill_tags=payload.skill_tags,
-                scope_type=GLOBAL_PROFILE_SCOPE_TYPE,
-                scope_id=GLOBAL_PROFILE_SCOPE_ID,
-                profile_metadata={"source": "legacy_worker_profile_api"},
-            )
-            inserted = await self._repo.insert_legacy_eligibility_if_absent(eligibility)
-            eligibility = await self._repo.get_legacy_eligibility(
-                actor.actor_id,
-                "worker",
-                GLOBAL_PROFILE_SCOPE_TYPE,
-                GLOBAL_PROFILE_SCOPE_ID,
-            )
-            if eligibility is None:
-                raise RuntimeError("legacy eligibility insert did not return a row")
-        else:
-            if eligibility.status == "disabled":
-                raise ActorProfileDisabled("Legacy workflow eligibility is disabled")
-            previous_status = eligibility.status
-            previous_tags = list(eligibility.skill_tags)
-            eligibility.status = "active"
-            eligibility.skill_tags = payload.skill_tags
-            eligibility.profile_metadata = {"source": "legacy_worker_profile_api"}
-            eligibility.updated_at = func.now()
-
-        if (
-            inserted
-            or previous_status != eligibility.status
-            or previous_tags != eligibility.skill_tags
-        ):
-            await self._write_legacy_eligibility_audit(
-                actor,
-                eligibility,
-                from_status=previous_status,
-            )
-        await self._session.commit()
-        await self._session.refresh(eligibility)
-        return LegacyWorkflowEligibilityResponse(
-            id=eligibility.id,
-            actor_id=eligibility.actor_id,
-            profile_type=eligibility.profile_type,
-            status=eligibility.status,
-            skill_tags=list(eligibility.skill_tags),
-            scope_type=eligibility.scope_type,
-            scope_id=eligibility.scope_id,
-            profile_metadata=dict(eligibility.profile_metadata),
-            external_subject=identity.external_subject,
-            external_issuer=identity.external_issuer,
-            created_at=eligibility.created_at,
-            updated_at=eligibility.updated_at,
-        )
 
     @staticmethod
     def self_response(
@@ -593,53 +468,3 @@ class ActorService:
                 **common,
             )
         )
-
-    async def _write_legacy_eligibility_audit(
-        self,
-        actor: ActorContext,
-        eligibility: LegacyWorkflowEligibility,
-        *,
-        from_status: str | None,
-    ) -> None:
-        audit = actor.audit_context()
-        await self._legacy_audit.add_audit_event(
-            AuditEvent(
-                id=str(uuid4()),
-                entity_type="legacy_workflow_eligibility",
-                entity_id=eligibility.id,
-                event_type="legacy_workflow_eligibility_activated",
-                from_status=from_status,
-                to_status=eligibility.status,
-                actor_id=audit.actor_id,
-                external_subject=audit.external_subject,
-                external_issuer=audit.external_issuer,
-                actor_roles=list(audit.actor_roles),
-                claim_snapshot=audit.claim_snapshot,
-                auth_source=audit.auth_source,
-                is_dev_auth=audit.is_dev_auth,
-                reason="legacy_intake_compatibility",
-                event_payload={"skill_tags": list(eligibility.skill_tags)},
-            )
-        )
-
-
-class LegacyWorkflowEligibilityCompatibility:
-    """Enumerated read-only bridge for task eligibility during staged cutover."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._repository = ActorRepository(session)
-
-    async def get_active_submitter_eligibility(
-        self,
-        actor_profile_id: str,
-    ) -> LegacyWorkflowEligibility | None:
-        """Return active legacy submitter metadata without granting permission."""
-        eligibility = await self._repository.get_legacy_eligibility(
-            actor_profile_id,
-            "worker",
-            GLOBAL_PROFILE_SCOPE_TYPE,
-            GLOBAL_PROFILE_SCOPE_ID,
-        )
-        if eligibility is None or eligibility.status != "active":
-            return None
-        return eligibility

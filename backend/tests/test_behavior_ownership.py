@@ -1654,6 +1654,28 @@ def test_finalization_partition_additions_are_exact_and_cannot_authorize_neighbo
         )
 
 
+def test_partition_accepts_only_exact_task_project_authority_targets() -> None:
+    """TASK authority registration cannot admit an unrelated neighboring owner."""
+    expected = frozenset({
+        "backend/app/modules/authorization/domain/task_authority.py",
+        "backend/app/modules/authorization/task_authorization.py",
+        "backend/app/modules/tasks/api/authorization.py",
+        "backend/app/modules/tasks/api/transition_audit.py",
+        "backend/app/modules/tasks/authorized_commands.py",
+    })
+    assert ownership.TASK_PROJECT_AUTHORITY_TARGETS == expected
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(
+        _partition(sorted({retained, *expected})), trusted
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted({retained, *expected, "backend/app/modules/tasks/extra.py"})),
+            trusted,
+        )
+
+
 def test_partition_accepts_only_exact_cp05_authorization_targets() -> None:
     """CP05 registers five named targets without admitting another AUTH owner."""
     expected = frozenset({
@@ -1757,5 +1779,21 @@ def test_partition_accepts_only_exact_external_api_drill_target() -> None:
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(
             _partition(sorted({retained, *expected, "backend/scripts/extra_api_drill.py"})),
+            trusted,
+        )
+
+
+def test_partition_accepts_only_exact_guide_document_lookup_target() -> None:
+    expected = {"backend/app/modules/projects/document_upload.py"}
+    assert ownership.POL_04B2_PARTITION_TARGETS == expected
+    assert ownership.group_for_target(next(iter(expected))) == "lifecycle"
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(
+        _partition(sorted({retained, *expected})), trusted,
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted({retained, *expected, "backend/app/modules/projects/unregistered_upload.py"})),
             trusted,
         )

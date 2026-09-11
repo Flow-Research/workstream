@@ -18,6 +18,8 @@ def complete_guide_payload(version: str = "v1") -> dict:
         "version": version,
         "change_summary": f"Initial {version}",
         "task_examples": [{"content": "Review a claim using the project guide."}],
+        "documents": [{"label": name, "media_type": "application/pdf"}
+                      for name in ("guide.pdf", "rubric.pdf")],
     }
 
 
@@ -67,43 +69,27 @@ async def add_project_manager_admin_grant(project_id: str) -> UUID:
         return grant.id
 
 
-def source_snapshot_payload(*, source_label: str = "guide.pdf") -> dict:
-    return {
-        "items": [
-            {
-                "source_kind": "document",
-                "source_label": source_label,
-                "ingestion_adapter": "upload",
-                "media_type": "application/pdf",
-            },
-            {
-                "source_kind": "document",
-                "source_label": "rubric.pdf",
-                "ingestion_adapter": "upload",
-                "media_type": "application/pdf",
-            },
-        ]
-    }
+async def read_guide_source_snapshot(project_id: str, guide_id: str) -> dict:
+    """Read internal creation lineage for downstream policy/history tests."""
+    from app.modules.projects.repository import ProjectRepository
+    from app.modules.projects.schemas import GuideSourceSnapshotResponse, GuideSourceSnapshotItemResponse
+    from app.modules.projects.models import ProjectGuide
 
-
-async def create_source_snapshot(
-    client: AsyncClient,
-    project_id: str,
-    guide_id: str,
-    payload: dict | None = None,
-) -> dict:
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-        headers=auth_headers(),
-        json=payload if payload is not None else source_snapshot_payload(),
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
+    async with db_session.get_session_factory()() as session:
+        guide = await session.get(ProjectGuide, guide_id)
+        assert guide is not None and guide.project_id == project_id
+        repository = ProjectRepository(session)
+        snapshot = await repository.get_latest_guide_source_snapshot(project_id, guide_id, guide.version)
+        assert snapshot is not None
+        items = await repository.list_guide_source_snapshot_items(snapshot.id)
+        response = GuideSourceSnapshotResponse.model_validate(snapshot)
+        response.items = [GuideSourceSnapshotItemResponse.model_validate(item) for item in items]
+        return response.model_dump(mode="json")
 
 
 async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> dict:
     request_payload = dict(payload)
-    source_snapshot = request_payload.pop("source_snapshot", None)
+    request_payload.setdefault("documents", complete_guide_payload()["documents"])
     review_policy = request_payload.pop("review_policy", "default")
     revision_policy = request_payload.pop("revision_policy", "default")
     payment_policy = request_payload.pop("payment_policy", "default")
@@ -182,6 +168,4 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
             )
         await session.commit()
     await add_project_manager_admin_grant(project_id)
-    if source_snapshot is not None:
-        await create_source_snapshot(client, project_id, guide["id"], source_snapshot)
     return guide

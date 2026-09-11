@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from project_create_fixtures import guide_example_columns, guide_snapshot_columns
+from project_create_fixtures import guide_example_columns, guide_snapshot_columns, seed_guide_snapshot_rows
 
 import asyncio
 from collections.abc import Iterator
@@ -64,6 +64,7 @@ from app.modules.artifacts.schemas import (
     GuideArtifactAdmissionRequest,
 )
 from app.modules.artifacts.service import (
+    ArtifactAdmissionConflictError,
     ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
     ArtifactStorageNamespaceSpec,
@@ -288,7 +289,7 @@ async def _seed_guide(
     async with suspend_historical_product_custody(
         session,
         table="project_guides",
-        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody"),
+        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody", "require_document_creation_pair"),
     ):
         session.add(
             ProjectGuide(
@@ -304,7 +305,7 @@ async def _seed_guide(
     async with suspend_historical_product_custody(
         session,
         table="guide_source_snapshots",
-        triggers=("source_snapshot_product_custody",),
+        triggers=("source_snapshot_product_custody", "require_document_creation_pair"),
     ):
         session.add(
             GuideSourceSnapshot(
@@ -390,38 +391,18 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     )
     await session.flush()
     async with suspend_historical_product_custody(
-        session,
-        table="project_guides",
-        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody"),
+        session, table="project_guides",
+        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody", "require_document_creation_pair"),
+    ), suspend_historical_product_custody(
+        session, table="guide_source_snapshots",
+        triggers=("source_snapshot_product_custody", "require_document_creation_pair"),
     ):
-        session.add(
-            ProjectGuide(
-                **guide_example_columns(),
-                id=guide_id,
-                project_id=project_id,
-                version=guide_version,
-                status="draft",
-                approved_by="setup-actor",
-                effective_at=now,
-                created_by="setup-actor",
-            )
+        await seed_guide_snapshot_rows(
+            session, project_id=project_id, guide_id=guide_id,
+            version=guide_version, snapshot_id=snapshot_id,
         )
-        await session.flush()
-    async with suspend_historical_product_custody(
-        session,
-        table="guide_source_snapshots",
-        triggers=("source_snapshot_product_custody",),
-    ):
-        session.add(
-            GuideSourceSnapshot(
-                id=snapshot_id,
-                project_id=project_id,
-                guide_id=guide_id,
-                guide_version=guide_version,
-                **guide_snapshot_columns(snapshot_id),
-                captured_by="setup-actor",
-            )
-        )
+        snapshot = await session.get(GuideSourceSnapshot, snapshot_id)
+        snapshot.captured_by = "setup-actor"
         await session.flush()
     session.add(
         SubmissionArtifactPolicy(
@@ -568,6 +549,8 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         guide.selected_revision_policy_generation = 1
         guide.selected_revision_policy_hash = revision_hash
         guide.status = "active"
+        guide.approved_by = guide.created_by = "setup-actor"
+        guide.effective_at = now
         await session.flush()
     session.add(
         WorkstreamTask(
@@ -2301,7 +2284,7 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                 media_type="application/pdf",
             ) as wrong_source:
                 with pytest.raises(
-                    ArtifactAdmissionRelationshipError,
+                    ArtifactAdmissionConflictError,
                     match="guide source ingest conflicts with prepared bytes",
                 ):
                     wrong_prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
@@ -2326,15 +2309,9 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                     GuideSourceArtifactIngest.source_item_id == item_id
                 )
             )
-            scopes = (
-                (
-                    await session.execute(
-                        select(ArtifactAdmissionScope).order_by(ArtifactAdmissionScope.scope_type)
-                    )
-                )
-                .scalars()
-                .all()
-            )
+            scopes = (await session.scalars(
+                select(ArtifactAdmissionScope).order_by(ArtifactAdmissionScope.scope_type)
+            )).all()
             assert attempt is not None
             assert staged is not None
             assert staged.sha256 == expected_sha256
@@ -2353,9 +2330,8 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
             }
             assert len(result.charge_ids) == 3
             assert await _count(session, ArtifactPutAttempt) == 1
-            assert await _count(session, ArtifactContent) == 0
-            assert await _count(session, ArtifactReplica) == 0
-            assert await _count(session, ArtifactOperationReceipt) == 0
+            await _assert_no_admission_rows(
+                session, ArtifactContent, ArtifactReplica, ArtifactOperationReceipt)
             with pytest.raises(DBAPIError):
                 await session.execute(
                     text(

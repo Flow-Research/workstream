@@ -437,16 +437,21 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 73
+    assert len(route_inventory) == 72
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "58e52a93a0f081691e5dff6f6226d2a45f843a3ddc9df10d560e83dc1ee9439a"
+        "467431130a55743092c60339f318af93c526b0e8ccbdb2a2690637b4cb497cd1"
     )
-    assert len(protected_inventory) == 71
+    assert len(protected_inventory) == 70
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "588b760470932011dc1d2c669e700891e31120df2674d50f60163032aa349ac8"
+        "bd581252ecceda632de3bc8696a6b70e2ff15d2e0c519703138ef9d83c7f1191"
     )
+    assert "/api/v1/workers/me/profile" not in schema["paths"]
+    assert "post" not in schema["paths"]["/api/v1/tasks/{task_id}/submissions"]
+    assert "GET /api/v1/tasks/{task_id}/submissions" in protected_inventory
+    assert "POST /api/v1/operations/tasks/{task_id}/start" in protected_inventory
+    assert "GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context" in protected_inventory
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
-    assert {"401", "403", "503"} <= set(schema["paths"]["/api/v1/auth/me"]["get"]["responses"])
+    assert {"401", "403", "503"} <= set(schema["paths"]["/api/v1/actors/me"]["get"]["responses"])
     service_actor_responses = schema["paths"]["/api/v1/service-actors"]["post"]["responses"]
     assert "409" in service_actor_responses
     assert service_actor_responses["409"]["content"]["application/json"]["schema"] == {
@@ -463,6 +468,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        "POST /api/v1/tasks/{task_id}/claim": "task.claim",
+        "POST /api/v1/tasks/{task_id}/start": "task.start",
+        "GET /api/v1/tasks/{task_id}/work-context": "task.work_context.read",
+        "POST /api/v1/operations/tasks/{task_id}/start": "operations.task.start_override",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context": (
+            "project.task.work_context.read"
+        ),
         "GET /api/v1/actors/me": "actor.profile.read_self",
         "PATCH /api/v1/actors/me": "actor.profile.update_self",
         "GET /api/v1/actors/me/authorization-context": ("actor.authorization_context.read"),
@@ -507,8 +519,8 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy": (
             "project.revision_policy.update"
         ),
-        "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots": (
-            "project.guide_source_snapshot.create"
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content": (
+            "artifact.guide_source.ingest"
         ),
         "POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports": (
             "project.guide_sufficiency_report.create"
@@ -601,7 +613,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         ("/api/v1/projects/{project_id}/guides", "post"),
         ("/api/v1/projects/{project_id}/guides/{guide_id}", "patch"),
         (
-            "/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
+            "/api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content",
             "post",
         ),
     ):

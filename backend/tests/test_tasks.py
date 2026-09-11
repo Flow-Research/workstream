@@ -18,15 +18,15 @@ from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
-    AsyncConnection,
     AsyncSession,
-    create_async_engine,
 )
 from sqlalchemy.schema import CreateIndex
 
 from projects.guide_fixtures import complete_guide_payload
+from auth_concurrency_support import wait_for_named_database_lock
+from tests.submission_fixtures import seed_finalized_submission_for_checker_test
 
 from app.adapters.auth.dev import actor_id_from_external_identity
 from app.core.config import get_settings
@@ -35,6 +35,7 @@ from app.core.permissions import PermissionDenied
 from app.db import models as db_models
 from app.db import session as db_session
 from app.db.base import Base
+from app.db.errors import integrity_constraint_name
 from app.main import create_app
 from app.modules.actors.models import (
     ActorIdentityLink,
@@ -42,13 +43,6 @@ from app.modules.actors.models import (
     LegacyActorIdentity,
     LegacyWorkflowEligibility,
 )
-from app.modules.actors.schemas import LegacyWorkflowEligibilityActivationRequest
-from app.modules.actors.service import (
-    ActiveHumanWriteActorRequired,
-    ActorService,
-    CanonicalWriteActorUnavailable,
-)
-from app.modules.checkers.service import CheckerService
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
@@ -85,10 +79,9 @@ from project_create_fixtures import (
 )
 from committed_guide_fixtures import create_compiled_report_fixture
 from app.modules.tasks.repository import TaskRepository
-from app.modules.tasks.schemas import SubmissionCreate, TaskCreate
+from app.modules.tasks.submission_composition import build_submission
+from app.modules.tasks.schemas import TaskCreate
 from app.modules.tasks.service import (
-    ActiveContributorRequired,
-    ContributorIdentityUnavailable,
     TaskLockedContextInvalid,
     TaskService,
     TaskServiceError,
@@ -351,48 +344,6 @@ async def test_task_repository_delegates_audit_persistence() -> None:
     repository._audit_repository.list_audit_events.assert_awaited_once_with("task", "task-1")
 
 
-async def test_task_contributor_revalidation_maps_failures_and_rolls_back() -> None:
-    actor = ActorContext(
-        actor_id=actor_id("write-actor"),
-        external_subject="write-actor",
-        external_issuer="flow-test",
-        roles=("worker",),
-        claim_snapshot={},
-        auth_source="dev_mock",
-        is_dev_auth=True,
-    )
-    session = MagicMock(spec=AsyncSession)
-    session.rollback = AsyncMock()
-    service = TaskService(session)
-    service._actors.require_active_human_write_actor = AsyncMock(return_value=None)
-
-    assert await service._require_active_contributor(actor) is None
-    session.rollback.assert_not_awaited()
-
-    cases = (
-        (
-            ActiveHumanWriteActorRequired("inactive"),
-            ActiveContributorRequired,
-            "active_contributor_required",
-        ),
-        (
-            CanonicalWriteActorUnavailable("missing"),
-            ContributorIdentityUnavailable,
-            "contributor_identity_unavailable",
-        ),
-        (
-            OperationalError("select", {}, RuntimeError("database unavailable")),
-            ContributorIdentityUnavailable,
-            "contributor_identity_unavailable",
-        ),
-    )
-    for source_error, expected_error, code in cases:
-        service._actors.require_active_human_write_actor = AsyncMock(side_effect=source_error)
-        with pytest.raises(expected_error) as failure:
-            await service._require_active_contributor(actor)
-        assert failure.value.code == code
-
-    assert session.rollback.await_count == len(cases)
 
 
 def task_service_actor(*roles: str) -> ActorContext:
@@ -453,36 +404,23 @@ async def test_task_service_read_contexts_preserve_visibility_and_operator_scope
     task.id = "task-1"
     task.created_by = actor.actor_id
     context = MagicMock(name="locked_context")
-    eligibility = MagicMock(name="legacy_eligibility")
     task_response = MagicMock(name="task_response")
-    work_response = MagicMock(name="work_response")
     requirements_response = MagicMock(name="requirements_response")
     locked_response = MagicMock(name="locked_response")
     service._get_task = AsyncMock(return_value=task)
     service._ensure_task_visible = AsyncMock()
     service._load_locked_task_context = AsyncMock(return_value=context)
-    service._legacy_workflow_eligibility.get_active_submitter_eligibility = AsyncMock(
-        return_value=eligibility
-    )
     service._task_response = MagicMock(return_value=task_response)
-    service._work_context_response = MagicMock(return_value=work_response)
     service._submission_requirements_response = MagicMock(return_value=requirements_response)
     service._locked_context_response = MagicMock(return_value=locked_response)
 
     assert await service.get_task(actor, task.id) is task_response
-    assert await service.get_task_work_context(actor, task.id) is work_response
     assert await service.get_task_submission_requirements(actor, task.id) is requirements_response
     assert await service.get_task_locked_context(actor, task.id) is locked_response
 
-    assert service._get_task.await_count == 4
-    assert service._ensure_task_visible.await_count == 3
-    assert service._load_locked_task_context.await_count == 3
-    service._work_context_response.assert_called_once_with(
-        actor,
-        task,
-        context,
-        has_active_submitter_eligibility=False,
-    )
+    assert service._get_task.await_count == 3
+    assert service._ensure_task_visible.await_count == 2
+    assert service._load_locked_task_context.await_count == 2
     service._submission_requirements_response.assert_called_once_with(task, context)
     service._locked_context_response.assert_called_once_with(task, context)
 
@@ -543,44 +481,6 @@ async def test_task_service_screen_and_release_own_transaction_boundaries() -> N
     assert session.refresh.await_args_list[1].args == (screened_task,)
 
 
-async def test_task_service_contributor_start_uses_exact_active_assignment() -> None:
-    actor = task_service_actor("worker")
-    session = MagicMock(spec=AsyncSession)
-    session.commit = AsyncMock()
-    session.refresh = AsyncMock()
-    service = TaskService(session)
-    task = MagicMock(spec=WorkstreamTask)
-    task.id = "task-1"
-    task.status = "claimed"
-    assignment = MagicMock(spec=TaskAssignment)
-    assignment.id = "assignment-1"
-    assignment.contributor_id = actor.actor_id
-    response = MagicMock(name="task_response")
-    service._get_task = AsyncMock(return_value=task)
-    service._ensure_transition_allowed = MagicMock()
-    service._repo.get_active_assignment = AsyncMock(return_value=assignment)
-    service._require_legacy_submitter_eligibility = AsyncMock(return_value=MagicMock())
-    service._change_task_status = AsyncMock()
-    service._task_response = MagicMock(return_value=response)
-
-    result = await service.start_task(actor, task.id, "starting work")
-
-    assert result is response
-    service._require_legacy_submitter_eligibility.assert_awaited_once_with(actor)
-    service._change_task_status.assert_awaited_once_with(
-        actor,
-        task,
-        "in_progress",
-        "starting work",
-        event_payload={
-            "assignment_id": assignment.id,
-            "contributor_id": actor.actor_id,
-            "operator_override": False,
-        },
-        event_type="task_status_changed",
-    )
-    session.commit.assert_awaited_once_with()
-    session.refresh.assert_awaited_once_with(task)
 
 
 async def test_task_service_finalize_requeues_locked_latest_submission(
@@ -864,7 +764,7 @@ async def task_client(task_database_env: str) -> AsyncIterator[AsyncClient]:
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        admission = await client.get("/api/v1/auth/me", headers=auth_headers())
+        admission = await client.get("/api/v1/actors/me", headers=auth_headers())
         assert admission.status_code == 200, admission.text
         async with db_session.get_session_factory()() as session:
             await grant_system_project_manager(
@@ -928,25 +828,6 @@ def actor_id(subject: str, issuer: str = "flow-test") -> str:
     return actor_id_from_external_identity(issuer, subject)
 
 
-async def fetch_legacy_actor_rows(
-    subject: str,
-    issuer: str = "flow-test",
-) -> tuple[LegacyActorIdentity | None, list[LegacyWorkflowEligibility]]:
-    """Load non-authoritative compatibility rows for assertions."""
-    expected_actor_id = actor_id(subject, issuer)
-    async with db_session.get_session_factory()() as session:
-        identity = await session.get(LegacyActorIdentity, expected_actor_id)
-        profiles = (
-            await session.scalars(
-                select(LegacyWorkflowEligibility)
-                .where(LegacyWorkflowEligibility.actor_id == expected_actor_id)
-                .order_by(
-                    LegacyWorkflowEligibility.profile_type.asc(),
-                    LegacyWorkflowEligibility.scope_type.asc(),
-                )
-            )
-        ).all()
-    return identity, list(profiles)
 
 
 def sha256_hash(seed: str) -> str:
@@ -1145,22 +1026,9 @@ async def create_policy_bundle_for_guide(
         await session.flush()
         await session.commit()
 
-    snapshot_response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-        headers=auth_headers(),
-        json={
-            "items": [
-                {
-                    "source_kind": "document",
-                    "source_label": f"guide-{guide_id}.pdf",
-                    "ingestion_adapter": "upload",
-                    "media_type": "application/pdf",
-                }
-            ]
-        },
-    )
-    assert snapshot_response.status_code == 201, snapshot_response.text
-    snapshot = snapshot_response.json()
+    from projects.guide_fixtures import read_guide_source_snapshot
+
+    snapshot = await read_guide_source_snapshot(project_id, guide_id)
     async with db_session.get_session_factory()() as session:
         setup = await session.scalar(
             select(ProjectSetupRun).where(
@@ -1349,8 +1217,7 @@ async def create_started_task(
 ) -> dict:
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     ready_task = await create_ready_task(client, project_id, payload)
-    await seed_worker_profile(subject)
-    set_dev_actor(monkeypatch, roles="worker", subject=subject)
+    await admit_and_grant_project_submitter(client, monkeypatch, project_id, subject)
     claim = await client.post(
         f"/api/v1/tasks/{ready_task['id']}/claim",
         headers=auth_headers(),
@@ -1363,7 +1230,38 @@ async def create_started_task(
         json={"reason": "start"},
     )
     assert start.status_code == 200, start.text
+    # Claim/start above prove grant-only authority. Downstream retained
+    # checker/detail routes still expect this token role until their cutover.
+    set_dev_actor(monkeypatch, roles="worker", subject=subject)
     return start.json()
+
+
+async def admit_and_grant_project_submitter(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, project_id: str, subject: str,
+) -> dict:
+    """Give a role-free contributor explicit authority for exactly one project."""
+    set_dev_actor(monkeypatch, roles="viewer", subject=subject)
+    admitted = await client.get("/api/v1/actors/me", headers=auth_headers())
+    assert admitted.status_code == 200, admitted.text
+    actor_profile_id = admitted.json()["actor_profile_id"]
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/role-grants",
+        headers=auth_headers(),
+        json={
+            "target_actor_profile_id": actor_profile_id,
+            "role": "submitter",
+            "qualification": {
+                "skills_snapshot": {"availability": "unavailable", "reference_ids": [], "unavailable_reason": "no_record"},
+                "reputation_snapshot": {"availability": "unavailable", "reference_ids": [], "unavailable_reason": "no_record"},
+                "prior_project_work_refs": [], "external_expertise_refs": [],
+            },
+            "reason": "Explicit project assignment for task behavior tests",
+        },
+    )
+    assert response.status_code == 201, response.text
+    set_dev_actor(monkeypatch, roles="viewer", subject=subject)
+    return {"actor_profile_id": actor_profile_id, "grant_id": response.json()["id"]}
 
 
 def expected_worker_requester_provenance(subject: str = "worker-one") -> dict[str, str]:
@@ -1381,7 +1279,8 @@ def hold_pre_review_enqueue(*, checker_run_id: str, requester_provenance: dict) 
     return f"held:{checker_run_id}"
 
 
-async def seed_worker_profile(subject: str, *, skill_tags: list[str] | None = None) -> str:
+async def seed_task_test_actor(subject: str, *, stored_role: str = "worker") -> str:
+    """Seed identity facts for row/read tests; never seed eligibility or a grant."""
     worker_actor_id = actor_id(subject)
     async with db_session.get_session_factory()() as session:
         session.add_all(
@@ -1409,50 +1308,16 @@ async def seed_worker_profile(subject: str, *, skill_tags: list[str] | None = No
                     external_issuer="flow-test",
                     display_name=subject.replace("-", " ").title(),
                     email=f"{subject}@example.test",
-                    last_seen_roles=["worker"],
+                    last_seen_roles=[stored_role],
                     last_claim_snapshot={"seeded_for_task_test": True},
                     auth_source="dev_mock",
                     is_dev_auth=True,
                 ),
-                LegacyWorkflowEligibility(
-                    id=str(uuid4()),
-                    actor_id=worker_actor_id,
-                    profile_type="worker",
-                    status="active",
-                    skill_tags=skill_tags or ["stem"],
-                    scope_type="global",
-                    scope_id="global",
-                    profile_metadata={"seeded_for_task_test": True},
-                ),
+
             ]
         )
         await session.commit()
     return worker_actor_id
-
-
-async def _wait_for_task_database_lock(
-    database_url: str,
-    application_name: str,
-) -> None:
-    """Wait until one named race participant is blocked on a PostgreSQL lock."""
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            for _ in range(5000):
-                waiting = await connection.scalar(
-                    text(
-                        "select exists(select 1 from pg_stat_activity where "
-                        "application_name = :application_name "
-                        "and wait_event_type = 'Lock')"
-                    ),
-                    {"application_name": application_name},
-                )
-                if waiting:
-                    return
-                await asyncio.sleep(0)
-    finally:
-        await engine.dispose()
-    raise AssertionError(f"{application_name} never reached the PostgreSQL lock")
 
 
 async def _submission_context_request_for_started_task(
@@ -1525,12 +1390,13 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
         hold_pre_review_enqueue,
     )
     set_dev_actor(monkeypatch, roles="worker", subject=subject)
-    submission_response = await task_client.post(
-        f"/api/v1/tasks/{task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        task["id"], complete_submission_payload(),
     )
-    assert submission_response.status_code == 201, submission_response.text
+    submission_response = await task_client.get(
+        f"/api/v1/submissions/{submission_id}", headers=auth_headers(),
+    )
+    assert submission_response.status_code == 200, submission_response.text
     predecessor = submission_response.json()
 
     async with db_session.get_session_factory()() as session:
@@ -1580,7 +1446,7 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
             await TaskRepository(session).lock_submission_context(revision_request)
 
     replacement_subject = "worker-submission-context-replacement"
-    replacement_contributor_id = await seed_worker_profile(replacement_subject)
+    replacement_contributor_id = await seed_task_test_actor(replacement_subject)
     async with db_session.get_session_factory()() as session:
         await session.execute(
             update(TaskAssignment)
@@ -1636,7 +1502,7 @@ async def test_task_repository_postgresql_submission_context_lock_serializes_rac
         contender_call = asyncio.create_task(
             TaskRepository(contender).lock_submission_context(request)
         )
-        await _wait_for_task_database_lock(task_database_env, contender_name)
+        await wait_for_named_database_lock(task_database_env, contender_name)
         assert not contender_call.done()
         await holder.rollback()
         contender_facts = await contender_call
@@ -1650,603 +1516,8 @@ async def test_task_repository_postgresql_submission_context_lock_serializes_rac
         await contender.close()
 
 
-async def _task_contributor_race_snapshot(
-    connection: AsyncConnection,
-    task_id: str,
-) -> dict[str, object]:
-    """Capture every task-owned write surface relevant to contributor races."""
-    task = (
-        await connection.execute(
-            text("select status, assigned_to from workstream_tasks where id = :task_id"),
-            {"task_id": task_id},
-        )
-    ).one()
-    assignments = (
-        await connection.execute(
-            text(
-                "select id, contributor_id, assigned_by, status, accepted_at, released_at "
-                "from task_assignments where task_id = :task_id order by id"
-            ),
-            {"task_id": task_id},
-        )
-    ).all()
-    submissions = (
-        await connection.execute(
-            text(
-                "select id, contributor_id, version, status, locked_at "
-                "from submissions where task_id = :task_id order by version"
-            ),
-            {"task_id": task_id},
-        )
-    ).all()
-    evidence_count = await connection.scalar(
-        text(
-            "select count(*) from evidence_items evidence "
-            "join submissions submission on submission.id = evidence.submission_id "
-            "where submission.task_id = :task_id"
-        ),
-        {"task_id": task_id},
-    )
-    checker_run_count = await connection.scalar(
-        text("select count(*) from checker_runs where task_id = :task_id"),
-        {"task_id": task_id},
-    )
-    checker_result_count = await connection.scalar(
-        text("select count(*) from checker_results where task_id = :task_id"),
-        {"task_id": task_id},
-    )
-    audit_events = (
-        await connection.execute(
-            text(
-                "select id, event_type, from_status, to_status, actor_id, event_payload "
-                "from audit_events where entity_type = 'task' and entity_id = :task_id "
-                "order by created_at, id"
-            ),
-            {"task_id": task_id},
-        )
-    ).all()
-    idempotency_count = await connection.scalar(
-        text("select count(*) from authority_idempotency_records")
-    )
-    return {
-        "task": tuple(task),
-        "assignments": [tuple(row) for row in assignments],
-        "submissions": [tuple(row) for row in submissions],
-        "evidence_count": evidence_count,
-        "checker_run_count": checker_run_count,
-        "checker_result_count": checker_result_count,
-        "audit_events": [tuple(row) for row in audit_events],
-        "idempotency_count": idempotency_count,
-    }
 
 
-async def _read_task_contributor_race_snapshot(
-    database_url: str,
-    task_id: str,
-) -> dict[str, object]:
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            return await _task_contributor_race_snapshot(connection, task_id)
-    finally:
-        await engine.dispose()
-
-
-async def _run_contributor_lifecycle_write(
-    database_url: str,
-    *,
-    actor_profile_id: str,
-    identity_link_id: str,
-    transition: str,
-    task_id: str,
-    application_name: str,
-    entered: asyncio.Event,
-    locked: asyncio.Event | None = None,
-    release: asyncio.Event | None = None,
-    observe_task_after_lock: bool = False,
-) -> dict[str, object] | None:
-    """Apply one canonical-order lifecycle write in an independent transaction."""
-    engine = create_async_engine(database_url)
-    observed: dict[str, object] | None = None
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("select set_config('application_name', :name, true)"),
-                {"name": application_name},
-            )
-            entered.set()
-            await connection.execute(
-                text("select id from actor_profiles where id = :id for update"),
-                {"id": actor_profile_id},
-            )
-            await connection.execute(
-                text("select id from actor_identity_links where id = :id for update"),
-                {"id": identity_link_id},
-            )
-            if locked is not None:
-                locked.set()
-            if release is not None:
-                await release.wait()
-            if observe_task_after_lock:
-                observed = await _task_contributor_race_snapshot(connection, task_id)
-
-            if transition == "suspend":
-                await connection.execute(
-                    text(
-                        "update actor_profiles set status = 'suspended', "
-                        "suspended_by = :actor_id, suspended_at = clock_timestamp(), "
-                        "suspension_reason = 'contributor lock race' where id = :actor_id"
-                    ),
-                    {"actor_id": actor_profile_id},
-                )
-            elif transition == "deactivate":
-                await connection.execute(
-                    text(
-                        "update actor_profiles set status = 'deactivated', "
-                        "deactivated_by = :actor_id, deactivated_at = clock_timestamp(), "
-                        "deactivation_reason = 'contributor lock race' where id = :actor_id"
-                    ),
-                    {"actor_id": actor_profile_id},
-                )
-            else:
-                assert transition == "revoke_link"
-                await connection.execute(
-                    text(
-                        "update actor_identity_links set status = 'revoked', "
-                        "revoked_by = :actor_id, revoked_at = clock_timestamp(), "
-                        "revoked_reason = 'contributor lock race' where id = :link_id"
-                    ),
-                    {"actor_id": actor_profile_id, "link_id": identity_link_id},
-                )
-        return observed
-    finally:
-        await engine.dispose()
-
-
-async def _run_task_contributor_write(
-    database_url: str,
-    *,
-    actor: ActorContext,
-    task_id: str,
-    operation: str,
-    application_name: str,
-    entered: asyncio.Event,
-) -> object:
-    """Run one task write in its own named PostgreSQL session."""
-    engine = create_async_engine(database_url)
-    try:
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            await session.execute(
-                text("select set_config('application_name', :name, true)"),
-                {"name": application_name},
-            )
-            entered.set()
-            service = TaskService(session)
-            if operation == "claim":
-                return await service.claim_task(actor, task_id, "contributor lock race")
-            assert operation == "submission"
-            return await service.create_submission(
-                actor,
-                task_id,
-                SubmissionCreate.model_validate(complete_submission_payload()),
-            )
-    finally:
-        await engine.dispose()
-
-
-async def _read_contributor_lifecycle_state(
-    database_url: str,
-    actor_profile_id: str,
-    identity_link_id: str,
-) -> tuple[str, str]:
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            profile_status = await connection.scalar(
-                text("select status from actor_profiles where id = :id"),
-                {"id": actor_profile_id},
-            )
-            link_status = await connection.scalar(
-                text("select status from actor_identity_links where id = :id"),
-                {"id": identity_link_id},
-            )
-            assert isinstance(profile_status, str)
-            assert isinstance(link_status, str)
-            return profile_status, link_status
-    finally:
-        await engine.dispose()
-
-
-async def _restore_contributor_after_lifecycle_race(
-    database_url: str,
-    actor_profile_id: str,
-    identity_link_id: str,
-) -> None:
-    """Return a terminal test actor to active state under explicit test custody."""
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            reset = await connection.begin()
-            try:
-                await connection.execute(
-                    text("alter table actor_profiles disable trigger actor_profile_history_guard")
-                )
-                await connection.execute(
-                    text(
-                        "alter table actor_identity_links disable trigger "
-                        "actor_identity_link_history_guard"
-                    )
-                )
-                await connection.execute(
-                    text(
-                        "update actor_profiles set status = 'active', "
-                        "suspended_by = null, suspended_at = null, "
-                        "suspension_reason = null, reactivated_by = null, "
-                        "reactivated_at = null, reactivation_reason = null, "
-                        "deactivated_by = null, deactivated_at = null, "
-                        "deactivation_reason = null where id = :id"
-                    ),
-                    {"id": actor_profile_id},
-                )
-                await connection.execute(
-                    text(
-                        "update actor_identity_links set status = 'active', "
-                        "revoked_by = null, revoked_at = null, revoked_reason = null, "
-                        "reactivated_by = null, reactivated_at = null, "
-                        "reactivation_reason = null where id = :id"
-                    ),
-                    {"id": identity_link_id},
-                )
-                await reset.commit()
-            except BaseException:
-                await reset.rollback()
-                raise
-            finally:
-                enable = await connection.begin()
-                try:
-                    await connection.execute(
-                        text(
-                            "alter table actor_identity_links enable trigger "
-                            "actor_identity_link_history_guard"
-                        )
-                    )
-                    await connection.execute(
-                        text(
-                            "alter table actor_profiles enable trigger actor_profile_history_guard"
-                        )
-                    )
-                    await enable.commit()
-                except BaseException:
-                    await enable.rollback()
-                    raise
-    finally:
-        await engine.dispose()
-
-
-@pytest.fixture
-async def contributor_lifecycle_race_cleanup(
-    task_database_env: str,
-) -> AsyncIterator[list[tuple[str, str]]]:
-    """Restore lifecycle race actors before the migration fixture downgrades."""
-    actors: list[tuple[str, str]] = []
-    yield actors
-    for actor_profile_id, identity_link_id in actors:
-        await _restore_contributor_after_lifecycle_race(
-            task_database_env,
-            actor_profile_id,
-            identity_link_id,
-        )
-
-
-_CONTRIBUTOR_LOCK_RACE_CASES = [
-    (operation, transition, ordering)
-    for operation in ("claim", "submission")
-    for transition in ("suspend", "deactivate", "revoke_link")
-    for ordering in ("lifecycle_first", "task_write_first")
-]
-
-
-@pytest.mark.parametrize(
-    ("operation", "transition", "ordering"),
-    _CONTRIBUTOR_LOCK_RACE_CASES,
-    ids=["-".join(case) for case in _CONTRIBUTOR_LOCK_RACE_CASES],
-)
-async def test_contributor_task_writes_serialize_with_lifecycle_changes(
-    task_client: AsyncClient,
-    task_database_env: str,
-    contributor_lifecycle_race_cleanup: list[tuple[str, str]],
-    monkeypatch: pytest.MonkeyPatch,
-    operation: str,
-    transition: str,
-    ordering: str,
-) -> None:
-    """Prove all twelve contributor-write and lifecycle lock order outcomes."""
-    project = await create_active_project(task_client)
-    subject = f"race-{operation}-{transition}-{ordering}"
-    contributor_id = actor_id(subject)
-    checker_calls: list[str] = []
-    enqueue_calls: list[str] = []
-    if operation == "claim":
-        task = await create_ready_task(task_client, project["id"])
-        await seed_worker_profile(subject)
-    else:
-        task = await create_started_task(
-            task_client,
-            project["id"],
-            monkeypatch,
-            subject,
-        )
-        original_pre_submit_check = CheckerService.pre_submit_check
-
-        async def count_pre_submit_check(self, *args, **kwargs):
-            checker_calls.append(task["id"])
-            return await original_pre_submit_check(self, *args, **kwargs)
-
-        def count_pre_review_enqueue(
-            *,
-            checker_run_id: str,
-            requester_provenance: dict,
-        ) -> str:
-            enqueue_calls.append(checker_run_id)
-            return hold_pre_review_enqueue(
-                checker_run_id=checker_run_id,
-                requester_provenance=requester_provenance,
-            )
-
-        monkeypatch.setattr(
-            CheckerService,
-            "pre_submit_check",
-            count_pre_submit_check,
-        )
-        monkeypatch.setattr(
-            "app.modules.tasks.service.enqueue_pre_review_gate",
-            count_pre_review_enqueue,
-        )
-
-    async with db_session.get_session_factory()() as session:
-        identity_link_id = await session.scalar(
-            select(ActorIdentityLink.id).where(ActorIdentityLink.actor_profile_id == contributor_id)
-        )
-    assert identity_link_id is not None
-    contributor_lifecycle_race_cleanup.append((contributor_id, identity_link_id))
-
-    actor = ActorContext(
-        actor_id=contributor_id,
-        external_subject=subject,
-        external_issuer="flow-test",
-        roles=("worker",),
-        claim_snapshot={"roles": ["worker"]},
-        auth_source="dev_mock",
-        is_dev_auth=True,
-    )
-    task_id = task["id"]
-    before = await _read_task_contributor_race_snapshot(task_database_env, task_id)
-    task_application_name = f"ws-race-{operation}-{transition}-{ordering}-task"
-    lifecycle_application_name = f"ws-race-{operation}-{transition}-{ordering}-lifecycle"
-
-    if ordering == "lifecycle_first":
-        lifecycle_entered = asyncio.Event()
-        lifecycle_locked = asyncio.Event()
-        release_lifecycle = asyncio.Event()
-        lifecycle_call = asyncio.create_task(
-            _run_contributor_lifecycle_write(
-                task_database_env,
-                actor_profile_id=contributor_id,
-                identity_link_id=identity_link_id,
-                transition=transition,
-                task_id=task_id,
-                application_name=lifecycle_application_name,
-                entered=lifecycle_entered,
-                locked=lifecycle_locked,
-                release=release_lifecycle,
-            ),
-            name=lifecycle_application_name,
-        )
-        await lifecycle_entered.wait()
-        await lifecycle_locked.wait()
-        task_entered = asyncio.Event()
-        task_call = asyncio.create_task(
-            _run_task_contributor_write(
-                task_database_env,
-                actor=actor,
-                task_id=task_id,
-                operation=operation,
-                application_name=task_application_name,
-                entered=task_entered,
-            ),
-            name=task_application_name,
-        )
-        await task_entered.wait()
-        lock_error: AssertionError | None = None
-        try:
-            await _wait_for_task_database_lock(
-                task_database_env,
-                task_application_name,
-            )
-        except AssertionError as exc:
-            lock_error = exc
-        finally:
-            release_lifecycle.set()
-        lifecycle_result, task_result = await asyncio.gather(
-            lifecycle_call,
-            task_call,
-            return_exceptions=True,
-        )
-        if lock_error is not None:
-            raise lock_error
-        assert lifecycle_result is None
-        assert isinstance(task_result, ActiveContributorRequired)
-        assert task_result.code == "active_contributor_required"
-        assert (
-            await _read_task_contributor_race_snapshot(
-                task_database_env,
-                task_id,
-            )
-            == before
-        )
-        if operation == "submission":
-            assert checker_calls == []
-            assert enqueue_calls == []
-    else:
-        task_locked = asyncio.Event()
-        release_task = asyncio.Event()
-        original_guard = ActorService.require_active_human_write_actor
-
-        async def hold_task_after_contributor_lock(
-            service: ActorService,
-            current_actor: ActorContext,
-        ) -> None:
-            await original_guard(service, current_actor)
-            if current_actor.actor_id == contributor_id:
-                task_locked.set()
-                await release_task.wait()
-
-        monkeypatch.setattr(
-            ActorService,
-            "require_active_human_write_actor",
-            hold_task_after_contributor_lock,
-        )
-        task_entered = asyncio.Event()
-        task_call = asyncio.create_task(
-            _run_task_contributor_write(
-                task_database_env,
-                actor=actor,
-                task_id=task_id,
-                operation=operation,
-                application_name=task_application_name,
-                entered=task_entered,
-            ),
-            name=task_application_name,
-        )
-        await task_entered.wait()
-        await task_locked.wait()
-        lifecycle_entered = asyncio.Event()
-        lifecycle_call = asyncio.create_task(
-            _run_contributor_lifecycle_write(
-                task_database_env,
-                actor_profile_id=contributor_id,
-                identity_link_id=identity_link_id,
-                transition=transition,
-                task_id=task_id,
-                application_name=lifecycle_application_name,
-                entered=lifecycle_entered,
-                observe_task_after_lock=True,
-            ),
-            name=lifecycle_application_name,
-        )
-        await lifecycle_entered.wait()
-        lock_error = None
-        try:
-            await _wait_for_task_database_lock(
-                task_database_env,
-                lifecycle_application_name,
-            )
-        except AssertionError as exc:
-            lock_error = exc
-        finally:
-            release_task.set()
-        task_result, observed_after_task_commit = await asyncio.gather(
-            task_call,
-            lifecycle_call,
-            return_exceptions=True,
-        )
-        if lock_error is not None:
-            raise lock_error
-        if isinstance(task_result, BaseException):
-            raise task_result
-        if isinstance(observed_after_task_commit, BaseException):
-            raise observed_after_task_commit
-        assert isinstance(observed_after_task_commit, dict)
-        if operation == "claim":
-            assert task_result.assignment.contributor_id == contributor_id
-            assert observed_after_task_commit["task"] == (
-                "claimed",
-                contributor_id,
-            )
-            assignments = observed_after_task_commit["assignments"]
-            assert isinstance(assignments, list)
-            assert len(assignments) == 1
-            assert assignments[0][1] == contributor_id
-        else:
-            assert task_result.contributor_id == contributor_id
-            assert checker_calls == [task_id]
-            assert len(enqueue_calls) == 1
-            assert observed_after_task_commit["task"] == (
-                "submitted",
-                contributor_id,
-            )
-            submissions = observed_after_task_commit["submissions"]
-            assert isinstance(submissions, list)
-            assert len(submissions) == 1
-            assert submissions[0][1] == contributor_id
-
-    profile_status, link_status = await _read_contributor_lifecycle_state(
-        task_database_env,
-        contributor_id,
-        identity_link_id,
-    )
-    if transition == "suspend":
-        assert (profile_status, link_status) == ("suspended", "active")
-    elif transition == "deactivate":
-        assert (profile_status, link_status) == ("deactivated", "active")
-    else:
-        assert (profile_status, link_status) == ("active", "revoked")
-
-
-async def seed_actor_profile(
-    subject: str,
-    *,
-    profile_type: str,
-    status: str = "active",
-    skill_tags: list[str] | None = None,
-) -> str:
-    """Seed one actor identity and global actor profile for authorization tests."""
-    seeded_actor_id = actor_id(subject)
-    async with db_session.get_session_factory()() as session:
-        session.add_all(
-            [
-                ActorProfile(
-                    id=seeded_actor_id,
-                    actor_kind="human",
-                    status="active",
-                    provisioning_method="automatic_first_access",
-                    created_by=seeded_actor_id,
-                ),
-                ActorIdentityLink(
-                    id=str(uuid4()),
-                    actor_profile_id=seeded_actor_id,
-                    issuer="flow-test",
-                    subject=subject,
-                    subject_kind="human",
-                    status="active",
-                    linked_by=seeded_actor_id,
-                    last_verified_at=datetime.now(UTC),
-                ),
-                LegacyActorIdentity(
-                    actor_id=seeded_actor_id,
-                    external_subject=subject,
-                    external_issuer="flow-test",
-                    display_name=subject.replace("-", " ").title(),
-                    email=f"{subject}@example.test",
-                    last_seen_roles=[profile_type],
-                    last_claim_snapshot={"seeded_for_task_test": True},
-                    auth_source="dev_mock",
-                    is_dev_auth=True,
-                ),
-                LegacyWorkflowEligibility(
-                    id=str(uuid4()),
-                    actor_id=seeded_actor_id,
-                    profile_type=profile_type,
-                    status=status,
-                    skill_tags=skill_tags or [],
-                    scope_type="global",
-                    scope_id="global",
-                    profile_metadata={"seeded_for_task_test": True},
-                ),
-            ]
-        )
-        await session.commit()
-    return seeded_actor_id
 
 
 def test_task_models_are_registered_for_alembic_metadata() -> None:
@@ -2309,22 +1580,13 @@ def test_task_assignment_partial_unique_index_metadata_compiles() -> None:
     assert "status = 'active'" in postgres_compiled
 
 
-def test_submission_create_openapi_documents_domain_error() -> None:
+@pytest.mark.parametrize("path", [
+    "/api/v1/tasks/{task_id}/work-context",
+    "/api/v1/projects/{project_id}/tasks/{task_id}/work-context",
+])
+def test_task_context_openapi_documents_locked_context_domain_error(path: str) -> None:
     schema = create_app().openapi()
-    responses = schema["paths"]["/api/v1/tasks/{task_id}/submissions"]["post"]["responses"]
-    response_422 = responses["422"]["content"]["application/json"]["schema"]
-
-    assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
-    domain_schema = next(option for option in response_422["oneOf"] if "properties" in option)
-    assert domain_schema["properties"]["code"]["enum"] == ["pre_submission_checker_failed"]
-    assert "details" in domain_schema["properties"]
-    assert set(domain_schema["required"]) == {"code", "details", "error"}
-    assert domain_schema["additionalProperties"] is False
-
-
-def test_task_context_openapi_documents_locked_context_domain_error() -> None:
-    schema = create_app().openapi()
-    responses = schema["paths"]["/api/v1/tasks/{task_id}/work-context"]["get"]["responses"]
+    responses = schema["paths"][path]["get"]["responses"]
     response_422 = responses["422"]["content"]["application/json"]["schema"]
 
     assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
@@ -2433,7 +1695,6 @@ async def test_task_router_service_errors_use_canonical_request_context(
     cases = [
         ("create_task", "POST", "/api/v1/projects/project-id/tasks", complete_task_payload()),
         ("get_task", "GET", "/api/v1/tasks/task-id", None),
-        ("get_task_work_context", "GET", "/api/v1/tasks/task-id/work-context", None),
         (
             "get_task_submission_requirements",
             "GET",
@@ -2443,14 +1704,6 @@ async def test_task_router_service_errors_use_canonical_request_context(
         ("get_task_locked_context", "GET", "/api/v1/tasks/task-id/locked-context", None),
         ("move_to_screening", "POST", "/api/v1/tasks/task-id/screen", None),
         ("release_to_ready", "POST", "/api/v1/tasks/task-id/release", None),
-        ("claim_task", "POST", "/api/v1/tasks/task-id/claim", None),
-        ("start_task", "POST", "/api/v1/tasks/task-id/start", None),
-        (
-            "create_submission",
-            "POST",
-            "/api/v1/tasks/task-id/submissions",
-            complete_submission_payload(),
-        ),
         ("list_task_submissions", "GET", "/api/v1/tasks/task-id/submissions", None),
         ("get_submission", "GET", "/api/v1/submissions/submission-id", None),
         ("finalize_submission", "POST", "/api/v1/submissions/submission-id/finalize", None),
@@ -2481,84 +1734,8 @@ async def test_task_router_service_errors_use_canonical_request_context(
     assert denied.json()["detail"] == "bounded permission failure"
     assert denied.json()["error"]["code"] == "permission_not_granted"
 
-    async def fail_inactive_contributor(*_args, **_kwargs):
-        raise ActiveContributorRequired(ActiveContributorRequired.message)
-
-    monkeypatch.setattr(TaskService, "claim_task", fail_inactive_contributor)
-    inactive = await task_client.post(
-        "/api/v1/tasks/task-id/claim",
-        headers=auth_headers(),
-        json={"reason": "claim"},
-    )
-
-    assert inactive.status_code == 403
-    assert inactive.json()["detail"] == "Active contributor identity required"
-    assert inactive.json()["error"]["code"] == "active_contributor_required"
-    assert inactive.json()["error"]["retryable"] is False
-
-    async def fail_contributor_lookup(*_args, **_kwargs):
-        raise ContributorIdentityUnavailable(ContributorIdentityUnavailable.message)
-
-    monkeypatch.setattr(TaskService, "create_submission", fail_contributor_lookup)
-    unavailable = await task_client.post(
-        "/api/v1/tasks/task-id/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert unavailable.status_code == 503
-    assert unavailable.json()["error"]["message"] == (
-        "Contributor identity verification unavailable"
-    )
-    assert unavailable.json()["error"]["code"] == "contributor_identity_unavailable"
-    assert unavailable.json()["error"]["retryable"] is True
 
 
-async def test_legacy_eligibility_service_updates_existing_submitter_row(
-    task_database_env: str,
-) -> None:
-    async with db_session.get_session_factory()() as session:
-        service = ActorService(session)
-        worker_actor = ActorContext(
-            actor_id=actor_id("worker-upsert"),
-            external_subject="worker-upsert",
-            external_issuer="flow-test",
-            display_name="Worker Upsert",
-            email="worker-upsert@example.test",
-            roles=("worker",),
-            claim_snapshot={"roles": ("worker",)},
-            auth_source="dev_mock",
-            is_dev_auth=True,
-        )
-        first_worker = await service.activate_legacy_workflow_eligibility(
-            worker_actor,
-            LegacyWorkflowEligibilityActivationRequest(skill_tags=["stem"]),
-        )
-        updated_worker = await service.activate_legacy_workflow_eligibility(
-            worker_actor.model_copy(
-                update={"display_name": "Worker Updated", "email": "worker-updated@example.test"}
-            ),
-            LegacyWorkflowEligibilityActivationRequest(skill_tags=["stem", "analysis"]),
-        )
-
-    async with db_session.get_session_factory()() as session:
-        worker_rows = (
-            (
-                await session.execute(
-                    select(LegacyWorkflowEligibility).where(
-                        LegacyWorkflowEligibility.actor_id == worker_actor.actor_id,
-                        LegacyWorkflowEligibility.profile_type == "worker",
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-    assert updated_worker.id == first_worker.id
-    assert updated_worker.skill_tags == ["stem", "analysis"]
-    assert len(worker_rows) == 1
-    assert worker_rows[0].id == first_worker.id
 
 
 async def test_task_can_be_created_in_draft(task_client: AsyncClient) -> None:
@@ -2863,7 +2040,7 @@ async def test_worker_task_response_redacts_locked_policy_hashes(
 
     assert operator_response.status_code == 200, operator_response.text
 
-    await seed_worker_profile("worker-one")
+    await seed_task_test_actor("worker-one")
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
 
     response = await task_client.get(
@@ -2918,7 +2095,9 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     assert work_body["guide"]["change_summary"] == "Initial v1"
     assert "content_markdown" not in work_body["guide"]
     assert work_body["payment_policy"]["base_amount"] == "25.00"
-    assert work_body["lifecycle"]["can_submit"] is True
+    assert work_body["lifecycle"]["can_submit"] is False
+    assert work_body["lifecycle"]["can_run_pre_submit_check"] is False
+    assert work_body["lifecycle"]["next_actions"] == []
     worker_context_json = json.dumps(work_body, sort_keys=True)
     for internal_field in (
         "locked_guide_source_snapshot_hash",
@@ -3015,8 +2194,9 @@ async def test_ready_worker_work_context_omits_private_task_source_fields(
     payload["import_batch_id"] = "ready-private-import"
     payload["external_task_id"] = "ready-private-external"
     ready_task = await create_ready_task(task_client, project["id"], payload)
-    await seed_worker_profile("worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-one",
+    )
 
     response = await task_client.get(
         f"/api/v1/tasks/{ready_task['id']}/work-context",
@@ -3112,6 +2292,11 @@ async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
+    # Use the manager's actual grant-backed route so AUTH cannot mask a
+    # locked-policy validation defect with an earlier contributor denial.
+    context_url = f"/api/v1/projects/{project['id']}/tasks/{ready_task['id']}/work-context"
+    before = await task_client.get(context_url, headers=auth_headers())
+    assert before.status_code == 200, before.text
 
     async with db_session.get_session_factory()() as session:
         persisted_task = await session.get(WorkstreamTask, ready_task["id"])
@@ -3154,12 +2339,9 @@ async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
             }
         await session.commit()
 
-    response = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/work-context",
-        headers=auth_headers(),
-    )
+    response = await task_client.get(context_url, headers=auth_headers())
 
-    assert response.status_code == 422
+    assert response.status_code == 422, response.text
     assert response.json()["code"] == "task_locked_context_invalid"
 
 
@@ -3336,101 +2518,6 @@ async def test_tasks_under_same_active_guide_share_project_pre_submit_checker(
     )
 
 
-async def test_submission_runtime_uses_locked_project_policy_not_task_required_fields(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-
-    project_policy_task = await create_started_task(
-        task_client,
-        project["id"],
-        monkeypatch,
-        "worker-one",
-        complete_task_payload(),
-    )
-    project_policy_response = await task_client.post(
-        f"/api/v1/tasks/{project_policy_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-    assert project_policy_response.status_code == 201, project_policy_response.text
-
-    non_contract_artifact_task = await create_started_task(
-        task_client,
-        project["id"],
-        monkeypatch,
-        "worker-two",
-        complete_task_payload(),
-    )
-    non_contract_artifact_payload = complete_submission_payload("sha256:non-contract-package")
-    non_contract_artifact_payload["artifact_hash_manifest"] = [
-        {
-            "artifact": "non-contract-only.md",
-            "hash": "sha256:non-contract-only-v1",
-            "size_bytes": 128,
-            "notes": "does not match the locked project policy",
-        }
-    ]
-    non_contract_artifact_response = await task_client.post(
-        f"/api/v1/tasks/{non_contract_artifact_task['id']}/submissions",
-        headers=auth_headers(),
-        json=non_contract_artifact_payload,
-    )
-
-    assert non_contract_artifact_response.status_code == 422, non_contract_artifact_response.text
-    detail = non_contract_artifact_response.json()
-    assert set(detail) == {"code", "details", "error"}
-    assert detail["code"] == "pre_submission_checker_failed"
-    assert detail["error"]["code"] == "pre_submission_checker_failed"
-    assert detail["error"]["details"] == detail["details"]
-    required_files = next(
-        result
-        for result in detail["details"]["results"]
-        if result["checker_name"] == "check_required_files"
-    )
-    assert required_files["status"] == "failed"
-
-    non_contract_evidence_task = await create_started_task(
-        task_client,
-        project["id"],
-        monkeypatch,
-        "worker-three",
-        complete_task_payload(),
-    )
-    non_contract_evidence_payload = complete_submission_payload(
-        "sha256:non-contract-evidence-package"
-    )
-    non_contract_evidence_payload["artifact_hash_manifest"][0]["hash"] = (
-        "sha256:answer-non-contract-evidence"
-    )
-    non_contract_evidence_payload["evidence_items"] = [
-        {
-            "type": "note",
-            "label": "non-contract evidence",
-            "uri": "local://evidence/non-contract-evidence.txt",
-            "hash": "sha256:non-contract-evidence-v1",
-            "size_bytes": 128,
-            "metadata": {"policy_key": "non_contract_evidence"},
-        }
-    ]
-    non_contract_evidence_response = await task_client.post(
-        f"/api/v1/tasks/{non_contract_evidence_task['id']}/submissions",
-        headers=auth_headers(),
-        json=non_contract_evidence_payload,
-    )
-
-    assert non_contract_evidence_response.status_code == 422, non_contract_evidence_response.text
-    detail = non_contract_evidence_response.json()
-    assert detail["code"] == "pre_submission_checker_failed"
-    required_evidence = next(
-        result
-        for result in detail["details"]["results"]
-        if result["checker_name"] == "check_evidence_present"
-    )
-    assert required_evidence["status"] == "failed"
-
-
 async def test_release_requires_decision_reason(task_client: AsyncClient) -> None:
     project = await create_active_project(task_client)
     task = await create_draft_task(task_client, project["id"])
@@ -3457,8 +2544,10 @@ async def test_full_task_claim_start_flow_writes_audit_events(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    worker_actor_id = await seed_worker_profile("worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    grant = await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-one",
+    )
+    worker_actor_id = grant["actor_profile_id"]
 
     claim = await task_client.post(
         f"/api/v1/tasks/{ready_task['id']}/claim",
@@ -3477,6 +2566,7 @@ async def test_full_task_claim_start_flow_writes_audit_events(
     assert start.status_code == 200, start.text
     assert start.json()["status"] == "in_progress"
 
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     audit = await task_client.get(
         f"/api/v1/tasks/{ready_task['id']}/audit-events",
         headers=auth_headers(),
@@ -3518,231 +2608,136 @@ async def test_full_task_claim_start_flow_writes_audit_events(
         assert event["event_payload"]["locked_payment_policy_version"] == "v1"
     claim_event = next(event for event in events if event["to_status"] == "claimed")
     assert claim_event["actor_id"] == worker_actor_id
-    assert claim_event["external_subject"] == "worker-one"
-    assert claim_event["external_issuer"] == "flow-test"
-    assert claim_event["actor_roles"] == ["worker"]
+    assert claim_event["actor_roles"] == []
     assert claim_event["claim_snapshot"] == {}
-    assert claim_event["auth_source"] == "dev_mock"
-    assert claim_event["is_dev_auth"] is True
-    assert claim_event["event_payload"]["assignment_id"] == claim.json()["assignment"]["id"]
+    assert claim_event["is_dev_auth"] is False
+    references = claim_event["event_payload"]["references"]
+    assert references["assignment_id"] == claim.json()["assignment"]["id"]
+    assert references["task_id"] == ready_task["id"]
+    assert references["project_id"] == project["id"]
 
     async with db_session.get_session_factory()() as session:
         persisted_event = await session.get(AuditEvent, claim_event["id"])
+        decision = await session.get(AuditEvent, references["authorization_decision_id"])
+        assert decision.action_id == "task.claim"
+        assert decision.actor_id == worker_actor_id
+        assert decision.after_facts["allowed"] is True
     assert persisted_event is not None
-    assert persisted_event.claim_snapshot["roles"] == ["worker"]
+    assert persisted_event.claim_snapshot == {}
 
 
-async def test_worker_without_profile_cannot_claim_ready_task(
+@pytest.mark.parametrize("authority_state", ["absent", "revoked"])
+async def test_submitter_without_current_project_grant_cannot_claim(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    authority_state: str,
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-without-profile")
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim"},
-    )
-
-    assert response.status_code == 403
-    assert "active legacy submitter eligibility" in response.json()["detail"]
-    context = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/work-context",
-        headers=auth_headers(),
-    )
-    assert context.status_code == 200, context.text
-    assert context.json()["lifecycle"]["next_actions"] == []
-
-
-async def test_disabled_worker_profile_cannot_claim_ready_task(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    await seed_actor_profile("disabled-worker", profile_type="worker", status="disabled")
-    set_dev_actor(monkeypatch, roles="worker", subject="disabled-worker")
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim with disabled profile"},
-    )
-
-    assert response.status_code == 403
-    assert "active legacy submitter eligibility" in response.json()["detail"]
-    async with db_session.get_session_factory()() as session:
-        assignment = await session.scalar(
-            select(TaskAssignment).where(TaskAssignment.task_id == ready_task["id"])
+    subject = f"claim-grant-{authority_state}"
+    if authority_state == "revoked":
+        grant = await admit_and_grant_project_submitter(
+            task_client, monkeypatch, project["id"], subject,
         )
+        set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+        revoked = await task_client.post(
+            f"/api/v1/projects/{project['id']}/role-grants/{grant['grant_id']}/revoke",
+            headers=auth_headers(), json={"reason": "Withdraw project authority"},
+        )
+        assert revoked.status_code == 200, revoked.text
+    # Even a token worker role cannot supply absent or revoked project authority.
+    set_dev_actor(monkeypatch, roles="worker", subject=subject)
+    response = await task_client.post(
+        f"/api/v1/tasks/{ready_task['id']}/claim",
+        headers=auth_headers(), json={"reason": "claim"},
+    )
+    assert response.status_code == 403, response.text
+    context = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}/work-context", headers=auth_headers(),
+    )
+    assert context.status_code == 403, context.text
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(select(TaskAssignment).where(
+            TaskAssignment.task_id == ready_task["id"],
+        )) is None
         task = await session.get(WorkstreamTask, ready_task["id"])
-    assert assignment is None
-    assert task is not None
-    assert task.status == "ready"
+        assert task.status == "ready" and task.assigned_to is None
 
 
-async def test_disabled_legacy_eligibility_after_claim_blocks_assigned_submitter_start(
+@pytest.mark.parametrize("state_before_revocation", ["claimed", "in_progress"])
+async def test_revocation_blocks_contributor_commands_without_rewriting_assignment(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    state_before_revocation: str,
 ) -> None:
     project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    worker_actor_id = await seed_worker_profile("eligibility-disabled-after-claim")
-    set_dev_actor(
-        monkeypatch,
-        roles="worker",
-        subject="eligibility-disabled-after-claim",
+    task = await create_ready_task(task_client, project["id"])
+    subject = "revoked-assignee"
+    grant = await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], subject,
     )
-    claim = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim while eligible"},
+    claimed = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers(),
     )
-    assert claim.status_code == 200, claim.text
-
-    async with db_session.get_session_factory()() as session:
-        eligibility = await session.scalar(
-            select(LegacyWorkflowEligibility).where(
-                LegacyWorkflowEligibility.actor_id == worker_actor_id,
-                LegacyWorkflowEligibility.profile_type == "worker",
-            )
+    assert claimed.status_code == 200, claimed.text
+    if state_before_revocation == "in_progress":
+        started = await task_client.post(
+            f"/api/v1/tasks/{task['id']}/start", headers=auth_headers(),
         )
-        assert eligibility is not None
-        eligibility.status = "disabled"
-        await session.commit()
-
-    start = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "start after eligibility disabled"},
+        assert started.status_code == 200, started.text
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    revoked = await task_client.post(
+        f"/api/v1/projects/{project['id']}/role-grants/{grant['grant_id']}/revoke",
+        headers=auth_headers(), json={"reason": "Withdraw project authority"},
     )
-    assert start.status_code == 403
-    assert "active legacy submitter eligibility" in start.json()["detail"]
-    read = await task_client.get(f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers())
-    assert read.status_code == 200
-    assert read.json()["status"] == "claimed"
-    context = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/work-context",
-        headers=auth_headers(),
-    )
-    assert context.status_code == 200, context.text
-    assert context.json()["lifecycle"]["next_actions"] == []
-
-
-async def test_disabled_eligibility_suppresses_submit_lifecycle_affordances(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    subject = "eligibility-disabled-after-start"
-    started_task = await create_started_task(
-        task_client,
-        project["id"],
-        monkeypatch,
-        subject=subject,
-    )
-    async with db_session.get_session_factory()() as session:
-        eligibility = await session.scalar(
-            select(LegacyWorkflowEligibility).where(
-                LegacyWorkflowEligibility.actor_id == actor_id(subject),
-                LegacyWorkflowEligibility.profile_type == "worker",
-            )
+    assert revoked.status_code == 200, revoked.text
+    set_dev_actor(monkeypatch, roles="viewer", subject=subject)
+    for method, action in (("post", "start"), ("get", "work-context")):
+        denied = await getattr(task_client, method)(
+            f"/api/v1/tasks/{task['id']}/{action}", headers=auth_headers(),
         )
-        assert eligibility is not None
-        eligibility.status = "disabled"
-        await session.commit()
-
-    context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/work-context",
-        headers=auth_headers(),
-    )
-
-    assert context.status_code == 200, context.text
-    lifecycle = context.json()["lifecycle"]
-    assert lifecycle["can_run_pre_submit_check"] is False
-    assert lifecycle["can_submit"] is False
-    assert lifecycle["next_actions"] == []
-
+        assert denied.status_code == 403, denied.text
     async with db_session.get_session_factory()() as session:
-        before = {
-            "submissions": await session.scalar(
-                select(func.count())
-                .select_from(Submission)
-                .where(Submission.task_id == started_task["id"])
-            ),
-            "checker_runs": await session.scalar(
-                select(func.count()).select_from(db_models.CheckerRun)
-            ),
-            "audit_events": await session.scalar(select(func.count()).select_from(AuditEvent)),
-        }
-    submission = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-    assert submission.status_code == 403
-    assert "active legacy submitter eligibility" in submission.json()["detail"]
-    async with db_session.get_session_factory()() as session:
-        after = {
-            "submissions": await session.scalar(
-                select(func.count())
-                .select_from(Submission)
-                .where(Submission.task_id == started_task["id"])
-            ),
-            "checker_runs": await session.scalar(
-                select(func.count()).select_from(db_models.CheckerRun)
-            ),
-            "audit_events": await session.scalar(select(func.count()).select_from(AuditEvent)),
-        }
-    assert after == before
+        stored = await session.get(WorkstreamTask, task["id"])
+        assert stored.status == state_before_revocation
+        assert stored.assigned_to == grant["actor_profile_id"]
+        assignment = await session.get(TaskAssignment, claimed.json()["assignment"]["id"])
+        assert assignment.status == "active"
+        assert assignment.contributor_id == grant["actor_profile_id"]
+        assert await session.scalar(select(Submission).where(
+            Submission.task_id == task["id"],
+        )) is None
 
 
-async def test_active_worker_profile_without_worker_token_cannot_claim(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_project_grant_allows_claim_without_worker_token_role(
+    task_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    set_dev_actor(monkeypatch, roles="worker", subject="project-manager-subject")
-    activation = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": []},
+    task = await create_ready_task(task_client, project["id"])
+    grant = await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "role-free-submitter",
     )
-    assert activation.status_code == 200, activation.text
-    set_dev_actor(
-        monkeypatch,
-        roles="project_manager",
-        subject="project-manager-subject",
+    claimed = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers(),
     )
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim without worker token role"},
-    )
-
-    assert response.status_code == 403
-    assert "actor lacks required role" in response.json()["detail"]
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["assignment"]["contributor_id"] == grant["actor_profile_id"]
     context = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/work-context",
-        headers=auth_headers(),
+        f"/api/v1/tasks/{task['id']}/work-context", headers=auth_headers(),
     )
     assert context.status_code == 200, context.text
-    assert context.json()["lifecycle"]["next_actions"] == []
+    assert context.json()["lifecycle"]["next_actions"] == ["start"]
 
 
 @pytest.mark.parametrize("profile_type", ["admin", "project_manager"])
-async def test_active_operator_profile_without_matching_token_cannot_create_task(
+async def test_stored_role_metadata_does_not_authorize_task_creation(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     profile_type: str,
 ) -> None:
     project = await create_active_project(task_client)
     subject = f"{profile_type}-profile-only"
-    await seed_actor_profile(subject, profile_type=profile_type)
+    await seed_task_test_actor(subject, stored_role=profile_type)
     set_dev_actor(monkeypatch, roles="worker", subject=subject)
 
     response = await task_client.post(
@@ -3755,131 +2750,10 @@ async def test_active_operator_profile_without_matching_token_cannot_create_task
     assert "actor lacks required role" in response.json()["detail"]
 
 
-async def test_worker_can_create_profile_before_claiming_task(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-self-profile")
-
-    profile = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": [" Terminal_Benchmark ", "GO", "go"]},
-    )
-    assert profile.status_code == 200, profile.text
-    profile_body = profile.json()
-    assert profile_body["actor_id"] == actor_id("worker-self-profile")
-    assert profile_body["external_subject"] == "worker-self-profile"
-    assert profile_body["skill_tags"] == ["terminal_benchmark", "go"]
-    assert profile_body["status"] == "active"
-
-    refreshed_profile = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": ["stem"]},
-    )
-    assert refreshed_profile.status_code == 200, refreshed_profile.text
-    assert refreshed_profile.json()["id"] == profile_body["id"]
-    assert refreshed_profile.json()["skill_tags"] == ["stem"]
-
-    claim = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim after self profile"},
-    )
-
-    assert claim.status_code == 200, claim.text
-    assert claim.json()["task"]["status"] == "claimed"
-    assert claim.json()["assignment"]["contributor_id"] == actor_id("worker-self-profile")
 
 
-async def test_worker_profile_response_excludes_identity_display_fields(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    set_dev_actor(
-        monkeypatch,
-        roles="worker",
-        subject="worker-null-identity",
-        email=None,
-        display_name=None,
-    )
-
-    response = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": []},
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["actor_id"] == actor_id("worker-null-identity")
-    assert body["external_subject"] == "worker-null-identity"
-    assert body["external_issuer"] == "flow-test"
-    assert "display_name" not in body
-    assert "email" not in body
-    assert body["skill_tags"] == []
-    assert body["status"] == "active"
 
 
-async def test_worker_profile_request_is_fail_closed_and_validated(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    subject = "worker-profile-validation"
-    set_dev_actor(monkeypatch, roles="worker", subject=subject)
-
-    spoofed_fields = {
-        "actor_id": actor_id("malicious"),
-        "external_subject": "spoofed-subject",
-        "external_issuer": "spoofed-issuer",
-        "roles": ["admin"],
-        "email": "spoofed@example.test",
-        "display_name": "Spoofed Name",
-    }
-    for field_name, field_value in spoofed_fields.items():
-        unknown_field = await task_client.post(
-            "/api/v1/workers/me/profile",
-            headers=auth_headers(),
-            json={
-                "skill_tags": ["stem"],
-                field_name: field_value,
-            },
-        )
-        assert unknown_field.status_code == 422
-        assert field_name in unknown_field.text
-
-    identity, profiles = await fetch_legacy_actor_rows(subject)
-    malicious_identity, malicious_profiles = await fetch_legacy_actor_rows("malicious")
-
-    assert malicious_identity is None
-    assert malicious_profiles == []
-    assert identity is not None
-    assert identity.actor_id == actor_id(subject)
-    assert identity.external_subject == subject
-    assert identity.external_issuer == "flow-test"
-    assert identity.email is None
-    assert identity.display_name is None
-    assert identity.last_seen_roles == ["worker"]
-    assert profiles == []
-
-    blank_tag = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": [" "]},
-    )
-    long_tag = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": ["x" * 65]},
-    )
-
-    assert blank_tag.status_code == 422
-    assert "invalid skill tag" in blank_tag.text
-    assert long_tag.status_code == 422
-    assert "invalid skill tag" in long_tag.text
 
 
 async def test_registered_claim_route_rejects_identity_spoof_fields(
@@ -3888,13 +2762,9 @@ async def test_registered_claim_route_rejects_identity_spoof_fields(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-claim-overpost")
-    profile = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": ["stem"]},
+    grant = await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-claim-overpost",
     )
-    assert profile.status_code == 200, profile.text
 
     spoofed_fields = {
         "actor_id": actor_id("malicious"),
@@ -3913,37 +2783,19 @@ async def test_registered_claim_route_rejects_identity_spoof_fields(
         assert response.status_code == 422
         assert field_name in response.text
 
-    identity, profiles = await fetch_legacy_actor_rows("worker-claim-overpost")
-    malicious_identity, malicious_profiles = await fetch_legacy_actor_rows("malicious")
-
-    assert malicious_identity is None
-    assert malicious_profiles == []
-    assert identity is not None
-    assert identity.actor_id == actor_id("worker-claim-overpost")
-    assert identity.external_subject == "worker-claim-overpost"
-    assert identity.external_issuer == "flow-test"
-    assert identity.email is None
-    assert identity.display_name is None
-    assert identity.last_seen_roles == ["worker"]
-    assert [(profile.profile_type, profile.status, profile.skill_tags) for profile in profiles] == [
-        ("worker", "active", ["stem"])
-    ]
+    async with db_session.get_session_factory()() as session:
+        profile = await session.get(ActorProfile, grant["actor_profile_id"])
+        assert profile.actor_kind == "human" and profile.status == "active"
+        assert profile.display_name != "Spoofed Name"
+        assert profile.contact_email != "spoofed@example.test"
+        assert await session.get(ActorProfile, actor_id("malicious")) is None
+        assert await session.scalar(select(TaskAssignment).where(
+            TaskAssignment.task_id == ready_task["id"],
+        )) is None
+        task = await session.get(WorkstreamTask, ready_task["id"])
+        assert task.status == "ready" and task.assigned_to is None
 
 
-async def test_worker_profile_requires_worker_role(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-
-    response = await task_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": ["stem"]},
-    )
-
-    assert response.status_code == 403
-    assert "actor lacks required role" in response.json()["detail"]
 
 
 async def test_second_claim_is_rejected(
@@ -3951,8 +2803,9 @@ async def test_second_claim_is_rejected(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    await seed_worker_profile("worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-one",
+    )
     first_claim = await task_client.post(
         f"/api/v1/tasks/{ready_task['id']}/claim",
         headers=auth_headers(),
@@ -3960,15 +2813,16 @@ async def test_second_claim_is_rejected(
     )
     assert first_claim.status_code == 200, first_claim.text
 
-    await seed_worker_profile("worker-two")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-two",
+    )
     second_claim = await task_client.post(
         f"/api/v1/tasks/{ready_task['id']}/claim",
         headers=auth_headers(),
         json={"reason": "claim again"},
     )
 
-    assert second_claim.status_code == 409
+    assert second_claim.status_code == 403, second_claim.text
 
 
 async def test_different_worker_cannot_start_or_read_claimed_task(
@@ -3977,8 +2831,9 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    await seed_worker_profile("worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-one",
+    )
     claim = await task_client.post(
         f"/api/v1/tasks/{ready_task['id']}/claim",
         headers=auth_headers(),
@@ -3986,65 +2841,31 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
     )
     assert claim.status_code == 200, claim.text
 
-    await seed_worker_profile("worker-two")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "worker-two",
+    )
     start = await task_client.post(
         f"/api/v1/tasks/{ready_task['id']}/start",
         headers=auth_headers(),
         json={"reason": "start"},
     )
+    # Retained detail/audit reads have not yet had their separate authority
+    # cutover; exercise their non-owner visibility rule with the accepted role.
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
     read = await task_client.get(f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers())
     audit = await task_client.get(
         f"/api/v1/tasks/{ready_task['id']}/audit-events",
         headers=auth_headers(),
     )
 
-    assert start.status_code == 409
+    assert start.status_code == 403, start.text
     assert read.status_code == 404
     assert audit.status_code == 404
 
 
-async def test_operator_start_override_requires_reason_and_records_distinct_event(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    await seed_worker_profile("worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
-    claim = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/claim",
-        headers=auth_headers(),
-        json={"reason": "claim"},
-    )
-    assert claim.status_code == 200, claim.text
-
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    missing_reason = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
-        headers=auth_headers(),
-        json={},
-    )
-    assert missing_reason.status_code == 422
-
-    started = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "operator verified worker started"},
-    )
-    assert started.status_code == 200, started.text
-    assert started.json()["status"] == "in_progress"
-
-    audit = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit.status_code == 200, audit.text
-    assert audit.json()[-1]["event_type"] == "task_start_override"
-    assert audit.json()[-1]["event_payload"]["operator_override"] is True
 
 
-async def test_assigned_worker_submit_auto_enters_pre_review_gate(
+async def test_retained_packet_reads_preserve_locked_lineage_and_redact_audit(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -4052,13 +2873,31 @@ async def test_assigned_worker_submit_auto_enters_pre_review_gate(
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     worker_actor_id = actor_id("worker-one")
 
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-
-    assert response.status_code == 201, response.text
+    # Historical creation evidence is a stored prerequisite for the read
+    # contract, not evidence that the retired public writer still executes.
+    async with db_session.get_session_factory()() as session:
+        stored = await session.get(Submission, submission_id)
+        stored_task = await session.get(WorkstreamTask, started_task["id"])
+        assert stored is not None and stored_task is not None
+        actor = ActorContext(
+            actor_id=worker_actor_id, external_subject="worker-one",
+            external_issuer="flow-test", roles=("worker",), claim_snapshot={},
+            auth_source="dev_mock", is_dev_auth=True,
+        )
+        service = TaskService(session)
+        await service._write_task_audit(
+            actor, stored_task, event_type="submission_created",
+            from_status="in_progress", to_status="submitted", reason=None,
+            event_payload=service._submission_audit_payload(stored),
+        )
+        await session.commit()
+    response = await task_client.get(
+        f"/api/v1/submissions/{submission_id}", headers=auth_headers(),
+    )
+    assert response.status_code == 200, response.text
     submission = response.json()
     assert submission["task_id"] == started_task["id"]
     assert submission["contributor_id"] == worker_actor_id
@@ -4211,311 +3050,6 @@ async def test_assigned_worker_submit_auto_enters_pre_review_gate(
     assert gate_started_event["actor_id"] == "workstream-system:pre-review-gate"
     assert gate_started_event["event_payload"]["requester_actor_id"] == worker_actor_id
     assert gate_started_event["event_payload"]["requester_external_subject"] == "worker-one"
-
-
-async def test_submission_schema_rejects_worker_supplied_locked_context(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload.update(
-        {
-            "contributor_id": actor_id("worker-one"),
-            "version": 1,
-            "status": "submitted",
-            "locked_guide_version": "malicious",
-            "locked_post_submit_checker_policy_id": "malicious",
-            "locked_post_submit_checker_policy_version": "malicious",
-            "locked_post_submit_checker_policy_hash": "sha256:" + "0" * 64,
-            "locked_post_submit_checker_policy_body": {"required_checkers": []},
-            "locked_review_policy_id": "malicious",
-            "locked_review_policy_generation": 99,
-            "locked_review_policy_hash": "sha256:" + "1" * 64,
-            "locked_revision_policy_id": "malicious",
-            "locked_revision_policy_generation": 99,
-            "locked_revision_policy_hash": "sha256:" + "2" * 64,
-            "locked_payment_policy_version": "malicious",
-            "locked_guide_source_snapshot_id": "malicious",
-            "locked_guide_source_snapshot_hash": "sha256:" + "0" * 64,
-            "locked_effective_project_submission_artifact_policy_id": "malicious",
-            "locked_effective_project_submission_artifact_policy_hash": "sha256:" + "0" * 64,
-            "locked_pre_submit_checker_policy_id": "malicious",
-            "locked_pre_submit_checker_bundle_hash": "sha256:" + "0" * 64,
-            "runtime_parameters": {"required_artifacts": []},
-            "finalized_at": "2026-06-07T00:00:00Z",
-        }
-    )
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert response.status_code == 422
-    task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
-    assert task.status_code == 200, task.text
-    assert task.json()["status"] == "in_progress"
-
-
-async def test_submission_requires_assigned_worker_and_in_progress_task(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
-    await seed_worker_profile("worker-two")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
-
-    ready_response = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert ready_response.status_code == 409
-
-    started_task = await create_started_task(task_client, project["id"], monkeypatch, "worker-one")
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
-    other_worker_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert other_worker_response.status_code == 404
-
-
-async def test_pre_submit_failure_writes_audit_event_without_submission(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload["evidence_items"] = []
-    async with db_session.get_session_factory()() as session:
-        audit_ids_before = {
-            event.id
-            for event in (
-                await session.execute(
-                    select(AuditEvent).where(
-                        AuditEvent.entity_type == "task",
-                        AuditEvent.entity_id == started_task["id"],
-                    )
-                )
-            ).scalars()
-        }
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert response.status_code == 422
-    detail = response.json()
-    assert detail["code"] == "pre_submission_checker_failed"
-    assert detail["details"]["status"] == "failed"
-    assert detail["details"]["eligible_to_submit"] is False
-    evidence_result = next(
-        result
-        for result in detail["details"]["results"]
-        if result["checker_name"] == "check_evidence_present"
-    )
-    assert evidence_result["status"] == "failed"
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-        audit_events = (
-            (
-                await session.execute(
-                    select(AuditEvent).where(
-                        AuditEvent.entity_type == "task",
-                        AuditEvent.entity_id == started_task["id"],
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
-        task = await session.get(WorkstreamTask, started_task["id"])
-    assert submissions == []
-    new_audit_events = [event for event in audit_events if event.id not in audit_ids_before]
-    assert len(new_audit_events) == 1
-    assert new_audit_events[0].event_type == "pre_submission_check_failed"
-    assert new_audit_events[0].from_status == "in_progress"
-    assert new_audit_events[0].to_status == "in_progress"
-    assert new_audit_events[0].event_payload["pre_submit_check"]["status"] == "failed"
-    assert new_audit_events[0].event_payload["pre_submit_check"]["eligible_to_submit"] is False
-    assert checker_runs == []
-    assert task is not None
-    assert task.status == "in_progress"
-
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    audit_response = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit_response.status_code == 200, audit_response.text
-    audit_event = next(
-        event
-        for event in audit_response.json()
-        if event["event_type"] == "pre_submission_check_failed"
-    )
-    assert audit_event["event_payload"]["pre_submit_check"]["status"] == "failed"
-
-
-async def test_submission_pre_submit_requires_specific_evidence_key(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload["evidence_items"] = [
-        {
-            "type": "note",
-            "label": "unrelated evidence",
-            "uri": "local://evidence/unrelated.txt",
-            "hash": "sha256:unrelated-v1",
-            "size_bytes": 64,
-            "metadata": {"policy_key": "other_evidence"},
-        }
-    ]
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert response.status_code == 422, response.text
-    detail = response.json()
-    assert detail["code"] == "pre_submission_checker_failed"
-    evidence_result = next(
-        result
-        for result in detail["details"]["results"]
-        if result["checker_name"] == "check_evidence_present"
-    )
-    assert evidence_result["status"] == "failed"
-    assert evidence_result["would_block_if_submitted"] is True
-    assert "required evidence" in evidence_result["worker_message"]
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-    assert submissions == []
-
-
-async def test_submission_pre_submit_requires_project_attestation_terms(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload["worker_attestation"] = (
-        "I attest this submission contains no confidential client data, credentials, secrets, "
-        "tokens, passwords, API keys, private source material, source code, copied platform "
-        "artifacts, or copied platform content."
-    )
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert response.status_code == 422, response.text
-    detail = response.json()
-    assert detail["code"] == "pre_submission_checker_failed"
-    attestation_result = next(
-        result
-        for result in detail["details"]["results"]
-        if result["checker_name"] == "check_confidentiality_attestation"
-    )
-    assert attestation_result["status"] == "failed"
-    assert attestation_result["would_block_if_submitted"] is True
-    assert "confidentiality attestation" in attestation_result["worker_message"]
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-    assert submissions == []
-
-
-async def test_submission_pre_submit_rejects_mutated_effective_policy_body(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        effective_policy = await session.get(
-            EffectiveProjectSubmissionArtifactPolicy,
-            task.locked_effective_project_submission_artifact_policy_id,
-        )
-        assert effective_policy is not None
-        effective_policy.effective_policy = {
-            **effective_policy.effective_policy,
-            "required_evidence": [],
-        }
-        await session.commit()
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
-    assert (
-        response.json()["details"]["field"]
-        == "locked_effective_project_submission_artifact_policy_hash"
-    )
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
-    assert submissions == []
-    assert checker_runs == []
 
 
 async def test_submission_pre_submit_rejects_hash_consistent_malformed_effective_policy(
@@ -4714,51 +3248,6 @@ async def test_submission_pre_submit_rejects_hash_consistent_malformed_packaging
     assert checker_runs == []
 
 
-async def test_submission_pre_submit_rejects_mutated_compiled_checker_bundle(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        pre_submit_policy = await session.get(
-            PreSubmitCheckerPolicy,
-            task.locked_pre_submit_checker_policy_id,
-        )
-        assert pre_submit_policy is not None
-        pre_submit_policy.compiled_bundle = {
-            **pre_submit_policy.compiled_bundle,
-            "effective_policy_hash": "sha256:" + "0" * 64,
-        }
-        await session.commit()
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
-    assert response.json()["details"]["field"] == "locked_pre_submit_checker_bundle_hash"
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
-    assert submissions == []
-    assert checker_runs == []
-
-
 async def test_submission_pre_submit_rejects_hash_consistent_incomplete_checker_bundle(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -4829,112 +3318,6 @@ async def test_submission_pre_submit_rejects_hash_consistent_incomplete_checker_
         )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
-    assert checker_runs == []
-
-
-async def test_submission_pre_submit_checker_setup_error_is_controlled(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        pre_submit_policy = await session.get(
-            PreSubmitCheckerPolicy,
-            task.locked_pre_submit_checker_policy_id,
-        )
-        assert pre_submit_policy is not None
-        pre_submit_policy.checker_names = ["unknown_project_checker"]
-        await session.commit()
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
-    assert response.json()["details"]["field"] == "locked_pre_submit_checker_policy_id"
-
-    async with db_session.get_session_factory()() as session:
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-    assert submissions == []
-
-
-async def test_submission_rejects_crossed_post_submit_policy_sidecar(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        locked_body = dict(task.locked_post_submit_checker_policy_body or {})
-        post_submit_policy = await session.get(
-            PostSubmitCheckerPolicy,
-            task.locked_post_submit_checker_policy_id,
-        )
-        assert post_submit_policy is not None
-        post_submit_policy.required_checkers = [
-            *post_submit_policy.required_checkers,
-            "check_acceptance_criteria_present",
-        ]
-        audit_ids = sorted(await session.scalars(select(AuditEvent.id)))
-        await session.commit()
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
-    assert response.json()["details"]["field"] == "locked_post_submit_checker_policy_body"
-
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        submissions = (
-            (
-                await session.execute(
-                    select(Submission).where(Submission.task_id == started_task["id"])
-                )
-            )
-            .scalars()
-            .all()
-        )
-        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
-        assert sorted(await session.scalars(select(AuditEvent.id))) == audit_ids
-    assert task is not None
-    assert task.status == "in_progress"
-    assert submissions == []
-    assert task.locked_post_submit_checker_policy_body == locked_body
-    assert "check_acceptance_criteria_present" not in [
-        entry["checker_id"]
-        for entry in locked_body["entries"]
-        if entry["classification"] == "project_required"
-    ]
-    assert "check_acceptance_criteria_present" not in [
-        entry["checker_id"] for entry in locked_body["entries"]
-    ]
-    assert "check_required_files" in [
-        entry["checker_id"]
-        for entry in locked_body["entries"]
-        if entry["classification"] == "platform_default"
-    ]
-    assert "check_required_files" in [entry["checker_id"] for entry in locked_body["entries"]]
     assert checker_runs == []
 
 
@@ -5025,15 +3408,16 @@ async def test_database_rejects_checker_run_without_post_submit_policy_context(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    submission_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    stored_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert submission_response.status_code == 201, submission_response.text
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{stored_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
-        submission = await session.get(Submission, submission_response.json()["id"])
+        submission = await session.get(Submission, stored_response.json()["id"])
         assert task is not None
         assert submission is not None
         checker_run = db_models.CheckerRun(
@@ -5072,19 +3456,20 @@ async def test_database_rejects_checker_run_without_post_submit_policy_context(
             await session.commit()
 
 
-async def test_submission_versioning_creates_new_rows_and_preserves_v1(
+async def test_retained_submission_versions_are_readable_without_exposing_packet_hashes(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     v1_payload = complete_submission_payload()
-    v1 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v1_payload,
+    v1_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v1_payload,
     )
-    assert v1.status_code == 201, v1.text
+    v1 = await task_client.get(
+        f"/api/v1/submissions/{v1_id}", headers=auth_headers(),
+    )
+    assert v1.status_code == 200, v1.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
@@ -5094,13 +3479,14 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     v2_payload = complete_submission_payload("sha256:package-v2")
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
 
-    v2 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v2_payload,
+    v2_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v2_payload, predecessor_id=v1_id,
+    )
+    v2 = await task_client.get(
+        f"/api/v1/submissions/{v2_id}", headers=auth_headers(),
     )
 
-    assert v2.status_code == 201, v2.text
+    assert v2.status_code == 200, v2.text
     first = v1.json()
     second = v2.json()
     assert second["version"] == 2
@@ -5123,7 +3509,7 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     assert all("artifact_hash_manifest" not in submission for submission in listed.json())
 
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
-    await seed_worker_profile("worker-two")
+    await seed_task_test_actor("worker-two")
     denied = await task_client.get(
         f"/api/v1/submissions/{second['id']}",
         headers=auth_headers(),
@@ -5131,7 +3517,7 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     assert denied.status_code == 404
 
 
-async def test_submission_uses_task_locked_context_after_new_guide_activation(
+async def test_retained_submission_finalization_preserves_locked_guide_after_activation(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -5154,13 +3540,14 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
     assert activate_v2["guide"]["version"] == "v2"
 
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    response_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
+    )
+    response = await task_client.get(
+        f"/api/v1/submissions/{response_id}", headers=auth_headers(),
     )
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == 200, response.text
     submission = response.json()
     assert "locked_guide_version" not in submission
     async with db_session.get_session_factory()() as session:
@@ -5176,19 +3563,20 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
     assert "locked_guide_source_snapshot_hash" not in task.json()
 
 
-async def test_locked_submission_can_only_be_replaced_by_new_version(
+async def test_retained_version_read_does_not_rewrite_prior_finalized_packet(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     v1_payload = complete_submission_payload()
-    v1 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v1_payload,
+    v1_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v1_payload,
     )
-    assert v1.status_code == 201, v1.text
+    v1 = await task_client.get(
+        f"/api/v1/submissions/{v1_id}", headers=auth_headers(),
+    )
+    assert v1.status_code == 200, v1.text
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     locked_v1 = await task_client.post(
@@ -5206,13 +3594,14 @@ async def test_locked_submission_can_only_be_replaced_by_new_version(
     v2_payload = complete_submission_payload("sha256:package-replacement")
     v2_payload["summary"] = "Replacement packet after locked v1."
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:replacement-artifact"
-    v2 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v2_payload,
+    v2_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v2_payload, predecessor_id=v1_id,
+    )
+    v2 = await task_client.get(
+        f"/api/v1/submissions/{v2_id}", headers=auth_headers(),
     )
 
-    assert v2.status_code == 201, v2.text
+    assert v2.status_code == 200, v2.text
     assert v2.json()["version"] == 2
     assert v2.json()["supersedes_submission_id"] == v1.json()["id"]
     fetched_v1 = await task_client.get(
@@ -5230,102 +3619,15 @@ async def test_locked_submission_can_only_be_replaced_by_new_version(
     assert persisted_v1.artifact_hash_manifest[0]["hash"] == "sha256:answer-v1"
 
 
-async def test_project_manager_cannot_submit_as_worker(
+async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task_audit(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-
-    assert response.status_code == 403
-
-
-async def test_submission_rejects_nested_manifest_and_evidence_injection(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload["artifact_hash_manifest"][0]["locked_guide_version"] = "v999"
-    payload["evidence_items"][0]["submission_id"] = "attacker-controlled"
-
-    response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert response.status_code == 422
-
-
-async def test_submission_rejects_signed_or_raw_external_uris(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    payload = complete_submission_payload()
-    payload["package_uri"] = "https://storage.example.test/package.tar?token=secret"
-
-    signed_package_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert signed_package_response.status_code == 422
-
-    payload = complete_submission_payload()
-    payload["evidence_items"][0]["uri"] = "file:///home/worker/private/evidence.log"
-    raw_file_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert raw_file_response.status_code == 422
-
-    payload = complete_submission_payload()
-    payload["package_uri"] = "local://"
-    empty_reference_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert empty_reference_response.status_code == 422
-
-    payload = complete_submission_payload()
-    payload["evidence_items"][0]["uri"] = "local://../private/evidence.log"
-    traversal_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=payload,
-    )
-
-    assert traversal_response.status_code == 422
-
-
-async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_audit(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    submitted = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-    assert submitted.status_code == 201, submitted.text
     audit_before = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/audit-events",
         headers=auth_headers(),
@@ -5361,46 +3663,14 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_audi
 
     assert screen.status_code == 409
     assert release.status_code == 409
-    assert claim.status_code == 409
-    assert start.status_code == 409
+    # Canonical AUTH rejects the stale contributor resource before a TASK
+    # transition can occur; retained management commands still report conflict.
+    assert claim.status_code == 403, claim.text
+    assert claim.json()["error"]["code"] == "permission_not_granted"
+    assert start.status_code == 403, start.text
+    assert start.json()["error"]["code"] == "permission_not_granted"
     assert audit_after.status_code == 200, audit_after.text
     assert len(audit_after.json()) == len(audit_before.json())
-
-
-async def test_concurrent_submission_posts_return_clean_version_outcomes(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-
-    async def post_submission(package_hash: str) -> int:
-        payload = complete_submission_payload(package_hash)
-        response = await task_client.post(
-            f"/api/v1/tasks/{started_task['id']}/submissions",
-            headers=auth_headers(),
-            json=payload,
-        )
-        return response.status_code
-
-    statuses = await asyncio.gather(
-        post_submission("sha256:concurrent-one"),
-        post_submission("sha256:concurrent-two"),
-    )
-    listed = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-    )
-    task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
-
-    assert set(statuses).issubset({201, 409})
-    assert statuses.count(201) >= 1
-    assert listed.status_code == 200, listed.text
-    assert [submission["version"] for submission in listed.json()] == list(
-        range(1, statuses.count(201) + 1)
-    )
-    assert task.status_code == 200, task.text
-    assert task.json()["status"] == "review_pending"
 
 
 async def test_cross_worker_cannot_list_submissions_or_audit_after_submit(
@@ -5409,13 +3679,10 @@ async def test_cross_worker_cannot_list_submissions_or_audit_after_submit(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    await seed_worker_profile("worker-two")
+    await seed_task_test_actor("worker-two")
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
 
     listed = await task_client.get(
@@ -5439,12 +3706,9 @@ async def test_future_roles_cannot_view_unassigned_task_or_submissions(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
     set_dev_actor(monkeypatch, roles=role, subject=f"{role}-subject")
 
     task_read = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
@@ -5463,12 +3727,9 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     guide_v2 = await task_client.post(
@@ -5501,17 +3762,14 @@ async def test_finalize_submission_rejects_unfinished_task(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    stored_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
         task.status = "in_progress"
-        submission = await TaskRepository(session).get_submission(created.json()["id"])
+        submission = await TaskRepository(session).get_submission(stored_id)
         assert submission is not None
         submission.locked_at = None
         for evidence in submission.evidence_items:
@@ -5520,7 +3778,7 @@ async def test_finalize_submission_rejects_unfinished_task(
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     finalize = await task_client.post(
-        f"/api/v1/submissions/{created.json()['id']}/finalize",
+        f"/api/v1/submissions/{stored_id}/finalize",
         headers=auth_headers(),
     )
 
@@ -5534,21 +3792,18 @@ async def test_finalize_submission_rejects_unsubmitted_submission_row(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    stored_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
     async with db_session.get_session_factory()() as session:
-        submission = await session.get(Submission, created.json()["id"])
+        submission = await session.get(Submission, stored_id)
         assert submission is not None
         submission.status = "draft"
         await session.commit()
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     finalize = await task_client.post(
-        f"/api/v1/submissions/{created.json()['id']}/finalize",
+        f"/api/v1/submissions/{stored_id}/finalize",
         headers=auth_headers(),
     )
 
@@ -5562,12 +3817,13 @@ async def test_finalize_submission_rejects_invalid_locked_context(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    stored_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{stored_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
@@ -5578,12 +3834,12 @@ async def test_finalize_submission_rejects_invalid_locked_context(
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     finalize = await task_client.post(
-        f"/api/v1/submissions/{created.json()['id']}/finalize",
+        f"/api/v1/submissions/{stored_response.json()['id']}/finalize",
         headers=auth_headers(),
     )
 
     assert finalize.status_code == 200, finalize.text
-    assert finalize.json()["finalized_at"] == created.json()["finalized_at"]
+    assert finalize.json()["finalized_at"] == stored_response.json()["finalized_at"]
 
 
 async def test_finalize_submission_rejects_non_latest_version(
@@ -5592,12 +3848,9 @@ async def test_finalize_submission_rejects_non_latest_version(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    v1 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    first_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert v1.status_code == 201, v1.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
@@ -5606,16 +3859,19 @@ async def test_finalize_submission_rejects_non_latest_version(
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     v2_payload = complete_submission_payload("sha256:package-v2")
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
-    v2 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v2_payload,
+    second_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v2_payload, predecessor_id=first_id,
     )
-    assert v2.status_code == 201, v2.text
+    async with db_session.get_session_factory()() as session:
+        first = await session.get(Submission, first_id)
+        second = await session.get(Submission, second_id)
+        assert first is not None and second is not None
+        assert second.version == first.version + 1
+        assert second.supersedes_submission_id == first.id
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     stale_finalize = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/finalize",
+        f"/api/v1/submissions/{first_id}/finalize",
         headers=auth_headers(),
     )
 
@@ -5623,28 +3879,28 @@ async def test_finalize_submission_rejects_non_latest_version(
     assert "only latest submission version can be repair-checked" in stale_finalize.json()["detail"]
 
 
-async def test_submitter_finalize_is_idempotent_after_automatic_gate(
+async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    v1 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert v1.status_code == 201, v1.text
-    premature_v2 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload("sha256:package-v2"),
+    # This is finalization/queue proof from a stored prerequisite. The retired
+    # POST is not a submission-creation path. TASK's context owner must still
+    # reject a revision before the task enters needs_revision.
+    premature_revision = await _submission_context_request_for_started_task(
+        started_task["id"], actor_id("worker-one"),
+        predecessor_submission_id=submission_id,
     )
-    assert premature_v2.status_code == 409
-    assert "in progress or needs revision" in premature_v2.json()["detail"]
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(TaskSubmissionContextUnavailable, match="task_submission_context_invalid"):
+            await TaskRepository(session).lock_submission_context(premature_revision)
 
     worker_repair = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/finalize",
+        f"/api/v1/submissions/{submission_id}/finalize",
         headers=auth_headers(),
         json={"actor_id": "workstream-system:pre-review-gate"},
     )
@@ -5652,7 +3908,7 @@ async def test_submitter_finalize_is_idempotent_after_automatic_gate(
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="other-project-manager")
     wrong_manager_finalize = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/finalize",
+        f"/api/v1/submissions/{submission_id}/finalize",
         headers=auth_headers(),
         json={"audit_actor": "workstream-system:pre-review-gate"},
     )
@@ -5670,7 +3926,7 @@ async def test_submitter_finalize_is_idempotent_after_automatic_gate(
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     locked = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/finalize",
+        f"/api/v1/submissions/{submission_id}/finalize",
         headers=auth_headers(),
         json={"audit_actor": "client-supplied-spoof"},
     )
@@ -5679,7 +3935,7 @@ async def test_submitter_finalize_is_idempotent_after_automatic_gate(
     assert locked_body["finalized_at"] is not None
     assert locked_body["evidence_items"][0]["finalized_at"] == locked_body["finalized_at"]
     checker_runs = await task_client.get(
-        f"/api/v1/submissions/{v1.json()['id']}/checker-runs",
+        f"/api/v1/submissions/{submission_id}/checker-runs",
         headers=auth_headers(),
     )
     assert checker_runs.status_code == 200, checker_runs.text
@@ -5734,13 +3990,13 @@ async def test_submitter_finalize_is_idempotent_after_automatic_gate(
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     second_lock = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/finalize",
+        f"/api/v1/submissions/{submission_id}/finalize",
         headers=auth_headers(),
     )
     assert second_lock.status_code == 200, second_lock.text
     assert second_lock.json()["finalized_at"] == locked_body["finalized_at"]
     repeated_checker_runs = await task_client.get(
-        f"/api/v1/submissions/{v1.json()['id']}/checker-runs",
+        f"/api/v1/submissions/{submission_id}/checker-runs",
         headers=auth_headers(),
     )
     assert repeated_checker_runs.status_code == 200, repeated_checker_runs.text
@@ -5774,13 +4030,17 @@ async def test_finalize_repairs_locked_submission_with_missing_pre_review_gate(
         raise PreReviewGateQueueError("simulated broker outage")
 
     monkeypatch.setattr(task_service_module, "enqueue_pre_review_gate", fail_enqueue)
-    create_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    # Exercise initial-dispatch recovery: persistence survives broker failure;
+    # the assertions below require the exact retained failure/claim evidence.
+    seeded_submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
+        raise_on_dispatch_failure=False,
     )
-    assert create_response.status_code == 201, create_response.text
-    assert create_response.json()["finalized_at"] is not None
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{seeded_submission_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
+    assert stored_response.json()["finalized_at"] is not None
 
     submissions = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/submissions",
@@ -5790,7 +4050,7 @@ async def test_finalize_repairs_locked_submission_with_missing_pre_review_gate(
     assert len(submissions.json()) == 1
     submission_id = submissions.json()[0]["id"]
     assert submissions.json()[0]["finalized_at"] is not None
-    assert submission_id == create_response.json()["id"]
+    assert submission_id == stored_response.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
@@ -5912,13 +4172,17 @@ async def test_failed_pre_review_gate_repair_is_idempotent_while_queued(
         raise PreReviewGateQueueError("simulated broker outage")
 
     monkeypatch.setattr(task_service_module, "enqueue_pre_review_gate", fail_enqueue)
-    create_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    # Exercise initial-dispatch recovery: persistence survives broker failure;
+    # the assertions below require the exact retained failure/claim evidence.
+    seeded_submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
+        raise_on_dispatch_failure=False,
     )
-    assert create_response.status_code == 201, create_response.text
-    assert create_response.json()["finalized_at"] is not None
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{seeded_submission_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
+    assert stored_response.json()["finalized_at"] is not None
     submissions = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
@@ -6013,13 +4277,17 @@ async def test_enqueue_failure_without_current_claim_skips_dispatch_failed_audit
         "mark_pre_review_gate_enqueue_failed",
         miss_enqueue_failure_cas,
     )
-    create_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    # Exercise initial-dispatch recovery: persistence survives broker failure;
+    # the assertions below require the exact retained failure/claim evidence.
+    seeded_submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
+        raise_on_dispatch_failure=False,
     )
-    assert create_response.status_code == 201, create_response.text
-    submission_id = create_response.json()["id"]
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{seeded_submission_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
+    submission_id = stored_response.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         moved_run = await session.scalar(
@@ -6058,13 +4326,9 @@ async def test_unknown_checker_gate_failure_is_repairable(
         return f"held:{checker_run_id}"
 
     monkeypatch.setattr(task_service_module, "enqueue_pre_review_gate", hold_initial_enqueue)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
@@ -6121,13 +4385,9 @@ async def test_nonrepairable_failed_gate_does_not_return_success(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
@@ -6174,14 +4434,18 @@ async def test_eager_pre_review_gate_failure_after_submission_is_repairable(
         "run_queued_pre_review_gate",
         fail_run_queued_gate,
     )
-    create_response = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    # Exercise initial-dispatch recovery: persistence survives broker failure;
+    # the assertions below require the exact retained failure/claim evidence.
+    seeded_submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
+        raise_on_dispatch_failure=False,
     )
-    assert create_response.status_code == 201, create_response.text
-    submission_id = create_response.json()["id"]
-    assert create_response.json()["finalized_at"] is not None
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{seeded_submission_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
+    submission_id = stored_response.json()["id"]
+    assert stored_response.json()["finalized_at"] is not None
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
@@ -6251,13 +4515,9 @@ async def test_finalize_repairs_stale_running_pre_review_gate(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     stale_started_at = datetime.now(UTC) - timedelta(hours=1)
     async with db_session.get_session_factory()() as session:
@@ -6332,13 +4592,9 @@ async def test_stale_running_pre_review_gate_repair_is_idempotent_while_queued(
         return f"held:{checker_run_id}"
 
     monkeypatch.setattr(task_service_module, "enqueue_pre_review_gate", hold_initial_enqueue)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     stale_started_at = datetime.now(UTC) - timedelta(hours=1)
     async with db_session.get_session_factory()() as session:
@@ -6425,14 +4681,14 @@ async def test_finalize_redispatches_queued_pre_review_gate_without_duplicate_ru
         return f"held:{checker_run_id}"
 
     monkeypatch.setattr(task_service_module, "enqueue_pre_review_gate", hold_enqueue)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
-    assert created.json()["finalized_at"] is not None
+    stored = await task_client.get(
+        f"/api/v1/submissions/{submission_id}", headers=auth_headers(),
+    )
+    assert stored.status_code == 200, stored.text
+    assert stored.json()["finalized_at"] is not None
     assert len(enqueue_calls) == 1
     assert enqueue_calls[0]["requester_provenance"] == expected_worker_requester_provenance()
     assert "claim_snapshot" not in enqueue_calls[0]["requester_provenance"]
@@ -6505,16 +4761,13 @@ async def test_manual_checker_run_cannot_replace_queued_automatic_gate(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     manual_run = await task_client.post(
-        f"/api/v1/submissions/{created.json()['id']}/checker-runs",
+        f"/api/v1/submissions/{submission_id}/checker-runs",
         headers=auth_headers(),
         json={"trigger_reason": "manual shortcut attempt"},
     )
@@ -6526,7 +4779,7 @@ async def test_manual_checker_run_cannot_replace_queued_automatic_gate(
             (
                 await session.execute(
                     select(db_models.CheckerRun).where(
-                        db_models.CheckerRun.submission_id == created.json()["id"]
+                        db_models.CheckerRun.submission_id == submission_id
                     )
                 )
             )
@@ -6554,13 +4807,9 @@ async def test_manual_checker_run_cannot_bypass_failed_automatic_gate(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
@@ -6626,13 +4875,9 @@ async def test_queued_gate_policy_error_is_failed_and_repairable(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         submission = await session.get(Submission, submission_id)
@@ -6728,13 +4973,9 @@ async def test_queued_gate_rejects_tampered_requester_provenance(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
@@ -6817,13 +5058,9 @@ async def test_queued_gate_fails_closed_when_lock_audit_is_missing(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
@@ -6875,19 +5112,16 @@ async def test_stale_queued_pre_review_gate_skips_before_task_status_check(
         "enqueue_pre_review_gate",
         hold_pre_review_enqueue,
     )
-    v1 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    v1_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert v1.status_code == 201, v1.text
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         assert task is not None
         task.status = "needs_revision"
         v1_run = await session.scalar(
             select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == v1.json()["id"]
+                db_models.CheckerRun.submission_id == v1_id
             )
         )
         await session.commit()
@@ -6896,12 +5130,9 @@ async def test_stale_queued_pre_review_gate_skips_before_task_status_check(
 
     v2_payload = complete_submission_payload("sha256:package-v2")
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
-    v2 = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=v2_payload,
+    v2_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], v2_payload, predecessor_id=v1_id,
     )
-    assert v2.status_code == 201, v2.text
 
     result = cast(Any, run_pre_review_gate).run(
         v1_run.id,
@@ -6917,7 +5148,7 @@ async def test_stale_queued_pre_review_gate_skips_before_task_status_check(
         stale_run = await session.get(db_models.CheckerRun, v1_run.id)
         fresh_run = await session.scalar(
             select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == v2.json()["id"]
+                db_models.CheckerRun.submission_id == v2_id
             )
         )
         audit_events = (
@@ -6948,13 +5179,9 @@ async def test_submission_finalize_guard_is_atomic(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    submission_id = created.json()["id"]
     finalized_at = datetime.now(UTC)
 
     async with db_session.get_session_factory()() as session:
@@ -6992,52 +5219,30 @@ async def test_database_enforces_unique_submission_version(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    created = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    stored_id = await seed_finalized_submission_for_checker_test(
+        started_task["id"], complete_submission_payload(),
     )
-    assert created.status_code == 201, created.text
-    body = created.json()
+    stored_response = await task_client.get(
+        f"/api/v1/submissions/{stored_id}", headers=auth_headers(),
+    )
+    assert stored_response.status_code == 200, stored_response.text
+    body = stored_response.json()
 
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(Submission, body["id"])
         assert persisted is not None
-        session.add(
-            Submission(
-                id=str(uuid4()),
-                task_id=body["task_id"],
-                contributor_id=body["contributor_id"],
-                version=body["version"],
-                status="submitted",
-                summary="duplicate",
-                package_hash=persisted.package_hash,
-                artifact_hash_manifest=persisted.artifact_hash_manifest,
-                worker_attestation=persisted.worker_attestation,
-                locked_guide_version=persisted.locked_guide_version,
-                locked_post_submit_checker_policy_id=(
-                    persisted.locked_post_submit_checker_policy_id
-                ),
-                locked_post_submit_checker_policy_version=(
-                    persisted.locked_post_submit_checker_policy_version
-                ),
-                locked_post_submit_checker_policy_hash=(
-                    persisted.locked_post_submit_checker_policy_hash
-                ),
-                locked_post_submit_checker_policy_body=(
-                    persisted.locked_post_submit_checker_policy_body
-                ),
-                locked_review_policy_id=persisted.locked_review_policy_id,
-                locked_review_policy_generation=persisted.locked_review_policy_generation,
-                locked_review_policy_hash=persisted.locked_review_policy_hash,
-                locked_revision_policy_id=persisted.locked_revision_policy_id,
-                locked_revision_policy_generation=persisted.locked_revision_policy_generation,
-                locked_revision_policy_hash=persisted.locked_revision_policy_hash,
-                locked_payment_policy_version=persisted.locked_payment_policy_version,
-            )
-        )
-        with pytest.raises(IntegrityError):
+        task = await session.get(WorkstreamTask, persisted.task_id)
+        session.add(build_submission(
+            submission_id=str(uuid4()), task=task, contributor_id=persisted.contributor_id,
+            version=persisted.version, summary="duplicate",
+            worker_attestation=persisted.worker_attestation,
+            package_uri=persisted.package_uri, package_hash=persisted.package_hash,
+            artifact_hash_manifest=persisted.artifact_hash_manifest,
+            supersedes_submission_id=None,
+        ))
+        with pytest.raises(IntegrityError) as rejected:
             await session.commit()
+        assert integrity_constraint_name(rejected.value) == "uq_submissions_task_version"
 
 
 async def test_worker_cannot_create_screen_or_release_tasks(
@@ -7069,7 +5274,9 @@ async def test_worker_cannot_create_screen_or_release_tasks(
     assert release.status_code == 403
 
 
-async def test_invalid_transitions_are_rejected(task_client: AsyncClient) -> None:
+async def test_invalid_transitions_are_rejected(
+    task_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     project = await create_active_project(task_client)
     task = await create_draft_task(task_client, project["id"])
 
@@ -7078,6 +5285,9 @@ async def test_invalid_transitions_are_rejected(task_client: AsyncClient) -> Non
         headers=auth_headers(),
         json={"reason": "release"},
     )
+    await admit_and_grant_project_submitter(
+        task_client, monkeypatch, project["id"], "draft-task-submitter",
+    )
     start_from_draft = await task_client.post(
         f"/api/v1/tasks/{task['id']}/start",
         headers=auth_headers(),
@@ -7085,7 +5295,14 @@ async def test_invalid_transitions_are_rejected(task_client: AsyncClient) -> Non
     )
 
     assert release_from_draft.status_code == 409
-    assert start_from_draft.status_code == 409
+    assert start_from_draft.status_code == 403
+    assert start_from_draft.json()["error"]["code"] == "permission_not_granted"
+    async with db_session.get_session_factory()() as session:
+        unchanged = await session.get(WorkstreamTask, task["id"])
+        assert unchanged.status == "draft" and unchanged.assigned_to is None
+        assert await session.scalar(select(TaskAssignment).where(
+            TaskAssignment.task_id == task["id"],
+        )) is None
     with pytest.raises(InvalidTaskTransition):
         ensure_allowed_transition("unknown", "ready")
 
@@ -7093,8 +5310,8 @@ async def test_invalid_transitions_are_rejected(task_client: AsyncClient) -> Non
 async def test_database_enforces_one_active_assignment_per_task(task_client: AsyncClient) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    first_contributor_id = await seed_worker_profile("assignment-contributor-one")
-    second_contributor_id = await seed_worker_profile("assignment-contributor-two")
+    first_contributor_id = await seed_task_test_actor("assignment-contributor-one")
+    second_contributor_id = await seed_task_test_actor("assignment-contributor-two")
 
     async with db_session.get_session_factory()() as session:
         session.add_all(
@@ -7124,8 +5341,8 @@ async def test_released_assignment_does_not_block_new_active_assignment(
 ) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
-    first_contributor_id = await seed_worker_profile("released-contributor-one")
-    second_contributor_id = await seed_worker_profile("released-contributor-two")
+    first_contributor_id = await seed_task_test_actor("released-contributor-one")
+    second_contributor_id = await seed_task_test_actor("released-contributor-two")
 
     async with db_session.get_session_factory()() as session:
         session.add_all(

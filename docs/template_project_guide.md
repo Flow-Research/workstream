@@ -14,7 +14,8 @@ Describe what this project produces and why it matters.
 
 ## Task Examples Supplied With This Guide
 
-Provide at least one nonblank task example in the guide-create request's
+Declare the complete document list when creating the guide, and provide at
+least one nonblank task example in the request's
 `task_examples` list. A starting idea or short description is enough; title and
 labels are optional. Examples need not repeat this guide's deliverables or
 acceptance criteria. Workstream stores the list with guide metadata in PostgreSQL
@@ -29,8 +30,22 @@ each. The full canonical UTF-8 JSON list must fit within 128 KiB. Examples are
 immutable for that guide version; a correction uses a new guide version.
 
 ```json
-{"task_examples": [{"content": "Repair intermittent memory faults in the claims processing service."}]}
+{
+  "version": "initial",
+  "task_examples": [
+    {"content": "Repair intermittent memory faults in the claims processing service."}
+  ],
+  "documents": [
+    {"label": "project-guide.pdf", "media_type": "application/pdf"}
+  ]
+}
 ```
+
+The response returns each document ID and the waiting setup ID. Upload each
+original as a binary body to its project/guide/document content endpoint with
+the declared `Content-Type` and a UUID `Idempotency-Key`. Setup starts when every
+declared original has committed bytes. There is no separate source-snapshot
+creation step.
 
 ## Business Terms Summary
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from httpx import AsyncClient
 
-from projects.guide_fixtures import create_source_snapshot
+from projects.guide_fixtures import read_guide_source_snapshot
 from projects.post_submit_fixtures import (
     seed_post_submit_policy_for_downstream_tests,
 )
@@ -26,7 +26,7 @@ async def create_approved_policy_bundle(
     sufficiency_status: str = "passed",
     compile_pre_submit_checker: bool = True,
 ) -> dict:
-    snapshot = await create_source_snapshot(client, project_id, guide_id)
+    snapshot = await read_guide_source_snapshot(project_id, guide_id)
     report = await create_sufficiency_report(
         client,
         project_id,

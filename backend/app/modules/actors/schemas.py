@@ -12,20 +12,6 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId
 
 
-def normalize_skill_tags(value: list[str]) -> list[str]:
-    """Return stable deduplicated legacy workflow skill tags."""
-    normalized_tags: list[str] = []
-    seen_tags: set[str] = set()
-    for raw_tag in value:
-        tag = raw_tag.strip().lower()
-        if not tag or len(tag) > 64:
-            raise ValueError("invalid skill tag")
-        if tag not in seen_tags:
-            normalized_tags.append(tag)
-            seen_tags.add(tag)
-    return normalized_tags
-
-
 class ActorProfileUpdateRequest(BaseModel):
     """Human-owned display fields accepted by the canonical self API."""
 
@@ -128,35 +114,3 @@ class ActorIdentityLinkAdminResponse(BaseModel):
     last_verified_at: datetime | None
     revoked_at: datetime | None
     reactivated_at: datetime | None
-
-
-class LegacyWorkflowEligibilityActivationRequest(BaseModel):
-    """Temporary non-authoritative intake metadata for existing task workflows."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    skill_tags: list[str] = Field(default_factory=list, max_length=100)
-
-    @field_validator("skill_tags")
-    @classmethod
-    def validate_skill_tags(cls, value: list[str]) -> list[str]:
-        return normalize_skill_tags(value)
-
-
-class LegacyWorkflowEligibilityResponse(BaseModel):
-    """Temporary compatibility response that grants no product permission."""
-
-    model_config = ConfigDict(extra="forbid", from_attributes=True)
-
-    id: str
-    actor_id: str
-    profile_type: str
-    status: str
-    skill_tags: list[str]
-    scope_type: str
-    scope_id: str
-    profile_metadata: dict
-    external_subject: str
-    external_issuer: str
-    created_at: datetime
-    updated_at: datetime

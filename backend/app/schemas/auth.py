@@ -185,39 +185,3 @@ class ActorContext(BaseModel):
             auth_source=self.auth_source,
             is_dev_auth=self.is_dev_auth,
         )
-
-
-class ActorResponse(BaseModel):
-    """Public response schema for the current actor endpoint."""
-
-    actor_id: str
-    external_subject: str
-    external_issuer: str
-    email: str | None = None
-    display_name: str | None = None
-    roles: tuple[str, ...]
-    auth_source: Literal["flow", "dev_mock", "workstream_system"]
-    is_dev_auth: bool
-    audit_context: ActorAuditContext
-
-    @classmethod
-    def from_actor(cls, actor: ActorContext) -> "ActorResponse":
-        """Build an actor response from the trusted actor context.
-
-        Args:
-            actor: Trusted actor resolved by authentication.
-
-        Returns:
-            Public actor response with audit context included.
-        """
-        return cls(
-            actor_id=actor.actor_id,
-            external_subject=actor.external_subject,
-            external_issuer=actor.external_issuer,
-            email=actor.email,
-            display_name=actor.display_name,
-            roles=actor.roles,
-            auth_source=actor.auth_source,
-            is_dev_auth=actor.is_dev_auth,
-            audit_context=actor.audit_context(),
-        )

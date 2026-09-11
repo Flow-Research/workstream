@@ -989,8 +989,9 @@ regenerate bytes or replay a mutation. If authoritative absence is confirmed
 and the owning durable source can be regenerated, the original caller may
 prepare it again and compare the complete digest/size. Identical bytes may
 replay the original operation after admission capacity is reacquired. Changed
-bytes abandon the old operation and create a new source snapshot/setup
-generation or checker-run attempt; they never reuse the old operation, snapshot,
+guide bytes require a new guide version with its own document declaration,
+internal snapshot and setup; changed checker output requires a new checker-run
+attempt. Neither reuses the old operation, snapshot,
 or binding identity. A generator that cannot reproduce exact bytes fails its old
 infrastructure attempt instead of fabricating replay. Bytes are never placed in
 PostgreSQL, Redis, Celery payloads, logs, or audit.

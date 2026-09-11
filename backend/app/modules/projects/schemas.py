@@ -62,23 +62,13 @@ class PaymentPolicyInput(BaseModel):
     accepted_payment_rule: str | None = None
 
 
-class GuideSourceSnapshotItemInput(BaseModel):
-    """Input schema for one source item in a guide material bundle."""
+class ProjectGuideDocumentInput(BaseModel):
+    """Declare one original document belonging to a guide version."""
 
     model_config = ConfigDict(extra="forbid")
 
-    source_kind: Literal["document"]
-    source_label: str = Field(max_length=500)
-    ingestion_adapter: Literal["upload"]
+    label: str = Field(min_length=1, max_length=500)
     media_type: GuideDocumentMediaType
-
-
-class GuideSourceSnapshotCreate(BaseModel):
-    """Request schema for creating an immutable guide-source snapshot."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1, max_length=100)
 
 
 class GuideSourceSnapshotItemResponse(BaseModel):
@@ -114,12 +104,11 @@ class GuideSourceSnapshotResponse(BaseModel):
 
 
 class GuideArtifactIngestResponse(BaseModel):
-    """Provider-neutral result for one hidden guide byte ingest."""
+    """Public server commitment for one declared guide document upload."""
 
     model_config = ConfigDict(extra="forbid")
 
-    put_attempt_id: UUID
-    operation_identity: str
+    document_id: UUID
     sha256: str
     byte_count: int
     status: str
@@ -482,6 +471,7 @@ class ProjectGuideCreate(BaseModel):
     version: str = Field(max_length=50, pattern=r"^[^\x00]*$")
     change_summary: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00]*$")
     task_examples: ProjectGuideTaskExamples
+    documents: list[ProjectGuideDocumentInput] = Field(min_length=1, max_length=100)
 
 
 class ProjectGuideUpdate(BaseModel):
@@ -510,6 +500,33 @@ class ProjectGuideResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     superseded_at: datetime | None
+
+
+class ProjectGuideDocumentResponse(BaseModel):
+    """Public document selector and immutable declaration; no storage coordinates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: UUID
+    label: str
+    media_type: GuideDocumentMediaType
+    order: int = Field(ge=0)
+
+
+class ProjectGuideWaitingSetupResponse(BaseModel):
+    """Initial setup identity returned by guide creation and exact replay."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    status: Literal["awaiting_documents"] = "awaiting_documents"
+
+
+class ProjectGuideCreateResponse(ProjectGuideResponse):
+    """Created guide with its declared upload targets and initial waiting setup."""
+
+    documents: list[ProjectGuideDocumentResponse] = Field(min_length=1, max_length=100)
+    setup: ProjectGuideWaitingSetupResponse
 
 
 class PostSubmitCheckerPolicyResponse(BaseModel):

@@ -1,6 +1,7 @@
 """TASK-owned composition adapters and transaction roots."""
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
 from app.modules.artifacts.api import (
     SubmissionAdmissionConsumptionPort,
@@ -18,13 +19,26 @@ from app.modules.tasks.api import (
     TaskSubmissionContextPort,
 )
 from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
+from app.modules.tasks.api import TaskAuthorizationPort, TaskTransitionAuditPort
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 
 __all__ = (
+    "task_commands",
     "DenySubmissionCreationAuthorization",
     "TransactionalSubmissionCreationCommand",
     "task_submission_context_port",
 )
+
+
+def task_commands(
+    session: AsyncSession, *, authorization: TaskAuthorizationPort,
+    audit: TaskTransitionAuditPort, actor_profile_id: UUID,
+) -> AuthorizedTaskCommands:
+    """Compose TASK commands without exposing private product imports to delivery."""
+    return AuthorizedTaskCommands(
+        session, authorization=authorization, audit=audit, actor_profile_id=actor_profile_id,
+    )
 
 
 def task_submission_context_port(session: AsyncSession) -> TaskSubmissionContextPort:

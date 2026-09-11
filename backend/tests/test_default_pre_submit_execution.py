@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from project_create_fixtures import guide_snapshot_columns, seed_guide_snapshot_rows
+from project_create_fixtures import GUIDE_CREATION_CUSTODY_TRIGGERS, guide_snapshot_columns, seed_guide_snapshot_rows
 
 from app.modules.projects.models import ReviewPolicy
 
@@ -443,10 +443,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     engine = create_async_engine(isolated_database_env)
     custody_triggers = (
         ("projects", "project_creation_custody"),
-        ("project_guides", "guide_mutation_product_custody"),
-        ("project_guides", "guide_task_examples_create_custody"),
+        *GUIDE_CREATION_CUSTODY_TRIGGERS,
         ("project_guides", "guide_lineage_lifecycle_guard"),
-        ("guide_source_snapshots", "source_snapshot_product_custody"),
         ("submission_artifact_policies", "submission_policy_creation_custody"),
         (
             "effective_project_submission_artifact_policies",

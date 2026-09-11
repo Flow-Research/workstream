@@ -17,6 +17,7 @@ from starlette.requests import Request
 
 import app.adapters.artifacts as artifact_adapters
 from app.adapters.artifacts import get_guide_artifact_ingest_command
+from app.modules.projects.router import guide_document_upload_command
 from app.core.config import Settings
 from app.interfaces.artifact_operations import GuideArtifactIngestRequest
 from app.modules.artifacts.preparation import (
@@ -32,9 +33,8 @@ from app.modules.artifacts.schemas import (
     GuideArtifactAdmissionRequest,
     GuideArtifactIngestAuthorityFacts,
 )
-from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthorization
 from app.modules.artifacts.authorization import PreparedGuideArtifactAuthorization
-from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.projects.guide_mutation_router import guide_authorization_actor
 from app.modules.artifacts.authorization import get_guide_artifact_prepared_authorization
 from app.modules.artifacts.authorization import guide_ingest_prepared_request_digest
 from app.modules.artifacts.service import (
@@ -54,7 +54,8 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationInput,
     PreparedAuthorizationHandleInvalid,
 )
-from app.modules.projects.router import ingest_guide_source_artifact
+from app.modules.projects.api.guide_documents import GuideDocumentUploadTarget
+from app.modules.projects.router import upload_guide_document
 from app.modules.projects.router import router as projects_router
 
 
@@ -133,6 +134,23 @@ class _AllowPreparedAuthority:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _RejectPreparedAuthority(_AllowPreparedAuthority):
+    async def prepare(self, **values):
+        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+
+
+class _UploadTargets:
+    async def resolve(self, project_id, guide_id, document_id, *, for_update):
+        return GuideDocumentUploadTarget(SNAPSHOT_ID, SNAPSHOT_ID, 1, "application/pdf", 0)
+
+
+def _command(service, authority):
+    return PreparedGuideArtifactIngestCommand(
+        service, authority, _UploadTargets(), maximum_document_bytes=64,
+        maximum_total_bytes=128,
+    )
 
 
 class _FailCommitAuthority(_AllowPreparedAuthority):
@@ -314,8 +332,8 @@ async def test_guide_ingest_denies_before_reading_bytes(tmp_path: Path) -> None:
         read = True
         yield b"must not be read"
 
-    authority = DenyGuideArtifactPreparedAuthorization()
-    command = PreparedGuideArtifactIngestCommand(
+    authority = _RejectPreparedAuthority()
+    command = _command(
         _service(
             preparation,
             _Admission(),
@@ -326,15 +344,7 @@ async def test_guide_ingest_denies_before_reading_bytes(tmp_path: Path) -> None:
     )
     try:
         with pytest.raises(ArtifactAuthorityDeniedError):
-            await command.ingest(
-                authorization_context=_context(),
-                project_id=PROJECT_ID,
-                guide_id=GUIDE_ID,
-                guide_source_snapshot_id=SNAPSHOT_ID,
-                source_item_id=ITEM_ID,
-                idempotency_key=uuid4(),
-                byte_source=source(),
-            )
+            await command.ingest(authorization_context=_context(), project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=source(), content_type='application/pdf', content_length=None)
         assert not read
         assert preparation.pending_cleanup_count == 0
     finally:
@@ -541,16 +551,8 @@ async def test_guide_ingest_uses_server_commitment_and_existing_put_path(
         authority,
     )
     try:
-        command = PreparedGuideArtifactIngestCommand(service, authority)
-        result = await command.ingest(
-            authorization_context=authority.context,
-            project_id=PROJECT_ID,
-            guide_id=GUIDE_ID,
-            guide_source_snapshot_id=SNAPSHOT_ID,
-            source_item_id=ITEM_ID,
-            idempotency_key=uuid4(),
-            byte_source=_bytes(DOCUMENT_BYTES[:7], DOCUMENT_BYTES[7:]),
-        )
+        command = _command(service, authority)
+        result = await command.ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(DOCUMENT_BYTES[:7], DOCUMENT_BYTES[7:]), content_type='application/pdf', content_length=None)
         assert result.sha256 == authority.admissions[0].sha256
         assert result.byte_count == len(DOCUMENT_BYTES)
         assert orchestrator.continuations == [ATTEMPT_ID]
@@ -608,21 +610,13 @@ async def test_guide_ingest_cleans_prepared_bytes_when_prep_commit_fails(
     preparation, manager = _preparation(tmp_path)
     authority = _FailCommitAuthority()
     orchestrator = _Orchestrator(authority=authority)
-    command = PreparedGuideArtifactIngestCommand(
+    command = _command(
         _service(preparation, _Admission(authority=authority), orchestrator, authority),
         authority,
     )
     try:
         with pytest.raises(RuntimeError, match="PREP commit failed"):
-            await command.ingest(
-                authorization_context=authority.context,
-                project_id=PROJECT_ID,
-                guide_id=GUIDE_ID,
-                guide_source_snapshot_id=SNAPSHOT_ID,
-                source_item_id=ITEM_ID,
-                idempotency_key=uuid4(),
-                byte_source=_bytes(DOCUMENT_BYTES),
-            )
+            await command.ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(DOCUMENT_BYTES), content_type='application/pdf', content_length=None)
         assert orchestrator.puts == 0
         assert authority.closed
         assert preparation.pending_cleanup_count == 0
@@ -642,15 +636,7 @@ async def test_exact_replay_observes_without_second_provider_put(tmp_path: Path)
         authority,
     )
     try:
-        result = await PreparedGuideArtifactIngestCommand(service, authority).ingest(
-            authorization_context=authority.context,
-            project_id=PROJECT_ID,
-            guide_id=GUIDE_ID,
-            guide_source_snapshot_id=SNAPSHOT_ID,
-            source_item_id=ITEM_ID,
-            idempotency_key=uuid4(),
-            byte_source=_bytes(DOCUMENT_BYTES),
-        )
+        result = await _command(service, authority).ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(DOCUMENT_BYTES), content_type='application/pdf', content_length=None)
         assert result.replayed
         assert result.status == "stale"
         assert orchestrator.resolutions == 1
@@ -757,51 +743,36 @@ async def test_canonical_lineage_drift_stops_before_provider_io(tmp_path: Path) 
     )
     try:
         with pytest.raises(Exception, match="canonical lineage"):
-            await PreparedGuideArtifactIngestCommand(service, authority).ingest(
-                authorization_context=authority.context,
-                project_id=PROJECT_ID,
-                guide_id=GUIDE_ID,
-                guide_source_snapshot_id=SNAPSHOT_ID,
-                source_item_id=ITEM_ID,
-                idempotency_key=uuid4(),
-                byte_source=_bytes(DOCUMENT_BYTES),
-            )
+            await _command(service, authority).ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(DOCUMENT_BYTES), content_type='application/pdf', content_length=None)
         assert orchestrator.puts == 0
         assert preparation.pending_cleanup_count == 0
     finally:
         manager.close()
 
 
-def test_hidden_guide_ingest_route_is_not_in_openapi() -> None:
+def test_guide_document_upload_route_is_in_openapi() -> None:
     route = next(
         route
         for route in projects_router.routes
-        if getattr(route, "name", None) == "ingest_guide_source_artifact"
+        if getattr(route, "name", None) == "upload_guide_document"
     )
-    assert route.include_in_schema is False
+    assert route.include_in_schema is True
 
 
 @pytest.mark.asyncio
-async def test_production_composition_denies_before_disabled_runtime_is_opened() -> None:
+async def test_production_composition_denies_before_runtime_is_opened(monkeypatch) -> None:
     request = Request({"type": "http", "method": "POST", "path": "/hidden", "headers": []})
     request.scope["app"] = type("App", (), {"state": type("State", (), {})()})()
     request.app.state.settings = Settings()
     command = get_guide_artifact_ingest_command(
         request,
         object(),  # type: ignore[arg-type]
-        DenyGuideArtifactPreparedAuthorization(),
+        _RejectPreparedAuthority(),
         DenyArtifactInternalAuthority(),
+        _UploadTargets(),
     )
     with pytest.raises(ArtifactAuthorityDeniedError):
-        await command.ingest(
-            authorization_context=_context(),
-            project_id=PROJECT_ID,
-            guide_id=GUIDE_ID,
-            guide_source_snapshot_id=SNAPSHOT_ID,
-            source_item_id=ITEM_ID,
-            idempotency_key=uuid4(),
-            byte_source=_bytes(b"never read"),
-        )
+        await command.ingest(authorization_context=_context(), project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(b'never read'), content_type='application/pdf', content_length=None)
 
 
 @pytest.mark.asyncio
@@ -838,23 +809,16 @@ async def test_guide_runtime_closes_bootstrap_when_scratch_construction_fails(
         object(),  # type: ignore[arg-type]
         authority,
         DenyArtifactInternalAuthority(),
+        _UploadTargets(),
     )
     with pytest.raises(RuntimeError, match="scratch construction failed"):
-        await command.ingest(
-            authorization_context=authority.context,
-            project_id=PROJECT_ID,
-            guide_id=GUIDE_ID,
-            guide_source_snapshot_id=SNAPSHOT_ID,
-            source_item_id=ITEM_ID,
-            idempotency_key=uuid4(),
-            byte_source=_bytes(b"never read"),
-        )
+        await command.ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(b'never read'), content_type='application/pdf', content_length=None)
     assert closed == 1
     assert authority.closed
 
 
 @pytest.mark.asyncio
-async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
+async def test_document_http_route_conceals_fail_closed_authority() -> None:
     body_read = False
 
     async def receive() -> dict[str, object]:
@@ -872,55 +836,56 @@ async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
         receive,
     )
     with pytest.raises(HTTPException) as denied:
-        await ingest_guide_source_artifact(
-            project_id=str(PROJECT_ID),
-            guide_id=str(GUIDE_ID),
-            source_snapshot_id=str(SNAPSHOT_ID),
-            source_item_id=str(ITEM_ID),
+        await upload_guide_document(
+            project_id=PROJECT_ID,
+            guide_id=GUIDE_ID,
+            document_id=ITEM_ID,
             request=request,
-            context=_context(),
+            authorization=(uuid4(), _context()),
             ingest=_UnavailableCommand(),  # type: ignore[arg-type]
-            idempotency_key=str(uuid4()),
+            content_type="application/pdf",
+            content_length=None,
         )
     assert denied.value.status_code == 404
     assert not body_read
 
 
 @pytest.mark.asyncio
-async def test_hidden_http_route_does_not_conceal_unexpected_value_error() -> None:
+async def test_document_http_route_does_not_conceal_unexpected_value_error() -> None:
     request = Request({"type": "http", "method": "POST", "path": "/hidden", "headers": []})
     with pytest.raises(ValueError, match="unexpected implementation failure"):
-        await ingest_guide_source_artifact(
-            project_id=str(PROJECT_ID),
-            guide_id=str(GUIDE_ID),
-            source_snapshot_id=str(SNAPSHOT_ID),
-            source_item_id=str(ITEM_ID),
+        await upload_guide_document(
+            project_id=PROJECT_ID,
+            guide_id=GUIDE_ID,
+            document_id=ITEM_ID,
             request=request,
-            context=_context(),
+            authorization=(uuid4(), _context()),
             ingest=_UnexpectedValueErrorCommand(),  # type: ignore[arg-type]
-            idempotency_key=str(uuid4()),
+            content_type="application/pdf",
+            content_length=None,
         )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("idempotency_key", [None, "not-a-uuid"])
-async def test_hidden_http_route_conceals_invalid_idempotency_key(
+async def test_document_http_route_conceals_invalid_idempotency_key(
     idempotency_key: str | None,
 ) -> None:
     app = FastAPI()
     app.include_router(projects_router)
-    app.dependency_overrides[get_artifact_authorization_context] = _context
+    # This route-shape test isolates identity resolution; PostgreSQL covers the
+    # real key-gated actor dependency and zero provisioning on invalid keys.
+    app.dependency_overrides[guide_authorization_actor] = lambda: None
     command = _MustNotCallCommand()
-    app.dependency_overrides[get_guide_artifact_ingest_command] = lambda: command
+    app.dependency_overrides[guide_document_upload_command] = lambda: command
     headers = {} if idempotency_key is None else {"Idempotency-Key": idempotency_key}
     path = (
-        f"/projects/{PROJECT_ID}/guides/{GUIDE_ID}/source-snapshots/"
-        f"{SNAPSHOT_ID}/items/{ITEM_ID}/artifact"
+        f"/projects/{PROJECT_ID}/guides/{GUIDE_ID}/documents/{ITEM_ID}/content"
     )
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
         response = await client.post(path, headers=headers, content=b"never read")
-    assert response.status_code == 404
+    assert response.status_code == 422
     assert not command.called

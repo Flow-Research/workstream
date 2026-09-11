@@ -3,7 +3,13 @@
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
+from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.resource_digest import authorization_resource_digest
 from app.modules.authorization.runtime import PreSubmitCheckerInputPreparationContext
+from app.modules.authorization.submission_consumption import parse_consumption_binding
+from app.modules.authorization.submission_preparation import (
+    parse_submission_preparation_or_invalid, submission_preparation_binding_fields,
+)
 
 
 def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
@@ -23,14 +29,23 @@ def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
     return context, canonical_json_hash({"pre_submit_checker_input_preparation": context})
 
 
-def initialize_artifact_bindings() -> tuple[None, None, None, None, None, None]:
-    """Return empty prepared-artifact binding slots."""
-    return None, None, None, None, None, None
-
-
-def parse_submission_binding(raw: dict, invalid_error, parser) -> tuple:
-    """Delegate submission preparation parsing through its bounded parser."""
-    return parser(raw, invalid_error)
+def parse_prepared_artifact_bindings(action_id: ActionId, raw: dict, invalid_error) -> dict:
+    """Bind only the exact artifact facts owned by the selected prepared action."""
+    fields = {}
+    if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
+        context, digest = parse_materialization_binding(raw, invalid_error)
+        fields.update(exact_artifact_context=context, exact_artifact_resource_digest=digest)
+    consumption = parse_consumption_binding(action_id, raw, invalid_error)
+    if consumption is not None:
+        fields.update(
+            exact_artifact_context=consumption.model_dump(mode="json"),
+            exact_artifact_resource_digest=authorization_resource_digest(consumption),
+        )
+    if action_id is ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE:
+        fields.update(submission_preparation_binding_fields(
+            parse_submission_preparation_or_invalid(raw, invalid_error),
+        ))
+    return fields
 
 
 def parse_project_create_binding(raw: dict, invalid_error):

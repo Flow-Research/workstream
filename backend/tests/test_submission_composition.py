@@ -1,6 +1,7 @@
 """Focused behavior proof for hidden admission-backed Submission composition."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -117,6 +118,26 @@ async def test_human_lifecycle_denial_precedes_task_state(
 
 
 @pytest.mark.asyncio
+async def test_foreign_contributor_denial_precedes_task_lookup():
+    request = _request()
+    context = HumanAuthorizationContext(
+        actor_profile_id=uuid4(), actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE, identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=uuid4(), correlation_id=uuid4(),
+    )
+    service = TaskSubmissionCreationService(
+        _Session(), authorization=PreparedSubmissionCreationAuthorization(object(), context),
+        admissions=None,
+    )
+    service._repository = SimpleNamespace(
+        lock_submission_context=lambda value: pytest.fail("foreign task was inspected"),
+    )
+    with pytest.raises(SubmissionCreationUnavailable):
+        await service.create(request)
+
+
+@pytest.mark.asyncio
 async def test_command_orders_authority_task_art_persistence_and_final_consumption():
     request = _request()
     events = []
@@ -146,9 +167,14 @@ async def test_command_orders_authority_task_art_persistence_and_final_consumpti
         async def add_submission(self, submission): events.append(("persist", submission.version))
 
     service._repository = Repository()
+    service._contexts = SimpleNamespace(
+        _load_locked_task_context=AsyncMock(
+            side_effect=lambda task: events.append(("policy", task.id)),
+        ),
+    )
     result = await service.create(request)
     assert [event[0] for event in events] == [
-        "authorize", "task", "prepare", "persist", "art", "final"
+        "authorize", "task", "policy", "prepare", "persist", "art", "final"
     ]
     assert result.submission_version == 1
 
@@ -196,6 +222,8 @@ async def test_fresh_authority_denial_precedes_art_and_mutation(revocation):
         async def add_submission(self, submission): persisted.append(submission)
 
     service._repository = Repository()
+    # This test isolates authority sequencing, not policy validation behavior.
+    service._contexts = SimpleNamespace(_load_locked_task_context=AsyncMock())
     with pytest.raises(SubmissionCreationUnavailable):
         await service.create(request)
     assert events == [revocation]
@@ -231,6 +259,8 @@ async def test_invalid_admission_result_denies_before_lineage_and_final_authorit
         async def add_submission(self, submission): persisted.append(submission)
 
     service._repository = Repository()
+    # This test isolates ART result validation, not policy validation behavior.
+    service._contexts = SimpleNamespace(_load_locked_task_context=AsyncMock())
     with pytest.raises(RuntimeError, match="exact binding facts"):
         await service.create(request)
     assert events == ["authorize", "prepare", "art"]
@@ -291,6 +321,8 @@ async def test_revision_increments_and_binds_the_exact_predecessor():
         async def add_submission(self, submission): seen.update(submission=submission)
 
     service._repository = Repository()
+    # This test isolates predecessor propagation, not policy validation behavior.
+    service._contexts = SimpleNamespace(_load_locked_task_context=AsyncMock())
     result = await service.create(request)
     assert result.submission_version == 2
     assert seen["submission"].supersedes_submission_id == str(predecessor.submission_id)

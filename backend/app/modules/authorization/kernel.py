@@ -32,6 +32,9 @@ from app.modules.authorization.domain.prepared_service import (
     project_setup_resource_matches,
 )
 from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
+from app.modules.authorization.domain.task_authority import (
+    TASK_ACTIONS, TaskAuthorityResourceContext,
+)
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
@@ -93,10 +96,9 @@ from app.modules.authorization.runtime import (
     authorization_resource_digest,
 )
 from app.modules.authorization.artifact_project_authority import (
-    evaluate_guide_ingest_authority,
-    evaluate_submitter_authority,
-    lock_guide_ingest_authority,
-    lock_submitter_authority,
+    PROJECT_AUTHORITY_ACTIONS,
+    evaluate_project_authority,
+    lock_project_authority,
 )
 
 ContextRevalidator = Callable[
@@ -526,11 +528,9 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
-        elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
-            context, grant = await lock_guide_ingest_authority(self._admin, context, scope, action.permission_id, self._locked_human_context)
-        elif action_id in {ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE}:
-            context, grant = await lock_submitter_authority(
-                self._admin, context, scope, self._locked_human_context
+        elif action_id in PROJECT_AUTHORITY_ACTIONS:
+            context, grant = await lock_project_authority(
+                self._admin, context, scope, action, self._locked_human_context,
             )
         else:
             raise PreparedAuthorizationUnsupported(
@@ -622,6 +622,8 @@ class AuthorizationService:
         self._validate_prepared_consumer(consumer_token)
         action = ACTION_BY_ID.get(action_id)
         supported = (
+            (action_id in TASK_ACTIONS and isinstance(resource_context, TaskAuthorityResourceContext))
+            or
             (
                 action_id is ActionId.PROJECT_CREATE
                 and isinstance(resource_context, ProjectCreateResourceContext)
@@ -1039,13 +1041,9 @@ class AuthorizationService:
             if denial is None:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
-        elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
-            denial, matched_kind, matched_grant_id, matched_project_id = (
-                evaluate_guide_ingest_authority(action, authority, resource_context, self._lifecycle_denial(context))
-            )
-        elif action_id in {ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE}:
-            denial, matched_kind, matched_grant_id, matched_project_id = (
-                evaluate_submitter_authority(action, context, authority, resource_context, self._lifecycle_denial(context))
+        elif action_id in PROJECT_AUTHORITY_ACTIONS:
+            denial, matched_kind, matched_grant_id, matched_project_id = evaluate_project_authority(
+                action, context, authority, resource_context, self._lifecycle_denial(context),
             )
         else:
             denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
@@ -1462,31 +1460,11 @@ class AuthorizationService:
             audit_resource_type = "actor_profile"
         elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
             audit_resource_type = decision.resource_type
-        if isinstance(resource_context, ProjectCreateResourceContext):
-            audit_resource_type = "project_create_operation"
-            audit_resource_id = str(resource_context.resource_id)
-            target_ref_kind = "project"
-            target_ref_id = str(resource_context.requested_project_id)
-        elif decision.action_id in _SUBMISSION_POLICY_MUTATIONS and isinstance(
-            resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
-        ):
-            audit_project_id = str(resource_context.scope_project_id)
-            audit_resource_type = resource_context.resource_type
-            audit_resource_id = str(resource_context.resource_id)
-            target_ref_kind = "project"
-            target_ref_id = str(resource_context.scope_project_id)
-        elif exact_project_target := project_authority_audit_target(resource_context):
-            (audit_project_id, audit_resource_type, audit_resource_id,
+        if exact_project_target := project_authority_audit_target(resource_context, decision.action_id):
+            (target_project_id, audit_resource_type, audit_resource_id,
              target_ref_kind, target_ref_id) = exact_project_target
-        elif decision.action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
-            if resource_context is not None:
-                project_id = self._resource_project_id(resource_context)
-                if project_id is not None:
-                    audit_project_id = str(project_id)
-                    audit_resource_type = "project"
-                    audit_resource_id = str(project_id)
-                    target_ref_kind = "project"
-                    target_ref_id = str(project_id)
+            if target_project_id is not None:
+                audit_project_id = target_project_id
         after_facts: dict[str, object] = {"allowed": decision.allowed}
         if decision.resource_type in CONTEXT_DIGEST_RESOURCE_TYPES or decision.action_id in CONTEXT_DIGEST_ACTIONS:
             after_facts["resource_context_digest"] = decision.resource_context_digest

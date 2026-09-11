@@ -16,14 +16,14 @@ from tests.projects.client_fixtures import (
     project_client as project_client,
     project_database_env as project_database_env,
 )
-from tests.projects.guide_fixtures import create_project, create_source_snapshot, create_guide, complete_guide_payload
+from tests.projects.guide_fixtures import create_project, read_guide_source_snapshot, create_guide, complete_guide_payload
 
 
 async def _guide(client, project_id, examples, *, key=None):
     return await client.post(
         f"/api/v1/projects/{project_id}/guides",
         headers=auth_headers() | {"Idempotency-Key": key or str(uuid4())},
-        json={"version": "example-proof", "task_examples": examples},
+        json={"version": "example-proof", "task_examples": examples, "documents": complete_guide_payload()["documents"]},
     )
 
 
@@ -32,7 +32,7 @@ async def test_required_examples_reject_before_product_effects_then_exact_replay
     route = f"/api/v1/projects/{project['id']}/guides"
     for patch in [{}, {"task_examples": []}, {"task_examples": [{"content": " \t\u2003"}]}]:
         response = await project_client.post(
-            route, headers=auth_headers(), json={"version": "example-proof", **patch},
+            route, headers=auth_headers(), json={"version": "example-proof", "documents": complete_guide_payload()["documents"], **patch},
         )
         assert response.status_code == 422
     async with get_session_factory()() as session:
@@ -53,7 +53,7 @@ async def test_required_examples_reject_before_product_effects_then_exact_replay
                     [examples[0], examples[1] | {"labels": ["changed"]}]]:
         response = await _guide(project_client, project["id"], changed, key=key)
         assert response.status_code == 409, response.text
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     assert snapshot["manifest_json"]["task_examples_hash"] == guide["task_examples_hash"]
     assert snapshot["manifest_json"]["task_examples_count"] == 2
     async with get_session_factory()() as session:
@@ -103,7 +103,7 @@ async def test_same_example_hash_cannot_cross_compose_setup_ownership(project_cl
         guide = response.json()
         projects.append(project)
         guides.append(guide)
-        snapshots.append(await create_source_snapshot(project_client, project["id"], guide["id"]))
+        snapshots.append(await read_guide_source_snapshot(project["id"], guide["id"]))
     assert guides[0]["task_examples_hash"] == guides[1]["task_examples_hash"]
     async with get_session_factory()() as session, session.begin():
         with pytest.raises(DBAPIError, match="guide setup snapshot ownership mismatch"):
@@ -121,7 +121,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     expected_manifest = {
         "schema_version": "guide_source_snapshot.task_examples",
         "task_examples_hash": guide["task_examples_hash"],
@@ -158,7 +158,7 @@ async def test_retained_missing_examples_are_visible_and_never_invoke_provider(p
     response = await _guide(project_client, project["id"], [{"content": "Review one claim."}])
     assert response.status_code == 201, response.text
     guide = response.json()
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     async with get_session_factory()() as session, session.begin():
         setup = (await session.execute(text(
             "select id,setup_generation from project_setup_runs where source_snapshot_id=:id"
@@ -192,12 +192,6 @@ async def test_retained_missing_examples_are_visible_and_never_invoke_provider(p
     assert diagnostic.status_code == 200, diagnostic.text
     assert diagnostic.json()["status"] == "setup_input_invalid"
     assert diagnostic.json()["error_code"] == "task_examples_missing"
-    new_snapshot = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=auth_headers(), json={"items": [{"source_kind": "document", "source_label": "new.pdf", "ingestion_adapter": "upload", "media_type": "application/pdf"}]},
-    )
-    assert new_snapshot.status_code == 422, new_snapshot.text
-    assert new_snapshot.json()["detail"] == "task_examples_missing"
     async with get_session_factory()() as session:
         assert await session.scalar(text("select count(*) from project_guide_compilation_attempts")) == 0
         assert await session.scalar(text("select count(*) from guide_source_snapshots where guide_id=:id"), {"id": guide["id"]}) == 1

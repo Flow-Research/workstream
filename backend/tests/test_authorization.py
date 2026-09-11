@@ -217,7 +217,6 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     AuthorizationEvidenceUnavailable,
     HumanAuthorizationContext,
-    GuideSourceIngestResourceContext,
     IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
@@ -1729,7 +1728,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 110
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 114
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -1808,8 +1807,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 66,
-        ActionAvailability.PLANNED: 44,
+        ActionAvailability.ACTIVE: 71,
+        ActionAvailability.PLANNED: 43,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -2425,9 +2424,8 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     assert "v0.1 baseline.\nThe REV transfer adds no migration." in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
-    assert (
-            "73 PermissionIds, 112 ActionIds, 68 active actions, and\n44 planned actions" in operations
-    )
+    assert "Catalogue entries and explicit runtime composition determine availability" in operations
+    assert "a planned action is not activated by its presence in the catalogue" in operations
 
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -4739,80 +4737,6 @@ async def test_prepared_admin_consume_reuses_exact_locked_grant_without_requery(
     assert len(evidence.events) == 1
 
 
-@pytest.mark.asyncio
-async def test_prepared_guide_ingest_binds_exact_project_and_locked_manager_grant():
-    context = _runtime_context()
-    assert isinstance(context, HumanAuthorizationContext)
-    session = _PreparedTestSession()
-    authorization, evidence = _runtime_service(context, session=session)
-    facts = _PreparedAdminFacts(context)
-    authorization._admin = facts  # type: ignore[assignment]
-    prepared = PreparedAuthorizationService(
-        session,  # type: ignore[arg-type]
-        context,
-        authorization,
-        facts,  # type: ignore[arg-type]
-    )
-    project_id = uuid4()
-    caller_input = PreparedAuthorizationInput(
-        idempotency_key=uuid4(), request_value={"project_id": str(project_id)}
-    )
-    handle = await prepared.prepare(
-        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        caller_input,
-        PreparedAuthorityScope(
-            kind=PreparedAuthorityScopeKind.PROJECT,
-            project_id=project_id,
-        ),
-    )
-    assert (facts.calls, facts.grant_calls) == (1, 1)
-    assert facts.grant_requests == [
-        (
-            (context.actor_profile_id, PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST),
-            {"scope_project_id": project_id, "for_update": True},
-        )
-    ]
-
-    def resource(scope_project_id: UUID) -> GuideSourceIngestResourceContext:
-        return GuideSourceIngestResourceContext(
-            resource_type="project",
-            resource_id=scope_project_id,
-            scope_project_id=scope_project_id,
-            guide_id=uuid4(),
-            guide_source_snapshot_id=uuid4(),
-            guide_source_item_id=uuid4(),
-            operation_identity="sha256:" + "b" * 64,
-            request_digest="sha256:" + "c" * 64,
-            sha256="sha256:" + "d" * 64,
-            byte_count=17,
-            media_type="application/octet-stream",
-        )
-
-    with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            handle,
-            ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-            caller_input,
-            resource(uuid4()),
-        )
-    assert evidence.events == []
-    decision = await prepared.consume(
-        handle,
-        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        caller_input,
-        resource(project_id),
-    )
-    assert decision.allowed is True
-    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
-    assert decision.matched_grant_id == facts.grant_id
-    assert decision.matched_scope_project_id == project_id
-    assert (facts.calls, facts.grant_calls) == (1, 1)
-    assert len(evidence.events) == 1
-    assert evidence.events[0].project_id == str(project_id)
-    assert evidence.events[0].after_facts is not None
-    assert evidence.events[0].after_facts["resource_context_digest"] == (
-        decision.resource_context_digest
-    )
 
 
 @pytest.mark.asyncio

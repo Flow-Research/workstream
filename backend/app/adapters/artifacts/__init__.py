@@ -17,6 +17,7 @@ from app.adapters.projects import project_locked_policy_context_port
 from app.adapters.tasks import task_submission_context_port
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import GuideArtifactIngestCommand
+from app.modules.projects.api.guide_documents import GuideDocumentUploadTargetPort
 from app.modules.artifacts.api import SubmissionBundlePreparationCommand
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
@@ -177,6 +178,7 @@ def get_guide_artifact_ingest_command(
         ArtifactInternalAuthority,
         Depends(get_artifact_internal_authority),
     ],
+    targets: GuideDocumentUploadTargetPort,
 ) -> GuideArtifactIngestCommand:
     """Compose real guide ingest lazily so denial performs no provider I/O."""
     from app.modules.artifacts.service import (
@@ -223,7 +225,11 @@ def get_guide_artifact_ingest_command(
 
     from app.adapters.artifacts.internal_workers import continue_guide_setup_after_stored_document
     service = GuideArtifactIngestService(runtime, authority, continue_guide_setup_after_stored_document)
-    return PreparedGuideArtifactIngestCommand(service, authority)
+    return PreparedGuideArtifactIngestCommand(
+        service, authority, targets,
+        maximum_document_bytes=min(settings.artifact_maximum_bytes, settings.project_agent_max_document_bytes),
+        maximum_total_bytes=settings.project_agent_max_total_document_bytes,
+    )
 
 
 def get_submission_bundle_preparation_authorization(

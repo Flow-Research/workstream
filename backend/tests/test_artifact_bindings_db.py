@@ -26,6 +26,7 @@ from app.modules.tasks.api import SubmissionCreationRequest, SubmissionCreationU
 from app.modules.tasks.models import Submission
 from app.modules.tasks.models import AuditEvent
 from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.service import TaskService
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization import prepared as prepared_authorization
@@ -197,8 +198,14 @@ async def test_composed_final_denial_rolls_back_task_and_art_rows(
         del self, task_id, kwargs
         return task
 
+    async def validate_context(self, candidate):
+        # This isolated ART schema deliberately doubles the TASK owner. Full
+        # policy rejection is proved in task_authority/test_submission_policy.py.
+        assert candidate is task
+
     monkeypatch.setattr(TaskRepository, "lock_submission_context", lock_context)
     monkeypatch.setattr(TaskRepository, "get_task", get_task)
+    monkeypatch.setattr(TaskService, "_load_locked_task_context", validate_context)
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         async with factory.begin() as seed:
             await _seed(seed, schema, art_request)
@@ -388,6 +395,9 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
 
     async def lock_context(_self, _request): return context
     async def get_task(_self, _task_id, **_kwargs): return task
+    async def validate_context(_self, candidate):
+        # These are ART transaction tests, not a TASK policy certification.
+        assert candidate is task
     async def lock_actor(_self, link_id, actor_id):
         is_service = actor_id == service_actor_id
         return (
@@ -405,6 +415,7 @@ def _wire_hidden_authority(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(TaskRepository, "lock_submission_context", lock_context)
     monkeypatch.setattr(TaskRepository, "get_task", get_task)
+    monkeypatch.setattr(TaskService, "_load_locked_task_context", validate_context)
     monkeypatch.setattr(AdminAuthorizationRepository, "lock_request_actor", lock_actor)
     monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", find_role)
     monkeypatch.setattr(

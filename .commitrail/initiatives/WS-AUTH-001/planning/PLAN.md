@@ -29,10 +29,13 @@ compilation/component/approval identities, session and transaction. Test
 cross-project, stale generation, substituted action/resource, revoked authority,
 concurrent replay and rollback before activating the live adapter.
 
-No legacy task-eligibility fallback survives in a replacement command. Remove
-its affected consumer with ARCH-03B/03C; later cleanup proves absent consumers,
-not permission to delete a still-live public path. Existing actions and
-registrations are reused, never re-created under aliases.
+The bounded [task project-grant repair](../../../changes/task-project-grant-authorization.md)
+replaces contributor claim/start/work-context authority, adds separate management
+context and reasoned system-Operator start, and removes self-activated eligibility
+and public JSON-packet Submission creation. Admission-backed creation stays hidden.
+ARCH-03B/03C must reuse these exact actions and command owners while completing
+ContributionPolicyVersion lineage, ready queues, remaining projections and durable
+invalidation. Do not restore eligibility or register replacement aliases.
 
 ## WS-AUTH-001-OUTBOX-01 — unavailable dispatcher contract
 

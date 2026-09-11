@@ -25,9 +25,8 @@ from app.modules.projects.guide_mutation_service import (
     GuideMutationService,
 )
 from app.modules.projects.schemas import (
-    GuideSourceSnapshotCreate,
-    GuideSourceSnapshotResponse,
     ProjectGuideCreate,
+    ProjectGuideCreateResponse,
     ProjectGuideResponse,
     ProjectGuideUpdate,
 )
@@ -38,7 +37,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 def require_guide_mutation_key(
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", json_schema_extra={"format": "uuid"})],
 ) -> UUID:
     """Validate replay custody before actor provisioning."""
     try:
@@ -163,7 +162,7 @@ async def _finish(session, outcome):
 
 @router.post(
     "/{project_id}/guides",
-    response_model=ProjectGuideResponse,
+    response_model=ProjectGuideCreateResponse,
     status_code=201,
     openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_CREATE.value},
 )
@@ -202,31 +201,6 @@ async def update_guide(
         return await _finish(
             session,
             await GuideMutationService(session).update_guide(
-                resolved, prepared, key, project_id, guide_id, payload
-            ),
-        )
-    except ProjectServiceError as exc:
-        raise _error(exc) from exc
-
-
-@router.post(
-    "/{project_id}/guides/{guide_id}/source-snapshots",
-    response_model=GuideSourceSnapshotResponse,
-    status_code=201,
-    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE.value},
-)
-async def create_snapshot(
-    project_id: UUID,
-    guide_id: UUID,
-    payload: GuideSourceSnapshotCreate,
-    authorization: Annotated[tuple, Depends(guide_authorization)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-):
-    key, resolved, prepared = authorization
-    try:
-        return await _finish(
-            session,
-            await GuideMutationService(session).create_snapshot(
                 resolved, prepared, key, project_id, guide_id, payload
             ),
         )

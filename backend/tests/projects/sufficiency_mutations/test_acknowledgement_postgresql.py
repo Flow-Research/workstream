@@ -24,7 +24,7 @@ from projects.guide_fixtures import (
     complete_guide_payload,
     create_guide,
     create_project,
-    create_source_snapshot,
+    read_guide_source_snapshot,
 )
 from projects.submission_policy_fixtures import create_sufficiency_report
 from committed_guide_fixtures import create_compiled_report_fixture
@@ -81,7 +81,7 @@ async def transaction_state(session, report_id, project_id, key):
 async def test_acknowledgement_late_conflict_rolls_back(project_client, monkeypatch):
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     diagnostic = await create_sufficiency_report(
         project_client,
         project["id"],

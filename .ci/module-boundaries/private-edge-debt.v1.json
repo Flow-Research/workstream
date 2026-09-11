@@ -190,12 +190,6 @@
     {
       "source_file": "backend/app/modules/actors/service.py",
       "target_module": "audit",
-      "imported_private_path": "app.modules.audit.repository",
-      "repair_owner": "WS-ARCH-001-07"
-    },
-    {
-      "source_file": "backend/app/modules/actors/service.py",
-      "target_module": "audit",
       "imported_private_path": "app.modules.audit.schemas",
       "repair_owner": "WS-ARCH-001-07"
     },
@@ -204,12 +198,6 @@
       "target_module": "audit",
       "imported_private_path": "app.modules.audit.service",
       "repair_owner": "WS-ARCH-001-07"
-    },
-    {
-      "source_file": "backend/app/modules/actors/service.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.models",
-      "repair_owner": "WS-ARCH-001-03"
     },
     {
       "source_file": "backend/app/modules/artifacts/authorization.py",
@@ -504,30 +492,6 @@
       "target_module": "audit",
       "imported_private_path": "app.modules.audit.repository",
       "repair_owner": "WS-ARCH-001-07"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/router.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.schemas",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/router.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.service",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/service.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.models",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/service.py",
-      "target_module": "actors",
-      "imported_private_path": "app.modules.actors.service",
-      "repair_owner": "WS-ARCH-001-03"
     },
     {
       "source_file": "backend/app/modules/tasks/service.py",

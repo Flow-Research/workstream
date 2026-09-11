@@ -1,6 +1,7 @@
 # WS-POL-003 — Unified project-guide compilation
 
-Latest completed POL behavior: [POL-04B live unified setup](WS-POL-003-04B.md).
+Latest completed POL behavior: [POL-04B2 guide document intake](WS-POL-003-04B2.md),
+building on [POL-04B live unified setup](WS-POL-003-04B.md).
 Current remaining design: [POL plan](planning/PLAN.md) and the
 [cross-owner dependency contract](../WS-ARCH-001/planning/PLAN.md#current-dependency-contract).
 
@@ -10,7 +11,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 
 - Disposition: Planned
 - Completed boundary: automatic unified execution, deterministic projections,
-  immutable setup finalization and current-authority replay.
+  immutable setup finalization, current-authority replay and one public guide
+  creation/document-upload flow.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
 - Next usable boundary: POL-05A builds hidden complete-proposal review, correction and pre-policy approval custody, followed by AUTH-12F4 and POL-05B approval/manual rerun.

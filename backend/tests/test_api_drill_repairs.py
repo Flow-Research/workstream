@@ -538,9 +538,9 @@ async def test_unsupported_adjudicator_role_is_rejected_without_grant(
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", target_subject)
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "contributor")
     get_settings.cache_clear()
-    target_admission = await project_client.get("/api/v1/auth/me", headers=auth_headers())
+    target_admission = await project_client.get("/api/v1/actors/me", headers=auth_headers())
     assert target_admission.status_code == 200, target_admission.text
-    target_actor_id = target_admission.json()["actor_id"]
+    target_actor_id = target_admission.json()["actor_profile_id"]
 
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", "project-manager-subject")
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "project_manager")

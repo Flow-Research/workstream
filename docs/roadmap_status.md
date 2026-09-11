@@ -131,15 +131,15 @@ cannot be reused as post-submission review-gate evidence. See the
 
 | Lifecycle stage | Status on `main` | What is already proven | What remains before v0.1 |
 | --- | --- | --- | --- |
-| Identity and actor resolution | **Live foundation** | Flow-token verification; canonical ActorProfile and ActorIdentityLink; human/service separation; lifecycle controls | Final end-to-end operational and conformance proof |
+| Identity and actor resolution | **Live foundation** | Flow-token verification; canonical ActorProfile and ActorIdentityLink; human/service separation; lifecycle controls; canonical `/actors/me` self-read with duplicate `/auth/me` removed | Final end-to-end operational and conformance proof |
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
-| Project Guide source custody | **Live foundation** | Project Manager original-document uploads; immutable metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection | Carry the same document generation through manager approval and guide activation; prove each enabled document reader |
+| Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection | Carry the same document generation through manager approval and guide activation; prove each enabled document reader |
 | Unified Project Guide compilation | **Live automatic draft/findings setup** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization | Add manager proposal review, correction, approval and manual rerun; add deterministic post-submit projection and one checker-service port |
 | Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history | Expose selected-policy validation, bind one published complete version to the active guide generation |
-| Task readiness and claim | **Foundation plus planned replacement** | Task records, lifecycle guards, assignments, locked work context, public owner facts | A task must inherit the guide-bound ContributionPolicyVersion before `READY`; claim copies the prepared task context into TaskAssignment without a current-policy lookup; activate exact task authority |
+| Task readiness and claim | **Foundation with grant-backed contributor commands** | Task records, assignments and locked work context; claim/start/contributor context use exact-project Submitter grants; separate manager context and system-Operator start | Bind the guide's ContributionPolicyVersion before `READY` and carry it through TaskAssignment without a current-policy lookup; finish ready queues, remaining management/read authority and durable assignment invalidation |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission | Connect only the active unified guide/checker lineage and complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden and proven; unified-guide integration remains** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, and blocking feedback before Submission creation | Connect approved unified-guide pre-submit policy lineage through task/assignment preparation and complete the canonical public cutover; passing intake must never substitute for post-submit evaluation |
-| Immutable Submission creation | **Hidden and proven** | Contributor preparation authority; atomic admission consumption; TASK-owned Submission creation; fixed-service artifact binding; replay/concurrency/rollback proof | Stamp the assignment's exact ContributionPolicyVersion and unified policy lineage; remove the legacy Submission path only after remediation and review prerequisites are ready |
+| Immutable Submission creation | **Hidden foundation; public packet creation retired** | Contributor preparation authority; atomic admission consumption; TASK-owned admission-backed creation; fixed-service artifact binding; replay/concurrency/rollback proof | Stamp the assignment's exact ContributionPolicyVersion and complete unified policy lineage; finish downstream evaluation and the canonical public integration. The retained submission-list GET is not a usable creation POST |
 | Post-submission evaluation and `allow_review` | **Planned; immediate integration milestone** | One canonical CHECKER post-submit catalogue/compiler used by existing consumers, hidden phase contracts and structural-handler conformance; existing pre-review and materialization foundations | Connect the unavailable phase port to durable execution; evaluate the exact Submission against its locked policy; persist one durable current superseding result; activate fixed services; automatically dispatch it and publish the canonical `allow_review` manifest |
 | Review queue and lease | **Hidden persistence foundation** | Queue/admission idempotency and ReviewLease/preference persistence; complete unavailable REV action/principal catalogue and typed AUTH contracts | Packet-membership contract and manifest; Review schema; canonical admission from `allow_review`; claim/lease/packet authority; lease copies the Submission-stamped policy version with no CON lookup |
 | Review decision and revision | **Planned** | Review/revision policy identities and mutation authority; approved same-task revision-rebase semantics | Immutable findings and decisions; `accept`, `needs_revision`, and `reject`; complete-context revision preparation; finding responses; replacement contributor rules; replay and recovery |
@@ -243,7 +243,9 @@ cannot be reused as post-submission review-gate evidence. See the
   permitted to manage.
 - Guide originals remain immutable in ArtifactStore; PostgreSQL holds metadata,
   versions, custody and the required task-example list. Guide creation requires
-  at least one nonblank example; a starting idea is sufficient and optional
+  at least one nonblank example and the complete nonempty document list. The
+  response supplies document IDs for the public binary upload route; no separate
+  source-snapshot creation call remains. A starting idea is sufficient and optional
   example fields do not repeat requirements from the guide. Each snapshot/run
   binds the exact version's examples. Upload admission checks bounded format, digest and size.
   Committed originals do not bypass the separate verification required for
@@ -490,7 +492,7 @@ reader does not need internal engineering records to understand the roadmap
 above. The main
 remaining trace sequence is:
 
-- Unified guide: `POL-04B1 -> POL-04B -> POL-05A -> AUTH-12F4 -> POL-05B -> POL-06A
+- Unified guide: `POL-04B1 -> POL-04B -> POL-04B2 -> POL-05A -> AUTH-12F4 -> POL-05B -> POL-06A
   -> AUTH-12G -> POL-06B -> POL-07 -> AUTH-12H`. `ARCH-04A` catalogue/schema
   reconciliation precedes approval-eligible `POL-04B` generations, and actual
   selected-capability conformance precedes `POL-07`/activation. POL-05 includes

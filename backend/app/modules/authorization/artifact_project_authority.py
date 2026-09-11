@@ -1,8 +1,11 @@
-"""Narrow kernel rules for human project-scoped ART actions."""
+"""Shared project-authority locks and ART resource evaluation for the AUTH kernel."""
 
 from __future__ import annotations
 
-from app.modules.authorization.catalogue import ActionAvailability
+from app.modules.authorization.catalogue import ActionAvailability, ActionId
+from app.modules.authorization.domain.task_authority import (
+    TASK_ACTIONS, TASK_SUBMITTER_ACTIONS, evaluate_task_authority,
+)
 from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     HumanAuthorizationContext,
@@ -14,8 +17,30 @@ from app.modules.authorization.runtime import (
 )
 
 
-async def lock_guide_ingest_authority(repository, context, scope, permission_id, locked_context):
-    """Lock the exact human identity and project-scoped guide-ingest grant."""
+PROJECT_SUBMITTER_ACTIONS = TASK_SUBMITTER_ACTIONS | {
+    ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE, ActionId.SUBMISSION_CREATE,
+}
+PROJECT_AUTHORITY_ACTIONS = TASK_ACTIONS | PROJECT_SUBMITTER_ACTIONS | {
+    ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+}
+
+
+async def lock_project_authority(repository, context, scope, action, locked_context):
+    """Dispatch the closed project-action set to its existing authority owner."""
+    if action.action_id in PROJECT_SUBMITTER_ACTIONS:
+        return await lock_submitter_authority(repository, context, scope, locked_context)
+    if action.action_id not in PROJECT_AUTHORITY_ACTIONS:
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+    return await lock_project_admin_authority(
+        repository, context, scope, action.permission_id, locked_context,
+        system_scope_only=action.action_id is ActionId.OPERATIONS_TASK_START_OVERRIDE,
+    )
+
+
+async def lock_project_admin_authority(
+    repository, context, scope, permission_id, locked_context, *, system_scope_only=False,
+):
+    """Lock a project-covering admin grant, or require a system grant for override."""
     if (
         not isinstance(context, HumanAuthorizationContext)
         or scope.kind is not PreparedAuthorityScopeKind.PROJECT
@@ -28,11 +53,23 @@ async def lock_guide_ingest_authority(repository, context, scope, permission_id,
         context.actor_profile_id,
         permission_id,
         scope_project_id=scope.project_id,
+        system_scope_only=system_scope_only,
         for_update=True,
     )
     if grant is None:
         raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
     return context, grant
+
+
+def evaluate_project_authority(action, context, authority, resource, lifecycle_denial):
+    """Keep each resource guard distinct while sharing the closed dispatch boundary."""
+    if action.action_id in TASK_ACTIONS:
+        return evaluate_task_authority(action, context, authority, resource, lifecycle_denial)
+    if action.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
+        return evaluate_guide_ingest_authority(action, authority, resource, lifecycle_denial)
+    if action.action_id in PROJECT_SUBMITTER_ACTIONS:
+        return evaluate_submitter_authority(action, context, authority, resource, lifecycle_denial)
+    return AuthorizationDenialCode.ACTION_UNAVAILABLE, None, None, None
 
 
 def evaluate_guide_ingest_authority(action, authority, resource, lifecycle_denial):

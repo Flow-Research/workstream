@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps.auth import (
     actor_registry_http_error,
     actor_registry_unavailable_error,
-    get_registered_actor,
 )
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
@@ -32,25 +31,8 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.read_service import ActorAuthorizationContextReadService
 from app.modules.authorization.runtime import authorization_resource_selector_id
 from app.modules.projects.service import ProjectService
-from app.schemas.auth import ActorContext, ActorResponse
 
-router = APIRouter(prefix="/auth", tags=["auth"])
 actors_router = APIRouter(prefix="/actors", tags=["actors"])
-
-
-@router.get("/me", response_model=ActorResponse)
-async def read_current_actor(
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-) -> ActorResponse:
-    """Return the actor context derived from the current bearer token.
-
-    Args:
-        actor: Verified actor resolved by auth dependencies.
-
-    Returns:
-        Public actor response including audit context.
-    """
-    return ActorResponse.from_actor(actor)
 
 
 @actors_router.get(

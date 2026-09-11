@@ -28,9 +28,10 @@ Target v0.1 checklist before releasing tasks. The
 remaining setup/activation work:
 
 - project name and slug exist
-- project guide metadata created with at least one ordinary-text task example
-- every assigned PDF/DOCX/PPTX guide original uploaded to ArtifactStore/S3
-- guide source snapshot captured
+- project guide metadata created with at least one ordinary-text task example and
+  the complete PDF/DOCX/PPTX document list
+- every declared original uploaded to ArtifactStore/S3 using its returned document ID
+- automatic setup starts after all declared documents have committed bytes
 - project owner setup material captured
 - latest project setup run visible through covered Project Manager or authorized
   Operator/Audit projection
@@ -74,7 +75,9 @@ it does not require a human reviewer pool, lease or decision endpoint.
 Unsupported false activation is rejected rather than silently switched to
 true. See the [implementation handoff](../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next).
 
-The guide source snapshot freezes guide/source material only. While the guide is
+Guide creation freezes the declared document set internally; there is no separate
+public source-snapshot creation step. The internal guide source snapshot freezes the declared document metadata and
+the guide task-example hash/count commitment. While the guide is
 still draft, an authorized covered Project Manager may attach or update review
 and revision policy records after snapshot capture because those records are
 activated as separate guide-policy context. Contribution policy is project-level
@@ -249,6 +252,12 @@ post-submit checker policy reference.
 
 ### Task Screening Gate
 
+The following is the target v0.1 gate. Complete ContributionPolicyVersion
+propagation into Task, TaskAssignment, Submission and ReviewLease is still
+planned; do not treat this checklist as proof that the current release operation
+enforces that lock. See [the capability ledger](roadmap_status.md) for delivered
+boundaries and remaining work.
+
 A task cannot move to `READY` until the task contract is complete, the guide
 version is locked, submission artifact requirements are clear,
 checker/review/revision policy versions and the guide-bound
@@ -261,9 +270,13 @@ After screening and release, contributors use
 `GET /api/v1/tasks/{task_id}/work-context` for the locked guide and lifecycle
 context and `GET /api/v1/tasks/{task_id}/submission-requirements` for the exact
 artifact, evidence, storage, packaging, hash, and attestation requirements.
-Covered Project Managers and explicitly authorized Operator/Audit projections use
-`GET /api/v1/tasks/{task_id}/locked-context` when support or a live API drill
-needs full locked provenance without database inspection.
+Covered Project Managers use
+`GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context` for their
+canonical exact-project projection. The retained
+`GET /api/v1/tasks/{task_id}/locked-context` route still uses token-role
+checks for either the `admin` token role or the `project_manager` token role;
+it is not a canonical Operator/Audit projection.
+Its authorization cutover remains planned.
 
 ### Submission Quality Gate
 
@@ -277,6 +290,9 @@ human review.
 External origin qualification and webhook drop notifications are future adapter concerns, not v0.1 gates.
 
 ## Task Release Checklist
+
+This is the target release checklist, including the pending contribution-policy
+lock described above; it is not an inventory of current runtime guards.
 
 Before moving a task to `READY`:
 
@@ -295,6 +311,9 @@ Before moving a task to `READY`:
 
 ## Ready Gate
 
+The complete gate below is the target v0.1 contract. Its contribution-policy
+lock remains pending, as noted in Task Screening Gate.
+
 A task cannot move to `READY` just because it has text.
 
 The ready gate confirms:
@@ -312,6 +331,11 @@ If the ready gate fails, the task remains `DRAFT`.
 
 ## Submission Intake Checklist
 
+This is the target contributor handoff. The obsolete public packet-creation POST
+has been removed; canonical admission-backed creation remains hidden and does
+not yet finalize or enqueue evaluation automatically. Do not use these intended
+steps as a public API availability claim.
+
 Before locking a submission packet:
 
 - task is assigned to submitter
@@ -323,15 +347,18 @@ Before locking a submission packet:
 - effective project submission artifact policy is loaded
 - generated project pre-submit checker policy runs
 - failed submission-bundle preparation returns `pre_submission_checker_failed` with bounded same-request status, eligibility, and pass/fail/warning details
-- until deferred WS-ARCH-001-02I, the frozen legacy preflight endpoint remains
-  non-authoritative; after every submission context and downstream prerequisite
-  is live, the cutover leaves no standalone endpoint or client-owned manifest
-  that can reproduce the authoritative result
+- the retained preflight endpoint is non-authoritative; the completed cutover
+  must leave no standalone endpoint or client-owned manifest that can reproduce
+  the authoritative result
 - no submission row is created until blocking pre-submit checks pass
 - successful submission creation stamps the immutable submission boundary and queues the Celery pre-review gate
-- `/finalize` is an Operator repair/requeue endpoint under
-  `operations.submission_gate.repair` for an already locked submission; it is
-  not the normal contributor handoff
+- the intended Operator repair/requeue operation for an already locked submission
+  is `operations.submission_gate.repair`, not the normal contributor handoff.
+  That canonical action remains planned. The retained
+  `/api/v1/submissions/{submission_id}/finalize` route still uses token-role
+  checks for either the `admin` token role or the `project_manager` token role;
+  it must not be described as that activated
+  Operator operation
 
 ## Reviewer Simulation Gate
 

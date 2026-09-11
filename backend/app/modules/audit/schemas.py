@@ -78,6 +78,7 @@ _FACT_VALUES: dict[str, frozenset[str]] = {
 class LifecycleAuditEntityType(StrEnum):
     """Closed product-fact namespaces admitted by the shared participant."""
 
+    TASK = "task"
     REVIEW_QUEUE_ENTRY = "review_queue_entry"
     REVIEW_LEASE = "review_lease"
     REVIEW = "review"
@@ -91,6 +92,9 @@ class LifecycleAuditEntityType(StrEnum):
 class LifecycleAuditEventType(StrEnum):
     """Canonical REV/CON lifecycle facts admitted by the shared participant."""
 
+    TASK_CLAIMED = "TaskClaimed"
+    TASK_STARTED = "TaskStarted"
+    TASK_START_OVERRIDDEN = "TaskStartOverridden"
     REVIEW_QUEUE_ENTRY_CREATED = "ReviewQueueEntryCreated"
     REVIEW_ROUTED_TO_PREFERRED_REVIEWER = "ReviewRoutedToPreferredReviewer"
     REVIEWER_PREFERENCE_EXPIRED = "ReviewerPreferenceExpired"
@@ -132,6 +136,7 @@ class LifecycleAuditReason(StrEnum):
 class LifecycleAuditReferenceKind(StrEnum):
     """Closed UUID reference keys allowed in lifecycle audit payloads."""
 
+    AUTHORIZATION_DECISION = "authorization_decision_id"
     PROJECT = "project_id"
     TASK = "task_id"
     ASSIGNMENT = "assignment_id"
@@ -148,6 +153,14 @@ class LifecycleAuditReferenceKind(StrEnum):
 
 
 _LIFECYCLE_EVENT_ENTITY = {
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.TASK_CLAIMED,
+            LifecycleAuditEventType.TASK_STARTED,
+            LifecycleAuditEventType.TASK_START_OVERRIDDEN,
+        ),
+        LifecycleAuditEntityType.TASK,
+    ),
     **dict.fromkeys(
         (
             LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
@@ -195,6 +208,14 @@ _LIFECYCLE_EVENT_ENTITY = {
 }
 
 _LIFECYCLE_EVENT_REQUIRED_REFERENCES = {
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.TASK_CLAIMED,
+            LifecycleAuditEventType.TASK_STARTED,
+            LifecycleAuditEventType.TASK_START_OVERRIDDEN,
+        ),
+        frozenset({LifecycleAuditReferenceKind.ASSIGNMENT, LifecycleAuditReferenceKind.AUTHORIZATION_DECISION}),
+    ),
     LifecycleAuditEventType.REVIEW_ACCEPTED: frozenset(
         {LifecycleAuditReferenceKind.FINAL_ACCEPTANCE}
     ),
@@ -231,6 +252,7 @@ class LifecycleAuditEventInput(BaseModel):
     event_type: LifecycleAuditEventType
     actor_id: UUID
     reason: LifecycleAuditReason
+    task_reason: Annotated[str, Field(min_length=1, max_length=1000)] | None = None
     from_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
     to_status: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,29}$")] | None = None
     references: dict[LifecycleAuditReferenceKind, UUID] = Field(default_factory=dict)
@@ -258,6 +280,20 @@ class LifecycleAuditEventInput(BaseModel):
     @model_validator(mode="after")
     def validate_lifecycle_shape(self) -> Self:
         """Keep state transitions distinct from immutable fact creation."""
+        if self.entity_type is LifecycleAuditEntityType.TASK:
+            expected = {
+                LifecycleAuditEventType.TASK_CLAIMED: ("ready", "claimed"),
+                LifecycleAuditEventType.TASK_STARTED: ("claimed", "in_progress"),
+                LifecycleAuditEventType.TASK_START_OVERRIDDEN: ("claimed", "in_progress"),
+            }.get(self.event_type)
+            if expected != (self.from_status, self.to_status):
+                raise ValueError("task event requires its exact transition")
+            if self.task_reason is not None and not self.task_reason.strip():
+                raise ValueError("task reason must not be blank")
+            if self.event_type is LifecycleAuditEventType.TASK_START_OVERRIDDEN and self.task_reason is None:
+                raise ValueError("task start override requires a reason")
+        elif self.task_reason is not None:
+            raise ValueError("task reason is restricted to task transitions")
         if self.reason is LifecycleAuditReason.STATE_CHANGED:
             if (
                 self.from_status is None
@@ -268,6 +304,7 @@ class LifecycleAuditEventInput(BaseModel):
         elif self.from_status is not None or self.to_status is not None:
             raise ValueError("fact recording cannot carry lifecycle states")
         entity_reference = {
+            LifecycleAuditEntityType.TASK: LifecycleAuditReferenceKind.TASK,
             LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: LifecycleAuditReferenceKind.REVIEW_QUEUE_ENTRY,
             LifecycleAuditEntityType.REVIEW_LEASE: LifecycleAuditReferenceKind.REVIEW_LEASE,
             LifecycleAuditEntityType.REVIEW: LifecycleAuditReferenceKind.REVIEW,

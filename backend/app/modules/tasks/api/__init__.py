@@ -1,5 +1,14 @@
 """Dependency-safe public API for the TASKS business module."""
 
+from app.modules.tasks.api.transition_audit import TaskTransitionAuditPort, TaskTransitionFacts
+
+from app.modules.tasks.api.authorization import (
+    TaskAuthorizationPort,
+    TaskAuthorityDenied,
+    TaskAuthorityFacts,
+    TaskAuthorityOperation,
+)
+
 from app.modules.tasks.api.submission_context import (
     SubmissionPredecessorFacts,
     TaskLockedProjectContextReferences,
@@ -25,6 +34,12 @@ from app.modules.tasks.api.submission_command import (
 )
 
 __all__ = (
+    "TaskTransitionAuditPort",
+    "TaskTransitionFacts",
+    "TaskAuthorizationPort",
+    "TaskAuthorityDenied",
+    "TaskAuthorityFacts",
+    "TaskAuthorityOperation",
     "SubmissionPredecessorFacts",
     "TaskLockedProjectContextReferences",
     "TaskSubmissionContextFacts",

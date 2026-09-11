@@ -16,6 +16,12 @@ phase receives only a strict `workstream_test_<12 lowercase hex>` database and a
 
 ## Local PostgreSQL diagnostic
 
+Use PostgreSQL 16, matching Backend CI, for reset-schema fingerprint checks.
+Catalog identity rendering can differ across major versions even when the
+schema is equivalent. A changed fingerprint requires comparing the actual
+schema objects on the CI engine; never bypass the check or accept an additional
+hash merely to make a different local engine pass.
+
 This legacy sequential command checks PostgreSQL provisioning and cleanup. It
 is not complete full-suite proof because it does not start or bind a MinIO
 provider. Use the hosted semantic-lane workflow below for authoritative
@@ -46,6 +52,14 @@ prevent cleanup; recover manually with the database provisioning credential, tar
 
 ## Candidate coverage floor
 
+All coverage collection uses `backend/pyproject.toml` with
+`concurrency = ["thread", "greenlet"]`. SQLAlchemy async operations switch
+greenlets within a thread; default thread-only tracing can assign executed
+lines to the wrong source file. Do not override that setting in local or
+hosted coverage commands. The coverage-contract suite checks actual line
+attribution across SQLAlchemy async switches using the repository configuration.
+This setting changes measurement, not test selection, exclusions or floors.
+
 `coverage_policy.py --compute-floor` is a read-only preparation command. Point
 `--coverage-json` at temporary complete-app coverage JSON; the command validates
 the application-file inventory and prints the exact statement percentage
@@ -73,6 +87,19 @@ WORKSTREAM_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/works
 ```
 
 Do not use `WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE` for ordinary proof.
+
+The public task portion of this drill ends at project-authorized claim/start.
+It checks that revoked grants deny work and explicitly issues fresh authority
+before continuing. The self-activated eligibility endpoint and JSON-packet
+submission POST are removed. A passing drill does not certify hidden
+admission-backed Submission creation, finalization or post-submit routing.
+Those owners require their own bounded integration evidence.
+
+Checker, finalization and review persistence tests may use the explicit stored
+Submission fixture in `backend/tests/submission_fixtures.py`. It seeds retained
+packet prerequisites and runs the existing finalization/enqueue owners; it is
+not a public API or ART-admission success simulation. Tests of new Submission
+creation must use the real admission-backed command, not this fixture.
 
 If provisioning fails, confirm the local PostgreSQL provisioning credential can create/drop databases and roles, terminate owned sessions, and reach the named admin database. Diagnostics omit credentials.
 

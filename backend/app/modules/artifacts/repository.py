@@ -40,6 +40,10 @@ from app.modules.projects.models import (
 from app.modules.tasks.models import Submission, WorkstreamTask
 
 
+class GuideSourceIngestConflict(ValueError):
+    """Authorized ingest differs from the immutable stored document."""
+
+
 @dataclass(frozen=True, slots=True)
 class GuideAdmissionFacts:
     """Authoritative project ownership for one guide source item."""
@@ -149,7 +153,7 @@ class ArtifactRepository:
         byte_count: int,
         media_type: str,
     ) -> GuideSourceArtifactIngest:
-        """Persist server-prepared facts after locking exact legacy descriptor lineage."""
+        """Persist server-prepared facts after locking exact declared document lineage."""
         lineage = await self.get_guide_lineage(str(guide_source_item_id))
         if (
             lineage is None
@@ -173,7 +177,7 @@ class ArtifactRepository:
                 or existing.byte_count != byte_count
                 or existing.media_type != media_type
             ):
-                raise ValueError("guide source ingest conflicts with prepared bytes")
+                raise GuideSourceIngestConflict("guide source ingest conflicts with prepared bytes")
             return existing
         ingest = GuideSourceArtifactIngest(
             id=str(uuid4()),

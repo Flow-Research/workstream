@@ -24,6 +24,7 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import AuthorizationContext
+from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.authorization.guide_compilation_projections import (
     ArtifactPolicyProjectionAuthorization,
     GuideSufficiencyProjectionAuthorization,
@@ -33,6 +34,13 @@ from app.modules.authorization.guide_compilation_projections import (
 def setup_finalization_authorization(session: AsyncSession) -> SetupFinalizationAuthorization:
     """Compose explicit hidden finalization authority in the caller session."""
     return SetupFinalizationAuthorization(session)
+
+
+def task_authorization(
+    session: AsyncSession, context: AuthorizationContext,
+) -> PreparedTaskAuthorization:
+    """Compose exact task authority in AUTH's registered composition root."""
+    return PreparedTaskAuthorization(session, context)
 
 
 def guide_sufficiency_projection_authorization(
@@ -73,6 +81,7 @@ def contribution_policy_authorization(
 
 
 __all__ = (
+    "task_authorization",
     "guide_compilation_request_authority",
     "guide_compilation_execution_authority",
     "ContributionPolicyAuthorization",

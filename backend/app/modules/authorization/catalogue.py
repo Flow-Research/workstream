@@ -92,6 +92,11 @@ class PermissionId(StrEnum):
 class ActionId(StrEnum):
     """Closed action identifiers reserved by approved owner chunks."""
 
+    TASK_CLAIM = "task.claim"
+    TASK_START = "task.start"
+    TASK_WORK_CONTEXT_READ = "task.work_context.read"
+    PROJECT_TASK_WORK_CONTEXT_READ = "project.task.work_context.read"
+
     ACTOR_PROFILE_READ_SELF = "actor.profile.read_self"
     ACTOR_PROFILE_UPDATE_SELF = "actor.profile.update_self"
     AUTHORIZATION_PERMISSION_CATALOGUE_READ = "authorization.permission_catalogue.read"
@@ -216,6 +221,8 @@ class ActionId(StrEnum):
 class ActionOwner(StrEnum):
     """Closed implementation chunks allowed to activate reserved actions."""
 
+    TASK_PROJECT_GRANT = "task-project-grant-authorization"
+
     AUTH_07B = "WS-AUTH-001-07B"
     AUTH_08 = "WS-AUTH-001-08"
     AUTH_09B = "WS-AUTH-001-09B"
@@ -239,7 +246,6 @@ class ActionOwner(StrEnum):
     XINT_002_06A = "WS-XINT-002-06A"
     AUTH_12G = "WS-AUTH-001-12G"
     AUTH_12H = "WS-AUTH-001-12H"
-    AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     AUTH_REV_05 = "WS-AUTH-001-REV-05"
     AUTH_REV_06 = "WS-AUTH-001-REV-06"
@@ -562,10 +568,14 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_GUIDE_MANAGE,
         ActionOwner.AUTH_12H,
     ),
-    _planned(
+    _active(ActionId.TASK_CLAIM, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
+    _active(ActionId.TASK_START, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
+    _active(ActionId.TASK_WORK_CONTEXT_READ, PermissionId.TASK_QUEUE_READ, ActionOwner.TASK_PROJECT_GRANT),
+    _active(ActionId.PROJECT_TASK_WORK_CONTEXT_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_PROJECT_GRANT),
+    _active(
         ActionId.OPERATIONS_TASK_START_OVERRIDE,
         PermissionId.OPERATIONS_TASK_START_OVERRIDE,
-        ActionOwner.AUTH_13,
+        ActionOwner.TASK_PROJECT_GRANT,
     ),
     _planned(
         ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
@@ -845,7 +855,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 110:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 114:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 24:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -935,7 +945,10 @@ def _index_actions(
         definition.action_id
         for definition in definitions
         if definition.availability is ActionAvailability.ACTIVE
-    } != active_actions:
+    } != active_actions | {
+        ActionId.TASK_CLAIM, ActionId.TASK_START, ActionId.TASK_WORK_CONTEXT_READ,
+        ActionId.PROJECT_TASK_WORK_CONTEXT_READ, ActionId.OPERATIONS_TASK_START_OVERRIDE,
+    }:
         raise RuntimeError("authorization active action boundary mismatch")
     if set(definitions) != set(ACTION_DEFINITIONS):
         raise RuntimeError("authorization action metadata mismatch")

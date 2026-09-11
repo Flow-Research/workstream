@@ -317,7 +317,9 @@ The `guide_source_snapshot.task_examples` manifest contains the example hash
 and count, the server-owned snapshot id and generation plus each
 server-owned item id/order and its non-authoritative source metadata. Caller
 hashes, content identifiers, excerpts, provider references, and fetch locators
-are excluded. Changing a declaration creates a new snapshot and setup generation.
+are excluded. Each guide has one declared document set. Changing a declaration,
+document bytes or task examples requires a new guide version, which receives
+its own internal snapshot and initial setup.
 
 ## GuideSourceSnapshotItem
 
@@ -341,12 +343,11 @@ keys or credentials. No URL fetching, Markdown body, or extraction continuation
 is part of this path. File access and provider allocations retain exact original
 identity under the runtime custody contracts below.
 
-Any guide or source-material change creates a new source snapshot. That
-invalidates prior sufficiency reports, derived policies, effective policies,
-checker bundles, acknowledgements, and approvals for activation.
-A new guide-source snapshot invalidates prior setup records for new activation
-and unlocked tasks only. Tasks already locked to an earlier snapshot retain
-that policy context unless an explicit audited rebase occurs.
+A new guide version requires its own sufficiency findings, policy proposals,
+acknowledgements and approvals before activation. Prior immutable evidence is
+retained and cannot substitute for the new version's evidence. Tasks already
+locked to an earlier guide and snapshot retain that policy context unless an
+explicit audited rebase occurs.
 
 ## ProjectSetupRun
 

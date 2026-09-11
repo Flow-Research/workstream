@@ -141,9 +141,10 @@ class GuideArtifactIngestCommand(Protocol):
         authorization_context: AuthorizationContext,
         project_id: UUID,
         guide_id: UUID,
-        guide_source_snapshot_id: UUID,
         source_item_id: UUID,
         idempotency_key: UUID,
+        content_type: str,
+        content_length: int | None,
         byte_source: AsyncIterable[bytes],
     ) -> GuideArtifactIngestResult:
         """Prepare authority before delegating to durable byte ingestion."""

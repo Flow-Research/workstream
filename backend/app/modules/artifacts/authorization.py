@@ -328,47 +328,6 @@ class GuideArtifactPreparedAuthorization(Protocol):
     def close(self) -> None: ...
 
 
-class DenyGuideArtifactPreparedAuthorization:
-    """Keep guide byte ingest unavailable until exact AUTH activation."""
-
-    @asynccontextmanager
-    async def transaction(self):
-        """Provide no durable state while the action remains unavailable."""
-        yield
-
-    async def prepare(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        project_id: UUID,
-        guide_id: UUID,
-        guide_source_snapshot_id: UUID,
-        guide_source_item_id: UUID,
-        idempotency_key: UUID,
-    ) -> PreparedAuthorizationHandle:
-        del (
-            authorization_context,
-            project_id,
-            guide_id,
-            guide_source_snapshot_id,
-            guide_source_item_id,
-            idempotency_key,
-        )
-        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
-
-    async def consume(
-        self,
-        *,
-        prepared_authorization: PreparedAuthorizationHandle,
-        facts: GuideArtifactIngestAuthorityFacts,
-    ) -> UUID:
-        del prepared_authorization, facts
-        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
-
-    def close(self) -> None:
-        """Deny-only adapters hold no capability state."""
-
-
 class PreparedGuideArtifactAuthorization:
     """Activate exact Project Manager guide ingest through AUTH-owned PREP."""
 

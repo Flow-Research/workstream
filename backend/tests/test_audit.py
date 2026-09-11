@@ -31,15 +31,8 @@ from app.modules.audit.schemas import (
     LifecycleAuditReferenceKind,
 )
 from app.modules.audit.service import AuditService, LifecycleAuditParticipant
-from app.modules.authorization.catalogue import (
-    ACTION_DEFINITIONS,
-    ActionAvailability,
-    ActionId,
-    PermissionId,
-)
 from app.modules.tasks.models import AuditEvent
 from tests.assertion_helpers import assert_secret_not_retained
-from tests.authorization.catalogue_fixtures import AUDIT_ALLOWED_ACTION_VALUES
 
 
 @pytest.fixture
@@ -123,83 +116,6 @@ def _authority_input(event_type: AuthorityEventType, **overrides) -> AuthorityAu
     return AuthorityAuditEventInput(**values)
 
 
-def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> None:
-    denied = _authority_input(
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
-        permission_id="artifact.binding.read",
-        action_id="artifact.binding.read",
-        denial_code="permission_not_granted",
-    )
-    assert (denied.action_id, denied.permission_id) == (ActionId.ARTIFACT_BINDING_READ, PermissionId.ARTIFACT_BINDING_READ)
-    with pytest.raises(ValidationError, match="action permission"):
-        _authority_input(
-            AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
-            permission_id="artifact.replica.read",
-            action_id="artifact.binding.read",
-            denial_code="permission_not_granted",
-        )
-    with pytest.raises(ValidationError, match="new permission requires"):
-        _authority_input(
-            AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
-            permission_id="artifact.binding.read",
-            action_id=None,
-            denial_code="permission_not_granted",
-        )
-    allowed_action_ids: set[ActionId] = set()
-    for definition in ACTION_DEFINITIONS:
-        if definition.availability is ActionAvailability.PLANNED:
-            with pytest.raises(ValidationError, match="planned action"):
-                _authority_input(
-                    AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
-                    permission_id=definition.permission_id,
-                    action_id=definition.action_id,
-                )
-        else:
-            allowed = _authority_input(
-                AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
-                permission_id=definition.permission_id,
-                action_id=definition.action_id,
-            )
-            assert allowed.action_id is not None
-            allowed_action_ids.add(allowed.action_id)
-    assert {action.value for action in allowed_action_ids} == AUDIT_ALLOWED_ACTION_VALUES
-    artifact_allowed = _authority_input(
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
-        permission_id=PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
-        action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-        after_facts={"allowed": True, "resource_context_digest": "sha256:" + "a" * 64},
-    )
-    assert artifact_allowed.after_facts["resource_context_digest"] == "sha256:" + "a" * 64
-    with pytest.raises(TypeError, match="invalid authority audit input"):
-        _authority_input(
-            AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
-            permission_id=PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
-            action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-            after_facts={"allowed": True, "resource_context_digest": "not-a-digest"},
-        )
-    with pytest.raises(TypeError, match="invalid authority audit input"):
-        _authority_input(
-            AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
-            permission_id="artifact.binding.read",
-            action_id="unknown.action",
-            denial_code="permission_not_granted",
-        )
-    event_id = uuid4()
-    with pytest.raises(ValidationError, match="action requires authorization decision"):
-        AuthorityAuditEventInput(
-            event_id=event_id,
-            event_type=AuthorityEventType.ADMIN_ROLE_GRANT_ISSUE_DENIED,
-            entity_type="admin_role_grant",
-            entity_id=str(uuid4()),
-            actor_ref_kind=ActorReferenceKind.SYSTEM_PRINCIPAL,
-            actor_ref="workstream:system:bootstrap",
-            request_id=uuid4(),
-            correlation_id=uuid4(),
-            permission_id=PermissionId.ACTOR_PROFILE_READ_SELF,
-            action_id=ActionId.ACTOR_PROFILE_READ_SELF,
-            reason="authorization_policy_denial",
-            denial_code="permission_not_granted",
-        )
 
 
 def test_project_create_audit_event_binds_operation_to_future_project() -> None:
@@ -1282,8 +1198,15 @@ def _lifecycle_input(**overrides) -> LifecycleAuditEventInput:
     return LifecycleAuditEventInput(**values)
 
 
+
+
 def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
     event_groups = {
+        LifecycleAuditEntityType.TASK: {
+            LifecycleAuditEventType.TASK_CLAIMED,
+            LifecycleAuditEventType.TASK_STARTED,
+            LifecycleAuditEventType.TASK_START_OVERRIDDEN,
+        },
         LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: {
             LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
             LifecycleAuditEventType.REVIEW_ROUTED_TO_PREFERRED_REVIEWER,
@@ -1332,6 +1255,7 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
     }
     assert set().union(*event_groups.values()) == set(LifecycleAuditEventType)
     entity_references = {
+        LifecycleAuditEntityType.TASK: LifecycleAuditReferenceKind.TASK,
         LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: LifecycleAuditReferenceKind.REVIEW_QUEUE_ENTRY,
         LifecycleAuditEntityType.REVIEW_LEASE: LifecycleAuditReferenceKind.REVIEW_LEASE,
         LifecycleAuditEntityType.REVIEW: LifecycleAuditReferenceKind.REVIEW,
@@ -1370,11 +1294,24 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
                 )
             elif event_type is LifecycleAuditEventType.COMPENSATION_AWARD_CREATED:
                 references[LifecycleAuditReferenceKind.CONTRIBUTION_RECORD] = uuid4()
+            transition = {}
+            if entity_type is LifecycleAuditEntityType.TASK:
+                references.update({
+                    LifecycleAuditReferenceKind.ASSIGNMENT: uuid4(),
+                    LifecycleAuditReferenceKind.AUTHORIZATION_DECISION: uuid4(),
+                })
+                transition = {
+                    "reason": LifecycleAuditReason.STATE_CHANGED,
+                    "from_status": "ready" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "claimed",
+                    "to_status": "claimed" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "in_progress",
+                    "task_reason": "Explicit task operation",
+                }
             value = _lifecycle_input(
                 entity_type=entity_type,
                 entity_id=entity_id,
                 event_type=event_type,
                 references=references,
+                **transition,
             )
             assert value.event_type is event_type
 

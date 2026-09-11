@@ -120,7 +120,7 @@ def test_setup_existing_active_pairs_and_downstream_plans_are_preserved():
 
 
 def test_exact_active_action_inventory():
-    """Preserve finalization and the complete catalogue after CP05 activation."""
+    """Preserve finalization and the complete catalogue after TASK activation."""
     from app.modules.authorization.catalogue import ACTION_DEFINITIONS
 
     assert {
@@ -184,6 +184,11 @@ def test_exact_active_action_inventory():
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE,
+        ActionId.TASK_CLAIM,
+        ActionId.TASK_START,
+        ActionId.TASK_WORK_CONTEXT_READ,
+        ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
+        ActionId.OPERATIONS_TASK_START_OVERRIDE,
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         ActionId.COMPENSATION_ADAPTER_BINDING_READ,
         ActionId.COMPENSATION_ADAPTER_BINDING_CREATE,

@@ -50,9 +50,9 @@ gRPC, or asynchronous transport without changing product authority semantics.
 
 It contains no Workstream product role or permission. Email, display name,
 skills, reputation, and relationship metadata are never authorization keys.
-During the compatibility period, `/api/v1/auth/me` and actor registration do
-not copy issuer email or display name, and those response fields remain null.
-Canonical profile metadata is owned by the later actor-profile migration.
+Canonical self-read is `GET /api/v1/actors/me`. Actor admission does not copy
+issuer email or display name. Human-owned profile metadata is updated through
+`PATCH /api/v1/actors/me`; verified issuer claims do not grant product roles.
 
 Human first access may create a canonical human profile and identity link.
 Unknown service subjects, agents, and Spaces are denied without implicit
@@ -284,7 +284,10 @@ producing 111 rows with 61 active and 50 planned actions. AUTH-12B2 then
 activates exact setup finalization, yielding 62 active and 49 planned
 actions without adding a row. CP05 activates the five existing ContributionPolicy
 actions, yielding 67 active and 44 planned actions. POL-04B1 adds the automatic compilation
-request action, making the current totals 112 actions: 68 active and 44 planned. Only active human
+request action, historically making 112 actions: 68 active and 44 planned.
+These are activation-history counts, not the current registry census. The
+current typed catalogue also includes the TASK project-authority cutover.
+Only active human
 Finance Authority with system or exact-project scope is eligible. The explicit
 CON adapter uses serialized reads and transaction-bound PREP for mutations;
 committed replay requires fresh read authority. Registration custody remains
@@ -1153,26 +1156,33 @@ committed custody chain, then returns the original response without new PREP or
 allowed evidence. Later grant revocation denies new or changed creation
 requests but does not rewrite an already committed idempotent response.
 
-Guide create, guide update, and source-snapshot metadata create require an
-active human with an effective system-scoped or exact-project Project Manager
-grant carrying `project.guide.manage`. Each route requires a UUID
-`Idempotency-Key` before actor first-access provisioning and consumes one opaque,
-transaction-bound PREP handle after locking the exact project, draft guide, and
-current source lineage. Guide create produces only a draft guide. Snapshot
-creation separately records the sanitized source manifest and may commit one
-setup-run queue intent; broker dispatch happens only after commit and never
-carries the prepared handle.
+Guide creation and draft metadata updates require an active human with an
+effective system-scoped or exact-project Project Manager grant carrying
+`project.guide.manage`. Each public mutation requires a UUID `Idempotency-Key`
+before actor first-access provisioning. Guide creation consumes distinct,
+transaction-bound guide-create and internal source-consent PREP handles after
+locking the project. It atomically commits the draft guide, complete document
+set, paired same-key replay records and one `awaiting_documents` setup.
+There is no separate public source-snapshot creation operation.
+
+The create response supplies document IDs. The manager uploads each original
+through `POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`.
+Exact membership and current ingest authority are checked before body reads.
+Only committed bytes for every declared document can trigger automatic setup.
+Broker dispatch happens after commit and never carries a prepared handle.
+Guide-create replay reauthorizes both original actions against current authority
+and returns the original document IDs and initial setup response.
 
 Guide create/update no longer accept embedded review, revision, retired
 payout/economic, or contribution-record configuration fields. Guide create
-requires task examples stored as immutable PostgreSQL JSON with the guide
-metadata. AUTH receives the request digest, example hash and count; the guide
+requires the complete document declarations and task examples stored as
+immutable PostgreSQL metadata. AUTH receives the request digest, example hash and count; the guide
 and exact replay response are committed together. Document/upload snapshots
 bind that commitment and receive original PDF/DOCX/PPTX files through ART.
 Inline Markdown and URL/repository ingestion are unavailable. Only bounded
 metadata such as `change_summary` remains editable while the guide is draft.
-Exact committed retries return the recorded response without another
-mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,
+For guide creation and document upload, exact committed retries return the
+recorded response without another mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,
 stale-lineage, revoked, wrong-action, wrong-resource, or wrong-transaction use
 fails closed with no product write.
 
@@ -1215,7 +1225,7 @@ execution task, calls no provider, and does not make the hidden POL workflow liv
 | `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
 | `project.guide.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.guide.update` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
-| `project.guide_source_snapshot.create` (active) | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide_source_snapshot.create` (active internal paired consent) | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.review_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
@@ -1292,16 +1302,23 @@ The two collection routes return and transactionally bind at most the newest
 100 canonical rows in deterministic newest-first order. Older retained records
 remain available only through their exact individually authorized read route.
 
-`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.
-It clean-cuts TaskAssignment and Submission attribution to `contributor_id`,
-binds both fields to canonical human ActorProfiles in PostgreSQL, and exposes
-one actor-owned transaction participant for claim and submission. The
-participant locks the exact profile and verified issuer/subject link, requires
-both to be active human identity state, returns no identity or authority data,
-and runs after coarse legacy role admission but before resource locks. A
-non-human or inactive identity returns `active_contributor_required`; missing,
-mismatched, or unavailable canonical identity state returns retryable
-`contributor_identity_unavailable`.
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` established TaskAssignment and Submission
+`contributor_id` references to canonical human ActorProfiles in PostgreSQL.
+The task-project-grant authorization change replaces its exclusive write-guard
+wrapper and self-activated eligibility bridge with existing canonical AUTH.
+TASK locks the task and active assignment before AUTH locks the exact current
+profile, identity link and applicable grant. Claim/start/contributor context
+require an active exact-project Submitter grant; manager context and reasoned
+Operator start use their separate canonical permissions. Token role strings
+do not authorize these operations. Command denials use
+`permission_not_granted`; database unavailability rolls back with retryable
+`task_authority_unavailable`. Identity resolution retains its own earlier
+failure contract.
+
+The public JSON packet-creation POST is removed, not aliased or replaced by a
+second authorization path. Existing admission-backed creation stays hidden,
+uses TASK-first locked context and canonical submission authority, and preserves
+atomic ART consumption. Retained contributor data and submission reads remain.
 
 ## Migration And Compatibility
 

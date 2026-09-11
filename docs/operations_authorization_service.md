@@ -5,9 +5,11 @@
 This runbook assigns ownership and stop conditions for the staged WS-AUTH-001
 authorization rollout. The verified-token configuration and evidence commands
 are executable contracts. Canonical actor resolution, actor-self authorization,
-one-time bootstrap, and administrative grant APIs are active through AUTH-08;
-later actor lifecycle and project-grant sections remain staged until their
-owning implementation chunks.
+one-time bootstrap, administrative and project grants, and actor/link lifecycle
+controls are implemented. TASK claim, start and work-context operations use
+canonical project authority. Other feature activations remain operation-specific;
+consult `docs/roadmap_status.md` rather than inferring availability from a grant
+or catalogue entry.
 
 ## Ownership
 
@@ -107,12 +109,15 @@ python3 scripts/check_markdown_links.py
 git diff --check
 ```
 
-During the compatibility period, `/api/v1/auth/me` uses only the verified
-issuer/subject plus bounded legacy roles. It does not copy issuer email or
-display name into actor storage or responses, so both response fields remain
-`null`. Consumers must not treat token identity metadata or legacy workflow
-eligibility as profile or authorization truth. Human-owned display data is
-written only through `PATCH /api/v1/actors/me`.
+Use `GET /api/v1/actors/me` for canonical actor self-read. The duplicate
+`GET /api/v1/auth/me` endpoint is removed. Actor admission does not copy issuer
+email or display name into the profile. Consumers must not treat token identity
+metadata or workflow eligibility as profile or authorization truth. Human-owned
+display data is written only through `PATCH /api/v1/actors/me`.
+Task claim/start/work-context require current canonical authority and the applicable
+exact project grant. Token claims and eligibility rows are not authority.
+The API drill ends its task journey at that supported public boundary; hidden
+submission creation has separate proof.
 
 ## Request And Error Context
 
@@ -207,17 +212,16 @@ the database and install `0001_v01_baseline`. Operators must never infer a
 service identity from subject syntax, email, display name, token role, or
 adapter provenance.
 
-Git history for the completed AUTH-06 change records the exact deprecated
-compatibility identifier. That temporary,
-enumerated intake route writes only `LegacyWorkflowEligibility` and cannot
-create a grant or change a canonical profile. Its direct compatibility
-consumers are assigned-submitter claim, assigned-submitter start, and submission
-intake. Operator start override does not use the bridge. Current
-ARCH-03B/03C remove the replacement task claim/start consumers and activate
-their exact authority. Canonical admission-backed Submission already has its
-own hidden path; ARCH-02I removes legacy public reachability after its full
-prerequisites, and CP09 removes dead economic schema only after zero consumers.
-Historical broad AUTH-13/14 are not additional implementation lanes.
+The self-activation profile route and TASK eligibility bridge have been
+removed. Claim and start require canonical actor/lifecycle checks and an active
+Submitter grant for the exact project; an authorized Operator start override
+uses its explicit operation and reason. Retained eligibility rows do not grant
+TASK authority and have not been deleted. The old public submission-packet POST
+is also removed. Canonical admission-backed Submission creation remains hidden;
+its command validates current authority, exact assignment and locked policy
+lineage before consuming ART admission in the same transaction. Public creation
+and the remaining management/read-route cutovers remain separate work, not
+capabilities implied by this retirement.
 
 ## Contributor Attribution Runtime Guard
 
@@ -247,13 +251,20 @@ rejects a missing profile with SQLSTATE `23503` and a service profile with
 `23514`. Suspended and deactivated human profiles remain valid historical
 references. The v0.1 baseline has no downgrade path.
 
-Claim and submission also revalidate current identity inside their mutation
-transaction in lock order ActorProfile, exact issuer/subject identity link,
-task, active assignment. An inactive or non-human identity returns HTTP 403
-`active_contributor_required`. Missing, mismatched, database-unavailable, or
-lock-failed canonical identity state rolls back and returns retryable HTTP 503
-`contributor_identity_unavailable`. These responses are identity eligibility,
-not permission decisions; grant and resource authorization remain separate.
+Claim, start and work-context use canonical AUTH. TASK locks the task and
+active assignment before AUTH locks the current ActorProfile, exact identity
+link and applicable grant; mutation locks remain held through the transaction.
+Contributor commands require an active exact-project Submitter grant, not a
+token role or an eligibility row. The separate Operator start override
+requires its explicit permission and a reason. AUTH denials return HTTP 403
+`permission_not_granted`; database failures roll back with retryable HTTP 503
+`task_authority_unavailable`. Initial identity resolution may reject a request
+before command execution under its own identity-error contract.
+
+Admission-backed Submission creation remains hidden and uses its existing
+TASK-first context/assignment and AUTH transaction participants. The old public
+packet POST and self-activated contributor-profile endpoint are removed. Stored
+contributor references and retained submission reads are preserved.
 
 ## PostgreSQL Rate Controls
 
@@ -497,8 +508,9 @@ v0.1 baseline.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 73 PermissionIds, 112 ActionIds, 68 active actions, and
-44 planned actions. CP01A added four initially unavailable adapter-binding actions under
+Catalogue entries and explicit runtime composition determine availability;
+a planned action is not activated by its presence in the catalogue.
+CP01A added four initially unavailable adapter-binding actions under
 `WS-ARCH-001-CP01A` custody; it adds no evaluator, identity, grant, service
 matrix row, route, or activation. CP01B registered five initially unavailable
 `contribution.policy.*` actions with the same non-activation guarantees. CP05
@@ -1114,25 +1126,33 @@ Project Manager grants cannot create projects.
 
 ## Draft guide and source-metadata authorization
 
-`POST /api/v1/projects/{project_id}/guides`, its draft-guide `PATCH`, and the
-source-snapshot metadata `POST` each require a UUID `Idempotency-Key` and an
-active system or exact-project Project Manager grant. A 403 for an existing
-project is expected when that local grant is absent, revoked, stale, or scoped
-to another project; do not restore access from token roles or issuer claims.
-Use the request/correlation IDs to inspect the bounded denial event.
+`POST /api/v1/projects/{project_id}/guides` and its draft-guide `PATCH`
+require a UUID `Idempotency-Key` and an active system or exact-project Project
+Manager grant. A 403 for an existing project is expected when that local grant
+is absent, revoked, stale, or scoped to another project; do not restore access
+from token roles or issuer claims. Use request/correlation IDs to inspect the
+bounded denial event.
 
-Guide creation must not create source snapshots, policy rows, or setup runs.
-Source-snapshot creation is the separate boundary that may atomically commit
-one setup-run queue intent. Celery receives identifiers only after commit; a
-prepared authorization handle must never appear in task arguments, logs, or
-serialized state. If broker dispatch fails, inspect the exact setup run for
-`enqueue_failed` and use its bounded recovery path. Retrying the original HTTP
-request returns its recorded response and must not dispatch again.
+Guide creation commits guide metadata, the complete declared document set and
+one `awaiting_documents` setup together. Its transaction consumes distinct
+internal guide-create and source-consent decisions and commits their paired
+replay records using the same external key. There is no public source-snapshot
+creation operation. Exact create replay rechecks current authority for both
+decisions and returns the original document IDs and initial setup response.
 
-Guide creation requires the ordered task-example list. It is stored with guide
-metadata in PostgreSQL and cannot be edited in place; corrections require a new
-guide version. Upload-only document declarations form the separate immutable
-source snapshot, and original document bytes live in ArtifactStore/S3. Inline
+Upload each declared document through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`
+with its declared content type and a UUID replay key. Exact membership and
+current ingest authority are checked before reading bytes. Only committed
+readiness of every declared document can dispatch setup. Celery receives
+identifiers after commit; prepared authorization handles must never appear in
+task arguments, logs or serialized state. The existing bounded continuation
+and dispatch recovery paths handle post-commit failures without another upload
+or compilation attempt.
+
+The ordered task-example list and document declarations are immutable guide
+metadata in PostgreSQL; changes require a new guide version. Original document
+bytes live in ArtifactStore/S3. Inline
 Markdown and URL/repository ingestion are unavailable. Bounded draft metadata
 such as `change_summary` may still be updated. Embedded review, revision, retired payout/economic, and
 contribution-record configuration fields correctly return 422; do not reintroduce a

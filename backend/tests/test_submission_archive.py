@@ -86,6 +86,15 @@ def test_collision_and_ancestry_confusion_fail_closed(entries: dict[str, bytes])
     rejection(archive_bytes(entries), SubmissionArchiveFailureCode.COLLISION)
 
 
+def test_duplicate_physical_member_is_rejected_before_materialization() -> None:
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("answer.md", b"first")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            archive.writestr("answer.md", b"replacement")
+    rejection(output.getvalue(), SubmissionArchiveFailureCode.COLLISION)
+
+
 def test_symlink_entry_is_rejected() -> None:
     output = BytesIO()
     info = zipfile.ZipInfo("link")

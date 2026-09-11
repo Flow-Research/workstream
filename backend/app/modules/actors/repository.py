@@ -14,7 +14,6 @@ from app.modules.actors.models import (
     ActorIdentityLink,
     ActorProfile,
     LegacyActorIdentity,
-    LegacyWorkflowEligibility,
 )
 
 
@@ -255,52 +254,3 @@ class ActorRepository:
         if persisted is None:
             raise RuntimeError("legacy identity upsert did not return a row")
         return persisted
-
-    async def get_legacy_eligibility(
-        self,
-        actor_id: str,
-        profile_type: str,
-        scope_type: str,
-        scope_id: str,
-    ) -> LegacyWorkflowEligibility | None:
-        """Load one classified legacy workflow-eligibility row."""
-        return await self._session.scalar(
-            select(LegacyWorkflowEligibility)
-            .where(
-                LegacyWorkflowEligibility.actor_id == actor_id,
-                LegacyWorkflowEligibility.profile_type == profile_type,
-                LegacyWorkflowEligibility.scope_type == scope_type,
-                LegacyWorkflowEligibility.scope_id == scope_id,
-            )
-            .execution_options(populate_existing=True)
-        )
-
-    async def insert_legacy_eligibility_if_absent(
-        self,
-        eligibility: LegacyWorkflowEligibility,
-    ) -> bool:
-        """Insert compatibility metadata without overwriting established state."""
-        result = await self._session.execute(
-            insert(LegacyWorkflowEligibility)
-            .values(
-                id=eligibility.id,
-                actor_id=eligibility.actor_id,
-                profile_type=eligibility.profile_type,
-                status=eligibility.status,
-                skill_tags=eligibility.skill_tags,
-                scope_type=eligibility.scope_type,
-                scope_id=eligibility.scope_id,
-                profile_metadata=eligibility.profile_metadata,
-            )
-            .on_conflict_do_nothing(
-                index_elements=[
-                    LegacyWorkflowEligibility.actor_id,
-                    LegacyWorkflowEligibility.profile_type,
-                    LegacyWorkflowEligibility.scope_type,
-                    LegacyWorkflowEligibility.scope_id,
-                ]
-            )
-            .returning(LegacyWorkflowEligibility.id)
-        )
-        await self._session.flush()
-        return result.scalar_one_or_none() is not None

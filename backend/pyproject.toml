@@ -49,6 +49,10 @@ markers = [
 pythonpath = ["."]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+# SQLAlchemy async I/O switches greenlets within the request thread.
+concurrency = ["thread", "greenlet"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

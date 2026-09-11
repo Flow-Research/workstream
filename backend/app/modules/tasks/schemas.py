@@ -93,7 +93,7 @@ class TaskTransitionRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class EvidenceItemCreate(BaseModel):
@@ -131,7 +131,7 @@ class ArtifactHashEntry(BaseModel):
 
 
 class SubmissionCreate(BaseModel):
-    """Request schema for creating a submission packet version."""
+    """Shared packet value used by retained checker feedback and evaluation."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -21,6 +21,7 @@ from app.modules.tasks.api import (
 )
 from app.modules.tasks.models import EvidenceItem, Submission
 from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.service import TaskService
 
 
 def build_submission(
@@ -92,6 +93,7 @@ class TaskSubmissionCreationService:
         self._authorization = authorization
         self._admissions = admissions
         self._repository = TaskRepository(session)
+        self._contexts = TaskService(session)
 
     async def create(self, request: SubmissionCreationRequest) -> SubmissionCreationResult:
         """Create one Submission without opening or committing a transaction."""
@@ -116,6 +118,7 @@ class TaskSubmissionCreationService:
         task = await self._repository.get_task(str(request.task_id))
         if task is None:
             raise RuntimeError("locked task disappeared")
+        await self._contexts._load_locked_task_context(task)
         version = 1 if context.predecessor is None else context.predecessor.version + 1
         submission_id = uuid4()
         submission = build_submission(

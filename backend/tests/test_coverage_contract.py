@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,6 +16,63 @@ import coverage_policy as policy  # noqa: E402
 HEAD = "0016_artifact_domain"
 SHA = "a" * 40
 PEP695_INVALID = sys.version_info < (3, 12)
+
+
+def test_sqlalchemy_async_coverage_preserves_source_line_custody(tmp_path: Path) -> None:
+    """Actual SQLAlchemy switches must not attribute resumed app lines to callers."""
+    app_source = tmp_path / "measured_app.py"
+    app_source.write_text(
+        "def work():\n"
+        "    before = 'ready'\n"
+        "    await_only(asyncio.sleep(0))\n"
+        "    after = 'resumed'\n"
+        "    await_only(asyncio.sleep(0))\n"
+        "    return before, after\n",
+        encoding="utf-8",
+    )
+    caller_source = tmp_path / "measured_caller.py"
+    caller_source.write_text(
+        "\n" * 40 + "async def call():\n    return await greenlet_spawn(work)\n",
+        encoding="utf-8",
+    )
+    probe = """
+import asyncio
+import json
+from pathlib import Path
+import sys
+from coverage import Coverage
+from sqlalchemy.util.concurrency import await_only, greenlet_spawn
+
+config, app, caller = map(Path, sys.argv[1:])
+namespace = dict(asyncio=asyncio, await_only=await_only, greenlet_spawn=greenlet_spawn)
+for path in (app, caller):
+    exec(compile(path.read_text(), str(path), 'exec'), namespace)
+coverage = Coverage(config_file=str(config), data_file=None, include=[str(app), str(caller)])
+assert coverage.get_option('run:concurrency') == ['thread', 'greenlet']
+coverage.start()
+try:
+    result = asyncio.run(namespace['call']())
+finally:
+    coverage.stop()
+data = coverage.get_data()
+print(json.dumps(dict(result=result, app=sorted(data.lines(str(app)) or []),
+                      caller=sorted(data.lines(str(caller)) or []))))
+"""
+    # A child owns the probe tracer; inherited pytest-cov must not start a second one.
+    env = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("COV_CORE_", "COVERAGE_"))
+    }
+    completed = subprocess.run(
+        [sys.executable, "-c", probe, str(SCRIPTS.parent / "pyproject.toml"),
+         str(app_source), str(caller_source)],
+        env=env, capture_output=True, text=True, timeout=30, check=True,
+    )
+    assert json.loads(completed.stdout) == {
+        "result": ["ready", "resumed"],
+        "app": [2, 3, 4, 5, 6],
+        "caller": [42],
+    }
 
 
 def write_json(path: Path, value: dict, *, canonical: bool = False) -> Path:

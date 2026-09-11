@@ -226,7 +226,11 @@ new_permissions = frozenset(
 expected = {
     "actor.profile.read_self": ("actor.profile.read_self", "WS-AUTH-001-07B"),
     "actor.profile.update_self": ("actor.profile.update_self", "WS-AUTH-001-07B"),
-    "operations.task.start_override": ("operations.task.start_override", "WS-AUTH-001-13"),
+    "operations.task.start_override": ("operations.task.start_override", "task-project-grant-authorization"),
+    "task.claim": ("task.claim", "task-project-grant-authorization"),
+    "task.start": ("task.claim", "task-project-grant-authorization"),
+    "task.work_context.read": ("task.queue.read", "task-project-grant-authorization"),
+    "project.task.work_context.read": ("project.task.manage", "task-project-grant-authorization"),
     "operations.submission_gate.repair": (
         "operations.submission_gate.repair",
         "WS-AUTH-001-14",
@@ -363,6 +367,11 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "task.claim",
+    "task.start",
+    "task.work_context.read",
+    "project.task.work_context.read",
+    "operations.task.start_override",
     "actor.admin_role_grant_history.read",
     "actor.authorization_context.read",
     "actor.identity_link.reactivate",

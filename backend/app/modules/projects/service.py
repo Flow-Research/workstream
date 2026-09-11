@@ -47,7 +47,7 @@ from app.modules.projects.schemas import (
     ActiveGuideReadResponse,
     ActiveGuidePreSubmitCheckerPolicyResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
-    GuideSourceSnapshotCreate,
+    ProjectGuideCreate,
     GuideSourceSnapshotItemResponse,
     GuideSourceSnapshotResponse,
     GuideSufficiencyReportCreate,
@@ -1676,7 +1676,7 @@ class ProjectService:
 
 
 def build_guide_source_snapshot_manifest(
-    payload: GuideSourceSnapshotCreate,
+    payload: ProjectGuideCreate,
     *,
     snapshot_id: str,
     generation: int,
@@ -1695,10 +1695,10 @@ def build_guide_source_snapshot_manifest(
     examples_hash = task_examples_hash(examples)
     declared_items: list[dict[str, Any]] = []
     seen_labels: set[tuple[str, str]] = set()
-    for item in payload.items:
-        source_kind = _guide_source_token(item.source_kind, "source kind")
-        ingestion_adapter = _guide_source_token(item.ingestion_adapter, "ingestion adapter")
-        source_label = _guide_source_label(item.source_label)
+    for item in payload.documents:
+        source_kind = "document"
+        ingestion_adapter = "upload"
+        source_label = _guide_source_label(item.label)
         duplicate_key = (source_kind, source_label)
         if duplicate_key in seen_labels:
             raise SourceSnapshotInvalid("duplicate source item label")
@@ -1711,13 +1711,9 @@ def build_guide_source_snapshot_manifest(
                 "media_type": item.media_type,
             }
         )
-    sorted_declarations = sorted(
-        declared_items,
-        key=lambda item: (item["source_kind"], item["source_label"], item["ingestion_adapter"]),
-    )
-    sorted_items = [
+    ordered_items = [
         {"item_id": str(uuid4()), "item_order": index, **item}
-        for index, item in enumerate(sorted_declarations)
+        for index, item in enumerate(declared_items)
     ]
     return {
         "schema_version": GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
@@ -1725,8 +1721,8 @@ def build_guide_source_snapshot_manifest(
         "generation": generation,
         "task_examples_hash": examples_hash,
         "task_examples_count": len(examples),
-        "items": sorted_items,
-    }, sorted_items
+        "items": ordered_items,
+    }, ordered_items
 
 
 def _guide_source_token(value: str, label: str) -> str:

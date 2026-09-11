@@ -21,6 +21,8 @@ from app.interfaces.artifacts import (
     ArtifactStore,
     ArtifactCommitment,
     ArtifactIntegrityError,
+    ArtifactLimitExceededError,
+    ArtifactInputMismatchError,
     ArtifactStoreError,
     ArtifactStoreUnavailableError,
     ArtifactObjectMissingError,
@@ -30,7 +32,7 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
-from app.modules.projects.api.guide_documents import DOCUMENT_EXTENSIONS
+from app.modules.projects.api.guide_documents import DOCUMENT_EXTENSIONS, GuideDocumentUploadTargetPort
 from app.modules.artifacts.guide_formats import BoundGuideFormatInspector, GuideFormatDetector, GuideFormatLimits
 from app.interfaces.artifact_operations import (
     ArtifactRecoveryRequest,
@@ -59,7 +61,7 @@ from app.modules.artifacts.metrics import (
     ArtifactAdmissionMetrics,
     artifact_admission_metrics,
 )
-from app.modules.artifacts.repository import ArtifactRepository
+from app.modules.artifacts.repository import ArtifactRepository, GuideSourceIngestConflict
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
     guide_ingest_prepared_request_digest,
@@ -245,7 +247,7 @@ class GuideArtifactIngestService:
             ))
             if (classification.status != "classified"
                     or classification.detected_format != DOCUMENT_EXTENSIONS[media_type]):
-                raise ArtifactAdmissionRelationshipError("guide document format is invalid")
+                raise ArtifactInputMismatchError("guide document format is invalid")
             admission = await admission_service.admit(
                 GuideArtifactAdmissionRequest(
                     project_id=request.project_id,
@@ -312,9 +314,14 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
         self,
         service: GuideArtifactIngestService,
         authority: GuideArtifactPreparedAuthorization,
+        targets: GuideDocumentUploadTargetPort,
+        *, maximum_document_bytes: int, maximum_total_bytes: int,
     ) -> None:
         self._service = service
         self._authority = authority
+        self._targets = targets
+        self._maximum_document_bytes = maximum_document_bytes
+        self._maximum_total_bytes = maximum_total_bytes
 
     async def ingest(
         self,
@@ -322,9 +329,10 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
         authorization_context: AuthorizationContext,
         project_id: UUID,
         guide_id: UUID,
-        guide_source_snapshot_id: UUID,
         source_item_id: UUID,
         idempotency_key: UUID,
+        content_type: str,
+        content_length: int | None,
         byte_source: AsyncIterable[bytes],
     ) -> GuideArtifactIngestResult:
         authority_transaction = self._authority.transaction()
@@ -332,6 +340,10 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
         try:
             await authority_transaction.__aenter__()
             transaction_open = True
+            target = await self._targets.resolve(project_id, guide_id, source_item_id, for_update=False)
+            if target is None:
+                raise ArtifactAdmissionRelationshipError("guide document not found")
+            guide_source_snapshot_id = target.snapshot_id
             prepared_authorization = await self._authority.prepare(
                 authorization_context=authorization_context,
                 project_id=project_id,
@@ -340,6 +352,24 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
                 guide_source_item_id=source_item_id,
                 idempotency_key=idempotency_key,
             )
+            locked = await self._targets.resolve(project_id, guide_id, source_item_id, for_update=True)
+            if (locked is None or (locked.snapshot_id, locked.setup_id, locked.setup_generation, locked.media_type)
+                    != (target.snapshot_id, target.setup_id, target.setup_generation, target.media_type)):
+                raise ArtifactAdmissionRelationshipError("guide document metadata does not match")
+            if content_type != locked.media_type:
+                raise ArtifactInputMismatchError("guide document content type does not match")
+            limit = min(self._maximum_document_bytes, self._maximum_total_bytes - locked.other_document_bytes)
+            if limit <= 0 or (content_length is not None and (content_length < 0 or content_length > limit)):
+                raise ArtifactLimitExceededError("guide document exceeds maximum bytes")
+
+            async def bounded_body():
+                total = 0
+                async for chunk in byte_source:
+                    total += len(chunk)
+                    if total > limit:
+                        raise ArtifactLimitExceededError("guide document exceeds maximum bytes")
+                    yield chunk
+
             async with self._service.runtime() as runtime:
                 preparation, admission_service, orchestrator = runtime
                 prepared, admission = await self._service.prepare_and_admit(
@@ -363,7 +393,7 @@ class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
                             idempotency_key=idempotency_key,
                         ),
                         logical_role="guide_source",
-                        byte_source=byte_source,
+                        byte_source=bounded_body(),
                     ),
                     preparation,
                     admission_service,
@@ -1926,6 +1956,8 @@ class ArtifactAdmissionService:
                         byte_count=commitment.byte_count,
                         media_type=commitment.media_type,
                     )
+                except GuideSourceIngestConflict as exc:
+                    raise ArtifactAdmissionConflictError(str(exc)) from exc
                 except ValueError as exc:
                     raise ArtifactAdmissionRelationshipError(str(exc)) from exc
             submission_facts: _AdmissionFacts | None = None
@@ -1977,6 +2009,8 @@ class ArtifactAdmissionService:
             request_digest = canonical_json_hash(
                 {
                     "operation_identity": facts.operation_identity,
+                    **({"guide_ingest_request_digest": request.request_digest}
+                       if type(request) is GuideArtifactAdmissionRequest else {}),
                     "request_type": facts.request_type,
                     "producer_type": facts.producer_type,
                     "producer_ref": facts.producer_ref,

@@ -44,27 +44,24 @@ async def test_actor_api_accepts_verifier_identity_bounds(
         assert link is not None
 
 
-async def test_legacy_provenance_accepts_verifier_identity_bounds(actor_client, monkeypatch):
+async def test_identity_bounds_preserve_private_canonical_provisioning_evidence(actor_client, monkeypatch):
     issuer = ("https://identity.test/" + "i" * 200)[:200]
     subject = "s" * 200
     set_dev_actor(monkeypatch, roles="worker", subject=subject, issuer=issuer)
     created = await actor_client.get("/api/v1/actors/me", headers=auth_headers())
     assert created.status_code == 200
-    eligibility = await actor_client.post(
-        "/api/v1/workers/me/profile",
-        headers=auth_headers(),
-        json={"skill_tags": ["stem"]},
-    )
-    assert eligibility.status_code == 200, eligibility.text
     async with db_session.get_session_factory()() as session:
         event = await session.scalar(
             select(AuditEvent).where(
-                AuditEvent.event_type == "legacy_workflow_eligibility_activated"
+                AuditEvent.event_type == "ActorProfileProvisioned",
+                AuditEvent.actor_id == created.json()["actor_profile_id"],
             )
         )
         assert event is not None
-        assert event.external_issuer == issuer
-        assert event.external_subject == subject
+        assert event.external_issuer is None
+        assert event.external_subject is None
+        assert event.actor_roles == []
+        assert event.claim_snapshot == {}
 
 
 @pytest.mark.parametrize("field", ["issuer", "subject"])

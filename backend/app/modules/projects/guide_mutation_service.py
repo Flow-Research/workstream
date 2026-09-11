@@ -27,10 +27,12 @@ from app.modules.projects.models import (
 )
 from app.modules.projects.repository import ProjectRepository
 from app.modules.projects.schemas import (
-    GuideSourceSnapshotCreate,
     GuideSourceSnapshotItemResponse,
     GuideSourceSnapshotResponse,
     ProjectGuideCreate,
+    ProjectGuideCreateResponse,
+    ProjectGuideDocumentResponse,
+    ProjectGuideWaitingSetupResponse,
     ProjectGuideResponse,
     ProjectGuideUpdate,
 )
@@ -41,9 +43,9 @@ from app.modules.projects.service import (
     GuideVersionConflict,
     ProjectNotFound,
     ProjectServiceError,
-    PolicySetupBlocked,
     build_guide_source_snapshot_manifest,
     build_guide_source_snapshot_items,
+    ProjectService,
 )
 
 
@@ -57,7 +59,7 @@ class GuideMutationIdempotencyConflict(ProjectServiceError):
 class GuideMutationOutcome:
     """Route-owned transaction result and optional post-commit dispatch facts."""
 
-    response: ProjectGuideResponse | GuideSourceSnapshotResponse
+    response: ProjectGuideResponse | ProjectGuideCreateResponse
     replayed: bool
     setup_run_id: str | None = None
     setup_generation: int | None = None
@@ -85,7 +87,7 @@ class GuideMutationService:
         operation_id: UUID,
     ) -> tuple[PreparedAuthorizationInput, str]:
         body_value = body.model_dump(mode="json", exclude_unset=True)
-        if action is ActionId.PROJECT_GUIDE_CREATE:
+        if action in {ActionId.PROJECT_GUIDE_CREATE, ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE}:
             examples = validate_task_examples(body.task_examples)
             body_value.pop("task_examples")
             body_value["task_examples_hash"] = task_examples_hash(examples)
@@ -197,16 +199,26 @@ class GuideMutationService:
             target_resource_id=guide_id,
             operation_id=operation_id,
         )
-        existing = await self._existing(resolved, action, key, digest, ProjectGuideResponse)
-        if existing:
+        existing = await self._replay_creation(resolved, prepared, key, project_id, payload, digest)
+        if existing is not None:
             return existing
+        snapshot_id, source_operation_id = uuid4(), uuid4()
+        manifest, sanitized = build_guide_source_snapshot_manifest(
+            payload, snapshot_id=str(snapshot_id), generation=1,
+            task_examples=examples, expected_task_examples_hash=examples_hash,
+        )
+        source_action = ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
+        source_caller, source_digest = self._input(
+            source_action, "POST /api/v1/projects/{project_id}/guides", resolved, key, payload,
+            project_id=project_id, guide_id=guide_id,
+            target_resource_id=snapshot_id, operation_id=source_operation_id,
+        )
         handle = await self._prepare(
-            prepared,
-            action,
-            caller,
-            project_id,
-            guide_id=None,
-            target_kind="guide_create",
+            prepared, action, caller, project_id, guide_id=None, target_kind="guide_create",
+        )
+        source_handle = await self._prepare(
+            prepared, source_action, source_caller, project_id,
+            guide_id=guide_id, target_kind="source_snapshot_create",
         )
         project = await self._repo.get_project(str(project_id), for_update=True)
         if project is None:
@@ -214,8 +226,8 @@ class GuideMutationService:
         # A concurrent exact replay can miss the optimistic lookup and then wait
         # on this project lock. Re-read the ledger after the lock so the winner's
         # committed response takes precedence over the natural version conflict.
-        existing = await self._existing(resolved, action, key, digest, ProjectGuideResponse)
-        if existing:
+        existing = await self._replay_creation(resolved, prepared, key, project_id, payload, digest)
+        if existing is not None:
             return existing
         if await self._repo.get_guide_by_version(str(project_id), payload.version):
             raise GuideVersionConflict("guide version already exists for project")
@@ -246,9 +258,27 @@ class GuideMutationService:
             resource_id=str(guide_id),
             operation_generation=1,
         )
-        concurrent = self._reservation_outcome(disposition, replay, ProjectGuideResponse)
-        if concurrent is not None:
-            return concurrent
+        if disposition != "claimed":
+            raise GuideMutationIdempotencyConflict("idempotency_pending")
+        source_resource = self._source_resource(
+            project_id, guide_id, payload.version, snapshot_id,
+            canonical_json_hash(manifest), source_operation_id,
+        )
+        source_decision = await prepared.consume(
+            source_handle, source_action, source_caller, source_resource,
+        )
+        self._prove(source_decision, project_id)
+        source_disposition, source_replay = await self._replay.reserve(
+            actor_profile_id=resolved.profile.id,
+            identity_link_id=resolved.identity_link.id,
+            action_id=source_action.value, idempotency_key=key,
+            request_digest=source_digest,
+            resource_context_digest=source_decision.resource_context_digest,
+            operation_id=source_operation_id, project_id=str(project_id),
+            resource_id=str(snapshot_id), operation_generation=1,
+        )
+        if source_disposition != "claimed":
+            raise GuideMutationIdempotencyConflict("idempotency_pending")
         guide = ProjectGuide(
             id=str(guide_id),
             project_id=str(project_id),
@@ -272,97 +302,109 @@ class GuideMutationService:
             last_authorization_decision_event_id=str(decision.decision_id),
         )
         await self._repo.add_guide(guide)
-        response = ProjectGuideResponse.model_validate(guide)
+        items, setup = await self._initialize_documents(
+            resolved, guide, snapshot_id, manifest, sanitized, source_decision, source_replay,
+        )
+        response = ProjectGuideCreateResponse(
+            **ProjectGuideResponse.model_validate(guide).model_dump(),
+            documents=[ProjectGuideDocumentResponse(
+                document_id=UUID(item.id), label=item.source_label,
+                media_type=item.media_type, order=item.item_order,
+            ) for item in items],
+            setup=ProjectGuideWaitingSetupResponse(id=UUID(setup.id)),
+        )
         await self._replay.complete(replay, response_json=response.model_dump(mode="json"))
-        return GuideMutationOutcome(response, False)
+        return GuideMutationOutcome(response, False, setup.id, setup.setup_generation)
 
-    async def create_snapshot(
-        self,
-        resolved,
-        prepared,
-        key: UUID,
-        project_id: UUID,
-        guide_id: UUID,
-        payload: GuideSourceSnapshotCreate,
-    ) -> GuideMutationOutcome:
-        action = ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
-        snapshot_id, operation_id = uuid4(), uuid4()
-        caller, digest = self._input(
-            action,
-            "POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-            resolved,
-            key,
-            payload,
-            project_id=project_id,
-            guide_id=guide_id,
-            target_resource_id=snapshot_id,
-            operation_id=operation_id,
-        )
-        existing = await self._existing(resolved, action, key, digest, GuideSourceSnapshotResponse)
-        if existing:
-            return existing
-        handle = await self._prepare(
-            prepared,
-            action,
-            caller,
-            project_id,
-            guide_id=guide_id,
-            target_kind="source_snapshot_create",
-        )
-        project = await self._repo.get_project(str(project_id), for_update=True)
-        guide = await self._repo.lock_project_guide(str(guide_id))
-        if project is None:
-            raise ProjectNotFound("project not found")
-        if guide is None or guide.project_id != str(project_id):
-            raise GuideNotFound("guide not found")
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can receive source snapshots")
-        predecessor = await self._repo.lock_latest_guide_source_snapshot(
-            str(project_id), guide.id, guide.version
-        )
-        generation = (predecessor.creation_generation or 0) + 1 if predecessor else 1
-        manifest, sanitized = build_guide_source_snapshot_manifest(
-            payload,
-            snapshot_id=str(snapshot_id),
-            generation=generation,
-            task_examples=guide.task_examples,
-            expected_task_examples_hash=guide.task_examples_hash,
-        )
-        try:
-            snapshot_hash = canonical_json_hash(manifest)
-        except ValueError:
-            raise PolicySetupBlocked("canonical JSON cannot contain non-finite numbers") from None
-        resource = ProjectGuideSourceSnapshotMutationResourceContext(
+    @staticmethod
+    def _source_resource(project_id, guide_id, version, snapshot_id, bundle_hash, operation_id):
+        return ProjectGuideSourceSnapshotMutationResourceContext(
             resource_type="project_guide_source_snapshot_mutation",
-            resource_id=snapshot_id,
-            operation_id=operation_id,
-            scope_project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide.version,
-            guide_status=guide.status,
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=snapshot_hash,
-            predecessor_snapshot_id=UUID(predecessor.id) if predecessor else None,
-            predecessor_snapshot_hash=predecessor.bundle_hash if predecessor else None,
-            operation_generation=generation,
+            resource_id=snapshot_id, operation_id=operation_id,
+            scope_project_id=project_id, guide_id=guide_id, guide_version=version,
+            guide_status="draft", source_snapshot_id=snapshot_id,
+            source_snapshot_hash=bundle_hash, predecessor_snapshot_id=None,
+            predecessor_snapshot_hash=None, operation_generation=1,
         )
-        decision = await prepared.consume(handle, action, caller, resource)
-        self._prove(decision, project_id)
-        disposition, replay = await self._replay.reserve(
-            actor_profile_id=resolved.profile.id,
-            identity_link_id=resolved.identity_link.id,
-            action_id=action.value,
-            idempotency_key=key,
-            request_digest=digest,
-            resource_context_digest=decision.resource_context_digest,
-            operation_id=operation_id,
-            project_id=str(project_id),
-            resource_id=str(snapshot_id),
-            operation_generation=generation,
+
+    async def _replay_creation(self, resolved, prepared, key, project_id, payload, digest):
+        """Reauthorize both immutable original operations before returning a replay."""
+        action = ActionId.PROJECT_GUIDE_CREATE
+        source_action = ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
+        root = await self._replay.find(resolved.profile.id, action.value, key)
+        source = await self._replay.find(resolved.profile.id, source_action.value, key)
+        if root is None and source is None:
+            return None
+        if root is None or source is None:
+            raise GuideMutationIdempotencyConflict("idempotency_pending")
+        for record in (root, source):
+            if (record.identity_link_id != resolved.identity_link.id
+                    or record.project_id != str(project_id)):
+                raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+            if record.status != "committed" or record.response_json is None:
+                raise GuideMutationIdempotencyConflict("idempotency_pending")
+        if root.request_digest != digest:
+            raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+        guide = await self._repo.get_guide_by_version(str(project_id), payload.version)
+        snapshot = await self._repo.get_guide_source_snapshot(source.resource_id)
+        setup = await self._repo.get_project_setup_run(source.setup_run_id) if source.setup_run_id else None
+        if (guide is None or guide.id != root.resource_id or snapshot is None
+                or snapshot.guide_id != guide.id or snapshot.project_id != guide.project_id
+                or snapshot.guide_version != guide.version or snapshot.creation_generation != 1
+                or setup is None or setup.guide_id != guide.id
+                or setup.source_snapshot_id != snapshot.id
+                or setup.source_snapshot_hash != snapshot.bundle_hash):
+            raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+        items = await self._repo.list_guide_source_snapshot_items(snapshot.id)
+        await ProjectService(self._session).validate_source_snapshot_integrity(
+            snapshot, GuideMutationIdempotencyConflict, persisted_items=items,
         )
-        concurrent = self._reservation_outcome(disposition, replay, GuideSourceSnapshotResponse)
-        if concurrent is not None:
-            return concurrent
+        response = ProjectGuideCreateResponse.model_validate(root.response_json)
+        if (str(response.setup.id) != setup.id
+                or [str(item.document_id) for item in response.documents] != [item.id for item in items]):
+            raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+        guide_id, snapshot_id = UUID(guide.id), UUID(snapshot.id)
+        examples = validate_task_examples(payload.task_examples)
+        resources = (
+            ProjectGuideMutationResourceContext(
+                resource_type="project_guide_mutation", resource_id=guide_id,
+                operation_id=root.operation_id, scope_project_id=project_id,
+                guide_id=guide_id, target_kind="create", guide_exists=False,
+                operation_generation=1, request_digest=digest,
+                task_examples_hash=task_examples_hash(examples), task_examples_count=len(examples),
+            ),
+            self._source_resource(project_id, guide_id, guide.version, snapshot_id,
+                                  snapshot.bundle_hash, source.operation_id),
+        )
+        for record, resource, current_action, target in (
+            (root, resources[0], action, "guide_create"),
+            (source, resources[1], source_action, "source_snapshot_create"),
+        ):
+            caller, current_digest = self._input(
+                current_action, "POST /api/v1/projects/{project_id}/guides", resolved, key, payload,
+                project_id=project_id, guide_id=None if record is root else guide_id,
+                target_resource_id=resource.resource_id, operation_id=record.operation_id,
+            )
+            if current_digest != record.request_digest:
+                raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+            handle = await self._prepare(
+                prepared, current_action, caller, project_id,
+                guide_id=None if record is root else guide_id, target_kind=target,
+            )
+            decision = await prepared.consume(handle, current_action, caller, resource)
+            self._prove(decision, project_id)
+            if decision.resource_context_digest != record.resource_context_digest:
+                raise GuideMutationIdempotencyConflict("idempotency_mismatch")
+        return GuideMutationOutcome(response, True, setup.id, setup.setup_generation)
+
+    async def _initialize_documents(
+        self, resolved, guide, snapshot_id, manifest, sanitized, decision, replay,
+    ):
+        """Write the one document set inside its guide-create transaction."""
+        action = ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE
+        project_id = UUID(guide.project_id)
+        generation = 1
+        snapshot_hash = canonical_json_hash(manifest)
         provenance = dict(
             created_by_actor_profile_id=resolved.profile.id,
             created_via_identity_link_id=resolved.identity_link.id,
@@ -418,12 +460,7 @@ class GuideMutationService:
             response_json=response.model_dump(mode="json"),
             setup_run_id=setup_run.id,
         )
-        return GuideMutationOutcome(
-            response,
-            False,
-            setup_run.id,
-            setup_run.setup_generation,
-        )
+        return items, setup_run
 
     async def update_guide(
         self,

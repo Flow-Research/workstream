@@ -7,6 +7,7 @@ from httpx import (  # type: ignore[import-not-found]
     AsyncClient,
 )
 
+from app.core.config import Settings
 from app.main import create_app
 
 
@@ -17,7 +18,7 @@ async def test_missing_bearer_token_is_rejected() -> None:
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/api/v1/auth/me")
+        response = await client.get("/api/v1/actors/me")
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Missing bearer token"
@@ -44,7 +45,7 @@ async def test_invalid_bearer_token_is_rejected(monkeypatch: pytest.MonkeyPatch)
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            "/api/v1/auth/me",
+            "/api/v1/actors/me",
             headers={"Authorization": "Bearer wrong-token"},
         )
 
@@ -55,14 +56,20 @@ async def test_invalid_bearer_token_is_rejected(monkeypatch: pytest.MonkeyPatch)
 
 
 async def test_invalid_production_verifier_configuration_is_service_unavailable() -> None:
-    app = create_app()
+    app = create_app(Settings(
+        _env_file=None,
+        environment="production",
+        auth_provider="flow",
+        flow_auth_local_hmac_secret=None,
+        token_issuer=None,
+    ))
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            "/api/v1/auth/me",
+            "/api/v1/actors/me",
             headers={"Authorization": "Bearer opaque-token"},
         )
 

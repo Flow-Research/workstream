@@ -140,7 +140,7 @@ Adds protected v1 routes:
 - `GET /api/v1/projects/{project_id}`
 - `POST /api/v1/projects/{project_id}/guides`
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
@@ -149,6 +149,16 @@ Adds protected v1 routes:
 - `GET /api/v1/projects/{project_id}/active-guide`
 
 These routes require an actor role allowed to manage project setup.
+
+Guide creation requires at least one task example and a complete nonempty
+`documents` list of labels and supported media types. Its response includes each
+`document_id` and the initial `awaiting_documents` setup. Upload each original as
+a raw binary body with the declared `Content-Type` and a UUID `Idempotency-Key`.
+Workstream computes the digest and size, checks format and bounds, and stores
+the bytes through ArtifactStore. The document-set identity and source consent
+are internal custody; clients do not create or select a source snapshot.
+Exact create/upload replay rechecks current authority and returns the original
+result. A changed document set requires a new guide.
 
 Committed original-document readiness dispatches the sole unified project-guide compilation
 through Celery. Source metadata without committed original uploads remains pending;

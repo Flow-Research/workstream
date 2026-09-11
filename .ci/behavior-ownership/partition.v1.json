@@ -446,6 +446,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/task_authority.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/guide_compilation.py"
     },
     {
@@ -547,6 +551,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/submission_preparation.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/task_authorization.py"
     },
     {
       "group": "artifacts",
@@ -770,6 +778,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/document_upload.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/automatic_request.py"
     },
     {
@@ -934,6 +946,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/authorization.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/submission_command.py"
     },
     {
@@ -942,7 +958,15 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/transition_audit.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/authorization.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/authorized_commands.py"
     },
     {
       "group": "lifecycle",
@@ -1093,7 +1117,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "ddf6c3e0221d3e8caddc9b7f556dd75616f5880272552976bbd7b04b167b72f9",
+  "authority_digest": "8dd1954cb63c958e7826e20353a7f286a0dd60beff434fe6d978c096626514d6",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

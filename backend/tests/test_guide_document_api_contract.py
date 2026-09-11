@@ -4,12 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from app.modules.projects.schemas import (
-    ProjectGuideCreate, ProjectGuideUpdate, ProjectGuideResponse, GuideSourceSnapshotItemInput,
+    ProjectGuideCreate, ProjectGuideUpdate, ProjectGuideResponse, ProjectGuideDocumentInput,
 )
 
 
 @pytest.mark.parametrize("schema,payload", [
-    (ProjectGuideCreate, {"version": "v0.1", "task_examples": [{"content": "Review a claim."}]}),
+    (ProjectGuideCreate, {"version": "v0.1", "documents": [{"label": "guide.pdf", "media_type": "application/pdf"}], "task_examples": [{"content": "Review a claim."}]}),
     (ProjectGuideUpdate, {"change_summary": "Corrected source documents"}),
 ])
 @pytest.mark.parametrize("field", ["content_markdown", "retained_content_markdown", "content", "inline_text"])
@@ -32,9 +32,8 @@ def test_current_guide_response_excludes_retained_body():
 ])
 def test_source_metadata_rejects_superseded_or_unsupported_ingress(patch):
     with pytest.raises(ValidationError):
-        GuideSourceSnapshotItemInput.model_validate({
-            "source_kind": "document", "source_label": "guide.pdf",
-            "ingestion_adapter": "upload", "media_type": "application/pdf", **patch,
+        ProjectGuideDocumentInput.model_validate({
+            "label": "guide.pdf", "media_type": "application/pdf", **patch,
         })
 
 
@@ -43,6 +42,8 @@ def test_source_metadata_rejects_superseded_or_unsupported_ingress(patch):
     ("POST", "post-submit-checker-policy/approve"),
     ("POST", "post-submit-checker-policy/request-correction"),
     ("POST", "source-snapshots/{snapshot_id}/run-sufficiency-agent"),
+    ("POST", "source-snapshots"),
+    ("POST", "source-snapshots/{source_snapshot_id}/items/{source_item_id}/artifact"),
 ])
 def test_superseded_setup_endpoints_are_not_registered(method, suffix):
     from app.core.config import Settings
@@ -104,7 +105,7 @@ def test_superseded_activation_implementation_is_absent():
 
 @pytest.mark.parametrize("examples", [None, [], [{"content": ""}], [{"content": " \t\n\u2003"}], [{}]])
 def test_guide_create_requires_at_least_one_nonblank_task_example(examples):
-    payload = {"version": "v0.1"}
+    payload = {"version": "v0.1", "documents": [{"label": "guide.pdf", "media_type": "application/pdf"}]}
     if examples is not None:
         payload["task_examples"] = examples
     with pytest.raises(ValidationError, match="task_examples"):
@@ -116,7 +117,7 @@ def test_guide_examples_accept_minimal_and_diverse_descriptions_without_task_sch
         {"content": "Draft a claim review."},
         {"content": "  Reproduce a reported result.\nKeep this whitespace. 雪", "title": "Paper task", "labels": ["research"]},
     ]
-    created = ProjectGuideCreate.model_validate({"version": "v0.1", "task_examples": examples})
+    created = ProjectGuideCreate.model_validate({"version": "v0.1", "documents": [{"label": "guide.pdf", "media_type": "application/pdf"}], "task_examples": examples})
     assert [item.content for item in created.task_examples] == [item["content"] for item in examples]
     assert created.task_examples[0].title is None
     assert created.task_examples[0].labels == ()
@@ -137,7 +138,7 @@ def test_task_example_commitment_includes_order_content_title_and_labels():
 @pytest.mark.parametrize("content", ["雪" * 50_000, "\n" * 65_535 + "x"], ids=("multibyte_utf8", "json_escaping"))
 def test_task_example_aggregate_budget_counts_utf8_and_json_escaping(content):
     with pytest.raises(ValidationError, match="aggregate byte limit"):
-        ProjectGuideCreate.model_validate({"version": "v0.1", "task_examples": [{"content": content}]})
+        ProjectGuideCreate.model_validate({"version": "v0.1", "documents": [{"label": "guide.pdf", "media_type": "application/pdf"}], "task_examples": [{"content": content}]})
 
 
 def test_guide_create_authorization_projection_contains_commitments_not_example_text():
@@ -149,7 +150,7 @@ def test_guide_create_authorization_projection_contains_commitments_not_example_
     from app.modules.projects.guide_mutation_service import GuideMutationService
 
     sentinel = "private-example-text-sentinel"
-    payload = ProjectGuideCreate.model_validate({"version": "v0.1", "task_examples": [
+    payload = ProjectGuideCreate.model_validate({"version": "v0.1", "documents": [{"label": "guide.pdf", "media_type": "application/pdf"}], "task_examples": [
         {"content": sentinel, "title": "private-example-title", "labels": ["private-label"]},
     ]})
     caller, digest = GuideMutationService._input(
@@ -163,3 +164,27 @@ def test_guide_create_authorization_projection_contains_commitments_not_example_
     assert caller.request_value["request_digest"] == digest
     assert caller.request_value["task_examples_count"] == 1
     assert caller.request_value["task_examples_hash"].startswith("sha256:")
+
+
+def test_document_upload_openapi_binary_body_and_bounded_responses():
+    from app.core.config import Settings
+    from app.main import create_app
+    document = create_app(Settings(environment="test")).openapi()
+    operation = document["paths"]["/api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content"]["post"]
+    body = operation["requestBody"]
+    assert body["required"] is True
+    assert set(body["content"]) == {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+    assert all(value["schema"] == {"type": "string", "format": "binary"} for value in body["content"].values())
+    responses = operation["responses"]
+    assert responses["202"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/GuideArtifactIngestResponse"}
+    schema = document["components"]["schemas"]["GuideArtifactIngestResponse"]
+    assert set(schema["properties"]) == {"document_id", "sha256", "byte_count", "status", "replayed"}
+    for code in ("404", "409", "413", "422", "503"):
+        assert responses[code]["description"]
+        assert responses[code]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/ApiErrorResponse"}

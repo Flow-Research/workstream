@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+from app.api.deps.authorization import get_task_commands
+from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
+from app.modules.tasks.api import TaskAuthorityOperation
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.auth import actor_registry_http_error, get_registered_actor
+from app.api.deps.auth import get_registered_actor
 from app.core.api_controls import StructuredHTTPException, error_response
 from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
-from app.modules.actors.schemas import (
-    LegacyWorkflowEligibilityActivationRequest,
-    LegacyWorkflowEligibilityResponse,
-)
-from app.modules.actors.service import ActorRegistryError, ActorService
 from app.modules.tasks.schemas import (
     AuditEventResponse,
-    SubmissionCreate,
     SubmissionRequirementsResponse,
     SubmissionResponse,
     TaskCreate,
@@ -35,24 +33,6 @@ router = APIRouter(tags=["tasks"])
 
 
 CANONICAL_ERROR_OBJECT_SCHEMA = {"$ref": "#/components/schemas/ApiError"}
-PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
-    "oneOf": [
-        {
-            "type": "object",
-            "required": ["code", "details", "error"],
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "enum": ["pre_submission_checker_failed"],
-                },
-                "details": {"type": "object"},
-                "error": CANONICAL_ERROR_OBJECT_SCHEMA,
-            },
-            "additionalProperties": False,
-        },
-        {"$ref": "#/components/schemas/HTTPValidationError"},
-    ]
-}
 
 
 TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
@@ -72,6 +52,16 @@ TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
         },
         {"$ref": "#/components/schemas/HTTPValidationError"},
     ]
+}
+
+
+TASK_LOCKED_CONTEXT_RESPONSES = {
+    422: {
+        "description": "Locked task context is missing or inconsistent.",
+        "content": {
+            "application/json": {"schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA}
+        },
+    }
 }
 
 
@@ -102,10 +92,7 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
     code = getattr(exc, "code")
     details = getattr(exc, "details", None) or {}
     message = {
-        "pre_submission_checker_failed": "Pre-submission checks failed",
         "task_locked_context_invalid": "Task locked context is invalid",
-        "active_contributor_required": "Active contributor identity required",
-        "contributor_identity_unavailable": "Contributor identity verification unavailable",
     }[code]
     return error_response(
         request,
@@ -128,24 +115,6 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
         HTTP exception with a forbidden status.
     """
     return HTTPException(status_code=403, detail=str(exc))
-
-
-@router.post(
-    "/workers/me/profile",
-    response_model=LegacyWorkflowEligibilityResponse,
-)
-async def ensure_worker_profile(
-    payload: LegacyWorkflowEligibilityActivationRequest,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> LegacyWorkflowEligibilityResponse:
-    """Activate bounded legacy intake metadata without creating authority."""
-    try:
-        return await ActorService(session).activate_legacy_workflow_eligibility(actor, payload)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ActorRegistryError as exc:
-        raise actor_registry_http_error(exc) from exc
 
 
 @router.post(
@@ -185,47 +154,10 @@ async def get_task(
 
 
 @router.get(
-    "/tasks/{task_id}/work-context",
-    response_model=TaskWorkContextResponse,
-    response_model_exclude_none=True,
-    responses={
-        422: {
-            "description": "Locked task context is missing or inconsistent.",
-            "content": {
-                "application/json": {"schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA}
-            },
-        }
-    },
-)
-async def get_task_work_context(
-    request: Request,
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> TaskWorkContextResponse | JSONResponse:
-    """Return contributor-safe locked guide, policy, and lifecycle context."""
-    try:
-        return await TaskService(session).get_task_work_context(actor, task_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        if getattr(exc, "code", None) is not None:
-            return task_domain_error_response(request, exc)
-        raise task_http_error(exc) from exc
-
-
-@router.get(
     "/tasks/{task_id}/submission-requirements",
     response_model=SubmissionRequirementsResponse,
     response_model_exclude_none=True,
-    responses={
-        422: {
-            "description": "Locked task context is missing or inconsistent.",
-            "content": {
-                "application/json": {"schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA}
-            },
-        }
-    },
+    responses=TASK_LOCKED_CONTEXT_RESPONSES,
 )
 async def get_task_submission_requirements(
     request: Request,
@@ -248,14 +180,7 @@ async def get_task_submission_requirements(
     "/tasks/{task_id}/locked-context",
     response_model=TaskLockedContextResponse,
     response_model_exclude_none=True,
-    responses={
-        422: {
-            "description": "Locked task context is missing or inconsistent.",
-            "content": {
-                "application/json": {"schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA}
-            },
-        }
-    },
+    responses=TASK_LOCKED_CONTEXT_RESPONSES,
 )
 async def get_task_locked_context(
     request: Request,
@@ -319,88 +244,6 @@ async def release_task(
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/tasks/{task_id}/claim",
-    response_model=TaskWithAssignmentResponse,
-    response_model_exclude_none=True,
-)
-async def claim_task(
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    payload: TaskTransitionRequest | None = None,
-) -> TaskWithAssignmentResponse:
-    """Claim a ready task for the current actor."""
-    try:
-        return await TaskService(session).claim_task(
-            actor,
-            task_id,
-            None if payload is None else payload.reason,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/tasks/{task_id}/start",
-    response_model=TaskResponse,
-    response_model_exclude_none=True,
-)
-async def start_task(
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    payload: TaskTransitionRequest | None = None,
-) -> TaskResponse:
-    """Move a claimed task into active work."""
-    try:
-        return await TaskService(session).start_task(
-            actor,
-            task_id,
-            None if payload is None else payload.reason,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/tasks/{task_id}/submissions",
-    response_model=SubmissionResponse,
-    response_model_exclude_none=True,
-    status_code=201,
-    responses={
-        422: {
-            "description": "Pre-submit domain failure or request validation error.",
-            "content": {
-                "application/json": {
-                    "schema": PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA,
-                }
-            },
-        }
-    },
-)
-async def create_submission(
-    request: Request,
-    task_id: str,
-    payload: SubmissionCreate,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> SubmissionResponse | JSONResponse:
-    """Create a submission packet version for a task."""
-    try:
-        return await TaskService(session).create_submission(actor, task_id, payload)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        if getattr(exc, "code", None) is not None:
-            return task_domain_error_response(request, exc)
         raise task_http_error(exc) from exc
 
 
@@ -473,4 +316,86 @@ async def list_task_audit_events(
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except TaskServiceError as exc:
+        raise task_http_error(exc) from exc
+
+
+@router.post(
+    "/tasks/{task_id}/claim", response_model=TaskWithAssignmentResponse, response_model_exclude_none=True,
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.CLAIM.value},
+)
+async def claim_task(
+    task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+    payload: TaskTransitionRequest | None = None,
+) -> TaskWithAssignmentResponse:
+    try:
+        return await commands.claim(task_id, payload.reason if payload else None)
+    except TaskServiceError as exc:
+        raise task_http_error(exc) from exc
+
+
+@router.post(
+    "/tasks/{task_id}/start", response_model=TaskResponse, response_model_exclude_none=True,
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.START.value},
+)
+async def start_task(
+    task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+    payload: TaskTransitionRequest | None = None,
+) -> TaskResponse:
+    try:
+        return await commands.start(task_id, payload.reason if payload else None)
+    except TaskServiceError as exc:
+        raise task_http_error(exc) from exc
+
+
+@router.post(
+    "/operations/tasks/{task_id}/start", response_model=TaskResponse, response_model_exclude_none=True,
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.START_OVERRIDE.value},
+)
+async def override_task_start(
+    task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+    payload: TaskTransitionRequest,
+) -> TaskResponse:
+    try:
+        return await commands.start(task_id, payload.reason, operator_override=True)
+    except TaskServiceError as exc:
+        raise task_http_error(exc) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/work-context", response_model=TaskWorkContextResponse, response_model_exclude_none=True,
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.WORK_CONTEXT.value},
+    responses=TASK_LOCKED_CONTEXT_RESPONSES,
+)
+async def get_task_work_context(
+    request: Request,
+    task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+) -> TaskWorkContextResponse | JSONResponse:
+    try:
+        return await commands.work_context(task_id)
+    except TaskServiceError as exc:
+        if getattr(exc, "code", None) is not None:
+            return task_domain_error_response(request, exc)
+        raise task_http_error(exc) from exc
+
+
+@router.get(
+    "/projects/{project_id}/tasks/{task_id}/work-context", response_model=TaskWorkContextResponse, response_model_exclude_none=True,
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.MANAGEMENT_WORK_CONTEXT.value},
+    responses=TASK_LOCKED_CONTEXT_RESPONSES,
+)
+async def get_management_task_work_context(
+    request: Request,
+    project_id: UUID,
+    task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+) -> TaskWorkContextResponse | JSONResponse:
+    try:
+        return await commands.work_context(task_id, project_id=project_id)
+    except TaskServiceError as exc:
+        if getattr(exc, "code", None) is not None:
+            return task_domain_error_response(request, exc)
         raise task_http_error(exc) from exc

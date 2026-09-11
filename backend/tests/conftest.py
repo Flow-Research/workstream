@@ -21,7 +21,9 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "b4bea4699ce986c73b023dd310a231609aaaaffb29dc14348e1d01e66faa7e74"
+# Match the PostgreSQL 16 engine used by Backend CI. Catalog identity rendering
+# differs across major versions; regenerate only after comparing actual objects.
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "0b25b6c185f496e9733d046c06c0b6ef2b33d12e7e0737ea5d79fc0652c90c43"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",

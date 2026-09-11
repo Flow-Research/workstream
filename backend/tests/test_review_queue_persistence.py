@@ -33,6 +33,7 @@ from app.modules.reviews.schemas import (
 from app.modules.tasks.models import Submission
 from project_create_fixtures import grant_system_project_manager, insert_historical_project
 from tests.test_checkers import get_submission_and_automatic_pre_review_run
+from tests.submission_fixtures import seed_finalized_submission_for_checker_test
 from tests.test_tasks import (
     auth_headers,
     complete_submission_payload,
@@ -64,13 +65,13 @@ def review_database_env(
 
 @pytest.fixture
 async def review_client(review_database_env: str) -> AsyncIterator[AsyncClient]:
-    """Return an API client used only to create canonical upstream test facts."""
+    """Return an API client for project/task setup and stored-lineage reads."""
     app = create_app()
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        admission = await client.get("/api/v1/auth/me", headers=auth_headers())
+        admission = await client.get("/api/v1/actors/me", headers=auth_headers())
         assert admission.status_code == 200, admission.text
         async with db_session.get_session_factory()() as session:
             await grant_system_project_manager(
@@ -93,15 +94,11 @@ async def _reviewable_lineage(
         monkeypatch,
         subject="review-worker-two",
     )
-    submission_response = await client.post(
-        f"/api/v1/tasks/{task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        task["id"], complete_submission_payload(),
     )
-    assert submission_response.status_code == 201, submission_response.text
-    submission = submission_response.json()
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    _, checker = await get_submission_and_automatic_pre_review_run(client, submission["id"])
+    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
     assert checker["status"] == "completed"
     assert checker["routing_recommendation"] == "allow_review"
     return project, task, submission | {"checker_run_id": checker["id"]}
@@ -112,17 +109,13 @@ async def _additional_reviewable_submission(
     project: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[dict, dict]:
-    """Create another exact task/submission/checker lineage in one project."""
+    """Seed another stored submission and evaluate it for queue-owner tests."""
     task = await create_started_task(client, project["id"], monkeypatch)
-    submission_response = await client.post(
-        f"/api/v1/tasks/{task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
+    submission_id = await seed_finalized_submission_for_checker_test(
+        task["id"], complete_submission_payload(),
     )
-    assert submission_response.status_code == 201, submission_response.text
-    submission = submission_response.json()
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    _, checker = await get_submission_and_automatic_pre_review_run(client, submission["id"])
+    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
     assert checker["status"] == "completed"
     assert checker["routing_recommendation"] == "allow_review"
     return task, submission | {"checker_run_id": checker["id"]}

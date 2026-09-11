@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from project_create_fixtures import GUIDE_CREATION_CUSTODY_TRIGGERS
+
 import asyncio
 import hashlib
 import inspect
@@ -30,7 +32,7 @@ from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
 from app.db.base import Base
 from app.main import create_app
-from app.modules.actors.models import ActorIdentityLink, ActorProfile, LegacyActorIdentity
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideMutationIdempotencyRecord,
@@ -88,7 +90,6 @@ from app.modules.projects.create_service import (
 from app.modules.projects.guide_mutation_service import GuideMutationService
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import (
-    GuideSourceSnapshotCreate,
     ProjectCreate,
     ProjectGuideCreate,
     ProjectGuideUpdate,
@@ -129,8 +130,7 @@ from projects.guide_fixtures import (
     complete_guide_payload,
     create_project,
     add_project_manager_admin_grant,
-    source_snapshot_payload,
-    create_source_snapshot,
+    read_guide_source_snapshot,
     create_guide,
 )
 from projects.submission_policy_fixtures import (
@@ -1510,7 +1510,7 @@ async def revoke_system_project_manager_for_default_actor() -> None:
         await session.commit()
 
 
-async def test_project_route_registers_project_manager_actor_without_auth_me(
+async def test_project_route_uses_canonical_actor_profile(
     project_client: AsyncClient,
 ) -> None:
     response = await project_client.post(
@@ -1530,16 +1530,10 @@ async def test_project_route_registers_project_manager_actor_without_auth_me(
         )
         assert identity_link is not None
         profile = await session.get(ActorProfile, identity_link.actor_profile_id)
-        legacy_identity = await session.get(
-            LegacyActorIdentity,
-            identity_link.actor_profile_id,
-        )
 
     assert profile is not None
     assert profile.actor_kind == "human"
     assert profile.status == "active"
-    assert legacy_identity is not None
-    assert legacy_identity.last_seen_roles == ["project_manager"]
 
 
 async def test_project_create_exact_replay_and_mismatch_are_atomic(
@@ -1792,8 +1786,10 @@ async def test_create_guide_never_enqueues_setup_or_runs_agents(
             )
         ).all()
 
-    assert snapshots == []
-    assert setup_runs == []
+    assert len(snapshots) == len(setup_runs) == 1
+    assert setup_runs[0].source_snapshot_id == snapshots[0].id
+    assert setup_runs[0].status == "awaiting_documents"
+    assert setup_runs[0].celery_task_id is None
     assert reports == []
     assert policies == []
 
@@ -1983,99 +1979,13 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
         assert denied.status_code == 404
 
 
-async def test_create_source_snapshot_waits_for_committed_documents_before_enqueue(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Snapshot creation persists queued work without touching the broker."""
-    project = await create_project(project_client)
-
-    def enqueue_failure(
-        *,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-        setup_run_id: str,
-        setup_generation: int,
-    ) -> str:
-        """Simulate a broker outage after the guide transaction commits."""
-        raise ProjectSetupQueueError("queue failed after commit")
-
-    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
-    get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        enqueue_failure,
-    )
-
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=auth_headers(),
-        json=source_snapshot_payload(),
-    )
-
-    assert response.status_code == 201, response.text
-    created_snapshot = response.json()
-    async with db_session.get_session_factory()() as session:
-        persisted_guide = await session.scalar(
-            select(ProjectGuide).where(ProjectGuide.id == guide["id"])
-        )
-        snapshot = await session.get(GuideSourceSnapshot, created_snapshot["id"])
-        setup_run = await session.scalar(
-            select(ProjectSetupRun).where(
-                ProjectSetupRun.source_snapshot_id == created_snapshot["id"]
-            )
-        )
-
-    assert persisted_guide is not None
-    assert snapshot is not None
-    assert setup_run is not None
-    assert setup_run.status == "awaiting_documents"
-    assert setup_run.celery_task_id is None
 
 
-async def test_create_source_snapshot_waits_for_committed_documents_before_broker_dispatch(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Broker acceptance under another task id is not reported as an enqueue outage."""
-
-    def enqueue_with_wrong_identity(**_: object) -> str:
-        return str(uuid4())
-
-    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
-    get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        enqueue_with_wrong_identity,
-    )
-
-    project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=auth_headers(),
-        json=source_snapshot_payload(),
-    )
-
-    assert response.status_code == 201, response.text
-    async with db_session.get_session_factory()() as session:
-        setup_run = await session.scalar(
-            select(ProjectSetupRun).where(
-                ProjectSetupRun.source_snapshot_id == response.json()["id"]
-            )
-        )
-
-    assert setup_run is not None
-    assert setup_run.status == "awaiting_documents"
-    assert setup_run.error_code is None
-    assert setup_run.celery_task_id is None
 
 
-async def test_create_source_snapshot_does_not_run_agents_before_committed_documents(
+
+
+async def test_read_guide_source_snapshot_does_not_run_agents_before_committed_documents(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2084,7 +1994,7 @@ async def test_create_source_snapshot_does_not_run_agents_before_committed_docum
 
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    await create_source_snapshot(project_client, project["id"], guide["id"])
+    await read_guide_source_snapshot(project["id"], guide["id"])
 
     async with db_session.get_session_factory()() as session:
         snapshot = await session.scalar(
@@ -2112,101 +2022,9 @@ async def test_create_source_snapshot_does_not_run_agents_before_committed_docum
     assert pre_submit_checker_policy is None
 
 
-async def test_create_source_snapshot_autostart_waits_for_committed_documents(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    enqueued: list[dict[str, object]] = []
-
-    def capture_enqueue(
-        *,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-        setup_run_id: str,
-        setup_generation: int,
-    ) -> str:
-        """Capture queue arguments without running Celery."""
-        enqueued.append(
-            {
-                "project_id": project_id,
-                "guide_id": guide_id,
-                "source_snapshot_id": source_snapshot_id,
-                "setup_run_id": setup_run_id,
-                "setup_generation": setup_generation,
-            }
-        )
-        return project_setup_identity.project_guide_compilation_task_id(
-            setup_run_id, setup_generation
-        )
-
-    project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-
-    get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        capture_enqueue,
-    )
-
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-
-    assert enqueued == []
-    async with db_session.get_session_factory()() as session:
-        setup_runs = (
-            await session.scalars(
-                select(ProjectSetupRun).where(
-                    ProjectSetupRun.guide_id == guide["id"],
-                    ProjectSetupRun.source_snapshot_id == snapshot["id"],
-                )
-            )
-        ).all()
-
-    assert len(setup_runs) == 1
-    assert setup_runs[0].celery_task_id is None
 
 
-async def test_create_source_snapshot_returns_created_when_post_commit_enqueue_fails(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A late broker failure cannot turn a durable source snapshot create into a false 503."""
-    project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
-    def enqueue_failure(
-        *,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-        setup_run_id: str,
-        setup_generation: int,
-    ) -> str:
-        """Simulate a broker outage after the snapshot transaction commits."""
-        raise ProjectSetupQueueError("queue failed after commit")
-
-    get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        enqueue_failure,
-    )
-
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=auth_headers(),
-        json=source_snapshot_payload(source_label="source-v2.md"),
-    )
-
-    assert response.status_code == 201, response.text
-    snapshot = response.json()
-    async with db_session.get_session_factory()() as session:
-        persisted_snapshot = await session.scalar(
-            select(GuideSourceSnapshot).where(GuideSourceSnapshot.id == snapshot["id"])
-        )
-
-    assert persisted_snapshot is not None
 
 
 def sha256_hash(seed: str) -> str:
@@ -2247,22 +2065,7 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
     assert updated.status_code == 200, updated.text
     assert updated.json()["change_summary"] == "Expanded metadata."
 
-    snapshot_key = str(uuid4())
-    snapshot_headers = auth_headers() | {"Idempotency-Key": snapshot_key}
-    snapshot_payload = source_snapshot_payload()
-    snapshotted = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=snapshot_headers,
-        json=snapshot_payload,
-    )
-    snapshot_replay = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=snapshot_headers,
-        json=snapshot_payload,
-    )
-    assert snapshotted.status_code == 201, snapshotted.text
-    assert snapshot_replay.status_code == 201, snapshot_replay.text
-    assert snapshot_replay.json() == snapshotted.json()
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     blocked = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
@@ -2279,7 +2082,7 @@ async def test_guide_source_metadata_authority_records_exact_provenance_and_repl
 
     async with db_session.get_session_factory()() as session:
         persisted_guide = await session.get(ProjectGuide, guide["id"])
-        persisted_snapshot = await session.get(GuideSourceSnapshot, snapshotted.json()["id"])
+        persisted_snapshot = await session.get(GuideSourceSnapshot, snapshot["id"])
 
         records = (
             await session.scalars(
@@ -2656,20 +2459,10 @@ async def test_guide_mutation_service_executes_all_three_authorized_happy_paths(
         guide_id,
         ProjectGuideUpdate(change_summary="Clarified"),
     )
-    snapshotted = await service.create_snapshot(
-        resolved,
-        prepared,
-        uuid4(),
-        project_id,
-        guide_id,
-        GuideSourceSnapshotCreate.model_validate(source_snapshot_payload()),
-    )
-
-    assert created.replayed is updated.replayed is snapshotted.replayed is False
+    assert created.replayed is updated.replayed is False
     assert updated.response.change_summary == "Clarified"
-    assert snapshotted.response.guide_id == str(guide_id)
-    assert snapshotted.response.items
-    assert snapshotted.setup_run_id == repository.setup_run.id
+    assert created.response.documents
+    assert created.setup_run_id == repository.setup_run.id
     assert prepared.prepare_count == prepared.consume_count == 3
     assert len(replay.completed) == 3
     assert session.flush_count == session.refresh_count == 1
@@ -2754,7 +2547,7 @@ async def test_guide_mutation_service_classifies_existing_replay() -> None:
     assert existing.replayed is True
 
 
-async def test_guide_mutation_service_short_circuits_cached_operations() -> None:
+async def test_guide_update_service_returns_exact_cached_response() -> None:
     resolved, project_id, _replay, _service = _guide_mutation_edge_subject()
     cached = SimpleNamespace(replayed=True)
 
@@ -2764,16 +2557,6 @@ async def test_guide_mutation_service_short_circuits_cached_operations() -> None
     cached_service = GuideMutationService(object())
     cached_service._existing = cached_existing  # type: ignore[method-assign]
     guide_id = uuid4()
-    assert (
-        await cached_service.create_guide(
-            resolved,
-            object(),
-            uuid4(),
-            project_id,
-            ProjectGuideCreate.model_validate(complete_guide_payload()),
-        )
-        is cached
-    )
     assert (
         await cached_service.update_guide(
             resolved,
@@ -2785,17 +2568,7 @@ async def test_guide_mutation_service_short_circuits_cached_operations() -> None
         )
         is cached
     )
-    assert (
-        await cached_service.create_snapshot(
-            resolved,
-            object(),
-            uuid4(),
-            project_id,
-            guide_id,
-            GuideSourceSnapshotCreate.model_validate(source_snapshot_payload()),
-        )
-        is cached
-    )
+
 
 
 def test_guide_mutation_service_classifies_reservation_outcomes() -> None:
@@ -2941,8 +2714,8 @@ async def test_guide_source_metadata_authority_validates_key_before_actor_provis
             ),
             (
                 "post",
-                f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
-                source_snapshot_payload(),
+                f"/api/v1/projects/{project_id}/guides/{guide_id}/documents/{uuid4()}/content",
+                {},
             ),
         )
         for method, path, payload in requests:
@@ -3102,29 +2875,13 @@ async def test_guide_source_metadata_replay_cannot_cross_project_or_guide(
     assert crossed_update.status_code == 409
     assert crossed_update.json()["error"]["code"] == "idempotency_mismatch"
 
-    snapshot_key = str(uuid4())
-    snapshot_headers = auth_headers() | {"Idempotency-Key": snapshot_key}
-    snapshot_body = source_snapshot_payload()
-    first_snapshot = await project_client.post(
-        f"/api/v1/projects/{first_project['id']}/guides/{first_guide['id']}/source-snapshots",
-        headers=snapshot_headers,
-        json=snapshot_body,
-    )
-    crossed_snapshot = await project_client.post(
-        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/source-snapshots",
-        headers=snapshot_headers,
-        json=snapshot_body,
-    )
-    assert first_snapshot.status_code == 201
-    assert crossed_snapshot.status_code == 409
-    assert crossed_snapshot.json()["error"]["code"] == "idempotency_mismatch"
 
 
-async def test_guide_source_metadata_snapshot_replay_waits_for_committed_documents(
+async def test_guide_creation_replay_waits_for_committed_documents(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An exact snapshot replay returns custody without dispatching before verification."""
+    """An exact guide replay returns custody without dispatching before verification."""
     dispatched: list[dict[str, str]] = []
 
     def capture_dispatch(**facts: str) -> str:
@@ -3140,16 +2897,15 @@ async def test_guide_source_metadata_snapshot_replay_waits_for_committed_documen
         capture_dispatch,
     )
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
     headers = auth_headers() | {"Idempotency-Key": str(uuid4())}
-    payload = source_snapshot_payload()
+    payload = complete_guide_payload()
     first = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=headers,
         json=payload,
     )
     replay = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=headers,
         json=payload,
     )
@@ -3160,7 +2916,7 @@ async def test_guide_source_metadata_snapshot_replay_waits_for_committed_documen
         runs = (
             await session.scalars(
                 select(ProjectSetupRun).where(
-                    ProjectSetupRun.source_snapshot_id == first.json()["id"]
+                    ProjectSetupRun.id == first.json()["setup"]["id"]
                 )
             )
         ).all()
@@ -3208,7 +2964,7 @@ async def test_guide_source_metadata_database_rejects_unattributed_and_mismatche
             await session.commit()
         await session.rollback()
 
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     async with db_session.get_session_factory()() as session:
         persisted_snapshot = await session.get(GuideSourceSnapshot, snapshot["id"])
         assert persisted_snapshot is not None
@@ -3302,7 +3058,7 @@ async def test_project_setup_waits_for_verified_guide_material_before_outputs(
         project["id"],
         {
             **complete_guide_payload(),
-            "source_snapshot": source_snapshot_payload(),
+            "documents": complete_guide_payload()["documents"],
         },
     )
 
@@ -3375,7 +3131,7 @@ async def test_document_ready_setup_enqueue_failure_is_sanitized_and_retryable(
         project["id"],
         {
             **complete_guide_payload(),
-            "source_snapshot": source_snapshot_payload(),
+            "documents": complete_guide_payload()["documents"],
         },
     )
 
@@ -3444,7 +3200,7 @@ async def test_dispatch_pending_republishes_only_after_stale_cutoff(
     guide = await create_guide(
         project_client,
         project["id"],
-        {**complete_guide_payload(), "source_snapshot": source_snapshot_payload()},
+        {**complete_guide_payload(), "documents": complete_guide_payload()["documents"]},
     )
     published: list[str | None] = []
 
@@ -3561,7 +3317,7 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
         project["id"],
         {
             **complete_guide_payload(),
-            "source_snapshot": source_snapshot_payload(),
+            "documents": complete_guide_payload()["documents"],
         },
     )
     setup_run_response = await project_client.get(
@@ -3720,7 +3476,7 @@ async def test_removed_sufficiency_agent_route_has_no_effects(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     async with db_session.get_session_factory()() as session:
         before = await session.scalar(select(func.count()).select_from(AuditEvent))
     response = await project_client.post(
@@ -3783,32 +3539,28 @@ async def test_project_guide_update_rejects_unknown_non_contract_fields(
 
 
 
-async def test_source_snapshot_requires_at_least_one_uploaded_source_item(
+async def test_guide_documents_requires_at_least_one_uploaded_source_item(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
-        json={"items": []},
+        json={**complete_guide_payload(), "documents": []},
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", "items"]
+    assert response.json()["detail"][0]["loc"] == ["body", "documents"]
 
 
-async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) -> None:
+async def test_guide_documents_rejects_unsafe_refs(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
-        json=source_snapshot_payload(
-            source_label="https://docs.flow.test/guide.md?X-Amz-Signature=secret"
-        ),
+        json={**complete_guide_payload(), "documents": [{"label": "https://docs.flow.test/guide.md?X-Amz-Signature=secret", "media_type": "application/pdf"}]},
     )
 
     assert response.status_code == 422
@@ -3823,19 +3575,14 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         "credentialing-guide.md",
     ],
 )
-async def test_source_snapshot_allows_non_secret_keyword_prefixes(
+async def test_guide_documents_allows_non_secret_keyword_prefixes(
     project_client: AsyncClient,
     source_label: str,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    guide = await create_guide(project_client, project["id"], {**complete_guide_payload(), "documents": [{"label": source_label, "media_type": "application/pdf"}]})
 
-    snapshot = await create_source_snapshot(
-        project_client,
-        project["id"],
-        guide["id"],
-        payload=source_snapshot_payload(source_label=source_label),
-    )
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     assert source_label in {item["source_label"] for item in snapshot["items"]}
 
@@ -3890,33 +3637,31 @@ async def test_source_snapshot_allows_non_secret_keyword_prefixes(
         "inline:/mnt/material/guide.md",
     ],
 )
-async def test_source_snapshot_rejects_credential_and_local_refs(
+async def test_guide_documents_rejects_credential_and_local_refs(
     project_client: AsyncClient,
     source_label: str,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
-        json=source_snapshot_payload(source_label=source_label),
+        json={**complete_guide_payload(), "documents": [{"label": source_label, "media_type": "application/pdf"}]},
     )
 
     assert response.status_code == 422
     assert "locator or credential material" in response.json()["detail"]
 
 
-async def test_source_snapshot_rejects_unsafe_content_cid(
+async def test_guide_documents_rejects_unsafe_content_cid(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    payload = source_snapshot_payload()
-    payload["items"][0]["content_cid"] = "https://storage.flow.test/doc?token=secret"
+    payload = complete_guide_payload()
+    payload["documents"][0]["content_cid"] = "https://storage.flow.test/doc?token=secret"
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
         json=payload,
     )
@@ -3925,17 +3670,15 @@ async def test_source_snapshot_rejects_unsafe_content_cid(
     assert "extra" in response.text
 
 
-async def test_source_snapshot_rejects_duplicate_source_items(
+async def test_guide_documents_rejects_duplicate_source_items(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    payload = source_snapshot_payload()
-    payload["items"][1]["source_kind"] = payload["items"][0]["source_kind"]
-    payload["items"][1]["source_label"] = payload["items"][0]["source_label"]
+    payload = complete_guide_payload()
+    payload["documents"][1]["label"] = payload["documents"][0]["label"]
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
         json=payload,
     )
@@ -3944,22 +3687,21 @@ async def test_source_snapshot_rejects_duplicate_source_items(
     assert "duplicate source item" in response.json()["detail"]
 
 
-async def test_source_snapshot_rejects_unknown_request_fields(
+async def test_guide_documents_rejects_unknown_request_fields(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    top_level_payload = {**source_snapshot_payload(), "client_note": "not allowed"}
-    item_payload = source_snapshot_payload()
-    item_payload["items"][0]["signed_url"] = "not allowed"
+    top_level_payload = {**complete_guide_payload(), "client_note": "not allowed"}
+    item_payload = complete_guide_payload()
+    item_payload["documents"][0]["signed_url"] = "not allowed"
 
     top_level_response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
         json=top_level_payload,
     )
     item_response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
         json=item_payload,
     )
@@ -3970,15 +3712,15 @@ async def test_source_snapshot_rejects_unknown_request_fields(
     assert "extra" in item_response.text
 
 
-async def test_source_snapshot_rejects_oversized_source_fields(
+async def test_guide_documents_rejects_oversized_source_fields(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    payload = source_snapshot_payload(source_label="a" * 501)
+    payload = complete_guide_payload()
+    payload["documents"][0]["label"] = "a" * 501
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
         json=payload,
     )
@@ -3992,7 +3734,7 @@ async def test_sufficiency_report_rejects_snapshot_manifest_hash_drift(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(GuideSourceSnapshot, snapshot["id"])
@@ -4007,7 +3749,7 @@ async def test_submission_policy_rejects_snapshot_item_drift(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     async with db_session.get_session_factory()() as session:
         item = await session.scalar(
             select(GuideSourceSnapshotItem)
@@ -4052,43 +3794,6 @@ async def test_submission_policy_rejects_snapshot_item_drift(
             await session.commit()
 
 
-async def test_snapshot_freshness_fails_closed_when_captured_at_ties(
-    project_client: AsyncClient,
-) -> None:
-    project = await create_project(project_client)
-    guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    first_snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    second_response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
-        headers=auth_headers(),
-        json=source_snapshot_payload(source_label="guide-v2.md"),
-    )
-    assert second_response.status_code == 201, second_response.text
-    second_snapshot = second_response.json()
-    tied_at = datetime(2026, 6, 27, 12, 0, tzinfo=UTC)
-
-    async with db_session.get_session_factory()() as session:
-        first = await session.get(GuideSourceSnapshot, first_snapshot["id"])
-        second = await session.get(GuideSourceSnapshot, second_snapshot["id"])
-        assert first is not None
-        assert second is not None
-        first.captured_at = tied_at
-        second.captured_at = tied_at
-        await session.commit()
-
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
-        headers=auth_headers(),
-        json={
-            "source_snapshot_id": second_snapshot["id"],
-            "status": "passed",
-            "findings": [],
-            "summary": "Guide reviewed.",
-        },
-    )
-
-    assert response.status_code == 422
-    assert "ambiguous" in response.json()["detail"]
 
 
 async def test_sufficiency_report_rejects_unknown_request_fields(
@@ -4096,7 +3801,7 @@ async def test_sufficiency_report_rejects_unknown_request_fields(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     top_level_response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
@@ -4147,7 +3852,7 @@ async def test_sufficiency_report_status_requires_matching_findings(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
@@ -4169,7 +3874,7 @@ async def test_manual_sufficiency_report_rejects_agent_provenance_fields(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     rejected = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
@@ -4205,7 +3910,7 @@ async def test_manual_sufficiency_report_exact_replay_reauthorizes_and_mismatch_
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     endpoint = f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports"
     headers = auth_headers()
     payload = {
@@ -4286,19 +3991,11 @@ async def test_submission_artifact_policy_replay_postgres_converges_exact_reserv
                 ),
                 ids,
             )
-            for table, trigger in (
-                ("project_guides", "guide_mutation_product_custody"),
-                ("project_guides", "guide_task_examples_create_custody"),
-                ("guide_source_snapshots", "source_snapshot_product_custody"),
-            ):
+            for table, trigger in GUIDE_CREATION_CUSTODY_TRIGGERS:
                 await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
             await seed_guide_snapshot_rows(connection, project_id=ids["project"], guide_id=ids["guide"],
                                           version="v1", snapshot_id=ids["snapshot"])
-            for table, trigger in (
-                ("project_guides", "guide_mutation_product_custody"),
-                ("project_guides", "guide_task_examples_create_custody"),
-                ("guide_source_snapshots", "source_snapshot_product_custody"),
-            ):
+            for table, trigger in GUIDE_CREATION_CUSTODY_TRIGGERS:
                 await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
 
         operation_id, policy_id, key = uuid4(), str(uuid4()), uuid4()
@@ -4352,18 +4049,18 @@ async def test_submission_artifact_policy_replay_postgres_converges_exact_reserv
         await engine.dispose()
 
 
-async def test_source_snapshot_manifest_cannot_be_rewritten_for_legacy_shape(
+async def test_source_snapshot_manifest_rejects_caller_storage_references(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(GuideSourceSnapshot, snapshot["id"])
         assert persisted is not None
         manifest = json.loads(json.dumps(persisted.manifest_json))
         for item in manifest["items"]:
-            item["durable_ref"] = "caller-owned://legacy-source"
+            item["durable_ref"] = "caller-owned://untrusted-source"
             item["content_hash"] = "sha256:" + ("0" * 64)
         with pytest.raises(IntegrityError):
             await session.execute(
@@ -4396,7 +4093,7 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     create_response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -4484,7 +4181,7 @@ async def test_agent_derived_policy_approval_revalidates_server_owned_provenance
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(
         project_client,
         project["id"],
@@ -4531,7 +4228,7 @@ async def test_submission_artifact_policy_removed_agent_route_performs_no_runtim
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     endpoint = (
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/derive-submission-artifact-policy"
@@ -4563,7 +4260,7 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4623,7 +4320,7 @@ async def test_submission_artifact_policy_approval_rejects_body_hash_mismatch(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4656,7 +4353,7 @@ async def test_approved_submission_artifact_policy_cannot_be_updated(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4691,7 +4388,7 @@ async def test_submission_artifact_policy_creation_requires_sufficiency_report(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         headers=auth_headers(),
@@ -4713,7 +4410,7 @@ async def test_submission_artifact_policy_create_rejects_diagnostic_only_suffici
     """A human diagnostic report cannot substitute for setup-owned sufficiency."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -4734,7 +4431,7 @@ async def test_submission_artifact_policy_create_rejects_unacknowledged_warning_
     """An authoritative warning result without exact 12E acknowledgement cannot create policy."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     diagnostic = await create_sufficiency_report(
         project_client,
         project["id"],
@@ -4762,7 +4459,7 @@ async def test_submission_artifact_policy_create_exact_idempotency_replay_is_sta
     """Exact create replay returns the committed response and creates one row."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     diagnostic = await create_sufficiency_report(
         project_client, project["id"], guide["id"], snapshot["id"]
     )
@@ -4801,7 +4498,7 @@ async def test_submission_artifact_policy_create_fault_rolls_back_atomic_boundar
     """Every named post-authorization fault leaves no policy, replay, or allow evidence."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     diagnostic = await create_sufficiency_report(
         project_client, project["id"], guide["id"], snapshot["id"]
     )
@@ -4897,7 +4594,7 @@ async def test_database_enforces_effective_policy_submission_policy_hash(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4925,7 +4622,7 @@ async def test_database_enforces_pre_submit_checker_effective_policy_hash(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4957,7 +4654,7 @@ async def test_submission_artifact_policy_approval_merges_packaging_rules(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -4992,7 +4689,7 @@ async def test_approved_submission_artifact_policy_is_immutable(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -5024,7 +4721,7 @@ async def test_draft_submission_artifact_policy_can_be_updated(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -5078,7 +4775,7 @@ async def test_submission_artifact_policy_update_rejects_stale_cas_without_succe
     """A stale predecessor digest creates no replacement or supersession."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client, project["id"], guide["id"], snapshot["id"]
@@ -5116,9 +4813,7 @@ async def test_submission_artifact_policy_update_conceals_foreign_policy_id(
     """A policy selected through another project or guide is indistinguishable from absent."""
     first_project = await create_project(project_client)
     first_guide = await create_guide(project_client, first_project["id"], complete_guide_payload())
-    first_snapshot = await create_source_snapshot(
-        project_client, first_project["id"], first_guide["id"]
-    )
+    first_snapshot = await read_guide_source_snapshot(first_project["id"], first_guide["id"])
     await create_sufficiency_report(
         project_client, first_project["id"], first_guide["id"], first_snapshot["id"]
     )
@@ -5152,7 +4847,7 @@ async def test_submission_artifact_policy_update_fault_rolls_back_replacement(
     """A post-supersession fault restores the draft and all update boundary state."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client, project["id"], guide["id"], snapshot["id"]
@@ -5219,7 +4914,7 @@ async def test_submission_artifact_policy_update_concurrent_cas_creates_one_succ
     """Two replacement attempts against one draft converge on one append-only winner."""
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client, project["id"], guide["id"], snapshot["id"]
@@ -5263,7 +4958,7 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     first_policy = await create_submission_artifact_policy(
         project_client,
@@ -5373,7 +5068,7 @@ async def test_approving_replacement_policy_with_same_effective_content_succeeds
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy_body = project_submission_artifact_policy_body()
     first_policy = await create_submission_artifact_policy(
@@ -5414,7 +5109,7 @@ async def test_replacement_policy_requires_complete_prior_effective_context(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     first_policy = await create_submission_artifact_policy(
         project_client,
@@ -5469,7 +5164,7 @@ async def test_concurrent_policy_approvals_do_not_fork_current_chain(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     first_policy = await create_submission_artifact_policy(
         project_client,
@@ -5586,7 +5281,7 @@ async def test_inline_guide_body_is_rejected_after_source_snapshot(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    await create_source_snapshot(project_client, project["id"], guide["id"])
+    await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
@@ -5603,7 +5298,7 @@ async def test_removed_payment_policy_edit_after_source_snapshot_is_rejected(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    await create_source_snapshot(project_client, project["id"], guide["id"])
+    await read_guide_source_snapshot(project["id"], guide["id"])
     payment_policy = {
         "base_amount": "25.00",
         "currency": "USD",
@@ -5629,7 +5324,7 @@ async def test_draft_policy_cannot_be_approved_after_guide_activation(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     report = await create_sufficiency_report(
         project_client,
         project["id"],
@@ -5690,7 +5385,7 @@ async def test_manual_submission_artifact_policy_create_rejects_default_weakenin
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -5731,7 +5426,7 @@ async def test_submission_artifact_policy_rejects_default_artifact_key_conflict(
     )
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -5766,7 +5461,7 @@ async def test_submission_artifact_policy_dedupes_identical_default_artifact_key
     )
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -5792,7 +5487,7 @@ async def test_submission_artifact_policy_rejects_rule_hash_weakening(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -5815,7 +5510,7 @@ async def test_submission_artifact_policy_rejects_arbitrary_packaging_refs(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -5875,7 +5570,7 @@ async def test_submission_artifact_policy_rejects_unknown_policy_keys(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -5896,7 +5591,7 @@ async def test_submission_artifact_policy_rejects_unknown_wrapper_fields(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -5965,7 +5660,7 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -6123,7 +5818,7 @@ async def test_submission_artifact_policy_rejects_ambiguous_or_oversized_policy_
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
 
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
@@ -6144,7 +5839,7 @@ async def test_blocking_sufficiency_report_prevents_policy_creation(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(
         project_client,
         project["id"],
@@ -6172,7 +5867,7 @@ async def test_unified_warnings_do_not_use_the_manual_report_acknowledgement_pat
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     diagnostic = await create_sufficiency_report(project_client, project["id"], guide["id"],
         snapshot["id"], status="passed_with_warnings")
     compiled_id = await create_compiled_report_fixture(diagnostic["id"], snapshot["id"])
@@ -6210,7 +5905,7 @@ async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_polic
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     report = await create_sufficiency_report(
         project_client,
         project["id"],
@@ -6251,7 +5946,7 @@ async def test_sufficiency_warning_acknowledgement_rejects_unknown_fields(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     report = await create_sufficiency_report(
         project_client,
         project["id"],
@@ -6277,7 +5972,7 @@ async def test_worker_cannot_approve_submission_artifact_policy(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    snapshot = await read_guide_source_snapshot(project["id"], guide["id"])
     await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
@@ -6890,7 +6585,7 @@ async def test_project_create_copied_key_cannot_cross_actor_namespace(
     second_subject = f"copied-key-actor-{uuid4()}"
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", second_subject)
     get_settings.cache_clear()
-    admitted = await project_client.get("/api/v1/auth/me", headers=auth_headers())
+    admitted = await project_client.get("/api/v1/actors/me", headers=auth_headers())
     assert admitted.status_code == 200
     grantor_id, _, grantor_grant_id = await ensure_access_administrator_bootstrap()
     async with db_session.get_session_factory()() as session:

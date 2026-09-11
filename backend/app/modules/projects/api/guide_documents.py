@@ -246,3 +246,23 @@ class ProjectGuideDocumentScopePort(Protocol):
     async def lock_manifest_source(self, request: GuideDocumentManifestRequest) -> ProjectGuideDocumentLineage: ...
 
     async def lock_access_attempt(self, attempt_id: UUID, manifest: GuideDocumentManifest) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class GuideDocumentUploadTarget:
+    """Internal immutable membership resolved from public document selectors."""
+
+    snapshot_id: UUID
+    setup_id: UUID
+    setup_generation: int
+    media_type: GuideDocumentMediaType
+    other_document_bytes: int
+
+
+class GuideDocumentUploadTargetPort(Protocol):
+    """Resolve exact creation membership within the caller's AUTH/ART transaction."""
+
+    async def resolve(
+        self, project_id: UUID, guide_id: UUID, document_id: UUID, *, for_update: bool,
+    ) -> GuideDocumentUploadTarget | None:
+        """Return current membership, optionally locking the owning aggregate."""

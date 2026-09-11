@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
@@ -24,15 +23,7 @@ from app.modules.checkers.pre_review_gate import (
 )
 from app.modules.checkers.service import (
     CheckerService,
-    CheckerServiceError,
     pre_review_gate_system_actor,
-)
-from app.modules.actors.models import LegacyWorkflowEligibility
-from app.modules.actors.service import (
-    ActiveHumanWriteActorRequired,
-    ActorService,
-    CanonicalWriteActorUnavailable,
-    LegacyWorkflowEligibilityCompatibility,
 )
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
@@ -51,11 +42,8 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.tasks.authorization import can_admin_or_task_creator_manage
 from app.modules.tasks.lifecycle import (
-    TASK_STATUS_CLAIMED,
     TASK_STATUS_DRAFT,
     TASK_STATUS_EVALUATION_PENDING,
-    TASK_STATUS_IN_PROGRESS,
-    TASK_STATUS_NEEDS_REVISION,
     TASK_STATUS_READY,
     TASK_STATUS_SCREENING,
     TASK_STATUS_SUBMITTED,
@@ -64,22 +52,17 @@ from app.modules.tasks.lifecycle import (
 )
 from app.modules.tasks.models import (
     AuditEvent,
-    EvidenceItem,
     Submission,
-    TaskAssignment,
     WorkstreamTask,
 )
 from app.modules.tasks.repository import TaskRepository
-from app.modules.tasks.submission_composition import build_submission
 from app.modules.tasks.schemas import (
-    AssignmentResponse,
     AuditEventResponse,
     ForbiddenArtifactRequirement,
     PostSubmitPolicyBodySummary,
     RequiredArtifactRequirement,
     RequiredEvidenceRequirement,
     StorageReferenceRules,
-    SubmissionCreate,
     SubmissionRequirementsResponse,
     SubmissionResponse,
     TaskCreate,
@@ -93,16 +76,11 @@ from app.modules.tasks.schemas import (
     TaskWorkerLifecycleContext,
     TaskWorkerTaskContext,
     TaskWorkContextResponse,
-    TaskWithAssignmentResponse,
 )
 from app.schemas.auth import ActorContext
 
 PROJECT_OPERATOR_ROLES = {"admin", "project_manager"}
 TASK_VIEW_ROLES = {"admin", "project_manager", "worker"}
-TASK_CLAIM_ROLES = {"worker"}
-TASK_SUBMIT_ROLES = {"worker"}
-TASK_START_ROLES = {"admin", "project_manager", "worker"}
-TASK_START_OPERATOR_ROLES = {"admin", "project_manager"}
 SUBMISSION_FINALIZE_ROLES = {"admin", "project_manager"}
 SUBMISSION_FINALIZED_EVENT_TYPE = "submission_finalized"
 PRE_REVIEW_GATE_DISPATCH_FAILED_EVENT_TYPE = "pre_review_gate_dispatch_failed"
@@ -194,29 +172,6 @@ class TaskAssignmentConflict(TaskServiceError):
     status_code = 409
 
 
-class ActiveContributorRequired(TaskServiceError):
-    """Raised when the canonical caller cannot perform a contributor write."""
-
-    status_code = 403
-    code = "active_contributor_required"
-    message = "Active contributor identity required"
-
-
-class ContributorIdentityUnavailable(TaskServiceError):
-    """Raised when canonical contributor identity cannot be revalidated."""
-
-    status_code = 503
-    code = "contributor_identity_unavailable"
-    message = "Contributor identity verification unavailable"
-    retryable = True
-
-
-class LegacySubmitterEligibilityRequired(TaskServiceError):
-    """Raised when a submitter lacks temporary legacy workflow eligibility."""
-
-    status_code = 403
-
-
 class SubmissionNotFound(TaskServiceError):
     """Raised when a submission id does not match a stored packet."""
 
@@ -241,18 +196,6 @@ class SubmissionCheckerGateError(TaskServiceError):
         """
         super().__init__(message)
         self.status_code = status_code
-
-
-class PreSubmissionCheckerFailed(TaskServiceError):
-    """Raised when the locked pre-submit checker blocks submission creation."""
-
-    status_code = 422
-    code = "pre_submission_checker_failed"
-
-    def __init__(self, details: dict) -> None:
-        """Create a pre-submit failure carrying structured checker feedback."""
-        super().__init__(self.code)
-        self.details = details
 
 
 class TaskLockedContextInvalid(TaskServiceError):
@@ -300,8 +243,6 @@ class TaskService:
         self._session = session
         self._repo = TaskRepository(session)
         self._project_repo = ProjectRepository(session)
-        self._actors = ActorService(session)
-        self._legacy_workflow_eligibility = LegacyWorkflowEligibilityCompatibility(session)
 
     async def create_task(
         self,
@@ -380,39 +321,6 @@ class TaskService:
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
         return self._task_response(actor, task)
-
-    async def get_task_work_context(
-        self,
-        actor: ActorContext,
-        task_id: str,
-    ) -> TaskWorkContextResponse:
-        """Return Contributor-safe work context from the task's locked provenance.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task whose context should be returned.
-
-        Returns:
-            Contributor-facing task, guide, policy, and lifecycle context.
-
-        Raises:
-            PermissionDenied: If the actor cannot view tasks.
-            TaskNotFound: If the task is unknown or hidden.
-            TaskLockedContextInvalid: If locked context is incomplete or stale.
-        """
-        require_any_role(actor, TASK_VIEW_ROLES)
-        task = await self._get_task(task_id)
-        await self._ensure_task_visible(actor, task)
-        context = await self._load_locked_task_context(task)
-        eligibility = await self._legacy_workflow_eligibility.get_active_submitter_eligibility(
-            actor.actor_id
-        )
-        return self._work_context_response(
-            actor,
-            task,
-            context,
-            has_active_submitter_eligibility=("worker" in actor.roles and eligibility is not None),
-        )
 
     async def get_task_submission_requirements(
         self,
@@ -549,249 +457,6 @@ class TaskService:
         await self._session.commit()
         await self._session.refresh(task)
         return self._task_response(actor, task)
-
-    async def claim_task(
-        self,
-        actor: ActorContext,
-        task_id: str,
-        reason: str | None = None,
-    ) -> TaskWithAssignmentResponse:
-        """Claim a ready task for the current actor.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Ready task to claim.
-            reason: Optional transition reason stored in audit.
-
-        Returns:
-            Task and active assignment response.
-
-        Raises:
-            PermissionDenied: If the actor cannot claim tasks.
-            TaskAssignmentConflict: If an active assignment already exists.
-        """
-        require_any_role(actor, TASK_CLAIM_ROLES)
-        await self._require_active_contributor(actor)
-        task = await self._get_task(task_id, for_update=True)
-        self._ensure_transition_allowed(task.status, TASK_STATUS_CLAIMED)
-        await self._require_legacy_submitter_eligibility(actor)
-        if await self._repo.get_active_assignment(task_id, for_update=True) is not None:
-            raise TaskAssignmentConflict("task already has an active assignment")
-
-        assignment = TaskAssignment(
-            id=str(uuid4()),
-            task_id=task.id,
-            contributor_id=actor.actor_id,
-            assigned_by=actor.actor_id,
-            accepted_at=datetime.now(UTC),
-            status="active",
-        )
-        try:
-            assignment = await self._repo.add_assignment(assignment)
-            task.assigned_to = actor.actor_id
-            await self._change_task_status(
-                actor,
-                task,
-                TASK_STATUS_CLAIMED,
-                reason,
-                event_payload={
-                    "assignment_id": assignment.id,
-                    "contributor_id": assignment.contributor_id,
-                },
-            )
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise TaskAssignmentConflict("task already has an active assignment") from exc
-        await self._session.refresh(task)
-        await self._session.refresh(assignment)
-        return TaskWithAssignmentResponse(
-            task=self._task_response(actor, task),
-            assignment=AssignmentResponse.model_validate(assignment),
-        )
-
-    async def start_task(
-        self,
-        actor: ActorContext,
-        task_id: str,
-        reason: str | None = None,
-    ) -> TaskResponse:
-        """Move a claimed task into active work.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Claimed task to start.
-            reason: Optional transition reason stored in audit.
-
-        Returns:
-            Updated task response.
-
-        Raises:
-            PermissionDenied: If the actor cannot start this task.
-            TaskTransitionBlocked: If no active assignment exists.
-        """
-        require_any_role(actor, TASK_START_ROLES)
-        task = await self._get_task(task_id)
-        self._ensure_transition_allowed(task.status, TASK_STATUS_IN_PROGRESS)
-        assignment = await self._repo.get_active_assignment(task_id)
-        if assignment is None:
-            raise TaskTransitionBlocked("task has no active assignment")
-        is_operator_override = assignment.contributor_id != actor.actor_id and bool(
-            set(actor.roles).intersection(TASK_START_OPERATOR_ROLES)
-        )
-        if assignment.contributor_id != actor.actor_id and not is_operator_override:
-            raise TaskTransitionBlocked("actor is not assigned to this task")
-        if not is_operator_override:
-            await self._require_legacy_submitter_eligibility(actor)
-        if is_operator_override and (reason is None or not reason.strip()):
-            raise TaskValidationError("operator start override reason is required")
-        await self._change_task_status(
-            actor,
-            task,
-            TASK_STATUS_IN_PROGRESS,
-            reason,
-            event_payload={
-                "assignment_id": assignment.id,
-                "contributor_id": assignment.contributor_id,
-                "operator_override": bool(is_operator_override),
-            },
-            event_type="task_start_override" if is_operator_override else "task_status_changed",
-        )
-        await self._session.commit()
-        await self._session.refresh(task)
-        return self._task_response(actor, task)
-
-    async def create_submission(
-        self,
-        actor: ActorContext,
-        task_id: str,
-        payload: SubmissionCreate,
-    ) -> SubmissionResponse:
-        """Create a task-owned submission packet version.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task receiving the submission packet.
-            payload: Submission packet fields supplied by the Contributor.
-
-        Returns:
-            Created submission response with evidence items.
-
-        Raises:
-            PermissionDenied: If the actor cannot create Contributor submissions.
-            TaskProjectNotReady: If locked project policy context is invalid.
-            TaskTransitionBlocked: If task state or assignment does not allow submission.
-            TaskValidationError: If required submission fields are missing.
-            SubmissionVersionConflict: If concurrent version allocation conflicts.
-        """
-        require_any_role(actor, TASK_SUBMIT_ROLES)
-        await self._require_active_contributor(actor)
-        task = await self._get_task(task_id, for_update=True)
-        if "worker" in actor.roles and task.assigned_to not in {None, actor.actor_id}:
-            raise TaskNotFound("task not found")
-        await self._require_legacy_submitter_eligibility(actor)
-        assignment = await self._repo.get_active_assignment(task_id, for_update=True)
-        if assignment is None:
-            raise TaskTransitionBlocked("task has no active assignment")
-        if assignment.contributor_id != actor.actor_id or task.assigned_to != actor.actor_id:
-            raise TaskNotFound("task not found")
-        if task.status not in {
-            TASK_STATUS_IN_PROGRESS,
-            TASK_STATUS_NEEDS_REVISION,
-        }:
-            raise TaskTransitionBlocked(
-                "task must be in progress or needs revision before submission"
-            )
-        self._ensure_locked_context(task)
-        await self._load_locked_task_context(task)
-
-        try:
-            pre_submit_response = await CheckerService(self._session).pre_submit_check(
-                actor,
-                task_id,
-                payload,
-            )
-        except CheckerServiceError as exc:
-            raise SubmissionCheckerGateError(str(exc), exc.status_code) from exc
-        if not pre_submit_response.eligible_to_submit:
-            pre_submit_details = pre_submit_response.model_dump(mode="json")
-            await self._write_task_audit(
-                actor,
-                task,
-                event_type="pre_submission_check_failed",
-                from_status=task.status,
-                to_status=task.status,
-                reason=None,
-                event_payload={"pre_submit_check": pre_submit_details},
-            )
-            await self._session.commit()
-            raise PreSubmissionCheckerFailed(pre_submit_details)
-
-        latest_submission = await self._repo.get_latest_submission_for_task(task.id)
-        next_version = 1 if latest_submission is None else latest_submission.version + 1
-        submission = build_submission(
-            submission_id=str(uuid4()), task=task, contributor_id=actor.actor_id,
-            version=next_version, summary=payload.summary,
-            package_uri=payload.package_uri, package_hash=payload.package_hash,
-            artifact_hash_manifest=[
-                entry.model_dump(mode="json") for entry in payload.artifact_hash_manifest
-            ],
-            worker_attestation=payload.worker_attestation,
-            supersedes_submission_id=None if latest_submission is None else latest_submission.id,
-            evidence_items=[
-                EvidenceItem(
-                    id=str(uuid4()),
-                    type=evidence.type,
-                    label=evidence.label,
-                    uri=evidence.uri,
-                    hash=evidence.hash,
-                    size_bytes=evidence.size_bytes,
-                    metadata_json=evidence.metadata,
-                )
-                for evidence in payload.evidence_items
-            ],
-        )
-        try:
-            submission = await self._repo.add_submission(submission)
-            event_payload = self._submission_audit_payload(submission)
-            if task.status in {TASK_STATUS_IN_PROGRESS, TASK_STATUS_NEEDS_REVISION}:
-                await self._change_task_status(
-                    actor,
-                    task,
-                    TASK_STATUS_SUBMITTED,
-                    reason=None,
-                    event_payload=event_payload,
-                    event_type="submission_created",
-                )
-            else:
-                await self._write_task_audit(
-                    actor,
-                    task,
-                    event_type="submission_created",
-                    from_status=task.status,
-                    to_status=task.status,
-                    reason=None,
-                    event_payload=event_payload,
-                )
-            await self._finalize_submission_for_evaluation(actor, task, submission)
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise SubmissionVersionConflict("submission version conflicted; retry") from exc
-
-        await self._enqueue_pre_review_gate_after_commit(
-            actor,
-            submission.id,
-            raise_on_failure=False,
-        )
-        persisted = await self._repo.get_submission(submission.id)
-        if persisted is None:
-            raise SubmissionNotFound("submission not found")
-        return self._submission_response(
-            actor,
-            persisted,
-            has_operator_access=can_admin_or_task_creator_manage(actor, task),
-        )
 
     async def list_task_submissions(
         self,
@@ -1170,17 +835,6 @@ class TaskService:
             raise TaskNotFound("task not found")
         return task
 
-    async def _require_active_contributor(self, actor: ActorContext) -> None:
-        """Revalidate the exact canonical caller before contributor writes."""
-        try:
-            await self._actors.require_active_human_write_actor(actor)
-        except ActiveHumanWriteActorRequired as exc:
-            await self._session.rollback()
-            raise ActiveContributorRequired(ActiveContributorRequired.message) from exc
-        except (CanonicalWriteActorUnavailable, SQLAlchemyError) as exc:
-            await self._session.rollback()
-            raise ContributorIdentityUnavailable(ContributorIdentityUnavailable.message) from exc
-
     @staticmethod
     def _submission_audit_payload(submission: Submission) -> dict:
         """Build the task audit payload for a submission event.
@@ -1544,11 +1198,10 @@ class TaskService:
 
     def _work_context_response(
         self,
-        actor: ActorContext,
         task: WorkstreamTask,
         context: LockedTaskContext,
         *,
-        has_active_submitter_eligibility: bool,
+        lifecycle: TaskWorkerLifecycleContext,
     ) -> TaskWorkContextResponse:
         """Build the Contributor-safe work-context response."""
         return TaskWorkContextResponse(
@@ -1581,11 +1234,7 @@ class TaskService:
                 currency=task.currency,
                 payout_type=task.payout_type,
             ),
-            lifecycle=self._worker_lifecycle_context(
-                actor,
-                task,
-                has_active_submitter_eligibility=has_active_submitter_eligibility,
-            ),
+            lifecycle=lifecycle,
         )
 
     def _submission_requirements_response(
@@ -1916,47 +1565,6 @@ class TaskService:
             updated_at=task.updated_at,
         )
 
-    def _worker_lifecycle_context(
-        self,
-        actor: ActorContext,
-        task: WorkstreamTask,
-        *,
-        has_active_submitter_eligibility: bool,
-    ) -> TaskWorkerLifecycleContext:
-        """Build Contributor-facing lifecycle booleans and next actions."""
-        assigned_to_current_actor = task.assigned_to == actor.actor_id
-        can_submit = (
-            has_active_submitter_eligibility
-            and assigned_to_current_actor
-            and task.status
-            in {
-                TASK_STATUS_IN_PROGRESS,
-                TASK_STATUS_NEEDS_REVISION,
-            }
-        )
-        next_actions: list[str] = []
-        if (
-            has_active_submitter_eligibility
-            and task.status == TASK_STATUS_READY
-            and task.assigned_to is None
-        ):
-            next_actions.append("claim")
-        elif (
-            has_active_submitter_eligibility
-            and task.status == TASK_STATUS_CLAIMED
-            and assigned_to_current_actor
-        ):
-            next_actions.append("start")
-        elif can_submit:
-            next_actions.extend(["run_pre_submit_check", "submit"])
-        return TaskWorkerLifecycleContext(
-            status=task.status,
-            assigned_to_current_actor=assigned_to_current_actor,
-            can_run_pre_submit_check=can_submit,
-            can_submit=can_submit,
-            next_actions=next_actions,
-        )
-
     def _validate_task_contract_fields(self, task: WorkstreamTask) -> None:
         """Validate task source and reviewability fields before screening.
 
@@ -2099,30 +1707,6 @@ class TaskService:
         except ValueError as exc:
             raise TaskProjectNotReady("locked post-submit checker policy hash is invalid") from exc
 
-    async def _require_legacy_submitter_eligibility(
-        self,
-        actor: ActorContext,
-    ) -> LegacyWorkflowEligibility:
-        """Require temporary active submitter eligibility for intake workflows.
-
-        Args:
-            actor: Verified Flow actor context.
-
-        Returns:
-            Persisted active legacy submitter eligibility.
-
-        Raises:
-            LegacySubmitterEligibilityRequired: If eligibility is absent or inactive.
-        """
-        profile = await self._legacy_workflow_eligibility.get_active_submitter_eligibility(
-            actor.actor_id
-        )
-        if profile is None:
-            raise LegacySubmitterEligibilityRequired(
-                "active legacy submitter eligibility is required"
-            )
-        return profile
-
     async def _change_task_status(
         self,
         actor: ActorContext,
@@ -2253,8 +1837,13 @@ class TaskService:
         Returns:
             Task response with internal locked policy hashes hidden from workers.
         """
+        return self.task_response_for_authority(task, can_manage=can_admin_or_task_creator_manage(actor, task))
+
+    @staticmethod
+    def task_response_for_authority(task: WorkstreamTask, *, can_manage: bool) -> TaskResponse:
+        """Use an explicit authorized projection, never inferred token roles."""
         response = TaskResponse.model_validate(task)
-        if not can_admin_or_task_creator_manage(actor, task):
+        if not can_manage:
             response.source_ref = None
             response.source_payload_hash = None
             response.import_batch_id = None

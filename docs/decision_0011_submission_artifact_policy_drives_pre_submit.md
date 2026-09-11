@@ -53,9 +53,9 @@ are excluded. Non-finite numbers such as `NaN` or `Infinity` are rejected before
 hashing. The manifest builder rejects duplicate `(source_kind, source_label)`
 pairs before hashing and assigns server-owned item IDs and orders. Integrity
 validation and database constraints reject duplicate IDs or orders later.
-Changing the declared document set creates a new snapshot and setup generation.
-Task examples are immutable for their guide version; changing them requires a
-new guide version. Replacing document material or examples invalidates prior
+The declared document set, committed originals and task examples are immutable
+for their guide version. Changing any of them requires a new guide version,
+which receives its own internal snapshot and initial setup. Replacing document material or examples invalidates prior
 sufficiency reports, derived
 policies, effective policies, checker specs, checker bundles, acknowledgements,
 and approvals for activation.
