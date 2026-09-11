@@ -102,7 +102,16 @@ async def test_project_text_nul_rejected_without_state_and_same_key_recovers(
     recovered = await project_client.request(method, route, headers=headers, json=payload)
     assert recovered.status_code == status, recovered.text
     for name, value in payload.items():
-        assert recovered.json()[name] == value
+        if name == "documents":
+            documents = recovered.json()[name]
+            assert len(documents) == len(value)
+            assert len({item["document_id"] for item in documents}) == len(value)
+            for order, (item, declaration) in enumerate(zip(documents, value, strict=True)):
+                assert item == declaration | {
+                    "document_id": str(UUID(item["document_id"])), "order": order,
+                }
+        else:
+            assert recovered.json()[name] == value
     after = await project_text_state()
     assert after != before
     replay = await project_client.request(method, route, headers=headers, json=payload)
