@@ -74,6 +74,29 @@ old advertised role pass.
   database and bucket cleanup completed. These private artifacts are not durable
   links or hosted CI evidence, and neither repair certifies every public API field.
 
+## API-DRILL-012: administrative grant reasons containing NUL return 503
+
+- Reproduced at clean `6b059004` through a fresh real HTTP server, normal
+  token verification, local administrator bootstrap and isolated PostgreSQL.
+  Both `POST /api/v1/admin-role-grants` and its `/{grant_id}/revoke` operation
+  returned 503 `service_unavailable` for `reason: "bad\u0000reason"`.
+- The shared public `Reason` type enforced 1–500 UTF-8 bytes but did not reject
+  NUL. PostgreSQL cannot store NUL in the existing reason text columns.
+  Complete public grant-history readbacks stayed unchanged after both failures;
+  valid requests using the rejected keys succeeded. No authorization bypass
+  or partial grant mutation was observed.
+- Repair: reject NUL in that existing shared request constraint before
+  reservation/storage. Preserve the byte bound, Unicode, whitespace, authority,
+  idempotency and retained history. No migration or service change is needed.
+- The real PostgreSQL regression checks issue and revoke independently for
+  NUL and oversized UTF-8 input, unchanged grants/control/idempotency/audit,
+  valid 500-byte Unicode same-key recovery, stored reason/version and exact
+  replay. The administrator drill retains both NUL probes and reuses its
+  existing wrong-status/changed-state falsification helper tests.
+- Private original evidence: `/tmp/workstream-api-replay.9kz5fH/admin-reason-report.json`
+  and `admin-reason-database.json`; both failed cases remain recorded and the
+  disposable database was removed. This is not complete API certification.
+
 ## Evidence boundary
 
 - Product source: `b4b3d1d95d302011839f6f9dff3e2cb7c06c2124` (merged PR 390).

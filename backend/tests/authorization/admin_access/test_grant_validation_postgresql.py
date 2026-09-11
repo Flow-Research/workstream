@@ -7,6 +7,50 @@ import pytest
 from tests.authorization.admin_access.support import AdminAccess, authority_snapshot, grant_body
 
 
+@pytest.mark.parametrize("operation", ["issue", "revoke"])
+@pytest.mark.parametrize("reason", ["bad\x00reason", "é" * 251], ids=["nul", "utf8_overflow"])
+async def test_admin_reason_rejection_preserves_state_and_key(
+    admin_access: AdminAccess, operation: str, reason: str,
+) -> None:
+    access = admin_access
+    body = grant_body(access.target.id)
+    grant_id = await access.signed.grant(access.admin, access.target) if operation == "revoke" else None
+    key = str(uuid4())
+    path = "/api/v1/admin-role-grants" + (f"/{grant_id}/revoke" if grant_id else "")
+    before = await authority_snapshot()
+    payload = {"reason": reason} if grant_id else body | {"reason": reason}
+    headers = access.admin.headers | {"Idempotency-Key": key}
+    rejected = await access.signed.client.post(path, headers=headers, json=payload)
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert await authority_snapshot() == before
+
+    valid_reason = "é" * 250
+    payload["reason"] = valid_reason
+    recovered = await access.signed.client.post(path, headers=headers, json=payload)
+    assert recovered.status_code == (200 if grant_id else 201), recovered.text
+    after = await authority_snapshot()
+    stored = next(row for row in after["admin_role_grants"]
+                  if str(row["id"]) == recovered.json()["resource_id"])
+    assert stored["version"] == (2 if grant_id else 1)
+    assert stored["status"] == ("revoked" if grant_id else "active")
+    assert stored["revoked_reason" if grant_id else "grant_reason"] == valid_reason
+    if grant_id:
+        original = next(row for row in before["admin_role_grants"] if str(row["id"]) == grant_id)
+        assert stored["grant_reason"] == original["grant_reason"]
+    records = [row for row in after["authority_idempotency_records"] if str(row["idempotency_key"]) == key]
+    assert len(records) == 1
+    assert records[0]["status"] == "committed"
+    assert records[0]["operation"] == f"admin_role_grant.{operation}"
+    replay = await access.signed.client.post(path, headers=headers, json=payload)
+    assert replay.status_code == recovered.status_code
+    assert replay.json() == recovered.json()
+    replayed = await authority_snapshot()
+    for table in ("admin_role_grants", "authority_idempotency_records"):
+        assert replayed[table] == after[table]
+
+
 @pytest.mark.parametrize(
     "case,status,code",
     [

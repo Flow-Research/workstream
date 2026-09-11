@@ -208,6 +208,10 @@ Administrative grant history probes compare the entire single-target public
 row, including grantor/revoker references, reasons, nulls and timestamps. The
 first read happens before replay, followed by exact full-state equality after
 replay. Independent database snapshots continue to detect hidden duplicates.
+Grant issue and revoke also reject NUL-containing reasons with 422 before the
+same idempotency key is reused for the valid operation. Their permanent denial
+probes use the existing unchanged-authority snapshot checks; PostgreSQL regression
+additionally checks audit/control state and 500-byte Unicode recovery.
 Identity-link lifecycle probes additionally reject malformed reason fields and
 unknown fields, compare the entire stored public link view after each denial,
 and preserve every unchanged field across revoke/reactivate. Reactivation must

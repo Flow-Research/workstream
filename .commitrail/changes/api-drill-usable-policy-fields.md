@@ -104,6 +104,21 @@ security plus QA/test-delta and documentation, combined proportionately.
 
 ## Evidence
 
+Administrative-reason drill continuation (API-DRILL-012): the same-PR small
+repair scope additionally covers `backend/app/modules/authorization/admin_schemas.py`
+and `backend/tests/authorization/admin_access/test_grant_validation_postgresql.py`.
+Both administrative grant issue and revoke currently allow embedded NUL in the
+public reason, then return 503 when PostgreSQL rejects it. Reject NUL through
+their existing shared `Reason` constraint; retain its 1–500 UTF-8-byte bound,
+ordinary Unicode, whitespace semantics and every authorization/replay guard.
+Do not change services, canonical authority facts, migrations or stored data.
+Prove 422 for each operation, unchanged grant/idempotency/audit snapshots, and
+valid same-key recovery plus exact replay at the Unicode size boundary.
+Add permanent live probes using the existing denial snapshot helper and its
+counterexamples, which cannot swallow a failed rejection or changed history.
+Existing security and QA/test-delta/docs
+review routing applies; full backend verification stays in hosted CI.
+
 Commands: `backend/.venv/bin/python -m unittest scripts.test_external_api_drill
 scripts.test_admin_api_drill`; isolated external drill per its procedure;
 Ruff on changed Python; `python3 scripts/check_commitrail_records.py --base-ref

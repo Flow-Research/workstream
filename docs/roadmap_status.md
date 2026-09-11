@@ -242,6 +242,10 @@ cannot be reused as post-submission review-gate evidence. See the
   its canonical audit rather than escaping as 500. Local real PostgreSQL/MinIO
   regression and genuine-document replay passed; this does not establish
   complete field-level client readiness.
+  [API-DRILL-012](engineering/external-api-drill-findings.md#api-drill-012-administrative-grant-reasons-containing-nul-return-503)
+  closes the same validation gap in administrative grant issue/revoke reasons:
+  NUL rejects before storage, while valid Unicode and same-key recovery remain
+  supported. This does not change authority or retained grant history.
 - Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at

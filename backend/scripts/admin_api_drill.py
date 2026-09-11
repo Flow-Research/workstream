@@ -299,6 +299,9 @@ class AuthorityDrill:
         await self.deny("missing_scope_project", "POST", GRANTS, self.admin,
             payload=body | {"role": "project_manager", "scope_type": "project"}, expected=400)
         key = {"Idempotency-Key": str(uuid4())}
+        await self.deny("grant_reason_nul", "POST", GRANTS, self.admin,
+            payload=body | {"reason": "bad\x00reason"}, headers=key,
+            expected=422, code="invalid_request")
         result = await self.call("grant_exact", "POST", GRANTS, self.admin, payload=body, headers=key, expected=201,
             values={"resource_type": "admin_role_grant", "version": 1, "http_status": 201},
             checks={"resource_id": uuid_value},
@@ -343,6 +346,9 @@ class AuthorityDrill:
         route = GRANTS + "/{grant_id}/revoke"
         path = GRANTS + "/" + result["resource_id"] + "/revoke"
         revoke_key = {"Idempotency-Key": str(uuid4())}
+        await self.deny("revoke_reason_nul", "POST", route, self.admin,
+            path=path, payload={"reason": "bad\x00reason"}, headers=revoke_key,
+            expected=422, code="invalid_request")
         revoked = await self.call("grant_target_revoke", "POST", route, self.admin,
             path=path, payload=REASON, headers=revoke_key,
             values={"resource_id": result["resource_id"], "version": 2, "http_status": 200})
