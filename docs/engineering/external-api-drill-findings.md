@@ -63,7 +63,7 @@ old advertised role pass.
   exception class, so rollback and denial restaging were not reached.
 - The existing ART-owned authority adapter now owns a shared denial boundary:
   roll back denied work, restage canonical AUTH denial evidence, then translate
-  to the existing concealed ART denial. Guide upload and internal workers reuse
+  to the existing concealed ART denial. Guide upload and internal Celery operations reuse
   that operation; no new private AUTH import, permission or generic catch is added.
 - Real HTTP/PostgreSQL/MinIO regression proves 404, unchanged terminal upload
   fields, no provider operation, no extra dispatch, and exactly one

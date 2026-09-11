@@ -1121,7 +1121,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "8dd1954cb63c958e7826e20353a7f286a0dd60beff434fe6d978c096626514d6",
+  "authority_digest": "05f7e323b3a3919163019a28e7ec1354dd16f8b528a5de80054bae08b892ef63",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
