@@ -19,7 +19,7 @@ SPEC.loader.exec_module(drill)
 
 class ContractTests(unittest.TestCase):
     def test_guide_oracle_normalizes_and_binds_exact_ordered_examples(self):
-        body = {"version": "initial", "task_examples": [{"content": "名 claim"}, {"content": "Second"}]}
+        body = drill.guide_payload("initial") | {"task_examples": [{"content": "名 claim"}, {"content": "Second"}]}
         expected = drill.guide_expectations(body, "project", "manager")
         self.assertEqual(expected["values"]["task_examples"], [
             {"content": "名 claim", "title": None, "labels": []},
@@ -32,9 +32,28 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("content_markdown", expected["exact_fields"])
         self.assertEqual(set(expected["exact_fields"]), {"id", "project_id", "version", "status",
             "change_summary", "task_examples", "task_examples_hash", "approved_by", "effective_at",
-            "superseded_at", "created_by", "created_at", "updated_at"})
+            "superseded_at", "created_by", "created_at", "updated_at", "documents", "setup"})
         wrong = dict(expected["values"], created_by="foreign")
         self.assertFalse(drill.strict_equal(wrong, expected["values"]))
+
+    def test_guide_declaration_oracle_rejects_wrong_or_leaked_fields(self):
+        from uuid import uuid4
+        body = drill.guide_payload("initial")
+        checks = drill.guide_expectations(body, "project", "manager")["checks"]
+        document = dict(document_id=str(uuid4()), order=0, **body["documents"][0])
+        self.assertTrue(checks["documents"]([document]))
+        for changes in ({"label": "other.pdf"}, {"media_type": "text/plain"},
+                        {"order": True}, {"document_id": "bad"}, {"snapshot_id": "private"}):
+            with self.assertRaises(drill.ProbeFailure):
+                drill.verify_response(httpx.Response(201, json={"documents": [document | changes]}),
+                                      201, {}, {"documents": checks["documents"]})
+        self.assertFalse(checks["documents"]([]))
+        setup = {"id": str(uuid4()), "status": "awaiting_documents"}
+        self.assertTrue(checks["setup"](setup))
+        self.assertFalse(checks["setup"](setup | {"status": "queued"}))
+        self.assertFalse(checks["setup"](setup | {"celery_task_id": "private"}))
+        self.assertEqual(drill.guide_metadata({"id": "guide", "documents": [document], "setup": setup}),
+                         {"id": "guide"})
 
     def test_project_grant_contract_rejects_wrong_provenance_and_extra_fields(self):
         receipt = dict(id="grant", qualification_snapshot_id="snapshot", project_id="project",

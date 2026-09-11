@@ -177,3 +177,22 @@ before changing the selected operation list. Preserve old execution evidence at
 its original target and mark superseded fixtures explicitly. This integration
 does not claim the earlier eight-field NUL fixture still applies unchanged.
 The existing L1 plan/review routing and same-PR allowed paths remain applicable.
+
+Resumption after #396/#397: reconcile the existing drill with main before new
+execution. Required document declarations and create-only document/setup response
+fields replace the previous metadata-only fixtures. PATCH still returns guide
+metadata and must not be tested against the create-only envelope. Preserve named
+negative cases and independently check declaration order, types, identity, replay
+and response privacy. Prior results retain their actual target; this is not a
+claim that old fixtures certify the new API. The user also requests the now-public
+guide upload drill with genuine project material; enable it only with isolated
+real storage and approved model configuration, never fabricated provider output.
+The supporting `backend/scripts/guide_document_api_drill.py` entry point and its
+helper tests are in scope, reusing the existing HTTP/issuer/report runner. It
+adds public document upload and setup/findings reads to this guide-specific pass;
+those additions are explicitly separate from the original 29-operation census.
+Use original, shareable PDF inputs outside Git; do not copy private benchmark
+content or credentials into the repository. A real worker and uniquely owned
+loopback broker use isolated storage/database credentials. Stop owned processes
+and verify runner cleanup on failure as well as success. Output evidence may
+contain public diagnostic fields but never the provider key or environment file.

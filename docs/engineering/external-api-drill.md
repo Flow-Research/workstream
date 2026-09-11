@@ -223,7 +223,44 @@ bootstrap CLI is deployment setup, never an HTTP or MCP capability. These
 drills exercise draft project/guide surfaces; they do not establish the live
 unified setup, submission, checker or acceptance path for an adapter.
 
-This does not prove deployment connectivity, real Flow integration, S3 custody,
-model quality, the unified setup pipeline, or end-to-end acceptance. Storage and
-automatic setup execution are disabled. A successful partial run cannot certify
-those surfaces for an MCP adapter.
+The original metadata/authority entry points do not prove deployment connectivity,
+real Flow integration, S3 custody, model quality, the unified setup pipeline, or
+end-to-end acceptance. Their storage is disabled and no documents are uploaded.
+A successful partial run cannot certify those surfaces for an MCP adapter.
+
+## Public guide document pass
+
+After the merged guide-intake cutover, `guide_payload` declares required documents.
+Create-response checks cover document IDs, order, labels, media types and waiting
+setup; PATCH still checks only its metadata response, not the create-only fields.
+Prior execution results remain bound to their earlier target.
+
+`backend/scripts/guide_document_api_drill.py` reuses the same HTTP/token/report
+runner for the now-public upload and setup diagnostic routes. It uses two genuine,
+shareable PDFs, an isolated runner-owned PostgreSQL database and MinIO bucket,
+and a separately owned loopback Redis broker and actual Celery worker. It does
+not seed product rows or substitute a model/provider implementation. The private
+provider configuration contributes only `OPENAI_API_KEY` and project-agent
+settings, never another worktree's database, authority or storage configuration.
+
+Supply these environment variables to the isolated runner:
+
+- `WORKSTREAM_DRILL_PROVIDER_ENV`: explicitly approved private provider env file.
+- `WORKSTREAM_DRILL_GUIDE_PDFS`: JSON array of two local PDF paths, each at most 10 MiB.
+- `WORKSTREAM_DRILL_BROKER_URL`: disposable loopback Redis broker, not another worker's queue.
+- `WORKSTREAM_DRILL_SCRATCH_ROOT`: unique private processing directory.
+- `WORKSTREAM_TEST_MINIO_ENDPOINT`: local MinIO endpoint supported by the isolated runner.
+
+Invoke the guide entry point using the same `--isolation-metadata` and `--report`
+arguments. Use a Python environment with the repository's agent dependencies.
+Real model execution can incur provider usage; it requires explicit approval.
+The operator owns broker teardown. The runner verifies database/bucket cleanup;
+the entry point stops its API and worker even when a scenario fails.
+
+This pass checks partial-upload waiting, exact commitments, replay, ungranted and
+wrong-media denials, independently rereads stored original bytes, and observes
+the real worker through public setup diagnostics. A model finding that a guide
+is insufficient is a product outcome, not automatically an API defect. Finishing
+setup does not certify manager approval, active project policy, submission or
+acceptance. New upload/setup/findings operations are outside the original
+29-operation census and must be reported separately with their actual evidence.

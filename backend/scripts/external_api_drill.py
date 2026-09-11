@@ -35,7 +35,7 @@ def guide_payload(version):
     """A complete current guide-create input, without removed inline fields."""
     return {"version": version, "task_examples": [
         {"content": "Evaluate the assigned claim using the guide.", "title": None, "labels": []},
-    ]}
+    ], "documents": [{"label": "project-guide.pdf", "media_type": "application/pdf"}]}
 
 
 def example_commitment(examples):
@@ -55,9 +55,34 @@ def guide_expectations(payload, project_id, manager_id):
               "change_summary": payload.get("change_summary"), "task_examples": examples,
               "task_examples_hash": digest, "approved_by": None, "effective_at": None,
               "superseded_at": None, "created_by": manager_id}
+    def documents_match(documents):
+        if not isinstance(documents, list) or len(documents) != len(payload["documents"]):
+            return False
+        ids = []
+        for index, (actual, declared) in enumerate(zip(documents, payload["documents"])):
+            if (not isinstance(actual, dict)
+                    or set(actual) != {"document_id", "label", "media_type", "order"}
+                    or not uuid_value(actual["document_id"])
+                    or not strict_equal(actual["order"], index)
+                    or actual["label"] != declared["label"].strip()
+                    or actual["media_type"] != declared["media_type"]):
+                return False
+            ids.append(actual["document_id"])
+        return len(set(ids)) == len(ids)
+
+    def setup_matches(setup):
+        return (isinstance(setup, dict) and set(setup) == {"id", "status"}
+                and uuid_value(setup["id"]) and setup["status"] == "awaiting_documents")
+
     return {"values": values, "checks": {"id": uuid_value, "created_at": timestamp_value,
-                                         "updated_at": timestamp_value},
-            "exact_fields": (*values, "id", "created_at", "updated_at")}
+                                         "updated_at": timestamp_value,
+                                         "documents": documents_match, "setup": setup_matches},
+            "exact_fields": (*values, "id", "created_at", "updated_at", "documents", "setup")}
+
+
+def guide_metadata(response):
+    """PATCH returns metadata, not the create-only declaration/setup envelope."""
+    return {key: value for key, value in response.items() if key not in {"documents", "setup"}}
 
 # Frozen client expectations from spec_authorization_service.md and the closed
 # administrative role contract. These are test oracles, never runtime policy.
@@ -384,12 +409,12 @@ class Drill:
 
     async def call(self, name, method, route, *, path=None, token=None, payload=None,
                    expected=200, values=None, fields=(), headers=None, checks=None,
-                   exact_fields=None):
+                   exact_fields=None, content=None):
         operation = self.report["operations"][f"{method} {route}"]
         request_headers = {"X-Request-ID": str(uuid4()), "X-Correlation-ID": str(uuid4())}
         if token:
             request_headers["Authorization"] = f"Bearer {token}"
-        if payload is not None:
+        if payload is not None or content is not None:
             request_headers["Idempotency-Key"] = str(uuid4())
         request_headers.update(headers or {})
         request_headers = {key: value for key, value in request_headers.items() if value is not None}
@@ -420,8 +445,11 @@ class Drill:
                     await asyncio.sleep(delay)
                     times[:] = [stamp for stamp in times if time.monotonic() - stamp < 61]
                 times.append(time.monotonic())
-            response = await self.client.request(method, path or route, json=payload,
-                                                 headers=request_headers)
+            if content is not None and payload is not None:
+                raise ProbeFailure("ambiguous_request_body")
+            request_body = {"content": content} if content is not None else {"json": payload}
+            response = await self.client.request(method, path or route,
+                                                 headers=request_headers, **request_body)
             row["actual"] = response.status_code
             if response.status_code >= 400:
                 try:
@@ -795,7 +823,9 @@ async def project_guide_nul_cases(drill, token):
         except ProbeFailure:
             pass
         guide = await drill.call("guide_create_control_" + field, "POST", groute, path=gpath,
-            token=token, payload=body, headers=headers, expected=201, values=body)
+            token=token, payload=body, headers=headers, expected=201,
+            values={k: v for k, v in body.items() if k != "documents"})
+    guide = guide_metadata(guide)
     for field in ("change_summary",):
         headers = {"Idempotency-Key": str(uuid4())}
         try:
@@ -830,7 +860,7 @@ async def guide_field_cases(drill, manager, outsider, project, manager_id):
         ("count_limit", [{"content": str(i)} for i in range(100)], None),
     ]
     for label, examples, summary in controls:
-        body = {"version": "fields-" + uuid4().hex, "task_examples": examples}
+        body = guide_payload("fields-" + uuid4().hex) | {"task_examples": examples}
         if label != "minimal":
             body["change_summary"] = summary
         key = {"Idempotency-Key": str(uuid4())}
@@ -844,6 +874,7 @@ async def guide_field_cases(drill, manager, outsider, project, manager_id):
             values=current, exact_fields=current.keys())
         await drill.call("guide_fields_mismatch_" + label, "POST", route, path=path,
             token=manager, payload=body | {"change_summary": "Different"}, headers=key, expected=409)
+        current = guide_metadata(current)
         await drill.call("guide_fields_current_" + label, "PATCH", route + "/{guide_id}",
             path=path + "/" + current["id"], token=manager, payload={},
             values={k: v for k, v in current.items() if k != "updated_at"}, exact_fields=current.keys())
@@ -941,13 +972,8 @@ async def project_field_cases(drill, manager, outsider, project, guide, manager_
     gbody = guide_payload("v" * 50)
     boundary_guide = await drill.call("guide_maximum_version", "POST", groute,
         path=gpath, token=manager, payload=gbody, expected=201,
-        values=gbody | {"project_id": project["id"], "status": "draft", "change_summary": None,
-                       "approved_by": None, "effective_at": None, "superseded_at": None,
-                       "created_by": manager_id,
-                       "task_examples_hash": example_commitment(gbody["task_examples"])[1]},
-        checks={"id": uuid_value, "created_at": timestamp_value, "updated_at": timestamp_value},
-        exact_fields=("id", "project_id", "version", "status", "change_summary", "task_examples", "task_examples_hash",
-                      "approved_by", "effective_at", "superseded_at", "created_by", "created_at", "updated_at"))
+        **guide_expectations(gbody, project["id"], manager_id))
+    boundary_guide = guide_metadata(boundary_guide)
     for field in gbody:
         await drill.call("guide_" + field + "_missing", "POST", groute, path=gpath, token=manager,
             payload={k: v for k, v in gbody.items() if k != field}, expected=422)
@@ -966,7 +992,9 @@ async def project_field_cases(drill, manager, outsider, project, guide, manager_
             pass
         await drill.call("overflow_" + field + "_retry_after_rollback", "POST",
             route if field != "version" else groute, path=route if field != "version" else gpath,
-            token=manager, payload=body, headers=failed_key, expected=201, values=body)
+            token=manager, payload=body, headers=failed_key, expected=201,
+            **(guide_expectations(body, project["id"], manager_id) if field == "version"
+               else {"values": body}))
     # A new-key no-op PATCH returns current guide state, not a cached replay response.
     await drill.call("guide_current_state_after_overflow", "PATCH", groute + "/{guide_id}",
         path=gpath + "/" + boundary_guide["id"], token=manager, payload={},
@@ -1472,7 +1500,7 @@ async def isolation(metadata_path, *, require_empty=True):
     return url, sha
 
 
-async def run(args, report, *, scenario=None):
+async def run(args, report, *, scenario=None, environment=None):
     url, sha = await isolation(args.isolation_metadata)
     if (ROOT / ".env").exists():
         raise ProbeFailure("ambient_backend_env_file_forbidden")
@@ -1491,6 +1519,8 @@ async def run(args, report, *, scenario=None):
         limitations=["local synthetic Flow issuer, not deployed Flow",
         "artifact storage disabled; no provider/model calls", "no product fixtures or trigger suppression",
         "partial scenarios; no operation certified fully field-complete"], setup=[])
+    if environment is not None:
+        environment(env, report)
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -1524,7 +1554,7 @@ async def run(args, report, *, scenario=None):
         stop_server(process, preserving_failure=sys.exc_info()[0] is not None)
 
 
-def main(*, scenario=None):
+def main(*, scenario=None, environment=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--isolation-metadata", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
@@ -1535,7 +1565,9 @@ def main(*, scenario=None):
     descriptor = os.open(args.report, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w") as output:
         try:
-            if scenario is None:
+            if environment is not None:
+                asyncio.run(run(args, report, scenario=scenario, environment=environment))
+            elif scenario is None:
                 asyncio.run(run(args, report))
             else:
                 asyncio.run(run(args, report, scenario=scenario))
