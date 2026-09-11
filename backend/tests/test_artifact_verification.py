@@ -136,11 +136,6 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         "get_session_factory",
         Mock(return_value=Mock(return_value=SessionContext())),
     )
-    monkeypatch.setattr(
-        internal_worker_adapter,
-        "PreparedArtifactInternalAuthority",
-        Mock(),
-    )
     orchestrator = Mock()
     orchestrator.resolve_put_attempt = AsyncMock(return_value="resolved")
     orchestrator.verify_object = AsyncMock(return_value="verified")
