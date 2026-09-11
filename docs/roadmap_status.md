@@ -224,14 +224,21 @@ cannot be reused as post-submission review-gate evidence. See the
   records the matching authorization-context selector repair: NUL is rejected
   with 422 while project-ID lookup and project concealment remain intact.
   [API-DRILL-009](engineering/external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503)
-  records the project/guide text repair: eight create/update fields reject NUL
-  at request validation instead of returning a storage failure. Dedicated
+  records the project/guide text repair: the original eight inputs rejected NUL
+  at request validation instead of returning a storage failure; the guide
+  document cutover removes inline-content inputs and retains validation on
+  surviving fields. Dedicated
   regressions check selected stored-state preservation, same-key recovery and
   replay. This does not certify the unfinished all-field external-client handoff.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions
   cover both roles, persistence, replay, conflict and unauthorized rollback.
+  The resumed real guide-upload drill reproduced
+  [API-DRILL-010](engineering/external-api-drill-findings.md#api-drill-010-successful-guide-document-replay-returns-stale):
+  an exact retry of a successfully stored document returns `stale`. That replay
+  defect remains open; upload exposure does not establish completed field-level
+  client readiness.
 - Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at

@@ -281,6 +281,26 @@ class ContractTests(unittest.TestCase):
 
 
 class ExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_binary_body_is_exact_and_cannot_be_combined_with_json(self):
+        original = b"%PDF-1.7\n\x00\xff exact original bytes"
+        requests = []
+        def handler(request):
+            requests.append(request)
+            self.assertEqual(request.content, original)
+            self.assertEqual(request.headers["Content-Type"], "application/pdf")
+            self.assertTrue(request.headers["Idempotency-Key"])
+            return httpx.Response(202, json={"stored": True}, headers={
+                name: request.headers[name] for name in ("X-Request-ID", "X-Correlation-ID")})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://127.0.0.1") as client:
+            report = {}
+            probe = drill.Drill(client, {"paths": {"/upload": {"post": {}}}}, report)
+            await probe.call("binary", "POST", "/upload", content=original,
+                headers={"Content-Type": "application/pdf"}, expected=202, values={"stored": True})
+            with self.assertRaisesRegex(drill.ProbeFailure, "ambiguous_request_body"):
+                await probe.call("ambiguous", "POST", "/upload", content=original, payload={"bad": True})
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(report["cases"][-1]["result"], "failed")
+
     async def test_health_requires_exact_public_body(self):
         for body in ({"status": "ok"}, {"status": "down"}, {},
                      {"status": "ok", "secret": "unexpected"}):

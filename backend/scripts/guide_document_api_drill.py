@@ -18,6 +18,7 @@ import external_api_drill as api
 
 def environment(env, report):
     """Copy only approved model settings; never inherit another worktree's database."""
+    report["guide_drill_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     provider = dotenv_values(os.environ["WORKSTREAM_DRILL_PROVIDER_ENV"])
     if not provider.get("OPENAI_API_KEY"):
         raise api.ProbeFailure("model_key_missing")
@@ -142,20 +143,34 @@ async def scenario(drill, issuer, env):
                 token=outsider, content=content, headers=headers, expected=404)
             await drill.call(f"wrong_media_{index}", "POST", upload_route, path=upload_path,
                 token=manager, content=content, headers=headers | {"Content-Type": "text/plain"}, expected=422)
-            commitment = {"document_id": document["document_id"], "sha256": hashlib.sha256(content).hexdigest(),
+            commitment = {"document_id": document["document_id"], "sha256": "sha256:" + hashlib.sha256(content).hexdigest(),
                           "byte_count": len(content), "replayed": False}
             uploaded = await drill.call(f"upload_{index}", "POST", upload_route, path=upload_path,
-                token=manager, content=content, headers=headers, expected=202, values=commitment,
-                exact_fields=(*commitment, "status"))
-            await drill.call(f"upload_replay_{index}", "POST", upload_route, path=upload_path,
                 token=manager, content=content, headers=headers, expected=202,
-                values=uploaded | {"replayed": True}, exact_fields=uploaded.keys())
+                values=commitment | {"status": "document_stored"},
+                exact_fields=(*commitment, "status"))
+            def replay_status(value):
+                report.setdefault("upload_replay_statuses", []).append(value)
+                return value in {"document_stored", "object_confirmed"}
+            try:
+                await drill.call(f"upload_replay_{index}", "POST", upload_route, path=upload_path,
+                    token=manager, content=content, headers=headers, expected=202,
+                    values=commitment | {"replayed": True}, checks={"status": replay_status},
+                    exact_fields=uploaded.keys())
+            except api.ProbeFailure as exc:
+                # Preserve the failed case and final nonzero result, but inspect
+                # independent uploads/setup after this reproduced terminal replay defect.
+                if (str(exc) != "response_predicate_failed"
+                        or report.get("upload_replay_statuses", [])[-1:] != ["stale"]):
+                    raise
+                print("API-DRILL-010: stored upload replay returned stale; case remains failed", flush=True)
             if index == 0:
                 await drill.call("partial_documents_wait", "GET", setup_route, path=setup_path,
                     token=manager, values={"status": "awaiting_documents", "documents_ready_at": None})
         report["stored_originals_verified"] = await stored_documents(env, originals)
         deadline = time.monotonic() + 1800
         for attempt in range(121):
+            manager = issuer.issue("manager")
             if worker.poll() is not None:
                 raise api.ProbeFailure("worker_exited")
             status = await drill.call(f"setup_progress_{attempt}", "GET", setup_route,
@@ -167,7 +182,11 @@ async def scenario(drill, issuer, env):
                 await drill.call("sufficiency_findings", "GET", route + "/{guide_id}/sufficiency-reports",
                     path=path + "/" + guide["id"] + "/sufficiency-reports", token=manager)
                 return
-            if status["error_code"] or time.monotonic() >= deadline:
+            # The dispatch fence is recorded before inference, so the public
+            # unresolved outcome can also describe an invocation still running.
+            # Observe that same run; never submit a retry or treat it as success.
+            if (status["error_code"] not in {None, "provider_outcome_unresolved"}
+                    or time.monotonic() >= deadline):
                 raise api.ProbeFailure("setup_requires_diagnosis")
             print("guide setup state: " + status["status"], flush=True)
             await asyncio.sleep(15)

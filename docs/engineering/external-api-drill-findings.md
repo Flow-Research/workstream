@@ -20,6 +20,37 @@ Adjudication is deferred. Do not implement adjudicator functionality, widen an
 audit allowlist to support it, or introduce a compatibility path to make the
 old advertised role pass.
 
+## API-DRILL-010: successful guide-document replay returns stale
+
+- Open reproduction after integration of merged PRs #396/#397, product main
+  `53fec2b25590887f333321616ffca5ba59eaaf5f`. The new live guide drill ran
+  against local head `ac695417` with uncommitted drill-only assertion changes;
+  this is not clean-candidate or hosted verification.
+- Create a project and a guide declaring two original PDF documents through
+  public APIs as an authorized Project Manager. Upload the first PDF using a
+  fresh UUID idempotency key, then resend the exact bytes, media type, document
+  path and key. The original upload returns 202 with the expected canonical
+  SHA-256 commitment and byte count. Replay returns 202 and `replayed: true`,
+  but its public status is `stale`, not a completed document result.
+- Reproduction uses an isolated migrated PostgreSQL database, real MinIO,
+  public service provisioning and normal Flow-token verification. No product
+  SQL writes, disabled triggers or fabricated provider receipts are involved.
+- The terminal put has already become `object_confirmed`. The replay path in
+  `GuideArtifactIngestService.publish` calls `resume_committed_put`, which
+  enters `resolve_put_attempt`. Its observation claim only accepts unfinished
+  puts, so the terminal attempt cannot be claimed and returns `stale`.
+- Repair boundary: the existing ART replay operation must return an authorized,
+  validated terminal result without creating a second upload, inference or
+  storage owner. Preserve unfinished-put recovery, exact ownership/commitment,
+  namespace binding, fencing and atomicity. This drill does not implement that
+  product repair.
+- Keep the replay case failed while observing independent subsequent guide
+  steps. The final drill remains unsuccessful even if those later steps pass.
+- Private evidence: `live5-report.json` and `live5-database.json` under
+  `/tmp/workstream-api-resume.ipB7lK/`; case `upload_replay_0`, recorded status
+  `stale`. The API exposure is real, but replay is not yet ready for a verified
+  external-client handoff.
+
 ## Evidence boundary
 
 - Product source: `b4b3d1d95d302011839f6f9dff3e2cb7c06c2124` (merged PR 390).
