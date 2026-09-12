@@ -59,6 +59,30 @@ def test_archive_limit_projection_and_default_floor(monkeypatch, project_limit, 
     assert effective["workstream_default_policy"][field] == default_limit
 
 
+@pytest.mark.parametrize("field", ["required_evidence", "attestation_terms"])
+@pytest.mark.parametrize("value, valid", [
+    ("results", True), ("a" + "b" * 99, True), ("results.v0_1-ok", True),
+    ("", False), ("a" + "b" * 100, False), ("Provide results", False),
+    ("evidence/results", False), ("9results", False), ("Results", False),
+])
+def test_policy_identifier_schema_matches_existing_validator(field, value, valid):
+    import re
+    from app.interfaces.project_agents import _SAFE_IDENTIFIER
+
+    schema = SubmissionArtifactPolicyProposal.model_json_schema()["properties"][field]["items"]
+    assert schema["pattern"] == _SAFE_IDENTIFIER.pattern
+    assert (schema["minLength"], schema["maxLength"]) == (1, 100)
+    assert "machine identifier" in schema["description"]
+    assert (re.fullmatch(schema["pattern"], value) is not None) is valid
+    arguments = dict(maximum_file_size_bytes=100, maximum_package_size_bytes=1000)
+    arguments[field] = (value,)
+    if valid:
+        assert getattr(SubmissionArtifactPolicyProposal(**arguments), field) == (value,)
+    else:
+        with pytest.raises(ValidationError, match="identifier is invalid"):
+            SubmissionArtifactPolicyProposal(**arguments)
+
+
 def test_model_schema_describes_existing_expanded_byte_limit():
     properties = SubmissionArtifactPolicyProposal.model_json_schema()["properties"]
     assert "expanded bytes" in properties["maximum_package_size_bytes"]["description"]

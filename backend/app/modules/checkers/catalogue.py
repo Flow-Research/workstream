@@ -410,6 +410,7 @@ def _policy(
     *,
     order: int,
     classification: PreSubmissionCheckerClassification = PreSubmissionCheckerClassification.MANDATORY_ACCOUNTABILITY,
+    typed_inputs: tuple[str, ...] = ("LockedProjectCheckerRule", "SubmissionManifestView"),
 ) -> PreSubmissionCheckerDefinition:
     return PreSubmissionCheckerDefinition(
         stable_id=stable_id,
@@ -420,7 +421,7 @@ def _policy(
         order=order,
         dependencies=("artifact.scratch.sealed_tree_verified",),
         classification=classification,
-        typed_inputs=("LockedProjectCheckerRule", "SubmissionManifestView"),
+        typed_inputs=typed_inputs,
         result_schema=PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
         failure_code="pre_submission_checker_failed",
         resource_budget=(("maximum_results", 1),),
@@ -675,6 +676,7 @@ def _default_definitions() -> tuple[PreSubmissionCheckerDefinition, ...]:
             ("maximum_archive_size_bytes",),
             order=102,
             classification=integrity,
+            typed_inputs=("LockedProjectCheckerRule", "ArtifactCommitment"),
         ),
         _policy(
             "policy.archive_entries.limit",

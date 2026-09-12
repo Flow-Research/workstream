@@ -117,6 +117,19 @@ fixtures, full hosted CI and the same original-PDF genuine-provider drill.
 Human focus: independent compressed and expanded limits with immutable locked
 lineage; a successful setup run is not approval, activation or public intake.
 
+Review requires the compressed primitive's hashed typed-input declaration to
+name `ArtifactCommitment`, matching execution (`ARCH-COMP-001`). Preserve other
+primitive declarations and prove catalogue, model projection and plan parity.
+The genuine replay also reproduced `schema_invalid` with a sanitized cause at
+`submission_artifact_policy.required_evidence`: invalid identifier. Both that
+field and `attestation_terms` advertise prose while their existing validator
+requires canonical machine identifiers (`QA-MODEL-SCHEMA-001`). Correct their
+model-facing schema using the same canonical identifier regex; preserve the
+runtime validator and uniqueness checks. Test schema and valid/invalid boundary
+values for both fields. No validation relaxation, automatic sanitization or
+fabricated provider output. Earlier failures without this diagnostic remain
+unexplained; a subsequent valid run does not erase them.
+
 ### Historical same-PR genuine-guide metadata repair
 
 The following scope and evidence describe the earlier metadata-only repair.

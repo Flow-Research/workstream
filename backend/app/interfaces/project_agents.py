@@ -78,6 +78,12 @@ _MODEL_PROSE_SCHEMA = {
     ),
 }
 ModelProse = Annotated[str, Field(json_schema_extra=_MODEL_PROSE_SCHEMA)]
+PolicyIdentifier = Annotated[str, Field(json_schema_extra={
+    "pattern": _SAFE_IDENTIFIER.pattern,
+    "minLength": 1,
+    "maxLength": 100,
+    "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
+})]
 
 
 def _validated_safe_model_text(value: str) -> str:
@@ -301,8 +307,8 @@ class SubmissionArtifactPolicyProposal(BaseModel):
         default=(), max_length=100,
         description="Relative artifact prohibition patterns, such as secret* or outputs/*.tmp; these are machine fields, not prose.",
     )
-    required_evidence: tuple[ModelProse, ...] = Field(default=(), max_length=100)
-    attestation_terms: tuple[ModelProse, ...] = Field(default=(), max_length=50)
+    required_evidence: tuple[PolicyIdentifier, ...] = Field(default=(), max_length=100)
+    attestation_terms: tuple[PolicyIdentifier, ...] = Field(default=(), max_length=50)
 
     @field_validator("required_artifacts")
     @classmethod

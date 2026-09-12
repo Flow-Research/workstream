@@ -507,6 +507,18 @@ verify this repair; the preceding blocked run remains historical evidence, not
 evidence that the new field was exercised. Do not claim full guide coverage from
 the absence of a model-reported gap alone.
 
+The compressed-limit replay at `003731d2` ended `schema_invalid` after 30 HTTP
+checks. Its sanitized observer identified the rejected field as
+`submission_artifact_policy.required_evidence` with `identifier is invalid`.
+The model-facing schema advertised prose, while the existing validator required
+canonical machine identifiers. Both `required_evidence` and the identically
+validated `attestation_terms` now describe the same canonical identifier regex
+and 100-character bound; runtime validation and uniqueness checks remain strict.
+Generated-schema and acceptance/rejection tests cover both fields. The original
+PDFs and failed run are retained, and isolated cleanup completed. This explains
+this run's rejection, not the earlier failures whose rejected fields were not
+captured. A fresh real-provider replay remains necessary.
+
 Use the [new external-client drill](external-api-drill.md), not the older seeded
 API drill. Keep unresolved failures red until product repairs actually satisfy
 them; preserve the passing regressions for repaired defects. Run the applicable

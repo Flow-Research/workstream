@@ -256,6 +256,34 @@ def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, archive_
     assert result.eligible is (failure is None)
 
 
+def test_compressed_limit_declares_commitment_in_catalogue_projection_and_plan():
+    from app.modules.checkers.catalogue import project_guide_pre_submission_capabilities
+
+    catalogue = build_pre_submission_checker_catalogue()
+    expected = ("LockedProjectCheckerRule", "ArtifactCommitment")
+    definition = catalogue.definition("policy.archive_size.limit")
+    assert definition.typed_inputs == expected
+    projection = project_guide_pre_submission_capabilities(catalogue)
+    projected = next(item for item in projection.definitions if item.stable_id == definition.stable_id)
+    assert projected.typed_inputs == expected
+    policy = {**_effective_policy(), "maximum_archive_size_bytes": 1000}
+    digest = canonical_json_hash(policy)
+    compiled = compile_effective_project_submission_artifact_policy(policy, digest)
+    _, lineage = _compiled_and_lineage()
+    lineage = replace(lineage, effective_policy_hash=digest,
+                      pre_submit_policy_bundle_hash=compiled.compiled_bundle_hash)
+    plan = compile_effective_pre_submission_execution_plan(
+        lineage=lineage, effective_policy=policy,
+        compiled_bundle=compiled.compiled_bundle, catalogue=catalogue,
+    )
+    entry = next(item for item in plan.entries if item.definition_id == definition.stable_id)
+    assert entry.typed_inputs == expected
+    manifest_entry = next(item for item in catalogue.manifest["entries"]
+                          if item["stable_id"] == definition.stable_id)
+    assert manifest_entry["typed_inputs"] == list(expected)
+    assert plan.plan_sha256 == canonical_json_hash(plan.as_dict())
+
+
 def test_catalogue_exact_v01_contract_is_locked() -> None:
     catalogue = build_pre_submission_checker_catalogue()
     actual = {
