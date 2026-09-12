@@ -34,9 +34,15 @@ documented CLI and is recorded as setup, not an HTTP capability.
 
 ## Run
 
-Use a disposable local PostgreSQL server, never a deployed database. From
-`backend/`, with an existing private output directory and the administrative URL
-in `WORKSTREAM_TEST_ADMIN_DATABASE_URL`:
+Use a disposable local PostgreSQL server, never a deployed database.
+
+Run from a clean, frozen checkout. Do not commit, merge, pull or edit that checkout
+while the drill runs: its later owner probes recheck the exact Git target against
+the isolation metadata. Use a separate detached checkout if other work must
+continue; a target-mismatch refusal is failed evidence, not a product defect.
+
+From `backend/`, with an existing private output directory and the administrative
+URL in `WORKSTREAM_TEST_ADMIN_DATABASE_URL`:
 
 ```sh
 WORKSTREAM_ENVIRONMENT=local .venv/bin/python scripts/run_isolated_tests.py \
@@ -258,7 +264,7 @@ provider configuration contributes only `OPENAI_API_KEY` and project-agent
 settings, never another worktree's database, authority or storage configuration.
 Install the repository-declared runtime extra first (`uv sync --frozen --extra
 agents --extra dev` from `backend/`) and verify `import agents, openai` succeeds
-in the interpreter used for both the drill and its worker. A missing SDK can
+in the interpreter used for both the drill and its Celery worker. A missing SDK can
 leave setup reserved without ever invoking the model; it is not usable-flow proof.
 
 Supply these environment variables to the isolated runner:
