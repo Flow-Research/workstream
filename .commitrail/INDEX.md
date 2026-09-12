@@ -6,6 +6,7 @@ for current product capability.
 
 | Initiative | Durable disposition | Next usable boundary |
 |---|---|---|
+| [WS-MCP-002](initiatives/WS-MCP-002/OVERVIEW.md) | Planned | Review standalone adapter scope and credential contract before foundation implementation |
 | [WS-ARCH-001](initiatives/WS-ARCH-001/OVERVIEW.md) | Planned | Canonical ARCH-04A delivered; Automatic unified setup delivered; POL-05 through POL-07 connect manager review and approvals; CP06/CP07 and AUTH-12H connect guide activation afterward |
 | [WS-ART-001](initiatives/WS-ART-001/OVERVIEW.md) | Planned | Exact post-submit materialization after guide/checker contracts |
 | [WS-AUTH-001](initiatives/WS-AUTH-001/OVERVIEW.md) | Planned | Unavailable shared-dispatcher contracts after delivered CP05; POL-04B consumes completed finalization authority; AUTH-12F4 supplies proposal authority; POL-05B public composition follows |
