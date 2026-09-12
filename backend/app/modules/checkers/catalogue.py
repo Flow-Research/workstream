@@ -467,6 +467,7 @@ def _default_definitions() -> tuple[PreSubmissionCheckerDefinition, ...]:
         ),
         _platform(
             "artifact.archive.entries_safe",
+            public_name="Reject encrypted ZIP entries, symbolic links and special files",
             phase=custody,
             order=30,
             classification=security,

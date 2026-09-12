@@ -280,6 +280,10 @@ cannot be reused as post-submission review-gate evidence. See the
   in an isolated workspace and assesses them with every supplied task example;
   exact grants exclude other projects and runs. Known
   invalid output ends terminally, and replay never starts a second inference.
+  The model-facing mandatory archive-entry capability explicitly names existing
+  encryption, symbolic-link and special-file rejection. This does not add a
+  selectable checker or project-configurable expanded-size/member-count limits;
+  those stricter guide requirements can still produce genuine capability gaps.
   Transient pre-send retries use bounded backoff and a circuit breaker; the
   default request timeout is 300 seconds, separate from the whole-run timeout.
   POL-05A implements hidden review, pre-submission approval custody and

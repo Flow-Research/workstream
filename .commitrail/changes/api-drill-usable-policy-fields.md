@@ -22,6 +22,45 @@ applicable. A passing example or aggregate count is not endpoint completion.
 
 ## Bounded change
 
+### Same-PR genuine-guide follow-through
+
+The human additionally requested resolving the genuine-guide drill findings
+before merging this PR, rather than handing them to a separate change. Trace
+the existing catalogue, ART inspector and compilation validator first. Reuse
+canonical catalogue metadata to expose already-enforced encrypted-entry
+rejection to guide compilation; do not add another checker or invent configurable
+project archive limits. Preserve the original failed model outcome: a later
+successful call cannot explain its `schema_invalid` rejection.
+
+This extension allows `backend/app/modules/checkers/catalogue.py`,
+`backend/tests/test_checker_catalogue.py`,
+`backend/tests/test_project_guide_compilation_contracts.py`, and the existing
+drill documentation and record. Broader runtime repairs require a reproduced
+cause and an explicit update here before implementation. No weaker model-output
+validation, raw provider-output logging, hidden-route exposure, acceptance change,
+database migration or product-builder worktree edits are allowed.
+
+Acceptance: the model-facing projection describes the existing mandatory archive
+encryption rejection without making it selectable; exact catalogue identity and
+disabled-state checks remain enforced. Run the catalogue and compilation-contract
+tests plus `test_submission_archive.py::test_encrypted_flag_is_rejected_before_member_open`.
+Prove the new semantic regression fails against the previous catalogue metadata.
+Then rerun the two genuine PDFs from a frozen checkout with isolated resources,
+retaining every failed result. Investigate rejected model output with bounded,
+sanitized diagnostics; never label an unexplained rejection repaired. Risk L1;
+focused plan/architecture and QA/test-delta/documentation review cover this
+extension, with security review if runtime diagnostics or validation change.
+Human focus is honest capability coverage, unchanged fail-closed validation,
+and the distinction between a valid blocked guide and a completed ready guide.
+
+The metadata repair uses the existing `public_name`, not a new schema field.
+Both enabled/disabled regression parameters failed against the old opaque label;
+the repaired compilation-contract suite, exact catalogue snapshot and ART
+encrypted-entry owner regression pass together (69 tests). The initial broader
+plain invocation passed 86 tests but could not set up the database-backed startup
+test; it is not a complete catalogue-suite pass. Real-provider replay and the
+unexplained invalid result remain separate evidence obligations.
+
 Allowed: `backend/scripts/external_api_drill.py`,
 `scripts/test_external_api_drill.py`, `docs/engineering/external-api-drill.md`,
 `docs/engineering/external-api-drill-findings.md`, `docs/roadmap_status.md`,

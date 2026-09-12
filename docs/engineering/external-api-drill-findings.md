@@ -445,6 +445,26 @@ Git. This repair does not certify every other API field or deployed provider.
 
 ## Retest and handoff criteria
 
+### Genuine-guide capability evidence
+
+A two-PDF real-provider drill reported archive encryption as an unsupported
+automated check, although ART already rejects encrypted ZIP entries before
+opening members. The existing mandatory catalogue entry
+`artifact.archive.entries_safe` now names encrypted entries, symbolic links and
+special files explicitly in its canonical `public_name`. This same hash-bound
+metadata reaches guide compilation; no new checker or selectable policy is
+introduced. Disabled mandatory capabilities still make the catalogue unavailable.
+The owner regression proves encryption rejection separately from model behavior.
+This is not proof that public submission intake is exposed.
+
+The guide also requested project-specific expanded-archive size and member-count
+limits. Existing startup safety limits do not implement those project settings;
+these remain genuine gaps, not false findings to suppress. A separate real run
+ended with `schema_invalid`; its original rejected output was not retained, so
+the violated invariant is not established. Preserve that failed run and do not
+claim a later valid blocked report explains or repairs it. Real-model semantic
+reverification remains distinct from deterministic catalogue-contract tests.
+
 Use the [new external-client drill](external-api-drill.md), not the older seeded
 API drill. Keep unresolved failures red until product repairs actually satisfy
 them; preserve the passing regressions for repaired defects. Run the applicable

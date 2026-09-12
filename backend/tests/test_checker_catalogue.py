@@ -132,7 +132,7 @@ def test_catalogue_exact_v01_contract_is_locked() -> None:
     expected = {
         "artifact.outer_zip.valid|v1|artifact.outer_zip.valid|mandatory_security|custody|10|platform_capability|submission_archive.outer_zip_valid|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.paths_safe|v1|artifact.archive.paths_safe|mandatory_security|custody|20|platform_capability|submission_archive.paths_safe|-|infrastructure_unavailable|maximum_results=1",
-        "artifact.archive.entries_safe|v1|artifact.archive.entries_safe|mandatory_security|custody|30|platform_capability|submission_archive.entries_safe|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.entries_safe|v1|Reject encrypted ZIP entries, symbolic links and special files|mandatory_security|custody|30|platform_capability|submission_archive.entries_safe|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.resources_bounded|v1|artifact.archive.resources_bounded|mandatory_security|custody|40|platform_capability|submission_archive.resources_bounded|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.integrity_verified|v1|artifact.archive.integrity_verified|mandatory_integrity|custody|50|platform_capability|submission_archive.integrity_verified|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.identity_computed|v1|artifact.archive.identity_computed|mandatory_integrity|identity|10|platform_capability|artifact_commitment.identity|-|infrastructure_unavailable|maximum_results=1",
