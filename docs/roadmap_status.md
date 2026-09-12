@@ -236,8 +236,8 @@ cannot be reused as post-submission review-gate evidence. See the
   using POL-05A custody. Approval requires selected pre-submit checks to appear
   in the plan compiled from the actual policy; complete-proposal access requires
   Project Manager guide-management authority. Public manager review and manual
-  dispatch use AUTH-12F4 authority; saved human requests enter the same worker
-  with atomic queue intent and no second attempt.
+  dispatch use AUTH-12F4 authority. Committed manager requests enter the same
+  Celery execution pipeline with atomic queue intent and no second attempt.
   Superseded post-submit setup/approval/correction routes are removed; POL-06
   owns the remaining post-submit projection. Real Terra runs through API upload,
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
