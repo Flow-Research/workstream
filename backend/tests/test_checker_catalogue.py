@@ -84,7 +84,7 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
 
     assert catalogue.catalogue_id == PRE_SUBMISSION_CATALOGUE_ID
     assert catalogue.schema_version == PRE_SUBMISSION_CATALOGUE_SCHEMA_VERSION
-    assert len(ids) == len(set(ids)) == 27
+    assert len(ids) == len(set(ids)) == 28
     assert ids == [
         entry.stable_id
         for entry in sorted(
@@ -104,6 +104,7 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
         "limit_file_size": ("policy.file_size.limit", "check_evidence_integrity"),
         "limit_package_size": ("policy.package_size.limit", "check_evidence_integrity"),
         "limit_archive_entries": ("policy.archive_entries.limit", "check_evidence_integrity"),
+        "limit_archive_size": ("policy.archive_size.limit", "check_evidence_integrity"),
     }
     for primitive, (stable_id, public_name) in expected.items():
         definition = catalogue.primitive_definition(primitive)
@@ -111,82 +112,94 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
 
 
 @pytest.mark.parametrize("limit", [True, False, 0, -1, "100", 1.5])
-def test_archive_count_rejects_invalid_policy_and_compiler_input(limit) -> None:
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_archive_limit_rejects_invalid_policy_and_compiler_input(limit, field) -> None:
     from pydantic import ValidationError
     from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
     from app.modules.projects.schemas import SubmissionArtifactPolicyInput
     from app.modules.checkers.compiler import PreSubmitCheckerCompilerError
 
     with pytest.raises(ValidationError):
-        SubmissionArtifactPolicyInput(maximum_archive_entries=limit)
+        SubmissionArtifactPolicyInput(**{field: limit})
     with pytest.raises(ValidationError):
         SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=100, maximum_package_size_bytes=1000,
-            maximum_archive_entries=limit,
+            **{field: limit},
         )
-    policy = {**_effective_policy(), "maximum_archive_entries": limit}
+    policy = {**_effective_policy(), field: limit}
     with pytest.raises(PreSubmitCheckerCompilerError):
         compile_effective_project_submission_artifact_policy(policy, canonical_json_hash(policy))
 
 
 @pytest.mark.parametrize("alteration", ["missing", "weakened", "boolean", "warning"])
-def test_archive_count_compiler_rejects_rule_substitution(alteration) -> None:
+@pytest.mark.parametrize("field, primitive", [
+    ("maximum_archive_entries", "limit_archive_entries"),
+    ("maximum_archive_size_bytes", "limit_archive_size"),
+])
+def test_archive_limit_compiler_rejects_rule_substitution(alteration, field, primitive) -> None:
     from copy import deepcopy
     from app.modules.checkers.compiler import (
         PreSubmitCheckerCompilerError, validate_compiled_pre_submit_checker_bundle,
     )
 
-    policy = {**_effective_policy(), "maximum_archive_entries": 1}
+    policy = {**_effective_policy(), field: 1}
     digest = canonical_json_hash(policy)
     compiled = compile_effective_project_submission_artifact_policy(policy, digest)
     bundle = deepcopy(compiled.compiled_bundle)
-    rule = next(item for item in bundle["rules"] if item["primitive"] == "limit_archive_entries")
+    rule = next(item for item in bundle["rules"] if item["primitive"] == primitive)
     if alteration == "missing":
         bundle["rules"].remove(rule)
     elif alteration == "warning":
         rule["severity"] = "warning"
     else:
-        rule["config"]["maximum_archive_entries"] = True if alteration == "boolean" else 2
+        rule["config"][field] = True if alteration == "boolean" else 2
     with pytest.raises(PreSubmitCheckerCompilerError):
         validate_compiled_pre_submit_checker_bundle(policy, digest, bundle)
 
 
 @pytest.mark.parametrize("value", [True, 0, -1, "2", 2.5])
-def test_locked_archive_count_rejects_malformed_values(value):
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_locked_archive_limit_rejects_malformed_values(value, field):
     from app.modules.tasks.service import TaskService, TaskLockedContextInvalid
     from app.modules.checkers.service import CheckerService
 
-    policy = {**_effective_policy(), "maximum_archive_entries": value}
+    policy = {**_effective_policy(), field: value}
     assert not CheckerService._effective_policy_shape_is_valid(policy)
     with pytest.raises(TaskLockedContextInvalid):
-        TaskService(None)._optional_policy_non_negative_int(policy, "maximum_archive_entries", minimum=1)
+        TaskService(None)._optional_policy_non_negative_int(policy, field, minimum=1)
 
 
-def test_archive_count_changes_locked_hashes_and_preserves_null_semantics():
+@pytest.mark.parametrize("field, primitive", [
+    ("maximum_archive_entries", "limit_archive_entries"),
+    ("maximum_archive_size_bytes", "limit_archive_size"),
+])
+def test_archive_limit_changes_locked_hashes_and_preserves_null_semantics(field, primitive):
     from app.modules.tasks.service import TaskService
 
     hashes = set()
     for limit in (None, 1, 100):
-        policy = {**_effective_policy(), "maximum_archive_entries": limit}
+        policy = {**_effective_policy(), field: limit}
         digest = canonical_json_hash(policy)
         compiled = compile_effective_project_submission_artifact_policy(policy, digest)
         rules = [item for item in compiled.compiled_bundle["rules"]
-                 if item["primitive"] == "limit_archive_entries"]
+                 if item["primitive"] == primitive]
         assert len(rules) == (0 if limit is None else 1)
         assert TaskService(None)._optional_policy_non_negative_int(
-            policy, "maximum_archive_entries", minimum=1,
+            policy, field, minimum=1,
         ) == limit
         hashes.add((digest, compiled.compiled_bundle_hash))
     assert len(hashes) == 3
 
 
-@pytest.mark.parametrize("count, size, failure, task_path", [
-    (3, 4101, None, "task.toml"), (2, 4101, "policy.archive_entries.limit", "task.toml"),
-    (3, 4100, "policy.package_size.limit", "task.toml"), (None, 4101, None, "task.toml"),
-    (4, 4101, "policy.file.require", "wrapper/task.toml"),
+@pytest.mark.parametrize("count, size, archive_delta, failure, task_path", [
+    (3, 4101, None, None, "task.toml"), (2, 4101, None, "policy.archive_entries.limit", "task.toml"),
+    (3, 4100, None, "policy.package_size.limit", "task.toml"), (None, 4101, None, None, "task.toml"),
+    (4, 4101, None, "policy.file.require", "wrapper/task.toml"),
+    (3, 4101, 0, None, "task.toml"),
+    (3, 4101, -1, "policy.archive_size.limit", "task.toml"),
 ])
 @pytest.mark.parametrize("explicit_directory", [True, False])
-def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, failure, task_path, explicit_directory) -> None:
+def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, archive_delta, failure, task_path, explicit_directory) -> None:
     from hashlib import sha256
     from io import BytesIO
     from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
@@ -213,6 +226,7 @@ def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, failure,
     assert len(data) < 4100 < manifest.total_expanded_bytes == 4101
     commitment = ArtifactCommitment("sha256:" + sha256(data).hexdigest(), len(data), "application/zip")
     policy = {**_effective_policy(), "maximum_archive_entries": count, "maximum_package_size_bytes": size}
+    policy["maximum_archive_size_bytes"] = None if archive_delta is None else len(data) + archive_delta
     digest = canonical_json_hash(policy)
     compiled = compile_effective_project_submission_artifact_policy(policy, digest)
     _, lineage = _compiled_and_lineage()
@@ -288,6 +302,7 @@ def test_catalogue_exact_v01_contract_is_locked() -> None:
         "policy.file_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|90|policy_primitive|limit_file_size|limit_file_size|infrastructure_unavailable|maximum_results=1",
         "policy.package_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|100|policy_primitive|limit_package_size|limit_package_size|infrastructure_unavailable|maximum_results=1",
         "policy.archive_entries.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|105|policy_primitive|limit_archive_entries|limit_archive_entries|infrastructure_unavailable|maximum_results=1",
+        "policy.archive_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|102|policy_primitive|limit_archive_size|limit_archive_size|infrastructure_unavailable|maximum_results=1",
         "policy.packaging.require|v1|check_submission_packet|mandatory_accountability|project_policy|110|policy_primitive|require_packaging|require_packaging|infrastructure_unavailable|maximum_results=1",
         "policy.generated_quality.warn|v1|check_low_quality_generated_artifacts|advisory|project_policy|120|policy_primitive|warn_low_quality_generated_artifact|warn_low_quality_generated_artifact|record_disabled_and_continue|maximum_results=1",
     }

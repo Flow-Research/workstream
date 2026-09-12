@@ -142,6 +142,7 @@ def policy_body(
         maximum_file_size_bytes=proposal.maximum_file_size_bytes,
         maximum_package_size_bytes=proposal.maximum_package_size_bytes,
         maximum_archive_entries=proposal.maximum_archive_entries,
+        maximum_archive_size_bytes=proposal.maximum_archive_size_bytes,
         packaging={"package_required": True, "allowed_package_formats": ["zip"]},
     )
     return ProjectService(session).canonical_agent_submission_policy_body(

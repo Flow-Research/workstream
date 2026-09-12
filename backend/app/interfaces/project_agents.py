@@ -284,6 +284,10 @@ class SubmissionArtifactPolicyProposal(BaseModel):
         gt=0, le=10 * 1024 * 1024 * 1024,
         description="Maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes.",
     )
+    maximum_archive_size_bytes: StrictInt | None = Field(
+        default=None, gt=0,
+        description="Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply.",
+    )
     maximum_archive_entries: StrictInt | None = Field(
         default=None, gt=0,
         description="Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",

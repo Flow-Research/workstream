@@ -97,6 +97,7 @@ class PreSubmissionPolicyPrimitive(StrEnum):
     LIMIT_FILE_SIZE = "limit_file_size"
     LIMIT_PACKAGE_SIZE = "limit_package_size"
     LIMIT_ARCHIVE_ENTRIES = "limit_archive_entries"
+    LIMIT_ARCHIVE_SIZE = "limit_archive_size"
     ENFORCE_STORAGE_SCHEME = "enforce_storage_scheme"
     VERIFY_HASH = "verify_hash"
     REQUIRE_ATTESTATION = "require_attestation"
@@ -665,6 +666,14 @@ def _default_definitions() -> tuple[PreSubmissionCheckerDefinition, ...]:
             "check_evidence_integrity",
             ("maximum_package_size_bytes",),
             order=100,
+            classification=integrity,
+        ),
+        _policy(
+            "policy.archive_size.limit",
+            "limit_archive_size",
+            "check_evidence_integrity",
+            ("maximum_archive_size_bytes",),
+            order=102,
             classification=integrity,
         ),
         _policy(

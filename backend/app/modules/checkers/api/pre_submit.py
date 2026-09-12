@@ -19,6 +19,7 @@ _RESULT_MESSAGE_CODES = frozenset(
         "forbidden_artifact_present",
         "package_size_limit_exceeded",
         "archive_entry_limit_exceeded",
+        "archive_size_limit_exceeded",
         "packaging_requirement_failed",
         "passed",
         "policy_attestation_missing",

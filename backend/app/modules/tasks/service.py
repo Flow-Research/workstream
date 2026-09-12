@@ -1356,6 +1356,9 @@ class TaskService:
             maximum_archive_entries=self._optional_policy_non_negative_int(
                 policy, "maximum_archive_entries", minimum=1,
             ),
+            maximum_archive_size_bytes=self._optional_policy_non_negative_int(
+                policy, "maximum_archive_size_bytes", minimum=1,
+            ),
         )
 
     def _policy_list(self, policy: dict[str, Any], field: str) -> list[Any]:

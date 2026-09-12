@@ -427,6 +427,14 @@ class EffectivePreSubmissionProcessor:
             maximum = self._positive_limit(config, "maximum_package_size_bytes")
             failure_count = int(self._input.manifest.total_expanded_bytes > maximum)
             message_code = "package_size_limit_exceeded"
+        elif primitive is PreSubmissionPolicyPrimitive.LIMIT_ARCHIVE_SIZE:
+            maximum = self._positive_limit(config, "maximum_archive_size_bytes")
+            if maximum == 0:
+                raise PreSubmissionInfrastructureUnavailable(
+                    "pre_submission_policy_configuration_invalid"
+                )
+            failure_count = int(self._input.commitment.byte_count > maximum)
+            message_code = "archive_size_limit_exceeded"
         elif primitive is PreSubmissionPolicyPrimitive.LIMIT_ARCHIVE_ENTRIES:
             maximum = self._positive_limit(config, "maximum_archive_entries")
             if maximum == 0:

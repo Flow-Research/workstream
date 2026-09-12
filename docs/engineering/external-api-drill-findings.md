@@ -499,10 +499,13 @@ bytes or entry counts as unavailable. It identified only the separate ten MiB
 compressed archive limit as unsupported. This is partial coverage, not guide
 approval or activation; the earlier `schema_invalid` failures remain unexplained.
 
-The guide separately requests a compressed ZIP cap. Do not conflate that request
-with the existing expanded-byte limit or claim full guide coverage from the
-absence of a model-reported gap. This additional capability needs explicit
-resolution before certifying this guide's complete intake requirements.
+The human authorized repairing the separate compressed ZIP cap in this same PR.
+`maximum_archive_size_bytes` now follows the canonical policy/compiler path and
+compares the complete ZIP's verified commitment byte count, independently of
+expanded bytes. Real-ZIP boundary tests and a fresh genuine-provider replay must
+verify this repair; the preceding blocked run remains historical evidence, not
+evidence that the new field was exercised. Do not claim full guide coverage from
+the absence of a model-reported gap alone.
 
 Use the [new external-client drill](external-api-drill.md), not the older seeded
 API drill. Keep unresolved failures red until product repairs actually satisfy

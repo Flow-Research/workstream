@@ -266,6 +266,7 @@ class SubmissionArtifactPolicyInput(BaseModel):
     maximum_file_size_bytes: int | None = Field(default=None, gt=0)
     maximum_package_size_bytes: int | None = Field(default=None, gt=0)
     maximum_archive_entries: int | None = Field(default=None, gt=0, strict=True)
+    maximum_archive_size_bytes: int | None = Field(default=None, gt=0, strict=True)
     packaging: SubmissionArtifactPackagingInput = Field(
         default_factory=SubmissionArtifactPackagingInput
     )

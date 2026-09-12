@@ -40,49 +40,53 @@ SHA256 = "sha256:" + "a" * 64
 @pytest.mark.parametrize("project_limit, default_limit, expected", [
     (100, None, 100), (None, 50, 50), (100, 50, 50), (20, 50, 20), (None, None, None),
 ])
-def test_archive_limit_projection_and_default_floor(monkeypatch, project_limit, default_limit, expected):
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_archive_limit_projection_and_default_floor(monkeypatch, project_limit, default_limit, expected, field):
     from app.modules.projects import service
     from app.modules.projects.guide_compilation.projection_payloads import policy_body
 
     proposal = SubmissionArtifactPolicyProposal(
         maximum_file_size_bytes=1000, maximum_package_size_bytes=2000,
-        maximum_archive_entries=project_limit,
+        **{field: project_limit},
     )
     monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
-                        "maximum_archive_entries", default_limit)
+                        field, default_limit)
     body = policy_body(None, proposal)
-    assert body["maximum_archive_entries"] == project_limit
+    assert body[field] == project_limit
     effective = service.ProjectService(None)._merge_effective_submission_artifact_policy(body)
-    assert effective["maximum_archive_entries"] == expected
-    assert effective["project_policy"]["maximum_archive_entries"] == project_limit
-    assert effective["workstream_default_policy"]["maximum_archive_entries"] == default_limit
+    assert effective[field] == expected
+    assert effective["project_policy"][field] == project_limit
+    assert effective["workstream_default_policy"][field] == default_limit
 
 
 def test_model_schema_describes_existing_expanded_byte_limit():
     properties = SubmissionArtifactPolicyProposal.model_json_schema()["properties"]
     assert "expanded bytes" in properties["maximum_package_size_bytes"]["description"]
     assert "not compressed upload bytes" in properties["maximum_package_size_bytes"]["description"]
+    assert "entire submitted compressed ZIP" in properties["maximum_archive_size_bytes"]["description"]
     assert "directory entries" in properties["maximum_archive_entries"]["description"]
     assert "ZIP root" in properties["required_artifacts"]["description"]
 
 
 @pytest.mark.parametrize("default_limit", [None, 50])
-def test_omitted_optional_archive_limit_preserves_default_floor(monkeypatch, default_limit):
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_omitted_optional_archive_limit_preserves_default_floor(monkeypatch, default_limit, field):
     from app.modules.projects import service
     from app.modules.projects.schemas import SubmissionArtifactPolicyInput
 
     owner = service.ProjectService(None)
     policy = owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
-    del policy["maximum_archive_entries"]
+    del policy[field]
     monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
-                        "maximum_archive_entries", default_limit)
+                        field, default_limit)
     effective = owner._merge_effective_submission_artifact_policy(policy)
-    assert effective["maximum_archive_entries"] == default_limit
-    assert "maximum_archive_entries" not in policy
+    assert effective[field] == default_limit
+    assert field not in policy
 
 
 @pytest.mark.parametrize("limit", [2, None, 0, True])
-def test_task_requirements_response_carries_valid_locked_archive_limit(limit):
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_task_requirements_response_carries_valid_locked_archive_limit(limit, field):
     from types import SimpleNamespace
     from app.modules.projects.service import ProjectService
     from app.modules.projects.schemas import SubmissionArtifactPolicyInput
@@ -92,7 +96,7 @@ def test_task_requirements_response_carries_valid_locked_archive_limit(limit):
     policy = owner._merge_effective_submission_artifact_policy(
         owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
     )
-    policy["maximum_archive_entries"] = limit
+    policy[field] = limit
     context = SimpleNamespace(effective_policy=SimpleNamespace(effective_policy=policy))
     task = SimpleNamespace(id=str(uuid4()), project_id=str(uuid4()), locked_guide_version="v0.1")
     if limit is not None and (type(limit) is not int or limit <= 0):
@@ -100,7 +104,7 @@ def test_task_requirements_response_carries_valid_locked_archive_limit(limit):
             TaskService(None)._submission_requirements_response(task, context)
     else:
         response = TaskService(None)._submission_requirements_response(task, context)
-        assert response.model_dump(mode="json")["maximum_archive_entries"] == limit
+        assert response.model_dump(mode="json")[field] == limit
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
 DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
 

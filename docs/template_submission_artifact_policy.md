@@ -160,6 +160,7 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 | hash algorithm | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | maximum file size bytes | minimum non-null limit |
 | maximum package size bytes | minimum non-null total expanded ZIP byte limit |
+| maximum archive size bytes | minimum non-null byte limit for the entire compressed ZIP, including archive metadata |
 | maximum archive entries | minimum non-null normalized outer-ZIP tree entry limit, including implied parent directories |
 | packaging rules | restrictive merge; conflicts block setup |
 
@@ -187,6 +188,9 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 - required directory structure:
 - maximum file size bytes:
 - maximum package size bytes (total expanded bytes, not compressed upload size):
+- maximum archive size bytes (optional positive integer; entire compressed ZIP
+  including archive metadata, independently verified from actual bytes; null
+  adds no project limit and never removes platform safety limits):
 - maximum archive entries (optional positive integer; files and directory entries
   in the normalized outer ZIP tree, including implied parent directories, not
   recursive archive contents; null adds no project limit):

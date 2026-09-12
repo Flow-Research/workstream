@@ -339,6 +339,7 @@ class SubmissionRequirementsResponse(BaseModel):
     maximum_file_size_bytes: int | None
     maximum_package_size_bytes: int | None
     maximum_archive_entries: int | None
+    maximum_archive_size_bytes: int | None
     packaging: dict[str, Any]
 
 

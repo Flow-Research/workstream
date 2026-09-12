@@ -495,9 +495,10 @@ class CheckerService:
                 return False
         if not CheckerService._packaging_shape_is_valid(effective_policy.get("packaging", {})):
             return False
-        entries = effective_policy.get("maximum_archive_entries")
-        if entries is not None and (type(entries) is not int or entries <= 0):
-            return False
+        for field in ("maximum_archive_entries", "maximum_archive_size_bytes"):
+            limit = effective_policy.get(field)
+            if limit is not None and (type(limit) is not int or limit <= 0):
+                return False
         if not CheckerService._artifact_rule_list(
             effective_policy.get("required_artifacts", []),
             required_key="path",

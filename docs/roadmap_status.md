@@ -286,6 +286,9 @@ cannot be reused as post-submission review-gate evidence. See the
   The optional `maximum_archive_entries` policy adds a compiled, blocking normalized
   outer-ZIP tree entry limit, including implied parent directories, preserving tighter default
   limits and ART safety ceilings. This does not expose public submission intake.
+  The separate optional `maximum_archive_size_bytes` rule enforces the entire
+  compressed ZIP's verified byte count, including archive metadata, independently
+  of expanded content size; the same default-floor and locked-plan controls apply.
   Transient pre-send retries use bounded backoff and a circuit breaker; the
   default request timeout is 300 seconds, separate from the whole-run timeout.
   POL-05A implements hidden review, pre-submission approval custody and

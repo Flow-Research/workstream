@@ -343,5 +343,7 @@ historical observations, not finished API coverage. Subsequent source tracing
 confirmed the existing package-size rule already enforces expanded bytes; its
 proposal field now explains that meaning. The new `maximum_archive_entries`
 rule limits normalized outer-ZIP tree entries, including implied parent directories, through
-the same locked policy/compiler path. Neither change exposes hidden intake APIs.
+the same locked policy/compiler path. The separate `maximum_archive_size_bytes`
+rule compares the entire compressed ZIP's verified byte count, including archive
+metadata; it does not reuse expanded size. None of these changes exposes hidden intake APIs.
 Fresh real-provider execution must retain its own exact target and results.
