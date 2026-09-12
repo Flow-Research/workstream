@@ -29,7 +29,7 @@ this same PR. Source inspection corrects the earlier interpretation:
 `limit_package_size` already compares the verified manifest's total expanded
 bytes with `maximum_package_size_bytes`. Clarify that existing field in the
 model-facing proposal schema and current documentation; do not add a second
-expanded-size implementation. Add only `maximum_archive_entries`, an optional
+expanded-size implementation. Add `maximum_archive_entries`, an optional
 strict positive integer counting the canonical outer ZIP tree (files and explicit
 or implied parent directories), not raw central-directory record count.
 Null means no additional project limit, not removal of platform safety limits.
@@ -87,6 +87,35 @@ response needs a non-null/invalid-value regression (`QA-ARCHIVE-001`). Both are
 addressed alongside the primitive-list formatting correction (`DOC-ARCHIVE-001`).
 Real ZIP evidence explicitly includes implied parent directories in ART's
 canonical tree and proves omitting directory records cannot evade the count.
+
+### Compressed ZIP limit in the same repair
+
+The human also authorizes the genuine guide's separate compressed ZIP limit.
+Add optional strict-positive `maximum_archive_size_bytes` through the same
+allowed proposal, PROJECTS canonical/default/effective merge, projection, TASK
+locked summary and CHECKERS owners above. Null or omission adds no project
+limit; minimum non-null merging preserves tighter defaults. The field describes
+the entire submitted ZIP's verified byte count, including archive metadata,
+not the expanded contents or the sum of compressed member sizes.
+
+Register `limit_archive_size` / `policy.archive_size.limit` in the existing
+catalogue and compiled plan. Its blocking processor compares the existing ART
+`ArtifactCommitment.byte_count` with the locked limit; do not accept a client
+size claim or add another archive scan. Exact configuration, severity and rule
+coverage must reject omissions, booleans, warning substitutions and weakened
+limits. The existing package-size rule remains the expanded-byte owner.
+
+Risk remains L1; no expanded authority, routes, migrations, retained-data
+rewrites, alternate processor or weakened test/CI gates. Reuse the same focused
+review tracks and current documentation owners. Prove positive projection,
+default-floor merging, omitted keys, TASK response serialization and rejection
+of malformed values. Real ZIP tests must distinguish full compressed archive
+size from expanded size and prove equality passes and one byte over fails;
+disabled enforcement and wrong-size-source mutants must fail those tests.
+Run the existing focused policy/compiler/execution tests, exact-shape affected
+fixtures, full hosted CI and the same original-PDF genuine-provider drill.
+Human focus: independent compressed and expanded limits with immutable locked
+lineage; a successful setup run is not approval, activation or public intake.
 
 ### Historical same-PR genuine-guide metadata repair
 
