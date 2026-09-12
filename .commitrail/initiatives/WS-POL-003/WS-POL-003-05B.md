@@ -4,13 +4,15 @@
 - Durable disposition: `Complete`
 - Intended merge outcome: expose the existing complete proposal, pre-submission approval and correction operations with exact Project Manager authority, and dispatch a committed correction through the sole unified setup runtime.
 
-## Intent and current owners
+## Intent
 
 Managers must inspect both pre/post proposals and findings before approving the
 pre-submission policy or requesting correction. POL-05A owns those hidden
 operations and immutable receipts; AUTH-12F4 supplies current exact-project
 human authority. This chunk connects them to FastAPI/OpenAPI. Post-submission
 projection/approval remains POL-06, before CP06/CP07 and complete guide activation.
+
+## Current behavior at the base
 
 `GuideProposalService` owns read/approval/correction in a caller transaction.
 `GuideCompilationService.request_correction` already reserves a successor through
@@ -102,7 +104,7 @@ archive-limit changes, frontend or private guide fixtures.
 - Remove affected obsolete assumptions/tests that claim these routes are hidden;
   preserve required denial, locked lineage, atomicity and immutable evidence tests.
 
-## Risk and review
+## Risk and review routing
 
 - Risk class: L1 (public authorization, transactions and async dispatch).
 - Required reviewers: architecture/reuse, security, QA/test delta,
@@ -112,7 +114,7 @@ archive-limit changes, frontend or private guide fixtures.
 - Plan review passed before product edits. Verification below defines required
   proof; exact execution and reviewer freshness belong in the PR.
 
-## Verification
+## Evidence
 
 Add real HTTP/ASGI tests with production AUTH composition and PostgreSQL fixture
 lineage through existing authorized project/guide creation and finalized proposal
