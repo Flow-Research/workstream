@@ -48,6 +48,10 @@ PROJECTS `schemas.py`, `service.py` and
 `guide_compilation/projection_payloads.py`; TASK `schemas.py` and `service.py`;
 CHECKERS `catalogue.py`, `compiler.py`, `pre_submit_execution.py`, `service.py`;
 their existing focused policy/compiler/catalogue/execution/task-summary tests,
+`docs/architecture_data_model.md`,
+`docs/decision_0011_submission_artifact_policy_drives_pre_submit.md`,
+`docs/architecture_checker_framework.md`,
+`docs/template_submission_artifact_policy.md`,
 and the existing drill docs, roadmap and this record. Existing structural debt
 must not grow; extract a cohesive helper within its owning module if necessary.
 No migrations, authority changes, retained-data rewrites, new public routes,
@@ -68,7 +72,11 @@ Human focus: one canonical expanded-byte limit, one member-count rule, unchanged
 platform safety and authorization, and real drill results rather than inferred
 readiness.
 
-### Same-PR genuine-guide follow-through
+### Historical same-PR genuine-guide metadata repair
+
+The following scope and evidence describe the earlier metadata-only repair.
+Its prohibition on adding project archive limits is superseded by the explicit
+project archive-limit follow-through above; all other safety boundaries remain.
 
 The human additionally requested resolving the genuine-guide drill findings
 before merging this PR, rather than handing them to a separate change. Trace
