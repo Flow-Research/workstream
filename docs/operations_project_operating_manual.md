@@ -203,19 +203,14 @@ contracts with AUTH-12F4 authorization; status-only setup reads do not
 provide them. POL-05B supplies public wiring; AUTH-12G/POL-06B separately provide the
 exact post-policy draft read before post-policy approval.
 
-The post-submit checker setup read returns only bounded operator summaries:
-setup status, compiled checker names/severities, sufficiency status/counts,
-effective policy counts, pre-submit checker names/count, and registered
-post-submit checker catalog count. It does not return raw source text, local
-paths, replayable refs, exact source hashes, or compiled policy body internals.
-When an authorized covered Project Manager requests correction, Workstream
-supersedes and retains the unapproved compiled output, preserves its policy
-hash/body plus bounded actor/reason/time and redacted derivation metadata,
-links a separate correction operation to that provenance. If correction needs
-new model output for a known terminal result, it creates a new unified compilation/setup generation with
-bounded feedback; it never reopens a finalized run. Activation remains blocked. An
-unchanged replacement fails closed; a changed replacement must be approved
-separately through the approval endpoint.
+Post-submit projection, its exact draft read and approval remain POL-06 work;
+there is no current public post-submit checker setup read. The current unified
+proposal package displays proposed post-submit checks for manager inspection,
+but does not approve a post-submit policy. The latest setup read exposes bounded
+status and lineage pointers; it does not substitute for the authorized package.
+A manager correction preserves finalized history and creates a successor setup
+generation with bounded feedback. It never reopens a finalized run or activates
+the guide. The successor's pre-submission proposal requires its own approval.
 
 Timeout or unknown provider acceptance is not a correctable finalized result.
 It remains blocked without another call until the adapter supports verified
@@ -476,12 +471,22 @@ All four require a current human Project Manager grant for the exact project.
 Audit/Operator authority and a system-scoped manager grant do not grant proposal
 access. The source pointer is not permission to read another project's proposal.
 
-Approval and correction require a UUID `Idempotency-Key` header. Copy the exact
+Approval and correction require exactly one UUID `Idempotency-Key` header.
+Duplicate occurrences are rejected with 422, even when their values match. Copy the exact
 `target` from the package into the request body; do not construct it from status
 summaries. Approval supplies `acknowledged_warning_hashes` from that package and,
 when replacing a prior approval, both prior approval identifiers. Correction
 supplies a meaningful `reason`. The body has no second idempotency key. Dispatch
 uses the committed correction operation ID for stable replay identity.
+
+If the correction creation response is lost, an authorized replacement manager
+can read `/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest`.
+For a correction successor, that response supplies `correction_operation_id` and
+`predecessor_compilation_id` together. Use the predecessor as `{compilation_id}`
+in the dispatch prefix above, and the correction ID in its dispatch suffix.
+A `correction_requested` successor waits for this explicit dispatch. Both pointers
+remain available after dispatch and finalization; neither grants proposal access
+or bypasses current Project Manager authority. Initial setups have neither pointer.
 
 Approval atomically persists the existing artifact/effective/pre-submit chain.
 It does not approve the post-submit policy or activate the guide, and makes no

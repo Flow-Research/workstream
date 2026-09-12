@@ -34,8 +34,9 @@ IDEMPOTENCY_PARAMETER = {
 
 
 def require_proposal_key(request: Request) -> UUID:
-    """Raise immediately for missing keys before FastAPI resolves identity or SQL."""
-    return parse_idempotency_key(request.headers.get("Idempotency-Key", ""))
+    """Require one key before FastAPI resolves identity or SQL."""
+    values = request.headers.getlist("Idempotency-Key")
+    return parse_idempotency_key(values[0] if len(values) == 1 else "")
 
 
 def proposal_http_error(exc: GuideProposalError) -> StructuredHTTPException:

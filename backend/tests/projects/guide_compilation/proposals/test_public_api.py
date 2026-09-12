@@ -85,7 +85,9 @@ async def test_public_approval_rejects_without_writes(clean_postgres_database, f
 
 
 @pytest.mark.parametrize("subject_kind,expected", [("service",404),("human",422)])
-async def test_public_admission_rejects_before_identity_or_database(subject_kind, expected):
+@pytest.mark.parametrize("suffix", ["corrections", "pre-submission-approval"])
+@pytest.mark.parametrize("keys", ["missing", "duplicate_equal", "duplicate_conflicting"])
+async def test_public_admission_rejects_before_identity_or_database(subject_kind, expected, suffix, keys):
     from types import SimpleNamespace
     from httpx import ASGITransport, AsyncClient
     from app.api.deps.auth import get_auth_verification_result
@@ -100,9 +102,14 @@ async def test_public_admission_rejects_before_identity_or_database(subject_kind
         pytest.fail("rejected admission accessed identity or database")
     app.dependency_overrides[get_authorization_actor] = forbidden
     app.dependency_overrides[get_db_session] = forbidden
-    path = "/api/v1/projects/{0}/guides/{0}/compilations/{0}/corrections".format(uuid4())
+    path = "/api/v1/projects/{0}/guides/{0}/compilations/{0}/".format(uuid4()) + suffix
+    key = str(uuid4())
+    headers = [] if keys == "missing" else [
+        ("Idempotency-Key", key),
+        ("idempotency-key", key if keys == "duplicate_equal" else str(uuid4())),
+    ]
     async with AsyncClient(transport=ASGITransport(app=app),base_url="http://testserver") as client:
-        response = await client.post(path,json={})
+        response = await client.post(path,json={},headers=headers)
     assert response.status_code == expected, response.text
 
 
@@ -132,6 +139,8 @@ async def test_setup_pointer_opens_exact_complete_proposal(clean_postgres_databa
             status = await client.get(f"/api/v1/projects/{command.project_id}/guides/{command.guide_id}/setup-runs/latest")
             assert status.status_code == 200, status.text
             assert status.json()["finalized_compilation_id"] == str(command.compilation_id)
+            assert status.json()["correction_operation_id"] is None
+            assert status.json()["predecessor_compilation_id"] is None
             package = await client.get(path+"/proposal")
             assert package.status_code == 200, package.text
             assert package.json()["result"]["status"] == classification

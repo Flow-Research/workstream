@@ -510,7 +510,9 @@ stops with findings. Automatic compilation ends without approving the proposals.
 POL-05B exposes exact Project Manager proposal review, pre-submission approval,
 setup-wide correction and explicit manual dispatch using POL-05A operations and
 AUTH-12F4 authorization. The setup response supplies `finalized_compilation_id`
-for opening the exact complete proposal. See the
+for opening the exact complete proposal, plus `correction_operation_id` and
+`predecessor_compilation_id` for recovering a saved correction after manager
+handoff or a lost creation response. See the
 [manager proposal flow](docs/operations_project_operating_manual.md#review-approve-or-correct-a-guide-proposal).
 The separate post-submission Celery worker evaluates submitted work.
 The local Celery command above includes Beat; start it before creating guide sources.

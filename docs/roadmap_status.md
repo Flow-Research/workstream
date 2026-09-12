@@ -238,6 +238,9 @@ cannot be reused as post-submission review-gate evidence. See the
   Project Manager guide-management authority. Public manager review and manual
   dispatch use AUTH-12F4 authority. Committed manager requests enter the same
   Celery execution pipeline with atomic queue intent and no second attempt.
+  The authorized latest-setup read exposes saved correction/predecessor identifiers
+  so a replacement manager can discover and explicitly dispatch a pending correction
+  after the creator is revoked, without the original creation receipt.
   Superseded post-submit setup/approval/correction routes are removed; POL-06
   owns the remaining post-submit projection. Real Terra runs through API upload,
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready

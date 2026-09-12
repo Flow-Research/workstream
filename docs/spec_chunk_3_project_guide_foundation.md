@@ -184,6 +184,12 @@ The manual artifact-policy approval route and operation are removed. Proposal
 services require explicit authority; no unconfigured construction path remains.
 The existing setup diagnostic returns `finalized_compilation_id` only after
 finalization; that pointer never substitutes for authorized complete proposal read.
+For a correction successor, the same authorized read returns
+`correction_operation_id` and `predecessor_compilation_id` from its immutable
+correction record, before dispatch and after finalization. A replacement manager
+can discover both and dispatch through the existing predecessor-scoped route
+without the creator's receipt. Current dispatch authority is still required;
+initial setups return null for both pointers.
 
 The review package contains all findings, requirements, distinct pre/post
 bindings, capability suggestions and notes, plus exact source, result, component,

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.projects.models import GuideSourceSnapshot, ProjectGuide, ProjectSetupRun
 from app.modules.projects.api.task_examples import GuideTaskExampleInputError, require_task_example_commitment
 from app.modules.projects.schemas import ProjectSetupRunResponse
-from .models import ProjectGuideCompilationAttempt, ProjectGuideSetupFinalization
+from .models import ProjectGuideCompilationAttempt, ProjectGuideSetupFinalization, ProjectGuideProposalCorrection
 
 
 async def compilation_setup_response(
@@ -15,6 +15,17 @@ async def compilation_setup_response(
 ) -> ProjectSetupRunResponse:
     """Overlay the current attempt outcome after the caller's diagnostic authorization."""
     response = ProjectSetupRunResponse.model_validate(setup)
+    correction = (await session.execute(
+        select(ProjectGuideProposalCorrection.operation_id, ProjectGuideProposalCorrection.compilation_id).where(
+            ProjectGuideProposalCorrection.successor_setup_run_id == setup.id,
+            ProjectGuideProposalCorrection.successor_setup_generation == setup.setup_generation,
+            ProjectGuideProposalCorrection.project_id == setup.project_id,
+            ProjectGuideProposalCorrection.guide_id == setup.guide_id,
+        )
+    )).one_or_none()
+    if correction is not None:
+        response.correction_operation_id = correction.operation_id
+        response.predecessor_compilation_id = correction.compilation_id
     finalized = await session.scalar(
         select(ProjectGuideSetupFinalization.compilation_id).where(
             ProjectGuideSetupFinalization.setup_run_id == setup.id,

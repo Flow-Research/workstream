@@ -197,3 +197,40 @@ route construction through existing owner adapters without new private-edge debt
   execution and finalization authority remain in use.
 - Current navigation uses manual correction dispatch to distinguish successor
   creation from re-execution of a finalized attempt.
+
+### Public correction recovery and replay-header repair
+
+The existing latest-setup read must let a replacement manager recover a committed
+correction when its creation response was lost. Extend `ProjectSetupRunResponse`
+with nullable `correction_operation_id` and `predecessor_compilation_id`, populated
+together from the immutable correction whose successor matches the authorized
+setup's project, guide, setup ID and generation. These are lineage pointers,
+including after dispatch/finalization, not proposal contents or authority. The
+existing read and dispatch authorization remain unchanged. No new route, workflow,
+permission, storage record or automatic dispatch is introduced.
+
+Within the existing allowed schema/diagnostic/API/test/docs files, reject multiple
+Idempotency-Key header occurrences before identity/database dependencies, using
+the existing invalid-key 422 contract. Both proposal mutation routes must reject
+equal or conflicting duplicates. Reconcile the operating manual's obsolete
+post-submit setup-read claim with deferred POL-06, and document recovery in current
+API/operating guidance and the roadmap. Existing L1 risk and reviewer tracks apply.
+
+Acceptance/proof: a creator records a correction through HTTP and loses its
+response; revoke that creator, then a second exact-project manager uses only
+latest-setup public response identifiers to dispatch the pending successor.
+Assert revoked/foreign actors cannot use the recovery flow, exactly one retained
+correction/request, original creator attribution and new requesting-manager
+attribution, unchanged predecessor evidence, one runtime call and replay. Existing
+registered worker proof remains. The recovery test must fail without diagnostic
+pointers. Duplicate-header tests for both mutations forbid identity/database access
+and must fail with the old first-header parser. Ordinary single-key behavior and
+initial/finalized setup discovery stay covered. Focused tests, boundary/lint/docs
+gates, clean-target internal replay and fresh hosted CI precede readiness.
+
+Plan review confirmed existing owner and fixture feasibility before repair.
+POL05B-HUMAN-001 adds the two correction lineage pointers before the finalized
+response's early return, preserving discovery throughout the successor lifecycle.
+POL05B-HUMAN-002 requires exactly one header occurrence through the canonical
+invalid-UUID error path. POL05B-HUMAN-003 removes the obsolete public post-submit
+setup-read description; that policy projection/read/approval remains POL-06.
