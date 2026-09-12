@@ -41,7 +41,7 @@ def test_proposal_partition_replaces_only_the_shared_request_owner():
 def test_public_proposal_partition_is_exact_and_additive():
     expected = {
         'backend/app/api/deps/guide_proposals.py',
-        'backend/app/modules/projects/guide_proposal_router.py',
+        'backend/app/api/routes/guide_proposals.py',
         'backend/app/modules/projects/guide_compilation/correction_dispatch.py',
         'backend/app/modules/projects/guide_compilation/delivery_request.py',
     }

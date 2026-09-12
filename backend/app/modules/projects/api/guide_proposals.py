@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Protocol, TYPE_CHECKING
 from uuid import UUID
 import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.modules.authorization.api import ActorIdentityFacts
+from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
+from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
+from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
+from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
 from app.core.hashing import canonical_json_hash
 from app.modules.projects.api.compilation_identity import CompilationComponentHashes
+
+if TYPE_CHECKING:
+    from app.modules.projects.api.guide_proposal_package import GuideProposalReviewPackage
 
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
@@ -174,3 +182,32 @@ class GuideProposalError(RuntimeError):
     ) -> None:
         self.code = code
         super().__init__(code)
+
+
+
+
+class GuideProposalOperationsPort(Protocol):
+    """Caller-owned transaction for exact finalized proposal operations."""
+
+    async def review_package(
+        self, selection: GuideProposalSelection, *, actor: ActorIdentityFacts, request_id: UUID,
+    ) -> "GuideProposalReviewPackage": ...
+
+    async def approve(
+        self, command: GuideProposalApproval, *, actor: ActorIdentityFacts, request_id: UUID,
+        material: GuideDocumentManifestPort, pre_capabilities: PreSubmissionCapabilityProjection,
+        post_capabilities: PostSubmitCatalogue, planner: PreSubmissionPolicyCompilationPort,
+    ) -> GuideProposalApprovalReceipt: ...
+
+    async def request_correction(
+        self, command: GuideProposalCorrection, *, actor: ActorIdentityFacts, request_id: UUID,
+    ) -> GuideProposalCorrectionReceipt: ...
+
+
+class GuideCorrectionDispatchPort(Protocol):
+    """Own human correction admission and publication after commit."""
+
+    async def dispatch(
+        self, selection: GuideProposalSelection, correction_operation_id: UUID, *,
+        actor: ActorIdentityFacts,
+    ) -> GuideProposalDispatchResponse: ...

@@ -236,7 +236,7 @@ AUTH_12F4_PARTITION_TARGETS = frozenset({
 
 POL_05B_PARTITION_TARGETS = frozenset({
     'backend/app/api/deps/guide_proposals.py',
-    'backend/app/modules/projects/guide_proposal_router.py',
+    'backend/app/api/routes/guide_proposals.py',
     'backend/app/modules/projects/guide_compilation/correction_dispatch.py',
     'backend/app/modules/projects/guide_compilation/delivery_request.py',
 })

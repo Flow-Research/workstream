@@ -12,8 +12,9 @@ from tests.projects.client_fixtures import (
     project_client as project_client, project_database_env as project_database_env,
 )
 from .test_automatic_request import automatic_source as automatic_source
+from .runtime_fixtures import ScriptedGuideRuntime
 from .test_live_cutover_postgresql import (
-    Runtime, _delivery, scripted_document_port as scripted_document_port,
+    _delivery, scripted_document_port as scripted_document_port,
 )
 from .helpers import runtime_configuration
 from .test_capability_growth import growth_report
@@ -27,13 +28,13 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     if oversized:
         # Runtime rewrites refs to actual originals; keep large sections after that step.
         from .runtime_fixtures import record_scripted_document_access
         from app.interfaces.project_agents import GuideEvidenceRef
 
-        class OversizedRuntime(Runtime):
+        class OversizedRuntime(ScriptedGuideRuntime):
             async def compile_project_guide(self, context, capabilities):
                 self.calls += 1
                 await record_scripted_document_access(context, capabilities)

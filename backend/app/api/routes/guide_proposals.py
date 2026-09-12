@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.adapters.artifacts import guide_document_manifest_port
 from app.adapters.checkers import project_guide_approval_compiler
 from app.api.deps.authorization import enforce_human_authorization_read
-from app.api.deps.guide_proposals import ProposalRequest, get_proposal_request, get_correction_dispatch
+from app.api.deps.guide_proposals import ProposalRequest, CorrectionDispatchRequest, get_proposal_request, get_correction_dispatch
 from app.core.api_controls import ApiErrorResponse, StructuredHTTPException
 from app.modules.projects.api.guide_proposal_package import GuideProposalReviewPackage
 from app.modules.projects.api.guide_proposals import (
@@ -17,7 +17,7 @@ from app.modules.projects.api.guide_proposals import (
     GuideProposalCorrection, GuideProposalCorrectionInput, GuideProposalCorrectionReceipt,
     GuideProposalError, GuideProposalSelection, GuideProposalDispatchResponse,
 )
-from app.modules.projects.guide_mutation_router import require_guide_mutation_key
+from app.core.api_controls import parse_idempotency_key
 
 router = APIRouter(
     prefix="/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}",
@@ -35,7 +35,7 @@ IDEMPOTENCY_PARAMETER = {
 
 def require_proposal_key(request: Request) -> UUID:
     """Raise immediately for missing keys before FastAPI resolves identity or SQL."""
-    return require_guide_mutation_key(request.headers.get("Idempotency-Key", ""))
+    return parse_idempotency_key(request.headers.get("Idempotency-Key", ""))
 
 
 def proposal_http_error(exc: GuideProposalError) -> StructuredHTTPException:
@@ -146,14 +146,13 @@ async def correct_proposal(
 )
 async def dispatch_correction(
     project_id: UUID, guide_id: UUID, compilation_id: UUID, correction_operation_id: UUID,
-    request: Annotated[tuple, Depends(get_correction_dispatch)],
+    request: Annotated[CorrectionDispatchRequest, Depends(get_correction_dispatch)],
 ) -> GuideProposalDispatchResponse:
     """Manually dispatch the selected correction; its identity makes retries idempotent."""
-    service, actor = request
     try:
-        return await service.dispatch(
+        return await request.service.dispatch(
             GuideProposalSelection(project_id=project_id, guide_id=guide_id, compilation_id=compilation_id),
-            correction_operation_id, actor=actor,
+            correction_operation_id, actor=request.actor,
         )
     except GuideProposalError as exc:
         raise proposal_http_error(exc) from exc

@@ -25,8 +25,11 @@ committed human request rather than synthesize automatic source consent.
 
 ### Allowed
 
-- PROJECTS proposal API schemas/router, setup response/diagnostic pointer and request composition dependencies;
+- PROJECTS typed public proposal/dispatch ports and schemas, API-owned proposal routes,
+  setup response/diagnostic pointer and request composition dependencies;
   `app/api/router.py`; explicit AUTH/CHECKERS/ART composition through public ports.
+  Shared replay-header parsing in `app/core/api_controls.py` replaces the
+  guide-router-private parser so API routes do not import private PROJECTS HTTP code.
 - Existing proposal service and correction request owner where needed for route
   scoping, transaction ownership and removal of superseded unconfigured paths.
 - Existing compilation request/live coordinator, queue and continuation owners
@@ -164,3 +167,12 @@ four public operations, manual worker admission, regression tests and synchroniz
 current documentation. It does not add another lifecycle, compiler, runtime,
 authorization permission or database schema. Shared consumer and import checks
 route construction through existing owner adapters without new private-edge debt.
+
+### Review repairs
+
+- POL05B-ARCH-001: HTTP routing belongs to the API layer. Typed public PROJECTS
+  proposal and dispatch ports replace the private-router factory and untyped
+  operation dependencies; existing business operations and transactions remain sole owners.
+- POL05B-CI-001: trace the extracted scripted runtime to the capability-growth
+  consumer and update it directly; full collection must prove no obsolete import remains.
+- POL05B-DOC-001: renumber the remaining-work dependency sequence consistently.

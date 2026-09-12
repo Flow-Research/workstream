@@ -14,7 +14,7 @@ from app.api.deps.authorization import (
     resolve_authorization_actor,
 )
 from app.api.deps.rate_controls import get_rate_control_service
-from app.core.api_controls import StructuredHTTPException
+from app.core.api_controls import StructuredHTTPException, parse_idempotency_key
 from app.db.session import get_db_session
 from app.modules.actors.service import ResolvedActor
 from app.modules.api_controls.service import RateControlService
@@ -40,15 +40,7 @@ def require_guide_mutation_key(
     idempotency_key: Annotated[str, Header(alias="Idempotency-Key", json_schema_extra={"format": "uuid"})],
 ) -> UUID:
     """Validate replay custody before actor provisioning."""
-    try:
-        return UUID(idempotency_key)
-    except ValueError as exc:
-        raise StructuredHTTPException(
-            status_code=422,
-            detail="Idempotency-Key must be a UUID",
-            error_code="validation_error",
-            error_message="Idempotency-Key must be a UUID",
-        ) from exc
+    return parse_idempotency_key(idempotency_key)
 
 
 async def guide_authorization_actor(

@@ -1,6 +1,9 @@
 """PROJECT-owned composition adapters."""
 
 from app.modules.projects.api.guide_documents import ProjectGuideDocumentScopePort
+from app.modules.projects.api.guide_proposals import GuideProposalOperationsPort, GuideCorrectionDispatchPort
+from app.modules.authorization.api.guide_proposal_review import GuideProposalAuthorizationPort
+from app.modules.authorization.api import ProjectGuideCompilationAuthorizationPort
 from collections.abc import Callable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentAccessFactory
@@ -126,21 +129,20 @@ def project_guide_document_scope_port(session: AsyncSession) -> ProjectGuideDocu
     return SqlAlchemyProjectGuideDocumentScope(session)
 
 
-def project_guide_proposal_router():
-    """Expose the PROJECTS-owned proposal router at the application composition root."""
-    from app.modules.projects.guide_proposal_router import router
-
-    return router
-
-
-def project_guide_proposal_service(session, authorization):
+def project_guide_proposal_service(
+    session: AsyncSession, authorization: GuideProposalAuthorizationPort,
+) -> GuideProposalOperationsPort:
     """Compose the sole proposal owner with explicit authority."""
     from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
 
     return GuideProposalService(session, authorization)
 
 
-def project_guide_correction_dispatch(session, authorization, *, material, pre, post, configuration):
+def project_guide_correction_dispatch(
+    session: AsyncSession, authorization: ProjectGuideCompilationAuthorizationPort, *,
+    material: GuideDocumentManifestPort, pre: PreSubmissionCapabilityProjection,
+    post: PostSubmitCatalogue, configuration: ProjectGuideRuntimeConfiguration,
+) -> GuideCorrectionDispatchPort:
     """Compose human correction admission and existing queue dispatch without inference."""
     from app.modules.projects.guide_compilation.correction_dispatch import GuideCorrectionDispatchService
     from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs

@@ -321,7 +321,7 @@ The next dependency-safe product sequence is:
    The new activation command replaces legacy economic readiness guards;
    physical deletion waits until all old consumers are gone, including checker
    and public Submission cutover. Physical deletion is not a prerequisite for `allow_review`.
-5. **Make tasks claimable from that generation.** TASK locks the complete guide
+4. **Make tasks claimable from that generation.** TASK locks the complete guide
    and policy context before `READY`. Claim copies it to TaskAssignment; it
    performs no ContributionPolicy selection. Submission later copies the
    assignment's attempt version.
@@ -330,7 +330,7 @@ The next dependency-safe product sequence is:
    correction feedback on blocking failures, and publishes ready admission only
    after the required preparation/custody checks. TASK then consumes that
    admission to create the immutable Submission with the same assignment lineage.
-6. **Produce current post-submit evidence and policy-governed routing.** Materialize the exact immutable
+5. **Produce current post-submit evidence and policy-governed routing.** Materialize the exact immutable
    Submission, execute the locked post-submit plan, persist one current result,
    activate only its fixed services, and automatically publish an exact
    human `allow_review` manifest on true when no blocking failure exists.
@@ -348,19 +348,19 @@ The next dependency-safe product sequence is:
    enabling false. This milestone creates the submitter contribution and
    applicable awards without live human queues/leases/decisions; it neither
    invents a reviewer nor removes the later human branch from v0.1.
-7. **Start the live REV path.** Complete packet, Review, and FinalAcceptance
+6. **Start the live REV path.** Complete packet, Review, and FinalAcceptance
    persistence; admit only canonical `allow_review`; claim a bounded lease and
    exact packet using the Submission-stamped ContributionPolicyVersion.
-8. **Make human review decisions economically complete.** Before the first live
+7. **Make human review decisions economically complete.** Before the first live
    Review commit, add the reviewer CON operation and reuse the shared acceptance
    operation already needed by the false branch. Every final decision records
    reviewer work; accept additionally records accepted submitter work. Do not
    duplicate the common persistence or submitter participant.
-9. **Complete revision and operations.** Preserve old attempts immutably;
+8. **Complete revision and operations.** Preserve old attempts immutably;
    rebase a continuing TaskAssignment only at the controlled human-revision
    boundary when the complete governed context changed. Finish recovery,
    fulfillment, reconciliation, audit, release controls, and legacy cleanup.
-10. **Release proof.** Expose stable APIs and frontend surfaces, exercise the
+9. **Release proof.** Expose stable APIs and frontend surfaces, exercise the
     complete path through real database, durable-job, storage, security, failure,
     and recovery tests, then run the internal pilot.
 

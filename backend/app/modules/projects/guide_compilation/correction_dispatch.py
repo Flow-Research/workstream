@@ -3,6 +3,10 @@
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.modules.authorization.api import ActorIdentityFacts, ProjectGuideCompilationAuthorizationPort
+from app.modules.projects.api.guide_proposals import GuideProposalSelection
+from .request_inputs import CompilationRequestInputs
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.modules.authorization.api import AuthorizationDenied, AuthorizationUnavailable, PreparedAuthorizationInvalid
@@ -20,11 +24,17 @@ from .diagnostics import compilation_setup_response
 class GuideCorrectionDispatchService:
     """Use canonical request custody, then publish only after its transaction commits."""
 
-    def __init__(self, session, authorization, inputs):
+    def __init__(
+        self, session: AsyncSession, authorization: ProjectGuideCompilationAuthorizationPort,
+        inputs: CompilationRequestInputs,
+    ) -> None:
         self.session = session
         self.requests = GuideCompilationService(session, authorization, request_inputs=inputs)
 
-    async def dispatch(self, selection, correction_operation_id: UUID, *, actor):
+    async def dispatch(
+        self, selection: GuideProposalSelection, correction_operation_id: UUID, *,
+        actor: ActorIdentityFacts,
+    ) -> GuideProposalDispatchResponse:
         """Scope an immutable correction ID before fresh human request admission."""
         try:
             async with self.session.begin():

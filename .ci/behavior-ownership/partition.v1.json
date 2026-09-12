@@ -77,6 +77,10 @@
       "target": "backend/app/api/routes/auth.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/routes/guide_proposals.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/routes/health.py"
     },
@@ -954,10 +958,6 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/projects/guide_proposal_router.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_setup_continuation.py"
     },
     {
@@ -1209,7 +1209,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "babcc43861e7965f3553008b5b2b821f9b4942f914c8b2cbdb7a0bbd21b57693",
+  "authority_digest": "d0feb365939052a068e7c303b2a30f0f02a89b66c0bccb4ca3598d7328822a87",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -1,6 +1,8 @@
 """HTTP composition for exact human guide proposal operations."""
 
 from dataclasses import dataclass
+from collections.abc import AsyncIterator
+from app.modules.projects.api.guide_proposals import GuideProposalOperationsPort, GuideCorrectionDispatchPort
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -22,16 +24,24 @@ class ProposalRequest:
     """One request's explicit authority and caller-owned SQL transaction."""
 
     session: AsyncSession
-    service: Any
+    service: GuideProposalOperationsPort
     actor: ActorIdentityFacts
     request_id: UUID
+
+
+@dataclass(frozen=True)
+class CorrectionDispatchRequest:
+    """Typed correction delivery owner and resolved human identity."""
+
+    service: GuideCorrectionDispatchPort
+    actor: ActorIdentityFacts
 
 
 async def get_proposal_request(
     request: Request,
     resolved: Annotated[Any, Depends(get_authorization_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-):
+) -> AsyncIterator[ProposalRequest]:
     """Discard identity refresh reads before the proposal's sole transaction."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
@@ -54,7 +64,7 @@ async def get_correction_dispatch(
     request: Request,
     resolved: Annotated[Any, Depends(get_authorization_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-):
+) -> AsyncIterator[CorrectionDispatchRequest]:
     """Compose the existing human compilation request port without a runtime."""
     from app.adapters.artifacts import guide_document_manifest_port
     from app.adapters.checkers import project_guide_approval_compiler
@@ -66,8 +76,8 @@ async def get_correction_dispatch(
     await session.rollback()
     _, pre, post = project_guide_approval_compiler()
     async with prepared_authorization_service(request, resolved, session) as prepared:
-        yield project_guide_correction_dispatch(
+        yield CorrectionDispatchRequest(project_guide_correction_dispatch(
             session, human_guide_compilation_authorization(prepared),
             material=guide_document_manifest_port(session), pre=pre, post=post,
             configuration=project_guide_runtime_configuration(get_settings()),
-        ), actor
+        ), actor)

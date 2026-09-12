@@ -338,3 +338,16 @@ def install_api_control_openapi(app: FastAPI) -> None:
         return schema
 
     app.openapi = openapi
+
+
+def parse_idempotency_key(idempotency_key: str) -> UUID:
+    """Parse the shared UUID replay header before identity or SQL work."""
+    try:
+        return UUID(idempotency_key)
+    except ValueError as exc:
+        raise StructuredHTTPException(
+            status_code=422,
+            detail="Idempotency-Key must be a UUID",
+            error_code="validation_error",
+            error_message="Idempotency-Key must be a UUID",
+        ) from exc
