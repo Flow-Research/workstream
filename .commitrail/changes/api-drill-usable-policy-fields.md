@@ -104,6 +104,15 @@ security plus QA/test-delta and documentation, combined proportionately.
 
 ## Evidence
 
+The full rate-paced client run exposed fixture expiry after ten minutes: a later
+revocation conflict received 401 `invalid_token` instead of reaching its intended
+409 assertion. Extend only the ephemeral local issuer's default lifetime to one
+hour. Explicit expired-token inputs and production verification remain unchanged.
+Prove signed fixture admission after 901 seconds and actual expired-token rejection;
+replay the real client run. Focused QA/test-delta review covers this fixture repair.
+The separate genuine-document run also exposed an environmental missing-SDK
+precondition; document installation of the existing runtime extra, not a fallback.
+
 API-DRILL-013 repair: the human authorized fixing service provisioning subjects
 containing NUL in this same PR. Extend the existing `OpaqueSubject` constraint in
 `backend/app/modules/authorization/service_actor_schemas.py`; preserve exact

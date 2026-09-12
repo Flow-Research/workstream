@@ -17,7 +17,8 @@ exclusion is not established by this group. Candidate listing is not a grant of
 task access. Exact row checks are recorded as response predicates, not additional
 nested field-index coverage entries.
 
-Project/guide text probes include all eight NUL-input regressions from
+Project/guide text probes retain the six surviving-field NUL regressions and
+reject the removed inline-content field. The historical eight-field finding is
 [API-DRILL-009](external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503).
 They require non-retryable 422 responses and valid same-key recovery. Fresh-key
 guide PATCH controls compare public fields except `updated_at`; they are real
@@ -52,6 +53,9 @@ must be outside the repository. The child server rejects an ambient backend
 `.env` file, binds only loopback, and receives fresh test-only HMAC secrets.
 No production Flow credentials, external model calls or storage providers are
 used. The caller is responsible for stopping its disposable PostgreSQL server.
+Local fixture tokens expire after one hour so rate-paced field drills can finish;
+explicit expired-token probes retain their past expiry and must still return 401.
+This changes neither deployed token verification nor authorization policy.
 Local server readiness has a bounded 90-second monotonic deadline to accommodate
 slow imports under machine load. Process exit or failure to become healthy still
 fails the drill; a slow or unsuccessful startup is not API execution evidence.
@@ -252,6 +256,10 @@ and a separately owned loopback Redis broker and actual Celery worker. It does
 not seed product rows or substitute a model/provider implementation. The private
 provider configuration contributes only `OPENAI_API_KEY` and project-agent
 settings, never another worktree's database, authority or storage configuration.
+Install the repository-declared runtime extra first (`uv sync --frozen --extra
+agents --extra dev` from `backend/`) and verify `import agents, openai` succeeds
+in the interpreter used for both the drill and its worker. A missing SDK can
+leave setup reserved without ever invoking the model; it is not usable-flow proof.
 
 Supply these environment variables to the isolated runner:
 
@@ -308,8 +316,19 @@ Database and bucket cleanup completed. Fourteen focused real PostgreSQL/MinIO
 regressions also passed, including unchanged terminal state and a single durable
 denial audit. These are local execution results, not hosted-suite evidence.
 
-The real model outcome was `sufficiency_blocked`: the original project requests
-archive bounds, content validation and post-submit audit evaluation not supported
-by the selectable catalogue. Those are legitimate project capability gaps, not
-API failures or human acceptance. This pass does not certify manager approval,
-activation, all public API fields, or a complete MCP handoff.
+That model outcome was `sufficiency_blocked`, with reported gaps concerning
+archive bounds, content validation and post-submit evaluation. A stored finding
+is evidence of the model's assessment, not proof that its capability mapping is
+correct. This pass does not certify manager approval, activation, all public API
+fields, or a complete MCP handoff.
+
+At integrated `dd943749`, a fresh two-PDF run reached `schema_invalid` without a
+sufficiency report. A separately isolated observation-only diagnostic rerun
+completed 34 HTTP checks and produced a blocked report. The first failure remains
+unexplained, not repaired by the second outcome. Both runs verified exact uploaded
+bytes and completed local resource cleanup. The second also checked findings
+lineage and denied inactive-resolver replay without changing setup or originals.
+Its claimed encryption-check gap needs owner review: ART already rejects encrypted
+ZIP entries. Its separate requests for project-specific expanded-size and member
+limits must not be confused with ART's existing startup safety bounds. These are
+follow-up observations, not new checker implementations or finished API coverage.

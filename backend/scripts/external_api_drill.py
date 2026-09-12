@@ -217,7 +217,9 @@ class TokenIssuer:
         now = int(time.time())
         claims = dict(iss=self.issuer, aud=self.audience, sub=subject,
                       jti=str(uuid4()), subject_kind="human", scope="workstream:access",
-                      iat=now, nbf=now - 5, exp=now + 600, roles=[])
+                      # Rate-paced full drills can exceed ten minutes on local hosts.
+                      # This is fixture lifetime only; explicit expiry probes override it.
+                      iat=now, nbf=now - 5, exp=now + 3600, roles=[])
         claims.update(overrides)
 
         def encode(value):

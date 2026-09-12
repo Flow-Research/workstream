@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
+import jwt
 
 SOURCE = Path(__file__).resolve().parents[1] / "backend/scripts/external_api_drill.py"
 SPEC = importlib.util.spec_from_file_location("external_api_drill", SOURCE)
@@ -18,6 +19,21 @@ SPEC.loader.exec_module(drill)
 
 
 class ContractTests(unittest.TestCase):
+    def test_fixture_token_survives_rate_pacing_but_expiry_is_still_enforced(self):
+        issuer = drill.TokenIssuer()
+        now = int(drill.time.time())
+        with patch.object(drill.time, "time", return_value=now - 901):
+            token = issuer.issue("paced-client")
+        claims = jwt.decode(token, issuer.secret, algorithms=["HS256"],
+                            audience=issuer.audience, issuer=issuer.issuer)
+        self.assertEqual(claims["sub"], "paced-client")
+        self.assertEqual(claims["exp"] - claims["iat"], 3600)
+        self.assertEqual(claims["roles"], [])
+        expired = issuer.issue("expired-client", exp=now - 60)
+        with self.assertRaises(jwt.ExpiredSignatureError):
+            jwt.decode(expired, issuer.secret, algorithms=["HS256"],
+                       audience=issuer.audience, issuer=issuer.issuer)
+
     def test_guide_oracle_normalizes_and_binds_exact_ordered_examples(self):
         body = drill.guide_payload("initial") | {"task_examples": [{"content": "名 claim"}, {"content": "Second"}]}
         expected = drill.guide_expectations(body, "project", "manager")
@@ -263,7 +279,7 @@ class ContractTests(unittest.TestCase):
         claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
         self.assertEqual(claims["roles"], [])
         self.assertEqual(claims["scope"], "workstream:access")
-        self.assertEqual(claims["exp"] - claims["iat"], 600)
+        self.assertEqual(claims["exp"] - claims["iat"], 3600)
         self.assertNotIn(issuer.secret, token)
 
     def test_response_predicates_reject_missing_malformed_and_extra_fields(self):
