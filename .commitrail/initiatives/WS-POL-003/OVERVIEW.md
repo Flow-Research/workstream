@@ -17,7 +17,7 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   approval custody and correction successors.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
-- Next usable boundary: AUTH-12F4 supplies proposal authorization, followed by POL-05B public review,
+- Next usable boundary: POL-05B public review using delivered AUTH-12F4 proposal authorization,
   approval and manual rerun. POL-05A owns the hidden operations and removes manual approval.
   Live setup consumes the [consolidated catalogue](../WS-ARCH-001/WS-ARCH-001-04A.md)
   and completed AUTH-12B2.

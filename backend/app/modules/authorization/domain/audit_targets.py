@@ -1,8 +1,9 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.guide_proposals import GuideProposalResourceContext
 from app.modules.authorization.domain.action_groups import (
-    GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS, SUBMISSION_POLICY_MUTATIONS,
+    GUIDE_BOUND_PROJECT_MANAGER_ACTIONS, SUBMISSION_POLICY_MUTATIONS,
 )
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext
@@ -57,11 +58,12 @@ def project_authority_audit_target(
             AdapterBindingMutationResourceContext,
             ProjectGuideProjectionResourceContext,
             ProjectSetupFinalizationResourceContext,
+            GuideProposalResourceContext,
         ),
     ):
         project_id = str(getattr(resource, "project_id", None) or resource.scope_project_id)
         return project_id, resource.resource_type, str(resource.resource_id), "project", project_id
-    if action_id in GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
+    if action_id in GUIDE_BOUND_PROJECT_MANAGER_ACTIONS:
         scope_project_id = getattr(resource, "scope_project_id", None)
         if scope_project_id is not None:
             project_id = str(scope_project_id)

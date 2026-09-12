@@ -137,7 +137,7 @@ and retained attempts without runtime configuration are excluded from reclaim. A
 results resume persistence and projection without another model call.
 
 POL-05A supplies hidden complete-proposal review, pre-submission approval and
-setup-wide correction. AUTH-12F4 and POL-05B still own public authorization and
+setup-wide correction. AUTH-12F4 supplies current Project Manager authority; POL-05B still owns public
 manager-facing exposure. The manual artifact-policy approval route is removed. Neither warning acknowledgement nor
 post-submit policy correction dispatches inference. Operators must not invoke
 projectors directly or rewrite retained attempt evidence.
@@ -165,8 +165,7 @@ The active review/revision policy setup endpoints are:
 
 Unified proposal approval and correction have no public route yet. The latest
 setup run exposes bounded diagnostics and output IDs; the hidden review package
-contains the complete pre/post proposal and catalogue-growth handoff. AUTH-12F4
-and POL-05B expose manager review, approval and manual rerun. Post-submit policy
+contains the complete pre/post proposal and catalogue-growth handoff. AUTH-12F4 supplies their authority; POL-05B exposes manager review, approval and manual rerun. Post-submit policy
 projection remains POL-06.
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
@@ -185,7 +184,7 @@ Policy truth remains in the canonical versioned policy rows, not the setup
 ledger. POL-04B owns live unified wiring; POL-05A/05B and POL-06A/06B own separate
 append-only approval/projection/correction operations linked to that receipt.
 The approval/post-policy actions remain unavailable until their exact
-AUTH-12F4/12G activation; this is the target operator flow, not a claim that
+POL-05B public composition and AUTH-12G activation; this is the target operator flow, not a claim that
 those commands are already live.
 
 An authorized Project Manager reviews the complete bounded proposal before
@@ -194,14 +193,14 @@ project rules using the canonical CHECKERS compiler. Post-submit policy is a
 separate deterministic projection of the same unified result; no evaluator
 runs during setup or approval.
 
-The planned exact-compilation review-package surface uses
+The internally implemented exact-compilation review-package operation uses
 `project.guide_compilation.review_package.read` (AUTH-12F4), requiring
 `project.guide.manage` from a covered Project Manager. Operator/Audit diagnostic
-authority does not grant access to the complete proposal. The separate planned
+authority does not grant access to the complete proposal. The separate implemented
 `project.guide_compilation.correction.request` permits only the covered Project
 Manager to correct the exact known terminal result. These are new object-scoped
-contracts, not capabilities already provided by status-only setup reads.
-POL-05B exposes them before approval; AUTH-12G/POL-06B separately provide the
+contracts with internal AUTH-12F4 authorization; status-only setup reads do not
+provide them. Public API wiring remains POL-05B work; AUTH-12G/POL-06B separately provide the
 exact post-policy draft read before post-policy approval.
 
 The post-submit checker setup read returns only bounded operator summaries:

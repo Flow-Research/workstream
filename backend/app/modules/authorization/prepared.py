@@ -1,6 +1,7 @@
 """Transaction-bound, single-use authorization for sensitive mutations."""
 
 from __future__ import annotations
+from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS
 
 from copy import Error as CopyError
 from contextlib import asynccontextmanager
@@ -32,6 +33,10 @@ from app.modules.authorization.domain.guide_compilation import (
     ProjectGuideCompilationExecuteResourceContext,
     ProjectGuideCompilationRequestResourceContext,
 )
+from app.modules.authorization.domain.guide_proposals import (
+    GUIDE_PROPOSAL_RESOURCE_BY_ACTION, parse_proposal_prepare, proposal_matches,
+)
+from app.modules.authorization.domain.prepared_submission_policy import parse_submission_policy_prepare
 from app.modules.authorization.domain.prepared_compilation import prepared_compilation_matches
 from app.modules.authorization.domain.contribution_policies import (
     CONTRIBUTION_POLICY_MUTATION_ACTIONS, ContributionPolicyMutationResourceContext,
@@ -52,6 +57,7 @@ from app.modules.authorization.domain.prepared_guide_mutations import parse_prep
 from app.modules.authorization.domain.guide_compilation_projections import (
     ProjectGuideProjectionResourceContext,
 )
+from app.modules.authorization.prepared_proposal_replay import validate_proposal_replay
 from app.modules.authorization.prepared_projection_replay import (
     parse_setup_bindings, setup_context_matches,
     validate_projection_replay,
@@ -80,7 +86,6 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
     PROJECT_MUTATION_RESOURCE_BY_ACTION,
-    PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION,
     ProjectCreateResourceContext,
     ProjectGuideMutationResourceContext,
     ProjectGuideSufficiencyMutationResourceContext,
@@ -211,6 +216,7 @@ class _PreparedAuthorizationBinding:
     submission_preparation_final_digest: str | None = None
     guide_compilation_context: dict | None = None
     guide_compilation_resource_digest: str | None = None
+    proposal_prepare_context: dict | None = None
     contribution_policy_context: dict | None = None
     contribution_policy_resource_digest: str | None = None
     adapter_binding_context: dict | None = None
@@ -567,7 +573,7 @@ class PreparedAuthorizationService:
             final_resource_context,
         ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        if not setup_context_matches(issuance.binding, final_resource_context):
+        if not proposal_matches(issuance.binding.proposal_prepare_context, final_resource_context) or not setup_context_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
@@ -588,7 +594,8 @@ class PreparedAuthorizationService:
         issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
-            await validate_projection_replay(
+            replay = validate_proposal_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS else validate_projection_replay
+            await replay(
                 self,
                 issuance,
                 expected_action_id,
@@ -686,58 +693,18 @@ class PreparedAuthorizationService:
         policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
         policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
         sufficiency: dict[str, object] = {}
-        submission_policy_context = submission_policy_resource_digest = None
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
+        try:
+            proposal_binding = parse_proposal_prepare(action_id, caller_input, scope, self._context)
+        except (TypeError, ValueError) as exc:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared proposal handle") from exc
         if action_id is ActionId.PROJECT_CREATE:
             operation_id, project_id, operation_generation = parse_project_create_binding(
                 dict(caller_input.request_value), PreparedAuthorizationHandleInvalid
             )
-        if not setup_bindings.get("guide_projection_prepare_context") and action_id in {
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
-        }:
-            try:
-                value = dict(caller_input.request_value)
-                for field in (
-                    "resource_id",
-                    "operation_id",
-                    "scope_project_id",
-                    "guide_id",
-                    "source_snapshot_id",
-                    "policy_id",
-                    "sufficiency_report_id",
-                ):
-                    value[field] = UUID(str(value[field]))
-                raw_successor_policy_id = value.get("successor_policy_id")
-                if raw_successor_policy_id is not None:
-                    value["successor_policy_id"] = UUID(str(raw_successor_policy_id))
-                raw_custody = value.get("setup_service_custody")
-                if raw_custody is not None:
-                    custody = dict(raw_custody)
-                    for field in (
-                        "setup_run_id",
-                        "scope_project_id",
-                        "guide_id",
-                        "source_snapshot_id",
-                        "task_id",
-                        "correlation_id",
-                    ):
-                        custody[field] = UUID(str(custody[field]))
-                    value["setup_service_custody"] = custody
-                resource = ProjectSubmissionArtifactPolicyMutationResourceContext.model_validate(
-                    value
-                )
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
-            expected_target = PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION[action_id]
-            if resource.target_kind != expected_target:
-                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-            submission_policy_context = resource.model_dump(mode="json")
-            submission_policy_resource_digest = authorization_resource_digest(resource)
+        submission_policy_context, submission_policy_resource_digest = parse_submission_policy_prepare(
+            action_id, caller_input.request_value, setup_bindings.get("guide_projection_prepare_context"),
+        )
         if not setup_bindings.get("guide_projection_prepare_context") and action_id in {
             ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
             ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
@@ -885,6 +852,7 @@ class PreparedAuthorizationService:
             ),
             **parse_prepared_adapter_binding(action_id, caller_input.request_value),
             **parse_prepared_contribution_policy(action_id, caller_input.request_value),
+            proposal_prepare_context=proposal_binding,
             **setup_bindings,
         )
 
@@ -916,6 +884,7 @@ class PreparedAuthorizationService:
             return admin_scope
         expected_project_resource = (
             PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
+            or GUIDE_PROPOSAL_RESOURCE_BY_ACTION.get(action_id)
             or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
             or (TaskAuthorityResourceContext if action_id in TASK_ACTIONS else None)
         )
@@ -932,15 +901,12 @@ class PreparedAuthorizationService:
             ActionId.PROJECT_GUIDE_CREATE,
             ActionId.PROJECT_GUIDE_UPDATE,
             ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
-        } and isinstance(resource, ProjectGuideMutationPrepareDenialResourceContext):
-            return PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT,
-                project_id=resource.scope_project_id,
-            )
-        if action_id in {
-            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-            ActionId.PROJECT_REVISION_POLICY_UPDATE,
-        } and isinstance(resource, ProjectPolicyMutationPrepareDenialResourceContext):
+        } and isinstance(resource, ProjectGuideMutationPrepareDenialResourceContext) or (
+            action_id in {
+                ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+                ActionId.PROJECT_REVISION_POLICY_UPDATE,
+            } and isinstance(resource, ProjectPolicyMutationPrepareDenialResourceContext)
+        ):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,

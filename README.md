@@ -508,8 +508,9 @@ Verified guide-source readiness automatically delivers one compilation. A ready
 result records both policy proposals and stops at a draft; an insufficient guide
 stops with findings. Automatic compilation ends without approving the proposals.
 POL-05A implements hidden Project Manager proposal review, pre-submission approval
-and setup-wide correction. Public authorization and manager-facing exposure remain
-AUTH-12F4/POL-05B work. The separate post-submission Celery worker evaluates submitted work.
+and setup-wide correction. AUTH-12F4 implements their exact current Project
+Manager authorization internally; public API wiring remains POL-05B work.
+The separate post-submission Celery worker evaluates submitted work.
 The local Celery command above includes Beat; start it before creating guide sources.
 
 The Beat scheduler must run alongside the Celery execution processes so

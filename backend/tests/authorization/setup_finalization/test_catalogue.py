@@ -120,7 +120,7 @@ def test_setup_existing_active_pairs_and_downstream_plans_are_preserved():
 
 
 def test_exact_active_action_inventory():
-    """Preserve finalization and the complete catalogue after TASK activation."""
+    """Preserve finalization and the complete catalogue after proposal activation."""
     from app.modules.authorization.catalogue import ACTION_DEFINITIONS
 
     assert {
@@ -166,6 +166,9 @@ def test_exact_active_action_inventory():
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+        ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,

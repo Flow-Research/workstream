@@ -1,6 +1,10 @@
 # Chunk Contract: WS-AUTH-001-12F4 - Unified Pre-Submit Approval Activation
 
-Status: Proposed after hidden WS-POL-003-05A; inactive. Risk: L1.
+Durable disposition: Complete. Risk: L1.
+
+Adopted implementation record: [AUTH-12F4](../../WS-AUTH-001-12F4.md).
+POL-05A is delivered; this contract supplies its authorization prerequisite
+for subsequent POL-05B public composition.
 
 ## Goal
 
@@ -23,16 +27,19 @@ intake, migration of product columns, or approval of a 12F3-only draft.
 
 ## Acceptance
 
-- Activate only `project.submission_artifact_policy.approve` for the covered
-  human Project Manager; every service and unrelated human denies.
-- Add proposed `project.guide_compilation.review_package.read` mapped to
+- All three actions are active for the covered human Project Manager:
+  `project.submission_artifact_policy.approve`,
+  `project.guide_compilation.review_package.read`, and
+  `project.guide_compilation.correction.request`.
+  Every service and unrelated human denies.
+- Complete-proposal read (`project.guide_compilation.review_package.read`) maps to
   `project.guide.manage`, requiring a current exact-project human Project
   Manager grant and a new exact compilation resource contract. Operator, Audit,
   service and foreign-project grants deny. The package contains guide-derived
   prose but excludes raw document payloads, runtime handles and replayable
   references. It grants no approval or correction power; existing status-only
   diagnostic authority is insufficient.
-- Add proposed `project.guide_compilation.correction.request` mapped to
+- Setup correction (`project.guide_compilation.correction.request`) maps to
   `project.guide_compilation.request` for the covered human Project Manager.
   It binds the exact known finalized predecessor, safe correction digest and
   unique successor request. It cannot retry an uncertain provider outcome or

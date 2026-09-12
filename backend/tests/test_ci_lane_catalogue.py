@@ -168,6 +168,10 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     shared_b = modules_by_lane[catalogue.PARTITIONED_SHARED_LANES[1]]
     assert shared_a == shared_b == set(catalogue.SHARED_FOUNDATION_MODULES)
     assert {
+        "tests/authorization/guide_proposals/test_concurrency.py",
+        "tests/authorization/guide_proposals/test_context.py",
+        "tests/authorization/guide_proposals/test_prepared.py",
+        "tests/authorization/guide_proposals/test_postgresql.py",
         "tests/authorization/setup_finalization/test_adapter.py",
         "tests/authorization/setup_finalization/test_catalogue.py",
         "tests/authorization/setup_finalization/test_prepared.py",

@@ -20,6 +20,10 @@ class TestLane:
 
 SHARED_FOUNDATION_MODULES = (
     "tests/authorization/test_guide_metadata_contracts.py",
+    "tests/authorization/guide_proposals/test_concurrency.py",
+    "tests/authorization/guide_proposals/test_context.py",
+    "tests/authorization/guide_proposals/test_prepared.py",
+    "tests/authorization/guide_proposals/test_postgresql.py",
     "tests/authorization/setup_finalization/test_adapter.py",
     "tests/authorization/setup_finalization/test_catalogue.py",
     "tests/authorization/setup_finalization/test_prepared.py",

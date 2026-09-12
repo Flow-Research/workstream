@@ -1,6 +1,8 @@
 """Deny-by-default request-scoped authorization kernel."""
 
 from __future__ import annotations
+from app.modules.authorization.domain.guide_proposals import GUIDE_PROPOSAL_RESOURCE_BY_ACTION
+from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS
 
 from collections.abc import Awaitable, Callable
 from types import MappingProxyType
@@ -19,9 +21,10 @@ from app.modules.authorization.catalogue import (
     ActionId,
     PermissionId,
 )
+from app.modules.authorization.domain.guide_manager_resources import guide_manager_resource_denial
 from app.modules.authorization.domain import adapter_bindings, contribution_policies, guide_compilation as compilation
 from app.modules.authorization.domain.action_groups import (
-    GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS as _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS,
+    GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
     SUBMISSION_POLICY_MUTATIONS as _SUBMISSION_POLICY_MUTATIONS,
     PROJECT_SCOPED_ADMIN_MUTATIONS, CONTEXT_DIGEST_ACTIONS,
 )
@@ -238,6 +241,7 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
         **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
+        **GUIDE_PROPOSAL_RESOURCE_BY_ACTION,
     }
 )
 
@@ -477,35 +481,10 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
-        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
-            if (
-                not isinstance(context, HumanAuthorizationContext)
-                or scope.kind is not PreparedAuthorityScopeKind.PROJECT
-                or scope.project_id is None
-            ):
-                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
-            locked = await self._admin.lock_request_actor(
-                context.identity_link_id, context.actor_profile_id
+        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS:
+            context, grant = await self._prepare_project_manager(
+                context, action.permission_id, scope, action_id,
             )
-            context = self._locked_human_context(locked, context)
-            grant = await self._admin.find_effective_grant(
-                context.actor_profile_id,
-                action.permission_id,
-                scope_project_id=scope.project_id,
-                for_update=True,
-                allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}),
-                exact_project_scope=action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
-            )
-            if grant is None:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
-            if action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST and (
-                grant.scope_type != "project" or grant.scope_project_id != str(scope.project_id)
-            ):
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
         elif action_id is ActionId.PROJECT_CREATE:
             if not isinstance(context, HumanAuthorizationContext):
                 raise PreparedAuthorizationUnsupported(
@@ -561,6 +540,38 @@ class AuthorizationService:
         )
         self._sealed_prelocked.add(authority)
         return authority
+
+    async def _prepare_project_manager(self, context, permission, scope, action_id):
+        """Lock the current human and covered manager grant before product resources."""
+        if (
+            not isinstance(context, HumanAuthorizationContext)
+            or scope.kind is not PreparedAuthorityScopeKind.PROJECT
+            or scope.project_id is None
+        ):
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
+        locked = await self._admin.lock_request_actor(
+            context.identity_link_id, context.actor_profile_id
+        )
+        context = self._locked_human_context(locked, context)
+        grant = await self._admin.find_effective_grant(
+            context.actor_profile_id,
+            permission,
+            scope_project_id=scope.project_id,
+            for_update=True,
+            allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}),
+            exact_project_scope=(action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST or action_id in GUIDE_PROPOSAL_ACTION_IDS),
+        )
+        if grant is None:
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
+        if (action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST or action_id in GUIDE_PROPOSAL_ACTION_IDS) and (
+            grant.scope_type != "project" or grant.scope_project_id != str(scope.project_id)
+        ):
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
+        return context, grant
 
     @staticmethod
     def _locked_human_context(locked, original) -> HumanAuthorizationContext:
@@ -629,7 +640,7 @@ class AuthorizationService:
                 and isinstance(resource_context, ProjectCreateResourceContext)
             )
             or (
-                action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS
+                action_id in _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS
                 and isinstance(
                     resource_context,
                     (
@@ -980,44 +991,12 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
                 matched_project_id = authority.scope_project_id
-        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_MUTATIONS:
+        elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS:
             denial = self._lifecycle_denial(context)
-            expected = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(
-                action_id
-            ) or compilation.COMPILATION_RESOURCE_BY_ACTION.get(action_id)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
                 denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if denial is None and (expected is None or not isinstance(resource_context, expected)):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-            if denial is None and (resource_context.scope_project_id != authority.scope_project_id):
-                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
-            guide_kind = PROJECT_GUIDE_TARGET_KIND_BY_ACTION.get(action_id)
-            if (
-                denial is None
-                and guide_kind is not None
-                and (resource_context.target_kind != guide_kind)
-            ):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-            sufficiency_kind = PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION.get(action_id)
-            if (
-                denial is None
-                and sufficiency_kind is not None
-                and (
-                    resource_context.target_kind != sufficiency_kind
-                    or resource_context.execution_kind != "human"
-                )
-            ):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-            submission_policy_kind = PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION.get(action_id)
-            if (
-                denial is None
-                and submission_policy_kind is not None
-                and (
-                    resource_context.target_kind != submission_policy_kind
-                    or resource_context.execution_kind != "human"
-                )
-            ):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None:
+                denial = guide_manager_resource_denial(action_id, resource_context, authority.scope_project_id)
             if denial is None and (
                 authority.matched_grant_id is None or authority.matched_grant_status != "active"
             ):

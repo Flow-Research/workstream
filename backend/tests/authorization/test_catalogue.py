@@ -1,4 +1,4 @@
-"""Exact closed catalogue and proposal actions' unavailable-by-default status."""
+"""Exact closed catalogue and active unified proposal authority."""
 
 from collections import Counter
 
@@ -98,8 +98,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 71,
-        ActionAvailability.PLANNED: 45,
+        ActionAvailability.ACTIVE: 74,
+        ActionAvailability.PLANNED: 42,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -111,8 +111,10 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
 @pytest.mark.parametrize("action", [
     ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
     ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
 ])
-def test_proposal_actions_remain_planned_without_executable_authority(action):
-    assert ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
-    with pytest.raises(ValueError, match="not active"):
-        resolve_executable_action(action)
+def test_proposal_actions_have_exact_executable_authority(action):
+    definition = resolve_executable_action(action)
+    assert definition is ACTION_BY_ID[action]
+    assert definition.availability is ActionAvailability.ACTIVE
+    assert definition.owner is ActionOwner.AUTH_12F4

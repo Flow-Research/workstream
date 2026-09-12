@@ -242,7 +242,7 @@ class ActionOwner(StrEnum):
     AUTH_12I = "WS-AUTH-001-12I"
     XINT_003_02B = "WS-XINT-003-02B"
     AUTH_12E = "WS-AUTH-001-12E"
-    AUTH_12F = "WS-AUTH-001-12F"
+    AUTH_12F4 = "WS-AUTH-001-12F4"
     AUTH_12F2 = "WS-AUTH-001-12F2"
     AUTH_12F3 = "WS-AUTH-001-12F3"
     XINT_002_06A = "WS-XINT-002-06A"
@@ -540,20 +540,20 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
         ActionOwner.AUTH_12F2,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
         PermissionId.PROJECT_GUIDE_MANAGE,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F4,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
         PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F4,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
-        ActionOwner.AUTH_12F,
+        ActionOwner.AUTH_12F4,
     ),
     _planned(
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE,
@@ -873,6 +873,13 @@ def _require_catalogue_counts() -> None:
         raise RuntimeError("authorization permission boundary mismatch")
 
 
+GUIDE_PROPOSAL_ACTION_IDS = frozenset({
+    ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
+    ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+})
+
+
 def _index_actions(
     definitions: tuple[ActionDefinition, ...],
 ) -> MappingProxyType[ActionId, ActionDefinition]:
@@ -891,6 +898,7 @@ def _index_actions(
         raise RuntimeError("authorization action catalogue is incomplete")
     active_actions = {
         *_CONTRIBUTION_POLICY_ACTION_IDS,
+        *GUIDE_PROPOSAL_ACTION_IDS,
         ActionId.ACTOR_PROFILE_READ_SELF,
         ActionId.ACTOR_PROFILE_UPDATE_SELF,
         ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ,

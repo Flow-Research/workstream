@@ -1,6 +1,6 @@
 # WS-AUTH-001 — Workstream authorization service
 
-Latest completed activation: [WS-ARCH-001-CP05](../WS-ARCH-001/WS-ARCH-001-CP05.md).
+Latest completed activation: [AUTH-12F4 proposal authority](WS-AUTH-001-12F4.md), following [CP05 ContributionPolicy authority](../WS-ARCH-001/WS-ARCH-001-CP05.md).
 Current remaining [plan](planning/PLAN.md) and [activation map](planning/CHUNK_MAP.md).
 
 Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
@@ -13,8 +13,9 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: hidden projections and atomic setup finalization have exact
   request-local authority through AUTH-12J and AUTH-12B2; the five hidden
   ContributionPolicy actions have exact Finance Authority through CP05.
-- Next usable boundary: AUTH-12F4 exact review/correction/approval authority
-  over delivered hidden POL-05A behavior → POL-05B manager-facing composition.
+- Completed proposal boundary: AUTH-12F4 exact-project manager read, correction
+  and pre-submit approval authority over hidden POL-05A behavior.
+- Next usable boundary: POL-05B manager-facing composition.
   Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
@@ -44,8 +45,8 @@ nor policy selection is authorized by the sufficiency action.
 
 1. POL-04B delivers live automatic compilation and exact AUTH-12B2 finalization.
    POL-05A adds hidden manager review, correction and pre-submit approval.
-   Next, AUTH-12F4 → POL-05B supplies public authority and manual dispatch.
-2. `12F4`, `12G`, and `12H`: activate stored pre-submit/post-submit and final
+   AUTH-12F4 supplies its authority; next POL-05B supplies public composition and manual dispatch.
+2. `12G` and `12H`: activate stored pre-submit/post-submit and final
    guide behavior only after their owner implementations and remaining CON CP06-CP07.
 3. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.
    AUTH-OUTBOX-01/02 bracket hidden CON-02B dispatch; ARCH-04E2 activates only

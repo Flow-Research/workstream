@@ -54,7 +54,7 @@ implement a second compiler or agent lifecycle; POL must not create broad
 AUTH-12E and AUTH-12F3 are merged transitional separate-inference paths. Their
 action-specific projection custody remains reusable, but POL-04B makes their
 independent model calls unreachable without aliases or fallbacks. Remaining
-AUTH-12F4, 12G, and 12H are remaining narrow authorization/activation gates placed
+AUTH-12F4 supplies proposal authority; 12G and 12H remain narrow authorization/activation gates placed
 after the corresponding hidden POL behavior and before its live cutover. They
 are not blanket prerequisites for POL-01.
 

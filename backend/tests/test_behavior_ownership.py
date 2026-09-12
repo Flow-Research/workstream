@@ -1798,3 +1798,27 @@ def test_partition_accepts_only_exact_guide_document_lookup_target() -> None:
             _partition(sorted({retained, *expected, "backend/app/modules/projects/unregistered_upload.py"})),
             trusted,
         )
+
+
+def test_partition_accepts_only_exact_auth12f4_targets() -> None:
+    expected = {
+        'backend/app/modules/authorization/domain/guide_manager_resources.py',
+        'backend/app/modules/authorization/domain/guide_proposals.py',
+        'backend/app/modules/authorization/domain/prepared_submission_policy.py',
+        'backend/app/modules/authorization/guide_proposal_authorization.py',
+        'backend/app/modules/authorization/prepared_proposal_replay.py',
+    }
+    assert ownership.AUTH_12F4_PARTITION_TARGETS == expected
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    current = _partition(sorted({retained, *expected}))
+    ownership._validate_additive_partition_transition(current, trusted)
+    wrong_owner = _partition(sorted({retained, *expected}))
+    next(item for item in wrong_owner["assignments"] if item["target"] == retained)["group"] = "lifecycle"
+    for invalid in (
+        _partition(sorted(expected)),
+        _partition(sorted({retained, *expected, "backend/app/modules/authorization/extra.py"})),
+        wrong_owner,
+    ):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(invalid, trusted)

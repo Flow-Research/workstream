@@ -30,7 +30,7 @@ def parse_setup_bindings(
     action_id: ActionId, caller_input: PreparedAuthorizationInput,
     scope: PreparedAuthorityScope, context: AuthorizationContext,
 ) -> dict:
-    """Parse exact setup-family bindings, retaining the legacy compilation semantics."""
+    """Parse exact setup-family bindings, including compilation request custody."""
     request_value = caller_input.request_value
     if not isinstance(request_value, dict):
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -45,8 +45,8 @@ def parse_setup_bindings(
         )
     except (TypeError, ValueError) as exc:
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle") from exc
-    legacy = {} if projection else parse_prepared_compilation(action_id, request_value)
-    return {**projection, **legacy, "setup_finalization_prepare_context": finalization}
+    compilation = {} if projection else parse_prepared_compilation(action_id, request_value)
+    return {**projection, **compilation, "setup_finalization_prepare_context": finalization}
 
 
 def setup_context_matches(binding: Any, resource: AuthorizationResourceContext) -> bool:

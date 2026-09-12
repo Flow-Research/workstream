@@ -691,10 +691,20 @@ permissions rather than switching one action's mapping based on token roles.
 No human role's allowed permission set is broadened by those proposed actions.
 
 The [AUTH-12F4 contract](../.commitrail/initiatives/WS-AUTH-001/planning/chunks/WS-AUTH-001-12F4-submission-policy-approval.md)
-also proposes exact complete-compilation review-package read and correction
-actions under existing diagnostic/request permissions. Their bounded resource
-facts require separate review; old status-only diagnostic authority is not
-automatically sufficient to expose a complete proposal.
+activates exact complete-compilation review-package read and correction under
+existing guide-management and compilation-request permissions. Only a current
+human Project Manager grant on the exact project qualifies; status-only
+diagnostic authority cannot expose a complete proposal.
+
+Proposal PREP locks the current identity and exact-project manager grant before
+PROJECTS locks the proposal. Complete read, approval and correction share that
+path; services and system-scoped management grants cannot consume it. AUTH binds
+its audit correlation to the POL operation ID while preserving the authenticated
+transport request ID. Exact replay checks fresh authority and the retained
+allowed decision, including operation correlation and the canonical business
+digest, without requiring the original transport request or writing another
+allow. Product transactions and immutable output ownership remain in PROJECTS.
+No public proposal endpoint is enabled by this authorization chunk.
 
 ### Action And Resource Registration
 
@@ -1237,7 +1247,9 @@ execution task, calls no provider, and does not make the hidden POL workflow liv
 | `project.submission_artifact_policy.create` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
 | `project.submission_artifact_policy.derive` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F3` |
 | `project.submission_artifact_policy.update` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F2` |
-| `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F4` |
+| `project.guide_compilation.review_package.read` (active) | `project.guide.manage` | `WS-AUTH-001-12F4` |
+| `project.guide_compilation.correction.request` (active) | `project.guide_compilation.request` | `WS-AUTH-001-12F4` |
+| `project.submission_artifact_policy.approve` (active) | `project.effective_policy.manage` | `WS-AUTH-001-12F4` |
 | `project.post_submit_checker_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
 | `project.post_submit_checker_policy.correction.request` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
 | `project.post_submit_checker_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
@@ -1254,7 +1266,7 @@ recover forward.
 the zero-activation PREP/replay/provenance foundation; 12F2 owns explicitly
 manual Project Manager drafts; 12F3 owns automatic fixed
 `workstream.project.setup` derivation and removes public inline derivation; and
-12F4 owns Project Manager approval plus the atomic effective/pre-submit chain.
+12F4 owns Project Manager authority over the POL-05A atomic effective/pre-submit chain.
 POL-04A2 provides the hidden finalization service and dependency-free AUTH
 contracts; its default authorization port remains unavailable. The
 `project_guide_setup_finalization` audit resource binds the immutable receipt
@@ -1268,17 +1280,16 @@ allow envelope and digest, including a null denial code, without another allow
 event. POL retains transaction and immutable receipt ownership. The default
 port remains unavailable; POL-04B explicitly composes the authorized adapter
 in the live Celery setup path. POL-05A delivers hidden complete proposal review,
-correction and pre-submit approval. AUTH-12F4 is next, followed by POL-05B public
-composition. Complete proposal content uses current exact-project manager
+correction and pre-submit approval. AUTH-12F4 supplies exact manager authority; POL-05B public composition remains pending. Complete proposal content uses current exact-project manager
 `project.guide.manage` authority; diagnostic-read authority alone is insufficient. AUTH-12G later gates deterministic
 post-submit policy work; neither approval gate is required for draft finalization.
 
 The 12F1 foundation binds each future submission-policy handle to the exact
 project/guide/source lineage, mutation target, operation and request digests,
 policy generation, actor/link and grant-or-fixed-service custody, and current
-root transaction. Approval also binds the immutable default-catalogue manifest,
-ordered and disabled entry configuration digests, compiler/bundle schema, and
-compiled/effective output hashes. Its replay reservation distinguishes human
+root transaction. Unified approval replaces the manual approval resource. Its canonical proposal
+commitments bind both catalogues, complete result/component hashes and the
+actual compiled/effective output hashes through the POL-owned target and receipt. Its replay reservation distinguishes human
 idempotency from fixed setup-service task custody. Manual mutations permit only
 `pending -> committed`. Fixed-service derivation uses the 12F3 one-way
 `reserved -> pending -> committed` state machine: `reserved` is committed before
@@ -1289,9 +1300,10 @@ the all-null unattributed shape until their owning route cutovers. 12F2 now
 activates only manual human create/update. Manual update appends a separately
 authorized successor, binds predecessor hash and successor identity through
 PREP/replay, and supersedes the predecessor in the same root transaction.
-Diagnostic sufficiency, legacy role strings, services, contributors, and
+Diagnostic sufficiency, token role strings, services, contributors, and
 agent-derived rows cannot authorize this exception. Fixed-service derive is
-active under 12F3; human approval remains planned for 12F4. Any durable
+active under 12F3; human unified-proposal authority is active under 12F4, with
+public exposure pending POL-05B. Any durable
 execution claim or replay row—including reserved or pending—or attributed
 provenance must be preserved. Submission-policy authorization audit events,
 including denied evidence, must also be preserved.

@@ -6,12 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
-from app.modules.authorization.api.guide_proposal_review import (
-    GuideProposalAuthorizationFacts,
-    GuideProposalAuthorizationLocator,
-    GuideProposalAuthorityReceipt,
-)
+from app.modules.authorization.api import ActorKind
 from app.modules.projects.api.guide_proposals import (
     GuideProposalApproval,
     GuideProposalCorrection,
@@ -25,45 +20,7 @@ from app.modules.projects.guide_compilation.proposal_authority import (
 )
 from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
 from app.core.hashing import canonical_json_hash
-from .test_contracts import target_values
-
-
-def authority_case():
-    actor = ActorIdentityFacts(uuid4(), uuid4(), ActorKind.HUMAN)
-    target = GuideProposalTarget(**target_values())
-    locator = GuideProposalAuthorizationLocator(
-        project_id=target.project_id,
-        guide_id=target.guide_id,
-        compilation_id=target.compilation_id,
-        actor_profile_id=actor.actor_profile_id,
-        identity_link_id=actor.identity_link_id,
-        action_id="project.submission_artifact_policy.approve",
-        operation_id=uuid4(),
-        request_id=uuid4(),
-    )
-    facts = GuideProposalAuthorizationFacts(
-        locator=locator,
-        finalization_id=target.finalization_id,
-        artifact_policy_id=target.artifact_policy_id,
-        setup_run_id=target.setup_run_id,
-        setup_generation=target.setup_generation,
-        target_digest=target.digest,
-        request_digest="sha256:" + "a" * 64,
-        output_digest="sha256:" + "b" * 64,
-        current_approval_operation_id=None,
-        current_approval_output_digest=None,
-    )
-    receipt = GuideProposalAuthorityReceipt(
-        actor_profile_id=actor.actor_profile_id,
-        identity_link_id=actor.identity_link_id,
-        admin_role_grant_id=uuid4(),
-        authorization_decision_event_id=uuid4(),
-        action_id=locator.action_id,
-        permission_id="project.effective_policy.manage",
-        scope_project_id=target.project_id,
-        resource_context_digest=facts.digest,
-    )
-    return actor, target, facts, receipt
+from .contract_support import authority_case, target_values
 
 
 @pytest.mark.parametrize(
@@ -92,7 +49,12 @@ def test_authority_rejects_lookalike_receipts_and_service_actors():
     actor, _, facts, receipt = authority_case()
     for supplied, identity in (
         (SimpleNamespace(**asdict(receipt)), actor),
-        (receipt, replace(actor, actor_kind=ActorKind.SERVICE, service_identity="workstream.project.setup")),
+        (
+            receipt,
+            replace(
+                actor, actor_kind=ActorKind.SERVICE, service_identity="workstream.project.setup"
+            ),
+        ),
     ):
         with pytest.raises(GuideProposalError, match="authority_unavailable"):
             require_proposal_authority(supplied, facts, identity, "project.effective_policy.manage")
@@ -205,13 +167,18 @@ def test_manager_commands_reject_unknown_server_owned_fields(model, extra):
 
 
 def test_complete_proposal_read_requires_manager_content_permission():
-    from app.modules.authorization.catalogue import ACTION_BY_ID, ActionId, PermissionId, ActionAvailability
+    from app.modules.authorization.catalogue import (
+        ACTION_BY_ID,
+        ActionId,
+        PermissionId,
+        ActionAvailability,
+    )
     from app.modules.authorization.policy import ADMIN_ROLE_PERMISSIONS
     from app.modules.authorization.schemas import AdminRole
 
     definition = ACTION_BY_ID[ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ]
     assert definition.permission_id is PermissionId.PROJECT_GUIDE_MANAGE
-    assert definition.availability is ActionAvailability.PLANNED
+    assert definition.availability is ActionAvailability.ACTIVE
     assert definition.permission_id in ADMIN_ROLE_PERMISSIONS[AdminRole.PROJECT_MANAGER]
     for role in (AdminRole.OPERATOR, AdminRole.AUDIT_AUTHORITY):
         assert PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ in ADMIN_ROLE_PERMISSIONS[role]

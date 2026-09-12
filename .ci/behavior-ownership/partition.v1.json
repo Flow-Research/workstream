@@ -414,7 +414,15 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/guide_manager_resources.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/guide_mutations.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/guide_proposals.py"
     },
     {
       "group": "auth",
@@ -435,6 +443,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/domain/prepared_service.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/prepared_submission_policy.py"
     },
     {
       "group": "auth",
@@ -459,6 +471,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/guide_compilation_projections.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/guide_proposal_authorization.py"
     },
     {
       "group": "auth",
@@ -495,6 +511,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared_projection_replay.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_proposal_replay.py"
     },
     {
       "group": "auth",
@@ -1177,7 +1197,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "c033be40e196010f86f9019b73dfbefa1586f6b60dd532014e78c1747c97107d",
+  "authority_digest": "ab5fe482961fb2de10d664868dafaabf6a8e828ff1fdcb61ec18cd9cf024d4f9",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
