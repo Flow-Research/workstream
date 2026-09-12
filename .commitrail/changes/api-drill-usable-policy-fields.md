@@ -22,6 +22,52 @@ applicable. A passing example or aggregate count is not endpoint completion.
 
 ## Bounded change
 
+### Project archive-limit follow-through
+
+The human explicitly authorizes completing the genuine-guide archive limits in
+this same PR. Source inspection corrects the earlier interpretation:
+`limit_package_size` already compares the verified manifest's total expanded
+bytes with `maximum_package_size_bytes`. Clarify that existing field in the
+model-facing proposal schema and current documentation; do not add a second
+expanded-size implementation. Add only `maximum_archive_entries`, an optional
+strict positive integer counting all outer ZIP members (files and directories).
+Null means no additional project limit, not removal of platform safety limits.
+Nested archives remain file entries; this is not a recursive archive-entry count.
+
+Extend existing PROJECTS canonical/default/effective policy merging (minimum
+non-null), model proposal projection, TASK locked-policy summary, CHECKERS
+catalogue/compiler and the single effective-plan processor. Enforce member
+count against ART's verified manifest, never caller declarations. Keep the
+existing ART inspector and platform resource ceilings unchanged. Both size and
+count failures block intake through existing evidence routing, not acceptance.
+The approved policy hash and compiled bundle bind both limits; missing or altered
+required rules fail closed. Do not expose hidden APIs or create a parallel checker.
+
+Additional allowed files: `backend/app/interfaces/project_agents.py`, existing
+PROJECTS `schemas.py`, `service.py` and
+`guide_compilation/projection_payloads.py`; TASK `schemas.py` and `service.py`;
+CHECKERS `catalogue.py`, `compiler.py`, `pre_submit_execution.py`, `service.py`;
+their existing focused policy/compiler/catalogue/execution/task-summary tests,
+and the existing drill docs, roadmap and this record. Existing structural debt
+must not grow; extract a cohesive helper within its owning module if necessary.
+No migrations, authority changes, retained-data rewrites, new public routes,
+compatibility variants, provider fakes or CI/coverage weakening.
+
+Risk L1. Plan review covers architecture and proof feasibility; focused final
+architecture/security and QA/test-delta/docs reviews cover the changed owners.
+Acceptance: schema rejects booleans, nonintegers and nonpositive counts;
+projection preserves explicit count; effective defaults cannot be weakened;
+compiler rejects missing/weakened rules; real ZIP processor probes prove exact
+size/count boundaries, including directory members and compressed-vs-expanded
+bytes. Regressions must detect disabled limit enforcement. Run focused tests,
+the same two-PDF genuine-provider drill with isolated resources and exact stored
+hash/replay checks, then hosted full CI. Retain failed runs and distinguish
+public setup proof from hidden intake execution proof. Update incorrect prior
+gap interpretations explicitly rather than rewriting historical evidence.
+Human focus: one canonical expanded-byte limit, one member-count rule, unchanged
+platform safety and authorization, and real drill results rather than inferred
+readiness.
+
 ### Same-PR genuine-guide follow-through
 
 The human additionally requested resolving the genuine-guide drill findings
