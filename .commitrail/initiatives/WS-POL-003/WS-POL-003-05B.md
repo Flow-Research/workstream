@@ -181,3 +181,8 @@ route construction through existing owner adapters without new private-edge debt
 - POL05B-DOC-001: renumber the remaining-work dependency sequence consistently.
 - The shared OpenAPI inventory explicitly adds four protected proposal routes and
   their action IDs while preserving the retained inventory digests.
+- POL05B-CI-002: shared correction fixtures compose the canonical delivery port
+  from explicit inputs without importing Celery bootstrap. They use the shared
+  scripted runtime and retain actual admission, AUTH, execution, projection,
+  finalization, one-call and immutable-chain assertions. The worker dispatch
+  test supplies broker configuration before importing the worker.

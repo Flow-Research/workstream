@@ -15,16 +15,16 @@ from .public_support import proposal_client, proposal_path
 
 @pytest.mark.parametrize("broker_failure", [False, True])
 async def test_manual_dispatch_retains_one_human_request_and_one_execution(
-    clean_postgres_database, monkeypatch, broker_failure,
+    isolated_database_env, monkeypatch, broker_failure,
 ):
     from app.core.config import get_settings
     from app.core import project_agents
     from app.modules.projects import setup_queue
-    from app.workers import project_setup as worker
 
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "memory://")
-    monkeypatch.setenv("WORKSTREAM_CELERY_RESULT_BACKEND", "cache+memory://")
+    monkeypatch.setenv("WORKSTREAM_CELERY_RESULT_BACKEND_URL", "cache+memory://")
     get_settings.cache_clear()
+    from app.workers import project_setup as worker
     monkeypatch.setattr(project_agents, "project_guide_runtime_configuration", lambda settings: runtime_configuration())
     monkeypatch.setattr(worker, "guide_document_access_runtime", lambda sessions,*args:document_access(*args))
     runtime = ScriptedGuideRuntime()
@@ -36,7 +36,7 @@ async def test_manual_dispatch_retains_one_human_request_and_one_execution(
             raise setup_queue.ProjectSetupQueueError("broker unavailable")
         return values["task_id"]
     monkeypatch.setattr(setup_queue, "enqueue_project_guide_compilation", enqueue)
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, _):
+    async with proposal_case(isolated_database_env) as (_, factory, command, actor, _):
         path = proposal_path(command)
         async with proposal_client(factory, actor) as client:
             package = await client.get(path+"/proposal")

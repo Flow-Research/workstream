@@ -260,35 +260,37 @@ async def request_corrected_attempt(factory, actor, correction):
 async def finalize_corrected_attempt(factory, values, actor, correction):
     """Run a scripted result through actual execution, projections and finalization."""
     from app.adapters.artifacts import guide_document_manifest_port
+    from app.adapters.auth import (
+        artifact_policy_projection_authorization, guide_compilation_execution_authority,
+        guide_compilation_request_authority, guide_sufficiency_projection_authorization,
+        setup_finalization_authorization,
+    )
+    from app.adapters.checkers import project_guide_approval_compiler
+    from app.adapters.projects import project_guide_compilation_delivery_port
     from app.modules.projects.api import ProjectGuideSetupFinalizationCommand
     from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
     from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
-    from app.workers.project_setup import _coordinator
-    from tests.projects.guide_compilation.test_hidden_orchestrator_postgresql import _Runtime, _port
-    from tests.projects.guide_compilation.helpers import result
+    from tests.projects.guide_compilation.helpers import runtime_configuration
+    from tests.projects.guide_compilation.runtime_fixtures import ScriptedGuideRuntime, document_access
 
     await request_corrected_attempt(factory, actor, correction)
-    from app.modules.projects.api.guide_documents import GuideDocumentManifestRequest
-    from app.interfaces.project_agents import GuideEvidenceRef
     async with factory() as session:
         setup = await session.get(ProjectSetupRun, str(correction.successor_setup_run_id))
-        manifest = await guide_document_manifest_port(session).load(GuideDocumentManifestRequest(
-            project_id=values["project"], guide_id=values["guide"],
-            guide_source_snapshot_id=setup.source_snapshot_id,
-            project_setup_run_id=correction.successor_setup_run_id,
-            setup_generation=correction.successor_setup_generation,
-        ))
-    evidence_refs = tuple(GuideEvidenceRef(
-        source_item_id=document.source_item_id, document_version_id=document.ingest_id,
-        sha256=document.sha256,
-    ) for document in manifest.documents)
-    outcome = result()
-    outcome = outcome.model_copy(update={"findings": tuple(
-        finding.model_copy(update={"evidence_refs": evidence_refs}) for finding in outcome.findings
-    )})
-    runtime = _Runtime(outcome)
-    coordinator = _coordinator(factory)
-    coordinator._execution = _port(factory, runtime)
+    runtime = ScriptedGuideRuntime()
+    _, pre, post = project_guide_approval_compiler()
+    coordinator = project_guide_compilation_delivery_port(
+        factory,
+        material_factory=guide_document_manifest_port,
+        document_access_factory=document_access,
+        pre_capabilities=pre, post_capabilities=post,
+        request_authority=guide_compilation_request_authority,
+        execution_authority=guide_compilation_execution_authority,
+        configuration_factory=runtime_configuration,
+        runtime_factory=lambda configuration: runtime,
+        sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
+        policy_authorization_factory=artifact_policy_projection_authorization,
+        finalization_authorization_factory=setup_finalization_authorization,
+    )
     delivery = ProjectGuideCompilationDelivery(
         project_id=values["project"], guide_id=values["guide"],
         source_snapshot_id=setup.source_snapshot_id,
