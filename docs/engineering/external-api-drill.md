@@ -41,7 +41,7 @@ in `WORKSTREAM_TEST_ADMIN_DATABASE_URL`:
 ```sh
 WORKSTREAM_ENVIRONMENT=local .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /absolute/private/output/database.json \
-  --timeout-seconds 480 -- .venv/bin/python scripts/external_api_drill.py \
+  --timeout-seconds 1200 -- .venv/bin/python scripts/external_api_drill.py \
   --isolation-metadata /absolute/private/output/database.json \
   --report /absolute/private/output/report.json
 ```
@@ -71,7 +71,7 @@ backend/.venv/bin/python -m unittest scripts.test_external_api_drill
 The separate `backend/scripts/admin_api_drill.py` entry point reuses this runner
 for twenty HTTP-created human profiles, bootstrap and administrative authority.
 Run the same isolated command above with `scripts/admin_api_drill.py` in place
-of `scripts/external_api_drill.py` and allow a 900-second timeout for rate pacing.
+of `scripts/external_api_drill.py` and retain the 1200-second timeout for rate pacing.
 It performs actual local bootstrap CLI calls and read-only isolated-database
 snapshots to check forbidden authority/state changes. All later mutations use
 HTTP. The original no-product-SQL-write/no-disabled-guard rules still apply.
@@ -270,7 +270,9 @@ Supply these environment variables to the isolated runner:
 - `WORKSTREAM_TEST_MINIO_ENDPOINT`: local MinIO endpoint supported by the isolated runner.
 
 Invoke the guide entry point using the same `--isolation-metadata` and `--report`
-arguments. Use a Python environment with the repository's agent dependencies.
+arguments and `--timeout-seconds 2400` on the isolated runner to cover its
+1800-second setup observation window plus startup and cleanup. Use a Python
+environment with the repository's agent dependencies.
 Real model execution can incur provider usage; it requires explicit approval.
 The operator owns broker teardown. The runner verifies database/bucket cleanup;
 the entry point stops its API and Celery worker even when a scenario fails.
