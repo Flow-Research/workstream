@@ -61,6 +61,17 @@ plain invocation passed 86 tests but could not set up the database-backed startu
 test; it is not a complete catalogue-suite pass. Real-provider replay and the
 unexplained invalid result remain separate evidence obligations.
 
+Follow-through evidence at clean `8b79daf7`: compilation contracts, the complete
+archive inspector suite and catalogue snapshot passed 109 tests; the complete
+catalogue suite separately passed 21 tests with isolated PostgreSQL and confirmed
+cleanup. Focused architecture and QA/test-delta/docs reviews found no findings.
+The same two-PDF real-provider replay completed 33 HTTP checks, reported only
+the two genuine project-limit gaps, preserved original hashes and denied replay
+after resolver deactivation. All owned resources were cleaned up. The SDK
+redaction-aware private observer was calibrated with invalid structured output;
+the real replay produced no validation exception. This verifies the metadata
+repair, not the cause of the earlier isolated `schema_invalid` result.
+
 Allowed: `backend/scripts/external_api_drill.py`,
 `scripts/test_external_api_drill.py`, `docs/engineering/external-api-drill.md`,
 `docs/engineering/external-api-drill-findings.md`, `docs/roadmap_status.md`,

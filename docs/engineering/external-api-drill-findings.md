@@ -465,6 +465,16 @@ the violated invariant is not established. Preserve that failed run and do not
 claim a later valid blocked report explains or repairs it. Real-model semantic
 reverification remains distinct from deterministic catalogue-contract tests.
 
+Fresh real-provider replay at `8b79daf7` completed 33 HTTP checks with the same
+two original PDFs. The valid blocked report identified only the requested
+expanded-size and member-count limits as blocking gaps; encryption was no longer
+reported unsupported. Both original-object hashes, exact upload replay and
+deactivated-resolver denial passed, with isolated database and MinIO cleanup
+confirmed. No validation rejection occurred, so this run verifies the metadata
+repair but does not diagnose the earlier `schema_invalid` failure. The private
+observer was calibrated to record validation types before SDK redaction without
+retaining provider output or changing the rejection path.
+
 Use the [new external-client drill](external-api-drill.md), not the older seeded
 API drill. Keep unresolved failures red until product repairs actually satisfy
 them; preserve the passing regressions for repaired defects. Run the applicable
