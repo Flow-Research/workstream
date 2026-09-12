@@ -492,6 +492,13 @@ clarifies exact root paths. The successful replay does not diagnose the failed
 run; no sanitized validation exception was captured in that successful replay.
 Both isolated runs completed database, role, MinIO and broker cleanup.
 
+The real-provider replay at `1ca00cea` completed 35 HTTP checks with both original
+PDFs and verified both stored originals before and after the denied resolver
+replay. Its valid blocked report no longer identified root placement, expanded
+bytes or entry counts as unavailable. It identified only the separate ten MiB
+compressed archive limit as unsupported. This is partial coverage, not guide
+approval or activation; the earlier `schema_invalid` failures remain unexplained.
+
 The guide separately requests a compressed ZIP cap. Do not conflate that request
 with the existing expanded-byte limit or claim full guide coverage from the
 absence of a model-reported gap. This additional capability needs explicit

@@ -743,7 +743,7 @@ The merge contract is executable per field:
 | `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
 | `maximum_package_size_bytes` | minimum non-null total expanded ZIP byte limit |
-| `maximum_archive_entries` | minimum non-null outer ZIP member limit, including directories |
+| `maximum_archive_entries` | minimum non-null normalized outer-ZIP tree entry limit, including implied parent directories |
 | `packaging` | restrictive merge; conflicts block activation |
 
 A required artifact or evidence rule matching a forbidden artifact rule blocks

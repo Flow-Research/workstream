@@ -283,8 +283,8 @@ cannot be reused as post-submission review-gate evidence. See the
   The model-facing mandatory archive-entry capability explicitly names existing
   encryption, symbolic-link and special-file rejection. The existing package-size
   rule enforces verified expanded bytes, now explicit in the proposal schema.
-  The optional `maximum_archive_entries` policy adds a compiled, blocking outer
-  ZIP member-count rule (files and directories), preserving tighter default
+  The optional `maximum_archive_entries` policy adds a compiled, blocking normalized
+  outer-ZIP tree entry limit, including implied parent directories, preserving tighter default
   limits and ART safety ceilings. This does not expose public submission intake.
   Transient pre-send retries use bounded backoff and a circuit breaker; the
   default request timeout is 300 seconds, separate from the whole-run timeout.

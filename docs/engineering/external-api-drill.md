@@ -342,6 +342,6 @@ limits must not be confused with ART's existing startup safety bounds. These are
 historical observations, not finished API coverage. Subsequent source tracing
 confirmed the existing package-size rule already enforces expanded bytes; its
 proposal field now explains that meaning. The new `maximum_archive_entries`
-rule adds the missing outer ZIP member count, including directories, through
+rule limits normalized outer-ZIP tree entries, including implied parent directories, through
 the same locked policy/compiler path. Neither change exposes hidden intake APIs.
 Fresh real-provider execution must retain its own exact target and results.
