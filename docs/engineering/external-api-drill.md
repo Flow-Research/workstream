@@ -339,4 +339,9 @@ lineage and denied inactive-resolver replay without changing setup or originals.
 Its claimed encryption-check gap needs owner review: ART already rejects encrypted
 ZIP entries. Its separate requests for project-specific expanded-size and member
 limits must not be confused with ART's existing startup safety bounds. These are
-follow-up observations, not new checker implementations or finished API coverage.
+historical observations, not finished API coverage. Subsequent source tracing
+confirmed the existing package-size rule already enforces expanded bytes; its
+proposal field now explains that meaning. The new `maximum_archive_entries`
+rule adds the missing outer ZIP member count, including directories, through
+the same locked policy/compiler path. Neither change exposes hidden intake APIs.
+Fresh real-provider execution must retain its own exact target and results.

@@ -357,6 +357,15 @@ primitives such as:
 - `require_attestation`
 - `limit_file_size`
 - `limit_package_size`
+- `limit_archive_entries`
+
+`limit_package_size` evaluates total expanded bytes from ART's verified manifest,
+not compressed upload size. `limit_archive_entries` evaluates that manifest's
+outer ZIP member count, including directory entries. Nested archives count as
+files; this rule does not recursively unpack them. Project count is an optional
+strict positive integer; null adds no project limit. Both rules preserve ART's
+independent platform safety ceilings and block intake through the existing
+effective-plan result, without creating acceptance or exposing hidden routes.
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
 

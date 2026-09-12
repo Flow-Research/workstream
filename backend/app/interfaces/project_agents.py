@@ -280,7 +280,14 @@ class SubmissionArtifactPolicyProposal(BaseModel):
 
     packaging: Literal["zip"] = "zip"
     maximum_file_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
-    maximum_package_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
+    maximum_package_size_bytes: StrictInt = Field(
+        gt=0, le=10 * 1024 * 1024 * 1024,
+        description="Maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes.",
+    )
+    maximum_archive_entries: StrictInt | None = Field(
+        default=None, gt=0,
+        description="Maximum outer ZIP members, counting files and directory entries. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
+    )
     allowed_storage_schemes: tuple[Literal["artifact"], ...] = ("artifact",)
     required_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
         default=(), max_length=100,

@@ -222,6 +222,7 @@ WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY: dict[str, Any] = {
     "allowed_storage_schemes": DEFAULT_ALLOWED_STORAGE_SCHEMES,
     "maximum_file_size_bytes": None,
     "maximum_package_size_bytes": None,
+    "maximum_archive_entries": None,
     "packaging": {},
 }
 
@@ -680,6 +681,7 @@ class ProjectService:
             ),
             "maximum_file_size_bytes": policy_body.get("maximum_file_size_bytes"),
             "maximum_package_size_bytes": policy_body.get("maximum_package_size_bytes"),
+            "maximum_archive_entries": policy_body.get("maximum_archive_entries"),
             "packaging": packaging,
         }
 
@@ -792,6 +794,9 @@ class ProjectService:
             "allowed_storage_schemes": allowed_storage_schemes,
             "maximum_file_size_bytes": maximum_file_size_bytes,
             "maximum_package_size_bytes": maximum_package_size_bytes,
+            "maximum_archive_entries": self._minimum_non_null(
+                default_policy["maximum_archive_entries"], project_policy["maximum_archive_entries"]
+            ),
             "packaging": effective_packaging,
         }
         return effective

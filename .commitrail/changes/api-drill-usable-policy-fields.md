@@ -46,7 +46,8 @@ required rules fail closed. Do not expose hidden APIs or create a parallel check
 Additional allowed files: `backend/app/interfaces/project_agents.py`, existing
 PROJECTS `schemas.py`, `service.py` and
 `guide_compilation/projection_payloads.py`; TASK `schemas.py` and `service.py`;
-CHECKERS `catalogue.py`, `compiler.py`, `pre_submit_execution.py`, `service.py`;
+CHECKERS `catalogue.py`, `compiler.py`, `pre_submit_execution.py`, `service.py`,
+and `api/pre_submit.py` (the closed result-code list for the new failure);
 their existing focused policy/compiler/catalogue/execution/task-summary tests,
 `docs/architecture_data_model.md`,
 `docs/decision_0011_submission_artifact_policy_drives_pre_submit.md`,

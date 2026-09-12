@@ -137,6 +137,11 @@ def build_project_pre_submit_checker_spec(
                 {"maximum_package_size_bytes": effective_policy["maximum_package_size_bytes"]},
             )
         )
+    if effective_policy.get("maximum_archive_entries") is not None:
+        rules.append(_rule(
+            "limit_archive_entries", ["maximum_archive_entries"],
+            {"maximum_archive_entries": effective_policy["maximum_archive_entries"]},
+        ))
     packaging = effective_policy.get("packaging", {})
     if packaging.get("package_required") or packaging.get("allowed_package_formats"):
         rules.append(_rule("require_packaging", ["packaging"], packaging))
@@ -335,6 +340,16 @@ def _validate_rule_coverage(effective_policy: dict[str, Any], rules: list[dict[s
             f"checker spec omits required primitive rules: {', '.join(omitted_primitives)}"
         )
     by_primitive = {rule["primitive"]: rule for rule in rules}
+    maximum_entries = effective_policy.get("maximum_archive_entries")
+    if maximum_entries is not None:
+        _require_blocking_rule(by_primitive, "limit_archive_entries")
+        config = by_primitive["limit_archive_entries"]["config"]
+        if (
+            type(maximum_entries) is not int or maximum_entries <= 0
+            or type(config.get("maximum_archive_entries")) is not int
+            or config != {"maximum_archive_entries": maximum_entries}
+        ):
+            raise PreSubmitCheckerCompilerError("checker spec weakens archive entry limit")
     _require_warning_rule(by_primitive, "warn_low_quality_generated_artifact")
     _require_blocking_rule(by_primitive, "validate_submission_packet")
     _require_config_values(
@@ -536,6 +551,8 @@ def _expected_primitives(effective_policy: dict[str, Any]) -> set[str]:
         expected.add("limit_file_size")
     if effective_policy.get("maximum_package_size_bytes") is not None:
         expected.add("limit_package_size")
+    if effective_policy.get("maximum_archive_entries") is not None:
+        expected.add("limit_archive_entries")
     packaging = effective_policy.get("packaging", {})
     if not isinstance(packaging, dict):
         raise PreSubmitCheckerCompilerError(

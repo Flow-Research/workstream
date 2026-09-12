@@ -35,6 +35,34 @@ from app.modules.projects.post_submit_policy import DEFAULT_DURABLE_CHECKERS
 
 
 SHA256 = "sha256:" + "a" * 64
+
+
+@pytest.mark.parametrize("project_limit, default_limit, expected", [
+    (100, None, 100), (None, 50, 50), (100, 50, 50), (20, 50, 20), (None, None, None),
+])
+def test_archive_limit_projection_and_default_floor(monkeypatch, project_limit, default_limit, expected):
+    from app.modules.projects import service
+    from app.modules.projects.guide_compilation.projection_payloads import policy_body
+
+    proposal = SubmissionArtifactPolicyProposal(
+        maximum_file_size_bytes=1000, maximum_package_size_bytes=2000,
+        maximum_archive_entries=project_limit,
+    )
+    monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+                        "maximum_archive_entries", default_limit)
+    body = policy_body(None, proposal)
+    assert body["maximum_archive_entries"] == project_limit
+    effective = service.ProjectService(None)._merge_effective_submission_artifact_policy(body)
+    assert effective["maximum_archive_entries"] == expected
+    assert effective["project_policy"]["maximum_archive_entries"] == project_limit
+    assert effective["workstream_default_policy"]["maximum_archive_entries"] == default_limit
+
+
+def test_model_schema_describes_existing_expanded_byte_limit():
+    properties = SubmissionArtifactPolicyProposal.model_json_schema()["properties"]
+    assert "expanded bytes" in properties["maximum_package_size_bytes"]["description"]
+    assert "not compressed upload bytes" in properties["maximum_package_size_bytes"]["description"]
+    assert "directory entries" in properties["maximum_archive_entries"]["description"]
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
 DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
 

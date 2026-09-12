@@ -458,8 +458,14 @@ The owner regression proves encryption rejection separately from model behavior.
 This is not proof that public submission intake is exposed.
 
 The guide also requested project-specific expanded-archive size and member-count
-limits. Existing startup safety limits do not implement those project settings;
-these remain genuine gaps, not false findings to suppress. A separate real run
+limits. Subsequent runtime tracing corrected the initial interpretation: the
+existing `maximum_package_size_bytes` rule already checks verified expanded bytes.
+Its model-facing schema now states this explicitly. The missing member-count
+rule is added as `maximum_archive_entries` through proposal projection, effective
+minimum merging, locked summary, compiler and verified-manifest execution. ART
+startup safety limits remain independent and unchanged. A fresh real-provider
+replay is required before claiming model-level revalidation of these corrections.
+A separate earlier real run
 ended with `schema_invalid`; its original rejected output was not retained, so
 the violated invariant is not established. Preserve that failed run and do not
 claim a later valid blocked report explains or repairs it. Real-model semantic
