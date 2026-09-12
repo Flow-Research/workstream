@@ -180,11 +180,13 @@ def test_archive_count_changes_locked_hashes_and_preserves_null_semantics():
     assert len(hashes) == 3
 
 
-@pytest.mark.parametrize("count, size, failure", [
-    (3, 4101, None), (2, 4101, "policy.archive_entries.limit"),
-    (3, 4100, "policy.package_size.limit"), (None, 4101, None),
+@pytest.mark.parametrize("count, size, failure, task_path", [
+    (3, 4101, None, "task.toml"), (2, 4101, "policy.archive_entries.limit", "task.toml"),
+    (3, 4100, "policy.package_size.limit", "task.toml"), (None, 4101, None, "task.toml"),
+    (4, 4101, "policy.file.require", "wrapper/task.toml"),
 ])
-def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, failure) -> None:
+@pytest.mark.parametrize("explicit_directory", [True, False])
+def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, failure, task_path, explicit_directory) -> None:
     from hashlib import sha256
     from io import BytesIO
     from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
@@ -198,14 +200,15 @@ def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, failure)
 
     source = BytesIO()
     with ZipFile(source, "w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr("evidence/", b"", compress_type=ZIP_STORED)
-        archive.writestr("task.toml", bytes(range(256)) * 16)
+        if explicit_directory:
+            archive.writestr("evidence/", b"", compress_type=ZIP_STORED)
+        archive.writestr(task_path, bytes(range(256)) * 16)
         archive.writestr("evidence/results", b"proof")
     data = source.getvalue()
     inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
     inspection = inspector.inspect(BytesIO(data))
     manifest = build_submission_manifest(inspection)
-    assert manifest.entry_count == 3
+    assert manifest.entry_count == (4 if task_path.startswith("wrapper/") else 3)
     assert inspection.file_count == 2
     assert len(data) < 4100 < manifest.total_expanded_bytes == 4101
     commitment = ArtifactCommitment("sha256:" + sha256(data).hexdigest(), len(data), "application/zip")

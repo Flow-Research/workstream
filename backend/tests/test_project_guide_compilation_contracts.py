@@ -63,6 +63,44 @@ def test_model_schema_describes_existing_expanded_byte_limit():
     assert "expanded bytes" in properties["maximum_package_size_bytes"]["description"]
     assert "not compressed upload bytes" in properties["maximum_package_size_bytes"]["description"]
     assert "directory entries" in properties["maximum_archive_entries"]["description"]
+    assert "ZIP root" in properties["required_artifacts"]["description"]
+
+
+@pytest.mark.parametrize("default_limit", [None, 50])
+def test_omitted_optional_archive_limit_preserves_default_floor(monkeypatch, default_limit):
+    from app.modules.projects import service
+    from app.modules.projects.schemas import SubmissionArtifactPolicyInput
+
+    owner = service.ProjectService(None)
+    policy = owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
+    del policy["maximum_archive_entries"]
+    monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+                        "maximum_archive_entries", default_limit)
+    effective = owner._merge_effective_submission_artifact_policy(policy)
+    assert effective["maximum_archive_entries"] == default_limit
+    assert "maximum_archive_entries" not in policy
+
+
+@pytest.mark.parametrize("limit", [2, None, 0, True])
+def test_task_requirements_response_carries_valid_locked_archive_limit(limit):
+    from types import SimpleNamespace
+    from app.modules.projects.service import ProjectService
+    from app.modules.projects.schemas import SubmissionArtifactPolicyInput
+    from app.modules.tasks.service import TaskService, TaskLockedContextInvalid
+
+    owner = ProjectService(None)
+    policy = owner._merge_effective_submission_artifact_policy(
+        owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
+    )
+    policy["maximum_archive_entries"] = limit
+    context = SimpleNamespace(effective_policy=SimpleNamespace(effective_policy=policy))
+    task = SimpleNamespace(id=str(uuid4()), project_id=str(uuid4()), locked_guide_version="v0.1")
+    if limit is not None and (type(limit) is not int or limit <= 0):
+        with pytest.raises(TaskLockedContextInvalid):
+            TaskService(None)._submission_requirements_response(task, context)
+    else:
+        response = TaskService(None)._submission_requirements_response(task, context)
+        assert response.model_dump(mode="json")["maximum_archive_entries"] == limit
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
 DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
 

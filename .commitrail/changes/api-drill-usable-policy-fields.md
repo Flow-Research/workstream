@@ -30,7 +30,8 @@ this same PR. Source inspection corrects the earlier interpretation:
 bytes with `maximum_package_size_bytes`. Clarify that existing field in the
 model-facing proposal schema and current documentation; do not add a second
 expanded-size implementation. Add only `maximum_archive_entries`, an optional
-strict positive integer counting all outer ZIP members (files and directories).
+strict positive integer counting the canonical outer ZIP tree (files and explicit
+or implied parent directories), not raw central-directory record count.
 Null means no additional project limit, not removal of platform safety limits.
 Nested archives remain file entries; this is not a recursive archive-entry count.
 
@@ -72,6 +73,20 @@ gap interpretations explicitly rather than rewriting historical evidence.
 Human focus: one canonical expanded-byte limit, one member-count rule, unchanged
 platform safety and authorization, and real drill results rather than inferred
 readiness.
+
+The genuine-provider diagnostic replay removed the reported size/count gaps but
+reported root placement unsupported. Existing `require_file` already checks exact
+paths; clarify the existing proposal's `required_artifacts` field description and
+prove wrapping a required root file cannot satisfy it. No new path checker or
+relaxed validation. Preserve both the earlier terminal `schema_invalid` run and
+the subsequent valid blocked report; neither explains the other's outcome.
+
+Focused review found two repairs: omitted optional count must merge as null
+without rewriting policy JSON (`ARCH-SEC-001`), and the actual TASK requirements
+response needs a non-null/invalid-value regression (`QA-ARCHIVE-001`). Both are
+addressed alongside the primitive-list formatting correction (`DOC-ARCHIVE-001`).
+Real ZIP evidence explicitly includes implied parent directories in ART's
+canonical tree and proves omitting directory records cannot evade the count.
 
 ### Historical same-PR genuine-guide metadata repair
 

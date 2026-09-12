@@ -795,7 +795,7 @@ class ProjectService:
             "maximum_file_size_bytes": maximum_file_size_bytes,
             "maximum_package_size_bytes": maximum_package_size_bytes,
             "maximum_archive_entries": self._minimum_non_null(
-                default_policy["maximum_archive_entries"], project_policy["maximum_archive_entries"]
+                default_policy.get("maximum_archive_entries"), project_policy.get("maximum_archive_entries")
             ),
             "packaging": effective_packaging,
         }

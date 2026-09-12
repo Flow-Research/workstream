@@ -286,12 +286,12 @@ class SubmissionArtifactPolicyProposal(BaseModel):
     )
     maximum_archive_entries: StrictInt | None = Field(
         default=None, gt=0,
-        description="Maximum outer ZIP members, counting files and directory entries. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
+        description="Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
     )
     allowed_storage_schemes: tuple[Literal["artifact"], ...] = ("artifact",)
     required_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
         default=(), max_length=100,
-        description="Canonical relative POSIX paths inside the submitted ZIP, such as outputs/answer.md. No traversal, storage references or secret files.",
+        description="Exact canonical relative POSIX paths inside the submitted ZIP. A bare path such as task.toml requires that file at the ZIP root; wrapper/task.toml does not satisfy it. Nested paths such as outputs/answer.md require that exact location. No traversal, storage references or secret files.",
     )
     forbidden_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
         default=(), max_length=100,

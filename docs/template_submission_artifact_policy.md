@@ -188,7 +188,8 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 - maximum file size bytes:
 - maximum package size bytes (total expanded bytes, not compressed upload size):
 - maximum archive entries (optional positive integer; files and directory entries
-  in the outer ZIP, not recursive archive contents; null adds no project limit):
+  in the normalized outer ZIP tree, including implied parent directories, not
+  recursive archive contents; null adds no project limit):
 
 ## Project Forbidden Artifacts
 

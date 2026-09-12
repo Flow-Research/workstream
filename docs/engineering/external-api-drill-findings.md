@@ -481,6 +481,22 @@ repair but does not diagnose the earlier `schema_invalid` failure. The private
 observer was calibrated to record validation types before SDK redaction without
 retaining provider output or changing the rejection path.
 
+Archive-limit follow-through at `ea9f8691` retained two separate real runs. The
+first again ended `schema_invalid` after successful upload/replay, without a
+sufficiency report. The diagnostic replay passed 33 HTTP checks and produced a
+valid blocked report that no longer listed expanded-size or member-count gaps;
+it instead called required root-file placement unsupported. Existing exact-path
+`require_file` enforcement disproves that capability claim: a wrapped required
+root file fails the real ZIP processor regression. The proposal description now
+clarifies exact root paths. The successful replay does not diagnose the failed
+run; no sanitized validation exception was captured in that successful replay.
+Both isolated runs completed database, role, MinIO and broker cleanup.
+
+The guide separately requests a compressed ZIP cap. Do not conflate that request
+with the existing expanded-byte limit or claim full guide coverage from the
+absence of a model-reported gap. This additional capability needs explicit
+resolution before certifying this guide's complete intake requirements.
+
 Use the [new external-client drill](external-api-drill.md), not the older seeded
 API drill. Keep unresolved failures red until product repairs actually satisfy
 them; preserve the passing regressions for repaired defects. Run the applicable
