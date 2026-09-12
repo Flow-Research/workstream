@@ -44,7 +44,12 @@ from app.modules.projects.guide_compilation.contracts import (
 from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
-SHA256 = "sha256:" + "a" * 64
+from app.core.hashing import canonical_json_hash
+from app.modules.projects.api.task_examples import task_examples_hash, validate_task_examples
+
+TASK_EXAMPLES = validate_task_examples([{"content": "Review a claim using the project guide."}])
+TASK_EXAMPLE_MANIFEST = {"task_examples_hash": task_examples_hash(TASK_EXAMPLES), "task_examples_count": len(TASK_EXAMPLES)}
+SHA256 = canonical_json_hash(TASK_EXAMPLE_MANIFEST)
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
 DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
 PUT_ATTEMPT_ID = UUID("33333333-3333-3333-3333-333333333333")
@@ -95,10 +100,10 @@ def runtime_configuration():
     )
 
 
-def context(values: dict[str, UUID], *, generation: int = 1) -> ProjectGuideCompilationContext:
+def context(values: dict[str, UUID], *, generation: int = 1, guide_version="v1") -> ProjectGuideCompilationContext:
     """Build one exact committed-original metadata context."""
     material = GuideDocumentManifest(
-        project_id=values["project"], guide_id=values["guide"], guide_version="v1",
+        project_id=values["project"], guide_id=values["guide"], guide_version=guide_version,
         source_snapshot_id=values["snapshot"], source_snapshot_hash=SHA256,
         setup_run_id=values[f"setup_{generation}"], setup_generation=generation,
         documents=(GuideDocumentVersion(
@@ -222,17 +227,16 @@ def persistence_facts(
 
 
 async def _seed_project_rows(
-    engine: AsyncEngine, values: dict[str, UUID], generations: int
+    engine: AsyncEngine, values: dict[str, UUID], generations: int, guide_version: str
 ) -> None:
-    from app.modules.projects.api.task_examples import task_examples_hash, validate_task_examples
-
     sql_values = {name: str(value) for name, value in values.items()}
-    examples = validate_task_examples([{"content": "Review a claim using the project guide."}])
+    examples = TASK_EXAMPLES
     example_hash = task_examples_hash(examples)
     sql_values.update(
+        guide_version=guide_version,
         examples=json.dumps([item.model_dump(mode="json") for item in examples]),
         examples_hash=example_hash,
-        example_manifest=json.dumps({"task_examples_hash": example_hash, "task_examples_count": len(examples)}),
+        example_manifest=json.dumps(TASK_EXAMPLE_MANIFEST),
     )
     async with engine.begin() as connection:
         await connection.execute(text("alter table projects disable trigger user"))
@@ -265,7 +269,7 @@ async def _seed_project_rows(
         await connection.execute(
             text(
                 "insert into project_guides(id,project_id,version,status,"
-                "created_by,task_examples,task_examples_hash) values(:guide,:project,'v1','draft','test',cast(:examples as json),:examples_hash)"
+                "created_by,task_examples,task_examples_hash) values(:guide,:project,:guide_version,'draft','test',cast(:examples as json),:examples_hash)"
             ),
             sql_values,
         )
@@ -273,7 +277,7 @@ async def _seed_project_rows(
             text(
                 "insert into guide_source_snapshots(id,project_id,guide_id,guide_version,"
                 "manifest_schema_version,manifest_json,bundle_hash,captured_by) values"
-                "(:snapshot,:project,:guide,'v1','guide_source_snapshot.task_examples',cast(:example_manifest as json),"
+                "(:snapshot,:project,:guide,:guide_version,'guide_source_snapshot.task_examples',cast(:example_manifest as json),"
                 ":hash,'test')"
             ),
             {**sql_values, "hash": SHA256},
@@ -284,7 +288,7 @@ async def _seed_project_rows(
                     "insert into project_setup_runs(id,project_id,guide_id,guide_version,"
                     "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
                     "current_step,celery_task_id,documents_ready_at,created_by) values("
-                    ":setup,:project,:guide,'v1',:snapshot,:hash,:generation,"
+                    ":setup,:project,:guide,:guide_version,:snapshot,:hash,:generation,"
                     "'queued','queued',:task_id,now(),'test')"
                 ),
                 {
@@ -324,12 +328,17 @@ async def _seed_snapshot_item(engine: AsyncEngine, values: dict[str, UUID]) -> N
             )
 
 
-async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID]) -> None:
+async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID], namespace=None) -> None:
     from datetime import datetime, timezone
+    namespace_row = ArtifactStorageNamespace(
+        id="primary", backend=namespace.backend if namespace else "local",
+        adapter=namespace.adapter if namespace else "local",
+        provider_profile=namespace.provider_profile if namespace else "test",
+        namespace_descriptor=namespace.namespace_descriptor if namespace else {"root": "guide-compilation-fixture"},
+        namespace_fingerprint=namespace.namespace_fingerprint if namespace else SOURCE_SHA256,
+    )
     session.add_all([
-        ArtifactStorageNamespace(id="primary", backend="local", adapter="local",
-            provider_profile="test", namespace_descriptor={"root": "guide-compilation-fixture"},
-            namespace_fingerprint=SOURCE_SHA256),
+        namespace_row,
         ArtifactContent(id=str(CONTENT_ID), sha256=SOURCE_SHA256,
             byte_count=len(SOURCE_BYTES), media_type="application/pdf",
             normalized_display_name="guide.pdf"),
@@ -339,8 +348,8 @@ async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID])
     ])
     await session.flush()
     replica = ArtifactReplica(id=str(REPLICA_ID), content_id=str(CONTENT_ID),
-        storage_namespace_id="primary", namespace_fingerprint=SOURCE_SHA256,
-        adapter="local", provider_profile="test", provider_object_ref=f"fixtures/{CONTENT_ID}",
+        storage_namespace_id="primary", namespace_fingerprint=namespace_row.namespace_fingerprint,
+        adapter=namespace_row.adapter, provider_profile=namespace_row.provider_profile, provider_object_ref=f"fixtures/{CONTENT_ID}",
         verification_state="pending", availability_state="unknown", integrity_state="unknown")
     session.add(replica)
     await session.flush()
@@ -348,7 +357,7 @@ async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID])
         producer_type="actor_profile", producer_ref=str(values["actor"]),
         project_id=str(values["project"]), guide_source_item_id=str(SOURCE_ITEM_ID),
         sha256=SOURCE_SHA256, byte_count=len(SOURCE_BYTES), media_type="application/pdf",
-        storage_namespace_id="primary", namespace_fingerprint=SOURCE_SHA256,
+        storage_namespace_id="primary", namespace_fingerprint=namespace_row.namespace_fingerprint,
         canonical_target=f"sha256/{SOURCE_SHA256[7:9]}/{SOURCE_SHA256[9:]}",
         operation_identity=SOURCE_SHA256, request_digest=SOURCE_SHA256,
         status="object_confirmed", terminal_result_code="document_stored",
@@ -365,16 +374,16 @@ async def _seed_artifact_custody(session: AsyncSession, values: dict[str, UUID])
     put.receipt_id = str(RECEIPT_ID)
 
 
-async def seed_database(database_url: str, *, generations: int = 1) -> dict[str, UUID]:
+async def seed_database(database_url: str, *, generations: int = 1, guide_version="v1", namespace=None) -> dict[str, UUID]:
     """Seed only canonical parent rows needed by hidden persistence tests."""
     values = ids()
     engine = create_async_engine(database_url)
     try:
-        await _seed_project_rows(engine, values, generations)
+        await _seed_project_rows(engine, values, generations, guide_version)
         await _seed_snapshot_item(engine, values)
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session, session.begin():
-            await _seed_artifact_custody(session, values)
+            await _seed_artifact_custody(session, values, namespace)
     finally:
         await engine.dispose()
     return values

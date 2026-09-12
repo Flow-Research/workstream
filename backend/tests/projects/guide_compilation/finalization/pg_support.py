@@ -18,7 +18,7 @@ from app.modules.authorization.api import (
 )
 from app.modules.projects.api import ProjectGuideSetupFinalizationError
 from app.modules.projects.guide_compilation.finalization import GuideCompilationFinalizationService
-from ..helpers import seed_database
+from ..helpers import context, seed_database
 from .pg_prerequisites import compilation_and_projections
 
 
@@ -167,13 +167,15 @@ class DatabaseAuthorization:
 
 
 @asynccontextmanager
-async def database_case(url, *, classification="draft_ready", project=True):
-    values = await seed_database(url)
+async def database_case(url, *, classification="draft_ready", project=True, guide_version="v1", outcome=None):
+    values = await seed_database(url, guide_version=guide_version)
     engine = create_async_engine(url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         command = await compilation_and_projections(
-            url, factory, values, classification=classification, project=project
+            url, factory, values, classification=classification, project=project,
+            compilation_context=context(values, guide_version=guide_version),
+            outcome=outcome
         )
         yield values, factory, command
     finally:

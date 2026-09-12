@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from projects.unified_policy_fixtures import create_standalone_unified_policy
+
 from dataclasses import replace
 from types import SimpleNamespace
 from datetime import UTC, datetime
@@ -904,23 +906,15 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     resolver = _service_principal(ServiceIdentity.ARTIFACT_PUT_RESOLVER)
     verifier = _service_principal(ServiceIdentity.ARTIFACT_VERIFIER)
-    assert settings.artifact_local_root is not None
-    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
-    store = bootstrap.initialize_after_namespace_claim(
-        ArtifactStoreNamespaceClaim(
-            adapter_identity=bootstrap.identity,
-            namespace_identity=bootstrap.namespace_identity,
-            namespace_fingerprint=namespace.namespace_fingerprint,
-        )
-    )
+    bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             session.add_all((*resolver, *verifier))
             await session.commit()
             async with minted_source(tmp_path / "atomic-verify", b"verified") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 put_request_id = uuid4()
                 assert (
                     await ArtifactStorageOrchestrator(

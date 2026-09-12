@@ -311,6 +311,8 @@ expected = {
     "project.guide_source_snapshot.create": ("project.guide.manage", "WS-AUTH-001-12D"),
     "project.guide_compilation.request_automatic": ("project.guide_compilation.execute", "WS-AUTH-001-12I"),
     "project.guide_compilation.request": ("project.guide_compilation.request", "WS-AUTH-001-12I"),
+    "project.guide_compilation.review_package.read": ("project.guide.manage", "WS-AUTH-001-12F"),
+    "project.guide_compilation.correction.request": ("project.guide_compilation.request", "WS-AUTH-001-12F"),
     "project.guide_compilation.execute": ("project.guide_compilation.execute", "WS-AUTH-001-12I"),
     "project.review_policy.update": (
         "project.review_policy.manage",

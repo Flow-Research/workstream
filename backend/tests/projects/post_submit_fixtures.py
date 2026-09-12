@@ -23,6 +23,7 @@ async def seed_post_submit_policy_for_downstream_tests(
     required_checkers: list[str] | None = None,
     warning_checkers: list[str] | None = None,
     blocking_severities: list[str] | None = None,
+    approved_by_actor: str = "project-manager-subject",
 ) -> dict:
     """Seed the post-submit policy prerequisite without claiming setup execution."""
     async with db_session.get_session_factory()() as session:
@@ -58,9 +59,9 @@ async def seed_post_submit_policy_for_downstream_tests(
             policy_body=compiled.policy_body,
             lifecycle_status="approved",
             approved_by_role="project_manager",
-            approved_by_actor="project-manager-subject",
+            approved_by_actor=approved_by_actor,
             approved_at=datetime.now(UTC),
-            created_by="project-manager-subject",
+            created_by=approved_by_actor,
         )
         session.add(post_submit_policy)
         await session.commit()

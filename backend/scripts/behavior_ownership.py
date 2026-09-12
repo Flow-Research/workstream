@@ -226,6 +226,27 @@ POL_04A3_PARTITION_TARGETS = frozenset(
         "backend/app/modules/projects/api/guide_compilation_projections.py",
     }
 )
+POL_05A_PARTITION_TARGETS = frozenset({
+    'backend/app/modules/authorization/api/guide_proposal_review.py',
+    'backend/app/modules/checkers/api/artifact_paths.py',
+    'backend/app/modules/checkers/api/policy_compilation.py',
+    'backend/app/modules/projects/api/compilation_identity.py',
+    'backend/app/modules/projects/api/guide_proposal_package.py',
+    'backend/app/modules/projects/api/guide_proposals.py',
+    'backend/app/modules/projects/guide_compilation/approval_custody.py',
+    'backend/app/modules/projects/guide_compilation/correction_feedback.py',
+    'backend/app/modules/projects/guide_compilation/correction_request.py',
+    'backend/app/modules/projects/guide_compilation/proposal_approval.py',
+    'backend/app/modules/projects/guide_compilation/proposal_authority.py',
+    'backend/app/modules/projects/guide_compilation/proposal_correction.py',
+    'backend/app/modules/projects/guide_compilation/proposal_repository.py',
+    'backend/app/modules/projects/guide_compilation/proposal_service.py',
+    'backend/app/modules/projects/guide_compilation/request_inputs.py',
+})
+POL_05A_REMOVED_TARGETS = frozenset({
+    "backend/app/modules/projects/guide_compilation/automatic_request.py",
+})
+
 POL_04B1_PARTITION_TARGETS = frozenset(
     {"backend/app/modules/projects/guide_compilation/automatic_request.py"}
 )
@@ -466,7 +487,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS)
+        or removed - (V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
@@ -484,6 +505,7 @@ def _validate_additive_partition_transition(
         | POL_04B1_PARTITION_TARGETS
         | POL_04B_PARTITION_TARGETS
         | POL_04B2_PARTITION_TARGETS
+        | POL_05A_PARTITION_TARGETS
 
         | API_DRILL_PARTITION_TARGETS
         | AUTH_12I_TARGETS

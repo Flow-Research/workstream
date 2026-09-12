@@ -334,7 +334,7 @@ def test_checkers_public_planning_port_uses_the_canonical_compiler() -> None:
     policy_hash = canonical_json_hash(policy)
     compiled = compile_effective_project_submission_artifact_policy(policy, policy_hash)
     lineage = EffectivePreSubmissionPlanLineage(
-        project_id=uuid4(), guide_id=uuid4(), guide_version=1,
+        project_id=uuid4(), guide_id=uuid4(), guide_version="1",
         source_snapshot_id=uuid4(), source_snapshot_hash="sha256:" + "1" * 64,
         effective_policy_id=uuid4(), effective_policy_hash=policy_hash,
         pre_submit_policy_id=uuid4(),

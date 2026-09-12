@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -38,12 +37,15 @@ from projects.client_fixtures import (
 
 
 async def create_locked_policy_context_fixture(
-    client: AsyncClient,
+    client: AsyncClient, *, superseded=False,
 ) -> ProjectLockedPolicyContextRequest:
     """Create and activate one complete PROJECT policy lineage."""
     project = await create_project(client, name=f"Locked Context {uuid4()}")
     guide = await create_guide(client, project["id"], complete_guide_payload())
     bundle = await create_approved_policy_bundle(client, project["id"], guide["id"])
+    if superseded:
+        from projects.unified_policy_fixtures import supersede_unified_submission_policy
+        await supersede_unified_submission_policy(project["id"], guide["id"], bundle["submission_artifact_policy"]["id"])
     await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(),
         project_id=project["id"],
@@ -91,24 +93,6 @@ async def _wait_for_project_database_lock(
     raise AssertionError(f"{application_name} never reached the PostgreSQL lock")
 
 
-async def _supersede_locked_policy_context(
-    request: ProjectLockedPolicyContextRequest,
-) -> None:
-    """Move one exact PROJECT policy lineage to its historical states."""
-    async with db_session.get_session_factory()() as session:
-        superseded_at = datetime.now(UTC)
-        for model, identifier in (
-            (EffectiveProjectSubmissionArtifactPolicy, request.effective_policy_id),
-            (PreSubmitCheckerPolicy, request.pre_submit_policy_id),
-        ):
-            await session.execute(
-                update(model)
-                .where(model.id == str(identifier))
-                .values(lifecycle_status="superseded", superseded_at=superseded_at)
-            )
-        await session.commit()
-
-
 @pytest.mark.asyncio
 async def test_locked_policy_repository_postgresql_resolves_current(
     project_client: AsyncClient,
@@ -125,8 +109,7 @@ async def test_locked_policy_repository_postgresql_resolves_current(
 async def test_locked_policy_repository_postgresql_resolves_superseded(
     project_client: AsyncClient,
 ) -> None:
-    request = await create_locked_policy_context_fixture(project_client)
-    await _supersede_locked_policy_context(request)
+    request = await create_locked_policy_context_fixture(project_client, superseded=True)
     async with db_session.get_session_factory()() as session:
         historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
             request
@@ -140,8 +123,7 @@ async def test_locked_policy_repository_postgresql_resolves_superseded(
 async def test_locked_policy_repository_postgresql_rejects_unknown_effective_policy(
     project_client: AsyncClient,
 ) -> None:
-    request = await create_locked_policy_context_fixture(project_client)
-    await _supersede_locked_policy_context(request)
+    request = await create_locked_policy_context_fixture(project_client, superseded=True)
     wrong_successor = replace(request, effective_policy_id=uuid4())
     async with db_session.get_session_factory()() as session:
         with pytest.raises(
@@ -155,21 +137,21 @@ async def test_locked_policy_repository_postgresql_rejects_unknown_effective_pol
 async def test_locked_policy_repository_postgresql_rejects_pending_pre_submit(
     project_client: AsyncClient,
 ) -> None:
+    """Approved lineage cannot regress to pending before a locked reader observes it."""
+    from sqlalchemy.exc import IntegrityError
+
     request = await create_locked_policy_context_fixture(project_client)
-    await _supersede_locked_policy_context(request)
     async with db_session.get_session_factory()() as session:
         await session.execute(
             update(PreSubmitCheckerPolicy)
             .where(PreSubmitCheckerPolicy.id == str(request.pre_submit_policy_id))
             .values(lifecycle_status="pending_compilation", superseded_at=None)
         )
-        await session.commit()
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(
-            ProjectLockedPolicyContextUnavailable,
-            match="project_locked_policy_context_changed",
-        ):
-            await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
+        with pytest.raises(IntegrityError, match="proposal approval lifecycle mismatch"):
+            await session.commit()
+        await session.rollback()
+        current = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
+        assert current.pre_submit_policy_status == "compiled"
 
 
 @pytest.mark.asyncio
@@ -241,62 +223,18 @@ async def test_locked_policy_repository_postgresql_serializes_project_status_cha
 async def test_locked_policy_repository_postgresql_does_not_substitute_successors(
     project_client: AsyncClient,
 ) -> None:
-    """Keep resolving exact historical IDs after current successors exist."""
-    request = await create_locked_policy_context_fixture(project_client)
-    await _supersede_locked_policy_context(request)
+    """Keep resolving exact historical IDs after a real approved successor exists."""
+    from sqlalchemy import select
+
+    request = await create_locked_policy_context_fixture(project_client, superseded=True)
     async with db_session.get_session_factory()() as session:
-        original_effective = await session.get(
-            EffectiveProjectSubmissionArtifactPolicy, str(request.effective_policy_id)
-        )
-        original_pre_submit = await session.get(
-            PreSubmitCheckerPolicy, str(request.pre_submit_policy_id)
-        )
-        assert original_effective is not None
-        assert original_pre_submit is not None
-        successor_effective_id = str(uuid4())
-        session.add(
-            EffectiveProjectSubmissionArtifactPolicy(
-                id=successor_effective_id,
-                project_id=original_effective.project_id,
-                guide_id=original_effective.guide_id,
-                guide_version=original_effective.guide_version,
-                source_snapshot_id=original_effective.source_snapshot_id,
-                source_snapshot_hash=original_effective.source_snapshot_hash,
-                submission_artifact_policy_id=original_effective.submission_artifact_policy_id,
-                submission_artifact_policy_hash=original_effective.submission_artifact_policy_hash,
-                lifecycle_status="approved",
-                merge_algorithm_version=original_effective.merge_algorithm_version,
-                effective_policy=original_effective.effective_policy,
-                effective_policy_hash=original_effective.effective_policy_hash,
-                created_by="locked-context-successor-test",
-                supersedes_effective_policy_id=original_effective.id,
-            )
-        )
-        session.add(
-            PreSubmitCheckerPolicy(
-                id=str(uuid4()),
-                project_id=original_pre_submit.project_id,
-                guide_id=original_pre_submit.guide_id,
-                guide_version=original_pre_submit.guide_version,
-                source_snapshot_id=original_pre_submit.source_snapshot_id,
-                source_snapshot_hash=original_pre_submit.source_snapshot_hash,
-                effective_policy_id=successor_effective_id,
-                effective_policy_hash=original_pre_submit.effective_policy_hash,
-                lifecycle_status="compiled",
-                compiler_version=original_pre_submit.compiler_version,
-                compiled_bundle=original_pre_submit.compiled_bundle,
-                compiled_bundle_hash=original_pre_submit.compiled_bundle_hash,
-                checker_names=original_pre_submit.checker_names,
-                checker_configs=original_pre_submit.checker_configs,
-                created_by="locked-context-successor-test",
-                supersedes_pre_submit_checker_policy_id=original_pre_submit.id,
-            )
-        )
-        await session.commit()
-    async with db_session.get_session_factory()() as session:
-        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
-            request
-        )
+        successor = (await session.scalars(select(EffectiveProjectSubmissionArtifactPolicy).where(
+            EffectiveProjectSubmissionArtifactPolicy.project_id == str(request.project_id),
+            EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
+        ))).one()
+        assert successor.id != str(request.effective_policy_id)
+        assert successor.supersedes_effective_policy_id == str(request.effective_policy_id)
+        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
         assert historical.effective_policy_id == request.effective_policy_id
         assert historical.pre_submit_policy_id == request.pre_submit_policy_id
 

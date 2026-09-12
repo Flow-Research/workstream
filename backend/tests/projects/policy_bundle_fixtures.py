@@ -10,12 +10,10 @@ from projects.post_submit_fixtures import (
 )
 from projects.submission_policy_fixtures import (
     approve_submission_artifact_policy,
-    create_submission_artifact_policy,
     create_sufficiency_report,
-    force_pre_submit_checker_policy_pending,
     load_pre_submit_checker_policy,
 )
-from committed_guide_fixtures import create_compiled_report_fixture
+from projects.unified_policy_fixtures import create_unified_submission_policy
 
 
 async def create_approved_policy_bundle(
@@ -24,7 +22,11 @@ async def create_approved_policy_bundle(
     guide_id: str,
     *,
     sufficiency_status: str = "passed",
-    compile_pre_submit_checker: bool = True,
+    artifact_proposal=None,
+    request_headers=None,
+    post_submit_required_checkers=None,
+    post_submit_warning_checkers=None,
+    post_submit_blocking_severities=None,
 ) -> dict:
     snapshot = await read_guide_source_snapshot(project_id, guide_id)
     report = await create_sufficiency_report(
@@ -33,10 +35,17 @@ async def create_approved_policy_bundle(
         guide_id,
         snapshot["id"],
         status=sufficiency_status,
+        request_headers=request_headers,
     )
-    verified_report_id = await create_compiled_report_fixture(report["id"], snapshot["id"])
-    report = {**report, "id": verified_report_id}
-    policy = await create_submission_artifact_policy(client, project_id, guide_id, snapshot["id"])
+    policy = await create_unified_submission_policy(report["id"], snapshot["id"], proposal=artifact_proposal)
+    from app.db import session as db_session
+    from app.modules.projects.models import ProjectSetupRun
+    from sqlalchemy import select
+    async with db_session.get_session_factory()() as session:
+        setup = (await session.scalars(select(ProjectSetupRun).where(
+            ProjectSetupRun.guide_id == guide_id,
+        ))).one()
+        report = {**report, "id": setup.output_sufficiency_report_id}
     effective = await approve_submission_artifact_policy(
         client,
         project_id,
@@ -44,16 +53,14 @@ async def create_approved_policy_bundle(
         policy["id"],
     )
     compiled_pre_submit_checker = await load_pre_submit_checker_policy(effective)
-    if compile_pre_submit_checker:
-        assert compiled_pre_submit_checker["lifecycle_status"] == "compiled"
-        post_submit_checker_policy = await seed_post_submit_policy_for_downstream_tests(
-            project_id=project_id, guide_id=guide_id, source_snapshot=snapshot,
-            pre_submit_checker_policy=compiled_pre_submit_checker,
-        )
-    else:
-        await force_pre_submit_checker_policy_pending(effective)
-        compiled_pre_submit_checker = None
-        post_submit_checker_policy = None
+    assert compiled_pre_submit_checker["lifecycle_status"] == "compiled"
+    post_submit_checker_policy = await seed_post_submit_policy_for_downstream_tests(
+        project_id=project_id, guide_id=guide_id, source_snapshot=snapshot,
+        pre_submit_checker_policy=compiled_pre_submit_checker,
+        required_checkers=post_submit_required_checkers,
+        warning_checkers=post_submit_warning_checkers,
+        blocking_severities=post_submit_blocking_severities,
+    )
     return {
         "source_snapshot": snapshot,
         "sufficiency_report": report,

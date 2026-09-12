@@ -14,7 +14,6 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
 from app.adapters.artifacts import (
     guide_document_manifest_port,
 )
@@ -32,7 +31,7 @@ from app.modules.projects.guide_compilation.repository import (
     GuideCompilationRepository,
 )
 
-from .helpers import result, seed_database
+from .helpers import SHA256, result, seed_database
 from .test_projection_postgresql import (
     _ProjectionAuthorization,
     _persist_compilation,
@@ -345,29 +344,14 @@ async def test_policy_deny_default_precedes_any_material_load(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["blocked", "unprojectable"])
-async def test_forbidden_or_unprojectable_component_stops_before_auth_and_material(
+async def test_blocked_component_stops_before_auth_and_material(
     clean_postgres_database: str,
-    kind: str,
 ) -> None:
     values = await seed_database(clean_postgres_database)
-    compiled = result()
-    if kind == "blocked":
-        compiled = compiled.model_copy(
-            update={"status": "guide_blocked", "submission_artifact_policy": None}
-        )
-        expected = "component_forbidden"
-    else:
-        compiled = compiled.model_copy(
-            update={
-                "submission_artifact_policy": SubmissionArtifactPolicyProposal(
-                    maximum_file_size_bytes=1,
-                    maximum_package_size_bytes=2,
-                    required_artifacts=("C:artifact",),
-                )
-            }
-        )
-        expected = "component_unprojectable"
+    compiled = result().model_copy(
+        update={"status": "guide_blocked", "submission_artifact_policy": None}
+    )
+    expected = "component_forbidden"
     attempt_id, _ = await _persist_compilation(
         clean_postgres_database, values, outcome=compiled
     )
@@ -658,7 +642,7 @@ async def test_non_draft_guide_and_stale_generation_fail_closed(
                     "project": str(values["project"]),
                     "guide": str(values["guide"]),
                     "snapshot": str(values["snapshot"]),
-                    "hash": "sha256:" + "a" * 64,
+                    "hash": SHA256,
                     "task": "00000000-0000-0000-0000-000000000007",
                 },
             )

@@ -85,14 +85,16 @@ async def seed_setup_service_for_compiled_fixture(sessions):
             subject_kind="service", status="active", linked_by="compiled-guide-fixture"))
 
 
-async def create_compiled_report_fixture(report_id: str, source_snapshot_id: str) -> str:
+async def create_compiled_report_fixture(
+    report_id: str, source_snapshot_id: str, *, artifact_proposal=None,
+) -> str:
     """Project a scripted unified result under real service authority and custody."""
     from app.adapters.auth import guide_compilation_request_authority, guide_compilation_execution_authority, guide_sufficiency_projection_authorization, artifact_policy_projection_authorization
     from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue, project_guide_pre_submission_capabilities
     from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
     from app.modules.projects.api import ProjectGuideCompilationExecutionCommand, ProjectGuideProjectionCommand, ProjectGuideCompilationExecutionClassification
     from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
-    from app.modules.projects.guide_compilation.automatic_request import AutomaticCompilationInputs, automatic_operation_id
+    from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs, automatic_operation_id
     from app.modules.projects.guide_compilation.service import GuideCompilationService
     from app.modules.projects.guide_compilation.orchestrator import project_guide_compilation_execution_port
     from app.modules.projects.guide_compilation.projections import GuideCompilationProjectionService
@@ -118,7 +120,7 @@ async def create_compiled_report_fixture(report_id: str, source_snapshot_id: str
         await session.commit()
     async with sessions() as session:
         async with guide_compilation_request_authority(session, automatic_operation_id(manifest.setup_run_id, manifest.setup_generation)) as (authority, actor):
-            request = await GuideCompilationService(session, authority, automatic_inputs=AutomaticCompilationInputs(guide_document_manifest_port(session), pre, post, configuration)).request_automatic(actor=actor, setup_run_id=manifest.setup_run_id)
+            request = await GuideCompilationService(session, authority, request_inputs=CompilationRequestInputs(guide_document_manifest_port(session), pre, post, configuration)).request_automatic(actor=actor, setup_run_id=manifest.setup_run_id)
 
     class Runtime:
         identity = configuration.adapter_identity
@@ -136,6 +138,8 @@ async def create_compiled_report_fixture(report_id: str, source_snapshot_id: str
             if not compiled_findings:
                 compiled_findings = (CompilationFinding(severity="info", code="guide.ready", message="Guide complete.", evidence_refs=refs),)
             patch = {"status": {"blocked": "guide_blocked", "passed": "draft_ready", "passed_with_warnings": "draft_ready_with_warnings"}[status], "findings": compiled_findings}
+            if artifact_proposal is not None:
+                patch["submission_artifact_policy"] = artifact_proposal
             if status == "blocked":
                 patch["submission_artifact_policy"] = None
             return result().model_copy(update=patch)

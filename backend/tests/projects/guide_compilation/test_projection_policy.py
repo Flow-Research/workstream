@@ -115,60 +115,33 @@ def test_artifact_policy_transform_requires_a_persisted_proposal() -> None:
         _policy_body(cast(AsyncSession, None), None)
 
 
-@pytest.mark.parametrize(
-    "proposal",
-    [
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("a" * 501,),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            forbidden_artifacts=("x" * 501,),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=(" README.md ",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("cafe\u0301.txt",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("nested\\result.json",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("s3://bucket/result.json",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_evidence=("invalid evidence",),
-        ),
-    ],
-)
-def test_unprojectable_v1_policy_fails_without_best_effort_repair(
-    proposal: SubmissionArtifactPolicyProposal,
-) -> None:
-    """Reject incompatible persisted-v1 text instead of rewriting it."""
-    with pytest.raises((PolicySetupBlocked, ValueError)):
-        _policy_body(cast(AsyncSession, None), proposal)
+@pytest.mark.parametrize("patch", [
+    {"required_artifacts": ("a" * 501,)},
+    {"forbidden_artifacts": ("x" * 501,)},
+    {"required_artifacts": (" README.md ",)},
+    {"required_artifacts": ("cafe\u0301.txt",)},
+    {"required_artifacts": ("nested\\result.json",)},
+    {"required_artifacts": ("s3://bucket/result.json",)},
+    {"required_artifacts": ("C:artifact",)},
+    {"required_evidence": ("invalid evidence",)},
+    {"attestation_terms": ("x" * 101,)},
+])
+def test_invalid_policy_machine_fields_fail_at_result_boundary(patch) -> None:
+    """Reject invalid model fields before they can become persisted proposals."""
+    from pydantic import ValidationError
+
+    valid = dict(maximum_file_size_bytes=1, maximum_package_size_bytes=2)
+    assert SubmissionArtifactPolicyProposal(**valid)
+    with pytest.raises(ValidationError):
+        SubmissionArtifactPolicyProposal(**(valid | patch))
 
 
 @pytest.mark.parametrize(
     "path",
     ["../private.txt", "/absolute.txt", "nested//result.json"],
 )
-def test_persisted_v1_noncanonical_path_fails_at_projection(path: str) -> None:
-    """Reject a persisted legacy path at the projection-owned boundary."""
+def test_noncanonical_path_fails_defensive_projection_validation(path: str) -> None:
+    """Projection independently rejects a noncanonical path if result validation is bypassed."""
     proposal = SubmissionArtifactPolicyProposal.model_construct(
         maximum_file_size_bytes=1,
         maximum_package_size_bytes=2,

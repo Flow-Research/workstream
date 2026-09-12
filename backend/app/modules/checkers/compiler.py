@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import lru_cache
 from collections.abc import Callable
 from typing import Any
 
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.api.policy_compilation import CompiledPreSubmitCheckerPolicy
 from app.modules.checkers.catalogue import (
     PreSubmissionCatalogueError,
     PreSubmissionCheckerCatalogue,
     build_pre_submission_checker_catalogue,
 )
-from app.modules.checkers.pre_submit_defaults import is_canonical_relative_path
+from app.modules.checkers.api.artifact_paths import is_canonical_relative_path
 
 PRE_SUBMIT_COMPILER_VERSION = "workstream-pre-submit-compiler-v0.1"
 PRE_SUBMIT_BUNDLE_SCHEMA_VERSION = "pre_submit_checker_bundle.v1"
@@ -28,15 +28,6 @@ class PreSubmitCheckerCompilerError(ValueError):
     """Raised when checker specification compilation fails closed."""
 
 
-@dataclass(frozen=True)
-class CompiledPreSubmitCheckerPolicy:
-    """Compiled bundle plus index projections persisted on policy rows."""
-
-    compiler_version: str
-    compiled_bundle: dict[str, Any]
-    compiled_bundle_hash: str
-    checker_names: list[str]
-    checker_configs: dict[str, Any]
 
 
 @lru_cache(maxsize=1)

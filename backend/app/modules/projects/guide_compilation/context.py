@@ -6,7 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentManifestRequest
+from app.modules.projects.api.guide_documents import (
+    GuideDocumentManifestPort,
+    GuideDocumentManifestRequest,
+)
 from app.interfaces.project_agents import (
     MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES,
     PROJECT_GUIDE_COMPILATION_AGENT_IDENTITY,
@@ -82,6 +85,7 @@ async def build_project_guide_compilation_context(
             pre_submission_capabilities=pre_submission_capabilities,
             post_submission_capabilities=post_submission_capabilities,
             runtime_configuration=state.runtime_configuration,
+            correction_feedback=await _correction_feedback(session, identity.setup_run_id),
         )
         if CompilationAttemptIdentity.from_context(context) != identity:
             raise GuideCompilationIntegrityError("compilation context identity mismatch")
@@ -98,6 +102,7 @@ def compilation_context_from_material(
     pre_submission_capabilities: PreSubmissionCapabilityProjection,
     post_submission_capabilities: PostSubmitCatalogue,
     runtime_configuration: ProjectGuideRuntimeConfiguration,
+    correction_feedback=None,
 ) -> ProjectGuideCompilationContext:
     """Build the one bounded context used by both request and execution."""
     if (
@@ -112,11 +117,14 @@ def compilation_context_from_material(
         raise GuideCompilationIntegrityError("compilation manifest lineage mismatch")
     try:
         examples = require_task_example_commitment(
-            guide.task_examples, guide.task_examples_hash, manifest=snapshot.manifest_json,
+            guide.task_examples,
+            guide.task_examples_hash,
+            manifest=snapshot.manifest_json,
         )
     except ValueError:
         raise GuideCompilationIntegrityError("guide task examples are unavailable") from None
     context = ProjectGuideCompilationContext(
+        correction_feedback=correction_feedback,
         task_examples=examples,
         material=loaded,
         setup_run_id=setup_run_id,
@@ -134,3 +142,10 @@ def compilation_context_from_material(
     ):
         raise GuideCompilationIntegrityError("compilation context exceeds its limit")
     return context
+
+
+async def _correction_feedback(session, setup_run_id):
+    """Load downstream feedback without a context/repository import cycle."""
+    from .correction_feedback import load_correction_feedback
+
+    return await load_correction_feedback(session, setup_run_id)

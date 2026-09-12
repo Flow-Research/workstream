@@ -67,7 +67,7 @@ def _compiled_and_lineage() -> tuple[dict[str, object], EffectivePreSubmissionPl
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=uuid4(),
         guide_id=uuid4(),
-        guide_version=3,
+        guide_version="3",
         source_snapshot_id=uuid4(),
         source_snapshot_hash="sha256:" + "2" * 64,
         effective_policy_id=uuid4(),
@@ -474,7 +474,7 @@ def test_compiler_uses_catalogue_without_durable_checker_registry(
     assert "check_submission_packet" in compiled.checker_names
 
 
-async def test_application_startup_installs_fixed_catalogue_configuration() -> None:
+async def test_application_startup_installs_fixed_catalogue_configuration(clean_postgres_database) -> None:
     app = create_app(
         Settings(
             environment="test",

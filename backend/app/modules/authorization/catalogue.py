@@ -136,6 +136,8 @@ class ActionId(StrEnum):
     PROJECT_GUIDE_UPDATE = "project.guide.update"
     PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE = "project.guide_source_snapshot.create"
     PROJECT_GUIDE_COMPILATION_REQUEST = "project.guide_compilation.request"
+    PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ = "project.guide_compilation.review_package.read"
+    PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST = "project.guide_compilation.correction.request"
     PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC = "project.guide_compilation.request_automatic"
     PROJECT_GUIDE_COMPILATION_EXECUTE = "project.guide_compilation.execute"
     PROJECT_REVIEW_POLICY_UPDATE = "project.review_policy.update"
@@ -539,6 +541,16 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_12F2,
     ),
     _planned(
+        ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+        PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
         PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
         ActionOwner.AUTH_12F,
@@ -855,7 +867,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 114:
+    if len(PERMISSION_IDS) != 73 or len(ACTION_IDS) != 116:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 24:
         raise RuntimeError("authorization permission boundary mismatch")

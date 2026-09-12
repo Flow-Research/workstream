@@ -151,10 +151,9 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
         response = await project_client.post(
             f"/api/v1/projects/{delivery.project_id}/guides/{delivery.guide_id}/submission-artifact-policies/{policy_id}/approve",
             headers=auth_headers(),
-            json={"approval_note": "Attempt approval before POL05."},
+            json={"approval_note": "The removed manual approval route is unavailable."},
         )
-        assert response.status_code == 422, response.text
-        assert response.json()["detail"] == "unified compilation policy approval is unavailable"
+        assert response.status_code == 404, response.text
         async with factory() as session:
             for table in [
                 "effective_project_submission_artifact_policies",

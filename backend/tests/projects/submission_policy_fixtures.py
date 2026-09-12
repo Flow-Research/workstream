@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db import session as db_session
-from app.modules.projects.models import GuideSufficiencyReport, PreSubmitCheckerPolicy, ProjectSetupRun
+from app.modules.projects.models import GuideSufficiencyReport, PreSubmitCheckerPolicy
 from projects.client_fixtures import auth_headers
 from committed_guide_fixtures import create_compiled_report_fixture
 
@@ -63,6 +63,7 @@ async def create_sufficiency_report(
     snapshot_id: str,
     *,
     status: str = "passed",
+    request_headers=None,
 ) -> dict:
     findings = []
     if status == "blocked":
@@ -83,7 +84,7 @@ async def create_sufficiency_report(
         ]
     response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
-        headers=auth_headers(),
+        headers=request_headers if request_headers is not None else auth_headers(),
         json={
             "source_snapshot_id": snapshot_id,
             "status": status,
@@ -139,49 +140,17 @@ async def approve_submission_artifact_policy(
     guide_id: str,
     policy_id: str | None,
 ) -> dict:
-    if policy_id is None:
-        setup_response = await client.get(
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
-            headers=auth_headers(),
-        )
-        assert setup_response.status_code == 200, setup_response.text
-        setup_run = setup_response.json()
-        await create_sufficiency_report(
-            client,
-            project_id,
-            guide_id,
-            setup_run["source_snapshot_id"],
-        )
-        policy = await create_submission_artifact_policy(
-            client,
-            project_id,
-            guide_id,
-            setup_run["source_snapshot_id"],
-        )
-        async with db_session.get_session_factory()() as session:
-            authoritative_report = await session.scalar(
-                select(GuideSufficiencyReport).where(
-                    GuideSufficiencyReport.source_snapshot_id == setup_run["source_snapshot_id"],
-                    GuideSufficiencyReport.project_setup_run_id.is_not(None),
-                )
-            )
-            assert authoritative_report is not None
-            persisted_run = await session.get(ProjectSetupRun, setup_run["id"])
-            assert persisted_run is not None
-            persisted_run.status = "policy_draft_ready"
-            persisted_run.current_step = "submission_artifact_policy_derivation"
-            persisted_run.output_sufficiency_report_id = authoritative_report.id
-            persisted_run.output_submission_artifact_policy_id = policy["id"]
-            await session.commit()
-        policy_id = policy["id"]
-    response = await client.post(
-        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
-        f"{policy_id}/approve",
-        headers=auth_headers(),
-        json={"approval_note": "Approved by Workstream project manager."},
+    from projects.guide_fixtures import read_guide_source_snapshot
+    from projects.unified_policy_fixtures import (
+        approve_unified_submission_policy, create_unified_submission_policy,
     )
-    assert response.status_code == 200, response.text
-    return response.json()
+
+    if policy_id is None:
+        snapshot = await read_guide_source_snapshot(project_id, guide_id)
+        report = await create_sufficiency_report(client, project_id, guide_id, snapshot["id"])
+        policy = await create_unified_submission_policy(report["id"], snapshot["id"])
+        policy_id = policy["id"]
+    return await approve_unified_submission_policy(project_id, guide_id, policy_id)
 
 
 async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
@@ -204,21 +173,3 @@ async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
             "checker_names": pre_submit_checker_policy.checker_names,
             "checker_configs": pre_submit_checker_policy.checker_configs,
         }
-
-
-async def force_pre_submit_checker_policy_pending(effective_policy: dict) -> None:
-    """Force a compiled pre-submit checker row back to pending for guard tests."""
-    async with db_session.get_session_factory()() as session:
-        pre_submit_checker_policy = await session.scalar(
-            select(PreSubmitCheckerPolicy).where(
-                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
-            )
-        )
-        assert pre_submit_checker_policy is not None
-        pre_submit_checker_policy.lifecycle_status = "pending_compilation"
-        pre_submit_checker_policy.compiler_version = None
-        pre_submit_checker_policy.compiled_bundle = None
-        pre_submit_checker_policy.compiled_bundle_hash = None
-        pre_submit_checker_policy.checker_names = []
-        pre_submit_checker_policy.checker_configs = {}
-        await session.commit()

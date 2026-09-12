@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
+from uuid import UUID
 
 import pytest
 
@@ -23,6 +24,10 @@ def _validator() -> SimpleNamespace:
     return SimpleNamespace(
         validate_source_snapshot_integrity=AsyncMock(),
         validate_activation_ready=Mock(),
+        lock_active_approval=AsyncMock(return_value=SimpleNamespace(
+            operation=SimpleNamespace(operation_id=UUID(int=91), output_digest='sha256:' + 'e' * 64),
+            reservation=SimpleNamespace(operation_id=UUID(int=91)),
+        )),
     )
 
 
@@ -61,6 +66,8 @@ def _expected_binding_payload(repository: _PolicyReadRepository) -> list[dict[st
          "effective_policy_hash": repository.effective.effective_policy_hash},
         {"type": "SimpleNamespace", "id": repository.review.id},
         {"type": "SimpleNamespace", "id": repository.revision.id},
+        {"approval_operation_id": str(UUID(int=91)), "approval_output_digest": 'sha256:' + 'e' * 64,
+         "reservation_operation_id": str(UUID(int=91))},
     ]
 
 
@@ -152,6 +159,7 @@ async def test_active_guide_read_validates_readiness() -> None:
         repository.submission, repository.effective, repository.checker,
         repository.post_submit, repository.review, repository.revision, None,
         require_payment_policy=False,
+        approval_custody=service.lock_active_approval.return_value,
     )
 
 

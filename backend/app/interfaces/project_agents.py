@@ -9,6 +9,10 @@ from enum import StrEnum
 from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
+from app.modules.checkers.api.artifact_paths import (
+    is_canonical_relative_path, is_canonical_relative_pattern,
+)
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -278,20 +282,40 @@ class SubmissionArtifactPolicyProposal(BaseModel):
     maximum_file_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
     maximum_package_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
     allowed_storage_schemes: tuple[Literal["artifact"], ...] = ("artifact",)
-    required_artifacts: tuple[ModelProse, ...] = Field(default=(), max_length=100)
-    forbidden_artifacts: tuple[ModelProse, ...] = Field(default=(), max_length=100)
+    required_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        default=(), max_length=100,
+        description="Canonical relative POSIX paths inside the submitted ZIP, such as outputs/answer.md. No traversal, storage references or secret files.",
+    )
+    forbidden_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
+        default=(), max_length=100,
+        description="Relative artifact prohibition patterns, such as secret* or outputs/*.tmp; these are machine fields, not prose.",
+    )
     required_evidence: tuple[ModelProse, ...] = Field(default=(), max_length=100)
     attestation_terms: tuple[ModelProse, ...] = Field(default=(), max_length=50)
 
-    @field_validator(
-        "required_artifacts", "forbidden_artifacts", "required_evidence", "attestation_terms"
-    )
+    @field_validator("required_artifacts")
     @classmethod
-    def validate_policy_text(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        """Reject duplicate or unsafe artifact policy text."""
+    def validate_required_paths(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Artifact paths are machine fields, not display prose."""
+        if len(values) != len(set(values)) or not all(is_canonical_relative_path(value) for value in values):
+            raise ValueError("artifact policy paths must be unique canonical relative paths")
+        return values
+
+    @field_validator("forbidden_artifacts")
+    @classmethod
+    def validate_forbidden_patterns(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Express prohibition patterns without treating their secret names as requests."""
+        if len(values) != len(set(values)) or not all(is_canonical_relative_pattern(value) for value in values):
+            raise ValueError("artifact policy patterns must be unique canonical relative patterns")
+        return values
+
+    @field_validator("required_evidence", "attestation_terms")
+    @classmethod
+    def validate_policy_identifiers(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        """Evidence and attestations use bounded machine identifiers."""
         if len(values) != len(set(values)):
             raise ValueError("artifact policy values must be unique")
-        return tuple(_validated_safe_model_text(value) for value in values)
+        return tuple(_validated_identifier(value) for value in values)
 
     @model_validator(mode="after")
     def validate_package_limit(self) -> SubmissionArtifactPolicyProposal:
@@ -321,6 +345,17 @@ class CapabilitySuggestion(BaseModel):
     _rationale = field_validator("rationale")(_validated_safe_model_text)
 
 
+class ProjectGuideCorrectionFeedback(BaseModel):
+    """Bounded manager input tied to the exact result being reconsidered."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: UUID
+    predecessor_compilation_id: UUID
+    predecessor_result_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    target_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    reason: str = Field(min_length=1, max_length=4000)
+
+
 class ProjectGuideCompilationContext(BaseModel):
     """Exact bounded input for one future unified compilation attempt."""
 
@@ -336,6 +371,7 @@ class ProjectGuideCompilationContext(BaseModel):
     pre_submission_capabilities: PreSubmissionCapabilityProjection
     post_submission_capabilities: PostSubmitCatalogue
     task_examples: ProjectGuideTaskExamples
+    correction_feedback: ProjectGuideCorrectionFeedback | None = None
 
     @model_validator(mode="after")
     def validate_instruction_configuration(self) -> ProjectGuideCompilationContext:
@@ -357,6 +393,10 @@ def canonical_project_guide_compilation_context_bytes(
 ) -> bytes:
     """Serialize one context without double-encoding canonical guide JSON."""
     body = context.model_dump(mode="json")
+    if context.correction_feedback is None:
+        # Absent optional input contributes no canonical field; a real
+        # correction is always included in the exact attempt identity.
+        del body["correction_feedback"]
     return json.dumps(
         body,
         sort_keys=True,

@@ -487,7 +487,7 @@ def test_result_validation_rejects_failure_code_on_non_failed_result() -> None:
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=uuid4(),
         guide_id=uuid4(),
-        guide_version=1,
+        guide_version="1",
         source_snapshot_id=uuid4(),
         source_snapshot_hash=_sha("a"),
         effective_policy_id=uuid4(),

@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.interfaces.project_agents import (
     ProjectGuideCompilationResult,
-    SubmissionArtifactPolicyProposal,
 )
 from app.modules.authorization.api import (
     ArtifactPolicyProjectionFacts,
@@ -36,7 +35,6 @@ from app.modules.projects.guide_compilation.projections import (
     _report_digest,
     _report_payload,
 )
-from app.modules.projects.service import PolicySetupBlocked
 
 from .helpers import SHA256, result
 
@@ -239,32 +237,6 @@ def test_report_and_policy_transforms_are_exact() -> None:
     assert policy["allowed_storage_schemes"] == ["local", "s3"]
 
 
-@pytest.mark.parametrize(
-    "proposal",
-    [
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_artifacts=("C:artifact",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            required_evidence=("Not canonical",),
-        ),
-        SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1,
-            maximum_package_size_bytes=2,
-            attestation_terms=("x" * 101,),
-        ),
-    ],
-)
-def test_policy_projection_rejects_unprojectable_legacy_v1_values(
-    proposal: SubmissionArtifactPolicyProposal,
-) -> None:
-    """Fail closed rather than truncating or rewriting persisted v1 text."""
-    with pytest.raises((PolicySetupBlocked, ValueError)):
-        _policy_body(cast(AsyncSession, None), proposal)
 
 
 def test_blocked_result_maps_only_to_a_blocked_report() -> None:

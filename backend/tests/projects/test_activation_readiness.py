@@ -129,7 +129,7 @@ def _activation_ready_bundle() -> dict[str, Any]:
         source_snapshot_id=snapshot_id,
         source_snapshot_hash=snapshot_hash,
         lifecycle_status="approved",
-        derivation_source="manual_admin_derivation",
+        derivation_source="unified_compilation",
         policy_body=submission_body,
         policy_hash=submission_hash,
         approved_by_actor="actor-1",
@@ -175,6 +175,11 @@ def _activation_ready_bundle() -> dict[str, Any]:
         "review_policy": review,
         "revision_policy": revision,
         "payment_policy": payment,
+        # Structural validator delegation only; PostgreSQL proposal tests prove custody.
+        "approval_custody": SimpleNamespace(
+            operation=SimpleNamespace(artifact_policy_id=submission.id),
+            effective=effective, pre=pre_submit,
+        ),
     }
 
 

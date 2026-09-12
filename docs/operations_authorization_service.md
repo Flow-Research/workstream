@@ -1229,5 +1229,8 @@ authorization event to one setup generation. Both human and automatic request
 replays recheck current authority inside the receipt transaction. POL-04B
 composes this authority with execution, projections and finalization in the live
 Celery worker. The automatic operation stops at findings or draft proposals;
-POL-05A → AUTH-12F4 → POL-05B owns the remaining manager review and approval.
-Default and public mutation ports remain unavailable.
+POL-05A delivers hidden manager review, correction and pre-submit approval.
+AUTH-12F4 → POL-05B still supplies public authority and manual dispatch. Complete
+proposal content requires current exact-project manager authority; Operator and
+Audit diagnostic permissions do not grant it. Default proposal ports remain
+unavailable.

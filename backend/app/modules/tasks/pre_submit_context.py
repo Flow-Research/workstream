@@ -192,18 +192,11 @@ def compile_locked_pre_submit_plan(
     planner: EffectivePreSubmissionPlanningPort,
 ) -> EffectivePreSubmissionExecutionPlan:
     """Compile one exact plan from TASK-locked policy rows and the fixed catalogue."""
-    guide_version_text = context.guide_version
-    if guide_version_text.startswith("v"):
-        guide_version_text = guide_version_text[1:]
-    try:
-        guide_version = int(guide_version_text)
-    except ValueError as exc:
-        raise PreSubmitLockedContextInvalid("pre_submit_guide_version_invalid") from exc
     return planner.compile_effective_plan(
         lineage=EffectivePreSubmissionPlanLineage(
             project_id=context.project_id,
             guide_id=context.guide_id,
-            guide_version=guide_version,
+            guide_version=context.guide_version,
             source_snapshot_id=context.source_snapshot_id,
             source_snapshot_hash=context.source_snapshot_sha256,
             effective_policy_id=context.effective_policy_id,

@@ -1342,7 +1342,7 @@ class PreSubmitCheckerInputPreparationContext(BaseModel):
     assignment_id: UUID
     project_id: UUID
     guide_id: UUID
-    guide_version: int = Field(gt=0)
+    guide_version: str = Field(min_length=1, max_length=50)
     source_snapshot_id: UUID
     source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     submission_artifact_policy_id: UUID
@@ -1371,9 +1371,7 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
 
 
 AuthorizationResourceContext = (
-    TaskAuthorityResourceContext
-    |
-    ActorSelfResourceContext
+    TaskAuthorityResourceContext | ActorSelfResourceContext
     | ProjectReadResourceContext
     | ProjectDiagnosticReadResourceContext
     | ProjectPolicyReadResourceContext

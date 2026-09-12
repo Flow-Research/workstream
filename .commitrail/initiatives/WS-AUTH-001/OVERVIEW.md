@@ -13,8 +13,8 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: hidden projections and atomic setup finalization have exact
   request-local authority through AUTH-12J and AUTH-12B2; the five hidden
   ContributionPolicy actions have exact Finance Authority through CP05.
-- Next usable boundary: POL-05A proposal review/correction behavior → AUTH-12F4
-  exact review/correction/approval authority → POL-05B manager-facing composition.
+- Next usable boundary: AUTH-12F4 exact review/correction/approval authority
+  over delivered hidden POL-05A behavior → POL-05B manager-facing composition.
   Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
@@ -43,8 +43,8 @@ Hidden owner behavior precedes exact AUTH authority; neither guide activation
 nor policy selection is authorized by the sufficiency action.
 
 1. POL-04B delivers live automatic compilation and exact AUTH-12B2 finalization.
-   Next, POL-05A → AUTH-12F4 → POL-05B delivers authorized manager review,
-   correction, explicit fresh-generation rerun and approval.
+   POL-05A adds hidden manager review, correction and pre-submit approval.
+   Next, AUTH-12F4 → POL-05B supplies public authority and manual dispatch.
 2. `12F4`, `12G`, and `12H`: activate stored pre-submit/post-submit and final
    guide behavior only after their owner implementations and remaining CON CP06-CP07.
 3. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.

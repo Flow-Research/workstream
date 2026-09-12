@@ -22,9 +22,9 @@ The first user flows prove that Workstream can run real work from intake to acce
 ## Flow 1: Project Manager Creates A Project
 
 POL-04B delivers the automatic compilation and immutable draft/findings stop
-below. The remaining manager proposal view, correction, fresh-generation rerun
-and approval follow POL-05A → AUTH-12F4 → POL-05B; the complete activation flow
-below describes the target lifecycle, not a claim that those surfaces are live.
+below. POL-05A delivers hidden manager proposal review, correction and pre-submit
+approval. AUTH-12F4 → POL-05B still supplies public authority and manual dispatch;
+the complete activation flow below describes the target lifecycle.
 
 1. A system-scoped Project Manager creates the project.
 2. Project owner provides open-ended guide material and business terms.

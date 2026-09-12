@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from project_create_fixtures import GUIDE_CREATION_CUSTODY_TRIGGERS, guide_snapshot_columns, seed_guide_snapshot_rows
-
-from app.modules.projects.models import ReviewPolicy
+from project_create_fixtures import guide_snapshot_columns
 
 import asyncio
 from io import BytesIO
 from dataclasses import replace
-import json
 from pathlib import Path
 import threading
 from types import SimpleNamespace
@@ -91,6 +88,7 @@ from app.modules.checkers.pre_submit_execution import (
 from app.modules.checkers.api import PreSubmissionInfrastructureUnavailableError
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from tests.pre_submit_test_helpers import (
+    approved_pre_submit_fixture,
     checker_execution as _CheckerExecution,
     evidence_workflow,
     submission_preparation_request,
@@ -133,7 +131,7 @@ async def test_evidence_workflow_requires_transaction_free_session() -> None:
         )
 
 
-def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes:
+def _archive(path: str = "task.toml", *, extra_path: str | None = None, evidence_path="evidence/results") -> bytes:
     output = BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
 
@@ -144,14 +142,14 @@ def _archive(path: str = "task.toml", *, extra_path: str | None = None) -> bytes
         write(path, b"[task]\nname='proof'\n")
         if extra_path is not None:
             write(extra_path, b"blocked\n")
-        if path != "evidence/results":
-            write("evidence/results", b"verified\n")
+        if path != evidence_path:
+            write(evidence_path, b"verified\n")
     return output.getvalue()
 
 
 def _effective_policy() -> dict[str, object]:
     defaults = {
-        "required_packet_fields": ["summary", "worker_attestation"],
+        "required_packet_fields": ["summary", "worker_attestation", "artifact_hash_manifest"],
         "forbidden_artifacts": [{"pattern": ".env"}, {"pattern": ".git/**"}],
         "attestation_terms": ["rights_confirmed"],
     }
@@ -173,15 +171,15 @@ def _effective_policy() -> dict[str, object]:
     }
 
 
-def _plan(catalogue):
-    policy = _effective_policy()
+def _plan(catalogue, *, policy=None):
+    policy = _effective_policy() if policy is None else policy
     policy_hash = canonical_json_hash(policy)
     compiled = compile_effective_project_submission_artifact_policy(policy, policy_hash)
     snapshot_id = uuid4()
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=uuid4(),
         guide_id=uuid4(),
-        guide_version=1,
+        guide_version="v0.1",
         source_snapshot_id=snapshot_id,
         source_snapshot_hash=guide_snapshot_columns(str(snapshot_id))["bundle_hash"],
         effective_policy_id=uuid4(),
@@ -255,10 +253,12 @@ async def _request(
     path: str = "task.toml",
     extra_path: str | None = None,
     catalogue=None,
+    plan=None,
+    evidence_path="evidence/results",
 ):
     selected_catalogue = catalogue or build_pre_submission_checker_catalogue()
-    plan = _plan(selected_catalogue)
-    data = _archive(path, extra_path=extra_path)
+    plan = _plan(selected_catalogue) if plan is None else plan
+    data = _archive(path, extra_path=extra_path, evidence_path=evidence_path)
     inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=_limits())
     preparation = ArtifactPreparationService(manager)
@@ -436,22 +436,25 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     tmp_path: Path,
     isolated_database_env: str,
 ) -> None:
-    request, inspector, manager, preparation, catalogue = await _request(tmp_path)
+    engine = create_async_engine(isolated_database_env)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    namespace = ArtifactStorageNamespaceSpec(
+        backend="local", adapter="local", provider_profile="test",
+        namespace_descriptor={"test": "submission-bundle"},
+        namespace_fingerprint=canonical_json_hash({"test": "submission-bundle"}),
+    )
+    plan, policy_params = await approved_pre_submit_fixture(session_factory, namespace, guide_version="v0.1")
+    evidence_path = policy_params.pop("evidence_path")
+    request, inspector, manager, preparation, catalogue = await _request(tmp_path, plan=plan, evidence_path=evidence_path)
+    request = replace(request, packet=replace(request.packet, contributor_attestation=(
+        request.packet.contributor_attestation + " " + " ".join(policy_params.pop("attestation_terms"))
+    )))
     actor_id = uuid4()
     identity_link_id = uuid4()
     lineage = request.effective_plan.lineage
-    engine = create_async_engine(isolated_database_env)
     custody_triggers = (
-        ("projects", "project_creation_custody"),
-        *GUIDE_CREATION_CUSTODY_TRIGGERS,
+        ("project_guides", "guide_mutation_product_custody"),
         ("project_guides", "guide_lineage_lifecycle_guard"),
-        ("submission_artifact_policies", "submission_policy_creation_custody"),
-        (
-            "effective_project_submission_artifact_policies",
-            "effective_submission_policy_custody",
-        ),
-        ("pre_submit_checker_policies", "pre_submit_policy_custody"),
-        ("review_policies", "review_policy_mutation_custody"), ("revision_policies", "revision_policy_mutation_custody"),  # noqa: E501
     )
     blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
     original_prepared_closed = False
@@ -475,18 +478,13 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 "guide": str(lineage.guide_id),
                 "snapshot": str(lineage.source_snapshot_id),
                 "snapshot_hash": lineage.source_snapshot_hash,
-                "submission_policy": str(uuid4()),
+                **policy_params,
                 "effective_policy": str(lineage.effective_policy_id),
                 "effective_hash": lineage.effective_policy_hash,
-                "effective_body": json.dumps(_effective_policy()), "checker_body": json.dumps(compile_effective_project_submission_artifact_policy(_effective_policy(), lineage.effective_policy_hash).compiled_bundle),  # noqa: E501
                 "checker_policy": str(lineage.pre_submit_policy_id),
                 "checker_hash": lineage.pre_submit_policy_bundle_hash,
                 "post_policy": str(uuid4()),
                 "post_policy_hash": "sha256:" + "8" * 64,
-                "review_policy": str(uuid4()),
-                "review_policy_hash": "sha256:" + "7" * 64,
-                "revision_policy": str(uuid4()),
-                "revision_policy_hash": "sha256:" + "6" * 64,
                 "task": str(request.task_id),
                 "assignment": str(request.assignment_id),
             }
@@ -511,82 +509,23 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
             await connection.execute(
                 text(
-                    "insert into projects (id,name,slug,status) values "
-                    "(:project,'Evidence project',:project,'active')"
-                ),
-                params,
-            )
-            await seed_guide_snapshot_rows(connection, project_id=str(lineage.project_id),
-                guide_id=str(lineage.guide_id), version="1", snapshot_id=str(lineage.source_snapshot_id))
-            await connection.execute(
-                text(
-                    "insert into submission_artifact_policies "
-                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
-                    "source_snapshot_hash,policy_version,lifecycle_status,policy_body,"
-                    "policy_hash,derivation_source,source_material_refs,created_by) values "
-                    "(:submission_policy,:project,:guide,'1',:snapshot,:snapshot_hash,'1',"
-                    "'draft','{}'::json,:effective_hash,'test','[]'::json,'test')"
-                ),
-                params,
-            )
-            await connection.execute(
-                text(
-                    "insert into effective_project_submission_artifact_policies "
-                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
-                    "source_snapshot_hash,submission_artifact_policy_id,"
-                    "submission_artifact_policy_hash,lifecycle_status,merge_algorithm_version,"
-                    "effective_policy,effective_policy_hash,created_by) values "
-                    "(:effective_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
-                    ":submission_policy,:effective_hash,'approved','1',cast(:effective_body as json),"
-                    ":effective_hash,'test')"
-                ),
-                params,
-            )
-            await connection.execute(
-                text(
-                    "insert into pre_submit_checker_policies "
-                    "(id,project_id,guide_id,guide_version,source_snapshot_id,"
-                    "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
-                    "lifecycle_status,compiler_version,compiled_bundle,compiled_bundle_hash,"
-                    "checker_names,checker_configs,created_by) values "
-                    "(:checker_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
-                    ":effective_policy,:effective_hash,'compiled','1',cast(:checker_body as json),"
-                    ":checker_hash,'[]'::json,'{}'::json,'test')"
-                ),
-                params,
-            )
-            await connection.execute(
-                text(
                     "insert into checker_policies "
                     "(id,project_id,guide_id,guide_version,source_snapshot_id,"
                     "source_snapshot_hash,effective_policy_id,effective_policy_hash,"
                     "pre_submit_checker_policy_id,pre_submit_checker_bundle_hash,"
                     "required_checkers,warning_checkers,blocking_severities,policy_hash,"
                     "policy_body,lifecycle_status,created_by) values "
-                    "(:post_policy,:project,:guide,'1',:snapshot,:snapshot_hash,"
+                    "(:post_policy,:project,:guide,:guide_version,:snapshot,:snapshot_hash,"
                     ":effective_policy,:effective_hash,:checker_policy,:checker_hash,"
                     "'[]'::json,'[]'::json,'[]'::json,:post_policy_hash,'{}'::json,"
                     "'compiled','test')"
                 ),
                 params,
             )
-            await connection.execute(ReviewPolicy.__table__.insert().values(
-                id=params["review_policy"], project_id=params["project"], guide_version="1",
-                policy_generation=1, policy_hash=params["review_policy_hash"],
-                semantics_status="legacy_incomplete", semantics_format="v1",
-            ))
-            await connection.execute(
-                text(
-                    "with inserted_revision as (insert into revision_policies "
-                    "(id,project_id,guide_version,policy_generation,policy_hash,"
-                    "semantics_status,max_revision_rounds,revision_deadline_hours,"
-                    "allowed_resubmission_states) values "
-                    "(:revision_policy,:project,'1',1,:revision_policy_hash,"
-                    "'legacy_incomplete',1,24,'[]'::json) returning id) "
-                    "update project_guides set status='active',selected_review_policy_id=:review_policy,selected_review_policy_generation=1,selected_review_policy_hash=:review_policy_hash,selected_revision_policy_id=:revision_policy,selected_revision_policy_generation=1,selected_revision_policy_hash=:revision_policy_hash where id=:guide"
-                ),
-                params,
-            )
+            await connection.execute(text("update projects set status='active' where id=:project"), params)
+            await connection.execute(text(
+                "update project_guides set status='active',approved_by=:actor,effective_at=now() where id=:guide"
+            ), params)
             await connection.execute(
                 text(
                     "insert into workstream_tasks "
@@ -603,8 +542,8 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                     "locked_review_policy_hash,locked_revision_policy_id,"
                     "locked_revision_policy_generation,locked_revision_policy_hash,"
                     "source_type,title,description,skill_tags,status,assigned_to,created_by) values "
-                    "(:task,:project,'1',:snapshot,:snapshot_hash,:effective_policy,"
-                    ":effective_hash,:checker_policy,:checker_hash,:post_policy,'1',"
+                    "(:task,:project,:guide_version,:snapshot,:snapshot_hash,:effective_policy,"
+                    ":effective_hash,:checker_policy,:checker_hash,:post_policy,:guide_version,"
                     ":post_policy_hash,'{}'::json,:review_policy,1,:review_policy_hash,"
                     ":revision_policy,1,:revision_policy_hash,'manual','Evidence task',"
                     "'Evidence test task','[]'::json,'in_progress',:actor,'test')"
@@ -639,7 +578,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             )
             async def fresh_checked_bundle():
                 prepared = await preparation.prepare(
-                    _bytes(_archive()),
+                    _bytes(_archive(evidence_path=evidence_path)),
                     media_type="application/zip",
                 )
                 inspection = await prepared.inspect(inspector)
@@ -671,7 +610,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 request,
                 preparation_request=preparation_request,
             )
-            assert first.pass_capability is not None
+            assert first.pass_capability is not None, first.failure_audit
             namespace = ArtifactStorageNamespaceSpec(
                 backend="local",
                 adapter="local",
@@ -926,7 +865,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
             )
             await session.rollback()
             assert durable_counts == {
-                "artifact_put_attempts": 1,
+                "artifact_put_attempts": before["artifact_put_attempts"] + 1,
                 "submission_bundle_durable_intents": 1,
                 "artifact_admission_charges": 4,
             }
@@ -976,7 +915,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 await session.commit()
             await session.rollback()
             blocked_prepared = await preparation.prepare(
-                _bytes(_archive("task.toml")), media_type="application/zip"
+                _bytes(_archive("task.toml", evidence_path=evidence_path)), media_type="application/zip"
             )
             blocked_inspection = await blocked_prepared.inspect(inspector)
             blocked_manifest = build_submission_manifest(blocked_inspection)
@@ -1169,6 +1108,7 @@ async def test_effective_executor_uses_plan_order_and_dispatches_project_rules(
     assert authority.facts.task_id == request.task_id
     assert authority.facts.assignment_id == request.assignment_id
     assert authority.facts.project_id == request.effective_plan.lineage.project_id
+    assert authority.facts.guide_version == "v0.1"
     assert authority.facts.submission_artifact_policy_id == request.submission_artifact_policy_id
     assert authority.facts.checker_policy_id == request.checker_policy_id
     assert authority.facts.prepared_generation_id == request.prepared_artifact.generation_id
@@ -1694,3 +1634,30 @@ async def test_terminal_event_during_sealing_precedes_checker_access_and_cleans(
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await request.prepared_artifact.close()
     manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["artifact_hash_manifest", "unknown_packet_field"])
+async def test_policy_packet_fields_use_inspected_manifest_and_reject_unknown(tmp_path, field):
+    catalogue = build_pre_submission_checker_catalogue()
+    policy = _effective_policy()
+    policy["required_packet_fields"] = [field]
+    policy["workstream_default_policy"]["required_packet_fields"] = [field]
+    request, inspector, manager, preparation, _ = await _request(
+        tmp_path, catalogue=catalogue, plan=_plan(catalogue, policy=policy),
+    )
+    service = PreparedBundleMaterializationService(
+        authorization=_AllowAuthority(), preparation=preparation,
+        checker_execution=_CheckerExecution(inspector, catalogue), storage_scheme="s3",
+    )
+    try:
+        if field == "unknown_packet_field":
+            with pytest.raises(PreSubmissionInfrastructureUnavailableError, match="pre_submission_policy_field_unmappable"):
+                await service.materialize_prepared_bundle(request)
+        else:
+            outcome = await service.materialize_prepared_bundle(request)
+            assert outcome.eligible
+            assert outcome.custody.semantic_manifest_sha256 == request.manifest.sha256
+    finally:
+        await request.prepared_artifact.close()
+        manager.close()

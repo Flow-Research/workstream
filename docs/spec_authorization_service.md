@@ -1267,8 +1267,10 @@ custody. Fresh replay rechecks current lifecycle authority and the exact stored
 allow envelope and digest, including a null denial code, without another allow
 event. POL retains transaction and immutable receipt ownership. The default
 port remains unavailable; POL-04B explicitly composes the authorized adapter
-in the live Celery setup path. POL-05A → AUTH-12F4 → POL-05B is the next manager
-review/correction/approval boundary. AUTH-12G later gates deterministic
+in the live Celery setup path. POL-05A delivers hidden complete proposal review,
+correction and pre-submit approval. AUTH-12F4 is next, followed by POL-05B public
+composition. Complete proposal content uses current exact-project manager
+`project.guide.manage` authority; diagnostic-read authority alone is insufficient. AUTH-12G later gates deterministic
 post-submit policy work; neither approval gate is required for draft finalization.
 
 The 12F1 foundation binds each future submission-policy handle to the exact

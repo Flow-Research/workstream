@@ -35,12 +35,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     Project,
     ProjectGuide,
-    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
-)
-from app.modules.projects.post_submit_policy import (
-    build_project_post_submit_checker_spec,
-    compile_project_post_submit_checker_spec,
 )
 from run_isolated_tests import NAME_RE as DERIVED_DATABASE_NAME
 from bootstrap_access_administrator import _run as run_admin_bootstrap
@@ -82,13 +77,13 @@ async def seed_active_guide_for_pre_12h_e2e(
             text("select 1 from project_guide_setup_finalizations where guide_id=:guide"),
             {"guide": guide_id},
         )
-        ensure(finalized is None, "task fixture refuses finalized guide")
-        await _seed_task_fixture_post_policy(
-            session=session,
-            project_id=project_id,
-            guide_id=guide_id,
-            manager_subject=manager_subject,
-            **fixture_bundle,
+        ensure(finalized is not None, "task fixture requires unified finalization")
+        from tests.projects.post_submit_fixtures import seed_post_submit_policy_for_downstream_tests
+        await seed_post_submit_policy_for_downstream_tests(
+            project_id=project_id, guide_id=guide_id,
+            source_snapshot=fixture_bundle["source_snapshot"],
+            pre_submit_checker_policy=fixture_bundle["pre_submit_checker_policy"],
+            approved_by_actor=manager_subject,
         )
         link = await session.scalar(
             select(ActorIdentityLink).where(
@@ -839,7 +834,7 @@ async def exercise_guide_setup_contract(
         "guide compilation delivery identity changed",
     )
     from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
-    from guide_compilation_e2e import compile_live_guide, project_task_fixture_sufficiency
+    from guide_compilation_e2e import compile_live_guide
 
     delivery = ProjectGuideCompilationDelivery(
         project_id=project_id,
@@ -850,35 +845,21 @@ async def exercise_guide_setup_contract(
         task_id=queued_setup["celery_task_id"],
     )
     if task_fixture:
-        # This separate guide supplies only manual downstream task prerequisites.
-        # Guide A independently proves the live compilation and immutable stop.
-        manual_report = await request_json(
-            client,
-            "POST",
+        # A manual diagnostic remains a supported report, never approval custody.
+        await request_json(
+            client, "POST",
             f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
             diagnostic_reader_token,
-            {
-                "source_snapshot_id": snapshot["id"],
-                "status": "passed",
-                "findings": [],
-                "summary": "Manual diagnostic prerequisite for the isolated task fixture.",
-            },
-            expected_status=201,
-            idempotency_key=str(uuid4()),
+            {"source_snapshot_id": snapshot["id"], "status": "passed", "findings": [],
+             "summary": "Manual diagnostic alongside the unified result."},
+            expected_status=201, idempotency_key=str(uuid4()),
         )
-        fixture_report_id = await project_task_fixture_sufficiency(
-            delivery, manual_report["id"]
-        )
-        setup_run = {**queued_setup, "output_sufficiency_report_id": fixture_report_id}
-    else:
-        await compile_live_guide(delivery)
-        setup_run = await request_json(
-            client,
-            "GET",
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
-            diagnostic_reader_token,
-        )
-        ensure(setup_run["status"] == "policy_draft_ready", "live guide did not stop at draft")
+    await compile_live_guide(delivery)
+    setup_run = await request_json(
+        client, "GET", f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        diagnostic_reader_token,
+    )
+    ensure(setup_run["status"] == "policy_draft_ready", "live guide did not stop at draft")
     report = await request_json(
         client,
         "GET",
@@ -905,29 +886,28 @@ async def exercise_guide_setup_contract(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report['id']}",
         diagnostic_reader_token,
     )
-    if not task_fixture:
-        policy = await request_json(
-            client,
-            "GET",
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
-            f"{setup_run['output_submission_artifact_policy_id']}",
-            diagnostic_reader_token,
-        )
-        policies = await request_json(
-            client,
-            "GET",
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
-            diagnostic_reader_token,
-        )
-        ensure(isinstance(policies, list), "submission artifact policy list did not return a list")
-        ensure(len(policies) == 1, f"expected one submission artifact policy, got {len(policies)}")
-        ensure(policies[0]["id"] == policy["id"], "submission policy list returned wrong policy")
-        await request_json(
-            client,
-            "GET",
-            f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy['id']}",
-            diagnostic_reader_token,
-        )
+    policy = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
+        f"{setup_run['output_submission_artifact_policy_id']}",
+        diagnostic_reader_token,
+    )
+    policies = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        diagnostic_reader_token,
+    )
+    ensure(isinstance(policies, list), "submission artifact policy list did not return a list")
+    ensure(len(policies) == 1, f"expected one submission artifact policy, got {len(policies)}")
+    ensure(policies[0]["id"] == policy["id"], "submission policy list returned wrong policy")
+    await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy['id']}",
+        diagnostic_reader_token,
+    )
     manual_create_key = str(uuid4())
     manual_payload = {
         "source_snapshot_id": snapshot["id"],
@@ -1069,19 +1049,10 @@ async def exercise_guide_setup_contract(
         expected_status=409,
         idempotency_key=str(uuid4()),
     )
-    if not task_fixture:
-        denied = await request_json(
-            client,
-            "POST",
-            f"{manual_path}/{policy['id']}/approve",
-            manager_token,
-            {"approval_note": "Unified proposal must wait for manager review workflow."},
-            expected_status=422,
-        )
-        ensure(
-            "unified compilation policy approval is unavailable" in denied["detail"],
-            "unified approval did not reach its specific draft-only guard",
-        )
+    await request_json(
+        client, "POST", f"{manual_path}/{policy['id']}/approve", manager_token,
+        {}, expected_status=404,
+    )
     for suffix in ("effective-submission-artifact-policy", "pre-submit-checker-policy"):
         await request_json(
             client,
@@ -1099,91 +1070,19 @@ async def exercise_guide_setup_contract(
         )
         ensure(after == setup_run, "policy probes changed immutable live finalization")
         return {}
-    effective_policy = await request_json(
-        client,
-        "POST",
-        f"{manual_path}/{manual_successor['id']}/approve",
-        manager_token,
-        {"approval_note": "Manual policy for isolated downstream task lineage fixture."},
-    )
-    return {
-        "source_snapshot": snapshot,
-        "sufficiency_report": report,
-        "submission_artifact_policy": manual_successor,
-        "effective_policy": effective_policy,
-    }
-
-
-async def _seed_task_fixture_post_policy(
-    *,
-    session,
-    project_id: str,
-    guide_id: str,
-    manager_subject: str,
-    source_snapshot: dict,
-    sufficiency_report: dict,
-    submission_artifact_policy: dict,
-    effective_policy: dict,
-    required_checkers: list[str] | None = None,
-    warning_checkers: list[str] | None = None,
-    blocking_severities: list[str] | None = None,
-) -> dict:
-    """Seed the canonical approved policy prerequisite for the API contract drill.
-
-    The real compiler builds the policy after API-created prerequisites. This
-    fixture supplies an approved policy row without external agent
-    credentials so the drill can exercise task/submission/checker APIs. It does
-    not prove live unified setup or guide-activation authority; those require
-    their separately governed product paths.
-    """
-    guide_version = effective_policy["guide_version"]
-    spec = build_project_post_submit_checker_spec(
-        project_id=project_id,
-        guide_version=guide_version,
-        required_checkers=[] if required_checkers is None else required_checkers,
-        warning_checkers=[] if warning_checkers is None else warning_checkers,
-        blocking_severities=blocking_severities,
-    )
-    compiled = compile_project_post_submit_checker_spec(
-        project_id=project_id,
-        guide_version=guide_version,
-        spec=spec,
-    )
-    pre_submit_checker_policy = await session.scalar(
-        select(PreSubmitCheckerPolicy).where(
+    from tests.projects.unified_policy_fixtures import approve_unified_submission_policy
+    from app.modules.projects.schemas import PreSubmitCheckerPolicyResponse
+    effective_policy = await approve_unified_submission_policy(project_id, guide_id, policy["id"])
+    async with db_session.get_session_factory()() as session:
+        pre = (await session.scalars(select(PreSubmitCheckerPolicy).where(
             PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"],
-            PreSubmitCheckerPolicy.lifecycle_status == "compiled",
-        )
-    )
-    ensure(
-        pre_submit_checker_policy is not None,
-        "compiled pre-submit checker policy was not created during approval",
-    )
-    post_submit_policy = PostSubmitCheckerPolicy(
-        id=str(uuid4()),
-        project_id=project_id,
-        guide_id=guide_id,
-        guide_version=guide_version,
-        source_snapshot_id=source_snapshot["id"],
-        source_snapshot_hash=source_snapshot["bundle_hash"],
-        effective_policy_id=effective_policy["id"],
-        effective_policy_hash=effective_policy["effective_policy_hash"],
-        pre_submit_checker_policy_id=pre_submit_checker_policy.id,
-        pre_submit_checker_bundle_hash=pre_submit_checker_policy.compiled_bundle_hash,
-        required_checkers=compiled.required_checkers,
-        warning_checkers=compiled.warning_checkers,
-        blocking_severities=list(compiled.blocking_severities),
-        policy_hash=compiled.policy_hash,
-        policy_body=compiled.policy_body,
-        lifecycle_status="approved",
-        approved_by_role="project_manager",
-        approved_by_actor=manager_subject,
-        approved_at=datetime.now(UTC),
-        created_by=manager_subject,
-    )
-    session.add(post_submit_policy)
-    await session.commit()
-    return {"id": post_submit_policy.id, "policy_hash": post_submit_policy.policy_hash}
+        ))).one()
+        pre_policy = PreSubmitCheckerPolicyResponse.model_validate(pre).model_dump(mode="json")
+    return {
+        "source_snapshot": snapshot, "sufficiency_report": report,
+        "submission_artifact_policy": policy, "effective_policy": effective_policy,
+        "pre_submit_checker_policy": pre_policy,
+    }
 
 
 async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
@@ -1781,7 +1680,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
             idempotency_key=str(uuid4()),
         )
-        ensure(guide["id"] != live_guide_id, "task fixture reused finalized live guide")
+        ensure(guide["id"] != live_guide_id, "task fixture must use its own finalized guide")
         await configure_policy_boundaries(
             client,
             project_reader_token,
@@ -2198,7 +2097,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "submission requirements did not expose the locked artifact path",
         )
         ensure(
-            submission_requirements["required_evidence"][0]["key"] == "checker_log",
+            submission_requirements["required_evidence"][0]["key"] == "required-evidence-001",
             "submission requirements did not expose the locked evidence key",
         )
         ensure(

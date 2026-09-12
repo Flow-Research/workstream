@@ -1,6 +1,6 @@
 # Chunk Contract: WS-POL-003-05A - Hidden Pre-Submit Approval
 
-Status: Proposed after 04B; inactive. Risk: L1.
+Status: Complete (hidden boundary; public AUTH-12F4/POL-05B remains). Risk: L1.
 
 ## Goal
 
@@ -9,14 +9,16 @@ over the complete immutable unified result.
 
 ## Allowed files
 
-Project approval/policy service/repository/schema, ART catalogue/compiler
-integration, bounded unified-review/correction schemas and shared compilation
+Project approval/policy service/repository/schema, CHECKERS catalogue/compiler
+integration and affected ART/TASK consumers, bounded unified-review/correction schemas and shared compilation
 input contracts, deny-by-default AUTH seam, focused tests, and WS-POL-003 docs.
 
 ## Not allowed
 
 Action activation, public live approval, model calls, post projection,
-checker execution, second compiler/registry, or in-place proposal edits.
+new checker execution activation, second compiler/registry, or in-place proposal edits.
+Existing pre-submit consumers must accept the canonical approved policy: preserve
+opaque guide versions and recognize its inspected-byte artifact hash manifest.
 
 ## Acceptance
 
@@ -37,7 +39,7 @@ checker execution, second compiler/registry, or in-place proposal edits.
   approval. Choose the owner-local table/constraints in this hidden boundary,
   not in AUTH-12F4 or live 05B.
 - The effective policy is mandatory platform defaults plus the approved
-  project artifact policy, compiled by the existing ART-owned compiler into
+  project artifact policy, compiled by the existing CHECKERS-owned compiler into
   the exact pre-submit plan. Project requirements can strengthen/configure
   supported rules but cannot remove or duplicate platform work. Unknown
   required rules remain explicit gaps; do not invent defaults for them.
@@ -50,12 +52,15 @@ Existing setup-run and post-policy reads are not a complete review package.
 PROJECTS owns an exact-compilation bounded projection containing sufficiency
 findings, artifact proposal, requirements/dispositions, pre/post bindings,
 capability suggestions, safe notes and component/catalogue/generation lineage.
-No raw guide, model reasoning, credentials, replayable references or hidden
-provider payload is exposed. Approval must name exactly the displayed target
+The package contains guide-derived prose and requires current exact-project
+Project Manager guide-content authority (`project.guide.manage`), not Operator
+or Audit diagnostic authority. It excludes raw document payloads, model
+reasoning, credentials, runtime handles, replayable references and hidden
+provider payloads; prose validation is not a promise of semantic DLP. Approval must name exactly the displayed target
 and hashes; a latest-only diagnostic response is insufficient.
 
-Also implement a hidden setup-wide correction request before any artifact/pre
-approval. Bind exact known finalized compilation/result/components, normalized
+The hidden setup-wide correction request acts on a known finalized setup
+result, including an already approved predecessor. Bind exact known finalized compilation/result/components, normalized
 bounded reason and predecessor. Record a separate immutable correction
 operation and allocate one successor generation through the existing unified
 request/attempt machinery. Version its bounded feedback input contract where

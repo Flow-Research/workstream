@@ -136,9 +136,9 @@ it cannot create a new provider attempt. Invalid, uncertain and finalized attemp
 and retained attempts without runtime configuration are excluded from reclaim. Accepted
 results resume persistence and projection without another model call.
 
-Project Manager proposal visibility, editing, explicit fresh-generation reruns
-and approval remain POL-05. Generic artifact-policy approval rejects unified
-drafts before creating effective policy. Neither warning acknowledgement nor
+POL-05A supplies hidden complete-proposal review, pre-submission approval and
+setup-wide correction. AUTH-12F4 and POL-05B still own public authorization and
+manager-facing exposure. The manual artifact-policy approval route is removed. Neither warning acknowledgement nor
 post-submit policy correction dispatches inference. Operators must not invoke
 projectors directly or rewrite retained attempt evidence.
 
@@ -163,16 +163,11 @@ The active review/revision policy setup endpoints are:
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy`
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy`
 
-The manual submission-policy approval endpoint remains separate from unified
-proposal approval:
-
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
-
-Unified post-submit setup, approval and correction routes are unavailable.
-The latest setup run exposes bounded outcome/status diagnostics and output IDs.
-Complete compilation proposals and the catalogue-growth handoff are not exposed
-there. Their manager-facing visibility, review, correction, approval and manual
-rerun belong to POL-05; post-submit policy projection belongs to POL-06.
+Unified proposal approval and correction have no public route yet. The latest
+setup run exposes bounded diagnostics and output IDs; the hidden review package
+contains the complete pre/post proposal and catalogue-growth handoff. AUTH-12F4
+and POL-05B expose manager review, approval and manual rerun. Post-submit policy
+projection remains POL-06.
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
 `If-Match` value. Use `"no-current-policy"` for the first version and the quoted
@@ -195,13 +190,14 @@ those commands are already live.
 
 An authorized Project Manager reviews the complete bounded proposal before
 approval. Effective intake combines mandatory platform defaults with approved
-project rules using the canonical ART compiler. Post-submit policy is a
+project rules using the canonical CHECKERS compiler. Post-submit policy is a
 separate deterministic projection of the same unified result; no evaluator
 runs during setup or approval.
 
 The planned exact-compilation review-package surface uses
-`project.guide_compilation.review_package.read` (AUTH-12F4), including covered
-Operator/Audit diagnostic readers with no approval power. The separate planned
+`project.guide_compilation.review_package.read` (AUTH-12F4), requiring
+`project.guide.manage` from a covered Project Manager. Operator/Audit diagnostic
+authority does not grant access to the complete proposal. The separate planned
 `project.guide_compilation.correction.request` permits only the covered Project
 Manager to correct the exact known terminal result. These are new object-scoped
 contracts, not capabilities already provided by status-only setup reads.

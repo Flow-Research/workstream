@@ -512,8 +512,9 @@ its canonical input hash; source snapshots commit its hash and count.
 
 Manual reports use their separately authorized API and persist null agent name
 and version. They do not execute inference or supply compilation provenance.
-The removed run-sufficiency route is not a manager rerun API; that later workflow
-belongs to POL-05A → AUTH-12F4 → POL-05B.
+POL-05A supplies hidden setup-wide correction and canonical human request
+admission. AUTH-12F4 and POL-05B remain responsible for public authorization and
+manual dispatch. The removed run-sufficiency route has no compatibility path.
 
 The live Celery path consumes the sufficiency projector under fresh fixed-service
 authority. Its immutable `ProjectGuideComponentProjectionOperation` binds the
@@ -634,10 +635,11 @@ and authorization evidence. Finalization records the exact permitted outputs.
 
 `derivation_source`, agent identity and generated policy version are server-owned
 provenance. Clients cannot supply them or use the reserved `agent-` version
-prefix. Manual policies retain their own authorized provenance. A unified draft
-cannot use the generic manual-policy approval route: manager proposal review,
-correction, fresh-generation rerun and approval remain POL-05A → AUTH-12F4 →
-POL-05B. Projection creates neither effective policy nor executable checkers.
+prefix. Manual drafts retain their own authorized creation/update provenance.
+The manual approval route is removed. POL-05A reviews the complete unified
+proposal and atomically approves effective/pre-submit policy with immutable
+custody, or records a correction successor. Public authorization and dispatch
+remain AUTH-12F4 → POL-05B. Projection itself creates no approved policy.
 
 ## ProjectGuideComponentProjectionOperation
 

@@ -41,9 +41,9 @@ from app.modules.checkers.catalogue import (
     PreSubmissionPlatformCapability,
     PreSubmissionPolicyPrimitive,
 )
+from app.modules.checkers.api.artifact_paths import is_canonical_relative_path
 from app.modules.checkers.pre_submit_defaults import (
     attestation_validation_facts,
-    is_canonical_relative_path,
     matched_low_quality_patterns,
 )
 
@@ -434,7 +434,8 @@ class EffectivePreSubmissionProcessor:
             message_code = "policy_attestation_missing"
         elif primitive is PreSubmissionPolicyPrimitive.VALIDATE_SUBMISSION_PACKET:
             fields = set(self._string_list(config.get("fields")))
-            known = {"summary", "worker_attestation", "contributor_attestation"}
+            # The artifact hash manifest is derived and verified before dispatch.
+            known = {"summary", "worker_attestation", "contributor_attestation", "artifact_hash_manifest"}
             if not fields.issubset(known):
                 raise PreSubmissionInfrastructureUnavailable(
                     "pre_submission_policy_field_unmappable"

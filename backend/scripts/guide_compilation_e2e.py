@@ -73,7 +73,9 @@ class E2EProjectGuideRuntime:
             status="draft_ready",
             findings=(CompilationFinding(severity="info", code="guide.ready", message="Assigned documents are available for this scripted contract test.", evidence_refs=tuple(refs)),),
             submission_artifact_policy=SubmissionArtifactPolicyProposal(
-                required_artifacts=("answer",),
+                required_artifacts=("answer.md",),
+                required_evidence=("checker_log",),
+                attestation_terms=("real_api_originality",),
                 maximum_file_size_bytes=1_000_000,
                 maximum_package_size_bytes=5_000_000,
             ),
@@ -113,62 +115,9 @@ async def compile_live_guide(delivery: ProjectGuideCompilationDelivery) -> dict:
     return first
 
 
-async def project_task_fixture_sufficiency(delivery, report_id):
-    """Exercise real request/execution/projection; stop before downstream fixture setup.
-
-    This proves document custody and scripted compilation, not a model provider
-    or the future post-submit approval workflow.
-    """
-    from functools import partial
-    from sqlalchemy import text
-    from app.db.session import get_session_factory
-    from app.adapters.artifacts import guide_document_manifest_port, guide_document_access_runtime
-    from app.adapters.checkers import project_guide_pre_submission_catalogue
-    from app.adapters.auth import (
-        guide_compilation_request_authority, guide_compilation_execution_authority,
-        guide_sufficiency_projection_authorization, artifact_policy_projection_authorization,
-    )
-    from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
-    from app.modules.projects.api import ProjectGuideCompilationExecutionCommand, ProjectGuideProjectionCommand
-    from app.modules.projects.guide_compilation.automatic_request import AutomaticCompilationInputs, automatic_operation_id
-    from app.modules.projects.guide_compilation.service import GuideCompilationService
-    from app.modules.projects.guide_compilation.orchestrator import project_guide_compilation_execution_port
-    from app.modules.projects.guide_compilation.projections import GuideCompilationProjectionService
-    from app.modules.projects.models import GuideSufficiencyReport
-    from run_isolated_tests import NAME_RE
-
-    sessions = get_session_factory()
-    configuration = project_guide_runtime_configuration(get_settings())
-    pre, post = project_guide_pre_submission_catalogue(), current_post_submit_catalogue()
-    async with sessions() as session:
-        database = await session.scalar(text("select current_database()"))
-        if NAME_RE.fullmatch(str(database)) is None:
-            raise RuntimeError("task report projection requires an isolated E2E database")
-        diagnostic = await session.get(GuideSufficiencyReport, report_id)
-        assert diagnostic is not None and diagnostic.source_snapshot_id == str(delivery.source_snapshot_id)
-        assert diagnostic.project_setup_run_id is None and diagnostic.agent_name is None
-        async with guide_compilation_request_authority(session, automatic_operation_id(delivery.setup_run_id, delivery.setup_generation)) as (authority, actor):
-            request = await GuideCompilationService(session, authority,
-                automatic_inputs=AutomaticCompilationInputs(guide_document_manifest_port(session), pre, post, configuration),
-            ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)
-    runtime = E2EProjectGuideRuntime(configuration)
-    execution = project_guide_compilation_execution_port(sessions,
-        material_factory=guide_document_manifest_port,
-        document_access_factory=partial(guide_document_access_runtime, sessions),
-        pre_submission_capabilities=pre, post_submission_capabilities=post,
-        authorization_context=guide_compilation_execution_authority, runtime_factory=runtime_factory(runtime))
-    await execution.execute(ProjectGuideCompilationExecutionCommand(attempt_id=request.attempt_id))
-    projection = GuideCompilationProjectionService(sessions, material_factory=guide_document_manifest_port,
-        sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
-        policy_authorization_factory=artifact_policy_projection_authorization)
-    outcome = await projection.project_guide_sufficiency(ProjectGuideProjectionCommand(attempt_id=request.attempt_id))
-    assert runtime.calls == 1
-    return str(outcome.output_id)
-
-
 def guide_pdf_bytes() -> bytes:
     """Build a one-page PDF for document upload/custody, not model-quality proof."""
-    stream = b"BT /F1 12 Tf 40 750 Td (Submit answer.txt with reviewable evidence.) Tj ET"
+    stream = b"BT /F1 12 Tf 40 750 Td (Submit answer.md with reviewable evidence.) Tj ET"
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",

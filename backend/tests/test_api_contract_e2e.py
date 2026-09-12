@@ -134,32 +134,27 @@ async def test_api_drill_seeds_one_canonical_post_submit_policy(
     """The real drill compiler accepts additions but cannot reclassify defaults."""
     import json
     from types import SimpleNamespace
-    from unittest.mock import AsyncMock, Mock
+    from unittest.mock import AsyncMock, MagicMock
     from uuid import uuid4
 
     from app.modules.checkers.api.post_submit_catalogue import CompiledPostSubmitPolicy
     from app.modules.projects.post_submit_policy import PostSubmitCheckerCompilerError
+    from tests.projects.post_submit_fixtures import seed_post_submit_policy_for_downstream_tests
+    from app.db import session as db_session
 
     api_contract = MODULES[0]
-    pre = SimpleNamespace(id=str(uuid4()), compiled_bundle_hash="sha256:" + "a" * 64)
-    session = SimpleNamespace(
-        scalar=AsyncMock(return_value=pre),
-        add=Mock(),
-        commit=AsyncMock(),
-    )
-
+    session = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
+    session.get = AsyncMock(return_value=SimpleNamespace(version="v1"))
+    session.commit = AsyncMock()
+    monkeypatch.setattr(db_session, "get_session_factory", lambda: lambda: session)
+    pre = {"id": str(uuid4()), "compiled_bundle_hash": "sha256:" + "a" * 64,
+           "effective_policy_id": str(uuid4()), "effective_policy_hash": "sha256:" + "c" * 64}
     payload = dict(
-        project_id=str(uuid4()),
-        guide_id=str(uuid4()),
-        manager_subject="manager",
+        project_id=str(uuid4()), guide_id=str(uuid4()), approved_by_actor="manager",
         source_snapshot={"id": str(uuid4()), "bundle_hash": "sha256:" + "b" * 64},
-        sufficiency_report={"id": str(uuid4())},
-        submission_artifact_policy={"id": str(uuid4())},
-        effective_policy={
-            "id": str(uuid4()),
-            "guide_version": "v1",
-            "effective_policy_hash": "sha256:" + "c" * 64,
-        },
+        pre_submit_checker_policy=pre,
     )
     if severity_floor is not None:
         payload["blocking_severities"] = severity_floor
@@ -169,13 +164,13 @@ async def test_api_drill_seeds_one_canonical_post_submit_policy(
         with pytest.raises(
             PostSubmitCheckerCompilerError, match="project selection is unavailable"
         ):
-            await api_contract._seed_task_fixture_post_policy(session=session, **payload)
-        session.scalar.assert_not_awaited()
+            await seed_post_submit_policy_for_downstream_tests(**payload)
+        session.get.assert_awaited_once()
         session.add.assert_not_called()
         session.commit.assert_not_awaited()
         return
 
-    result = await api_contract._seed_task_fixture_post_policy(session=session, **payload)
+    result = await seed_post_submit_policy_for_downstream_tests(**payload)
     session.add.assert_called_once()
     policy = session.add.call_args.args[0]
     parsed = CompiledPostSubmitPolicy.model_validate_json(json.dumps(policy.policy_body))
@@ -189,10 +184,12 @@ async def test_api_drill_seeds_one_canonical_post_submit_policy(
         blocking_severities=policy.blocking_severities,
     )
     assert set(parsed.default_checkers) == api_contract.EXPECTED_DURABLE_CHECKERS
-    assert result == {"id": policy.id, "policy_hash": parsed.policy_hash}
+    assert result["id"] == policy.id
+    assert result["policy_hash"] == parsed.policy_hash
+    assert policy.approved_by_actor == policy.created_by == "manager"
     assert policy.lifecycle_status == "approved"
-    assert policy.pre_submit_checker_policy_id == pre.id
-    session.scalar.assert_awaited_once()
+    assert policy.pre_submit_checker_policy_id == pre["id"]
+    session.get.assert_awaited_once()
     session.commit.assert_awaited_once()
 
 

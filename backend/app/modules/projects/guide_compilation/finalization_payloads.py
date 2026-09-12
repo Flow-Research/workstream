@@ -59,6 +59,7 @@ class LockedFinalization:
     operations: tuple[ProjectGuideComponentProjectionOperation, ...]
     report: GuideSufficiencyReport | None
     policy: SubmissionArtifactPolicy | None
+    approval_custody: object | None = None
 
 
 def deny() -> None:
@@ -67,7 +68,11 @@ def deny() -> None:
 
 
 def require_lineage(
-    view: LockedFinalization, command: ProjectGuideSetupFinalizationCommand
+    view: LockedFinalization,
+    command: ProjectGuideSetupFinalizationCommand,
+    *,
+    require_current: bool = True,
+    allowed_guide_statuses: frozenset[str] = frozenset({"draft"}),
 ) -> None:
     """Bind every selected row to the latest locked draft and persisted attempt."""
     a, c, s, g, snap, request = (
@@ -81,13 +86,13 @@ def require_lineage(
     if any(row is None for row in (a, c, s, g, snap, request)):
         deny()
     if (
-        not view.compilation_is_current
+        (require_current and not view.compilation_is_current)
         or c.id != command.compilation_id
         or s.id != str(command.setup_run_id)
         or s.setup_generation != command.setup_generation
         or g.id != str(command.guide_id)
         or g.project_id != str(command.project_id)
-        or g.status != "draft"
+        or g.status not in allowed_guide_statuses
         or a.status != "compilation_persisted"
         or a.persisted_compilation_id != c.id
         or c.attempt_id != a.id
@@ -117,11 +122,7 @@ def require_lineage(
 def require_source_shape(view: LockedFinalization) -> str:
     """Validate the sole queued source shape and hash it using the projection owner."""
     s = view.setup
-    if (
-        s.status != "queued"
-        or s.current_step != "queued"
-        or s.documents_ready_at is None
-    ):
+    if s.status != "queued" or s.current_step != "queued" or s.documents_ready_at is None:
         deny()
     for name in (
         "error_code",
@@ -291,6 +292,14 @@ def require_outputs(view, report_op, policy_op, result) -> None:
         if view.policy is not None:
             deny()
         return
+    if view.policy.lifecycle_status == "draft":
+        projected_digest = policy_digest(view.policy)
+        if view.approval_custody is not None:
+            deny()
+    else:
+        from .approval_custody import approved_projection_digest
+
+        projected_digest = approved_projection_digest(view)
     if (
         view.policy.id != policy_op.policy_id
         or view.policy.id != str(policy_op.output_id)
@@ -298,8 +307,7 @@ def require_outputs(view, report_op, policy_op, result) -> None:
         or policy_op.prior_operation_id != report_op.operation_id
         or policy_op.prior_output_id != report_op.output_id
         or policy_op.prior_output_digest != report_op.output_digest
-        or policy_digest(view.policy) != policy_op.output_digest
-        or view.policy.lifecycle_status != "draft"
+        or projected_digest != policy_op.output_digest
         or view.policy.derivation_source != "unified_compilation"
     ):
         deny()

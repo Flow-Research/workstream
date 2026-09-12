@@ -26,10 +26,12 @@ intake, migration of product columns, or approval of a 12F3-only draft.
 - Activate only `project.submission_artifact_policy.approve` for the covered
   human Project Manager; every service and unrelated human denies.
 - Add proposed `project.guide_compilation.review_package.read` mapped to
-  `project.setup_diagnostic.read`, with the existing covered diagnostic-reader
-  principal matrix and a new exact compilation resource contract. It exposes
-  only POL-05A's bounded package and grants no approval or correction power.
-  Existing status-only diagnostic facts are not sufficient for this read.
+  `project.guide.manage`, requiring a current exact-project human Project
+  Manager grant and a new exact compilation resource contract. Operator, Audit,
+  service and foreign-project grants deny. The package contains guide-derived
+  prose but excludes raw document payloads, runtime handles and replayable
+  references. It grants no approval or correction power; existing status-only
+  diagnostic authority is insufficient.
 - Add proposed `project.guide_compilation.correction.request` mapped to
   `project.guide_compilation.request` for the covered human Project Manager.
   It binds the exact known finalized predecessor, safe correction digest and

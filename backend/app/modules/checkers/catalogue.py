@@ -11,6 +11,7 @@ from app.modules.checkers.api.pre_submit_catalogue import (
     PreSubmissionCapabilityDefinition, PreSubmissionCapabilityProjection,
 )
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.api.policy_compilation import CompiledPreSubmitCheckerPolicy
 from app.modules.checkers.api import (
     EffectivePreSubmissionExecutionPlan,
     EffectivePreSubmissionPlanLineage,
@@ -295,6 +296,16 @@ class PreSubmissionCheckerCatalogue:
             if entry.primitive == primitive:
                 return entry
         raise PreSubmissionCatalogueError("catalogue primitive is unknown")
+
+    def compile_policy_bundle(
+        self, *, effective_policy: Mapping[str, object], effective_policy_hash: str,
+    ) -> CompiledPreSubmitCheckerPolicy:
+        """Implement the public policy compiler capability through its sole owner."""
+        from app.modules.checkers.compiler import compile_effective_project_submission_artifact_policy
+
+        return compile_effective_project_submission_artifact_policy(
+            dict(effective_policy), effective_policy_hash,
+        )
 
     def compile_effective_plan(
         self,

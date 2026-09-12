@@ -481,7 +481,7 @@ jobs:
         working-directory: backend
         run: >-
           coverage report
-          --include='app/modules/projects/guide_compilation/*'
+          --include='app/modules/projects/guide_compilation/*,app/modules/projects/api/compilation_identity.py,app/modules/projects/api/guide_proposal_package.py,app/modules/projects/api/guide_proposals.py'
           --precision=2
           --fail-under=90
 

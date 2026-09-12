@@ -1,4 +1,4 @@
-"""Resolve automatic request input from owned lineage and verified ART material."""
+"""Resolve canonical setup input from owned lineage and verified ART material."""
 
 from dataclasses import dataclass
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -7,7 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentManifestRequest
+from app.modules.projects.api.guide_documents import (
+    GuideDocumentManifestPort,
+    GuideDocumentManifestRequest,
+)
 from app.modules.checkers.api.pre_submit_catalogue import (
     PreSubmissionCapabilityProjection,
 )
@@ -34,7 +37,7 @@ from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguratio
 
 
 @dataclass(frozen=True)
-class AutomaticCompilationInputs:
+class CompilationRequestInputs:
     """Composition supplies material access and canonical CHECKERS projections, never a runtime."""
 
     material: GuideDocumentManifestPort
@@ -82,6 +85,35 @@ class AutomaticCompilationInputs:
             source_mutation_operation_id=mutation.operation_id,
             source_authorization_decision_event_id=UUID(setup.authorization_decision_event_id),
         )
+        context = await self.context_for_setup(session, setup)
+        identity = CompilationAttemptIdentity.from_context(context)
+        operation_id = automatic_operation_id(setup_run_id, setup.setup_generation)
+        predecessor = await GuideCompilationRepository(session).current_compilation(
+            UUID(setup.project_id),
+            UUID(setup.guide_id),
+            lock=False,
+        )
+        facts = ProjectGuideCompilationRequestFacts(
+            **identity.model_dump(),
+            operation_id=operation_id,
+            request_id=uuid5(operation_id, "request"),
+            idempotency_key=uuid5(operation_id, "idempotency"),
+            expected_predecessor_compilation_id=predecessor.id if predecessor else None,
+        )
+        await GuideCompilationRepository(session).require_automatic_request_origin(facts, origin)
+        return facts, identity, origin
+
+    async def context_for_setup(self, session: AsyncSession, setup: ProjectSetupRun):
+        """Use one document/context builder for automatic and correction requests."""
+        from .correction_feedback import load_correction_feedback
+
+        if self.runtime_configuration is None:
+            raise GuideCompilationIntegrityError("compilation runtime configuration unavailable")
+        guide = await session.get(ProjectGuide, setup.guide_id)
+        snapshot = await session.get(GuideSourceSnapshot, setup.source_snapshot_id)
+        if guide is None or snapshot is None:
+            raise GuideCompilationIntegrityError("compilation source unavailable")
+        setup_run_id = UUID(setup.id)
         loaded = await self.material.load(
             GuideDocumentManifestRequest(
                 project_id=UUID(setup.project_id),
@@ -100,23 +132,9 @@ class AutomaticCompilationInputs:
             pre_submission_capabilities=self.pre_submission_capabilities,
             post_submission_capabilities=self.post_submission_capabilities,
             runtime_configuration=self.runtime_configuration,
+            correction_feedback=await load_correction_feedback(session, setup_run_id),
         )
-        identity = CompilationAttemptIdentity.from_context(context)
-        operation_id = automatic_operation_id(setup_run_id, setup.setup_generation)
-        predecessor = await GuideCompilationRepository(session).current_compilation(
-            UUID(setup.project_id),
-            UUID(setup.guide_id),
-            lock=False,
-        )
-        facts = ProjectGuideCompilationRequestFacts(
-            **identity.model_dump(),
-            operation_id=operation_id,
-            request_id=uuid5(operation_id, "request"),
-            idempotency_key=uuid5(operation_id, "idempotency"),
-            expected_predecessor_compilation_id=predecessor.id if predecessor else None,
-        )
-        await GuideCompilationRepository(session).require_automatic_request_origin(facts, origin)
-        return facts, identity, origin
+        return context
 
 
 def automatic_operation_id(setup_run_id: UUID, generation: int) -> UUID:

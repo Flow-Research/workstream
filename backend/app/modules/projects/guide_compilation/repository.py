@@ -135,7 +135,13 @@ class GuideCompilationRepository:
         )
         return tuple(rows)
 
-    async def lock_finalization(self, command, attempt_id) -> LockedFinalization:
+    async def lock_finalization(
+        self,
+        command,
+        attempt_id,
+        *,
+        exact_setup: bool = False,
+    ) -> LockedFinalization:
         """Follow the projection lock order and refresh all read-before-lock objects."""
         attempt = await self._session.scalar(
             select(ProjectGuideCompilationAttempt)
@@ -155,6 +161,17 @@ class GuideCompilationRepository:
         setup = await projects.lock_latest_project_setup_run(
             str(command.project_id), guide.id, guide.version
         )
+        if exact_setup:
+            # Downstream review can select retained custody explicitly. The
+            # finalizer still uses only the latest source via the default path.
+            setup = await projects.lock_project_setup_run(str(command.setup_run_id))
+            if setup is not None:
+                snapshot = await self._session.scalar(
+                    select(GuideSourceSnapshot)
+                    .where(GuideSourceSnapshot.id == setup.source_snapshot_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
         if setup is None or snapshot is None:
             raise GuideCompilationIntegrityError("finalization setup unavailable")
         await self._session.refresh(snapshot)
@@ -202,6 +219,8 @@ class GuideCompilationRepository:
         for output in (report, policy):
             if output is not None:
                 await self._session.refresh(output)
+        from .approval_custody import load_approval_custody
+
         return LockedFinalization(
             attempt,
             request,
@@ -213,6 +232,7 @@ class GuideCompilationRepository:
             operations,
             report,
             policy,
+            await load_approval_custody(self._session, policy.id if policy else None),
         )
 
     async def persist_finalization(self, row, setup) -> None:
@@ -486,9 +506,12 @@ class GuideCompilationRepository:
     ) -> ProjectGuideCompilationAttempt:
         """Store one revalidated canonical result before compilation insertion."""
         from .runtime_resources import require_compilation_document_access
+
         attempt = await self._lock_attempt(attempt_id)
         try:
-            await require_compilation_document_access(self._session, attempt_id, context.material, result)
+            await require_compilation_document_access(
+                self._session, attempt_id, context.material, result
+            )
             identity = identity_from_attempt(attempt)
             accepted = accepted_compilation_result(result)
             validate_accepted_compilation_result(
@@ -566,6 +589,7 @@ class GuideCompilationRepository:
     ) -> ProjectGuideCompilation:
         """CAS-insert one immutable compilation and finish its attempt."""
         from .runtime_resources import require_compilation_document_access
+
         attempt = await self._lock_attempt(attempt_id)
         existing = await self._compilation_for_attempt(attempt_id)
         if attempt.status not in {"provider_result_accepted", "compilation_persisted"}:
@@ -573,7 +597,9 @@ class GuideCompilationRepository:
         try:
             accepted = accepted_from_attempt(attempt)
             await require_compilation_document_access(
-                self._session, attempt_id, context.material,
+                self._session,
+                attempt_id,
+                context.material,
                 ProjectGuideCompilationResult.model_validate(accepted.canonical_result),
             )
             identity = identity_from_attempt(attempt)

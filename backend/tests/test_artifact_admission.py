@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
-from project_create_fixtures import guide_example_columns, guide_snapshot_columns, seed_guide_snapshot_rows
+from projects.unified_policy_fixtures import create_standalone_unified_policy
+
+from project_create_fixtures import guide_example_columns, guide_snapshot_columns
 
 import asyncio
 from collections.abc import Iterator
@@ -88,16 +90,13 @@ from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.models import AdminRoleGrant
 from app.modules.projects.models import (
     GuideSourceArtifactIngest,
-    EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     PaymentPolicy,
     PostSubmitCheckerPolicy,
-    PreSubmitCheckerPolicy,
     ProjectGuide,
     ReviewPolicy,
     RevisionPolicy,
-    SubmissionArtifactPolicy,
 )
 from app.modules.projects.policy_lineage import (
     ReviewPolicySemantics,
@@ -339,14 +338,18 @@ async def _seed_guide(
     return project_id, item_id
 
 
-async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
+async def _seed_checker_output_relationships(session, namespace, *, policy_bundle=None) -> tuple[str, str, str]:
     """Persist one complete checker-run ownership chain for admission proof."""
-    project_id = str(uuid4())
-    guide_id = str(uuid4())
-    snapshot_id = str(uuid4())
-    submission_policy_id = str(uuid4())
-    effective_policy_id = str(uuid4())
-    pre_submit_policy_id = str(uuid4())
+
+    if policy_bundle is None:
+        assert not session.in_transaction(), "Arrange canonical setup before staging artifact rows"
+        policy_bundle = await create_standalone_unified_policy(
+            async_sessionmaker(session.bind, expire_on_commit=False), namespace,
+        )
+    values, effective, pre = policy_bundle
+    project_id, guide_id, snapshot_id = (str(values[key]) for key in ("project", "guide", "snapshot"))
+    effective_policy_id = effective["id"]
+    pre_submit_policy_id = pre.id
     post_submit_policy_id = str(uuid4())
     review_policy_id = str(uuid4())
     revision_policy_id = str(uuid4())
@@ -356,13 +359,9 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     contributor_link_id = str(uuid4())
     checker_run_id = str(uuid4())
     guide_version = "v1"
-    snapshot_hash = guide_snapshot_columns(snapshot_id)["bundle_hash"]
-    submission_policy_body = {"required_artifacts": []}
-    submission_policy_hash = canonical_json_hash(submission_policy_body)
-    effective_policy_body = {"required_artifacts": [], "artifact_hash_algorithm": "sha256"}
-    effective_policy_hash = canonical_json_hash(effective_policy_body)
-    pre_submit_bundle = {"schema_version": "v1", "rules": []}
-    pre_submit_bundle_hash = canonical_json_hash(pre_submit_bundle)
+    snapshot_hash = effective["source_snapshot_hash"]
+    effective_policy_hash = effective["effective_policy_hash"]
+    pre_submit_bundle_hash = pre.compiled_bundle_hash
     post_submit_policy_body = {"required_checkers": []}
     post_submit_policy_hash = canonical_json_hash(post_submit_policy_body)
     now = datetime.now(UTC)
@@ -383,175 +382,107 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         ),
     )
 
-    await seed_historical_project(
-        session,
-        project_id=project_id,
-        name="Checker project",
-        slug=f"checker-{project_id}",
-    )
-    await session.flush()
-    async with suspend_historical_product_custody(
-        session, table="project_guides",
-        triggers=("guide_mutation_product_custody", "guide_task_examples_create_custody", "require_document_creation_pair"),
-    ), suspend_historical_product_custody(
-        session, table="guide_source_snapshots",
-        triggers=("source_snapshot_product_custody", "require_document_creation_pair"),
-    ):
-        await seed_guide_snapshot_rows(
-            session, project_id=project_id, guide_id=guide_id,
-            version=guide_version, snapshot_id=snapshot_id,
-        )
-        snapshot = await session.get(GuideSourceSnapshot, snapshot_id)
-        snapshot.captured_by = "setup-actor"
-        await session.flush()
-    session.add(
-        SubmissionArtifactPolicy(
-            id=submission_policy_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=snapshot_hash,
-            policy_version="v1",
-            lifecycle_status="approved",
-            policy_body=submission_policy_body,
-            policy_hash=submission_policy_hash,
-            derivation_source="test",
-            source_material_refs=[],
-            created_by="setup-actor",
-            approved_by_role="admin",
-            approved_by_actor="setup-actor",
-            approved_at=now,
-        )
-    )
-    await session.flush()
-    session.add(
-        EffectiveProjectSubmissionArtifactPolicy(
-            id=effective_policy_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=snapshot_hash,
-            submission_artifact_policy_id=submission_policy_id,
-            submission_artifact_policy_hash=submission_policy_hash,
-            lifecycle_status="approved",
-            merge_algorithm_version="v1",
-            effective_policy=effective_policy_body,
-            effective_policy_hash=effective_policy_hash,
-            created_by="setup-actor",
-        )
-    )
-    await session.flush()
-    session.add(
-        PreSubmitCheckerPolicy(
-            id=pre_submit_policy_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            source_snapshot_id=snapshot_id,
-            source_snapshot_hash=snapshot_hash,
-            effective_policy_id=effective_policy_id,
-            effective_policy_hash=effective_policy_hash,
-            lifecycle_status="compiled",
-            compiler_version="v1",
-            compiled_bundle=pre_submit_bundle,
-            compiled_bundle_hash=pre_submit_bundle_hash,
-            checker_names=[],
-            checker_configs={},
-            created_by="setup-actor",
-        )
-    )
-    await session.flush()
-    async with (
-        suspend_historical_product_custody(
+    existing_post = await session.scalar(select(PostSubmitCheckerPolicy).where(
+        PostSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
+    ))
+    if existing_post is None:
+        async with (
+            suspend_historical_product_custody(
+                session,
+                table="review_policies",
+                triggers=("review_policy_mutation_custody",),
+            ),
+            suspend_historical_product_custody(
+                session,
+                table="revision_policies",
+                triggers=("revision_policy_mutation_custody",),
+            ),
+        ):
+            session.add_all(
+                [
+                    PostSubmitCheckerPolicy(
+                        id=post_submit_policy_id,
+                        project_id=project_id,
+                        guide_id=guide_id,
+                        guide_version=guide_version,
+                        source_snapshot_id=snapshot_id,
+                        source_snapshot_hash=snapshot_hash,
+                        effective_policy_id=effective_policy_id,
+                        effective_policy_hash=effective_policy_hash,
+                        pre_submit_checker_policy_id=pre_submit_policy_id,
+                        pre_submit_checker_bundle_hash=pre_submit_bundle_hash,
+                        required_checkers=[],
+                        warning_checkers=[],
+                        blocking_severities=["error"],
+                        policy_hash=post_submit_policy_hash,
+                        policy_body=post_submit_policy_body,
+                        lifecycle_status="approved",
+                        approved_by_role="admin",
+                        approved_by_actor="setup-actor",
+                        approved_at=now,
+                        created_by="setup-actor",
+                    ),
+                    ReviewPolicy(
+                        id=review_policy_id,
+                        project_id=project_id,
+                        guide_version=guide_version,
+                        policy_generation=1,
+                        policy_hash=review_hash,
+                        semantics_status="legacy_incomplete",
+                        review_preference_window_seconds=3600,
+                        review_lease_duration_seconds=1800,
+                        max_active_review_leases_per_reviewer=1,
+                        self_review_allowed=False,
+                        reject_policy="close_task",
+                        finding_evidence_requirement="optional",
+                        requires_second_review=False,
+                        allowed_decisions=["accept", "needs_revision", "reject"],
+                        minimum_finding_fields=[],
+                    ),
+                    RevisionPolicy(
+                        id=revision_policy_id,
+                        project_id=project_id,
+                        guide_version=guide_version,
+                        policy_generation=1,
+                        policy_hash=revision_hash,
+                        semantics_status="legacy_incomplete",
+                        max_revision_rounds=1,
+                        revision_deadline_hours=24,
+                        allowed_resubmission_states=["needs_revision"],
+                    ),
+                    PaymentPolicy(
+                        id=str(uuid4()),
+                        project_id=project_id,
+                        guide_version=guide_version,
+                    ),
+                ]
+            )
+            await session.flush()
+        async with suspend_historical_product_custody(
             session,
-            table="review_policies",
-            triggers=("review_policy_mutation_custody",),
-        ),
-        suspend_historical_product_custody(
-            session,
-            table="revision_policies",
-            triggers=("revision_policy_mutation_custody",),
-        ),
-    ):
-        session.add_all(
-            [
-                PostSubmitCheckerPolicy(
-                    id=post_submit_policy_id,
-                    project_id=project_id,
-                    guide_id=guide_id,
-                    guide_version=guide_version,
-                    source_snapshot_id=snapshot_id,
-                    source_snapshot_hash=snapshot_hash,
-                    effective_policy_id=effective_policy_id,
-                    effective_policy_hash=effective_policy_hash,
-                    pre_submit_checker_policy_id=pre_submit_policy_id,
-                    pre_submit_checker_bundle_hash=pre_submit_bundle_hash,
-                    required_checkers=[],
-                    warning_checkers=[],
-                    blocking_severities=["error"],
-                    policy_hash=post_submit_policy_hash,
-                    policy_body=post_submit_policy_body,
-                    lifecycle_status="approved",
-                    approved_by_role="admin",
-                    approved_by_actor="setup-actor",
-                    approved_at=now,
-                    created_by="setup-actor",
-                ),
-                ReviewPolicy(
-                    id=review_policy_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=review_hash,
-                    semantics_status="legacy_incomplete",
-                    review_preference_window_seconds=3600,
-                    review_lease_duration_seconds=1800,
-                    max_active_review_leases_per_reviewer=1,
-                    self_review_allowed=False,
-                    reject_policy="close_task",
-                    finding_evidence_requirement="optional",
-                    requires_second_review=False,
-                    allowed_decisions=["accept", "needs_revision", "reject"],
-                    minimum_finding_fields=[],
-                ),
-                RevisionPolicy(
-                    id=revision_policy_id,
-                    project_id=project_id,
-                    guide_version=guide_version,
-                    policy_generation=1,
-                    policy_hash=revision_hash,
-                    semantics_status="legacy_incomplete",
-                    max_revision_rounds=1,
-                    revision_deadline_hours=24,
-                    allowed_resubmission_states=["needs_revision"],
-                ),
-                PaymentPolicy(
-                    id=str(uuid4()),
-                    project_id=project_id,
-                    guide_version=guide_version,
-                ),
-            ]
-        )
-        await session.flush()
-    async with suspend_historical_product_custody(
-        session,
-        table="project_guides",
-        triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard"),
-    ):
+            table="project_guides",
+            triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard"),
+        ):
+            guide = await session.get(ProjectGuide, guide_id)
+            assert guide is not None
+            guide.selected_review_policy_id = review_policy_id
+            guide.selected_review_policy_generation = 1
+            guide.selected_review_policy_hash = review_hash
+            guide.selected_revision_policy_id = revision_policy_id
+            guide.selected_revision_policy_generation = 1
+            guide.selected_revision_policy_hash = revision_hash
+            guide.status = "active"
+            guide.approved_by = guide.created_by = "setup-actor"
+            guide.effective_at = now
+            await session.flush()
+    else:
+        post_submit_policy_id = existing_post.id
         guide = await session.get(ProjectGuide, guide_id)
-        assert guide is not None
-        guide.selected_review_policy_id = review_policy_id
-        guide.selected_review_policy_generation = 1
-        guide.selected_review_policy_hash = review_hash
-        guide.selected_revision_policy_id = revision_policy_id
-        guide.selected_revision_policy_generation = 1
-        guide.selected_revision_policy_hash = revision_hash
-        guide.status = "active"
-        guide.approved_by = guide.created_by = "setup-actor"
-        guide.effective_at = now
-        await session.flush()
+        assert guide is not None and guide.status == "active"
+        review_policy_id = guide.selected_review_policy_id
+        revision_policy_id = guide.selected_revision_policy_id
+        assert guide.selected_review_policy_hash == review_hash
+        assert guide.selected_revision_policy_hash == revision_hash
     session.add(
         WorkstreamTask(
             id=task_id,
@@ -724,9 +655,9 @@ async def _admit_guide_source(session, settings, namespace, context, source):
     )
 
 
-async def _admit_checker_output(session, settings, namespace, source):
+async def _admit_checker_output(session, settings, namespace, source, *, policy_bundle=None):
     """Create one exact task-scoped checker-output attempt for shared-path tests."""
-    project_id, task_id, checker_run_id = await _seed_checker_output_relationships(session)
+    project_id, task_id, checker_run_id = await _seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
     existing = (await session.execute(
         select(ActorProfile.id, ActorIdentityLink.id)
         .join(ActorIdentityLink, ActorIdentityLink.actor_profile_id == ActorProfile.id)
@@ -779,6 +710,7 @@ async def test_committed_put_and_independent_verification_are_fenced(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
     authority = _AllowArtifactAuthority()
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(
@@ -787,8 +719,7 @@ async def test_committed_put_and_independent_verification_are_fenced(
                 media_type="text/plain",
             ) as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, authority
                 )
@@ -825,7 +756,8 @@ async def test_committed_put_and_independent_verification_are_fenced(
                     replica.availability_state,
                     replica.integrity_state,
                 ] == ["verified", "available", "valid"]
-                assert await _count(session, ArtifactOperationReceipt) == 1
+                # One retained guide upload receipt plus this checker-output receipt.
+                assert await _count(session, ArtifactOperationReceipt) == 2
                 assert await _count(session, ArtifactVerificationReceipt) == 1
                 await session.rollback()
                 assert await orchestrator.verify_object(job_id) == "stale"
@@ -868,12 +800,12 @@ async def test_every_provider_operation_revalidates_namespace_before_io(
         def open(self, _provider_object_ref):
             raise AssertionError("read must not run after namespace drift")
 
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "namespace-fence", b"fenced") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 drifted = ArtifactStorageOrchestrator(
                     session, DriftStore(), namespace, settings, _AllowArtifactAuthority()
                 )
@@ -888,7 +820,7 @@ async def test_every_provider_operation_revalidates_namespace_before_io(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await real.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 assert job is not None
                 replica = await session.get(ArtifactReplica, job.replica_id)
                 assert replica is not None
@@ -1465,33 +1397,11 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
-        job_ids: list[str] = []
-        async with factory() as seed_session:
-            orchestrator = ArtifactStorageOrchestrator(
-                seed_session, store, namespace, settings, _AllowArtifactAuthority()
-            )
-            for index in range(3):
-                async with minted_source(
-                    tmp_path / f"verification-scan-{index}", f"job-{index}".encode()
-                ) as source:
-                    _, _, _, admission = await _admit_checker_output(
-                        seed_session, settings, namespace, source
-                    )
-                    await orchestrator.execute_committed_put(
-                        attempt_id=admission.attempt_id, source=source
-                    )
-            job_ids = list(
-                (
-                    await seed_session.execute(
-                        select(ArtifactVerificationJob.id).order_by(
-                            ArtifactVerificationJob.created_at,
-                            ArtifactVerificationJob.id,
-                        )
-                    )
-                ).scalars()
-            )
-            await seed_session.rollback()
+        job_ids, prior_audit_ids = await _seed_verification_scan_jobs(
+            factory, settings, namespace, store, tmp_path, policy_bundle,
+        )
 
         first_executor = uuid4()
         async with factory() as claim_session, claim_session.begin():
@@ -1570,7 +1480,7 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                 == "stale"
             )
             assert await _count(stale_session, ArtifactVerificationReceipt) == 0
-            assert await _count(stale_session, AuditEvent) == 0
+            assert set(await stale_session.scalars(select(AuditEvent.id))) == prior_audit_ids
             await stale_session.rollback()
             due_ids = await ArtifactRepository(stale_session).list_due_verification_job_ids(
                 cutoff=datetime.now(UTC), limit=2
@@ -1697,12 +1607,12 @@ async def test_verification_resource_drift_after_read_is_stale_without_terminal_
     bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "verification-drift", b"expected") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
@@ -1710,7 +1620,7 @@ async def test_verification_resource_drift_after_read_is_stale_without_terminal_
                     attempt_id=admission.attempt_id, source=source
                 )
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 assert attempt is not None and attempt.replica_id is not None and job is not None
                 original_replica_id = attempt.replica_id
                 unrelated_content = ArtifactContent(
@@ -1772,17 +1682,17 @@ async def test_verification_rechecks_relationship_after_prepare_before_io(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "preclaim-drift", b"expected") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await allowing.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert job is not None and attempt is not None
                 unrelated_content = ArtifactContent(
@@ -1862,13 +1772,14 @@ async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
             await super().prepare(**values)
             self.phases.append(str(values["phase"]))
 
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             attempts: list[ArtifactPutAttempt] = []
             for name, value in (("first", b"first"), ("second", b"second")):
                 async with minted_source(tmp_path / name, value) as source:
                     _, _, _, admission = await _admit_checker_output(
-                        session, settings, namespace, source
+                        session, settings, namespace, source, policy_bundle=policy_bundle
                     )
                     await ArtifactStorageOrchestrator(
                         session, store, namespace, settings, _AllowArtifactAuthority()
@@ -1920,17 +1831,17 @@ async def test_verification_rechecks_authorized_object_ref_before_io(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "preclaim-object-ref-drift", b"expected") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await allowing.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert job is not None and attempt is not None and attempt.replica_id is not None
                 job_id = UUID(job.id)
@@ -1977,19 +1888,19 @@ async def test_verification_rechecks_authorized_object_ref_after_io(
     bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "postread-object-ref-drift", b"expected") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await orchestrator.execute_committed_put(
                     attempt_id=admission.attempt_id, source=source
                 )
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert job is not None and attempt is not None and attempt.replica_id is not None
                 job_id, replica_id = UUID(job.id), attempt.replica_id
@@ -2035,19 +1946,19 @@ async def test_verification_terminal_result_matrix(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / expected, b"verification matrix") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await orchestrator.execute_committed_put(
                     attempt_id=admission.attempt_id, source=source
                 )
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 assert job is not None
                 job_id = UUID(job.id)
                 await session.rollback()
@@ -2081,19 +1992,19 @@ async def test_verification_terminal_authority_denial_writes_zero_result_facts(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(
                 tmp_path / f"verify-{denial_reason}", denial_reason.encode()
             ) as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 allowing = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await allowing.execute_committed_put(attempt_id=admission.attempt_id, source=source)
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 assert job is not None
                 job_id = UUID(job.id)
                 await session.rollback()
@@ -2136,19 +2047,19 @@ async def test_verification_unavailable_retries_then_exhausts(
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     bootstrap, store = _local_store(settings, namespace)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(tmp_path / "unavailable", b"retry") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
                 await orchestrator.execute_committed_put(
                     attempt_id=admission.attempt_id, source=source
                 )
-                job = await session.scalar(select(ArtifactVerificationJob))
+                job = await session.scalar(select(ArtifactVerificationJob).where(ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))
                 assert job is not None
                 job_id = UUID(job.id)
                 await session.rollback()
@@ -2694,7 +2605,7 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            project_id, task_id, checker_run_id = await _seed_checker_output_relationships(session)
+            project_id, task_id, checker_run_id = await _seed_checker_output_relationships(session, namespace)
             session.add(
                 ActorProfile(
                     id=str(actor_id),
@@ -2719,60 +2630,7 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
             await session.commit()
             canonical_task = await session.get(WorkstreamTask, task_id)
             assert canonical_task is not None
-            unrelated_task_id = str(uuid4())
-            session.add(
-                WorkstreamTask(
-                    id=unrelated_task_id,
-                    project_id=project_id,
-                    locked_guide_version=canonical_task.locked_guide_version,
-                    locked_post_submit_checker_policy_id=(
-                        canonical_task.locked_post_submit_checker_policy_id
-                    ),
-                    locked_post_submit_checker_policy_version=(
-                        canonical_task.locked_post_submit_checker_policy_version
-                    ),
-                    locked_post_submit_checker_policy_hash=(
-                        canonical_task.locked_post_submit_checker_policy_hash
-                    ),
-                    locked_post_submit_checker_policy_body=(
-                        canonical_task.locked_post_submit_checker_policy_body
-                    ),
-                    locked_review_policy_id=canonical_task.locked_review_policy_id,
-                    locked_review_policy_generation=(
-                        canonical_task.locked_review_policy_generation
-                    ),
-                    locked_review_policy_hash=canonical_task.locked_review_policy_hash,
-                    locked_revision_policy_id=canonical_task.locked_revision_policy_id,
-                    locked_revision_policy_generation=(
-                        canonical_task.locked_revision_policy_generation
-                    ),
-                    locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
-                    locked_payment_policy_version=(canonical_task.locked_payment_policy_version),
-                    locked_guide_source_snapshot_id=(
-                        canonical_task.locked_guide_source_snapshot_id
-                    ),
-                    locked_guide_source_snapshot_hash=(
-                        canonical_task.locked_guide_source_snapshot_hash
-                    ),
-                    locked_effective_project_submission_artifact_policy_id=(
-                        canonical_task.locked_effective_project_submission_artifact_policy_id
-                    ),
-                    locked_effective_project_submission_artifact_policy_hash=(
-                        canonical_task.locked_effective_project_submission_artifact_policy_hash
-                    ),
-                    locked_pre_submit_checker_policy_id=(
-                        canonical_task.locked_pre_submit_checker_policy_id
-                    ),
-                    locked_pre_submit_checker_bundle_hash=(
-                        canonical_task.locked_pre_submit_checker_bundle_hash
-                    ),
-                    title="Unrelated checker task",
-                    description="Must not own the checker output.",
-                    status="draft",
-                    created_by="setup-actor",
-                )
-            )
-            await session.flush()
+            unrelated_task_id = await _unrelated_checker_task(session, canonical_task)
             checker_run = await session.get(CheckerRun, checker_run_id)
             assert checker_run is not None
             checker_run.task_id = unrelated_task_id
@@ -2795,10 +2653,10 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                             source=source,
                         )
                     )
-                assert await _count(session, ArtifactStorageNamespace) == 0
+                assert await _count(session, ArtifactStorageNamespace) == 1
                 assert await _count(session, ArtifactAdmissionScope) == 0
                 assert await _count(session, ArtifactAdmissionCharge) == 0
-                assert await _count(session, ArtifactPutAttempt) == 0
+                assert await _count(session, ArtifactPutAttempt) == 1
                 await session.rollback()
 
                 request = CheckerOutputArtifactAdmissionRequest(
@@ -2857,11 +2715,11 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
             }
             assert len(result.charge_ids) == 4
             assert len(links) == 4
-            assert await _count(session, ArtifactPutAttempt) == 1
+            assert await _count(session, ArtifactPutAttempt) == 2
             assert await _count(session, ArtifactAdmissionCharge) == 4
-            assert await _count(session, ArtifactContent) == 0
-            assert await _count(session, ArtifactReplica) == 0
-            assert await _count(session, ArtifactOperationReceipt) == 0
+            assert await _count(session, ArtifactContent) == 1
+            assert await _count(session, ArtifactReplica) == 1
+            assert await _count(session, ArtifactOperationReceipt) == 1
     finally:
         await engine.dispose()
 
@@ -2886,14 +2744,14 @@ async def test_checker_output_shared_put_and_verification_lifecycle(
     bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(
                 tmp_path / f"checker-{expected_outcome}", b"checker lifecycle"
             ) as source:
                 project_id, task_id, checker_run_id, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
@@ -2966,43 +2824,19 @@ async def test_checker_output_put_observation_terminal_outcomes(
     namespace = _namespace(settings)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
             async with minted_source(
                 tmp_path / f"checker-observation-{expected_outcome}", b"checker observation"
             ) as source:
                 _project_id, _task_id, checker_run_id, admission = await _admit_checker_output(
-                    session, settings, namespace, source
-                )
+                    session, settings, namespace, source, policy_bundle=policy_bundle)
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert attempt is not None
                 provider_object_ref = attempt.canonical_target
                 if expected_outcome == "existing_replica_conflict":
-                    content_id = str(uuid4())
-                    session.add_all(
-                        [
-                            ArtifactContent(
-                                id=content_id,
-                                sha256=attempt.sha256,
-                                byte_count=attempt.byte_count,
-                                media_type=attempt.media_type,
-                                normalized_display_name=None,
-                            ),
-                            ArtifactReplica(
-                                id=str(uuid4()),
-                                content_id=content_id,
-                                storage_namespace_id=attempt.storage_namespace_id,
-                                namespace_fingerprint=attempt.namespace_fingerprint,
-                                adapter=namespace.adapter,
-                                provider_profile=namespace.provider_profile,
-                                provider_object_ref=provider_object_ref,
-                                verification_state="verified",
-                                availability_state="available",
-                                integrity_state="valid",
-                            ),
-                        ]
-                    )
-                    await session.commit()
+                    await _conflicting_checker_replica(session, attempt, namespace, provider_object_ref)
                 else:
                     await session.rollback()
                 observe = (
@@ -3121,3 +2955,122 @@ async def test_invalid_checker_role_precedes_namespace_drift(
             assert await _count(session, ArtifactPutAttempt) == 0
     finally:
         await engine.dispose()
+
+
+async def _seed_verification_scan_jobs(factory, settings, namespace, store, tmp_path, policy_bundle):
+    async with factory() as seed_session:
+        orchestrator = ArtifactStorageOrchestrator(
+            seed_session, store, namespace, settings, _AllowArtifactAuthority()
+        )
+        for index in range(3):
+            async with minted_source(
+                tmp_path / f"verification-scan-{index}", f"job-{index}".encode()
+            ) as source:
+                _, _, _, admission = await _admit_checker_output(
+                    seed_session, settings, namespace, source, policy_bundle=policy_bundle
+                )
+                await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source
+                )
+        job_ids = list(
+            (
+                await seed_session.execute(
+                    select(ArtifactVerificationJob.id).order_by(
+                        ArtifactVerificationJob.created_at,
+                        ArtifactVerificationJob.id,
+                    )
+                )
+            ).scalars()
+        )
+        prior_audit_ids = set(await seed_session.scalars(select(AuditEvent.id)))
+        await seed_session.rollback()
+
+    return job_ids, prior_audit_ids
+
+
+async def _unrelated_checker_task(session, canonical_task):
+    """Keep the same locked policy tuple on a distinct task for ownership rejection."""
+    unrelated_task_id = str(uuid4())
+    session.add(
+        WorkstreamTask(
+            id=unrelated_task_id,
+            project_id=canonical_task.project_id,
+            locked_guide_version=canonical_task.locked_guide_version,
+            locked_post_submit_checker_policy_id=(
+                canonical_task.locked_post_submit_checker_policy_id
+            ),
+            locked_post_submit_checker_policy_version=(
+                canonical_task.locked_post_submit_checker_policy_version
+            ),
+            locked_post_submit_checker_policy_hash=(
+                canonical_task.locked_post_submit_checker_policy_hash
+            ),
+            locked_post_submit_checker_policy_body=(
+                canonical_task.locked_post_submit_checker_policy_body
+            ),
+            locked_review_policy_id=canonical_task.locked_review_policy_id,
+            locked_review_policy_generation=(
+                canonical_task.locked_review_policy_generation
+            ),
+            locked_review_policy_hash=canonical_task.locked_review_policy_hash,
+            locked_revision_policy_id=canonical_task.locked_revision_policy_id,
+            locked_revision_policy_generation=(
+                canonical_task.locked_revision_policy_generation
+            ),
+            locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
+            locked_payment_policy_version=(canonical_task.locked_payment_policy_version),
+            locked_guide_source_snapshot_id=(
+                canonical_task.locked_guide_source_snapshot_id
+            ),
+            locked_guide_source_snapshot_hash=(
+                canonical_task.locked_guide_source_snapshot_hash
+            ),
+            locked_effective_project_submission_artifact_policy_id=(
+                canonical_task.locked_effective_project_submission_artifact_policy_id
+            ),
+            locked_effective_project_submission_artifact_policy_hash=(
+                canonical_task.locked_effective_project_submission_artifact_policy_hash
+            ),
+            locked_pre_submit_checker_policy_id=(
+                canonical_task.locked_pre_submit_checker_policy_id
+            ),
+            locked_pre_submit_checker_bundle_hash=(
+                canonical_task.locked_pre_submit_checker_bundle_hash
+            ),
+            title="Unrelated checker task",
+            description="Must not own the checker output.",
+            status="draft",
+            created_by="setup-actor",
+        )
+    )
+    await session.flush()
+    return unrelated_task_id
+
+
+async def _conflicting_checker_replica(session, attempt, namespace, provider_object_ref):
+    """Arrange an already-known replica for the observation conflict control."""
+    content_id = str(uuid4())
+    session.add_all(
+        [
+            ArtifactContent(
+                id=content_id,
+                sha256=attempt.sha256,
+                byte_count=attempt.byte_count,
+                media_type=attempt.media_type,
+                normalized_display_name=None,
+            ),
+            ArtifactReplica(
+                id=str(uuid4()),
+                content_id=content_id,
+                storage_namespace_id=attempt.storage_namespace_id,
+                namespace_fingerprint=attempt.namespace_fingerprint,
+                adapter=namespace.adapter,
+                provider_profile=namespace.provider_profile,
+                provider_object_ref=provider_object_ref,
+                verification_state="verified",
+                availability_state="available",
+                integrity_state="valid",
+            ),
+        ]
+    )
+    await session.commit()

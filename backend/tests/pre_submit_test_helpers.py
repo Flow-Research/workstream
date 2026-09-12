@@ -69,3 +69,50 @@ def evidence_workflow(
         task_contexts=TaskRepository(session),
         project_contexts=ProjectLockedPolicyRepository(session),
     )
+
+
+async def approved_pre_submit_fixture(factory, namespace, *, guide_version):
+    """Build supported PROJECTS custody before the ART evidence transaction."""
+    from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
+    from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
+    from app.modules.checkers.api import EffectivePreSubmissionPlanLineage
+    from app.modules.projects.api.guide_proposals import GuideProposalSelection
+    from app.modules.projects.models import ProjectGuide
+    from tests.projects.unified_policy_fixtures import create_standalone_unified_policy, _approval_context
+    from tests.projects.guide_compilation.proposals.pg_support import seed_selected_review_revision_inputs
+
+    values, effective, pre = await create_standalone_unified_policy(
+        factory, namespace, guide_version=guide_version,
+        artifact_proposal=SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=1_000_000, maximum_package_size_bytes=5_000_000,
+            required_artifacts=("task.toml",), required_evidence=("results",),
+            attestation_terms=("rights_confirmed",),
+        ),
+    )
+    actor, _grant, compilation = await _approval_context(
+        factory, str(values["project"]), str(values["guide"]), effective["submission_artifact_policy_id"],
+    )
+    await seed_selected_review_revision_inputs(factory, GuideProposalSelection(
+        project_id=values["project"], guide_id=values["guide"], compilation_id=compilation.id,
+    ), actor)
+    lineage = EffectivePreSubmissionPlanLineage(
+        project_id=values["project"], guide_id=values["guide"], guide_version=guide_version,
+        source_snapshot_id=values["snapshot"], source_snapshot_hash=effective["source_snapshot_hash"],
+        effective_policy_id=UUID(effective["id"]), effective_policy_hash=effective["effective_policy_hash"],
+        pre_submit_policy_id=UUID(pre.id), pre_submit_policy_bundle_hash=pre.compiled_bundle_hash,
+    )
+    plan = build_pre_submission_checker_catalogue().compile_effective_plan(
+        lineage=lineage, effective_policy=effective["effective_policy"], compiled_bundle=pre.compiled_bundle,
+    )
+    async with factory() as session:
+        guide = await session.get(ProjectGuide, str(values["guide"]))
+        return plan, {
+            "submission_policy": effective["submission_artifact_policy_id"],
+            "review_policy": guide.selected_review_policy_id,
+            "review_policy_hash": guide.selected_review_policy_hash,
+            "revision_policy": guide.selected_revision_policy_id,
+            "revision_policy_hash": guide.selected_revision_policy_hash,
+            "guide_version": guide_version,
+            "attestation_terms": effective["effective_policy"]["attestation_terms"],
+            "evidence_path": "evidence/" + effective["effective_policy"]["required_evidence"][0]["key"],
+        }

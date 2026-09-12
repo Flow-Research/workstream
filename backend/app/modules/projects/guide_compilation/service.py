@@ -23,7 +23,7 @@ from app.modules.authorization.api import (
     project_guide_compilation_execute_resource_digest,
 )
 
-from .automatic_request import AutomaticCompilationInputs, automatic_operation_id
+from .request_inputs import CompilationRequestInputs, automatic_operation_id
 
 from .contracts import (
     CompilationAttemptIdentity,
@@ -57,18 +57,18 @@ class GuideCompilationService:
         session: AsyncSession,
         authorization: ProjectGuideCompilationAuthorizationPort[Any],
         *,
-        automatic_inputs: AutomaticCompilationInputs | None = None,
+        request_inputs: CompilationRequestInputs | None = None,
     ) -> None:
         self._session = session
         self._authorization = authorization
-        self._automatic_inputs = automatic_inputs
+        self._request_inputs = request_inputs
 
     async def request_automatic(
         self, *, actor: ActorIdentityFacts, setup_run_id: UUID
     ) -> CompilationRequestReceipt:
         """Resolve a source-ready selector without calling or constructing a provider."""
         self._require_fresh_session()
-        if self._automatic_inputs is None:
+        if self._request_inputs is None:
             raise GuideCompilationIntegrityError("automatic compilation inputs unavailable")
         async with self._session.begin():
             setup = await self._session.get(ProjectSetupRun, str(setup_run_id))
@@ -95,7 +95,7 @@ class GuideCompilationService:
                     else None,
                 )
             else:
-                facts, identity, origin = await self._automatic_inputs.resolve(
+                facts, identity, origin = await self._request_inputs.resolve(
                     self._session, setup_run_id
                 )
         return await self.authorize_request(
@@ -103,7 +103,44 @@ class GuideCompilationService:
             facts=facts,
             identity=identity,
             origin=origin,
-            runtime_configuration=self._automatic_inputs.runtime_configuration,
+            runtime_configuration=self._request_inputs.runtime_configuration,
+        )
+
+    async def request_correction(
+        self,
+        *,
+        actor: ActorIdentityFacts,
+        correction_operation_id: UUID,
+    ) -> CompilationRequestReceipt:
+        """Reuse canonical human request/replay for a committed correction successor."""
+        from .correction_request import correction_request_inputs, correction_request_operation_id
+
+        self._require_fresh_session()
+        if self._request_inputs is None:
+            raise GuideCompilationIntegrityError("compilation request inputs unavailable")
+        async with self._session.begin():
+            repository = GuideCompilationRepository(self._session)
+            operation = await self._session.scalar(
+                select(ProjectGuideCompilationRequestOperation).where(
+                    ProjectGuideCompilationRequestOperation.operation_id
+                    == correction_request_operation_id(correction_operation_id),
+                )
+            )
+            if operation is None:
+                facts, identity = await correction_request_inputs(
+                    self._session,
+                    self._request_inputs,
+                    correction_operation_id,
+                )
+            else:
+                attempt = await repository.attempt(operation.attempt_id, lock=False)
+                facts, identity = _request_facts(operation, attempt), identity_from_attempt(attempt)
+        return await self.authorize_request(
+            actor=actor,
+            facts=facts,
+            identity=identity,
+            origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
+            runtime_configuration=self._request_inputs.runtime_configuration,
         )
 
     async def authorize_request(
@@ -137,17 +174,25 @@ class GuideCompilationService:
                     origin=origin,
                 )
                 if origin.trigger == "automatic_source_ready":
-                    if self._automatic_inputs is None:
+                    if self._request_inputs is None:
                         raise GuideCompilationIntegrityError(
                             "automatic compilation inputs unavailable"
                         )
-                    resolved = await self._automatic_inputs.resolve(
-                        self._session, facts.setup_run_id
-                    )
+                    resolved = await self._request_inputs.resolve(self._session, facts.setup_run_id)
                     if resolved != (facts, identity, origin):
                         raise GuideCompilationIntegrityError(
                             "automatic compilation request input mismatch"
                         )
+                else:
+                    from .correction_request import admit_correction_request
+
+                    await admit_correction_request(
+                        self._session,
+                        self._request_inputs,
+                        actor=actor,
+                        facts=facts,
+                        identity=identity,
+                    )
                 if (
                     runtime_configuration is None
                     or runtime_configuration.instruction_version != identity.instruction_version

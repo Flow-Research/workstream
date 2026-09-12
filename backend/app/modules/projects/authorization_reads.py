@@ -319,12 +319,6 @@ async def authorize_project_active_guide_read(
                 sufficiency.source_snapshot_id == snapshot.id,
                 sufficiency.source_snapshot_hash == snapshot.bundle_hash,
                 sufficiency.status in {"passed", "passed_with_warnings"},
-                sufficiency.status != "passed_with_warnings"
-                or (
-                    sufficiency.warnings_acknowledged_by_actor is not None
-                    and sufficiency.warnings_acknowledged_at is not None
-                    and sufficiency.warnings_acknowledged_by_role in {"admin", "project_manager"}
-                ),
                 submission.approved_by_actor is not None,
                 submission.approved_at is not None,
                 submission.approved_by_role in {"admin", "project_manager"},
@@ -363,6 +357,9 @@ async def authorize_project_active_guide_read(
                 GuideActivationBlocked,
                 persisted_items=source_items,
             )
+            approval = await project_service.lock_active_approval(
+                guide, snapshot, submission, effective, checker,
+            )
             project_service.validate_activation_ready(
                 guide,
                 snapshot,
@@ -375,8 +372,9 @@ async def authorize_project_active_guide_read(
                 revision,
                 None,
                 require_payment_policy=False,
+                approval_custody=approval,
             )
-        except ProjectServiceError:
+        except (ProjectServiceError, ValueError):
             target_exists = False
     binding_digest = (
         canonical_json_hash(
@@ -396,7 +394,9 @@ async def authorize_project_active_guide_read(
                     if hasattr(row, key)
                 }
                 for row in rows
-            ]
+            ] + [{"approval_operation_id": str(approval.operation.operation_id),
+                  "approval_output_digest": approval.operation.output_digest,
+                  "reservation_operation_id": str(approval.reservation.operation_id)}]
         )
         if target_exists
         else None

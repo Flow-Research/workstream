@@ -14,7 +14,6 @@ from app.adapters.artifacts import (
     get_artifact_internal_authority, GuideArtifactPreparedAuthorization, ArtifactInternalAuthority,
 )
 from app.modules.projects.document_upload import ProjectGuideDocumentUploadTargets
-from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
     get_authorization_actor,
@@ -42,7 +41,6 @@ from app.modules.projects.schemas import (
     ContributorProjectResponse,
     ProjectResponse,
     ProjectSetupRunResponse,
-    SubmissionArtifactPolicyApprove,
     SubmissionArtifactPolicyCreate,
     SubmissionArtifactPolicyResponse,
     SubmissionArtifactPolicyUpdate,
@@ -79,7 +77,6 @@ from app.modules.authorization.runtime import (
     ProjectReadResourceContext,
     authorization_resource_selector_id,
 )
-from app.schemas.auth import ActorContext
 
 LOGGER = logging.getLogger(__name__)
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -571,33 +568,6 @@ async def update_submission_artifact_policy(
         raise submission_policy_conflict_error(str(exc)) from exc
     except ProjectServiceError as exc:
         await session.rollback()
-        raise project_http_error(exc) from exc
-
-
-@router.post(
-    "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve",
-    response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
-)
-async def approve_submission_artifact_policy(
-    project_id: str,
-    guide_id: str,
-    policy_id: str,
-    payload: SubmissionArtifactPolicyApprove,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> EffectiveProjectSubmissionArtifactPolicyResponse:
-    """Approve a draft submission artifact policy and persist the effective policy."""
-    try:
-        return await ProjectService(session).approve_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            policy_id,
-            payload,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
         raise project_http_error(exc) from exc
 
 

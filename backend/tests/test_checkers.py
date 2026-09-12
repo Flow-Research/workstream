@@ -3297,7 +3297,7 @@ async def test_locked_submission_checker_run_enforces_required_evidence_key(
         result for result in body["results"] if result["checker_name"] == "check_evidence_present"
     )
     assert evidence_result["status"] == "failed"
-    assert "checker_log" in evidence_result["metadata"]["missing_required_evidence"]
+    assert "required-evidence-001" in evidence_result["metadata"]["missing_required_evidence"]
     assert body["routing_recommendation"] == "needs_revision"
 
 
@@ -3449,7 +3449,7 @@ async def test_checker_revision_routing_and_reads_for_retained_packet_versions(
         json={"submission": v1_payload},
     )
     assert precheck_v1.status_code == 200, precheck_v1.text
-    assert precheck_v1.json()["eligible_to_submit"] is True
+    assert precheck_v1.json()["eligible_to_submit"] is True, precheck_v1.text
 
     v1_id = await seed_finalized_submission_for_checker_test(
         started_task["id"], v1_payload,

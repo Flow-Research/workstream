@@ -51,7 +51,7 @@ class EffectivePreSubmissionPlanLineage:
 
     project_id: UUID
     guide_id: UUID
-    guide_version: int
+    guide_version: str
     source_snapshot_id: UUID
     source_snapshot_hash: str
     effective_policy_id: UUID
@@ -71,7 +71,7 @@ class EffectivePreSubmissionPlanLineage:
             )
         ):
             raise EffectivePreSubmissionPlanError("effective plan lineage id is invalid")
-        if type(self.guide_version) is not int or self.guide_version <= 0:
+        if type(self.guide_version) is not str or not 1 <= len(self.guide_version) <= 50:
             raise EffectivePreSubmissionPlanError("effective plan guide version is invalid")
         for value in (
             self.source_snapshot_hash,

@@ -314,14 +314,6 @@ class SubmissionArtifactPolicyUpdate(BaseModel):
         return value
 
 
-class SubmissionArtifactPolicyApprove(BaseModel):
-    """Request schema for approving a draft submission artifact policy."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    approval_note: str | None = Field(default=None, max_length=2000)
-
-
 class SubmissionArtifactPolicyResponse(BaseModel):
     """Response schema for project submission artifact policy records."""
 

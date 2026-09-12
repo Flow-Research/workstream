@@ -45,7 +45,7 @@ from .test_authorized_request_service import _authorized_service, _request, _see
 
 
 def _execution_service(
-    session: AsyncSession, actor: ActorIdentityFacts, *, automatic_inputs=None
+    session: AsyncSession, actor: ActorIdentityFacts, *, request_inputs=None
 ) -> GuideCompilationService:
     context_value = ServiceAuthorizationContext(
         actor_profile_id=actor.actor_profile_id,
@@ -63,7 +63,7 @@ def _execution_service(
     return GuideCompilationService(
         session,
         ProjectGuideCompilationAuthorizationAdapter(authorization, prepared),
-        automatic_inputs=automatic_inputs,
+        request_inputs=request_inputs,
     )
 
 

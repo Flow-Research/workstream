@@ -354,6 +354,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/guide_proposal_review.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/api/ports.py"
     },
     {
@@ -558,6 +562,14 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/artifact_paths.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/policy_compilation.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/post_submit.py"
     },
     {
@@ -726,6 +738,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/compilation_identity.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/contribution_policy.py"
     },
     {
@@ -739,6 +755,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/api/guide_documents.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_proposal_package.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_proposals.py"
     },
     {
       "group": "lifecycle",
@@ -782,7 +806,7 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/projects/guide_compilation/automatic_request.py"
+      "target": "backend/app/modules/projects/guide_compilation/approval_custody.py"
     },
     {
       "group": "lifecycle",
@@ -791,6 +815,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/contracts.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/correction_feedback.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/correction_request.py"
     },
     {
       "group": "lifecycle",
@@ -834,7 +866,31 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/proposal_approval.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/proposal_authority.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/proposal_correction.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/proposal_repository.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/proposal_service.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/repository.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/request_inputs.py"
     },
     {
       "group": "lifecycle",
@@ -1121,7 +1177,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "05f7e323b3a3919163019a28e7ec1354dd16f8b528a5de80054bae08b892ef63",
+  "authority_digest": "c033be40e196010f86f9019b73dfbefa1586f6b60dd532014e78c1747c97107d",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

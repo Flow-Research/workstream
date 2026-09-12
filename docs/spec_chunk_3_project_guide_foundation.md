@@ -145,7 +145,6 @@ Adds protected v1 routes:
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
-- `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
 - `GET /api/v1/projects/{project_id}/active-guide`
 
 These routes require an actor role allowed to manage project setup.
@@ -179,17 +178,31 @@ New projected artifact policies use `unified_compilation` provenance.
 The superseded post-submit setup read, approval and correction APIs are removed.
 Current outcomes remain visible through the latest setup run.
 
-Project Manager proposal reads, correction, fresh-generation reruns and approval
-remain POL-05. Existing generic approval rejects unified compilation drafts before
-writing effective policy or checker contracts. No correction or approval enqueues
-another inference operation.
+POL-05A implements hidden complete-proposal review, pre-submission approval and
+setup-wide correction. The manual artifact-policy approval route and operation
+are removed. Default authority denies access; AUTH-12F4 and POL-05B own public
+manager authorization and exposure.
 
-`POST /submission-artifact-policies/{policy_id}/approve` returns the merged
-`EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the
-project-scoped `PreSubmitCheckerPolicy` contract with lifecycle status
-`compiled`. The compiled bundle and compiled bundle hash are written during the
-same approval path. Guide activation fails unless the compiled project
-pre-submit checker policy exists.
+The review package contains all findings, requirements, distinct pre/post
+bindings, capability suggestions and notes, plus exact source, result, component,
+catalogue and finalization identities. Evidence locations use document ordinals
+and page/section labels; runtime document handles are not disclosed.
+
+Hidden approval requires the exact displayed target, acknowledged warning hashes
+and the current approval identity when replacing a policy. The existing CHECKERS
+compiler produces the effective artifact policy and compiled pre-submit bundle;
+the canonical planner supplies its ordered execution plan. An immutable approval
+operation and the existing mutation reservation bind those outputs atomically.
+Approval neither invokes a model nor changes the finalized setup receipt.
+
+Correction binds a manager's reason to one successor generation over the same
+original documents and task examples. The successor starts at
+`correction_requested`; initial-upload automatic recovery cannot dispatch it.
+The existing authorized human request operation binds feedback into its canonical
+input and reserves one attempt. POL-05B supplies public dispatch. Blocked results
+may be corrected but cannot be approved, and uncertain provider attempts are
+not correction targets. Guide activation still requires a complete compiled
+pre-submission policy and the separately governed post-submission policy.
 
 Guide activation is unavailable until AUTH-12H installs its prepared mutation
 boundary. The following retained legacy response shape is not the replacement

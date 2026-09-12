@@ -6,24 +6,20 @@ import fnmatch
 import logging
 import re
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import unquote
 from uuid import uuid4
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.core.permissions import require_any_role
 
 
-from app.modules.checkers.compiler import (
-    PreSubmitCheckerCompilerError,
-    compile_effective_project_submission_artifact_policy,
+from app.modules.checkers.api.artifact_paths import (
+    is_canonical_relative_path, is_canonical_relative_pattern,
 )
+
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
@@ -59,10 +55,8 @@ from app.modules.projects.schemas import (
     ProjectResponse,
     RevisionPolicyResponse,
     ReviewPolicyResponse,
-    SubmissionArtifactPolicyApprove,
     SubmissionArtifactPolicyResponse,
 )
-from app.schemas.auth import ActorContext
 
 logger = logging.getLogger(__name__)
 
@@ -80,19 +74,6 @@ SECRET_REF_PATTERN = re.compile(
     r"(x-amz-|access[_-]?key|private[_-]?key|"
     r"(?<![a-z0-9])(?:signature|credentials?|secrets?|tokens?|password)(?![a-z0-9]))",
     re.IGNORECASE,
-)
-CREDENTIAL_SHAPE_PATTERN = re.compile(
-    r"("
-    r"AKIA[0-9A-Z]{16}|"
-    r"ASIA[0-9A-Z]{16}|"
-    r"sk-[A-Za-z0-9_-]{20,}|"
-    r"sk_live_[A-Za-z0-9]{20,}|"
-    r"ghp_[A-Za-z0-9]{20,}|"
-    r"gho_[A-Za-z0-9]{20,}|"
-    r"github_pat_[A-Za-z0-9_]{20,}|"
-    r"xox[baprs]-[A-Za-z0-9-]{20,}|"
-    r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
-    r")"
 )
 SECRET_ARTIFACT_NAME_PATTERN = re.compile(
     r"(^|/)("
@@ -398,215 +379,6 @@ class ProjectService:
         return ProjectResponse.model_validate(project)
 
 
-    async def approve_submission_artifact_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        policy_id: str,
-        payload: SubmissionArtifactPolicyApprove,
-    ) -> EffectiveProjectSubmissionArtifactPolicyResponse:
-        """Approve a draft policy and persist its effective project submission artifact policy.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project that owns the policy.
-            guide_id: Guide that owns the policy.
-            policy_id: Draft policy to approve.
-            payload: Approval request body; provenance is server-derived.
-
-        Returns:
-            Effective project submission artifact policy response.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can approve submission artifact policies")
-        policy = await self._repo.lock_submission_artifact_policy(policy_id)
-        if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
-            raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
-        if policy.lifecycle_status != "draft":
-            raise PolicyEditBlocked("only draft policies can be approved")
-        if policy.derivation_source == "unified_compilation":
-            raise PolicySetupBlocked("unified compilation policy approval is unavailable")
-        if policy.derivation_source != MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-            raise PolicySetupBlocked("manual policy lineage is required for this approval")
-        snapshot = await self._get_snapshot_for_guide(project_id, guide, policy.source_snapshot_id)
-        await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
-        if policy.source_snapshot_hash != snapshot.bundle_hash:
-            raise PolicySetupBlocked(
-                "submission artifact policy is bound to a stale source snapshot"
-            )
-        if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
-            raise PolicySetupBlocked("submission artifact policy body hash mismatch")
-        sufficiency_report = await self._repo.get_diagnostic_sufficiency_report_for_snapshot(
-            snapshot.id
-        )
-        self._validate_sufficiency_report_allows_policy_approval(
-            sufficiency_report,
-            snapshot,
-        )
-
-        effective_policy = self._merge_effective_submission_artifact_policy(policy.policy_body)
-        effective_policy_hash = self._hash_canonical_json(effective_policy)
-        try:
-            compiled_pre_submit_checker = compile_effective_project_submission_artifact_policy(
-                effective_policy,
-                effective_policy_hash,
-            )
-        except PreSubmitCheckerCompilerError as exc:
-            raise PolicySetupBlocked("project pre-submit checker compilation failed") from exc
-        now = datetime.now(UTC)
-        try:
-            previous_policy = await self._repo.get_current_approved_submission_artifact_policy(
-                project_id,
-                guide.version,
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise PolicySetupConflict(
-                "submission artifact policy chain is ambiguous; create fresh policy records"
-            ) from exc
-        policy.supersedes_policy_id = previous_policy.id if previous_policy is not None else None
-
-        previous_effective = None
-        if previous_policy is not None:
-            try:
-                previous_effective = await self._repo.get_effective_submission_artifact_policy(
-                    project_id,
-                    guide.version,
-                    previous_policy.source_snapshot_id,
-                )
-            except ProjectRepositoryIntegrityError as exc:
-                raise PolicySetupConflict(
-                    "effective project submission artifact policy chain is ambiguous; create fresh policy records"
-                ) from exc
-            if previous_effective is None:
-                raise PolicySetupConflict(
-                    "effective project submission artifact policy chain is incomplete; create fresh policy records"
-                )
-            if (
-                previous_effective.submission_artifact_policy_id != previous_policy.id
-                or previous_effective.submission_artifact_policy_hash != previous_policy.policy_hash
-            ):
-                raise PolicySetupConflict(
-                    "effective project submission artifact policy chain is inconsistent; create fresh policy records"
-                )
-        try:
-            previous_pre_submit_checker_policy = (
-                await self._repo.get_current_pre_submit_checker_policy(
-                    project_id,
-                    guide.version,
-                )
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise PolicySetupConflict(
-                "pre-submit checker policy chain is ambiguous; create fresh policy records"
-            ) from exc
-        if previous_policy is not None:
-            if previous_pre_submit_checker_policy is None:
-                raise PolicySetupConflict(
-                    "pre-submit checker policy chain is incomplete; create fresh policy records"
-                )
-            if (
-                previous_pre_submit_checker_policy.effective_policy_id != previous_effective.id
-                or previous_pre_submit_checker_policy.effective_policy_hash
-                != previous_effective.effective_policy_hash
-            ):
-                raise PolicySetupConflict(
-                    "pre-submit checker policy chain is inconsistent; create fresh policy records"
-                )
-        elif previous_pre_submit_checker_policy is not None:
-            raise PolicySetupConflict(
-                "pre-submit checker policy chain is inconsistent; create fresh policy records"
-            )
-
-        policy.lifecycle_status = "approved"
-        policy.approved_by_role = self._approver_role(actor)
-        policy.approved_by_actor = actor.actor_id
-        policy.approved_at = now
-        if payload.approval_note:
-            policy.change_summary = payload.approval_note
-        if previous_policy is not None:
-            previous_policy.lifecycle_status = "superseded"
-            previous_policy.superseded_at = now
-            previous_effective.lifecycle_status = "superseded"
-            previous_effective.superseded_at = now
-            previous_pre_submit_checker_policy.lifecycle_status = "superseded"
-            previous_pre_submit_checker_policy.superseded_at = now
-
-        effective = EffectiveProjectSubmissionArtifactPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            submission_artifact_policy_id=policy.id,
-            submission_artifact_policy_hash=policy.policy_hash,
-            lifecycle_status="approved",
-            merge_algorithm_version=MERGE_ALGORITHM_VERSION,
-            effective_policy=effective_policy,
-            effective_policy_hash=effective_policy_hash,
-            created_by=actor.actor_id,
-            supersedes_effective_policy_id=(
-                previous_effective.id if previous_effective is not None else None
-            ),
-        )
-        existing_post_submit_policy = await self._repo.get_post_submit_checker_policy(
-            project_id,
-            guide.version,
-        )
-        if existing_post_submit_policy is not None:
-            if existing_post_submit_policy.lifecycle_status == "approved":
-                raise PolicySetupConflict(
-                    "approved post-submit checker policy must be superseded through the approval workflow"
-                )
-            self._supersede_post_submit_checker_policy(
-                existing_post_submit_policy,
-                actor,
-                supersession_kind="upstream_policy_changed",
-                supersession_reason="effective project submission artifact policy changed",
-                superseded_at=now,
-            )
-        try:
-            effective = await self._repo.add_effective_submission_artifact_policy(effective)
-            pre_submit_checker_policy = PreSubmitCheckerPolicy(
-                id=str(uuid4()),
-                project_id=project_id,
-                guide_id=guide.id,
-                guide_version=guide.version,
-                source_snapshot_id=snapshot.id,
-                source_snapshot_hash=snapshot.bundle_hash,
-                effective_policy_id=effective.id,
-                effective_policy_hash=effective.effective_policy_hash,
-                lifecycle_status="compiled",
-                compiler_version=compiled_pre_submit_checker.compiler_version,
-                compiled_bundle=compiled_pre_submit_checker.compiled_bundle,
-                compiled_bundle_hash=compiled_pre_submit_checker.compiled_bundle_hash,
-                checker_names=compiled_pre_submit_checker.checker_names,
-                checker_configs=compiled_pre_submit_checker.checker_configs,
-                created_by=actor.actor_id,
-                supersedes_pre_submit_checker_policy_id=(
-                    previous_pre_submit_checker_policy.id
-                    if previous_pre_submit_checker_policy is not None
-                    else None
-                ),
-            )
-            pre_submit_checker_policy = await self._repo.add_pre_submit_checker_policy(
-                pre_submit_checker_policy
-            )
-            await self._session.commit()
-        except IntegrityError as exc:
-            await self._session.rollback()
-            raise PolicySetupConflict(
-                "submission artifact policy approval conflicted with concurrent setup; retry"
-            ) from exc
-        await self._session.refresh(effective)
-        await self._session.refresh(pre_submit_checker_policy)
-        return EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective)
-
-
     async def active_guide_read_response(
         self,
         guide: ProjectGuide,
@@ -672,63 +444,8 @@ class ProjectService:
             "revision_policy": RevisionPolicyResponse.model_validate(revision_policy),
         }
 
-    async def _get_project_guide(self, project_id: str, guide_id: str) -> ProjectGuide:
-        """Load a guide and ensure it belongs to the requested project.
 
-        Args:
-            project_id: Project id expected to own the guide.
-            guide_id: Guide id to load.
 
-        Returns:
-            Matching guide model.
-
-        Raises:
-            GuideNotFound: If the guide is missing or belongs to another project.
-        """
-        guide = await self._repo.get_guide(guide_id)
-        if guide is None or guide.project_id != project_id:
-            raise GuideNotFound("guide not found")
-        return guide
-
-    async def _lock_project_guide_for_setup(
-        self,
-        project_id: str,
-        guide_id: str,
-    ) -> ProjectGuide:
-        """Load and lock a guide row before mutating setup records."""
-        guide = await self._repo.lock_project_guide(guide_id)
-        if guide is None or guide.project_id != project_id:
-            raise GuideNotFound("guide not found")
-        return guide
-
-    async def _get_snapshot_for_guide(
-        self,
-        project_id: str,
-        guide: ProjectGuide,
-        snapshot_id: str,
-    ) -> GuideSourceSnapshot:
-        """Load a guide-source snapshot and verify guide ownership.
-
-        Args:
-            project_id: Project id expected to own the snapshot.
-            guide: Guide model expected to own the snapshot.
-            snapshot_id: Snapshot id to load.
-
-        Returns:
-            Matching guide-source snapshot.
-
-        Raises:
-            SourceSnapshotNotFound: If the snapshot does not belong to the guide.
-        """
-        snapshot = await self._repo.get_guide_source_snapshot(snapshot_id)
-        if (
-            snapshot is None
-            or snapshot.project_id != project_id
-            or snapshot.guide_id != guide.id
-            or snapshot.guide_version != guide.version
-        ):
-            raise SourceSnapshotNotFound("guide source snapshot not found")
-        return snapshot
 
 
     def _safe_project_setup_error_summary(self, summary: str) -> str:
@@ -1131,6 +848,9 @@ class ProjectService:
             DEFAULT_ALLOWED_STORAGE_SCHEMES
         ):
             raise PolicySetupBlocked("project policy cannot add unsupported storage schemes")
+        if any(not is_canonical_relative_pattern(rule["pattern"])
+               for rule in project_policy["forbidden_artifacts"]):
+            raise PolicySetupBlocked("forbidden artifact patterns must be canonical relative patterns")
         forbidden_patterns = [
             *DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS,
             *[rule["pattern"] for rule in project_policy["forbidden_artifacts"]],
@@ -1162,31 +882,9 @@ class ProjectService:
                 raise PolicySetupBlocked("required evidence conflicts with forbidden artifacts")
 
     def _validate_artifact_path(self, path: str) -> None:
-        """Validate relative artifact paths used by project policy."""
-        if any(ord(character) < 32 or ord(character) == 127 for character in path):
-            raise PolicySetupBlocked("artifact paths cannot contain control characters")
-        decoded_path = self._decode_percent_encoded_artifact_path(path)
-        if "%" in path or decoded_path != path:
-            raise PolicySetupBlocked("artifact paths cannot contain percent-encoded characters")
-        if not path or path.startswith(("/", "\\", "~")) or re.match(r"^[A-Za-z]:", path):
-            raise PolicySetupBlocked("artifact paths must be safe relative paths")
-        if "\\" in path:
-            raise PolicySetupBlocked("artifact paths cannot contain local path separators")
-        if ":" in path or "://" in path or "?" in path or "#" in path:
-            raise PolicySetupBlocked("artifact paths cannot be storage refs or URLs")
-        segments = path.replace("\\", "/").split("/")
-        if any(segment in {"", ".", ".."} for segment in segments):
-            raise PolicySetupBlocked("artifact paths cannot contain empty or traversal segments")
-
-    def _decode_percent_encoded_artifact_path(self, path: str) -> str:
-        """Decode artifact paths until stable without allowing nested encodings."""
-        decoded = path
-        for _ in range(5):
-            next_decoded = unquote(decoded)
-            if next_decoded == decoded:
-                return decoded
-            decoded = next_decoded
-        raise PolicySetupBlocked("artifact paths cannot contain nested percent-encoding")
+        """Use the same canonical machine-field grammar as the compiler and runtime."""
+        if not is_canonical_relative_path(path):
+            raise PolicySetupBlocked("artifact paths must be safe canonical relative paths")
 
     def _matches_forbidden_artifact(self, value: str, patterns: list[str]) -> bool:
         """Return whether a value is blocked by default or project forbidden rules."""
@@ -1244,33 +942,7 @@ class ProjectService:
             return left
         return min(left, right)
 
-    def _approver_role(self, actor: ActorContext) -> str:
-        """Return the setup role used for server-derived approval provenance."""
-        for role in ("admin", "project_manager"):
-            if role in actor.roles:
-                return role
-        raise PolicySetupBlocked("actor lacks project setup approval role")
 
-    def _validate_sufficiency_report_allows_policy_approval(
-        self,
-        sufficiency_report: GuideSufficiencyReport | None,
-        source_snapshot: GuideSourceSnapshot,
-    ) -> None:
-        """Require sufficiency clearance before creating or approving policy."""
-        if sufficiency_report is None:
-            raise PolicySetupBlocked("guide sufficiency report is required before policy approval")
-        if sufficiency_report.source_snapshot_id != source_snapshot.id:
-            raise PolicySetupBlocked("guide sufficiency report is bound to a stale snapshot")
-        if sufficiency_report.source_snapshot_hash != source_snapshot.bundle_hash:
-            raise PolicySetupBlocked("guide sufficiency report snapshot hash mismatch")
-        if sufficiency_report.status == "blocked":
-            raise PolicySetupBlocked("guide sufficiency has blocking gaps")
-        if sufficiency_report.status == "passed_with_warnings":
-            self._validate_sufficiency_warning_acknowledgement(
-                sufficiency_report,
-                PolicySetupBlocked,
-                "before policy approval",
-            )
 
 
     def canonical_agent_submission_policy_body(self, policy_body: dict[str, Any]) -> dict[str, Any]:
@@ -1334,27 +1006,17 @@ class ProjectService:
         return await self._verified_source_material_refs(sufficiency_report)
 
 
-    def _supersede_post_submit_checker_policy(
-        self,
-        policy: PostSubmitCheckerPolicy,
-        actor: ActorContext,
-        *,
-        supersession_kind: str,
-        supersession_reason: str,
-        superseded_at: datetime,
-    ) -> None:
-        """Retire one compiled policy while preserving append-only provenance."""
-        if policy.lifecycle_status != "compiled":
-            raise PolicySetupConflict("only compiled post-submit policies can be superseded")
-        if supersession_kind not in {"correction_requested", "upstream_policy_changed"}:
-            raise PolicySetupConflict("post-submit policy supersession kind is invalid")
-        policy.lifecycle_status = "superseded"
-        policy.superseded_at = superseded_at
-        policy.superseded_by_role = self._approver_role(actor)
-        policy.superseded_by_actor = actor.actor_id
-        policy.supersession_kind = supersession_kind
-        policy.supersession_reason = supersession_reason
 
+
+    async def lock_active_approval(self, guide, snapshot, policy, effective, pre):
+        """Validate the canonical approval custody for the already locked read chain."""
+        from .guide_compilation.approval_custody import lock_policy_approval
+
+        from .api.guide_compilation import ProjectGuideSetupFinalizationError
+        try:
+            return await lock_policy_approval(self._session, guide, snapshot, policy, effective, pre)
+        except (ProjectGuideSetupFinalizationError, ValueError) as exc:
+            raise GuideActivationBlocked("current unified approval custody is unavailable") from exc
 
     def validate_activation_ready(
         self,
@@ -1370,6 +1032,7 @@ class ProjectService:
         payment_policy: PaymentPolicy | None,
         *,
         require_payment_policy: bool = True,
+        approval_custody=None,
     ) -> None:
         """Enforce the minimum guide and policy contract required to activate.
 
@@ -1401,20 +1064,22 @@ class ProjectService:
             raise GuideActivationBlocked("guide sufficiency report snapshot hash mismatch")
         if sufficiency_report.status == "blocked":
             raise GuideActivationBlocked("guide sufficiency has blocking gaps")
-        if sufficiency_report.status == "passed_with_warnings":
-            self._validate_sufficiency_warning_acknowledgement(
-                sufficiency_report,
-                GuideActivationBlocked,
-                "before guide activation",
-            )
+        # The canonical approval receipt binds exact warning acknowledgments;
+        # approval does not rewrite the earlier sufficiency report.
         if submission_artifact_policy.lifecycle_status != "approved":
             raise GuideActivationBlocked("approved submission artifact policy is required")
         if submission_artifact_policy.source_snapshot_id != source_snapshot.id:
             raise GuideActivationBlocked("submission artifact policy is bound to a stale snapshot")
         if submission_artifact_policy.source_snapshot_hash != source_snapshot.bundle_hash:
             raise GuideActivationBlocked("submission artifact policy snapshot hash mismatch")
-        if submission_artifact_policy.derivation_source != MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
-            raise GuideActivationBlocked("current approved manual policy lineage is required")
+        if (
+            submission_artifact_policy.derivation_source != "unified_compilation"
+            or approval_custody is None
+            or approval_custody.operation.artifact_policy_id != submission_artifact_policy.id
+            or approval_custody.effective is not effective_policy
+            or approval_custody.pre is not pre_submit_checker_policy
+        ):
+            raise GuideActivationBlocked("current unified approval custody is required")
         if (
             self._hash_canonical_json(submission_artifact_policy.policy_body)
             != submission_artifact_policy.policy_hash
@@ -1630,21 +1295,6 @@ class ProjectService:
         ):
             raise GuideActivationBlocked("payment policy is incomplete")
 
-    def _validate_sufficiency_warning_acknowledgement(
-        self,
-        sufficiency_report: GuideSufficiencyReport,
-        exception_type: type[ProjectServiceError],
-        action: str,
-    ) -> None:
-        """Require trusted provenance for warning acknowledgements."""
-        if (
-            not sufficiency_report.warnings_acknowledged_by_actor
-            or not sufficiency_report.warnings_acknowledged_at
-            or sufficiency_report.warnings_acknowledged_by_role not in PROJECT_SETUP_ROLES
-        ):
-            raise exception_type(
-                f"guide sufficiency warnings require admin/project_manager acknowledgement {action}"
-            )
 
     def _payment_policy_model(
         self,

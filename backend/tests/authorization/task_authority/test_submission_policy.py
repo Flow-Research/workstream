@@ -13,9 +13,7 @@ from app.db import models as db_models
 from app.db.errors import integrity_constraint_name
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.modules.projects.models import (
-    EffectiveProjectSubmissionArtifactPolicy,
     PostSubmitCheckerPolicy,
-    PreSubmitCheckerPolicy,
 )
 from app.modules.authorization.prepared import PreparedSubmissionCreationAuthorization
 from app.modules.tasks.api import SubmissionCreationRequest
@@ -23,6 +21,7 @@ from app.modules.tasks.models import AuditEvent, Submission, TaskAssignment, Wor
 from app.modules.tasks.service import TaskLockedContextInvalid
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 from tests.authorization.task_authority.test_concurrency import actor_context
+from tests.projects.policy_read_faults import corrupt_locked_policy_reads
 from tests.test_tasks import (
     task_database_env as task_database_env,
     task_client as task_client,
@@ -122,19 +121,7 @@ async def test_submission_pre_submit_rejects_mutated_effective_policy_body(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        effective_policy = await session.get(
-            EffectiveProjectSubmissionArtifactPolicy,
-            task.locked_effective_project_submission_artifact_policy_id,
-        )
-        assert effective_policy is not None
-        effective_policy.effective_policy = {
-            **effective_policy.effective_policy,
-            "required_evidence": [],
-        }
-        await session.commit()
+    await corrupt_locked_policy_reads(monkeypatch, started_task["id"], "stale_effective")
 
     with pytest.raises(TaskLockedContextInvalid) as rejected:
         await _create_hidden_submission(started_task["id"])
@@ -163,16 +150,7 @@ async def test_submission_pre_submit_checker_setup_error_is_controlled(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        pre_submit_policy = await session.get(
-            PreSubmitCheckerPolicy,
-            task.locked_pre_submit_checker_policy_id,
-        )
-        assert pre_submit_policy is not None
-        pre_submit_policy.checker_names = ["unknown_project_checker"]
-        await session.commit()
+    await corrupt_locked_policy_reads(monkeypatch, started_task["id"], "checker_names")
 
     with pytest.raises(TaskLockedContextInvalid) as rejected:
         await _create_hidden_submission(started_task["id"])
@@ -275,19 +253,7 @@ async def test_submission_pre_submit_rejects_mutated_compiled_checker_bundle(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
-    async with db_session.get_session_factory()() as session:
-        task = await session.get(WorkstreamTask, started_task["id"])
-        assert task is not None
-        pre_submit_policy = await session.get(
-            PreSubmitCheckerPolicy,
-            task.locked_pre_submit_checker_policy_id,
-        )
-        assert pre_submit_policy is not None
-        pre_submit_policy.compiled_bundle = {
-            **pre_submit_policy.compiled_bundle,
-            "effective_policy_hash": "sha256:" + "0" * 64,
-        }
-        await session.commit()
+    await corrupt_locked_policy_reads(monkeypatch, started_task["id"], "stale_bundle")
 
     with pytest.raises(TaskLockedContextInvalid) as rejected:
         await _create_hidden_submission(started_task["id"])

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     JSON,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
     text,
@@ -723,21 +724,37 @@ class ProjectGuideRuntimeAllocation(Base):
 
     __tablename__ = "project_guide_runtime_allocations"
     __table_args__ = (
-        UniqueConstraint("attempt_id", "kind", "document_handle",
-                         name="uq_guide_runtime_allocation_slot", postgresql_nulls_not_distinct=True),
+        UniqueConstraint(
+            "attempt_id",
+            "kind",
+            "document_handle",
+            name="uq_guide_runtime_allocation_slot",
+            postgresql_nulls_not_distinct=True,
+        ),
         CheckConstraint("kind in ('container','file','attachment')", name="ck_guide_resource_kind"),
-        CheckConstraint("state in ('allocating','allocated','uncertain','cleanup_failed','deleted')",
-                        name="ck_guide_resource_state"),
-        CheckConstraint("(kind='container' and document_handle is null and parent_provider_id is null) or "
-                        "(kind='file' and document_handle is not null and parent_provider_id is null) or "
-                        "(kind='attachment' and document_handle is not null and parent_provider_id is not null)",
-                        name="ck_guide_resource_scope"),
-        CheckConstraint("((kind='file' and num_nonnulls(source_item_id,document_version_id,put_attempt_id,content_id,replica_id,storage_namespace_id,namespace_fingerprint,sha256,byte_count,media_type)=10) or (kind in ('container','attachment') and num_nonnulls(source_item_id,document_version_id,put_attempt_id,content_id,replica_id,storage_namespace_id,namespace_fingerprint,sha256,byte_count,media_type)=0)) and ((kind='attachment' and source_file_allocation_id is not null and container_allocation_id is not null) or (kind in ('container','file') and source_file_allocation_id is null and container_allocation_id is null))", name="ck_guide_resource_document_shape"),
-        CheckConstraint("state in ('allocating','uncertain') or provider_id is not null",
-                        name="ck_guide_resource_identity"),
+        CheckConstraint(
+            "state in ('allocating','allocated','uncertain','cleanup_failed','deleted')",
+            name="ck_guide_resource_state",
+        ),
+        CheckConstraint(
+            "(kind='container' and document_handle is null and parent_provider_id is null) or "
+            "(kind='file' and document_handle is not null and parent_provider_id is null) or "
+            "(kind='attachment' and document_handle is not null and parent_provider_id is not null)",
+            name="ck_guide_resource_scope",
+        ),
+        CheckConstraint(
+            "((kind='file' and num_nonnulls(source_item_id,document_version_id,put_attempt_id,content_id,replica_id,storage_namespace_id,namespace_fingerprint,sha256,byte_count,media_type)=10) or (kind in ('container','attachment') and num_nonnulls(source_item_id,document_version_id,put_attempt_id,content_id,replica_id,storage_namespace_id,namespace_fingerprint,sha256,byte_count,media_type)=0)) and ((kind='attachment' and source_file_allocation_id is not null and container_allocation_id is not null) or (kind in ('container','file') and source_file_allocation_id is null and container_allocation_id is null))",
+            name="ck_guide_resource_document_shape",
+        ),
+        CheckConstraint(
+            "state in ('allocating','uncertain') or provider_id is not null",
+            name="ck_guide_resource_identity",
+        ),
     )
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
-    attempt_id: Mapped[UUID] = mapped_column(ForeignKey("project_guide_compilation_attempts.id"), index=True)
+    attempt_id: Mapped[UUID] = mapped_column(
+        ForeignKey("project_guide_compilation_attempts.id"), index=True
+    )
     manifest_sha256: Mapped[str] = mapped_column(String(71))
     runtime_key: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(16))
@@ -745,14 +762,22 @@ class ProjectGuideRuntimeAllocation(Base):
     document_handle: Mapped[UUID | None] = mapped_column(Uuid())
     provider_id: Mapped[str | None] = mapped_column(String(128))
     parent_provider_id: Mapped[str | None] = mapped_column(String(128))
-    source_file_allocation_id: Mapped[UUID | None] = mapped_column(ForeignKey("project_guide_runtime_allocations.id"))
-    container_allocation_id: Mapped[UUID | None] = mapped_column(ForeignKey("project_guide_runtime_allocations.id"))
+    source_file_allocation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("project_guide_runtime_allocations.id")
+    )
+    container_allocation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("project_guide_runtime_allocations.id")
+    )
     source_item_id: Mapped[str | None] = mapped_column(ForeignKey("guide_source_snapshot_items.id"))
-    document_version_id: Mapped[str | None] = mapped_column(ForeignKey("guide_source_artifact_ingests.id"))
+    document_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_source_artifact_ingests.id")
+    )
     put_attempt_id: Mapped[str | None] = mapped_column(ForeignKey("artifact_put_attempts.id"))
     content_id: Mapped[str | None] = mapped_column(ForeignKey("artifact_contents.id"))
     replica_id: Mapped[str | None] = mapped_column(ForeignKey("artifact_replicas.id"))
-    storage_namespace_id: Mapped[str | None] = mapped_column(ForeignKey("artifact_storage_namespaces.id"))
+    storage_namespace_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_storage_namespaces.id")
+    )
     namespace_fingerprint: Mapped[str | None] = mapped_column(String(71))
     sha256: Mapped[str | None] = mapped_column(String(71))
     byte_count: Mapped[int | None] = mapped_column(BigInteger)
@@ -766,13 +791,173 @@ class ProjectGuideDocumentAccess(Base):
     """Immutable successful original-file access evidence for an exact fenced run."""
 
     __tablename__ = "project_guide_document_accesses"
-    __table_args__ = (UniqueConstraint("attempt_id", "source_item_id", name="uq_guide_document_access"),)
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "source_item_id", name="uq_guide_document_access"),
+    )
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
-    attempt_id: Mapped[UUID] = mapped_column(ForeignKey("project_guide_compilation_attempts.id"), index=True)
+    attempt_id: Mapped[UUID] = mapped_column(
+        ForeignKey("project_guide_compilation_attempts.id"), index=True
+    )
     source_item_id: Mapped[str] = mapped_column(ForeignKey("guide_source_snapshot_items.id"))
     document_version_id: Mapped[str] = mapped_column(ForeignKey("guide_source_artifact_ingests.id"))
-    attachment_allocation_id: Mapped[UUID] = mapped_column(ForeignKey("project_guide_runtime_allocations.id"))
+    attachment_allocation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("project_guide_runtime_allocations.id")
+    )
     manifest_sha256: Mapped[str] = mapped_column(String(71))
     sha256: Mapped[str] = mapped_column(String(71))
     document_handle: Mapped[UUID] = mapped_column(Uuid())
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProjectGuideProposalApproval(Base):
+    """Committed approval provenance; the existing reservation owns replay."""
+
+    __tablename__ = "project_guide_proposal_approvals"
+    __table_args__ = (
+        Index(
+            "uq_proposal_approval_root_guide",
+            "guide_id",
+            unique=True,
+            postgresql_where=text("prior_approval_operation_id IS NULL"),
+        ),
+        ForeignKeyConstraint(
+            ["compilation_id", "project_id", "guide_id"],
+            [
+                "project_guide_compilations.id",
+                "project_guide_compilations.project_id",
+                "project_guide_compilations.guide_id",
+            ],
+            name="fk_proposal_approval_compilation_scope",
+        ),
+        ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_proposal_approval_actor_link",
+        ),
+        UniqueConstraint("finalization_id", name="uq_proposal_approval_finalization"),
+        UniqueConstraint("prior_approval_operation_id", name="uq_proposal_approval_prior"),
+        UniqueConstraint("artifact_policy_id", name="uq_proposal_approval_artifact"),
+        UniqueConstraint("effective_policy_id", name="uq_proposal_approval_effective"),
+        UniqueConstraint("pre_submit_policy_id", name="uq_proposal_approval_pre"),
+        UniqueConstraint("authorization_decision_event_id", name="uq_proposal_approval_decision"),
+        CheckConstraint(
+            "target_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "request_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "output_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "approved_policy_output_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "effective_pre_submit_plan_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_proposal_approval_digests",
+        ),
+        CheckConstraint(
+            "octet_length(target_json::text) <= 16384 and "
+            "octet_length(receipt_json::text) <= 32768 and "
+            "octet_length(effective_pre_submit_plan::text) <= 4194304",
+            name="ck_proposal_approval_sizes",
+        ),
+    )
+
+    operation_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey(
+            "submission_policy_mutation_idempotency_records.operation_id",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        primary_key=True,
+    )
+    project_id: Mapped[str] = mapped_column(String(36))
+    guide_id: Mapped[str] = mapped_column(String(36))
+    compilation_id: Mapped[UUID] = mapped_column(Uuid())
+    finalization_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("project_guide_setup_finalizations.id"),
+    )
+    target_json: Mapped[dict] = mapped_column(JSON)
+    target_digest: Mapped[str] = mapped_column(String(71))
+    request_digest: Mapped[str] = mapped_column(String(71))
+    resource_context_digest: Mapped[str] = mapped_column(String(71))
+    output_digest: Mapped[str] = mapped_column(String(71))
+    receipt_json: Mapped[dict] = mapped_column(JSON)
+    artifact_policy_id: Mapped[str] = mapped_column(ForeignKey("submission_artifact_policies.id"))
+    effective_policy_id: Mapped[str] = mapped_column(
+        ForeignKey("effective_project_submission_artifact_policies.id"),
+    )
+    pre_submit_policy_id: Mapped[str] = mapped_column(ForeignKey("pre_submit_checker_policies.id"))
+    approved_policy_output_digest: Mapped[str] = mapped_column(String(71))
+    effective_pre_submit_plan: Mapped[dict] = mapped_column(JSON)
+    effective_pre_submit_plan_hash: Mapped[str] = mapped_column(String(71))
+    prior_approval_operation_id: Mapped[UUID | None] = mapped_column(
+        Uuid(),
+        ForeignKey("project_guide_proposal_approvals.operation_id"),
+    )
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(String(36))
+    admin_role_grant_id: Mapped[UUID] = mapped_column(Uuid(), ForeignKey("admin_role_grants.id"))
+    authorization_decision_event_id: Mapped[str] = mapped_column(ForeignKey("audit_events.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProjectGuideProposalCorrection(Base):
+    """One immutable feedback input and successor for a known finalized result."""
+
+    __tablename__ = "project_guide_proposal_corrections"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["compilation_id", "project_id", "guide_id"],
+            [
+                "project_guide_compilations.id",
+                "project_guide_compilations.project_id",
+                "project_guide_compilations.guide_id",
+            ],
+            name="fk_proposal_correction_compilation_scope",
+        ),
+        ForeignKeyConstraint(
+            ["identity_link_id", "actor_profile_id"],
+            ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+            name="fk_proposal_correction_actor_link",
+        ),
+        UniqueConstraint("actor_profile_id", "idempotency_key", name="uq_proposal_correction_key"),
+        UniqueConstraint("finalization_id", name="uq_proposal_correction_predecessor"),
+        UniqueConstraint("successor_setup_run_id", name="uq_proposal_correction_successor"),
+        UniqueConstraint("authorization_decision_event_id", name="uq_proposal_correction_decision"),
+        CheckConstraint("successor_setup_generation > 1", name="ck_proposal_correction_generation"),
+        CheckConstraint(
+            "target_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "request_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "resource_context_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "feedback_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_proposal_correction_digests",
+        ),
+        CheckConstraint(
+            "length(btrim(reason)) between 1 and 4000 and octet_length(reason) <= 16000 "
+            "and octet_length(target_json::text) <= 16384",
+            name="ck_proposal_correction_sizes",
+        ),
+    )
+
+    operation_id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    idempotency_key: Mapped[UUID] = mapped_column(Uuid())
+    project_id: Mapped[str] = mapped_column(String(36))
+    guide_id: Mapped[str] = mapped_column(String(36))
+    compilation_id: Mapped[UUID] = mapped_column(Uuid())
+    finalization_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("project_guide_setup_finalizations.id"),
+    )
+    target_json: Mapped[dict] = mapped_column(JSON)
+    target_digest: Mapped[str] = mapped_column(String(71))
+    request_digest: Mapped[str] = mapped_column(String(71))
+    resource_context_digest: Mapped[str] = mapped_column(String(71))
+    resource_context_json: Mapped[dict] = mapped_column(JSON)
+    output_digest: Mapped[str] = mapped_column(String(71))
+    receipt_json: Mapped[dict] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(Text)
+    feedback_hash: Mapped[str] = mapped_column(String(71))
+    successor_setup_run_id: Mapped[str] = mapped_column(ForeignKey("project_setup_runs.id"))
+    successor_setup_generation: Mapped[int] = mapped_column(BigInteger)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"))
+    identity_link_id: Mapped[str] = mapped_column(String(36))
+    admin_role_grant_id: Mapped[UUID] = mapped_column(Uuid(), ForeignKey("admin_role_grants.id"))
+    authorization_decision_event_id: Mapped[str] = mapped_column(ForeignKey("audit_events.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

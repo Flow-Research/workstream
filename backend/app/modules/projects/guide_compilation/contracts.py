@@ -11,6 +11,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.modules.projects.api.compilation_identity import CompilationComponentHashes
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.interfaces.project_agents import (
     ProjectGuideCompilationContext,
@@ -141,20 +142,6 @@ class CompilationExecutionState:
     classification: CompilationRecoveryClassification
     compilation_id: UUID | None = None
     runtime_configuration: ProjectGuideRuntimeConfiguration | None = None
-
-
-class CompilationComponentHashes(BaseModel):
-    """Named canonical hashes for every independently projected component."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    sufficiency_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    artifact_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    requirement_inventory_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    pre_submit_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    post_submit_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    capability_suggestions_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    setup_notes_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class AcceptedCompilationResult(BaseModel):

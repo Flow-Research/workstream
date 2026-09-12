@@ -101,7 +101,7 @@ class PreSubmitMaterializationPreparationFacts:
     assignment_id: UUID
     project_id: UUID
     guide_id: UUID
-    guide_version: int
+    guide_version: str
     source_snapshot_id: UUID
     source_snapshot_hash: str
     submission_artifact_policy_id: UUID

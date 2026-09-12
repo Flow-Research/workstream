@@ -693,9 +693,7 @@ class PreparedSubmissionBundlePreparationCommand:
         planner: EffectivePreSubmissionPlanningPort,
     ) -> EffectivePreSubmissionExecutionPlan:
         """Compile the sole CHECKER plan from exact public PROJECT facts."""
-        guide_version = project_context.guide_version.removeprefix("v")
         try:
-            numeric_guide_version = int(guide_version)
             effective_policy = json.loads(project_context.effective_policy.value)
             compiled_bundle = json.loads(
                 project_context.compiled_pre_submit_bundle.value
@@ -717,7 +715,7 @@ class PreparedSubmissionBundlePreparationCommand:
             lineage=EffectivePreSubmissionPlanLineage(
                 project_id=project_context.project_id,
                 guide_id=project_context.guide_id,
-                guide_version=numeric_guide_version,
+                guide_version=project_context.guide_version,
                 source_snapshot_id=project_context.source_snapshot_id,
                 source_snapshot_hash=project_context.source_snapshot_hash,
                 effective_policy_id=project_context.effective_policy_id,

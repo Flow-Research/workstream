@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
 from app.modules.projects.api.task_examples import (
-    GuideTaskExampleInputError, require_task_example_commitment,
+    GuideTaskExampleInputError,
+    require_task_example_commitment,
 )
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.modules.authorization.api import (
@@ -32,7 +33,7 @@ from app.modules.projects.repository import ProjectRepository
 from app.modules.projects.models import ProjectSetupRun
 from .source_state import is_compilation_source_setup
 from .diagnostics import compilation_setup_response
-from .automatic_request import AutomaticCompilationInputs, automatic_operation_id
+from .request_inputs import CompilationRequestInputs, automatic_operation_id
 from .models import (
     ProjectGuideCompilationAttempt,
     ProjectGuideCompilation,
@@ -82,7 +83,8 @@ class LiveGuideCompilationCoordinator:
             finalization, has_attempt, snapshot = await self._admit(delivery)
         except GuideTaskExampleInputError as exc:
             return {
-                "status": "setup_input_invalid", "error_code": exc.code,
+                "status": "setup_input_invalid",
+                "error_code": exc.code,
                 "error_summary": "Create a new guide version with at least one task example.",
             }
         if finalization is not None:
@@ -91,7 +93,8 @@ class LiveGuideCompilationCoordinator:
             raise GuideCompilationIntegrityError("compilation runtime configuration unavailable")
         configuration = (
             ProjectGuideRuntimeConfiguration.model_validate(snapshot)
-            if snapshot is not None else self._configuration()
+            if snapshot is not None
+            else self._configuration()
         )
         operation_id = automatic_operation_id(delivery.setup_run_id, delivery.setup_generation)
         async with self._sessions() as session:
@@ -99,7 +102,7 @@ class LiveGuideCompilationCoordinator:
                 request = await GuideCompilationService(
                     session,
                     authority,
-                    automatic_inputs=AutomaticCompilationInputs(
+                    request_inputs=CompilationRequestInputs(
                         self._material(session),
                         self._pre,
                         self._post,
@@ -206,7 +209,9 @@ class LiveGuideCompilationCoordinator:
                     None,
                 )
             require_task_example_commitment(
-                guide.task_examples, guide.task_examples_hash, manifest=source.manifest_json,
+                guide.task_examples,
+                guide.task_examples_hash,
+                manifest=source.manifest_json,
             )
             if setup.status == "dispatch_pending" and setup.current_step == "dispatch":
                 setup.status = "queued"

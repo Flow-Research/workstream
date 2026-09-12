@@ -959,6 +959,7 @@ class ProjectSetupRun(Base):
         CheckConstraint(
             "status in ("
             "'awaiting_documents', "
+            "'correction_requested', "
             "'queued', "
             "'dispatch_pending', "
             "'enqueue_failed', "

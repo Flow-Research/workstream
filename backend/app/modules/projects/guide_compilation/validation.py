@@ -11,10 +11,11 @@ from app.modules.authorization.api import (
     project_guide_compilation_execute_resource_digest,
 )
 
+from app.modules.projects.api.compilation_identity import CompilationComponentHashes
+
 from .contracts import (
     AcceptedCompilationResult,
     CompilationAttemptIdentity,
-    CompilationComponentHashes,
 )
 from .models import ProjectGuideCompilationAttempt
 

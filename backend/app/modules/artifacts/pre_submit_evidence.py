@@ -720,16 +720,11 @@ class PreSubmitEvidenceService:
             ),
         )
         lineage = request.plan.lineage
-        guide_version = project_context.guide_version.removeprefix("v")
-        try:
-            numeric_guide_version = int(guide_version)
-        except ValueError as exc:
-            raise PreSubmitEvidenceConflict("pre_submit_locked_context_changed") from exc
         if (
             task_context.contributor_id != request.actor_profile_id
             or project_context.project_id != lineage.project_id
             or project_context.guide_id != lineage.guide_id
-            or numeric_guide_version != lineage.guide_version
+            or project_context.guide_version != lineage.guide_version
             or project_context.source_snapshot_id != lineage.source_snapshot_id
             or project_context.source_snapshot_hash != lineage.source_snapshot_hash
             or project_context.effective_policy_id != lineage.effective_policy_id

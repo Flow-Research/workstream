@@ -15,43 +15,13 @@ from app.modules.authorization.runtime import (
 
 
 async def install_submitter_grant(connection, params) -> None:
-    authorizer_id = str(uuid4())
-    authorizer_link_id = str(uuid4())
-    admin_grant_id, qualification_id, project_grant_id = uuid4(), uuid4(), uuid4()
-    await connection.execute(
-        text(
-            "insert into actor_profiles "
-            "(id,actor_kind,status,provisioning_method,created_by) values "
-            "(:authorizer,'human','active','automatic_first_access','test')"
-        ),
-        {"authorizer": authorizer_id},
-    )
-    await connection.execute(
-        text(
-            "insert into actor_identity_links "
-            "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
-            "last_verified_at) values "
-            "(:link,:authorizer,'flow-test',:authorizer,'human','active','test',now())"
-        ),
-        {"link": authorizer_link_id, "authorizer": authorizer_id},
-    )
-    await connection.execute(
-        text(
-            "insert into admin_role_grants "
-            "(id,target_actor_profile_id,role,scope_type,status,version,"
-            "granted_by_system_principal,grant_reason) values "
-            "(:admin_grant,:authorizer,'access_administrator','system','active',1,"
-            "'workstream:system:bootstrap','submission preparation test bootstrap')"
-        ),
-        {"admin_grant": admin_grant_id, "authorizer": authorizer_id},
-    )
-    await connection.execute(
-        text(
-            "update authority_control set bootstrap_completed=true, version=1, "
-            "bootstrap_grant_id=:admin_grant, updated_at=clock_timestamp() where id=1"
-        ),
-        {"admin_grant": admin_grant_id},
-    )
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from project_create_fixtures import ensure_fixture_bootstrap
+
+    async with AsyncSession(bind=connection, expire_on_commit=False) as session:
+        bootstrap = await ensure_fixture_bootstrap(session)
+        authorizer_id, admin_grant_id = bootstrap.target_actor_profile_id, bootstrap.id
+    qualification_id, project_grant_id = uuid4(), uuid4()
     await connection.execute(
         text(
             "insert into project_role_qualification_snapshots "

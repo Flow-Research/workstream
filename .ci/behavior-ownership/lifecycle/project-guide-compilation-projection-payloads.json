@@ -23,6 +23,6 @@
   "tests": [
     "backend/tests/projects/guide_compilation/test_projection_contracts.py::test_report_and_policy_transforms_are_exact",
     "backend/tests/projects/guide_compilation/test_projection_policy.py::test_artifact_policy_transform_preserves_values_and_server_owned_order",
-    "backend/tests/projects/guide_compilation/test_projection_policy.py::test_unprojectable_v1_policy_fails_without_best_effort_repair"
+    "backend/tests/projects/guide_compilation/test_projection_policy.py::test_noncanonical_path_fails_defensive_projection_validation"
   ]
 }

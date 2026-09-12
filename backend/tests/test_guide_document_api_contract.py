@@ -40,6 +40,7 @@ def test_source_metadata_rejects_superseded_or_unsupported_ingress(patch):
 @pytest.mark.parametrize("method,suffix", [
     ("GET", "post-submit-checker-policy/setup"),
     ("POST", "post-submit-checker-policy/approve"),
+    ("POST", "submission-artifact-policies/{policy_id}/approve"),
     ("POST", "post-submit-checker-policy/request-correction"),
     ("POST", "source-snapshots/{snapshot_id}/run-sufficiency-agent"),
     ("POST", "source-snapshots"),
@@ -58,37 +59,6 @@ def test_superseded_setup_endpoints_are_not_registered(method, suffix):
     )
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("source,message", [
-    ("unified_compilation", "unified compilation policy approval is unavailable"),
-    ("agent_derivation", "manual policy lineage is required for this approval"),
-    ("manual", "manual policy lineage is required for this approval"),
-])
-async def test_generic_approval_rejects_nonmanual_lineage_before_effects(source, message):
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-    from app.modules.projects.service import ProjectService, PolicySetupBlocked
-    from app.modules.projects.schemas import SubmissionArtifactPolicyApprove
-    from app.schemas.auth import ActorContext
-
-    session = SimpleNamespace(commit=AsyncMock(), flush=AsyncMock())
-    service = ProjectService(session)
-    guide = SimpleNamespace(id="guide", project_id="project", status="draft")
-    policy = SimpleNamespace(id="policy", project_id="project", guide_id="guide",
-                             lifecycle_status="draft", derivation_source=source)
-    service._lock_project_guide_for_setup = AsyncMock(return_value=guide)
-    service._repo = SimpleNamespace(lock_submission_artifact_policy=AsyncMock(return_value=policy))
-    actor = ActorContext(actor_id="manager", external_subject="manager",
-                         external_issuer="https://identity.test", roles=("project_manager",),
-                         auth_source="dev_mock")
-    with pytest.raises(PolicySetupBlocked, match=message):
-        await service.approve_submission_artifact_policy(
-            actor, "project", "guide", "policy", SubmissionArtifactPolicyApprove(),
-        )
-    service._repo.lock_submission_artifact_policy.assert_awaited_once_with("policy")
-    assert policy.lifecycle_status == "draft"
-    session.commit.assert_not_awaited()
-    session.flush.assert_not_awaited()
 
 
 def test_current_setup_response_excludes_superseded_post_policy_step():

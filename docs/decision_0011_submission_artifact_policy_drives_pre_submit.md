@@ -82,9 +82,10 @@ Deterministic projection owners persist the permitted report and artifact-policy
 component, and finalization binds their exact outputs in an immutable receipt.
 No later approval or correction starts a second derivation agent.
 
-POL-05A → AUTH-12F4 → POL-05B owns the remaining manager proposal view,
-correction, explicit new-generation rerun and approval. These operations must
-preserve the completed generation and unresolved provider outcomes. Policy
+POL-05A delivers hidden complete proposal review, correction successors and
+pre-submit approval. AUTH-12F4 → POL-05B supplies their public authority and
+manual dispatch. These operations preserve completed generations and unresolved
+provider outcomes. Policy
 versions and compiler provenance are Workstream-owned, never provider-returned
 identity. Manual sufficiency reports and manual policies retain their separately
 authorized provenance; they do not impersonate unified compilation evidence.

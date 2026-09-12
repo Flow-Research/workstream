@@ -437,13 +437,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 72
+    assert len(route_inventory) == 71
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "467431130a55743092c60339f318af93c526b0e8ccbdb2a2690637b4cb497cd1"
+        "fd0fff869be00f102755e579d694ba62fe0208a7c78774ccdb463ca3d2425fb9"
     )
-    assert len(protected_inventory) == 70
+    assert len(protected_inventory) == 69
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "bd581252ecceda632de3bc8696a6b70e2ff15d2e0c519703138ef9d83c7f1191"
+        "cac6b5bc0ff252bf83757fefdf2da5325ef6624665d55efa7e4ce6093aae5a28"
     )
     assert "/api/v1/workers/me/profile" not in schema["paths"]
     assert "post" not in schema["paths"]["/api/v1/tasks/{task_id}/submissions"]

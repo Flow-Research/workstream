@@ -17,7 +17,7 @@ from app.adapters.artifacts import (
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind, AuthorizationDenied
 from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
 from app.modules.checkers.catalogue import project_guide_pre_submission_capabilities
-from app.modules.projects.guide_compilation.automatic_request import AutomaticCompilationInputs
+from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
 from app.modules.projects.models import ProjectSetupRun
 from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
 
@@ -77,13 +77,13 @@ def acknowledge_automatic_setup(setup):
 
 
 def automatic_service(session, actor):
-    inputs = AutomaticCompilationInputs(
+    inputs = CompilationRequestInputs(
         guide_document_manifest_port(session),
         project_guide_pre_submission_capabilities(build_pre_submission_checker_catalogue()),
         current_post_submit_catalogue(),
         runtime_configuration=runtime_configuration(),
     )
-    return _execution_service(session, actor, automatic_inputs=inputs)
+    return _execution_service(session, actor, request_inputs=inputs)
 
 
 @pytest.mark.asyncio
@@ -255,7 +255,7 @@ async def test_sql_origin_rejects_each_missing_lineage_selector(automatic_source
     async with factory() as session, session.begin():
         facts, _identity, origin = await automatic_service(
             session, actor
-        )._automatic_inputs.resolve(session, setup_id)
+        )._request_inputs.resolve(session, setup_id)
     async with factory() as session:
         changed = replace(
             facts, **{field: facts.setup_generation + 1 if field == "setup_generation" else uuid4()}
@@ -421,7 +421,7 @@ async def test_concurrent_request_recovery_rechecks_current_authority(
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     async with factory() as session, session.begin():
-        facts, identity, origin = await automatic_service(session, actor)._automatic_inputs.resolve(
+        facts, identity, origin = await automatic_service(session, actor)._request_inputs.resolve(
             session, setup_id
         )
         if trigger == "project_manager":
@@ -548,14 +548,14 @@ async def test_stored_foreign_source_is_rejected_by_repository_and_insert(
                 ProjectSetupRun.source_snapshot_id == other_snapshot["id"]
             )
         )
-        facts, identity, origin = await automatic_service(session, actor)._automatic_inputs.resolve(
+        facts, identity, origin = await automatic_service(session, actor)._request_inputs.resolve(
             session, setup_id
         )
         acknowledge_automatic_setup(other_setup)
         await session.flush()
         other_facts, _, other_origin = await automatic_service(
             session, actor
-        )._automatic_inputs.resolve(session, UUID(other_setup.id))
+        )._request_inputs.resolve(session, UUID(other_setup.id))
     changed_facts, changed_origin = facts, origin
     if field in origin.__dataclass_fields__:
         changed_origin = replace(origin, **{field: getattr(other_origin, field)})

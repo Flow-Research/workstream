@@ -156,7 +156,6 @@ async def _seed_recovery_actor(session, context: HumanAuthorizationContext) -> N
 
 
 async def _exhausted_job(session, settings, tmp_path, context):
-    await _seed_recovery_actor(session, context)
     namespace = artifact_storage_namespace_spec(
         settings,
         LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root)),
@@ -169,10 +168,13 @@ async def _exhausted_job(session, settings, tmp_path, context):
             namespace_fingerprint=namespace.namespace_fingerprint,
         )
     )
+    from projects.unified_policy_fixtures import create_standalone_unified_policy
+    policy_bundle = await create_standalone_unified_policy(async_sessionmaker(session.bind, expire_on_commit=False), namespace)
     async with minted_source(tmp_path / "checker-output", b"recover checker output") as source:
         project_id, task_id, checker_run_id, admission = await _admit_checker_output(
-            session, settings, namespace, source
-        )
+            session, settings, namespace, source, policy_bundle=policy_bundle)
+        await _seed_recovery_actor(session, context)
+        await session.commit()
         orchestrator = ArtifactStorageOrchestrator(
             session, store, namespace, settings, _AllowArtifactAuthority()
         )

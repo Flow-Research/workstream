@@ -46,7 +46,7 @@ from ..helpers import (
 
 async def request_compilation(factory, values, compilation_context, predecessor_id):
     """Exercise real human request authority using a narrowly seeded project manager."""
-    human, link, grant = uuid4(), uuid4(), uuid4()
+    human, link = uuid4(), uuid4()
     async with factory() as session, session.begin():
         await session.execute(
             text(
@@ -63,16 +63,8 @@ async def request_compilation(factory, values, compilation_context, predecessor_
             ),
             {"id": str(link), "actor": str(human), "subject": str(human), "now": datetime.now(UTC)},
         )
-        await session.execute(text("alter table admin_role_grants disable trigger user"))
-        await session.execute(
-            text(
-                "insert into admin_role_grants(id,target_actor_profile_id,role,scope_type,scope_project_id,"
-                "status,version,granted_by_system_principal,grant_reason) values(:id,:actor,'project_manager','project',"
-                ":project,'active',1,'workstream:system:bootstrap','finalization fixture')"
-            ),
-            {"id": grant, "actor": str(human), "project": str(values["project"])},
-        )
-        await session.execute(text("alter table admin_role_grants enable trigger user"))
+        from project_create_fixtures import grant_fixture_admin_role
+        await grant_fixture_admin_role(session, human, project_id=values["project"])
     actor = ActorIdentityFacts(human, link, ActorKind.HUMAN)
     ctx = HumanAuthorizationContext(
         actor_profile_id=human,
@@ -117,12 +109,14 @@ async def compilation_and_projections(
     project=True,
     compilation_context=None,
     predecessor_id=None,
+    outcome=None,
 ):
     """Persist one accepted compilation with real custody guards and real projection adapters."""
     compilation_context = compilation_context or context(values)
     requested = await request_compilation(factory, values, compilation_context, predecessor_id)
-    outcome = result()
-    if classification != "draft_ready":
+    supplied_outcome = outcome is not None
+    outcome = outcome or result()
+    if classification != "draft_ready" and not supplied_outcome:
         patch = {
             "status": classification,
             "findings": (
