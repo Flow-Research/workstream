@@ -72,7 +72,7 @@ class GuideCorrectionDispatchService:
                 )
         except (AuthorizationDenied, AuthorizationUnavailable, PreparedAuthorizationInvalid):
             raise GuideProposalError("authority_unavailable") from None
-        except GuideCompilationIntegrityError:
-            raise GuideProposalError("operation_conflict") from None
         except (SQLAlchemyError, GuideCompilationStorageError):
             raise GuideProposalError("storage_unavailable") from None
+        except GuideCompilationIntegrityError:
+            raise GuideProposalError("operation_conflict") from None

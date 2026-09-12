@@ -186,3 +186,14 @@ route construction through existing owner adapters without new private-edge debt
   scripted runtime and retain actual admission, AUTH, execution, projection,
   finalization, one-call and immutable-chain assertions. The worker dispatch
   test supplies broker configuration before importing the worker.
+- POL05B-EXT-001: catch custody storage failures before their integrity base
+  class so dispatch returns storage-unavailable rather than a policy conflict.
+  Regression cases distinguish storage, raw database and true integrity failures,
+  verify sanitized errors and prohibit publication after failed admission. The
+  storage case fails with the superseded handler order.
+- POL05B-EXT-002: public manual-dispatch proof invokes the registered Celery task
+  with the captured publication payload and task ID, including replay. Automatic
+  request admission remains a forbidden worker dependency; actual request,
+  execution and finalization authority remain in use.
+- Current navigation uses manual correction dispatch to distinguish successor
+  creation from re-execution of a finalized attempt.

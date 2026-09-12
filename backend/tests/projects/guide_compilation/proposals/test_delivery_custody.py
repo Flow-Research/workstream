@@ -67,3 +67,40 @@ async def test_automatic_delivery_retains_its_own_admission_path():
     operation.operation_id = uuid4()
     with pytest.raises(ProjectGuideCompilationDeliveryError):
         await manual_delivery_attempt(session,setup,attempt)
+
+
+@pytest.mark.parametrize("failure,expected", [
+    ("storage", "storage_unavailable"),
+    ("database", "storage_unavailable"),
+    ("integrity", "operation_conflict"),
+])
+async def test_correction_dispatch_distinguishes_storage_from_conflict(monkeypatch, failure, expected):
+    from unittest.mock import AsyncMock, MagicMock
+    from sqlalchemy.exc import SQLAlchemyError
+    from app.modules.projects.api.guide_proposals import GuideProposalError, GuideProposalSelection
+    from app.modules.projects.guide_compilation import correction_dispatch
+    from app.modules.projects.guide_compilation.repository import (
+        GuideCompilationIntegrityError, GuideCompilationStorageError,
+    )
+
+    session = MagicMock()
+    session.begin.return_value = AsyncMock()
+    session.scalar = AsyncMock(return_value=SimpleNamespace(
+        successor_setup_run_id=str(uuid4()), successor_setup_generation=2,
+        target_json={"source_snapshot_id": str(uuid4())},
+    ))
+    errors = {"storage": GuideCompilationStorageError, "database": SQLAlchemyError,
+              "integrity": GuideCompilationIntegrityError}
+    request = AsyncMock(side_effect=errors[failure]("private database details"))
+    monkeypatch.setattr(correction_dispatch.GuideCompilationService, "request_correction", request)
+    publish = AsyncMock()
+    monkeypatch.setattr(correction_dispatch, "dispatch_project_guide_compilation_after_commit", publish)
+    service = correction_dispatch.GuideCorrectionDispatchService(session, object(), object())
+    selection = GuideProposalSelection(project_id=uuid4(), guide_id=uuid4(), compilation_id=uuid4())
+    actor, operation = object(), uuid4()
+    with pytest.raises(GuideProposalError) as error:
+        await service.dispatch(selection, operation, actor=actor)
+    assert error.value.code == expected
+    assert "private database details" not in str(error.value)
+    request.assert_awaited_once_with(actor=actor, correction_operation_id=operation)
+    publish.assert_not_awaited()

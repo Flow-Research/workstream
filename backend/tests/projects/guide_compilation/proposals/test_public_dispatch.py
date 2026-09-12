@@ -5,7 +5,6 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
-from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from tests.projects.guide_compilation.helpers import runtime_configuration
 from tests.projects.guide_compilation.runtime_fixtures import ScriptedGuideRuntime, document_access
@@ -26,6 +25,7 @@ async def test_manual_dispatch_retains_one_human_request_and_one_execution(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
     monkeypatch.setattr(project_agents, "project_guide_runtime_configuration", lambda settings: runtime_configuration())
+    monkeypatch.setattr(worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration())
     monkeypatch.setattr(worker, "guide_document_access_runtime", lambda sessions,*args:document_access(*args))
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration:runtime)
@@ -65,18 +65,25 @@ async def test_manual_dispatch_retains_one_human_request_and_one_execution(
                     "FROM project_guide_compilation_request_operations WHERE expected_predecessor_compilation_id=:id"
                 ), {"id":command.compilation_id})).one()
                 assert row.request_trigger == "project_manager"
-            delivery = ProjectGuideCompilationDelivery(
-                project_id=command.project_id, guide_id=command.guide_id,
-                source_snapshot_id=row.source_snapshot_id, setup_run_id=row.setup_run_id,
-                setup_generation=row.setup_generation,
-                task_id=project_guide_compilation_task_id(row.setup_run_id,row.setup_generation),
-            )
-            coordinator = worker._coordinator(factory)
-            async def forbidden_automatic(*args):
+            payload = published[-1]
+            assert payload == {
+                "project_id": str(command.project_id), "guide_id": str(command.guide_id),
+                "source_snapshot_id": row.source_snapshot_id, "setup_run_id": row.setup_run_id,
+                "setup_generation": row.setup_generation,
+                "task_id": project_guide_compilation_task_id(row.setup_run_id, row.setup_generation),
+            }
+            def forbidden_automatic(*args):
                 pytest.fail("manual delivery invoked automatic request authority")
-            coordinator._request_authority = forbidden_automatic
-            result = await coordinator.run(delivery)
+            monkeypatch.setattr(worker, "guide_compilation_request_authority", forbidden_automatic)
+            def deliver():
+                return worker.run_project_guide_compilation.apply(
+                    args=tuple(payload[key] for key in (
+                        "project_id", "guide_id", "source_snapshot_id", "setup_run_id", "setup_generation",
+                    )),
+                    task_id=payload["task_id"], throw=True,
+                ).get()
+            result = deliver()
             assert result["status"] == "policy_draft_ready", result
             assert runtime.calls == 1
-            assert await coordinator.run(delivery) == result
+            assert deliver() == result
             assert runtime.calls == 1

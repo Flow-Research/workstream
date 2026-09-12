@@ -287,7 +287,7 @@ inference methods and prompts. Runtime adapter, model and instructions are
 independently configured. Compilation stops at findings and draft pre/post
 policies. POL-05A adds hidden complete-proposal review, correction and pre-policy
 approval custody, replacing manual artifact-policy approval. AUTH-12F4 supplies exact-project manager authority. POL-05B exposes manager review,
-approval and manual rerun through the same compiler. The reconciled
+approval and manual correction dispatch through the same compiler. The reconciled
 [dependency and ownership plan](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#current-dependency-contract)
 permits selected-policy validation independently after completed CP05. The
 selected delivery order finishes unified setup, separate pre/post approval and
