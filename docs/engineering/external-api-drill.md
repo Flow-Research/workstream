@@ -153,6 +153,12 @@ including a populated value for every reference collection, continue afterward.
 
 ## MCP handoff boundary
 
+Service-subject NUL probes use valid idempotency headers and retain the same key
+for subsequent valid provisioning. Invalid input must return non-retryable 422;
+the focused PostgreSQL regression separately proves unchanged actor/link and
+authority state plus exact 200-byte Unicode subject storage and replay. These
+cases cover provisioning validation, not activation of every service action.
+
 The active drill scope is **currently usable public APIs**, not every operation
 discovered in OpenAPI. Hidden implementation routes and unfinished lifecycle
 paths are excluded until their owners expose a supported client flow. A public

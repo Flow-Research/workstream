@@ -246,6 +246,9 @@ cannot be reused as post-submission review-gate evidence. See the
   closes the same validation gap in administrative grant issue/revoke reasons:
   NUL rejects before storage, while valid Unicode and same-key recovery remain
   supported. This does not change authority or retained grant history.
+  [API-DRILL-013](engineering/external-api-drill-findings.md#api-drill-013-service-provisioning-subject-containing-nul-returns-503)
+  applies the same early rejection to service provisioning subjects, preserving
+  exact Unicode identity and same-key recovery without changing service authority.
 - Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at

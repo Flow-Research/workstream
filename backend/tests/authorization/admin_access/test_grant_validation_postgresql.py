@@ -3,8 +3,61 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
+from app.db import session as db_session
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
 
 from tests.authorization.admin_access.support import AdminAccess, authority_snapshot, grant_body
+
+
+async def service_subject_state():
+    """Observe provisioning outputs as well as the canonical authority tables."""
+    state = await authority_snapshot()
+    async with db_session.get_session_factory()() as session:
+        for model in (ActorProfile, ActorIdentityLink):
+            rows = await session.execute(select(model.__table__).order_by(model.id))
+            state[model.__tablename__] = [dict(row) for row in rows.mappings()]
+    return state
+
+
+@pytest.mark.parametrize("subject", ["service\x00subject", "\x00", "é" * 101],
+                         ids=["embedded_nul", "nul_only", "utf8_overflow"])
+async def test_service_subject_rejection_preserves_state_and_key(
+    admin_access: AdminAccess, subject: str,
+) -> None:
+    access = admin_access
+    key = str(uuid4())
+    headers = access.admin.headers | {"Idempotency-Key": key}
+    payload = {"service_identity": "workstream.review.projection", "subject": subject,
+               "reason": "é" * 250}
+    before = await service_subject_state()
+    rejected = await access.signed.client.post("/api/v1/service-actors", headers=headers, json=payload)
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert await service_subject_state() == before
+
+    payload["subject"] = "é" * 100
+    recovered = await access.signed.client.post("/api/v1/service-actors", headers=headers, json=payload)
+    assert recovered.status_code == 201, recovered.text
+    after = await service_subject_state()
+    actor_id = recovered.json()["actor_profile_id"]
+    links = [row for row in after["actor_identity_links"] if row["actor_profile_id"] == actor_id]
+    assert len(links) == 1 and links[0]["subject"] == payload["subject"]
+    assert links[0]["status"] == "active" and links[0]["subject_kind"] == "service"
+    profiles = [row for row in after["actor_profiles"] if row["id"] == actor_id]
+    assert len(profiles) == 1 and profiles[0]["service_identity"] == payload["service_identity"]
+    assert profiles[0]["actor_kind"] == "service" and profiles[0]["status"] == "active"
+    records = [row for row in after["authority_idempotency_records"] if str(row["idempotency_key"]) == key]
+    assert len(records) == 1 and records[0]["status"] == "committed"
+    assert records[0]["operation"] == "service_actor.create"
+    replay = await access.signed.client.post("/api/v1/service-actors", headers=headers, json=payload)
+    assert replay.status_code == 201 and replay.json() == recovered.json()
+    replayed = await service_subject_state()
+    assert replayed["authority_idempotency_records"] == after["authority_idempotency_records"]
+    assert [row for row in replayed["actor_profiles"] if row["id"] == actor_id] == profiles
+    assert [row for row in replayed["actor_identity_links"] if row["actor_profile_id"] == actor_id] == links
 
 
 @pytest.mark.parametrize("operation", ["issue", "revoke"])

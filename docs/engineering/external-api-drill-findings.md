@@ -97,6 +97,29 @@ old advertised role pass.
   and `admin-reason-database.json`; both failed cases remain recorded and the
   disposable database was removed. This is not complete API certification.
 
+## API-DRILL-013: service provisioning subject containing NUL returns 503
+
+- Reproduced at clean `4a5c475f`: `POST /api/v1/service-actors` returned 503
+  `service_unavailable` for both `service\u0000subject` and `\u0000` subjects,
+  instead of rejecting invalid input with 422. The real HTTP run used normal
+  token verification, local administrator bootstrap and an isolated database.
+- The existing `OpaqueSubject` bounded UTF-8 length and whitespace but admitted
+  NUL into PostgreSQL subject lookup/persistence. Both attempts preserved the
+  observed authority/product/audit state. A 200-byte Unicode subject then
+  succeeded using the same key, with exact replay and service-token resolution.
+- The bounded repair adds NUL rejection to the existing public subject
+  constraint. It preserves opaque identity, Unicode, the 1–200 byte bound,
+  authority and idempotency. No service implementation or migration changes.
+- PostgreSQL regressions compare complete actor/link and authority snapshots
+  after rejection, then verify stored Unicode subject, same-key recovery and
+  exact service/idempotency state on replay. Administrator observation timestamps
+  may legitimately advance on successful replay. Permanent live probes retain
+  failed expectations rather than swallowing failures or replacing the key.
+- Original private evidence is `service-report.json` and `service-database.json`
+  under `/home/abiorh/flow/api-drill-resume.6Rns3Y/`; the failed report remains
+  unchanged and isolated database/role cleanup completed. These are local
+  diagnostic artifacts, not hosted evidence or exhaustive API certification.
+
 ## Evidence boundary
 
 - Product source: `b4b3d1d95d302011839f6f9dff3e2cb7c06c2124` (merged PR 390).

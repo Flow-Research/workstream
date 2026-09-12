@@ -104,6 +104,21 @@ security plus QA/test-delta and documentation, combined proportionately.
 
 ## Evidence
 
+API-DRILL-013 repair: the human authorized fixing service provisioning subjects
+containing NUL in this same PR. Extend the existing `OpaqueSubject` constraint in
+`backend/app/modules/authorization/service_actor_schemas.py`; preserve exact
+subject identity, ordinary Unicode, whitespace rejection and the 1–200 UTF-8
+byte bound. No authority, service, migration or retained-data change is allowed.
+Additionally allowed: a focused regression in the existing administrator
+HTTP/PostgreSQL request-validation tests at
+`backend/tests/authorization/admin_access/test_grant_validation_postgresql.py`.
+Reuse their signed client/bootstrap fixture and snapshot helpers. Prove NUL
+rejection before state changes, valid 200-byte Unicode same-key recovery,
+stored subject identity and exact replay. Retain the original failing real-HTTP
+probe and rerun it; add permanent subject probes to the existing external drill.
+Assess the roadmap and findings in this PR. Risk remains L1 with focused plan,
+security and QA/test-delta/docs review. Full backend tests remain hosted.
+
 Administrative-reason drill continuation (API-DRILL-012): the same-PR small
 repair scope additionally covers `backend/app/modules/authorization/admin_schemas.py`
 and `backend/tests/authorization/admin_access/test_grant_validation_postgresql.py`.

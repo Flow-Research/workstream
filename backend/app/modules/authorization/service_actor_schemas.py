@@ -25,7 +25,7 @@ def _bounded_reason(value: str) -> str:
     return value
 
 
-OpaqueSubject = Annotated[str, Field(min_length=1), AfterValidator(_bounded_subject)]
+OpaqueSubject = Annotated[str, Field(min_length=1, pattern=r"^[^\x00]*$"), AfterValidator(_bounded_subject)]
 ProvisionReason = Annotated[str, Field(min_length=1), AfterValidator(_bounded_reason)]
 
 

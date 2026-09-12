@@ -1403,6 +1403,14 @@ async def service_actor_cases(drill, issuer, admin, outsider):
                          headers={"Idempotency-Key": value}, expected=422,
                          fields=("header.Idempotency-Key",))
     key = {"Idempotency-Key": str(uuid4())}
+    for label, subject_value in (("embedded_nul", "service\x00subject"), ("nul_only", "\x00")):
+        try:
+            await drill.call("service_subject_" + label, "POST", route, token=admin,
+                             payload=payload | {"subject": subject_value}, headers=key,
+                             expected=422, values={"error.code": "invalid_request", "error.retryable": False},
+                             fields=("body.subject", "header.Idempotency-Key"))
+        except ProbeFailure:
+            pass  # Keep the failed case and still exercise independent same-key recovery.
     created = await drill.call("service_provision", "POST", route, token=admin,
         payload=payload, headers=key, expected=201,
         values={"service_identity": payload["service_identity"], "actor_status": "active",
