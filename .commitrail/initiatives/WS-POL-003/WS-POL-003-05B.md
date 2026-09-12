@@ -173,6 +173,11 @@ route construction through existing owner adapters without new private-edge debt
 - POL05B-ARCH-001: HTTP routing belongs to the API layer. Typed public PROJECTS
   proposal and dispatch ports replace the private-router factory and untyped
   operation dependencies; existing business operations and transactions remain sole owners.
+  Contravariant input parameters keep public PROJECTS contracts independent of
+  foreign modules; API composition binds concrete AUTH/ART/CHECKERS types.
+  No extra bound-input wrapper or alternative transaction owner is introduced.
 - POL05B-CI-001: trace the extracted scripted runtime to the capability-growth
   consumer and update it directly; full collection must prove no obsolete import remains.
 - POL05B-DOC-001: renumber the remaining-work dependency sequence consistently.
+- The shared OpenAPI inventory explicitly adds four protected proposal routes and
+  their action IDs while preserving the retained inventory digests.

@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Protocol, TYPE_CHECKING
+from typing import Annotated, Literal, Protocol, TYPE_CHECKING, TypeVar
 from uuid import UUID
 import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.modules.authorization.api import ActorIdentityFacts
-from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
-from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
-from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
-from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
 from app.core.hashing import canonical_json_hash
 from app.modules.projects.api.compilation_identity import CompilationComponentHashes
 
@@ -186,28 +181,36 @@ class GuideProposalError(RuntimeError):
 
 
 
-class GuideProposalOperationsPort(Protocol):
+# Composition binds external capabilities; the public PROJECTS contract imports no other owner.
+_ActorT = TypeVar("_ActorT", contravariant=True)
+_MaterialT = TypeVar("_MaterialT", contravariant=True)
+_PreCapabilitiesT = TypeVar("_PreCapabilitiesT", contravariant=True)
+_PostCapabilitiesT = TypeVar("_PostCapabilitiesT", contravariant=True)
+_PlannerT = TypeVar("_PlannerT", contravariant=True)
+
+
+class GuideProposalOperationsPort(Protocol[_ActorT, _MaterialT, _PreCapabilitiesT, _PostCapabilitiesT, _PlannerT]):
     """Caller-owned transaction for exact finalized proposal operations."""
 
     async def review_package(
-        self, selection: GuideProposalSelection, *, actor: ActorIdentityFacts, request_id: UUID,
+        self, selection: GuideProposalSelection, *, actor: _ActorT, request_id: UUID,
     ) -> "GuideProposalReviewPackage": ...
 
     async def approve(
-        self, command: GuideProposalApproval, *, actor: ActorIdentityFacts, request_id: UUID,
-        material: GuideDocumentManifestPort, pre_capabilities: PreSubmissionCapabilityProjection,
-        post_capabilities: PostSubmitCatalogue, planner: PreSubmissionPolicyCompilationPort,
+        self, command: GuideProposalApproval, *, actor: _ActorT, request_id: UUID,
+        material: _MaterialT, pre_capabilities: _PreCapabilitiesT,
+        post_capabilities: _PostCapabilitiesT, planner: _PlannerT,
     ) -> GuideProposalApprovalReceipt: ...
 
     async def request_correction(
-        self, command: GuideProposalCorrection, *, actor: ActorIdentityFacts, request_id: UUID,
+        self, command: GuideProposalCorrection, *, actor: _ActorT, request_id: UUID,
     ) -> GuideProposalCorrectionReceipt: ...
 
 
-class GuideCorrectionDispatchPort(Protocol):
+class GuideCorrectionDispatchPort(Protocol[_ActorT]):
     """Own human correction admission and publication after commit."""
 
     async def dispatch(
         self, selection: GuideProposalSelection, correction_operation_id: UUID, *,
-        actor: ActorIdentityFacts,
+        actor: _ActorT,
     ) -> GuideProposalDispatchResponse: ...

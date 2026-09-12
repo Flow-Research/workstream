@@ -15,6 +15,10 @@ from app.api.deps.authorization import (
 from app.core.api_controls import request_ids
 from app.db.session import get_db_session
 from app.modules.authorization.api import ActorIdentityFacts
+from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
+from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
+from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
+from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
 from app.adapters.auth import guide_proposal_authorization, human_guide_compilation_authorization
 from app.adapters.projects import project_guide_proposal_service, project_guide_correction_dispatch
 
@@ -24,7 +28,10 @@ class ProposalRequest:
     """One request's explicit authority and caller-owned SQL transaction."""
 
     session: AsyncSession
-    service: GuideProposalOperationsPort
+    service: GuideProposalOperationsPort[
+        ActorIdentityFacts, GuideDocumentManifestPort, PreSubmissionCapabilityProjection,
+        PostSubmitCatalogue, PreSubmissionPolicyCompilationPort,
+    ]
     actor: ActorIdentityFacts
     request_id: UUID
 
@@ -33,7 +40,7 @@ class ProposalRequest:
 class CorrectionDispatchRequest:
     """Typed correction delivery owner and resolved human identity."""
 
-    service: GuideCorrectionDispatchPort
+    service: GuideCorrectionDispatchPort[ActorIdentityFacts]
     actor: ActorIdentityFacts
 
 

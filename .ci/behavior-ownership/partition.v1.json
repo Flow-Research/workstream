@@ -77,7 +77,7 @@
       "target": "backend/app/api/routes/auth.py"
     },
     {
-      "group": "lifecycle",
+      "group": "shared",
       "target": "backend/app/api/routes/guide_proposals.py"
     },
     {
@@ -1209,7 +1209,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "d0feb365939052a068e7c303b2a30f0f02a89b66c0bccb4ca3598d7328822a87",
+  "authority_digest": "59967797835c043d4f242d005026e83be793240754aa576e61e7b05909a957ee",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

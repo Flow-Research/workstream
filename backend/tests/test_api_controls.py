@@ -437,12 +437,22 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 71
-    assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
+    proposal_prefix = "/api/v1/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}"
+    proposal_routes = {
+        f"GET {proposal_prefix}/proposal",
+        f"POST {proposal_prefix}/pre-submission-approval",
+        f"POST {proposal_prefix}/corrections",
+        f"POST {proposal_prefix}/corrections/{{correction_operation_id}}/dispatch",
+    }
+    assert proposal_routes <= set(protected_inventory)
+    assert len(route_inventory) == 75
+    retained_routes = sorted(set(route_inventory) - proposal_routes)
+    retained_protected = sorted(set(protected_inventory) - proposal_routes)
+    assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "fd0fff869be00f102755e579d694ba62fe0208a7c78774ccdb463ca3d2425fb9"
     )
-    assert len(protected_inventory) == 69
-    assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
+    assert len(protected_inventory) == 73
+    assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "cac6b5bc0ff252bf83757fefdf2da5325ef6624665d55efa7e4ce6093aae5a28"
     )
     assert "/api/v1/workers/me/profile" not in schema["paths"]
@@ -468,6 +478,10 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        f"GET {proposal_prefix}/proposal": "project.guide_compilation.review_package.read",
+        f"POST {proposal_prefix}/pre-submission-approval": "project.submission_artifact_policy.approve",
+        f"POST {proposal_prefix}/corrections": "project.guide_compilation.correction.request",
+        f"POST {proposal_prefix}/corrections/{{correction_operation_id}}/dispatch": "project.guide_compilation.request",
         "POST /api/v1/tasks/{task_id}/claim": "task.claim",
         "POST /api/v1/tasks/{task_id}/start": "task.start",
         "GET /api/v1/tasks/{task_id}/work-context": "task.work_context.read",

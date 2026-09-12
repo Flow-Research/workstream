@@ -11,7 +11,9 @@ from app.interfaces.project_agents import ProjectGuideAgentRuntime
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
 from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
+from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
 from app.modules.authorization.api import (
+    ActorIdentityFacts,
     GuideSufficiencyProjectionAuthorizationPort,
     ArtifactPolicyProjectionAuthorizationPort,
     SetupFinalizationAuthorizationPort,
@@ -131,7 +133,10 @@ def project_guide_document_scope_port(session: AsyncSession) -> ProjectGuideDocu
 
 def project_guide_proposal_service(
     session: AsyncSession, authorization: GuideProposalAuthorizationPort,
-) -> GuideProposalOperationsPort:
+) -> GuideProposalOperationsPort[
+    ActorIdentityFacts, GuideDocumentManifestPort, PreSubmissionCapabilityProjection,
+    PostSubmitCatalogue, PreSubmissionPolicyCompilationPort,
+]:
     """Compose the sole proposal owner with explicit authority."""
     from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
 
@@ -142,7 +147,7 @@ def project_guide_correction_dispatch(
     session: AsyncSession, authorization: ProjectGuideCompilationAuthorizationPort, *,
     material: GuideDocumentManifestPort, pre: PreSubmissionCapabilityProjection,
     post: PostSubmitCatalogue, configuration: ProjectGuideRuntimeConfiguration,
-) -> GuideCorrectionDispatchPort:
+) -> GuideCorrectionDispatchPort[ActorIdentityFacts]:
     """Compose human correction admission and existing queue dispatch without inference."""
     from app.modules.projects.guide_compilation.correction_dispatch import GuideCorrectionDispatchService
     from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
