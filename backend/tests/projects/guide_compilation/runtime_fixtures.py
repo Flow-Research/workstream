@@ -10,7 +10,8 @@ from io import BytesIO
 from uuid import uuid4
 
 from app.modules.projects.api.guide_documents import OpenGuideDocument
-from .helpers import SOURCE_BYTES
+from .helpers import SOURCE_BYTES, runtime_configuration, result
+from app.interfaces.project_agents import GuideEvidenceRef
 
 
 @asynccontextmanager
@@ -55,3 +56,29 @@ async def record_attempt_document_access(sessions, attempt_id, context):
         resources = SqlAlchemyGuideRuntimeCustody(sessions, attempt_id, context.material,
                                                    context.runtime_configuration.runtime_key)
         await record_scripted_document_access(context, GuideRuntimeCapabilities(documents=documents, resources=resources))
+
+
+class ScriptedGuideRuntime:
+    outcome = result()
+    identity = runtime_configuration().adapter_identity
+    calls = 0
+
+    def admit_execution(self):
+        pass
+
+    async def aclose(self):
+        pass
+
+    async def compile_project_guide(self, context, capabilities):
+        self.calls += 1
+        await record_scripted_document_access(context, capabilities)
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
+        refs = tuple(GuideEvidenceRef(source_item_id=item.source_item_id,
+                     document_version_id=item.ingest_id, sha256=item.sha256)
+                     for item in context.material.documents)
+        return self.outcome.model_copy(update={
+            field: tuple(item.model_copy(update={"evidence_refs": refs})
+                         for item in getattr(self.outcome, field))
+            for field in ("findings", "requirements", "capability_suggestions")
+        })

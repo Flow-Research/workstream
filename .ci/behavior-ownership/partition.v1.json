@@ -58,6 +58,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/api/deps/guide_proposals.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/api/deps/rate_controls.py"
     },
     {
@@ -838,6 +842,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/correction_dispatch.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/correction_feedback.py"
     },
     {
@@ -847,6 +855,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/custody_payloads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/delivery_request.py"
     },
     {
       "group": "lifecycle",
@@ -939,6 +951,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_mutation_service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_proposal_router.py"
     },
     {
       "group": "lifecycle",
@@ -1193,7 +1209,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "3f3cc0dc99d242d729ec4e89bf47fb034f4432d33dad94523a8ffa1342545f3f",
+  "authority_digest": "babcc43861e7965f3553008b5b2b821f9b4942f914c8b2cbdb7a0bbd21b57693",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -1,4 +1,4 @@
-"""Exact, bounded contracts for hidden unified proposal review and decisions."""
+"""Exact, bounded contracts for unified proposal review and decisions."""
 
 from __future__ import annotations
 
@@ -67,12 +67,11 @@ class GuideProposalTarget(GuideProposalSelection):
         return canonical_json_hash(self.model_dump(mode="json"))
 
 
-class GuideProposalApproval(BaseModel):
+class GuideProposalApprovalInput(BaseModel):
     """Approve only the displayed target, with an exact warning acknowledgment."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     target: GuideProposalTarget
-    idempotency_key: UUID
     acknowledged_warning_hashes: tuple[Digest, ...] = Field(default=(), max_length=200)
     expected_previous_approval_operation_id: UUID | None = None
     expected_previous_approval_output_digest: Digest | None = None
@@ -89,12 +88,17 @@ class GuideProposalApproval(BaseModel):
         return self
 
 
-class GuideProposalCorrection(BaseModel):
+class GuideProposalApproval(GuideProposalApprovalInput):
+    """Canonical approval command with transport-validated replay identity."""
+
+    idempotency_key: UUID
+
+
+class GuideProposalCorrectionInput(BaseModel):
     """Request correction of a known finalized result, not an uncertain attempt."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     target: GuideProposalTarget
-    idempotency_key: UUID
     reason: str = Field(min_length=1, max_length=4000)
 
     @field_validator("reason")
@@ -109,6 +113,22 @@ class GuideProposalCorrection(BaseModel):
         if len(normalized.encode("utf-8")) > 16000:
             raise ValueError("correction reason exceeds its byte limit")
         return normalized
+
+
+class GuideProposalCorrection(GuideProposalCorrectionInput):
+    """Canonical correction command with transport-validated replay identity."""
+
+    idempotency_key: UUID
+
+
+class GuideProposalDispatchResponse(BaseModel):
+    """Public manual-dispatch state without provider or source access identifiers."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    correction_operation_id: UUID
+    setup_run_id: UUID
+    setup_generation: Annotated[int, Field(strict=True, gt=0)]
+    status: str
 
 
 class GuideProposalApprovalReceipt(BaseModel):

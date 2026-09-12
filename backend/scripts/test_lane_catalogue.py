@@ -224,6 +224,9 @@ PROJECT_MODULES = (
     'tests/projects/guide_compilation/proposals/test_migration.py',
     'tests/projects/guide_compilation/proposals/test_inventory.py',
     'tests/projects/guide_compilation/proposals/test_postgresql.py',
+    'tests/projects/guide_compilation/proposals/test_public_api.py',
+    'tests/projects/guide_compilation/proposals/test_public_dispatch.py',
+    'tests/projects/guide_compilation/proposals/test_delivery_custody.py',
 
     "tests/projects/submission_policy_mutations/test_authority.py",
     "tests/projects/submission_policy_mutations/test_commands.py",

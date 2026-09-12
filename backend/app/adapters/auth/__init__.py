@@ -127,3 +127,15 @@ async def guide_compilation_execution_authority(session, state):
         session, state.preflight_facts.operation_id
     ) as composed:
         yield composed
+
+
+def guide_proposal_authorization(session, context):
+    """Bind the public proposal authority port to the canonical request adapter."""
+    from app.modules.authorization.guide_proposal_authorization import GuideProposalAuthorizationAdapter
+
+    return GuideProposalAuthorizationAdapter(session, context)
+
+
+def human_guide_compilation_authorization(prepared):
+    """Bind the existing human request port to one shared PREP composition."""
+    return ProjectGuideCompilationAuthorizationAdapter.from_prepared(prepared)

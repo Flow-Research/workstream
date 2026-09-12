@@ -124,3 +124,27 @@ def project_guide_document_scope_port(session: AsyncSession) -> ProjectGuideDocu
     """Bind PROJECTS current document scope independently from ART storage."""
     from app.modules.projects.guide_compilation.document_scope import SqlAlchemyProjectGuideDocumentScope
     return SqlAlchemyProjectGuideDocumentScope(session)
+
+
+def project_guide_proposal_router():
+    """Expose the PROJECTS-owned proposal router at the application composition root."""
+    from app.modules.projects.guide_proposal_router import router
+
+    return router
+
+
+def project_guide_proposal_service(session, authorization):
+    """Compose the sole proposal owner with explicit authority."""
+    from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
+
+    return GuideProposalService(session, authorization)
+
+
+def project_guide_correction_dispatch(session, authorization, *, material, pre, post, configuration):
+    """Compose human correction admission and existing queue dispatch without inference."""
+    from app.modules.projects.guide_compilation.correction_dispatch import GuideCorrectionDispatchService
+    from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
+
+    return GuideCorrectionDispatchService(
+        session, authorization, CompilationRequestInputs(material, pre, post, configuration),
+    )

@@ -69,29 +69,3 @@ def test_correction_normalizes_unicode_and_whitespace_without_changing_meaning()
         reason="  Cafe\u0301\ncheck\tpages  ",
     )
     assert command.reason == "Café\ncheck\tpages"
-
-
-async def test_default_authority_denies_before_any_product_read():
-    from types import SimpleNamespace
-    from app.modules.authorization.api import ActorIdentityFacts, ActorKind
-    from app.modules.projects.api.guide_proposals import GuideProposalError, GuideProposalSelection
-    from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
-
-    session = SimpleNamespace(
-        in_transaction=lambda: True,
-        in_nested_transaction=lambda: False,
-        new=(),
-        dirty=(),
-        deleted=(),
-    )
-    actor = ActorIdentityFacts(uuid4(), uuid4(), ActorKind.HUMAN)
-    with pytest.raises(GuideProposalError, match="authority_unavailable"):
-        await GuideProposalService(session).review_package(
-            GuideProposalSelection(
-                project_id=uuid4(),
-                guide_id=uuid4(),
-                compilation_id=uuid4(),
-            ),
-            actor=actor,
-            request_id=uuid4(),
-        )

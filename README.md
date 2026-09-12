@@ -507,9 +507,11 @@ The runtime adapter is selected through the shared typed adapter factory.
 Verified guide-source readiness automatically delivers one compilation. A ready
 result records both policy proposals and stops at a draft; an insufficient guide
 stops with findings. Automatic compilation ends without approving the proposals.
-POL-05A implements hidden Project Manager proposal review, pre-submission approval
-and setup-wide correction. AUTH-12F4 implements their exact current Project
-Manager authorization internally; public API wiring remains POL-05B work.
+POL-05B exposes exact Project Manager proposal review, pre-submission approval,
+setup-wide correction and explicit manual dispatch using POL-05A operations and
+AUTH-12F4 authorization. The setup response supplies `finalized_compilation_id`
+for opening the exact complete proposal. See the
+[manager proposal flow](docs/operations_project_operating_manual.md#review-approve-or-correct-a-guide-proposal).
 The separate post-submission Celery worker evaluates submitted work.
 The local Celery command above includes Beat; start it before creating guide sources.
 

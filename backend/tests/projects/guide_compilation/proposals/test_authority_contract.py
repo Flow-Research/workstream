@@ -11,7 +11,6 @@ from app.modules.projects.api.guide_proposals import (
     GuideProposalApproval,
     GuideProposalCorrection,
     GuideProposalError,
-    GuideProposalSelection,
     GuideProposalTarget,
 )
 from app.modules.projects.guide_compilation.proposal_authority import (
@@ -72,48 +71,9 @@ def test_resource_encoding_binds_business_facts_and_excludes_only_transport_requ
     assert replace(facts, output_digest="sha256:" + "c" * 64).digest != facts.digest
 
 
-@pytest.mark.parametrize("operation", ["review", "approve", "correct"])
-async def test_unconfigured_authority_denies_all_operations_before_product_access(operation):
-    actor, target, _, _ = authority_case()
-    session = SimpleNamespace(
-        in_transaction=lambda: True,
-        in_nested_transaction=lambda: False,
-        new=(),
-        dirty=(),
-        deleted=(),
-    )
-    service = GuideProposalService(session)
-    with pytest.raises(GuideProposalError, match="authority_unavailable"):
-        if operation == "review":
-            await service.review_package(
-                GuideProposalSelection(
-                    project_id=target.project_id,
-                    guide_id=target.guide_id,
-                    compilation_id=target.compilation_id,
-                ),
-                actor=actor,
-                request_id=uuid4(),
-            )
-        elif operation == "approve":
-            await service.approve(
-                GuideProposalApproval(target=target, idempotency_key=uuid4()),
-                actor=actor,
-                request_id=uuid4(),
-                material=None,
-                pre_capabilities=None,
-                post_capabilities=None,
-                planner=None,
-            )
-        else:
-            await service.request_correction(
-                GuideProposalCorrection(
-                    target=target,
-                    idempotency_key=uuid4(),
-                    reason="Inspect the source again.",
-                ),
-                actor=actor,
-                request_id=uuid4(),
-            )
+def test_proposal_owner_requires_explicit_authority():
+    with pytest.raises(TypeError, match="authorization"):
+        GuideProposalService(SimpleNamespace())
 
 
 @pytest.mark.parametrize(
@@ -141,7 +101,7 @@ async def test_proposal_owner_requires_clean_caller_root_transaction(patch):
         )
     )
     with pytest.raises(GuideProposalError, match="proposal_unavailable"):
-        await GuideProposalService(session).request_correction(
+        await GuideProposalService(session, SimpleNamespace()).request_correction(
             GuideProposalCorrection(
                 target=target,
                 idempotency_key=uuid4(),

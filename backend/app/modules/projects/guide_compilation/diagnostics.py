@@ -16,7 +16,7 @@ async def compilation_setup_response(
     """Overlay the current attempt outcome after the caller's diagnostic authorization."""
     response = ProjectSetupRunResponse.model_validate(setup)
     finalized = await session.scalar(
-        select(ProjectGuideSetupFinalization.id).where(
+        select(ProjectGuideSetupFinalization.compilation_id).where(
             ProjectGuideSetupFinalization.setup_run_id == setup.id,
             ProjectGuideSetupFinalization.setup_generation == setup.setup_generation,
             ProjectGuideSetupFinalization.project_id == setup.project_id,
@@ -24,6 +24,7 @@ async def compilation_setup_response(
         )
     )
     if finalized is not None:
+        response.finalized_compilation_id = finalized
         return response
     attempt = await session.scalar(
         select(ProjectGuideCompilationAttempt).where(

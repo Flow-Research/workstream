@@ -1,7 +1,7 @@
 # POL-05B — Public manager proposal review, approval and manual correction dispatch
 
 - Initiative: `WS-POL-003`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Intended merge outcome: expose the existing complete proposal, pre-submission approval and correction operations with exact Project Manager authority, and dispatch a committed correction through the sole unified setup runtime.
 
 ## Intent and current owners
@@ -109,8 +109,8 @@ archive-limit changes, frontend or private guide fixtures.
   documentation/product operations; CI integrity for affected selection/inventories.
 - Human focus: complete inspect-before-approve journey; correction followed by
   explicit manual dispatch; no unintended post-submit activation or second agent.
-- Plan review required before product edits. Tests below are planned proof,
-  not claims of completed execution.
+- Plan review passed before product edits. Verification below defines required
+  proof; exact execution and reviewer freshness belong in the PR.
 
 ## Verification
 
@@ -140,3 +140,25 @@ inspect its relevant overlap before final reconciliation. Adopted 05B contract
 remains linked; this record makes manual dispatch/current owner wiring explicit.
 Next usable boundary after this chunk: POL-06 post-submit policy projection and
 approval with its own narrow AUTH gate; CP06 follows guide policy completion.
+
+
+## Implementation decisions and review findings
+
+Plan review required an atomic pending queue claim, redacted dispatch response,
+exact request-trigger admission and reachable exact-project PM fixtures. All are
+part of this boundary. Missing replay headers reject before identity/SQL because
+FastAPI can continue resolving other dependencies after an ordinary missing-field
+validation error. The guard reuses the canonical UUID parser and documents the
+required header explicitly in OpenAPI.
+
+The correction fixture now drives the shared live coordinator instead of manually
+calling the three downstream stages. Its provider remains scripted. Superseded
+unconfigured proposal constructors and their preservation-only tests are removed;
+required clean-transaction and explicit-authority tests remain. No source document,
+provider key, secret or private task example is added.
+
+The cohesive L1 diff exceeds the preferred 500-line guideline because it includes
+four public operations, manual worker admission, regression tests and synchronized
+current documentation. It does not add another lifecycle, compiler, runtime,
+authorization permission or database schema. Shared consumer and import checks
+route construction through existing owner adapters without new private-edge debt.

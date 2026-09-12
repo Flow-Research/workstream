@@ -36,3 +36,19 @@ def test_proposal_partition_replaces_only_the_shared_request_owner():
         })), before)
     with pytest.raises(ownership.BehaviorOwnershipError, match='untrusted_partition_change'):
         ownership._validate_additive_partition_transition(_partition(sorted(expected)), before)
+
+
+def test_public_proposal_partition_is_exact_and_additive():
+    expected = {
+        'backend/app/api/deps/guide_proposals.py',
+        'backend/app/modules/projects/guide_proposal_router.py',
+        'backend/app/modules/projects/guide_compilation/correction_dispatch.py',
+        'backend/app/modules/projects/guide_compilation/delivery_request.py',
+    }
+    assert ownership.POL_05B_PARTITION_TARGETS == expected
+    retained = 'backend/app/core/config.py'
+    before = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained,*expected})),before)
+    for invalid in (expected,{retained,*expected,'backend/app/modules/projects/extra.py'}):
+        with pytest.raises(ownership.BehaviorOwnershipError, match='untrusted_partition_change'):
+            ownership._validate_additive_partition_transition(_partition(sorted(invalid)),before)

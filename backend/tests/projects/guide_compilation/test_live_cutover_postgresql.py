@@ -15,8 +15,7 @@ from tests.projects.client_fixtures import (
 )
 from .test_automatic_request import automatic_source as automatic_source
 from .helpers import runtime_configuration, result
-from .runtime_fixtures import document_access, record_scripted_document_access
-from app.interfaces.project_agents import GuideEvidenceRef
+from .runtime_fixtures import document_access, ScriptedGuideRuntime
 
 
 @pytest.fixture(autouse=True)
@@ -57,30 +56,6 @@ async def _delivery(factory, setup_id):
     )
 
 
-class Runtime:
-    outcome = result()
-    identity = runtime_configuration().adapter_identity
-    calls = 0
-
-    def admit_execution(self):
-        pass
-
-    async def aclose(self):
-        pass
-
-    async def compile_project_guide(self, context, capabilities):
-        self.calls += 1
-        await record_scripted_document_access(context, capabilities)
-        if isinstance(self.outcome, Exception):
-            raise self.outcome
-        refs = tuple(GuideEvidenceRef(source_item_id=item.source_item_id,
-                     document_version_id=item.ingest_id, sha256=item.sha256)
-                     for item in context.material.documents)
-        return self.outcome.model_copy(update={
-            field: tuple(item.model_copy(update={"evidence_refs": refs})
-                         for item in getattr(self.outcome, field))
-            for field in ("findings", "requirements", "capability_suggestions")
-        })
 
 
 @pytest.mark.parametrize("status", ["draft_ready", "draft_ready_with_warnings", "guide_blocked"])
@@ -96,7 +71,7 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     if status != "draft_ready":
         from app.interfaces.project_agents import CompilationFinding
 
@@ -244,7 +219,7 @@ async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     runtime.outcome = (
         ProjectGuideCompilationInvalidOutputError("schema_invalid")
         if outcome == "invalid"
@@ -319,7 +294,7 @@ async def test_finalized_receipt_excludes_every_recovery_shape(automatic_source,
     factory, _actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration()
@@ -437,7 +412,7 @@ async def test_publisher_acknowledgement_cannot_overwrite_worker_finalization(
         return kwargs["task_id"]
 
     monkeypatch.setattr(setup_queue, "enqueue_project_guide_compilation", publish)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration()
@@ -495,7 +470,7 @@ async def test_phase_crash_recovers_same_attempt_without_reinference(
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration()
@@ -592,7 +567,7 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration()
@@ -685,7 +660,7 @@ async def test_concurrent_live_deliveries_share_one_provider_and_finalization(
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
     entered, release = asyncio.Event(), asyncio.Event()
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     original = runtime.compile_project_guide
 
     async def blocked_provider(context, capabilities):
@@ -789,7 +764,7 @@ async def test_stale_queued_configuration_failure_is_reclaimed_and_finishes_same
             == 0
         )
     await _reclaim_exact_delivery(factory, delivery, monkeypatch)
-    runtime = Runtime()
+    runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", lambda settings: runtime_configuration()
     )

@@ -40,7 +40,7 @@ async def correction_request_inputs(session, inputs, correction_id: UUID):
     ), identity
 
 
-async def admit_correction_request(session, inputs, *, actor, facts, identity) -> None:
+async def admit_correction_request(session, inputs, *, actor, facts, identity):
     """Transition only the exact committed successor inside request reservation."""
     correction = await session.scalar(
         select(ProjectGuideProposalCorrection).where(
@@ -73,3 +73,4 @@ async def admit_correction_request(session, inputs, *, actor, facts, identity) -
     setup.current_step = "queued"
     setup.celery_task_id = project_guide_compilation_task_id(setup.id, setup.setup_generation)
     await session.flush()
+    return setup

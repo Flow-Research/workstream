@@ -603,11 +603,11 @@ ART foundation actions, Project Manager `artifact.guide_source.ingest`, and the
 fixed-service `artifact.guide_source.binding.create` and
 `artifact.guide_source.read`, contributor `artifact.submission_bundle.prepare`,
 hidden human `submission.create`, and fixed-service
-`artifact.submission.binding.create` actions. AUTH-12F4 also supports hidden
+`artifact.submission.binding.create` actions. AUTH-12F4 also supports
 Project Manager `project.guide_compilation.review_package.read`,
 `project.submission_artifact_policy.approve`, and
-`project.guide_compilation.correction.request`; these have no public route, with
-POL-05B public composition pending. Checker, review, generic artifact-read, and
+`project.guide_compilation.correction.request`; POL-05B exposes these with
+exact Project Manager authority and manual correction dispatch. Checker, review, generic artifact-read, and
 the public Submission cutover remain planned. Callers begin and own one root
 transaction, call `prepare`,
 lock their participant rows, compose final typed facts, call `consume` with the
@@ -1232,8 +1232,8 @@ authorization event to one setup generation. Both human and automatic request
 replays recheck current authority inside the receipt transaction. POL-04B
 composes this authority with execution, projections and finalization in the live
 Celery worker. The automatic operation stops at findings or draft proposals;
-POL-05A delivers hidden manager review, correction and pre-submit approval.
-AUTH-12F4 supplies exact-project Project Manager authority; POL-05B still supplies public composition and manual dispatch. Complete
+POL-05A owns manager review, correction and pre-submit approval.
+AUTH-12F4 supplies exact-project Project Manager authority; POL-05B supplies public composition and manual dispatch. Complete
 proposal content requires current exact-project manager authority; Operator and
-Audit diagnostic permissions do not grant it. Default proposal ports remain
-unavailable.
+Audit diagnostic permissions do not grant it. Proposal services require explicit
+authority injection; there is no unconfigured construction path.
