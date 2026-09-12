@@ -130,7 +130,7 @@ def test_pre_submission_projection_reports_disabled_mandatory_unavailable() -> N
 
 @pytest.mark.parametrize("disabled", [False, True])
 def test_archive_encryption_guard_is_described_as_mandatory_platform_coverage(disabled):
-    from app.interfaces.project_agents import canonical_project_guide_compilation_context_bytes
+    from app.interfaces.project_agents import project_guide_compilation_prompt_bytes
 
     capability_id = "artifact.archive.entries_safe"
     catalogue = build_pre_submission_checker_catalogue(
@@ -140,6 +140,9 @@ def test_archive_encryption_guard_is_described_as_mandatory_platform_coverage(di
     definition = next(item for item in projection.definitions if item.stable_id == capability_id)
     expected = "Reject encrypted ZIP entries, symbolic links and special files"
     assert definition.public_name == expected
+    manifest_entry = next(item for item in catalogue.manifest["entries"]
+                          if item["stable_id"] == capability_id)
+    assert manifest_entry["public_name"] == expected
     assert definition.classification == "mandatory_security"
     assert definition.dispatch_kind == "platform_capability"
     assert definition.dispatch_capability == "submission_archive.entries_safe"
@@ -147,7 +150,7 @@ def test_archive_encryption_guard_is_described_as_mandatory_platform_coverage(di
     assert definition.state == ("disabled" if disabled else "enabled")
     assert projection.available is (not disabled)
     context = _context().model_copy(update={"pre_submission_capabilities": projection})
-    assert expected.encode() in canonical_project_guide_compilation_context_bytes(context)
+    assert expected.encode() in project_guide_compilation_prompt_bytes(context)
 
 
 def test_compilation_rejects_unavailable_mandatory_pre_submission_projection() -> None:
