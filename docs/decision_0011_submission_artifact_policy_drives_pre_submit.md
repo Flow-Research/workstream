@@ -196,6 +196,7 @@ Approved pre-submit checker primitives include:
 - `require_attestation`
 - `limit_file_size`
 - `limit_package_size`
+- `limit_archive_entries`
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
 
@@ -336,7 +337,9 @@ The effective policy merge is deterministic:
 | `allowed_storage_schemes` | intersection |
 | `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
-| `maximum_package_size_bytes` | minimum non-null limit |
+| `maximum_package_size_bytes` | minimum non-null total expanded ZIP byte limit |
+| `maximum_archive_size_bytes` | minimum non-null byte limit for the entire compressed ZIP, including archive metadata |
+| `maximum_archive_entries` | minimum non-null normalized outer-ZIP tree entry limit, including implied parent directories |
 | `packaging` | restrictive merge; conflicts block activation |
 
 Conflicts block setup before contributors see tasks. A project-required artifact that

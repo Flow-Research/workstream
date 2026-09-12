@@ -65,7 +65,8 @@ async def test_mutation_binds_exact_prepared_facts(case, command):
         "source_snapshot_id": str(rows.SNAPSHOT),
         "policy_version": version,
         "expected_policy_hash": prior_hash,
-        "policy_body": rows.predecessor().policy_body,
+        "policy_body": {**rows.predecessor().policy_body,
+                        "maximum_archive_entries": None, "maximum_archive_size_bytes": None},
         "change_summary": summary,
     }
     path = "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies"

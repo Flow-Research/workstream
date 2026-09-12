@@ -5,6 +5,7 @@ import json
 from uuid import UUID, uuid4
 
 from httpx import AsyncClient
+from pydantic import ValidationError
 import pytest
 from sqlalchemy import func, select
 
@@ -23,12 +24,100 @@ from app.modules.projects.models import (
     ProjectCreateIdempotencyRecord,
     ProjectGuide,
 )
+from app.modules.projects.schemas import ProjectCreate, ProjectGuideCreate, ProjectGuideUpdate
 from projects.client_fixtures import (
     auth_headers,
     project_client as project_client,
     project_database_env as project_database_env,
 )
 from projects.guide_fixtures import complete_guide_payload, create_guide, create_project
+
+
+PROJECT_TEXT_CASES = [
+    ("project", "name"), ("project", "slug"), ("project", "description"),
+    ("guide_create", "version"),
+    ("guide_create", "change_summary"),
+    ("guide_update", "change_summary"),
+]
+
+
+@pytest.mark.parametrize(("operation", "field"), PROJECT_TEXT_CASES)
+def test_project_text_schema_rejects_nul_preserving_valid_values(operation: str, field: str) -> None:
+    schema, payload = {
+        "project": (ProjectCreate, {"name": "Name", "slug": "slug"}),
+        "guide_create": (ProjectGuideCreate, complete_guide_payload("initial")),
+        "guide_update": (ProjectGuideUpdate, {}),
+    }[operation]
+    for value in ("\x00leading", "embedded\x00nul", "trailing\x00", "line\n\x00"):
+        with pytest.raises(ValidationError) as caught:
+            schema.model_validate(payload | {field: value})
+        assert caught.value.errors()[0]["loc"] == (field,)
+        assert caught.value.errors()[0]["type"] == "string_pattern_mismatch"
+    for value in ("", "  Unicode 名 é\nline\ttext  "):
+        assert getattr(schema.model_validate(payload | {field: value}), field) == value
+    if field in {"description", "change_summary"}:
+        assert getattr(schema.model_validate(payload | {field: None}), field) is None
+    else:
+        with pytest.raises(ValidationError):
+            schema.model_validate(payload | {field: None})
+    assert ProjectGuideUpdate().model_dump(exclude_unset=True) == {}
+
+
+async def project_text_state() -> list:
+    """Selected product/replay tables only; includes hidden guide generation."""
+    async with db_session.get_session_factory()() as session:
+        return [(await session.execute(select(model.__table__).order_by(model.id))).mappings().all()
+                for model in (Project, ProjectGuide, ProjectCreateIdempotencyRecord,
+                              GuideMutationIdempotencyRecord)]
+
+
+@pytest.mark.parametrize(("operation", "field"), PROJECT_TEXT_CASES)
+async def test_project_text_nul_rejected_without_state_and_same_key_recovers(
+    project_client: AsyncClient, operation: str, field: str,
+) -> None:
+    route, method, status = "/api/v1/projects", "POST", 201
+    payload = {"name": "Unicode 名 project", "slug": "nul-" + uuid4().hex,
+               "description": "Valid é description"}
+    if operation != "project":
+        project = await create_project(project_client)
+        route += f"/{project['id']}/guides"
+        payload = complete_guide_payload("initial") | {"task_examples": [
+                       {"content": "Evaluate Unicode 名 claims.", "title": None, "labels": []}],
+                   "change_summary": "Initial é summary"}
+        if operation == "guide_update":
+            created = await project_client.post(route, headers=auth_headers(), json=payload)
+            assert created.status_code == 201, created.text
+            route += "/" + created.json()["id"]
+            method, status = "PATCH", 200
+            payload = {"change_summary": "Updated é summary"}
+    headers = auth_headers()
+    before = await project_text_state()
+    rejected = await project_client.request(method, route, headers=headers,
+        json=payload | {field: "PRIVATE_BAD\x00TEXT"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert "PRIVATE_BAD" not in rejected.text
+    assert await project_text_state() == before
+    recovered = await project_client.request(method, route, headers=headers, json=payload)
+    assert recovered.status_code == status, recovered.text
+    for name, value in payload.items():
+        if name == "documents":
+            documents = recovered.json()[name]
+            assert len(documents) == len(value)
+            assert len({item["document_id"] for item in documents}) == len(value)
+            for order, (item, declaration) in enumerate(zip(documents, value, strict=True)):
+                assert item == declaration | {
+                    "document_id": str(UUID(item["document_id"])), "order": order,
+                }
+        else:
+            assert recovered.json()[name] == value
+    after = await project_text_state()
+    assert after != before
+    replay = await project_client.request(method, route, headers=headers, json=payload)
+    assert replay.status_code == status, replay.text
+    assert replay.json() == recovered.json()
+    assert await project_text_state() == after
 
 
 def maximum_qualification() -> dict:
@@ -41,6 +130,66 @@ def maximum_qualification() -> dict:
         "prior_project_work_refs": [str(uuid4()) for _ in range(20)],
         "external_expertise_refs": references[:],
     }
+
+
+@pytest.mark.parametrize("field", ["display_name", "contact_email"])
+async def test_profile_nul_rejected_without_partial_update(project_client: AsyncClient, field: str) -> None:
+    route = "/api/v1/actors/me"
+    control = await project_client.patch(route, headers=auth_headers(),
+        json={"display_name": "Original 名", "contact_email": "opaque contact"})
+    assert control.status_code == 200, control.text
+    before = control.json()
+    other = "contact_email" if field == "display_name" else "display_name"
+    rejected = await project_client.patch(route, headers=auth_headers(),
+        json={field: "before\x00after", other: "Must not persist"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    readback = await project_client.get(route, headers=auth_headers())
+    assert readback.status_code == 200
+    def stable(body: dict) -> dict:
+        return {key: value for key, value in body.items()
+                if key not in {"updated_at", "last_seen_at"}}
+    assert stable(readback.json()) == stable(before)
+    valid = await project_client.patch(route, headers=auth_headers(), json={field: "  Valid 名  "})
+    assert valid.status_code == 200, valid.text
+    assert valid.json()[field] == "Valid 名"
+    assert valid.json()[other] == before[other]
+
+
+async def test_context_nul_rejected_preserving_id_lookup_and_concealment(
+    project_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_project(project_client, name="Selector control")
+    route = "/api/v1/actors/me/authorization-context"
+    rejected = await project_client.get(route, headers=auth_headers(), params={"project_id": "before\x00after"})
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "invalid_request"
+    assert rejected.json()["error"]["retryable"] is False
+    assert "before" not in rejected.text
+    response = await project_client.get(route, headers=auth_headers(), params={"project_id": project["id"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["project_id"] == project["id"]
+    assert response.json()["admin_roles"] == ["project_manager"]
+    slug = await project_client.get(route, headers=auth_headers(), params={"project_id": project["slug"]})
+    assert slug.status_code == 404, slug.text
+    assert slug.json()["error"]["code"] == "project_authorization_resource_not_found"
+    missing = await project_client.get(route, headers=auth_headers(), params={"project_id": str(uuid4())})
+    assert missing.status_code == 404, missing.text
+    assert missing.json()["error"]["code"] == "project_authorization_resource_not_found"
+    try:
+        with monkeypatch.context() as scoped:
+            scoped.setenv("WORKSTREAM_DEV_AUTH_SUBJECT", f"ungranted-selector-{uuid4()}")
+            scoped.setenv("WORKSTREAM_DEV_AUTH_ROLES", "contributor")
+            get_settings.cache_clear()
+            admitted = await project_client.get("/api/v1/actors/me", headers=auth_headers())
+            assert admitted.status_code == 200
+            for selector in (project["id"], project["slug"]):
+                concealed = await project_client.get(route, headers=auth_headers(), params={"project_id": selector})
+                assert concealed.status_code == 404, concealed.text
+                assert concealed.json()["error"]["code"] == "project_authorization_resource_not_found"
+    finally:
+        get_settings.cache_clear()
 
 
 def maximum_role_request(role: str):

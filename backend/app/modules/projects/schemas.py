@@ -265,6 +265,8 @@ class SubmissionArtifactPolicyInput(BaseModel):
     )
     maximum_file_size_bytes: int | None = Field(default=None, gt=0)
     maximum_package_size_bytes: int | None = Field(default=None, gt=0)
+    maximum_archive_entries: int | None = Field(default=None, gt=0, strict=True)
+    maximum_archive_size_bytes: int | None = Field(default=None, gt=0, strict=True)
     packaging: SubmissionArtifactPackagingInput = Field(
         default_factory=SubmissionArtifactPackagingInput
     )
@@ -426,9 +428,9 @@ class ProjectCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(max_length=200)
-    slug: str = Field(max_length=120)
-    description: str | None = None
+    name: str = Field(max_length=200, pattern=r"^[^\x00]*$")
+    slug: str = Field(max_length=120, pattern=r"^[^\x00]*$")
+    description: str | None = Field(default=None, pattern=r"^[^\x00]*$")
 
 
 class ProjectResponse(BaseModel):
@@ -460,8 +462,8 @@ class ProjectGuideCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str = Field(max_length=50)
-    change_summary: str | None = Field(default=None, max_length=1000)
+    version: str = Field(max_length=50, pattern=r"^[^\x00]*$")
+    change_summary: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00]*$")
     task_examples: ProjectGuideTaskExamples
     documents: list[ProjectGuideDocumentInput] = Field(min_length=1, max_length=100)
 
@@ -471,7 +473,7 @@ class ProjectGuideUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    change_summary: str | None = Field(default=None, max_length=1000)
+    change_summary: str | None = Field(default=None, max_length=1000, pattern=r"^[^\x00]*$")
 
 
 class ProjectGuideResponse(BaseModel):

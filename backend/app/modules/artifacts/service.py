@@ -581,11 +581,17 @@ class ArtifactStorageOrchestrator:
             ):
                 self._authority.discard()
                 return "stale"
+            self._validate_put_execution_namespace(current, persisted_namespace)
             await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=facts,
             )
+            # A completed put is not eligible for another observation claim.
+            # Reauthorize its terminal result without changing its fence or
+            # repeating provider work.
+            if current.status == "object_confirmed":
+                return "object_confirmed"
             claimed_result = await self._repo.claim_put_attempt(
                 attempt_id=attempt_id,
                 executor_id=executor_id,

@@ -78,6 +78,12 @@ _MODEL_PROSE_SCHEMA = {
     ),
 }
 ModelProse = Annotated[str, Field(json_schema_extra=_MODEL_PROSE_SCHEMA)]
+PolicyIdentifier = Annotated[str, Field(json_schema_extra={
+    "pattern": _SAFE_IDENTIFIER.pattern,
+    "minLength": 1,
+    "maxLength": 100,
+    "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
+})]
 
 
 def _validated_safe_model_text(value: str) -> str:
@@ -280,18 +286,29 @@ class SubmissionArtifactPolicyProposal(BaseModel):
 
     packaging: Literal["zip"] = "zip"
     maximum_file_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
-    maximum_package_size_bytes: StrictInt = Field(gt=0, le=10 * 1024 * 1024 * 1024)
+    maximum_package_size_bytes: StrictInt = Field(
+        gt=0, le=10 * 1024 * 1024 * 1024,
+        description="Maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes.",
+    )
+    maximum_archive_size_bytes: StrictInt | None = Field(
+        default=None, gt=0,
+        description="Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply.",
+    )
+    maximum_archive_entries: StrictInt | None = Field(
+        default=None, gt=0,
+        description="Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
+    )
     allowed_storage_schemes: tuple[Literal["artifact"], ...] = ("artifact",)
     required_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
         default=(), max_length=100,
-        description="Canonical relative POSIX paths inside the submitted ZIP, such as outputs/answer.md. No traversal, storage references or secret files.",
+        description="Exact canonical relative POSIX paths inside the submitted ZIP. A bare path such as task.toml requires that file at the ZIP root; wrapper/task.toml does not satisfy it. Nested paths such as outputs/answer.md require that exact location. No traversal, storage references or secret files.",
     )
     forbidden_artifacts: tuple[Annotated[str, Field(min_length=1, max_length=500)], ...] = Field(
         default=(), max_length=100,
         description="Relative artifact prohibition patterns, such as secret* or outputs/*.tmp; these are machine fields, not prose.",
     )
-    required_evidence: tuple[ModelProse, ...] = Field(default=(), max_length=100)
-    attestation_terms: tuple[ModelProse, ...] = Field(default=(), max_length=50)
+    required_evidence: tuple[PolicyIdentifier, ...] = Field(default=(), max_length=100)
+    attestation_terms: tuple[PolicyIdentifier, ...] = Field(default=(), max_length=50)
 
     @field_validator("required_artifacts")
     @classmethod

@@ -156,7 +156,7 @@ def create_artifact_scratch_manager(settings: Settings) -> ArtifactScratchManage
 def get_artifact_internal_authority(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ArtifactInternalAuthority:
+) -> PreparedArtifactInternalAuthority:
     """Use the activated fixed-service resolver for post-commit provider work."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     return PreparedArtifactInternalAuthority(
@@ -175,7 +175,7 @@ def get_guide_artifact_ingest_command(
         Depends(get_guide_artifact_prepared_authorization),
     ],
     internal_authority: Annotated[
-        ArtifactInternalAuthority,
+        PreparedArtifactInternalAuthority,
         Depends(get_artifact_internal_authority),
     ],
     targets: GuideDocumentUploadTargetPort,
@@ -208,17 +208,18 @@ def get_guide_artifact_ingest_command(
                     namespace_fingerprint=namespace.namespace_fingerprint,
                 )
             )
-            yield (
-                ArtifactPreparationService(manager),
-                ArtifactAdmissionService(session, settings, namespace),
-                ArtifactStorageOrchestrator(
-                    session,
-                    store,
-                    namespace,
-                    settings,
-                    internal_authority,
-                ),
-            )
+            async with internal_authority.denial_boundary():
+                yield (
+                    ArtifactPreparationService(manager),
+                    ArtifactAdmissionService(session, settings, namespace),
+                    ArtifactStorageOrchestrator(
+                        session,
+                        store,
+                        namespace,
+                        settings,
+                        internal_authority,
+                    ),
+                )
         finally:
             manager.close()
             bootstrap.close()

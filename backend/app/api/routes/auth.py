@@ -75,7 +75,7 @@ async def read_current_actor_profile(
     dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def read_current_actor_authorization_context(
-    project_id: Annotated[str, Query(min_length=1, max_length=100)],
+    project_id: Annotated[str, Query(min_length=1, max_length=100, pattern=r"^[^\x00]*$")],
     resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
     authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],

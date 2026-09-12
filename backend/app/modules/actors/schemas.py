@@ -26,6 +26,8 @@ class ActorProfileUpdateRequest(BaseModel):
         """Reject whitespace-only values while preserving opaque text."""
         if value is None:
             return None
+        if "\x00" in value:
+            raise ValueError("profile field contains an unsupported character")
         normalized = value.strip()
         if not normalized:
             raise ValueError("profile field must not be blank")

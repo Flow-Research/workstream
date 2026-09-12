@@ -1764,6 +1764,7 @@ def test_partition_accepts_only_exact_unified_cutover_replacement():
 def test_partition_accepts_only_exact_external_api_drill_target() -> None:
     """Drill enrollment preserves closed target admission for neighboring scripts."""
     expected = {
+        "backend/scripts/guide_document_api_drill.py",
         "backend/scripts/external_api_drill.py",
         "backend/scripts/admin_api_drill.py",
         "backend/scripts/admin_guard_probe.py",

@@ -195,10 +195,60 @@ cannot be reused as post-submission review-gate evidence. See the
   separate value/predicate/shape/request evidence. Remaining field combinations
   and provider-dependent flows still need client proof before inclusion in the
   MCP endpoint-and-field handoff; route discovery alone is not readiness.
+  The public-client drill targets currently usable APIs only; hidden and
+  unfinished lifecycle routes are not completion targets. Draft-guide policy
+  probes additionally cover optional fields, conditional headers and exact
+  selected-lineage preservation after rejection, including preservation of the
+  human-review mode when omitted during replacement.
+  Endpoint-by-endpoint probes also check exact health output, full self-profile
+  business-state preservation after rejected updates, and contributor context
+  actions/revocation with real foreign-project concealment. These strengthen
+  evidence within the selected 29 canonical operations, not obsolete routes or
+  an exhaustive API-completion claim.
+  Catalogue evidence compares every registered permission and the full five-role
+  definition matrix. Administrative grant probes compare complete provenance,
+  reason and timestamp fields across issue/revoke replay, retaining independent
+  stored-state checks. Catalogue membership does not imply action activation.
+  Contributor-discovery drill checks enforce the privacy-safe two-field row,
+  cursor scope/limit binding and exact candidate membership across existing
+  actor/link lifecycle transitions. These checks do not equate discovery with
+  contributor authority or certify the entire public API surface.
+  Project-role field probes bind issuance and qualification capture to the known
+  manager grant and compare complete public state across issue/revoke replay
+  and conflicts for both submitter and reviewer roles.
+  [API-DRILL-007](engineering/external-api-drill-findings.md#api-drill-007-embedded-nul-in-canonical-profile-fields-becomes-503)
+  records the reproduced self-profile NUL defect and its repair: both editable
+  fields reject the unsupported character at request validation with 422 rather
+  than passing it to storage. The drill retains unchanged-business-state controls.
+  [API-DRILL-008](engineering/external-api-drill-findings.md#api-drill-008-nul-project-selector-becomes-503)
+  records the matching authorization-context selector repair: NUL is rejected
+  with 422 while project-ID lookup and project concealment remain intact.
+  [API-DRILL-009](engineering/external-api-drill-findings.md#api-drill-009-project-and-guide-text-nul-becomes-503)
+  records the project/guide text repair: the original eight inputs rejected NUL
+  at request validation instead of returning a storage failure; the guide
+  document cutover removes inline-content inputs and retains validation on
+  surviving fields. Dedicated
+  regressions check selected stored-state preservation, same-key recovery and
+  replay. This does not certify the unfinished all-field external-client handoff.
   API-DRILL-006 is repaired with a bounded project-role issuance envelope that
   accommodates the existing public qualification maxima; other authority
   mutations retain their original limit. Full-max parser/PostgreSQL regressions
   cover both roles, persistence, replay, conflict and unauthorized rollback.
+  The resumed real guide-upload drill reproduced
+  [API-DRILL-010](engineering/external-api-drill-findings.md#api-drill-010-successful-guide-document-replay-returns-stale):
+  an exact retry of a successfully stored document returned `stale`. The repair
+  returns the authorized terminal result without another provider operation.
+  The related inactive-resolver denial now returns concealed 404 and retains
+  its canonical audit rather than escaping as 500. Local real PostgreSQL/MinIO
+  regression and genuine-document replay passed; this does not establish
+  complete field-level client readiness.
+  [API-DRILL-012](engineering/external-api-drill-findings.md#api-drill-012-administrative-grant-reasons-containing-nul-return-503)
+  closes the same validation gap in administrative grant issue/revoke reasons:
+  NUL rejects before storage, while valid Unicode and same-key recovery remain
+  supported. This does not change authority or retained grant history.
+  [API-DRILL-013](engineering/external-api-drill-findings.md#api-drill-013-service-provisioning-subject-containing-nul-returns-503)
+  applies the same early rejection to service provisioning subjects, preserving
+  exact Unicode identity and same-key recovery without changing service authority.
 - Guide ingestion and exact document reads, artifact verification/recovery,
   contributor preparation, Submission consumption/binding, unified compilation
   request/execute, and deterministic projection authority are implemented at
@@ -230,6 +280,15 @@ cannot be reused as post-submission review-gate evidence. See the
   in an isolated workspace and assesses them with every supplied task example;
   exact grants exclude other projects and runs. Known
   invalid output ends terminally, and replay never starts a second inference.
+  The model-facing mandatory archive-entry capability explicitly names existing
+  encryption, symbolic-link and special-file rejection. The existing package-size
+  rule enforces verified expanded bytes, now explicit in the proposal schema.
+  The optional `maximum_archive_entries` policy adds a compiled, blocking normalized
+  outer-ZIP tree entry limit, including implied parent directories, preserving tighter default
+  limits and ART safety ceilings. This does not expose public submission intake.
+  The separate optional `maximum_archive_size_bytes` rule enforces the entire
+  compressed ZIP's verified byte count, including archive metadata, independently
+  of expanded content size; the same default-floor and locked-plan controls apply.
   Transient pre-send retries use bounded backoff and a circuit breaker; the
   default request timeout is 300 seconds, separate from the whole-run timeout.
   POL-05A implements hidden review, pre-submission approval custody and
@@ -242,7 +301,16 @@ cannot be reused as post-submission review-gate evidence. See the
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
   draft policy outcomes, with exact replay and provider cleanup. Broker delivery
   was scripted in these drills; live Celery transport and broad semantic accuracy
-  are not established by them. Earlier probes omitted task examples and establish
+  are not established by them. A later public-client diagnostic used an isolated
+  Redis broker and actual Celery delivery with two original shareable PDFs;
+  it reached a persisted `sufficiency_blocked` report and verified both stored
+  originals. The subsequent clean `869a1d71` public-client run passed 36 cases,
+  including repaired replay, findings-to-setup lineage, and inactive-resolver
+  denial with unchanged setup and stored originals. Its real model identified
+  unsupported archive/content intake checks and post-submit audit evaluation
+  required by that project. This does not establish broad semantic accuracy,
+  manager approval or active project policy.
+  Earlier probes omitted task examples and establish
   execution mechanics only. A subsequent real Terra run with assigned private documents
   and two task examples proved exact example delivery, original access, persisted
   findings, cleanup and replay. It correctly stopped for absent project-wide

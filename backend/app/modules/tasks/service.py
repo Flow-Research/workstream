@@ -1353,6 +1353,12 @@ class TaskService:
                 "maximum_package_size_bytes",
             ),
             packaging=self._policy_object(policy, "packaging"),
+            maximum_archive_entries=self._optional_policy_non_negative_int(
+                policy, "maximum_archive_entries", minimum=1,
+            ),
+            maximum_archive_size_bytes=self._optional_policy_non_negative_int(
+                policy, "maximum_archive_size_bytes", minimum=1,
+            ),
         )
 
     def _policy_list(self, policy: dict[str, Any], field: str) -> list[Any]:
@@ -1414,12 +1420,13 @@ class TaskService:
         self,
         policy: dict[str, Any],
         field: str,
+        *, minimum: int = 0,
     ) -> int | None:
         """Return an optional non-negative integer from the locked policy."""
         value = policy.get(field)
         if value is None:
             return None
-        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
             raise TaskLockedContextInvalid(
                 "task locked effective project submission artifact policy is invalid",
                 {"field": f"effective_policy.{field}"},

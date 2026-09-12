@@ -1,12 +1,14 @@
 """Unit proof for the administrator drill's evidence checks, not API proof."""
 
 import importlib.util
+from copy import deepcopy
 from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
 import sys
 import unittest
+import httpx
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 
@@ -27,6 +29,22 @@ def ambiguous_boundary(count):
 
 
 class EvidenceTests(unittest.IsolatedAsyncioTestCase):
+    def test_grant_row_and_replay_proof_reject_field_and_timestamp_mutants(self):
+        expected = {"grant_id": "known", "status": "active", "revoked_at": None}
+        row = expected | {"granted_at": "2026-01-01T00:00:00+00:00"}
+        self.assertTrue(module.one_grant_matches([row], expected))
+        for rows in ([], [row, row], [row | {"unexpected": True}], [row | {"status": "revoked"}],
+                     [{key: value for key, value in row.items() if key != "status"}]):
+            self.assertFalse(module.one_grant_matches(rows, expected))
+        from external_api_drill import verify_response
+        history = {"items": [row | {"revoked_at": "2026-01-02T00:00:00+00:00"}], "total": 1, "next_cursor": None}
+        verify_response(httpx.Response(200, json=history), 200, history)
+        for field in ("granted_at", "revoked_at"):
+            changed = deepcopy(history)
+            changed["items"][0][field] = "2026-01-03T00:00:00+00:00"
+            with self.subTest(field=field), self.assertRaises(module.ProbeFailure):
+                verify_response(httpx.Response(200, json=changed), 200, history)
+
     def test_duplicate_setup_grant_cannot_shrink_expected_pagination_truth(self):
         instance = module.AuthorityDrill(SimpleNamespace(results=[]), None, {})
         rows = {}

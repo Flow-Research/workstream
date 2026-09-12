@@ -84,7 +84,7 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
 
     assert catalogue.catalogue_id == PRE_SUBMISSION_CATALOGUE_ID
     assert catalogue.schema_version == PRE_SUBMISSION_CATALOGUE_SCHEMA_VERSION
-    assert len(ids) == len(set(ids)) == 26
+    assert len(ids) == len(set(ids)) == 28
     assert ids == [
         entry.stable_id
         for entry in sorted(
@@ -103,10 +103,185 @@ def test_catalogue_is_single_canonical_closed_namespace() -> None:
         "require_manifest_field": ("policy.manifest_field.require", "check_evidence_integrity"),
         "limit_file_size": ("policy.file_size.limit", "check_evidence_integrity"),
         "limit_package_size": ("policy.package_size.limit", "check_evidence_integrity"),
+        "limit_archive_entries": ("policy.archive_entries.limit", "check_evidence_integrity"),
+        "limit_archive_size": ("policy.archive_size.limit", "check_evidence_integrity"),
     }
     for primitive, (stable_id, public_name) in expected.items():
         definition = catalogue.primitive_definition(primitive)
         assert (definition.stable_id, definition.public_name) == (stable_id, public_name)
+
+
+@pytest.mark.parametrize("limit", [True, False, 0, -1, "100", 1.5])
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_archive_limit_rejects_invalid_policy_and_compiler_input(limit, field) -> None:
+    from pydantic import ValidationError
+    from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
+    from app.modules.projects.schemas import SubmissionArtifactPolicyInput
+    from app.modules.checkers.compiler import PreSubmitCheckerCompilerError
+
+    with pytest.raises(ValidationError):
+        SubmissionArtifactPolicyInput(**{field: limit})
+    with pytest.raises(ValidationError):
+        SubmissionArtifactPolicyProposal(
+            maximum_file_size_bytes=100, maximum_package_size_bytes=1000,
+            **{field: limit},
+        )
+    policy = {**_effective_policy(), field: limit}
+    with pytest.raises(PreSubmitCheckerCompilerError):
+        compile_effective_project_submission_artifact_policy(policy, canonical_json_hash(policy))
+
+
+@pytest.mark.parametrize("alteration", ["missing", "weakened", "boolean", "warning"])
+@pytest.mark.parametrize("field, primitive", [
+    ("maximum_archive_entries", "limit_archive_entries"),
+    ("maximum_archive_size_bytes", "limit_archive_size"),
+])
+def test_archive_limit_compiler_rejects_rule_substitution(alteration, field, primitive) -> None:
+    from copy import deepcopy
+    from app.modules.checkers.compiler import (
+        PreSubmitCheckerCompilerError, validate_compiled_pre_submit_checker_bundle,
+    )
+
+    policy = {**_effective_policy(), field: 1}
+    digest = canonical_json_hash(policy)
+    compiled = compile_effective_project_submission_artifact_policy(policy, digest)
+    bundle = deepcopy(compiled.compiled_bundle)
+    rule = next(item for item in bundle["rules"] if item["primitive"] == primitive)
+    if alteration == "missing":
+        bundle["rules"].remove(rule)
+    elif alteration == "warning":
+        rule["severity"] = "warning"
+    else:
+        rule["config"][field] = True if alteration == "boolean" else 2
+    with pytest.raises(PreSubmitCheckerCompilerError):
+        validate_compiled_pre_submit_checker_bundle(policy, digest, bundle)
+
+
+@pytest.mark.parametrize("value", [True, 0, -1, "2", 2.5])
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_locked_archive_limit_rejects_malformed_values(value, field):
+    from app.modules.tasks.service import TaskService, TaskLockedContextInvalid
+    from app.modules.checkers.service import CheckerService
+
+    policy = {**_effective_policy(), field: value}
+    assert not CheckerService._effective_policy_shape_is_valid(policy)
+    with pytest.raises(TaskLockedContextInvalid):
+        TaskService(None)._optional_policy_non_negative_int(policy, field, minimum=1)
+
+
+@pytest.mark.parametrize("field, primitive", [
+    ("maximum_archive_entries", "limit_archive_entries"),
+    ("maximum_archive_size_bytes", "limit_archive_size"),
+])
+def test_archive_limit_changes_locked_hashes_and_preserves_null_semantics(field, primitive):
+    from app.modules.tasks.service import TaskService
+
+    hashes = set()
+    for limit in (None, 1, 100):
+        policy = {**_effective_policy(), field: limit}
+        digest = canonical_json_hash(policy)
+        compiled = compile_effective_project_submission_artifact_policy(policy, digest)
+        rules = [item for item in compiled.compiled_bundle["rules"]
+                 if item["primitive"] == primitive]
+        assert len(rules) == (0 if limit is None else 1)
+        assert TaskService(None)._optional_policy_non_negative_int(
+            policy, field, minimum=1,
+        ) == limit
+        hashes.add((digest, compiled.compiled_bundle_hash))
+    assert len(hashes) == 3
+
+
+@pytest.mark.parametrize("count, size, archive_delta, failure, task_path", [
+    (3, 4101, None, None, "task.toml"), (2, 4101, None, "policy.archive_entries.limit", "task.toml"),
+    (3, 4100, None, "policy.package_size.limit", "task.toml"), (None, 4101, None, None, "task.toml"),
+    (4, 4101, None, "policy.file.require", "wrapper/task.toml"),
+    (3, 4101, 0, None, "task.toml"),
+    (3, 4101, -1, "policy.archive_size.limit", "task.toml"),
+])
+@pytest.mark.parametrize("explicit_directory", [True, False])
+def test_real_zip_enforces_locked_archive_limits(tmp_path, count, size, archive_delta, failure, task_path, explicit_directory) -> None:
+    from hashlib import sha256
+    from io import BytesIO
+    from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED
+    from app.modules.artifacts.sources import ArtifactCommitment
+    from app.modules.artifacts.submission_archive import SubmissionArchiveInspector, SubmissionArchiveLimits
+    from app.modules.artifacts.submission_manifest import build_submission_manifest, evaluate_submission_change
+    from app.modules.checkers.pre_submit_execution import (
+        DefaultPreSubmissionExecutionInput, EffectivePreSubmissionProcessor,
+        SubmissionPacketView, PreSubmissionResultStatus,
+    )
+
+    source = BytesIO()
+    with ZipFile(source, "w", compression=ZIP_DEFLATED) as archive:
+        if explicit_directory:
+            archive.writestr("evidence/", b"", compress_type=ZIP_STORED)
+        archive.writestr(task_path, bytes(range(256)) * 16)
+        archive.writestr("evidence/results", b"proof")
+    data = source.getvalue()
+    inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
+    inspection = inspector.inspect(BytesIO(data))
+    manifest = build_submission_manifest(inspection)
+    assert manifest.entry_count == (4 if task_path.startswith("wrapper/") else 3)
+    assert inspection.file_count == 2
+    assert len(data) < 4100 < manifest.total_expanded_bytes == 4101
+    commitment = ArtifactCommitment("sha256:" + sha256(data).hexdigest(), len(data), "application/zip")
+    policy = {**_effective_policy(), "maximum_archive_entries": count, "maximum_package_size_bytes": size}
+    policy["maximum_archive_size_bytes"] = None if archive_delta is None else len(data) + archive_delta
+    digest = canonical_json_hash(policy)
+    compiled = compile_effective_project_submission_artifact_policy(policy, digest)
+    _, lineage = _compiled_and_lineage()
+    lineage = replace(lineage, effective_policy_hash=digest,
+                      pre_submit_policy_bundle_hash=compiled.compiled_bundle_hash)
+    catalogue = build_pre_submission_checker_catalogue()
+    plan = compile_effective_pre_submission_execution_plan(
+        lineage=lineage, effective_policy=policy, compiled_bundle=compiled.compiled_bundle, catalogue=catalogue,
+    )
+    execution = DefaultPreSubmissionExecutionInput(
+        plan=plan, commitment=commitment, inspection=inspection, manifest=manifest,
+        change_gate=evaluate_submission_change(commitment=commitment, manifest=manifest,
+                                              predecessor=None, predecessor_exists=False),
+        packet=SubmissionPacketView(summary="Completed work", contributor_attestation=(
+            "No confidential client data, credentials, or copied source material; rights_confirmed."
+        )),
+        prepared_generation_id=uuid4(), storage_scheme="s3",
+    )
+    workspace = tmp_path / "private"
+    workspace.mkdir(mode=0o700)
+    result = EffectivePreSubmissionProcessor(
+        archive_inspector=inspector, catalogue=catalogue, execution_input=execution,
+    ).process_blocking(BytesIO(data), workspace)
+    failed = [item.definition.definition_id for item in result.entries
+              if item.status is PreSubmissionResultStatus.FAILED]
+    assert failed == ([] if failure is None else [failure])
+    assert result.eligible is (failure is None)
+
+
+def test_compressed_limit_declares_commitment_in_catalogue_projection_and_plan():
+    from app.modules.checkers.catalogue import project_guide_pre_submission_capabilities
+
+    catalogue = build_pre_submission_checker_catalogue()
+    expected = ("LockedProjectCheckerRule", "ArtifactCommitment")
+    definition = catalogue.definition("policy.archive_size.limit")
+    assert definition.typed_inputs == expected
+    projection = project_guide_pre_submission_capabilities(catalogue)
+    projected = next(item for item in projection.definitions if item.stable_id == definition.stable_id)
+    assert projected.typed_inputs == expected
+    policy = {**_effective_policy(), "maximum_archive_size_bytes": 1000}
+    digest = canonical_json_hash(policy)
+    compiled = compile_effective_project_submission_artifact_policy(policy, digest)
+    _, lineage = _compiled_and_lineage()
+    lineage = replace(lineage, effective_policy_hash=digest,
+                      pre_submit_policy_bundle_hash=compiled.compiled_bundle_hash)
+    plan = compile_effective_pre_submission_execution_plan(
+        lineage=lineage, effective_policy=policy,
+        compiled_bundle=compiled.compiled_bundle, catalogue=catalogue,
+    )
+    entry = next(item for item in plan.entries if item.definition_id == definition.stable_id)
+    assert entry.typed_inputs == expected
+    manifest_entry = next(item for item in catalogue.manifest["entries"]
+                          if item["stable_id"] == definition.stable_id)
+    assert manifest_entry["typed_inputs"] == list(expected)
+    assert plan.plan_sha256 == canonical_json_hash(plan.as_dict())
 
 
 def test_catalogue_exact_v01_contract_is_locked() -> None:
@@ -132,7 +307,7 @@ def test_catalogue_exact_v01_contract_is_locked() -> None:
     expected = {
         "artifact.outer_zip.valid|v1|artifact.outer_zip.valid|mandatory_security|custody|10|platform_capability|submission_archive.outer_zip_valid|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.paths_safe|v1|artifact.archive.paths_safe|mandatory_security|custody|20|platform_capability|submission_archive.paths_safe|-|infrastructure_unavailable|maximum_results=1",
-        "artifact.archive.entries_safe|v1|artifact.archive.entries_safe|mandatory_security|custody|30|platform_capability|submission_archive.entries_safe|-|infrastructure_unavailable|maximum_results=1",
+        "artifact.archive.entries_safe|v1|Reject encrypted ZIP entries, symbolic links and special files|mandatory_security|custody|30|platform_capability|submission_archive.entries_safe|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.resources_bounded|v1|artifact.archive.resources_bounded|mandatory_security|custody|40|platform_capability|submission_archive.resources_bounded|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.integrity_verified|v1|artifact.archive.integrity_verified|mandatory_integrity|custody|50|platform_capability|submission_archive.integrity_verified|-|infrastructure_unavailable|maximum_results=1",
         "artifact.archive.identity_computed|v1|artifact.archive.identity_computed|mandatory_integrity|identity|10|platform_capability|artifact_commitment.identity|-|infrastructure_unavailable|maximum_results=1",
@@ -154,6 +329,8 @@ def test_catalogue_exact_v01_contract_is_locked() -> None:
         "policy.attestation.require|v1|check_confidentiality_attestation|mandatory_accountability|project_policy|80|policy_primitive|require_attestation|require_attestation|infrastructure_unavailable|maximum_results=1",
         "policy.file_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|90|policy_primitive|limit_file_size|limit_file_size|infrastructure_unavailable|maximum_results=1",
         "policy.package_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|100|policy_primitive|limit_package_size|limit_package_size|infrastructure_unavailable|maximum_results=1",
+        "policy.archive_entries.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|105|policy_primitive|limit_archive_entries|limit_archive_entries|infrastructure_unavailable|maximum_results=1",
+        "policy.archive_size.limit|v1|check_evidence_integrity|mandatory_integrity|project_policy|102|policy_primitive|limit_archive_size|limit_archive_size|infrastructure_unavailable|maximum_results=1",
         "policy.packaging.require|v1|check_submission_packet|mandatory_accountability|project_policy|110|policy_primitive|require_packaging|require_packaging|infrastructure_unavailable|maximum_results=1",
         "policy.generated_quality.warn|v1|check_low_quality_generated_artifacts|advisory|project_policy|120|policy_primitive|warn_low_quality_generated_artifact|warn_low_quality_generated_artifact|record_disabled_and_continue|maximum_results=1",
     }

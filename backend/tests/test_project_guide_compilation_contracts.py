@@ -35,6 +35,100 @@ from app.modules.projects.post_submit_policy import DEFAULT_DURABLE_CHECKERS
 
 
 SHA256 = "sha256:" + "a" * 64
+
+
+@pytest.mark.parametrize("project_limit, default_limit, expected", [
+    (100, None, 100), (None, 50, 50), (100, 50, 50), (20, 50, 20), (None, None, None),
+])
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_archive_limit_projection_and_default_floor(monkeypatch, project_limit, default_limit, expected, field):
+    from app.modules.projects import service
+    from app.modules.projects.guide_compilation.projection_payloads import policy_body
+
+    proposal = SubmissionArtifactPolicyProposal(
+        maximum_file_size_bytes=1000, maximum_package_size_bytes=2000,
+        **{field: project_limit},
+    )
+    monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+                        field, default_limit)
+    body = policy_body(None, proposal)
+    assert body[field] == project_limit
+    effective = service.ProjectService(None)._merge_effective_submission_artifact_policy(body)
+    assert effective[field] == expected
+    assert effective["project_policy"][field] == project_limit
+    assert effective["workstream_default_policy"][field] == default_limit
+
+
+@pytest.mark.parametrize("field", ["required_evidence", "attestation_terms"])
+@pytest.mark.parametrize("value, valid", [
+    ("results", True), ("a" + "b" * 99, True), ("results.v0_1-ok", True),
+    ("", False), ("a" + "b" * 100, False), ("Provide results", False),
+    ("evidence/results", False), ("9results", False), ("Results", False),
+])
+def test_policy_identifier_schema_matches_existing_validator(field, value, valid):
+    import re
+    from app.interfaces.project_agents import _SAFE_IDENTIFIER
+
+    schema = SubmissionArtifactPolicyProposal.model_json_schema()["properties"][field]["items"]
+    assert schema["pattern"] == _SAFE_IDENTIFIER.pattern
+    assert (schema["minLength"], schema["maxLength"]) == (1, 100)
+    assert "machine identifier" in schema["description"]
+    assert (re.fullmatch(schema["pattern"], value) is not None) is valid
+    arguments = dict(maximum_file_size_bytes=100, maximum_package_size_bytes=1000)
+    arguments[field] = (value,)
+    if valid:
+        assert getattr(SubmissionArtifactPolicyProposal(**arguments), field) == (value,)
+    else:
+        with pytest.raises(ValidationError, match="identifier is invalid"):
+            SubmissionArtifactPolicyProposal(**arguments)
+
+
+def test_model_schema_describes_existing_expanded_byte_limit():
+    properties = SubmissionArtifactPolicyProposal.model_json_schema()["properties"]
+    assert "expanded bytes" in properties["maximum_package_size_bytes"]["description"]
+    assert "not compressed upload bytes" in properties["maximum_package_size_bytes"]["description"]
+    assert "entire submitted compressed ZIP" in properties["maximum_archive_size_bytes"]["description"]
+    assert "directory entries" in properties["maximum_archive_entries"]["description"]
+    assert "ZIP root" in properties["required_artifacts"]["description"]
+
+
+@pytest.mark.parametrize("default_limit", [None, 50])
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_omitted_optional_archive_limit_preserves_default_floor(monkeypatch, default_limit, field):
+    from app.modules.projects import service
+    from app.modules.projects.schemas import SubmissionArtifactPolicyInput
+
+    owner = service.ProjectService(None)
+    policy = owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
+    del policy[field]
+    monkeypatch.setitem(service.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+                        field, default_limit)
+    effective = owner._merge_effective_submission_artifact_policy(policy)
+    assert effective[field] == default_limit
+    assert field not in policy
+
+
+@pytest.mark.parametrize("limit", [2, None, 0, True])
+@pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
+def test_task_requirements_response_carries_valid_locked_archive_limit(limit, field):
+    from types import SimpleNamespace
+    from app.modules.projects.service import ProjectService
+    from app.modules.projects.schemas import SubmissionArtifactPolicyInput
+    from app.modules.tasks.service import TaskService, TaskLockedContextInvalid
+
+    owner = ProjectService(None)
+    policy = owner._merge_effective_submission_artifact_policy(
+        owner._canonical_policy_body(SubmissionArtifactPolicyInput().model_dump())
+    )
+    policy[field] = limit
+    context = SimpleNamespace(effective_policy=SimpleNamespace(effective_policy=policy))
+    task = SimpleNamespace(id=str(uuid4()), project_id=str(uuid4()), locked_guide_version="v0.1")
+    if limit is not None and (type(limit) is not int or limit <= 0):
+        with pytest.raises(TaskLockedContextInvalid):
+            TaskService(None)._submission_requirements_response(task, context)
+    else:
+        response = TaskService(None)._submission_requirements_response(task, context)
+        assert response.model_dump(mode="json")[field] == limit
 SOURCE_ITEM_ID = UUID("11111111-1111-1111-1111-111111111111")
 DOCUMENT_VERSION_ID = UUID("22222222-2222-2222-2222-222222222222")
 
@@ -126,6 +220,31 @@ def test_pre_submission_projection_reports_disabled_mandatory_unavailable() -> N
         PreSubmissionCheckerClassification.MANDATORY_SECURITY.value
     )
     assert projection.definitions[0].selectable is False
+
+
+@pytest.mark.parametrize("disabled", [False, True])
+def test_archive_encryption_guard_is_described_as_mandatory_platform_coverage(disabled):
+    from app.interfaces.project_agents import project_guide_compilation_prompt_bytes
+
+    capability_id = "artifact.archive.entries_safe"
+    catalogue = build_pre_submission_checker_catalogue(
+        disabled_entry_ids=frozenset({capability_id}) if disabled else frozenset()
+    )
+    projection = project_guide_pre_submission_capabilities(catalogue)
+    definition = next(item for item in projection.definitions if item.stable_id == capability_id)
+    expected = "Reject encrypted ZIP entries, symbolic links and special files"
+    assert definition.public_name == expected
+    manifest_entry = next(item for item in catalogue.manifest["entries"]
+                          if item["stable_id"] == capability_id)
+    assert manifest_entry["public_name"] == expected
+    assert definition.classification == "mandatory_security"
+    assert definition.dispatch_kind == "platform_capability"
+    assert definition.dispatch_capability == "submission_archive.entries_safe"
+    assert definition.selectable is False
+    assert definition.state == ("disabled" if disabled else "enabled")
+    assert projection.available is (not disabled)
+    context = _context().model_copy(update={"pre_submission_capabilities": projection})
+    assert expected.encode() in project_guide_compilation_prompt_bytes(context)
 
 
 def test_compilation_rejects_unavailable_mandatory_pre_submission_projection() -> None:

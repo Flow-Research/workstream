@@ -47,6 +47,8 @@ def test_artifact_policy_transform_preserves_values_and_server_owned_order() -> 
     proposal = SubmissionArtifactPolicyProposal(
         maximum_file_size_bytes=123,
         maximum_package_size_bytes=456,
+        maximum_archive_entries=7,
+        maximum_archive_size_bytes=1500,
         required_artifacts=("result.json", "report.md"),
         forbidden_artifacts=("*.env", "private_*"),
         required_evidence=("test_report", "coverage_report"),
@@ -102,6 +104,8 @@ def test_artifact_policy_transform_preserves_values_and_server_owned_order() -> 
         "allowed_storage_schemes": ["local", "s3"],
         "maximum_file_size_bytes": 123,
         "maximum_package_size_bytes": 456,
+        "maximum_archive_entries": 7,
+        "maximum_archive_size_bytes": 1500,
         "packaging": {
             "package_required": True,
             "allowed_package_formats": ["zip"],

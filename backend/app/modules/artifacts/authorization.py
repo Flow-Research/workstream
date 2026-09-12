@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import asdict
 from typing import Annotated, NoReturn, Protocol
@@ -920,6 +921,16 @@ class PreparedArtifactInternalAuthority:
         self._facts = None
         self._action_id = None
         self._authorization = None
+
+    @asynccontextmanager
+    async def denial_boundary(self) -> AsyncIterator[None]:
+        """Roll back denied ART work and retain its canonical AUTH evidence."""
+        try:
+            yield
+        except AuthorizationDenied:
+            await self._session.rollback()
+            await self.persist_denial()
+            raise ArtifactAuthorityDeniedError("artifact internal authority denied") from None
 
     async def persist_denial(self) -> None:
         """Restage one rolled-back denial in a clean AUTH-only transaction."""

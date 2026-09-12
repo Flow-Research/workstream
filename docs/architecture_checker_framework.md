@@ -357,8 +357,22 @@ primitives such as:
 - `require_attestation`
 - `limit_file_size`
 - `limit_package_size`
+- `limit_archive_size`
+- `limit_archive_entries`
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
+
+`limit_package_size` evaluates total expanded bytes from ART's verified manifest,
+not compressed upload size. `limit_archive_size` separately evaluates the entire
+compressed ZIP's verified `ArtifactCommitment.byte_count`, including archive
+metadata, not the sum of compressed member sizes. It is an optional strict
+positive byte limit; null adds no project limit. `limit_archive_entries` evaluates that manifest's
+normalized outer ZIP entry count, including explicit and implied parent
+directories. Omitting a ZIP directory record cannot evade this limit. Nested archives count as
+files; this rule does not recursively unpack them. Project count is an optional
+strict positive integer; null adds no project limit. All three rules preserve ART's
+independent platform safety ceilings and block intake through the existing
+effective-plan result, without creating acceptance or exposing hidden routes.
 
 `warn_low_quality_generated_artifact` is warning-only. The trusted compiler
 rejects checker specifications that escalate that primitive to blocking.

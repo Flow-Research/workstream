@@ -1150,6 +1150,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/guide_document_api_drill.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/legacy_actor_classification.py"
     },
     {
@@ -1193,7 +1197,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "3f3cc0dc99d242d729ec4e89bf47fb034f4432d33dad94523a8ffa1342545f3f",
+  "authority_digest": "ab5fe482961fb2de10d664868dafaabf6a8e828ff1fdcb61ec18cd9cf024d4f9",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

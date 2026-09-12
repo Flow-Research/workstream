@@ -96,6 +96,8 @@ class PreSubmissionPolicyPrimitive(StrEnum):
     FORBID_ARTIFACT = "forbid_artifact"
     LIMIT_FILE_SIZE = "limit_file_size"
     LIMIT_PACKAGE_SIZE = "limit_package_size"
+    LIMIT_ARCHIVE_ENTRIES = "limit_archive_entries"
+    LIMIT_ARCHIVE_SIZE = "limit_archive_size"
     ENFORCE_STORAGE_SCHEME = "enforce_storage_scheme"
     VERIFY_HASH = "verify_hash"
     REQUIRE_ATTESTATION = "require_attestation"
@@ -408,6 +410,7 @@ def _policy(
     *,
     order: int,
     classification: PreSubmissionCheckerClassification = PreSubmissionCheckerClassification.MANDATORY_ACCOUNTABILITY,
+    typed_inputs: tuple[str, ...] = ("LockedProjectCheckerRule", "SubmissionManifestView"),
 ) -> PreSubmissionCheckerDefinition:
     return PreSubmissionCheckerDefinition(
         stable_id=stable_id,
@@ -418,7 +421,7 @@ def _policy(
         order=order,
         dependencies=("artifact.scratch.sealed_tree_verified",),
         classification=classification,
-        typed_inputs=("LockedProjectCheckerRule", "SubmissionManifestView"),
+        typed_inputs=typed_inputs,
         result_schema=PRE_SUBMISSION_RESULT_SCHEMA_VERSION,
         failure_code="pre_submission_checker_failed",
         resource_budget=(("maximum_results", 1),),
@@ -467,6 +470,7 @@ def _default_definitions() -> tuple[PreSubmissionCheckerDefinition, ...]:
         ),
         _platform(
             "artifact.archive.entries_safe",
+            public_name="Reject encrypted ZIP entries, symbolic links and special files",
             phase=custody,
             order=30,
             classification=security,
@@ -663,6 +667,23 @@ def _default_definitions() -> tuple[PreSubmissionCheckerDefinition, ...]:
             "check_evidence_integrity",
             ("maximum_package_size_bytes",),
             order=100,
+            classification=integrity,
+        ),
+        _policy(
+            "policy.archive_size.limit",
+            "limit_archive_size",
+            "check_evidence_integrity",
+            ("maximum_archive_size_bytes",),
+            order=102,
+            classification=integrity,
+            typed_inputs=("LockedProjectCheckerRule", "ArtifactCommitment"),
+        ),
+        _policy(
+            "policy.archive_entries.limit",
+            "limit_archive_entries",
+            "check_evidence_integrity",
+            ("maximum_archive_entries",),
+            order=105,
             classification=integrity,
         ),
         _policy(

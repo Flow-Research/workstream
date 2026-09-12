@@ -302,6 +302,7 @@ POL_04B_REMOVED_TARGETS = frozenset({
 
 
 API_DRILL_PARTITION_TARGETS = frozenset({
+    "backend/scripts/guide_document_api_drill.py",
     "backend/scripts/external_api_drill.py",
     "backend/scripts/admin_api_drill.py",
     "backend/scripts/admin_guard_probe.py",
