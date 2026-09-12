@@ -122,3 +122,20 @@ async def test_public_package_denies_other_roles_and_scopes(clean_postgres_datab
                 response = await client.get(path+"/proposal")
                 assert response.status_code == 404, response.text
                 assert "target" not in response.json()
+
+
+@pytest.mark.parametrize("classification", ["draft_ready", "guide_blocked"])
+async def test_setup_pointer_opens_exact_complete_proposal(clean_postgres_database, classification):
+    async with proposal_case(clean_postgres_database,classification=classification) as (_,factory,command,actor,_):
+        path = proposal_path(command)
+        async with proposal_client(factory,actor) as client:
+            status = await client.get(f"/api/v1/projects/{command.project_id}/guides/{command.guide_id}/setup-runs/latest")
+            assert status.status_code == 200, status.text
+            assert status.json()["finalized_compilation_id"] == str(command.compilation_id)
+            package = await client.get(path+"/proposal")
+            assert package.status_code == 200, package.text
+            assert package.json()["result"]["status"] == classification
+            if classification == "guide_blocked":
+                denied = await client.post(path+"/pre-submission-approval",headers={"Idempotency-Key":str(uuid4())},json={"target":package.json()["target"]})
+                assert denied.status_code == 409, denied.text
+                assert denied.json()["error"]["code"] == "approval_blocked"
