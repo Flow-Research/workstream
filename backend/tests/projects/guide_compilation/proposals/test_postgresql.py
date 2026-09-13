@@ -900,7 +900,9 @@ async def test_another_current_manager_can_admit_correction_after_creator_revoca
             assert correction.actor_profile_id == str(actor.actor_profile_id)
             assert setup.authorized_by_actor_profile_id == str(actor.actor_profile_id)
             assert operation.actor_profile_id == str(second_actor.actor_profile_id)
-            assert setup.status == "queued"
+            assert setup.status == "dispatch_pending"
+            assert setup.current_step == "dispatch"
+            assert setup.celery_task_id is not None
         assert await stored_state(factory, command) == before
 
 

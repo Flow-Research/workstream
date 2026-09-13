@@ -3,7 +3,10 @@
 from contextlib import asynccontextmanager
 from uuid import uuid5
 from app.modules.actors.api import ServiceIdentity
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind, AuthorizationDenied
+from app.modules.authorization.api import (
+    ActorIdentityFacts, ActorKind, AuthorizationDenied, ProjectGuideCompilationAuthorizationPort,
+)
+from app.modules.authorization.api.guide_proposal_review import GuideProposalAuthorizationPort
 from app.modules.authorization.guide_compilation import ProjectGuideCompilationAuthorizationAdapter
 from app.modules.authorization.prepared import fixed_service_prepared_authorization
 from app.modules.authorization.runtime import PreparedAuthorizationUnsupported
@@ -127,3 +130,19 @@ async def guide_compilation_execution_authority(session, state):
         session, state.preflight_facts.operation_id
     ) as composed:
         yield composed
+
+
+def guide_proposal_authorization(
+    session: AsyncSession, context: AuthorizationContext,
+) -> GuideProposalAuthorizationPort:
+    """Bind the public proposal authority port to the canonical request adapter."""
+    from app.modules.authorization.guide_proposal_authorization import GuideProposalAuthorizationAdapter
+
+    return GuideProposalAuthorizationAdapter(session, context)
+
+
+def human_guide_compilation_authorization(
+    prepared: PreparedAuthorizationService,
+) -> ProjectGuideCompilationAuthorizationPort:
+    """Bind the existing human request port to one shared PREP composition."""
+    return ProjectGuideCompilationAuthorizationAdapter.from_prepared(prepared)

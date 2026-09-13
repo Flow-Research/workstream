@@ -136,11 +136,12 @@ it cannot create a new provider attempt. Invalid, uncertain and finalized attemp
 and retained attempts without runtime configuration are excluded from reclaim. Accepted
 results resume persistence and projection without another model call.
 
-POL-05A supplies hidden complete-proposal review, pre-submission approval and
-setup-wide correction. AUTH-12F4 supplies current Project Manager authority; POL-05B still owns public
-manager-facing exposure. The manual artifact-policy approval route is removed. Neither warning acknowledgement nor
-post-submit policy correction dispatches inference. Operators must not invoke
-projectors directly or rewrite retained attempt evidence.
+POL-05B exposes complete-proposal review, pre-submission approval and setup-wide
+correction using POL-05A operations and AUTH-12F4 Project Manager authority.
+The manual artifact-policy approval route is removed. Warning acknowledgement
+and correction creation do not invoke inference; explicit correction dispatch
+starts the async successor. Operators must not invoke projectors directly or
+rewrite retained attempt evidence.
 
 AUTH-11C2 separately exposes current active-guide configuration through the
 following endpoints:
@@ -163,10 +164,10 @@ The active review/revision policy setup endpoints are:
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy`
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy`
 
-Unified proposal approval and correction have no public route yet. The latest
-setup run exposes bounded diagnostics and output IDs; the hidden review package
-contains the complete pre/post proposal and catalogue-growth handoff. AUTH-12F4 supplies their authority; POL-05B exposes manager review, approval and manual rerun. Post-submit policy
-projection remains POL-06.
+The latest setup run exposes bounded diagnostics and `finalized_compilation_id`.
+Use that exact ID to read the complete pre/post proposal, findings and suggested
+catalogue additions through the manager flow below. Post-submit policy projection
+and approval remain POL-06.
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
 `If-Match` value. Use `"no-current-policy"` for the first version and the quoted
@@ -183,9 +184,8 @@ that run, rewrite its result or invoke a second post-submit derivation agent.
 Policy truth remains in the canonical versioned policy rows, not the setup
 ledger. POL-04B owns live unified wiring; POL-05A/05B and POL-06A/06B own separate
 append-only approval/projection/correction operations linked to that receipt.
-The approval/post-policy actions remain unavailable until their exact
-POL-05B public composition and AUTH-12G activation; this is the target operator flow, not a claim that
-those commands are already live.
+Pre-submission approval is public through POL-05B. Post-submit policy approval
+remains unavailable until its separate projection and AUTH-12G activation.
 
 An authorized Project Manager reviews the complete bounded proposal before
 approval. Effective intake combines mandatory platform defaults with approved
@@ -193,29 +193,24 @@ project rules using the canonical CHECKERS compiler. Post-submit policy is a
 separate deterministic projection of the same unified result; no evaluator
 runs during setup or approval.
 
-The internally implemented exact-compilation review-package operation uses
+The public exact-compilation review-package operation uses
 `project.guide_compilation.review_package.read` (AUTH-12F4), requiring
 `project.guide.manage` from a covered Project Manager. Operator/Audit diagnostic
 authority does not grant access to the complete proposal. The separate implemented
 `project.guide_compilation.correction.request` permits only the covered Project
 Manager to correct the exact known terminal result. These are new object-scoped
-contracts with internal AUTH-12F4 authorization; status-only setup reads do not
-provide them. Public API wiring remains POL-05B work; AUTH-12G/POL-06B separately provide the
+contracts with AUTH-12F4 authorization; status-only setup reads do not
+provide them. POL-05B supplies public wiring; AUTH-12G/POL-06B separately provide the
 exact post-policy draft read before post-policy approval.
 
-The post-submit checker setup read returns only bounded operator summaries:
-setup status, compiled checker names/severities, sufficiency status/counts,
-effective policy counts, pre-submit checker names/count, and registered
-post-submit checker catalog count. It does not return raw source text, local
-paths, replayable refs, exact source hashes, or compiled policy body internals.
-When an authorized covered Project Manager requests correction, Workstream
-supersedes and retains the unapproved compiled output, preserves its policy
-hash/body plus bounded actor/reason/time and redacted derivation metadata,
-links a separate correction operation to that provenance. If correction needs
-new model output for a known terminal result, it creates a new unified compilation/setup generation with
-bounded feedback; it never reopens a finalized run. Activation remains blocked. An
-unchanged replacement fails closed; a changed replacement must be approved
-separately through the approval endpoint.
+Post-submit projection, its exact draft read and approval remain POL-06 work;
+there is no current public post-submit checker setup read. The current unified
+proposal package displays proposed post-submit checks for manager inspection,
+but does not approve a post-submit policy. The latest setup read exposes bounded
+status and lineage pointers; it does not substitute for the authorized package.
+A manager correction preserves finalized history and creates a successor setup
+generation with bounded feedback. It never reopens a finalized run or activates
+the guide. The successor's pre-submission proposal requires its own approval.
 
 Timeout or unknown provider acceptance is not a correctable finalized result.
 It remains blocked without another call until the adapter supports verified
@@ -455,3 +450,52 @@ Output:
 - revision policy amendments
 - contribution policy amendments
 - project manager training notes
+
+
+## Review, approve or correct a guide proposal
+
+Poll the existing guide setup status until `finalized_compilation_id` is present.
+An invalid or uncertain provider outcome has no finalized proposal to approve or
+correct; it cannot be restarted through correction. For a ready or blocked
+finalized result, use this prefix:
+`/api/v1/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}`.
+
+| Method and suffix | Purpose |
+|---|---|
+| `GET /proposal` | Read both proposals, findings, suggestions and the exact target |
+| `POST /pre-submission-approval` | Approve the displayed pre-submission target and warning acknowledgements |
+| `POST /corrections` | Record feedback and allocate one successor without invoking the agent |
+| `POST /corrections/{correction_operation_id}/dispatch` | Explicitly run that successor asynchronously |
+
+All four require a current human Project Manager grant for the exact project.
+Audit/Operator authority and a system-scoped manager grant do not grant proposal
+access. The source pointer is not permission to read another project's proposal.
+
+Approval and correction require exactly one UUID `Idempotency-Key` header.
+Duplicate occurrences are rejected with 422, even when their values match. Copy the exact
+`target` from the package into the request body; do not construct it from status
+summaries. Approval supplies `acknowledged_warning_hashes` from that package and,
+when replacing a prior approval, both prior approval identifiers. Correction
+supplies a meaningful `reason`. The body has no second idempotency key. Dispatch
+uses the committed correction operation ID for stable replay identity.
+
+If the correction creation response is lost, an authorized replacement manager
+can read `/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest`.
+For a correction successor, that response supplies `correction_operation_id` and
+`predecessor_compilation_id` together. Use the predecessor as `{compilation_id}`
+in the dispatch prefix above, and the correction ID in its dispatch suffix.
+A `correction_requested` successor waits for this explicit dispatch. Both pointers
+remain available after dispatch and finalization; neither grants proposal access
+or bypasses current Project Manager authority. Initial setups have neither pointer.
+
+Approval atomically persists the existing artifact/effective/pre-submit chain.
+It does not approve the post-submit policy or activate the guide, and makes no
+model call. Correction leaves finalized history immutable. Dispatch commits its
+request and queue intent before broker publication; failed publication remains
+recoverable through the existing continuation scan. Repeating dispatch cannot
+create another attempt or bypass the one-shot provider fence. Poll setup status
+for completion; dispatch returns only the correction/setup identity and status.
+
+Authority or selector failures are concealed as 404; stale targets, blocked
+approval and conflicting replay are 409; malformed requests are 422; storage
+unavailability is 503. Refresh the exact proposal before resolving a conflict.

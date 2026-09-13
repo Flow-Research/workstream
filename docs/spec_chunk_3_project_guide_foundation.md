@@ -178,17 +178,25 @@ New projected artifact policies use `unified_compilation` provenance.
 The superseded post-submit setup read, approval and correction APIs are removed.
 Current outcomes remain visible through the latest setup run.
 
-POL-05A implements hidden complete-proposal review, pre-submission approval and
-setup-wide correction. The manual artifact-policy approval route and operation
-are removed. Default authority denies access; AUTH-12F4 and POL-05B own public
-manager authorization and exposure.
+POL-05B exposes POL-05A complete-proposal review, pre-submission approval and
+setup-wide correction using AUTH-12F4 exact-project human manager authorization.
+The manual artifact-policy approval route and operation are removed. Proposal
+services require explicit authority; no unconfigured construction path remains.
+The existing setup diagnostic returns `finalized_compilation_id` only after
+finalization; that pointer never substitutes for authorized complete proposal read.
+For a correction successor, the same authorized read returns
+`correction_operation_id` and `predecessor_compilation_id` from its immutable
+correction record, before dispatch and after finalization. A replacement manager
+can discover both and dispatch through the existing predecessor-scoped route
+without the creator's receipt. Current dispatch authority is still required;
+initial setups return null for both pointers.
 
 The review package contains all findings, requirements, distinct pre/post
 bindings, capability suggestions and notes, plus exact source, result, component,
 catalogue and finalization identities. Evidence locations use document ordinals
 and page/section labels; runtime document handles are not disclosed.
 
-Hidden approval requires the exact displayed target, acknowledged warning hashes
+Approval requires the exact displayed target, acknowledged warning hashes
 and the current approval identity when replacing a policy. The existing CHECKERS
 compiler produces the effective artifact policy and compiled pre-submit bundle;
 the canonical planner supplies its ordered execution plan. An immutable approval
@@ -199,7 +207,11 @@ Correction binds a manager's reason to one successor generation over the same
 original documents and task examples. The successor starts at
 `correction_requested`; initial-upload automatic recovery cannot dispatch it.
 The existing authorized human request operation binds feedback into its canonical
-input and reserves one attempt. POL-05B supplies public dispatch. Blocked results
+input and reserves one attempt. POL-05B dispatch atomically stores the pending
+queue claim with request custody, then publishes through the existing queue.
+The worker selects the exact saved human request and uses the same execution,
+projection and finalization owners. Public dispatch never reveals provider keys.
+See the [public manager flow](operations_project_operating_manual.md#review-approve-or-correct-a-guide-proposal). Blocked results
 may be corrected but cannot be approved, and uncertain provider attempts are
 not correction targets. Guide activation still requires a complete compiled
 pre-submission policy and the separately governed post-submission policy.

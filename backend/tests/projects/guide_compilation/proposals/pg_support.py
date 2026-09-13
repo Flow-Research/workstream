@@ -261,62 +261,56 @@ async def finalize_corrected_attempt(factory, values, actor, correction):
     """Run a scripted result through actual execution, projections and finalization."""
     from app.adapters.artifacts import guide_document_manifest_port
     from app.adapters.auth import (
-        artifact_policy_projection_authorization,
-        guide_sufficiency_projection_authorization,
+        artifact_policy_projection_authorization, guide_compilation_execution_authority,
+        guide_compilation_request_authority, guide_sufficiency_projection_authorization,
+        setup_finalization_authorization,
     )
-    from app.modules.projects.api import (
-        ProjectGuideCompilationExecutionCommand,
-        ProjectGuideCompilationExecutionClassification,
-        ProjectGuideProjectionCommand,
-        ProjectGuideSetupFinalizationCommand,
-    )
-    from app.modules.projects.guide_compilation.projections import GuideCompilationProjectionService
-    from tests.projects.guide_compilation.test_hidden_orchestrator_postgresql import _Runtime, _port
-    from tests.projects.guide_compilation.helpers import result
+    from app.adapters.checkers import project_guide_approval_compiler
+    from app.adapters.projects import project_guide_compilation_delivery_port
+    from app.modules.projects.api import ProjectGuideSetupFinalizationCommand
+    from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
+    from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
+    from tests.projects.guide_compilation.helpers import runtime_configuration
+    from tests.projects.guide_compilation.runtime_fixtures import ScriptedGuideRuntime, document_access
 
-    requested = await request_corrected_attempt(factory, actor, correction)
-    from app.modules.projects.api.guide_documents import GuideDocumentManifestRequest
-    from app.interfaces.project_agents import GuideEvidenceRef
+    await request_corrected_attempt(factory, actor, correction)
     async with factory() as session:
         setup = await session.get(ProjectSetupRun, str(correction.successor_setup_run_id))
-        manifest = await guide_document_manifest_port(session).load(GuideDocumentManifestRequest(
-            project_id=values["project"], guide_id=values["guide"],
-            guide_source_snapshot_id=setup.source_snapshot_id,
-            project_setup_run_id=correction.successor_setup_run_id,
-            setup_generation=correction.successor_setup_generation,
-        ))
-    evidence_refs = tuple(GuideEvidenceRef(
-        source_item_id=document.source_item_id, document_version_id=document.ingest_id,
-        sha256=document.sha256,
-    ) for document in manifest.documents)
-    outcome = result()
-    outcome = outcome.model_copy(update={"findings": tuple(
-        finding.model_copy(update={"evidence_refs": evidence_refs}) for finding in outcome.findings
-    )})
-    runtime = _Runtime(outcome)
-    execution = await _port(factory, runtime).execute(
-        ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id),
-    )
-    assert execution.classification is ProjectGuideCompilationExecutionClassification.PERSISTED, execution
-    assert runtime.calls == 1
-    projections = GuideCompilationProjectionService(
+    runtime = ScriptedGuideRuntime()
+    _, pre, post = project_guide_approval_compiler()
+    coordinator = project_guide_compilation_delivery_port(
         factory,
         material_factory=guide_document_manifest_port,
+        document_access_factory=document_access,
+        pre_capabilities=pre, post_capabilities=post,
+        request_authority=guide_compilation_request_authority,
+        execution_authority=guide_compilation_execution_authority,
+        configuration_factory=runtime_configuration,
+        runtime_factory=lambda configuration: runtime,
         sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
         policy_authorization_factory=artifact_policy_projection_authorization,
+        finalization_authorization_factory=setup_finalization_authorization,
     )
-    project = ProjectGuideProjectionCommand(attempt_id=requested.attempt_id)
-    await projections.project_guide_sufficiency(project)
-    await projections.project_submission_artifact_policy(project)
-    command = ProjectGuideSetupFinalizationCommand(
-        project_id=values["project"],
-        guide_id=values["guide"],
+    delivery = ProjectGuideCompilationDelivery(
+        project_id=values["project"], guide_id=values["guide"],
+        source_snapshot_id=setup.source_snapshot_id,
         setup_run_id=correction.successor_setup_run_id,
         setup_generation=correction.successor_setup_generation,
-        compilation_id=execution.compilation_id,
+        task_id=project_guide_compilation_task_id(str(correction.successor_setup_run_id), correction.successor_setup_generation),
     )
-    await finalize(factory, values, command)
-    return command
+    receipt = await coordinator.run(delivery)
+    assert receipt["status"] == "policy_draft_ready", receipt
+    assert runtime.calls == 1
+    from app.modules.projects.guide_compilation.models import ProjectGuideSetupFinalization
+    async with factory() as session:
+        finalization = await session.get(ProjectGuideSetupFinalization, UUID(receipt["finalization_id"]))
+        compilation_id = finalization.compilation_id
+    return ProjectGuideSetupFinalizationCommand(
+        project_id=values["project"], guide_id=values["guide"],
+        setup_run_id=correction.successor_setup_run_id,
+        setup_generation=correction.successor_setup_generation,
+        compilation_id=compilation_id,
+    )
 
 
 async def seed_review_actor(factory, project_id, *, actor=None, role="project_manager", scope="project"):

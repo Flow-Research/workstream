@@ -1099,8 +1099,8 @@ The self context lists effective role names and active route-backed project
 actions; it exposes no grant ids, identity-link data, planned actions, or
 unrelated system authority.
 
-AUTH-11C1 activates the six setup-run, sufficiency-report, draft submission
-artifact policy, and post-submit checker setup GET actions. Each route resolves
+AUTH-11C1 activates the five setup-run, sufficiency-report, and draft submission
+artifact policy GET actions. Each route resolves
 and locks the canonical project, guide/version, exact child or collection, and
 source-snapshot facts before requiring a covered Project Manager, scoped Audit
 Authority, or system Operator grant. Missing, cross-project, cross-guide,
@@ -1280,7 +1280,7 @@ allow envelope and digest, including a null denial code, without another allow
 event. POL retains transaction and immutable receipt ownership. The default
 port remains unavailable; POL-04B explicitly composes the authorized adapter
 in the live Celery setup path. POL-05A delivers hidden complete proposal review,
-correction and pre-submit approval. AUTH-12F4 supplies exact manager authority; POL-05B public composition remains pending. Complete proposal content uses current exact-project manager
+correction and pre-submit approval. AUTH-12F4 supplies exact manager authority; POL-05B exposes the exact public proposal operations and manual correction dispatch. Complete proposal content uses current exact-project manager
 `project.guide.manage` authority; diagnostic-read authority alone is insufficient. AUTH-12G later gates deterministic
 post-submit policy work; neither approval gate is required for draft finalization.
 
@@ -1303,7 +1303,7 @@ PREP/replay, and supersedes the predecessor in the same root transaction.
 Diagnostic sufficiency, token role strings, services, contributors, and
 agent-derived rows cannot authorize this exception. Fixed-service derive is
 active under 12F3; human unified-proposal authority is active under 12F4, with
-public exposure pending POL-05B. Any durable
+public exposure supplied by POL-05B. Any durable
 execution claim or replay row—including reserved or pending—or attributed
 provenance must be preserved. Submission-policy authorization audit events,
 including denied evidence, must also be preserved.

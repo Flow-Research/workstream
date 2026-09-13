@@ -1,6 +1,9 @@
 """PROJECT-owned composition adapters."""
 
 from app.modules.projects.api.guide_documents import ProjectGuideDocumentScopePort
+from app.modules.projects.api.guide_proposals import GuideProposalOperationsPort, GuideCorrectionDispatchPort
+from app.modules.authorization.api.guide_proposal_review import GuideProposalAuthorizationPort
+from app.modules.authorization.api import ProjectGuideCompilationAuthorizationPort
 from collections.abc import Callable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.modules.projects.api.guide_documents import GuideDocumentManifestPort, GuideDocumentAccessFactory
@@ -8,7 +11,9 @@ from app.interfaces.project_agents import ProjectGuideAgentRuntime
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
 from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
+from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
 from app.modules.authorization.api import (
+    ActorIdentityFacts,
     GuideSufficiencyProjectionAuthorizationPort,
     ArtifactPolicyProjectionAuthorizationPort,
     SetupFinalizationAuthorizationPort,
@@ -124,3 +129,29 @@ def project_guide_document_scope_port(session: AsyncSession) -> ProjectGuideDocu
     """Bind PROJECTS current document scope independently from ART storage."""
     from app.modules.projects.guide_compilation.document_scope import SqlAlchemyProjectGuideDocumentScope
     return SqlAlchemyProjectGuideDocumentScope(session)
+
+
+def project_guide_proposal_service(
+    session: AsyncSession, authorization: GuideProposalAuthorizationPort,
+) -> GuideProposalOperationsPort[
+    ActorIdentityFacts, GuideDocumentManifestPort, PreSubmissionCapabilityProjection,
+    PostSubmitCatalogue, PreSubmissionPolicyCompilationPort,
+]:
+    """Compose the sole proposal owner with explicit authority."""
+    from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
+
+    return GuideProposalService(session, authorization)
+
+
+def project_guide_correction_dispatch(
+    session: AsyncSession, authorization: ProjectGuideCompilationAuthorizationPort, *,
+    material: GuideDocumentManifestPort, pre: PreSubmissionCapabilityProjection,
+    post: PostSubmitCatalogue, configuration: ProjectGuideRuntimeConfiguration,
+) -> GuideCorrectionDispatchPort[ActorIdentityFacts]:
+    """Compose human correction admission and existing queue dispatch without inference."""
+    from app.modules.projects.guide_compilation.correction_dispatch import GuideCorrectionDispatchService
+    from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
+
+    return GuideCorrectionDispatchService(
+        session, authorization, CompilationRequestInputs(material, pre, post, configuration),
+    )

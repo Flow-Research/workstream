@@ -1,6 +1,8 @@
 # Chunk Contract: WS-POL-003-05B - Live Pre-Submit Approval
 
-Status: Proposed after 05A and AUTH-12F4; inactive. Risk: L1.
+Disposition: Complete. Risk: L1.
+
+Implemented boundary and decisions: [POL-05B change record](../../WS-POL-003-05B.md).
 
 ## Goal
 

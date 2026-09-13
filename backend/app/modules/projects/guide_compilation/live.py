@@ -80,7 +80,7 @@ class LiveGuideCompilationCoordinator:
     async def run(self, delivery: ProjectGuideCompilationDelivery) -> dict:
         """Admit the exact delivery and finish only its existing immutable generation."""
         try:
-            finalization, has_attempt, snapshot = await self._admit(delivery)
+            finalization, has_attempt, snapshot, manual_attempt = await self._admit(delivery)
         except GuideTaskExampleInputError as exc:
             return {
                 "status": "setup_input_invalid",
@@ -96,21 +96,25 @@ class LiveGuideCompilationCoordinator:
             if snapshot is not None
             else self._configuration()
         )
-        operation_id = automatic_operation_id(delivery.setup_run_id, delivery.setup_generation)
-        async with self._sessions() as session:
-            async with self._request_authority(session, operation_id) as (authority, actor):
-                request = await GuideCompilationService(
-                    session,
-                    authority,
-                    request_inputs=CompilationRequestInputs(
-                        self._material(session),
-                        self._pre,
-                        self._post,
-                        configuration,
-                    ),
-                ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)
+        if manual_attempt is None:
+            operation_id = automatic_operation_id(delivery.setup_run_id, delivery.setup_generation)
+            async with self._sessions() as session:
+                async with self._request_authority(session, operation_id) as (authority, actor):
+                    request = await GuideCompilationService(
+                        session,
+                        authority,
+                        request_inputs=CompilationRequestInputs(
+                            self._material(session),
+                            self._pre,
+                            self._post,
+                            configuration,
+                        ),
+                    ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)
+            attempt_id = request.attempt_id
+        else:
+            attempt_id = manual_attempt
         outcome = await self._execution.execute(
-            ProjectGuideCompilationExecutionCommand(attempt_id=request.attempt_id)
+            ProjectGuideCompilationExecutionCommand(attempt_id=attempt_id)
         )
         if outcome.classification is not ProjectGuideCompilationExecutionClassification.PERSISTED:
             async with self._sessions() as session:
@@ -207,6 +211,7 @@ class LiveGuideCompilationCoordinator:
                     ),
                     True,
                     None,
+                    None,
                 )
             require_task_example_commitment(
                 guide.task_examples,
@@ -226,7 +231,10 @@ class LiveGuideCompilationCoordinator:
                     ProjectGuideCompilationAttempt.setup_generation == setup.setup_generation,
                 )
             )
-            return None, attempt is not None, attempt.runtime_configuration if attempt else None
+            from .delivery_request import manual_delivery_attempt
+
+            manual_attempt = await manual_delivery_attempt(session, setup, attempt)
+            return None, attempt is not None, attempt.runtime_configuration if attempt else None, manual_attempt
 
     async def _finalize(self, command: ProjectGuideSetupFinalizationCommand) -> dict:
         """Create or replay the existing finalizer's receipt under fresh authority."""

@@ -1,4 +1,4 @@
-"""Hidden manager review over one exact immutable compilation result."""
+"""Manager review over one exact immutable compilation result."""
 
 from contextlib import asynccontextmanager
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -39,27 +39,16 @@ from .proposal_repository import GuideProposalRepository
 from .repository import GuideCompilationIntegrityError
 
 
-class _UnavailableProposalAuthorization:
-    """No product caller receives approval or disclosure authority by default."""
-
-    @asynccontextmanager
-    async def prepare_proposal_operation(self, _locator):
-        raise AuthorizationUnavailable("guide proposal authority is unavailable")
-        yield
-
-
 class GuideProposalService:
     """Use caller-owned transactions and explicitly supplied request authority."""
 
     def __init__(
         self,
         session: AsyncSession,
-        authorization: GuideProposalAuthorizationPort | None = None,
+        authorization: GuideProposalAuthorizationPort,
     ) -> None:
         self.session = session
-        self.authorization = (
-            authorization if authorization is not None else _UnavailableProposalAuthorization()
-        )
+        self.authorization = authorization
         self.repository = GuideProposalRepository(session)
 
     async def review_package(
@@ -116,7 +105,7 @@ class GuideProposalService:
         post_capabilities: PostSubmitCatalogue,
         planner: PreSubmissionPolicyCompilationPort,
     ) -> GuideProposalApprovalReceipt:
-        """Approve through the sole hidden owner, without committing or invoking a model."""
+        """Approve through the sole approval owner, without committing or invoking a model."""
         from .proposal_approval import approve_proposal
 
         self._require_transaction()

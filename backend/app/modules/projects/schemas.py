@@ -116,7 +116,7 @@ class GuideArtifactIngestResponse(BaseModel):
 
 
 class ProjectSetupRunResponse(BaseModel):
-    """Response schema for automatic project setup run ledger rows."""
+    """Setup status and discoverable immutable compilation/correction lineage."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -126,6 +126,9 @@ class ProjectSetupRunResponse(BaseModel):
     guide_version: str
     source_snapshot_id: str
     setup_generation: int
+    finalized_compilation_id: UUID | None = None
+    correction_operation_id: UUID | None = None
+    predecessor_compilation_id: UUID | None = None
     celery_task_id: str | None
     documents_ready_at: datetime | None
     status: str

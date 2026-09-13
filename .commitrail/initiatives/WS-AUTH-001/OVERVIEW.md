@@ -15,7 +15,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
   ContributionPolicy actions have exact Finance Authority through CP05.
 - Completed proposal boundary: AUTH-12F4 exact-project manager read, correction
   and pre-submit approval authority over hidden POL-05A behavior.
-- Next usable boundary: POL-05B manager-facing composition.
+- Next usable boundary: AUTH-12G with POL-06 post-policy projection/approval.
   Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
@@ -45,7 +45,7 @@ nor policy selection is authorized by the sufficiency action.
 
 1. POL-04B delivers live automatic compilation and exact AUTH-12B2 finalization.
    POL-05A adds hidden manager review, correction and pre-submit approval.
-   AUTH-12F4 supplies its authority; next POL-05B supplies public composition and manual dispatch.
+   AUTH-12F4 supplies its authority; POL-05B supplies public composition and manual dispatch.
 2. `12G` and `12H`: activate stored pre-submit/post-submit and final
    guide behavior only after their owner implementations and remaining CON CP06-CP07.
 3. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.

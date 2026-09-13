@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.api.routes.guide_proposals import router as guide_proposal_router
+
 from fastapi import APIRouter
 
 from app.api.routes.auth import actors_router
@@ -29,3 +31,5 @@ api_router.include_router(tasks_router, prefix="/api/v1")
 api_router.include_router(checkers_router, prefix="/api/v1")
 api_router.include_router(artifacts_router, prefix="/api/v1")
 api_router.include_router(artifact_submission_router, prefix="/api/v1")
+
+api_router.include_router(guide_proposal_router, prefix="/api/v1")

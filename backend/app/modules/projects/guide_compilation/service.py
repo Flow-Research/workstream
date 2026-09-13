@@ -173,6 +173,7 @@ class GuideCompilationService:
                     facts=facts,
                     origin=origin,
                 )
+                correction_setup = None
                 if origin.trigger == "automatic_source_ready":
                     if self._request_inputs is None:
                         raise GuideCompilationIntegrityError(
@@ -186,7 +187,7 @@ class GuideCompilationService:
                 else:
                     from .correction_request import admit_correction_request
 
-                    await admit_correction_request(
+                    correction_setup = await admit_correction_request(
                         self._session,
                         self._request_inputs,
                         actor=actor,
@@ -218,6 +219,10 @@ class GuideCompilationService:
                     attempt=attempt,
                     authorization_decision_event_id=event_id,
                 )
+                if correction_setup is not None:
+                    correction_setup.status = "dispatch_pending"
+                    correction_setup.current_step = "dispatch"
+                    await self._session.flush()
                 receipt = await _request_receipt(repository, operation)
             return receipt
         except GuideCompilationConcurrencyError:

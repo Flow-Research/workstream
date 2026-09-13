@@ -5,6 +5,8 @@ from typing import Any, BinaryIO, Protocol
 from pathlib import Path
 
 from app.modules.checkers.api.pre_submit_catalogue import PreSubmissionCapabilityProjection
+from app.modules.checkers.api.post_submit_catalogue import PostSubmitCatalogue
+from app.modules.checkers.api.policy_compilation import PreSubmissionPolicyCompilationPort
 
 from app.modules.checkers.api import (
     PreSubmissionExecutionFacts,
@@ -83,3 +85,13 @@ class PreSubmitCheckerExecutionAdapter:
 def project_guide_pre_submission_catalogue() -> PreSubmissionCapabilityProjection:
     """Compose the canonical immutable pre-submit capabilities for guide setup."""
     return project_guide_pre_submission_capabilities(build_pre_submission_checker_catalogue())
+
+
+def project_guide_approval_compiler() -> tuple[
+    PreSubmissionPolicyCompilationPort, PreSubmissionCapabilityProjection, PostSubmitCatalogue,
+]:
+    """Compose one canonical planner and its matching pre/post capabilities."""
+    from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
+
+    planner = build_pre_submission_checker_catalogue()
+    return planner, project_guide_pre_submission_capabilities(planner), current_post_submit_catalogue()

@@ -134,7 +134,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Identity and actor resolution | **Live foundation** | Flow-token verification; canonical ActorProfile and ActorIdentityLink; human/service separation; lifecycle controls; canonical `/actors/me` self-read with duplicate `/auth/me` removed | Final end-to-end operational and conformance proof |
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection | Carry the same document generation through manager approval and guide activation; prove each enabled document reader |
-| Unified Project Guide compilation | **Live automatic draft/findings setup** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization | Expose the delivered hidden manager review, correction and pre-submit approval through POL-05B using delivered AUTH-12F4 authority; add post-submit projection and one checker-service port |
+| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch | Add post-submit projection/approval and one checker-service port |
 | Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history | Expose selected-policy validation, bind one published complete version to the active guide generation |
 | Task readiness and claim | **Foundation with grant-backed contributor commands** | Task records, assignments and locked work context; claim/start/contributor context use exact-project Submitter grants; separate manager context and system-Operator start | Bind the guide's ContributionPolicyVersion before `READY` and carry it through TaskAssignment without a current-policy lookup; finish ready queues, remaining management/read authority and durable assignment invalidation |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission | Connect only the active unified guide/checker lineage and complete the later public admission-only cutover |
@@ -224,19 +224,23 @@ cannot be reused as post-submission review-gate evidence. See the
   ends at sufficiency evidence, with no policy projection. Its canonical result
   retains exact supported catalogue matches and one evidence-linked engineering
   suggestion for each required missing pre-submit or post-submit check. Fully
-  covered projects need no suggestions. POL-05A includes the complete handoff in its hidden review package;
-  public exposure remains POL-05B; AUTH-12F4 supplies exact manager authority; suggestions cannot register or activate a checker. Runtime, model/provider and instructions are independently
+  covered projects need no suggestions. POL-05B exposes the complete POL-05A review package;
+  AUTH-12F4 supplies exact manager authority; suggestions cannot register or activate a checker. Runtime, model/provider and instructions are independently
   configured and bound to the attempt. The agent opens assigned files on demand
   in an isolated workspace and assesses them with every supplied task example;
   exact grants exclude other projects and runs. Known
   invalid output ends terminally, and replay never starts a second inference.
   Transient pre-send retries use bounded backoff and a circuit breaker; the
   default request timeout is 300 seconds, separate from the whole-run timeout.
-  POL-05A implements hidden review, pre-submission approval custody and
-  correction successors. Approval requires selected pre-submit checks to appear
+  POL-05B exposes review, pre-submission approval and correction successors
+  using POL-05A custody. Approval requires selected pre-submit checks to appear
   in the plan compiled from the actual policy; complete-proposal access requires
-  Project Manager guide-management authority. Public manager review and dispatch
-  remain POL-05B; AUTH-12F4 supplies their exact manager authority.
+  Project Manager guide-management authority. Public manager review and manual
+  dispatch use AUTH-12F4 authority. Committed manager requests enter the same
+  Celery execution pipeline with atomic queue intent and no second attempt.
+  The authorized latest-setup read exposes saved correction/predecessor identifiers
+  so a replacement manager can discover and explicitly dispatch a pending correction
+  after the creator is revoked, without the original creation receipt.
   Superseded post-submit setup/approval/correction routes are removed; POL-06
   owns the remaining post-submit projection. Real Terra runs through API upload,
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
@@ -285,8 +289,8 @@ finalization to automatic initial setup execution, replacing the separate
 inference methods and prompts. Runtime adapter, model and instructions are
 independently configured. Compilation stops at findings and draft pre/post
 policies. POL-05A adds hidden complete-proposal review, correction and pre-policy
-approval custody, replacing manual artifact-policy approval. AUTH-12F4 supplies exact-project manager authority. POL-05B next exposes manager review,
-approval and manual rerun through the same compiler. The reconciled
+approval custody, replacing manual artifact-policy approval. AUTH-12F4 supplies exact-project manager authority. POL-05B exposes manager review,
+approval and manual correction dispatch through the same compiler. The reconciled
 [dependency and ownership plan](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#current-dependency-contract)
 permits selected-policy validation independently after completed CP05. The
 selected delivery order finishes unified setup, separate pre/post approval and
@@ -298,21 +302,19 @@ requires its exact owner-proven prerequisites.
 
 The next dependency-safe product sequence is:
 
-1. **Expose manager proposal review and correction.** POL-05B composes
-   the AUTH-12F4 authority with the delivered hidden complete result, pre-submit
-   approval and correction operations. Manual dispatch admits a fresh generation
-   through the same unified setup runtime.
-2. **Complete post-submit policy approval.** Pre-submit effective policy and
-   its compiled plan now have hidden approval custody. Persist the post-submit
+1. **Complete post-submit policy approval.** POL-05B delivers public manager
+   review, pre-submission approval, correction and manual dispatch through the
+   same unified setup runtime. Pre-submit effective policy and its compiled plan
+   have authorized approval custody. Persist the post-submit
    policy through its deterministic compiler, activate its narrow AUTH gate,
    and expose one typed checker-service facade. Approval consumes the existing
    result without another agent invocation. Approval/projection records reference immutable setup finalization;
    they cannot reopen or overwrite it.
-3. **Validate and bind the selected ContributionPolicy.** CP05 completes
+2. **Validate and bind the selected ContributionPolicy.** CP05 completes
    authorization for the five hidden policy actions. CP06 supplies selected-policy
    validation; CP07 binds one exact published, complete, binding-valid
    ContributionPolicyVersion to the Project Guide.
-4. **Activate the complete guide generation.** AUTH may permit terminal guide
+3. **Activate the complete guide generation.** AUTH may permit terminal guide
    activation only when compilation, sufficiency, pre-submit policy,
    post-submit policy, review policy, revision policy, and ContributionPolicy
    all belong to the same approved current generation. First prove that each
@@ -322,7 +324,7 @@ The next dependency-safe product sequence is:
    The new activation command replaces legacy economic readiness guards;
    physical deletion waits until all old consumers are gone, including checker
    and public Submission cutover. Physical deletion is not a prerequisite for `allow_review`.
-5. **Make tasks claimable from that generation.** TASK locks the complete guide
+4. **Make tasks claimable from that generation.** TASK locks the complete guide
    and policy context before `READY`. Claim copies it to TaskAssignment; it
    performs no ContributionPolicy selection. Submission later copies the
    assignment's attempt version.
@@ -331,7 +333,7 @@ The next dependency-safe product sequence is:
    correction feedback on blocking failures, and publishes ready admission only
    after the required preparation/custody checks. TASK then consumes that
    admission to create the immutable Submission with the same assignment lineage.
-6. **Produce current post-submit evidence and policy-governed routing.** Materialize the exact immutable
+5. **Produce current post-submit evidence and policy-governed routing.** Materialize the exact immutable
    Submission, execute the locked post-submit plan, persist one current result,
    activate only its fixed services, and automatically publish an exact
    human `allow_review` manifest on true when no blocking failure exists.
@@ -349,19 +351,19 @@ The next dependency-safe product sequence is:
    enabling false. This milestone creates the submitter contribution and
    applicable awards without live human queues/leases/decisions; it neither
    invents a reviewer nor removes the later human branch from v0.1.
-7. **Start the live REV path.** Complete packet, Review, and FinalAcceptance
+6. **Start the live REV path.** Complete packet, Review, and FinalAcceptance
    persistence; admit only canonical `allow_review`; claim a bounded lease and
    exact packet using the Submission-stamped ContributionPolicyVersion.
-8. **Make human review decisions economically complete.** Before the first live
+7. **Make human review decisions economically complete.** Before the first live
    Review commit, add the reviewer CON operation and reuse the shared acceptance
    operation already needed by the false branch. Every final decision records
    reviewer work; accept additionally records accepted submitter work. Do not
    duplicate the common persistence or submitter participant.
-9. **Complete revision and operations.** Preserve old attempts immutably;
+8. **Complete revision and operations.** Preserve old attempts immutably;
    rebase a continuing TaskAssignment only at the controlled human-revision
    boundary when the complete governed context changed. Finish recovery,
    fulfillment, reconciliation, audit, release controls, and legacy cleanup.
-10. **Release proof.** Expose stable APIs and frontend surfaces, exercise the
+9. **Release proof.** Expose stable APIs and frontend surfaces, exercise the
     complete path through real database, durable-job, storage, security, failure,
     and recovery tests, then run the internal pilot.
 
