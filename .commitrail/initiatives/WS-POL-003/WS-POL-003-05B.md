@@ -234,3 +234,7 @@ response's early return, preserving discovery throughout the successor lifecycle
 POL05B-HUMAN-002 requires exactly one header occurrence through the canonical
 invalid-UUID error path. POL05B-HUMAN-003 removes the obsolete public post-submit
 setup-read description; that policy projection/read/approval remains POL-06.
+
+DOC-POL05B-REC-001 reconciles the authorization specification to its five retained
+read actions and describes latest setup as covering manual correction successors,
+not only automatic runs.

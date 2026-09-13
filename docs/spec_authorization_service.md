@@ -1099,8 +1099,8 @@ The self context lists effective role names and active route-backed project
 actions; it exposes no grant ids, identity-link data, planned actions, or
 unrelated system authority.
 
-AUTH-11C1 activates the six setup-run, sufficiency-report, draft submission
-artifact policy, and post-submit checker setup GET actions. Each route resolves
+AUTH-11C1 activates the five setup-run, sufficiency-report, and draft submission
+artifact policy GET actions. Each route resolves
 and locks the canonical project, guide/version, exact child or collection, and
 source-snapshot facts before requiring a covered Project Manager, scoped Audit
 Authority, or system Operator grant. Missing, cross-project, cross-guide,

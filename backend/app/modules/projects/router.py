@@ -314,7 +314,7 @@ async def get_latest_project_setup_run(
     authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> ProjectSetupRunResponse:
-    """Return the latest automatic setup run for one project guide."""
+    """Return the latest project-guide setup run and its bounded compilation lineage."""
     run = await authorize_project_diagnostic_read(
         authorization=authorization,
         repository=ProjectRepository(session),
