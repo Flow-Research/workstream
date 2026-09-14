@@ -23,6 +23,7 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/test_test_impact_shadow.py",
     "tests/authorization/test_pre_submit_attempt_authority.py",
     "tests/authorization/test_guide_metadata_contracts.py",
     "tests/authorization/post_policy/test_concurrency.py",

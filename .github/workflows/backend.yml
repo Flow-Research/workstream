@@ -75,6 +75,14 @@ jobs:
             --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
 
+      - name: Report test impact (shadow only; full suite unchanged)
+        continue-on-error: true
+        working-directory: backend
+        env:
+          IMPACT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python -m scripts.test_impact_shadow --base "$IMPACT_BASE" --head "$GITHUB_SHA"
+
   lanes:
     runs-on: ubuntu-latest
     timeout-minutes: 45

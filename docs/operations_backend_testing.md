@@ -1,5 +1,29 @@
 # Backend Testing Operations
 
+## Test-impact shadow trial
+
+Backend preflight logs a JSON impact report for the exact checkout, base and
+merge base. It does not select or skip tests: all seven lanes and coverage gates
+remain unchanged. `mapped_candidates` lists test modules found through known
+owner dependencies, including transitive consumers. `recommended_modules` is the
+full catalogue whenever `fallback_reasons` is nonempty. Partitioned lanes count
+each test module only once.
+
+Shared infrastructure, dynamic imports, unmapped paths (including process docs),
+critical owners and deletions deliberately recommend the full suite. Existing
+dynamic test helpers can cause this on every run. Candidate counts are therefore
+diagnostic, not a safe-omission claim, a false-negative measurement, or a runtime
+saving. The advisory step may fail visibly without changing required checks.
+Use fallback causes to decide whether a later, separately reviewed experiment is
+worthwhile; do not use this report to bypass full CI.
+
+From a clean checkout, reproduce with:
+
+```bash
+cd backend
+python -m scripts.test_impact_shadow --base origin/main --head HEAD
+```
+
 ## Guide document runtime
 
 Guide uploads preserve original files in ArtifactStore. Bounded PDF/OOXML
