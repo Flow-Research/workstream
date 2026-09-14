@@ -6,7 +6,6 @@ from typing import Literal, Protocol, TypeAlias
 from uuid import UUID
 
 from app.modules.compensation.api import CompensationInstrumentType
-from app.modules.projects.api import ProjectContributionPolicyEligibilityPort
 
 PolicyAction = Literal[
     "contribution.policy.create_draft",
@@ -272,6 +271,3 @@ class DenyContributionPolicyAuthorization:
     def close_contribution_policy_mutation(self, prepared: object) -> None:
         """Discard a deny-default prepared value without side effects."""
         del prepared
-
-
-ContributionPolicyProjectEligibilityPort = ProjectContributionPolicyEligibilityPort

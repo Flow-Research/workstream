@@ -8,15 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.modules.compensation.api import (
-    CompensationInstrumentType,
     PolicyAdapterBindingPort,
-    PolicyAdapterBindingUnavailable,
 )
 from app.modules.contributions.api import (
     ContributionPolicyConflict,
     ContributionPolicyMutationAuthorizationPort,
     ContributionPolicyMutationResult,
-    ContributionPolicyProjectEligibilityPort,
     ContributionPolicyPublishAuthorizationFacts,
     ContributionPolicyPublishRequest,
     ContributionPolicyReadAuthorizationPort,
@@ -29,13 +26,20 @@ from app.modules.contributions.models import (
     ContributionPolicyTransitionCustody,
 )
 from app.modules.contributions.policy_graph import publication_graph_facts
+from app.modules.contributions.policy_eligibility import (
+    require_complete_policy_graph,
+    lock_policy_resources,
+)
 from app.modules.contributions.policy_mutation_support import (
     begin_and_recover_policy_mutation,
     consume_and_close_policy_authority,
 )
 from app.modules.contributions.policy_validation import policy_request_digest
 from app.modules.contributions.repository import ContributionPolicyRepository
-from app.modules.projects.api import ProjectContributionPolicyUnavailable
+from app.modules.projects.api import (
+    ProjectContributionPolicyEligibilityPort,
+    ProjectContributionPolicyUnavailable,
+)
 
 
 class ContributionPolicyPublicationService:
@@ -48,7 +52,7 @@ class ContributionPolicyPublicationService:
         repository: ContributionPolicyRepository,
         read_authorization: ContributionPolicyReadAuthorizationPort,
         mutation_authorization: ContributionPolicyMutationAuthorizationPort,
-        projects: ContributionPolicyProjectEligibilityPort | None,
+        projects: ProjectContributionPolicyEligibilityPort | None,
         bindings: PolicyAdapterBindingPort | None,
     ) -> None:
         self._session = session
@@ -75,9 +79,12 @@ class ContributionPolicyPublicationService:
             raise ContributionPolicyConflict("contribution_policy_not_found")
         prior = await self._lock_prior(policy, version)
         rules, definitions = await self._repository.lock_publication_graph(version.id)
-        self._require_complete_graph(rules)
+        require_complete_policy_graph(version, rules, definitions)
         set_committed_value(version, "rules", rules)
-        await self._lock_owner_resources(request.project_id, definitions)
+        assert self._bindings is not None
+        await lock_policy_resources(
+            self._repository, self._bindings, request.project_id, definitions
+        )
         graph_digest, binding_ids = publication_graph_facts(version)
         facts = ContributionPolicyPublishAuthorizationFacts(
             action="contribution.policy.publish",
@@ -184,37 +191,6 @@ class ContributionPolicyPublicationService:
             raise ContributionPolicyConflict("contribution_policy_not_found")
         return prior
 
-    async def _lock_owner_resources(self, project_id: UUID, definitions) -> None:
-        self._require_publication_ports()
-        assert self._bindings is not None
-        units = sorted({(item.instrument_type, item.unit_code) for item in definitions})
-        for instrument, unit_code in units:
-            unit = await self._repository.lock_unit(project_id, instrument, unit_code)
-            if unit is None or unit.status != "active":
-                raise ContributionPolicyConflict("contribution_policy_not_found")
-
-        bindings = {item.adapter_binding_id: item for item in definitions}
-        if any(
-            bindings[item.adapter_binding_id].instrument_type != item.instrument_type
-            for item in definitions
-        ):
-            raise ContributionPolicyConflict("contribution_policy_conflict")
-        for item in (bindings[key] for key in sorted(bindings, key=str)):
-            try:
-                binding = await self._bindings.lock_policy_adapter_binding(
-                    project_id=project_id,
-                    adapter_binding_id=item.adapter_binding_id,
-                    instrument_type=CompensationInstrumentType(item.instrument_type),
-                )
-            except (PolicyAdapterBindingUnavailable, ValueError) as exc:
-                raise ContributionPolicyConflict("contribution_policy_not_found") from exc
-            if (
-                binding.project_id != project_id
-                or binding.adapter_binding_id != item.adapter_binding_id
-                or binding.instrument_type.value != item.instrument_type
-            ):
-                raise ContributionPolicyConflict("contribution_policy_not_found")
-
     def _require_project_port(self) -> None:
         if self._projects is None:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
@@ -223,20 +199,6 @@ class ContributionPolicyPublicationService:
         self._require_project_port()
         if self._bindings is None:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
-
-    @staticmethod
-    def _require_complete_graph(rules) -> None:
-        if len(rules) != 2 or {rule.contribution_type for rule in rules} != {
-            "accepted_submission",
-            "completed_review",
-        }:
-            raise ContributionPolicyConflict("contribution_policy_conflict")
-        for rule in rules:
-            count = len(rule.award_definitions)
-            if (rule.compensation_mode == "unpaid" and count) or (
-                rule.compensation_mode == "compensated" and not 1 <= count <= 2
-            ):
-                raise ContributionPolicyConflict("contribution_policy_conflict")
 
     def _require_request(self, request: object, expected: type[object]) -> None:
         if (

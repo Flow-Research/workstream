@@ -163,12 +163,13 @@ class ContributionPolicyRepository:
                 ProjectCompensationUnit.unit_code == unit_code,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
 
     async def lock_publication_graph(
         self, version_id: UUID
     ) -> tuple[list[ContributionRule], list[ContributionAwardDefinition]]:
-        """Lock one draft graph in the canonical publication order."""
+        """Lock and refresh an exact version graph in canonical publication order."""
         rules = list(
             (
                 await self._session.scalars(
@@ -176,6 +177,7 @@ class ContributionPolicyRepository:
                     .where(ContributionRule.contribution_policy_version_id == version_id)
                     .order_by(ContributionRule.contribution_type, ContributionRule.id)
                     .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             ).all()
         )
@@ -191,6 +193,7 @@ class ContributionPolicyRepository:
                         ContributionAwardDefinition.id,
                     )
                     .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             ).all()
         )

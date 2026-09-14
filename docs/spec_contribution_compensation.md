@@ -431,9 +431,15 @@ operation even though the policy contains both actor rules.
 ### Governing policy lock
 
 During authorized Project Guide activation, PROJECTS calls the narrow CON
-validation participant. That participant locks the active ContributionPolicy,
+validation participant. CP06 implements this internal caller-transaction
+dependency; guide binding and its activation authority remain CP07/AUTH-12H.
+It first obtains the PROJECTS project fence, then the CON project-scope fence,
+and locks the explicitly selected active ContributionPolicy,
 its current published version, both rules, referenced definitions, and
-bindings. It returns one exact version ID that PROJECTS binds as:
+bindings. The requested version must exactly equal the aggregate’s current
+published selector; missing or stale IDs never select a replacement. Locked
+graph and unit reads refresh any values preloaded by the caller. It returns
+immutable identity and graph facts that PROJECTS will bind as:
 
 ```text
 ProjectGuide.contribution_policy_version_id
@@ -467,7 +473,13 @@ guide-bound version through CON and atomically rebases the continuing Task and
 TaskAssignment for the next submission attempt, recording exact prior/next
 lineage. Missing, incomplete, crossed-project, ambiguous, or binding-ineligible
 context blocks the whole preparation. Publication alone never performs an
-update.
+update. CP06’s distinct revision-adoption purpose checks only the supplied
+version and current resource eligibility, allowing immutable published or
+retired versions without requiring current-selector equality. It does not
+verify a complete guide, authorize a revision, or write attempt lineage. The
+future TASK/PROJECTS composition must derive those IDs from its locked complete
+guide context and cannot use revision-purpose facts to activate a new guide.
+An unchanged attempt makes no CON reselection call.
 
 ### Reviewer inheritance
 

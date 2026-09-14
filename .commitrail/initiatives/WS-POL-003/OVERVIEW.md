@@ -27,8 +27,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   Production post-submit phase execution remains unavailable.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
-- Next usable boundary: CP06 selected ContributionPolicy validation, then CP07
-  guide binding and AUTH-12H activation. POL-07B consumes the completed POL-07A
+- Next usable boundary: CP07 guide binding and AUTH-12H activation, using
+  completed CP06 selected ContributionPolicy validation. POL-07B consumes the completed POL-07A
   ART attempt prerequisite and ARCH-04A value contracts. POL-06B public
   policy review and automatic derivation use completed
   [AUTH-12G authority](../WS-AUTH-001/WS-AUTH-001-12G.md). POL-05B connects manager review, pre-submit
@@ -76,7 +76,7 @@ POL-05/06 and AUTH-12F4/12G deliver public proposal and post-policy visibility,
 separate approvals and shared corrections. Automatic derivation and recovery
 consume committed upstream approvals while finalized setup remains immutable.
 
-1. CP06 validates the selected ContributionPolicy; CP07 binds that exact version
+1. CP06 selected-policy validation is delivered; CP07 binds that exact version
    to the complete guide. AUTH-12H activates CP07's hidden command without a
    Task/CheckerRun dependency. POL-07B supplies the internal phase service;
    ARCH-04C alone owns later durable post-submit persistence.

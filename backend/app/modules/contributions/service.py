@@ -18,7 +18,6 @@ from app.modules.contributions.api import (
     ContributionPolicyMutationAuthorizationFacts,
     ContributionPolicyMutationAuthorizationPort,
     ContributionPolicyMutationResult,
-    ContributionPolicyProjectEligibilityPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyReadRequest,
     ContributionPolicyPublishRequest,
@@ -51,7 +50,10 @@ from app.modules.contributions.policy_mutation_support import (
     consume_and_close_policy_authority,
 )
 from app.modules.contributions.repository import ContributionPolicyRepository
-from app.modules.projects.api import ProjectContributionPolicyUnavailable
+from app.modules.projects.api import (
+    ProjectContributionPolicyEligibilityPort,
+    ProjectContributionPolicyUnavailable,
+)
 
 
 class ContributionPolicyService:
@@ -63,7 +65,7 @@ class ContributionPolicyService:
         *,
         read_authorization: ContributionPolicyReadAuthorizationPort | None = None,
         mutation_authorization: ContributionPolicyMutationAuthorizationPort | None = None,
-        projects: ContributionPolicyProjectEligibilityPort | None = None,
+        projects: ProjectContributionPolicyEligibilityPort | None = None,
         bindings: PolicyAdapterBindingPort | None = None,
     ) -> None:
         """Compose hidden policy behavior inside a caller-owned session."""

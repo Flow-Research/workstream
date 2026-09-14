@@ -10,7 +10,6 @@ from app.modules.contributions.api.policies import (
     ContributionPolicyMutationResult,
     ContributionPolicyPublishAuthorizationFacts,
     ContributionPolicyPublishRequest,
-    ContributionPolicyProjectEligibilityPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyReadRequest,
     ContributionPolicyRetireAuthorizationFacts,
@@ -28,7 +27,18 @@ from app.modules.contributions.api.policies import (
     PolicyRuleView,
 )
 
+from app.modules.contributions.api.validation import (
+    ContributionPolicyValidationFacts,
+    ContributionPolicyValidationPort,
+    ContributionPolicyValidationPurpose,
+    ContributionPolicyValidationRequest,
+)
+
 __all__ = (
+    "ContributionPolicyValidationFacts",
+    "ContributionPolicyValidationPort",
+    "ContributionPolicyValidationPurpose",
+    "ContributionPolicyValidationRequest",
     "CompensationMode",
     "ContributionPolicyConflict",
     "ContributionPolicyCreateDraftRequest",
@@ -38,7 +48,6 @@ __all__ = (
     "ContributionPolicyMutationResult",
     "ContributionPolicyPublishAuthorizationFacts",
     "ContributionPolicyPublishRequest",
-    "ContributionPolicyProjectEligibilityPort",
     "ContributionPolicyReadAuthorizationPort",
     "ContributionPolicyReadRequest",
     "ContributionPolicyRetireAuthorizationFacts",

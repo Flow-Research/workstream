@@ -99,6 +99,8 @@ SHARED_FOUNDATION_MODULES = (
     "tests/contributions/test_policy_publication_recovery.py",
     "tests/contributions/test_policy_publish.py",
     "tests/contributions/test_policy_read.py",
+    "tests/contributions/test_selected_policy_validation.py",
+    "tests/authorization/contribution_policies/test_selected_validation_postgresql.py",
     "tests/contributions/test_policy_retire.py",
     "tests/contributions/test_policy_routes_absent.py",
     "tests/test_coverage_contract.py",

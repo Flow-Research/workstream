@@ -25,7 +25,11 @@ PROJECTS builds hidden, deny-by-default guide-activation behavior to call the CO
 validation capability and persist the returned exact version as non-null
 `ProjectGuide.contribution_policy_version_id`. PROJECTS owns the guide write and
 single transaction; it imports no CON models/repositories and performs no
-policy selection itself.
+policy selection itself. New binding must request CP06’s `guide_activation`
+purpose and reject revision-purpose facts; revision adoption is not an
+alternate eligibility path for activation. Inject the CON dependency through
+a PROJECTS-owned local contract and explicit composition so existing CON
+consumption of PROJECTS eligibility does not form an import cycle.
 
 The owner command validates and binds the exact explicitly selected policy
 version during the eventual activation transaction, not on sufficiency or

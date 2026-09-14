@@ -622,6 +622,8 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
             "ContributionPolicyRetireAuthorizationFacts",
             "ContributionPolicyRetireRequest",
             "ContributionPolicyUpdateDraftRequest",
+            "ContributionPolicyValidationFacts",
+            "ContributionPolicyValidationRequest",
             "ContributionPolicyView",
             "PolicyDefinitionInput",
             "PolicyDefinitionView",

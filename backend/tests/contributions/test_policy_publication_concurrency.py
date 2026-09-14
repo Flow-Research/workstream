@@ -94,8 +94,9 @@ async def _assert_write_waits(request, statement: str, parameters: dict) -> None
     try:
         async with db_session.get_session_factory()() as contender, contender.begin():
             await contender.execute(text("set local lock_timeout='100ms'"))
-            with pytest.raises(DBAPIError):
+            with pytest.raises(DBAPIError) as exc:
                 await contender.execute(text(statement), parameters)
+            assert exc.value.orig.sqlstate == "55P03"
     finally:
         await _finish_publication(authorization, session, transaction, task)
 
@@ -123,7 +124,7 @@ async def test_binding_suspension_waits_for_publication_owner_fence(
     await _assert_write_waits(
         request,
         "update project_compensation_adapter_bindings "
-        "set lifecycle_version=lifecycle_version where id=:binding",
+        "set binding_lifecycle_version=binding_lifecycle_version where id=:binding",
         {"binding": binding},
     )
 

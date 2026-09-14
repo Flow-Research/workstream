@@ -540,9 +540,12 @@ canonical evidence ownership. The existing Celery pre-review gate still calls
 service. That service's `evaluate_post_submission` uses
 `UnavailablePostSubmissionExecution` and raises
 `PostSubmissionExecutionUnavailable` until its durable execution and authority
-boundaries land. The next guide boundary
-is CP06 selected ContributionPolicy validation, then CP07 binding and AUTH-12H
-activation.
+boundaries land. CON now provides internal exact selected-policy validation: a
+new guide binding must match the active policy’s current published version;
+the revision-adoption purpose validates an explicitly supplied historical version
+without reselection. Both validate complete rules and current unit/binding
+eligibility in the caller transaction. Guide custody and controlled revision
+integration remain pending. The next guide boundary is CP07 binding, then AUTH-12H activation.
 
 ## v0.1 Success Standard
 

@@ -7,8 +7,12 @@ from app.adapters.projects import project_contribution_policy_eligibility_port
 from app.modules.contributions.api import (
     ContributionPolicyMutationAuthorizationPort,
     ContributionPolicyReadAuthorizationPort,
+    ContributionPolicyValidationPort,
 )
 from app.modules.contributions.service import ContributionPolicyService
+from app.modules.contributions.selected_policy_validation import (
+    SelectedContributionPolicyValidation,
+)
 
 
 def contribution_policy_service(
@@ -22,6 +26,17 @@ def contribution_policy_service(
         session,
         read_authorization=read_authorization,
         mutation_authorization=mutation_authorization,
+        projects=project_contribution_policy_eligibility_port(session),
+        bindings=policy_adapter_binding_port(session),
+    )
+
+
+def contribution_policy_validation_port(
+    session: AsyncSession,
+) -> ContributionPolicyValidationPort:
+    """Compose exact validation with owner locks in the caller transaction."""
+    return SelectedContributionPolicyValidation(
+        session,
         projects=project_contribution_policy_eligibility_port(session),
         bindings=policy_adapter_binding_port(session),
     )

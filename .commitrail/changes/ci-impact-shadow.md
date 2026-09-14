@@ -60,6 +60,11 @@ PR #408 retry selection is preserved. Product roadmap impact: none; no capabilit
 exposure or product dependency changes. Remaining boundary: evaluate report
 usefulness before proposing selective execution. Do not claim this trial speeds CI.
 
+Reconciled with merged CP06 (#409): preserve its three CON owners and both new
+test modules alongside the reporter registration; recompute the combined
+partition digest. No CP06 product code changes. Keep this trial bounded: another
+test-impact change needs evidence of practical value, not an automatic follow-up.
+
 Plan review clarified that mandatory process records and dynamic source analysis
 may produce full-suite recommendations on every current run. Keep known-edge
 candidates separate from recommended execution. Include private as well as public

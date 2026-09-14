@@ -134,8 +134,8 @@ cannot be reused as post-submission review-gate evidence. See the
 | Identity and actor resolution | **Live foundation** | Flow-token verification; canonical ActorProfile and ActorIdentityLink; human/service separation; lifecycle controls; canonical `/actors/me` self-read with duplicate `/auth/me` removed | Final end-to-end operational and conformance proof |
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection | Carry the same document generation through manager approval and guide activation; prove each enabled document reader |
-| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody | CP06 selected ContributionPolicy validation, CP07 guide binding and AUTH-12H activation |
-| Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history | Expose selected-policy validation, bind one published complete version to the active guide generation |
+| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody | CP07 guide binding and AUTH-12H activation after delivered CP06 validation |
+| Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history; internal exact selected-version validation | Bind one published complete version to the active guide generation |
 | Task readiness and claim | **Foundation with grant-backed contributor commands** | Task records, assignments and locked work context; claim/start/contributor context use exact-project Submitter grants; separate manager context and system-Operator start | Bind the guide's ContributionPolicyVersion before `READY` and carry it through TaskAssignment without a current-policy lookup; finish ready queues, remaining management/read authority and durable assignment invalidation |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission | Connect only the active unified guide/checker lineage and complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden and proven; unified-guide integration remains** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, blocking feedback before Submission creation, and one internal phase command covering execution/replay with the JSON precheck removed | Connect approved unified-guide pre-submit policy lineage through task/assignment preparation and complete the canonical public cutover; passing intake must never substitute for post-submit evaluation |
@@ -360,6 +360,11 @@ cannot be reused as post-submission review-gate evidence. See the
   persisted with immutable lifecycle history. All five actions have exact human
   Finance Authority through explicit AUTH composition; default composition denies
   access and public policy routes remain unavailable.
+- CP06 supplies internal caller-transaction validation of the exact selected
+  ContributionPolicy version and its complete graph/resources. New guide binding
+  requires the active current published selector. Controlled revision validates
+  the caller’s exact guide-bound version, not a newer global selector; downstream
+  guide custody and revision integration remain pending.
 - REV queue/admission and lease/preference persistence foundations are merged.
 - The governing rule is fixed: one ContributionPolicyVersion contains both the
   `accepted_submission` and `completed_review` rules. It is bound before task
@@ -388,7 +393,8 @@ approval and manual correction dispatch through the same compiler. The reconcile
 [dependency and ownership plan](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#current-dependency-contract)
 permits selected-policy validation independently after completed CP05. The
 selected delivery order finishes unified setup, separate pre/post approval and
-the delivered POL-07B facade before CP06/CP07 and AUTH-12H guide activation.
+the delivered POL-07B facade and CP06 validation before CP07 binding and
+AUTH-12H guide activation.
 This priority adds no dependency on CP06 to live setup. Plans are not
 implementation claims.
 The sequence below describes product dependencies; production activation still
@@ -403,9 +409,9 @@ evidence ownership. Production post execution remains unavailable; value-contrac
 proof does not replace ARCH-04B/04C/04D/04E custody, execution and routing work.
 Setup receipts remain immutable. The next guide boundary is:
 
-1. **Validate and bind the selected ContributionPolicy.** CP05 completes
-   authorization for the five hidden policy actions. CP06 supplies selected-policy
-   validation; CP07 binds one exact published, complete, binding-valid
+1. **Bind the selected ContributionPolicy.** CP05 authorization and CP06
+   selected-policy validation are complete. CP07 binds one exact published,
+   complete, binding-valid
    ContributionPolicyVersion to the Project Guide.
 2. **Activate the complete guide generation.** AUTH may permit terminal guide
    activation only when compilation, sufficiency, pre-submit policy,
@@ -497,7 +503,7 @@ Hidden unified compilation, projections and setup finalization (complete)
 
 Hidden ContributionPolicy behavior (complete)
   -> AUTH policy action activation (complete)
-  -> CON selected-policy validation
+  -> CON selected-policy validation (complete)
   -> Project Guide policy-version binding
 
 Both chains
@@ -561,9 +567,9 @@ remaining trace sequence is:
 
 - Unified guide: POL-04B1/04B/04B2, POL-05A/AUTH-12F4/POL-05B,
   POL-06A/AUTH-12G/POL-06B and POL-07A/07B are delivered. The remaining guide
-  sequence is `CP06 -> CP07 -> AUTH-12H`. ARCH-04A supplies registered-capability
+  sequence is `CP07 -> AUTH-12H` after completed CP06 validation. ARCH-04A supplies registered-capability
   contracts; activation does not require a Task, Submission or completed run.
-- Contribution lineage: CP05 authorization is complete; `CP06 -> CP07` remain. Hidden `CP07` is another
+- Contribution lineage: CP05 authorization and CP06 validation are complete; `CP07` remains. Hidden `CP07` is another
   prerequisite of `AUTH-12H`, not a second live activation. `CP08` supplies
   lineage fields after `CP07`; `ARCH-03A` follows both `AUTH-12H` and `CP08`,
   then `ARCH-03B -> ARCH-03C`. `CP09` physical cleanup waits for all remaining

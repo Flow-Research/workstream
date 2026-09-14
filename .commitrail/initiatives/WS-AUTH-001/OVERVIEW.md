@@ -19,7 +19,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Completed post-policy boundary: AUTH-12G fixed setup derivation and exact-project
   manager read, approval and correction authority over POL-06A.
 - Public post-policy composition: POL-06B delivered using existing AUTH-12G.
-- Next usable boundary: CP06/CP07 selected-policy validation and guide binding,
+- Next usable boundary: CP07 guide binding after completed CP06 validation,
   then AUTH-12H guide activation; POL-07B internal phase composition is delivered.
   Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
@@ -52,7 +52,7 @@ POL-06B exposes completed POL-06A operations with AUTH-12G authority.
 POL-04B/05A/05B and AUTH-12F4 supply live unified setup and public
 manager proposal review, pre-submit approval and manual correction dispatch.
 
-1. After delivered POL-07B phase composition, CON CP06/CP07 validate and bind
+1. After delivered POL-07B phase composition and CON CP06 validation, CP07 binds
    the selected contribution policy. AUTH-12H activates the complete guide.
 2. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.
    AUTH-OUTBOX-01/02 bracket hidden CON-02B dispatch; ARCH-04E2 activates only
