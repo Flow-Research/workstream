@@ -136,3 +136,19 @@ def test_cli_invalid_git_ref_is_visible(monkeypatch, capsys) -> None:
     monkeypatch.setattr(sys, "argv", ["shadow", "--base", "nonexistent-shadow-ref", "--head", "HEAD"])
     assert shadow.main() == 1
     assert json.loads(capsys.readouterr().out)["recommendation"] == "full_suite"
+
+
+def test_partition_registration_is_exact() -> None:
+    from scripts import behavior_ownership as ownership
+
+    current = json.loads((shadow.ROOT / ownership.PARTITION_PATH).read_text())
+    trusted = json.loads(json.dumps(current))
+    trusted["assignments"] = [row for row in trusted["assignments"]
+                              if row["target"] != "backend/scripts/test_impact_shadow.py"]
+    trusted["authority_digest"] = ownership._digest(
+        {key: value for key, value in trusted.items() if key != "authority_digest"}
+    )
+    ownership._validate_additive_partition_transition(current, trusted)
+    current["assignments"].append({"group": "shared", "target": "backend/scripts/unapproved.py"})
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(current, trusted)

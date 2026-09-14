@@ -14,7 +14,7 @@ useful candidates. This is an experiment, not evidence that omitted tests are sa
 
 Allowed: a backend impact-report script and focused tests, registration in the
 existing test catalogue, an advisory step in `.github/workflows/backend.yml`,
-the exact behavior-ownership partition registration, the testing operations guide
+the exact behavior-ownership partition and validator registration, the testing operations guide
 and this record. No product code, dependencies,
 permissions, required gates, lane selection, pytest invocation, coverage policy,
 or retry-artifact behavior changes.

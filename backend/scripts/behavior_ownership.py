@@ -77,6 +77,7 @@ MODULE_BOUNDARY_FOUNDATION_TARGETS = frozenset(
     {"backend/scripts/module_boundaries.py"}
 )
 CI_LANE_CATALOGUE_TARGETS = frozenset({"backend/scripts/test_lane_catalogue.py"})
+CI_IMPACT_SHADOW_TARGETS = frozenset({"backend/scripts/test_impact_shadow.py"})
 MODULE_PUBLIC_API_FOUNDATION_TARGETS = frozenset(
     {
         "backend/app/api/routes/artifact_submissions.py",
@@ -540,6 +541,7 @@ def _validate_additive_partition_transition(
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS
         | CI_LANE_CATALOGUE_TARGETS
+        | CI_IMPACT_SHADOW_TARGETS
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
