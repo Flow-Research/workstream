@@ -4,7 +4,7 @@
 - Durable disposition: Complete
 - Intended merge outcome: report conservative test-module impact candidates without changing full backend CI execution.
 
-## Intent and current behavior
+## Intent
 
 Every backend run executes the complete semantic-lane catalogue. Before considering
 selective execution, learn whether repository-native dependency information gives
@@ -37,7 +37,7 @@ test-history system or selective execution is introduced. The first trial measur
 candidate module counts and fallback causes, not runtime savings or demonstrated
 false-negative rates. Those require subsequent evidence and a separate decision.
 
-## Acceptance criteria and verification
+## Acceptance criteria
 
 - Direct and transitive consumers appear; unrelated owners are not silently
   treated as dependents. Cycles terminate and partitioned modules deduplicate.
@@ -48,7 +48,7 @@ false-negative rates. Those require subsequent evidence and a separate decision.
 - Run focused pytest, Ruff, catalogue inventory, Commitrail, links/stale checks,
   and the complete hosted Backend workflow. Confirm no existing check is relaxed.
 
-## Risk and reviews
+## Risk and review routing
 
 L1 (CI). Plan review before implementation. Frozen implementation: CI integrity
 and documentation; QA/test delta and reuse/architecture for the dependency
@@ -67,8 +67,8 @@ static imports; the architecture validator's public-only graph is insufficient.
 
 ## Evidence
 
-Focused reporter and lane-catalogue tests pass (53 cases); reporter coverage is
-98.98 percent. A missing-transitive-edge mutation is rejected by
+Focused reporter and lane-catalogue tests pass (54 cases); the earlier 53-case
+coverage run measured reporter coverage at 98.98 percent. A missing-transitive-edge mutation is rejected by
 `test_reverse_transitive_private_and_public_consumers`. Real temporary Git tests
 cover exact target binding, deletion visibility and dirty-checkout rejection.
 Hosted integration and exact-head reviewer freshness are recorded in the PR.
