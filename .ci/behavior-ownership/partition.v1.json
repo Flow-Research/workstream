@@ -1270,6 +1270,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/test_impact_shadow.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/test_lane_catalogue.py"
     },
     {
@@ -1281,7 +1285,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "98d6536e24b98165ed839272de94e4cb5ef9e9d24376d78b2941a93490584b9e",
+  "authority_digest": "58b19ad2712d7847b0c43d6cf69c6bb0f92b7a6044f72572ff923e4d05a100eb",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
