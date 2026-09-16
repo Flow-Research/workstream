@@ -185,6 +185,13 @@ services cannot activate. Replay requires current authority and returns the orig
 receipt. Public activation API wiring remains pending. An active-guide read requires
 the committed binding; historical rows without that binding are unavailable.
 
+Internal task/intake integrations now resolve that complete binding through one
+PROJECTS context port. New work selects the active guide; frozen work keeps its
+exact guide and approved policy identities after a successor is activated.
+Retiring a contribution policy does not silently replace that binding. This is
+an internal contract, not a new manager API. Task-attempt lineage persistence
+and its existing writers are the next CP08 boundary.
+
 The intended unified flow uses one compilation result for sufficiency and
 artifact/pre-submit/post-submit proposals. Once finalized, its `ProjectSetupRun`,
 receipt, timestamps and output references are immutable. Approval cannot resume

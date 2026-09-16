@@ -56,14 +56,17 @@ class GuideProposalRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def lock(self, selection: GuideProposalSelection) -> LockedGuideProposal:
+    async def lock(
+        self, selection: GuideProposalSelection, *,
+        allowed_guide_statuses: frozenset[str] = frozenset({"draft"}),
+    ) -> LockedGuideProposal:
         """Resolve only the selected compilation, including retained predecessors."""
         compilation = await self.session.scalar(
             select(ProjectGuideCompilation).where(
                 ProjectGuideCompilation.id == selection.compilation_id,
                 ProjectGuideCompilation.project_id == str(selection.project_id),
                 ProjectGuideCompilation.guide_id == str(selection.guide_id),
-            )
+            ).execution_options(populate_existing=True)
         )
         if compilation is None:
             raise GuideProposalError("proposal_unavailable")
@@ -77,7 +80,8 @@ class GuideProposalRepository:
             compilation.attempt_id,
             exact_setup=True,
         )
-        require_lineage(view, command, require_current=False)
+        require_lineage(view, command, require_current=False,
+                        allowed_guide_statuses=allowed_guide_statuses)
         finalization = await self.session.scalar(
             select(ProjectGuideSetupFinalization)
             .where(

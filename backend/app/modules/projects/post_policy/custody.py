@@ -11,6 +11,7 @@ from app.modules.authorization.api import ActorKind
 from app.modules.authorization.api.post_policy import PostPolicyAuthorityReceipt
 from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.api.post_policy import PostPolicyReceipt, PostPolicyTarget
+from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
 from app.modules.projects.post_submit_policy import parse_locked_post_submit_checker_policy_body
 
 from .models import PostPolicyOperation
@@ -85,7 +86,7 @@ def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt:
 async def load_post_policy_custody(session, policy) -> PostPolicyCustody:
     """Require complete projection/approval/supersession evidence, even for reads."""
     operations = {row.kind: row for row in await session.scalars(
-        select(PostPolicyOperation).where(PostPolicyOperation.policy_id == policy.id).with_for_update()
+        select(PostPolicyOperation).where(PostPolicyOperation.policy_id == policy.id).with_for_update().execution_options(populate_existing=True)
     )}
     projection = operations.get("derive")
     if projection is None or policy.projection_operation_id != projection.operation_id:
@@ -95,6 +96,14 @@ async def load_post_policy_custody(session, policy) -> PostPolicyCustody:
         policy.policy_body, project_id=policy.project_id,
         guide_version=policy.guide_version, policy_hash=policy.policy_hash or "",
     )
+    if (
+        compiled.catalogue_id, compiled.catalogue_source_version,
+        compiled.catalogue_schema_version, compiled.catalogue_manifest_sha256,
+    ) != (
+        target.proposal.post_catalogue_id, target.proposal.post_catalogue_version,
+        target.proposal.post_catalogue_schema_version, target.proposal.post_catalogue_manifest_hash,
+    ):
+        raise GuideProposalError("proposal_unavailable")
     compiled.validate_sidecars(required_checkers=policy.required_checkers,
                               warning_checkers=policy.warning_checkers,
                               blocking_severities=policy.blocking_severities)
@@ -126,7 +135,7 @@ async def load_post_policy_custody(session, policy) -> PostPolicyCustody:
     ):
         raise GuideProposalError("proposal_unavailable")
     if policy.lifecycle_status == "superseded":
-        successor = await session.get(PostPolicyOperation, policy.supersession_operation_id)
+        successor = await session.get(PostPolicyOperation, policy.supersession_operation_id, populate_existing=True)
         if successor is None:
             raise GuideProposalError("proposal_unavailable")
         receipt = operation_receipt(successor)
@@ -214,6 +223,7 @@ def validate_activation_post_policy(
             guide_version=post_submit_checker_policy.guide_version,
             policy_hash=post_submit_checker_policy.policy_hash or "",
         )
+        parsed_post_submit_policy.validate_catalogue(current_post_submit_catalogue())
     except ValueError as exc:
         raise ValueError("post-submit checker policy hash is invalid") from exc
     try:

@@ -155,28 +155,9 @@ class GuideCompilationRepository:
         if guide is None or guide.project_id != str(command.project_id):
             raise GuideCompilationIntegrityError("finalization guide unavailable")
         await self._session.refresh(guide)
-        snapshot = await projects.lock_latest_guide_source_snapshot(
-            str(command.project_id), guide.id, guide.version
+        setup, snapshot = await self._lock_finalization_source(
+            projects, command, guide, exact_setup=exact_setup,
         )
-        setup = await projects.lock_latest_project_setup_run(
-            str(command.project_id), guide.id, guide.version
-        )
-        if exact_setup:
-            # Downstream review can select retained custody explicitly. The
-            # finalizer still uses only the latest source via the default path.
-            setup = await projects.lock_project_setup_run(str(command.setup_run_id))
-            if setup is not None:
-                snapshot = await self._session.scalar(
-                    select(GuideSourceSnapshot)
-                    .where(GuideSourceSnapshot.id == setup.source_snapshot_id)
-                    .with_for_update()
-                    .execution_options(populate_existing=True)
-                )
-        if setup is None or snapshot is None:
-            raise GuideCompilationIntegrityError("finalization setup unavailable")
-        await self._session.refresh(snapshot)
-        # Re-fetch the latest setup so a waiting session never uses a cached pre-state.
-        await self._session.refresh(setup)
         compilation = await self._session.scalar(
             select(ProjectGuideCompilation)
             .where(ProjectGuideCompilation.id == command.compilation_id)
@@ -234,6 +215,33 @@ class GuideCompilationRepository:
             policy,
             await load_approval_custody(self._session, policy.id if policy else None),
         )
+
+    async def _lock_finalization_source(self, projects, command, guide, *, exact_setup):
+        """Resolve the explicitly retained source or the finalizer's latest source."""
+        if exact_setup:
+            # Downstream review can select retained custody explicitly. The
+            # finalizer still uses only the latest source via the default path.
+            setup = await projects.lock_project_setup_run(str(command.setup_run_id))
+            snapshot = None
+            if setup is not None:
+                snapshot = await self._session.scalar(
+                    select(GuideSourceSnapshot)
+                    .where(GuideSourceSnapshot.id == setup.source_snapshot_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+        else:
+            snapshot = await projects.lock_latest_guide_source_snapshot(
+                str(command.project_id), guide.id, guide.version
+            )
+            setup = await projects.lock_latest_project_setup_run(
+                str(command.project_id), guide.id, guide.version
+            )
+        if setup is None or snapshot is None:
+            raise GuideCompilationIntegrityError("finalization setup unavailable")
+        await self._session.refresh(snapshot)
+        await self._session.refresh(setup)
+        return setup, snapshot
 
     async def persist_finalization(self, row, setup) -> None:
         """Insert custody then close the setup using the database transaction clock."""
@@ -302,7 +310,7 @@ class GuideCompilationRepository:
         )
         if lock:
             statement = statement.with_for_update()
-        operation = await self._session.scalar(statement)
+        operation = await self._session.scalar(statement.execution_options(populate_existing=True))
         if operation is None:
             raise GuideCompilationIntegrityError("compilation request custody is missing")
         return operation

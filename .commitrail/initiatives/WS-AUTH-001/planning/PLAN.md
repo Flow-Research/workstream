@@ -14,10 +14,12 @@ AUTH-13/14 cutovers are not additional implementation work.
   phase composition are delivered.
 - [AUTH-12H](../WS-AUTH-001-12H.md) delivers exact-project manager authority after
   completed POL-07B phase composition, CP06 validation and CP07 guide binding.
-  CP08 task-attempt lineage and ARCH-03A complete internal guide facts follow;
+  ARCH-03A complete internal guide context is delivered; CP08 lineage and its
+  minimal existing writers are next;
   HTTP activation exposure remains pending.
 - CP05 owns exact ContributionPolicy-action activation after merged CP04B.
-- ARCH-03B owns task behavior and ARCH-03C owns its exact activation.
+- CP08 owns the minimal lineage writers; ARCH-03B owns remaining queues,
+  invalidation and projections, and ARCH-03C owns their exact activation.
   [AUTH-13 is superseded](chunks/WS-AUTH-001-13-task-assignment-cutover.md).
 - ARCH-04D alone activates post-submit materialization/output and CHECKERS
   execution/finalization after ARCH-04B/04B2/04C; historical AUTH-14 and XINT-06B

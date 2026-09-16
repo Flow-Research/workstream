@@ -830,7 +830,7 @@ class ProjectRepository:
                 ProjectGuide.project_id == project_id,
                 ProjectGuide.version == guide_version,
             )
-            .with_for_update(of=ReviewPolicy)
+            .with_for_update(of=ReviewPolicy).execution_options(populate_existing=True)
         )
 
     async def lock_revision_policy(
@@ -854,7 +854,7 @@ class ProjectRepository:
                 ProjectGuide.project_id == project_id,
                 ProjectGuide.version == guide_version,
             )
-            .with_for_update(of=RevisionPolicy)
+            .with_for_update(of=RevisionPolicy).execution_options(populate_existing=True)
         )
 
     async def add_review_policy_version(

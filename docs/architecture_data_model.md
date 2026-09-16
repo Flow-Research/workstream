@@ -277,6 +277,24 @@ explicitly selected retained predecessor without backfilling it. AUTH-12H suppli
 explicit internal activation authority for a live exact-project Project Manager;
 composition without an authority adapter and HTTP activation remain unavailable.
 
+The internal `ProjectLockedPolicyContextPort` returns a complete immutable graph
+through `lock_active_policy_context(project_id)` or
+`lock_locked_policy_context(exact_selectors)`. Both require a caller root
+transaction. The existing frozen selectors resolve the receipt-bound source,
+compilation, separate approvals, artifact/effective/pre/post policies,
+review/revision selections and ContributionPolicy version. Canonical bodies are
+copied into immutable JSON values. Catalogue facts are the recorded ID, version,
+schema version and manifest hash; no historical catalogue body is reconstructed.
+
+The reader locks Project, discovers the exact candidate without locking Guide,
+then reuses Attempt -> Request -> Guide and the canonical custody order. It
+refreshes persisted rows after waiting and retains the caller's locks without
+committing. A successor changes active selection but does not redirect frozen
+lookup; contribution-policy retirement does not rewrite its saved activation
+facts. Inactive Projects and incomplete or inconsistent custody remain
+unavailable. This port adds no Task/Assignment/Submission columns or writers;
+CP08 owns that next change, including its minimal production copy paths.
+
 Draft guides may have no selected review/revision policy while the authorized
 policy writer is unavailable. Active and superseded guides require both exact
 identity triples, and PostgreSQL freezes those selections after activation.

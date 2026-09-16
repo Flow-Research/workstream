@@ -42,7 +42,7 @@ async def load_approval_custody(session, policy_id: str | None) -> ApprovalCusto
         .where(
             ProjectGuideProposalApproval.artifact_policy_id == policy_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     if operation is None:
         return None
@@ -51,25 +51,25 @@ async def load_approval_custody(session, policy_id: str | None) -> ApprovalCusto
         .where(
             SubmissionPolicyMutationIdempotencyRecord.operation_id == operation.operation_id,
         )
-        .with_for_update()
+        .with_for_update().execution_options(populate_existing=True)
     )
     effective = await session.get(
-        EffectiveProjectSubmissionArtifactPolicy, operation.effective_policy_id
+        EffectiveProjectSubmissionArtifactPolicy, operation.effective_policy_id, populate_existing=True, with_for_update=True
     )
-    pre = await session.get(PreSubmitCheckerPolicy, operation.pre_submit_policy_id)
+    pre = await session.get(PreSubmitCheckerPolicy, operation.pre_submit_policy_id, populate_existing=True, with_for_update=True)
     if reservation is None or effective is None or pre is None:
         raise ValueError("approval custody is incomplete")
     successor = await session.scalar(
         select(ProjectGuideProposalApproval).where(
             ProjectGuideProposalApproval.prior_approval_operation_id == operation.operation_id,
-        )
+        ).execution_options(populate_existing=True)
     )
     if successor is not None:
-        next_policy = await session.get(SubmissionArtifactPolicy, successor.artifact_policy_id)
+        next_policy = await session.get(SubmissionArtifactPolicy, successor.artifact_policy_id, populate_existing=True)
         next_effective = await session.get(
-            EffectiveProjectSubmissionArtifactPolicy, successor.effective_policy_id
+            EffectiveProjectSubmissionArtifactPolicy, successor.effective_policy_id, populate_existing=True
         )
-        next_pre = await session.get(PreSubmitCheckerPolicy, successor.pre_submit_policy_id)
+        next_pre = await session.get(PreSubmitCheckerPolicy, successor.pre_submit_policy_id, populate_existing=True)
         if (
             next_policy is None
             or next_effective is None

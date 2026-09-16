@@ -4953,3 +4953,42 @@ async def test_json_and_numeric_fields_round_trip_under_postgres(task_client: As
     assert task.skill_tags == ["stem", "proofs"]
     assert task.source_payload_hash == "hash-123"
     assert task.base_amount == Decimal("25.00")
+
+
+@pytest.mark.parametrize("transition", ("screen", "release"))
+async def test_catalogue_rollout_blocks_task_transition_without_writes(
+    task_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, transition: str,
+) -> None:
+    from tests.checkers.post_submit.support import altered_catalogue
+
+    project = await create_active_project(task_client)
+    task = await create_draft_task(task_client, project["id"])
+    if transition == "release":
+        screened = await task_client.post(
+            f"/api/v1/tasks/{task['id']}/screen", headers=auth_headers(),
+            json={"reason": "initial screening"},
+        )
+        assert screened.status_code == 200, screened.text
+    task_query = select(WorkstreamTask.__table__).where(WorkstreamTask.id == task["id"])
+    audit_query = select(AuditEvent.id).where(AuditEvent.entity_id == task["id"]).order_by(AuditEvent.id)
+    async with db_session.get_session_factory()() as session:
+        before = dict((await session.execute(task_query)).mappings().one())
+        audits = list(await session.scalars(audit_query))
+    if transition == "screen":
+        assert before["status"] == "draft"
+        assert all(value is None for key, value in before.items() if key.startswith("locked_"))
+    else:
+        assert before["status"] == "screening"
+    newer = altered_catalogue(index=8, state="disabled")
+    monkeypatch.setattr("app.modules.tasks.service.current_post_submit_catalogue", lambda: newer)
+    response = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/{transition}", headers=auth_headers(),
+        json={"reason": "must remain unchanged"},
+    )
+    assert response.status_code == 422, response.text
+    expected = ("active post-submit checker policy hash is invalid" if transition == "screen"
+                else "task locked post-submit checker policy body is invalid")
+    assert expected in response.text
+    async with db_session.get_session_factory()() as session:
+        assert dict((await session.execute(task_query)).mappings().one()) == before
+        assert list(await session.scalars(audit_query)) == audits

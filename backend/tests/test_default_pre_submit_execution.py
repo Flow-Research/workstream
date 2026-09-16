@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from project_create_fixtures import guide_snapshot_columns, activate_retained_project_for_test
+from project_create_fixtures import guide_snapshot_columns
 
 import asyncio
 from io import BytesIO
@@ -460,10 +460,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
     actor_id = uuid4()
     identity_link_id = uuid4()
     lineage = request.effective_plan.lineage
-    custody_triggers = (
-        ("project_guides", "guide_mutation_product_custody"),
-        ("project_guides", "guide_lineage_lifecycle_guard"),
-    )
     blocked_prepared = replay_prepared = drift_prepared = denied_prepared = None
     original_prepared_closed = False
     tables = (
@@ -511,12 +507,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
                 ),
                 params,
             )
-            for table, trigger in custody_triggers:
-                await connection.execute(text(f"alter table {table} disable trigger {trigger}"))
-            await activate_retained_project_for_test(connection, lineage.project_id)
-            await connection.execute(text(
-                "update project_guides set status='active',approved_by=:actor,effective_at=now() where id=:guide"
-            ), params)
             await connection.execute(
                 text(
                     "insert into workstream_tasks "
@@ -965,12 +955,7 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         try:
             manager.close()
         finally:
-            try:
-                async with engine.begin() as connection:
-                    for table, trigger in reversed(custody_triggers):
-                        await connection.execute(text(f"alter table {table} enable trigger {trigger}"))
-            finally:
-                await engine.dispose()
+            await engine.dispose()
 
     assert first.evidence.replayed is False
     assert replay.evidence.replayed is True

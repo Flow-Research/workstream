@@ -114,25 +114,17 @@ async def approved_pre_submit_fixture(factory, namespace, *, guide_version):
     from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
     from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
     from app.modules.checkers.api import EffectivePreSubmissionPlanLineage
-    from app.modules.projects.api.guide_proposals import GuideProposalSelection
     from app.modules.projects.models import ProjectGuide, PostSubmitCheckerPolicy
-    from tests.projects.unified_policy_fixtures import create_standalone_unified_policy, _approval_context
-    from tests.projects.guide_compilation.proposals.pg_support import seed_selected_review_revision_inputs
+    from tests.projects.unified_policy_fixtures import create_standalone_unified_policy
 
     values, effective, pre = await create_standalone_unified_policy(
-        factory, namespace, guide_version=guide_version, include_post_policy=True,
+        factory, namespace, guide_version=guide_version,
         artifact_proposal=SubmissionArtifactPolicyProposal(
             maximum_file_size_bytes=1_000_000, maximum_package_size_bytes=5_000_000,
             required_artifacts=("task.toml",), required_evidence=("results",),
             attestation_terms=("rights_confirmed",),
         ),
     )
-    actor, _grant, compilation = await _approval_context(
-        factory, str(values["project"]), str(values["guide"]), effective["submission_artifact_policy_id"],
-    )
-    await seed_selected_review_revision_inputs(factory, GuideProposalSelection(
-        project_id=values["project"], guide_id=values["guide"], compilation_id=compilation.id,
-    ), actor)
     lineage = EffectivePreSubmissionPlanLineage(
         project_id=values["project"], guide_id=values["guide"], guide_version=guide_version,
         source_snapshot_id=values["snapshot"], source_snapshot_hash=effective["source_snapshot_hash"],

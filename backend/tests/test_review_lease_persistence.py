@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 import pytest
-from sqlalchemy import text, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.adapters.contributions import contribution_policy_service
@@ -25,6 +25,7 @@ from app.modules.contributions.models import (
     ContributionRule,
 )
 from app.modules.contributions.api import ContributionPolicyPublishRequest
+from app.modules.projects.models import ProjectGuide
 from app.modules.reviews.models import ReviewLease, ReviewQueueEntry
 from app.modules.reviews.repository import ReviewQueueRepository
 from app.modules.reviews.schemas import ReviewLeaseInput
@@ -242,7 +243,10 @@ async def _seed_queue_and_policy(
             _queue_input(project, task, submission)
         )
         reviewer_id = await _human_actor(session, label="reviewer")
-        version_id = await _published_reviewer_policy(session, project["id"], reviewer_id)
+        version_id = await session.scalar(select(ProjectGuide.contribution_policy_version_id).where(
+            ProjectGuide.project_id == project["id"], ProjectGuide.status == "active",
+        ))
+        assert version_id is not None
         await session.commit()
         return project, queue, reviewer_id, version_id
 

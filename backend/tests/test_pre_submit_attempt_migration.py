@@ -6,24 +6,19 @@ import asyncio
 from pathlib import Path
 from uuid import uuid4
 
-from alembic import command
-from alembic.config import Config
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from tests.migration_fixtures import run_guarded_revision_downgrade
+from tests.migration_fixtures import (
+    current_schema_revision, run_guarded_revision_downgrade, run_scoped_revision_upgrade,
+)
 from tests.test_pre_submit_attempt_recovery import _harness
 
 
-PRIOR = "0020_post_submit_policy_custody"
 OWN = "0021_pre_submit_attempts"
 pytestmark = pytest.mark.postgres_schema_contract
-
-
-def _config() -> Config:
-    return Config(Path(__file__).resolve().parents[1] / "alembic.ini")
 
 
 def _seed_retained_evidence(tmp_path: Path, database_url: str) -> str:
@@ -34,7 +29,9 @@ def _seed_retained_evidence(tmp_path: Path, database_url: str) -> str:
         return harness
 
     harness = asyncio.run(prepare())
-    command.downgrade(_config(), PRIOR)
+    activation = asyncio.run(_activation_snapshot(database_url))
+    asyncio.run(run_guarded_revision_downgrade(database_url, OWN))
+    assert asyncio.run(_activation_snapshot(database_url)) == activation
     return asyncio.run(_insert_retained_evidence(harness))
 
 
@@ -124,7 +121,29 @@ async def _snapshot(
                  if key not in {"attempt_id", "attempt_request_digest", "packet_sha256"}},
                 {key: value for key, value in result.items()
                  if key not in {"checker_order", "metadata_json"}},
+                await _activation_snapshot(database_url),
             )
+    finally:
+        await engine.dispose()
+
+
+async def _activation_snapshot(database_url: str):
+    """Keep complete later-owner evidence and the head marker across scoped DDL."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            marker = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+            assert marker == current_schema_revision()
+            operations = list(await connection.scalars(text(
+                "SELECT to_jsonb(r) FROM guide_mutation_idempotency_records r "
+                "WHERE action_id='project.guide.activate' ORDER BY operation_id"
+            )))
+            events = list(await connection.scalars(text(
+                "SELECT to_jsonb(e) FROM audit_events e "
+                "WHERE resource_type='project_guide_activation' ORDER BY id"
+            )))
+            assert operations and events
+            return marker, operations, events
     finally:
         await engine.dispose()
 
@@ -151,14 +170,16 @@ def test_retained_evidence_round_trip_does_not_invent_attempt_or_result_details(
         original = asyncio.run(_snapshot(isolated_database_env, evidence_id, upgraded=False))
         old_audit = asyncio.run(_audit_privacy_constraint(isolated_database_env))
         assert "pre_submit_checker_input" not in old_audit
-        command.upgrade(_config(), OWN)
+        assert "compensation_adapter_binding" in old_audit
+        assert "project_guide_activation" in old_audit
+        asyncio.run(run_scoped_revision_upgrade(isolated_database_env, OWN))
         assert asyncio.run(_snapshot(isolated_database_env, evidence_id, upgraded=True)) == original
         new_audit = asyncio.run(_audit_privacy_constraint(isolated_database_env))
         assert new_audit.count("pre_submit_checker_input") == 1
-        command.downgrade(_config(), PRIOR)
+        asyncio.run(run_guarded_revision_downgrade(isolated_database_env, OWN))
         assert asyncio.run(_snapshot(isolated_database_env, evidence_id, upgraded=False)) == original
         assert asyncio.run(_audit_privacy_constraint(isolated_database_env)) == old_audit
-        command.upgrade(_config(), OWN)
+        asyncio.run(run_scoped_revision_upgrade(isolated_database_env, OWN))
         assert asyncio.run(_snapshot(isolated_database_env, evidence_id, upgraded=True)) == original
         assert asyncio.run(_audit_privacy_constraint(isolated_database_env)) == new_audit
 
@@ -169,7 +190,7 @@ def test_retained_reservation_refuses_downgrade_without_mutation(
     with migration_lock():
         migration_schema_at("head")
         evidence_id = _seed_retained_evidence(tmp_path, isolated_database_env)
-        command.upgrade(_config(), OWN)
+        asyncio.run(run_scoped_revision_upgrade(isolated_database_env, OWN))
 
     async def reserve() -> str:
         engine = create_async_engine(isolated_database_env)
@@ -230,7 +251,7 @@ def test_new_result_rows_require_valid_order_and_bounded_metadata(
     with migration_lock():
         migration_schema_at("head")
         retained_id = _seed_retained_evidence(tmp_path, isolated_database_env)
-        command.upgrade(_config(), OWN)
+        asyncio.run(run_scoped_revision_upgrade(isolated_database_env, OWN))
 
     async def probe() -> None:
         engine = create_async_engine(isolated_database_env)

@@ -132,7 +132,14 @@ async def suspend_historical_product_custody(
 async def seed_active_guide_for_downstream_test(
     session_factory, *, project_id: str, guide_id: str,
 ) -> dict:
-    """Seed a downstream prerequisite; no activation or approval flow is exercised."""
+    """Activate separately approved downstream guide fixtures through real AUTH/CP07."""
+    from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+    from app.modules.projects.api.post_policy import PostPolicyReceipt
+    from app.modules.projects.models import PostSubmitCheckerPolicy
+    from app.modules.projects.post_policy.models import PostPolicyOperation
+    from tests.projects.guide_activation.pg_support import activation_command, publish_policy
+    from tests.authorization.guide_activation.pg_support import activate
+
     async with session_factory() as session:
         link = await session.scalar(select(ActorIdentityLink).where(
             ActorIdentityLink.issuer == "flow-test",
@@ -140,28 +147,26 @@ async def seed_active_guide_for_downstream_test(
         ))
         if link is None:
             raise RuntimeError("downstream guide fixture requires an admitted actor")
-        guide = await session.get(ProjectGuide, guide_id)
-        project = await session.get(Project, project_id)
-        assert guide is not None and project is not None and guide.project_id == project.id
-        now = datetime.now(UTC)
-        async with suspend_historical_product_custody(session, table="projects",
-            triggers=("project_activation_custody",)), suspend_historical_product_custody(session, table="project_guides",
-            triggers=("guide_mutation_product_custody", "guide_lineage_lifecycle_guard")):
-            for prior in await session.scalars(select(ProjectGuide).where(
-                ProjectGuide.project_id == project_id, ProjectGuide.status == "active")):
-                prior.status = "superseded"
-                prior.superseded_at = now
-            await session.flush()
-            guide.status = "active"
-            guide.approved_by = link.actor_profile_id
-            guide.effective_at = now
-            project.status = "active"
-            await session.flush()
-        seeded = {"guide": {"id": guide.id, "version": guide.version,
-            "status": guide.status, "approved_by": guide.approved_by,
-            "effective_at": guide.effective_at.isoformat()}}
-        await session.commit()
-        return seeded
+        actor = ActorIdentityFacts(UUID(link.actor_profile_id), UUID(link.id), ActorKind.HUMAN)
+        operation = (await session.scalars(select(PostPolicyOperation).join(
+            PostSubmitCheckerPolicy,
+            PostSubmitCheckerPolicy.approval_operation_id == PostPolicyOperation.operation_id,
+        ).where(PostSubmitCheckerPolicy.guide_id == guide_id,
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.lifecycle_status == "approved"))).one()
+        approved = PostPolicyReceipt.model_validate(operation.receipt_json)
+        previous = await session.scalar(select(ProjectGuide).where(
+            ProjectGuide.project_id == project_id, ProjectGuide.status == "active"))
+        predecessor = {
+            "expected_previous_active_guide_id": UUID(previous.id) if previous else None,
+            "expected_previous_active_guide_generation": previous.mutation_generation if previous else None,
+        }
+    _, policy = await publish_policy(session_factory, UUID(project_id))
+    command = (await activation_command(session_factory, approved, policy)).model_copy(update=predecessor)
+    receipt = await activate(session_factory, actor, command)
+    return {"guide": {"id": guide_id, "version": receipt.command.target.proposal.guide_version,
+                      "status": "active", "approved_by": str(actor.actor_profile_id),
+                      "effective_at": receipt.effective_at.isoformat()}}
 
 
 async def grant_system_project_manager(
@@ -433,13 +438,3 @@ async def grant_fixture_admin_role(session, actor_id, *, role="project_manager",
     session.add(grant)
     await session.flush()
     return grant
-
-
-async def activate_retained_project_for_test(connection, project_id):
-    """Arrange only the retained Project prerequisite in an owned test database."""
-    async with suspend_historical_product_custody(
-        connection, table="projects", triggers=("project_activation_custody",),
-    ):
-        await connection.execute(
-            text("update projects set status='active' where id=:project"), {"project": str(project_id)},
-        )

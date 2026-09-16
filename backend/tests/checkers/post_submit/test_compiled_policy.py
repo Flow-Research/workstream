@@ -26,12 +26,15 @@ def compile_selection(*, required=(), warning=()):
 
 
 def parse(body, *, digest=None):
-    return parse_locked_post_submit_checker_policy_body(
+    parsed = parse_locked_post_submit_checker_policy_body(
         body,
         project_id=str(PROJECT),
         guide_version="v1",
         policy_hash=canonical_json_hash(body) if digest is None else digest,
     )
+
+    parsed.validate_catalogue(current_post_submit_catalogue())
+    return parsed
 
 
 def test_canonical_compile_parse_and_derived_lists():

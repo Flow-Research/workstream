@@ -11,31 +11,17 @@ assignment transaction, not a second claim implementation. This skeleton still
 owns the missing contribution-policy attempt locks, queues, broader projections
 and invalidation behavior below; it is not completed by that repair.
 
-The TASK readiness command inherits the ContributionPolicyVersion already
-bound to the active Project Guide and locks it once as
-`WorkstreamTask.locked_contribution_policy_version_id` before the task becomes
-claimable. The later claim command performs no CON lookup: it copies that exact
-locked identifier to
-`TaskAssignment.submitter_contribution_policy_version_id` inside the TASK-owned
-assignment transaction. TASK does not select, evaluate, or own
-ContributionPolicy rules. `SubmissionCreationCommand` stamps the assignment's
-current attempt version as immutable
-`Submission.contribution_policy_version_id`.
+The reconciled CP08 chunk owns contribution-policy fields and the minimal
+existing screening/claim/Submission copy paths together after ARCH-03A. This
+chunk consumes those complete frozen attempt facts; it must not reimplement the
+writers or select current CON policy during ordinary claim. Preserve the
+screening-time lock and existing authority/transaction ownership.
 
-Preserve the existing readiness transition boundary: draft-to-screening may
-stamp the guide-bound version; screening-to-READY verifies that persisted
-complete lock. Neither READY nor claim selects a current CON version. A stale
-lineage means a mismatch within the attempt's locked context, not merely a
-new policy publication elsewhere. Remove retired economic reads/writes from
-these replacement commands and their public projections before ARCH-03C;
-physical columns remain until CP09 proves all other consumers are gone.
-
-Allowed: `backend/app/modules/tasks/api/**`, the smallest TASKS-owned
-claim/assignment/service extraction, focused TASK tests, composition adapters,
-`backend/app/modules/tasks/router.py` for deny-only route declarations,
-boundary ledgers and initiative evidence/status. Not allowed: project-policy
-evaluation, checker planning, artifact custody, AUTH decisions, legacy
-eligibility fallback, public route cutover or revision semantics.
+Allowed: the smallest remaining TASK queue, assignment invalidation and public
+facts/projection changes, focused tests, composition adapters, deny-only route
+declarations, boundary ledgers and current documentation. Not allowed: duplicate
+lineage writers, project-policy evaluation, checker planning, ART custody, AUTH
+decisions, compatibility paths, public cutover or human revision semantics.
 
 Declare the missing ready queue and replacement task surfaces against hidden
 owner commands; ARCH-03C owns their exact activation and live route switch.

@@ -16,6 +16,7 @@ from app.modules.checkers.compiler import (
     PreSubmitCheckerCompilerError,
     validate_compiled_pre_submit_checker_bundle,
 )
+from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
 from app.modules.checkers.gate_queue import PreReviewGateQueueError, enqueue_pre_review_gate
 from app.modules.checkers.pre_review_gate import (
     find_submission_requester_provenance,
@@ -967,6 +968,7 @@ class TaskService:
                 guide_version=checker_policy.guide_version,
                 policy_hash=checker_policy.policy_hash,
             )
+            parsed_checker_policy.validate_catalogue(current_post_submit_catalogue())
         except ValueError as exc:
             raise TaskProjectNotReady("active post-submit checker policy hash is invalid") from exc
         try:
@@ -1121,6 +1123,7 @@ class TaskService:
                 guide_version=task.locked_post_submit_checker_policy_version or "",
                 policy_hash=task.locked_post_submit_checker_policy_hash or "",
             )
+            parsed_post_submit_body.validate_catalogue(current_post_submit_catalogue())
         except ValueError as exc:
             raise TaskLockedContextInvalid(
                 "task locked post-submit checker policy body is invalid",
@@ -1674,45 +1677,6 @@ class TaskService:
         missing = self._missing_locked_context_fields(task)
         if missing:
             raise TaskTransitionBlocked(f"task missing locked context: {', '.join(missing)}")
-
-    async def _validate_locked_post_submit_policy_context(self, task: WorkstreamTask) -> None:
-        """Validate the task's locked post-submit checker policy before submission.
-
-        Args:
-            task: Task whose locked post-submit policy context should be
-                verified before a submission row can be created.
-
-        Raises:
-            TaskProjectNotReady: If the locked post-submit policy row is
-                missing, mismatched, or no longer hashes to the stamped value.
-        """
-        policy = await self._project_repo.get_post_submit_checker_policy_by_id(
-            task.locked_post_submit_checker_policy_id or ""
-        )
-        if (
-            policy is None
-            or policy.project_id != task.project_id
-            or policy.guide_version != task.locked_post_submit_checker_policy_version
-            or policy.guide_version != task.locked_guide_version
-            or policy.policy_hash != task.locked_post_submit_checker_policy_hash
-        ):
-            raise TaskProjectNotReady("locked post-submit checker policy is invalid")
-        try:
-            parsed_policy = parse_locked_post_submit_checker_policy_body(
-                task.locked_post_submit_checker_policy_body,
-                project_id=task.project_id,
-                guide_version=task.locked_post_submit_checker_policy_version or "",
-                policy_hash=task.locked_post_submit_checker_policy_hash or "",
-            )
-            if policy.policy_body != parsed_policy.policy_body:
-                raise ValueError("persisted post-submit policy body differs from lock")
-            parsed_policy.validate_sidecars(
-                required_checkers=policy.required_checkers,
-                warning_checkers=policy.warning_checkers,
-                blocking_severities=policy.blocking_severities,
-            )
-        except ValueError as exc:
-            raise TaskProjectNotReady("locked post-submit checker policy hash is invalid") from exc
 
     async def _change_task_status(
         self,

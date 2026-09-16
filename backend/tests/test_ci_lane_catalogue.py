@@ -138,6 +138,8 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/projects/guide_compilation/test_repository_attempts.py",
             "tests/projects/guide_compilation/test_repository_persistence.py",
             "tests/projects/test_locked_policy_context.py",
+            "tests/projects/test_locked_policy_custody.py",
+            "tests/projects/test_locked_policy_concurrency.py",
             "tests/projects/test_locked_policy_contract.py",
             "tests/projects/test_activation_readiness.py",
             "tests/projects/test_policy_read_composition.py",

@@ -20,11 +20,11 @@ class PostPolicyRepository:
         self.session = session
         self.proposals = GuideProposalRepository(session)
 
-    async def lock_proposal(self, selection):
+    async def lock_proposal(self, selection, *, allowed_guide_statuses=frozenset({"draft"})):
         return await self.proposals.lock(GuideProposalSelection(
             project_id=selection.project_id, guide_id=selection.guide_id,
             compilation_id=selection.compilation_id,
-        ))
+        ), allowed_guide_statuses=allowed_guide_statuses)
 
     async def require_current_upstream(self, locked):
         """A finalized draft alone is insufficient; require the approved chain tip."""
@@ -48,8 +48,8 @@ class PostPolicyRepository:
         .order_by(PostPolicyOperation.target_json["proposal"]["setup_generation"].as_integer().desc())
         .limit(1).with_for_update().execution_options(populate_existing=True))).one_or_none()
 
-    async def lock_policy(self, selection):
-        locked = await self.lock_proposal(selection)
+    async def lock_policy(self, selection, *, allowed_guide_statuses=frozenset({"draft"})):
+        locked = await self.lock_proposal(selection, allowed_guide_statuses=allowed_guide_statuses)
         policy = await self.session.scalar(select(PostSubmitCheckerPolicy).where(
             PostSubmitCheckerPolicy.id == str(selection.policy_id),
             PostSubmitCheckerPolicy.project_id == str(selection.project_id),

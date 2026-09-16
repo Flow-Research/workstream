@@ -64,6 +64,7 @@ from app.modules.checkers.service import (
     pre_review_gate_system_actor,
 )
 from app.modules.projects.models import PostSubmitCheckerPolicy
+from app.modules.checkers.api.post_submit_catalogue import current_post_submit_catalogue
 from app.modules.projects.post_submit_policy import (
     DEFAULT_DURABLE_CHECKERS,
     POST_SUBMIT_CHECKER_POLICY_SPEC_SCHEMA_VERSION,
@@ -282,13 +283,16 @@ def _canonical_test_post_policy():
     )
 
 
-def _parse_test_post_body(body):
-    return parse_locked_post_submit_checker_policy_body(
+def _validate_test_post_body(body):
+    parsed = parse_locked_post_submit_checker_policy_body(
         body,
         project_id=body["project_id"],
         guide_version=body["guide_version"],
         policy_hash=canonical_json_hash(body),
     )
+
+    parsed.validate_catalogue(current_post_submit_catalogue())
+    return parsed
 
 
 def test_locked_post_submit_policy_parser_uses_persisted_body_hash() -> None:
@@ -507,13 +511,13 @@ def test_post_submit_compiler_rejects_blocking_severity_downgrade(
         [*DEFAULT_DURABLE_CHECKERS, "extra_default_checker"],
     ],
 )
-def test_locked_post_submit_policy_parser_rejects_default_checker_drift(default_checkers: list[str]) -> None:
+def test_locked_post_submit_policy_validation_rejects_default_checker_drift(default_checkers: list[str]) -> None:
     body = _canonical_test_post_policy().policy_body
     by_name = {entry["checker_id"]: entry for entry in body["entries"]}
     template = body["entries"][0]
     body["entries"] = [by_name.get(name, {**template, "checker_id": name}) for name in default_checkers]
     with pytest.raises(ValueError):
-        _parse_test_post_body(body)
+        _validate_test_post_body(body)
 
 
 @pytest.mark.parametrize(
@@ -525,20 +529,20 @@ def test_locked_post_submit_policy_parser_rejects_default_checker_drift(default_
         [*DEFAULT_DURABLE_CHECKERS, "extra_default_checker"],
     ],
 )
-def test_locked_post_submit_policy_parser_rejects_self_consistent_default_drift(drifted_defaults: list[str]) -> None:
+def test_locked_post_submit_policy_validation_rejects_self_consistent_default_drift(drifted_defaults: list[str]) -> None:
     body = _canonical_test_post_policy().policy_body
     template = body["entries"][0]
     body["entries"] = [{**template, "checker_id": name} for name in drifted_defaults]
     # Recomputed digest proves the canonical catalogue rejects changed defaults.
     with pytest.raises(ValueError):
-        _parse_test_post_body(body)
+        _validate_test_post_body(body)
 
 
-def test_locked_post_submit_policy_parser_rejects_unsupported_compiler_version() -> None:
+def test_locked_post_submit_policy_validation_rejects_unsupported_compiler_version() -> None:
     body = _canonical_test_post_policy().policy_body
     body["compiler_version"] = "unsupported"
     with pytest.raises(ValueError, match="compiler_version"):
-        _parse_test_post_body(body)
+        _validate_test_post_body(body)
 
 
 @pytest.mark.parametrize(
@@ -552,7 +556,7 @@ def test_locked_post_submit_policy_parser_rejects_unsupported_compiler_version()
         ([], ["check_submission_packet"], list(DEFAULT_DURABLE_CHECKERS)),
     ],
 )
-def test_locked_post_submit_policy_parser_rejects_conflicting_classifications(
+def test_locked_post_submit_policy_validation_rejects_conflicting_classifications(
     required_checkers: list[str], warning_checkers: list[str], execution_checkers: list[str],
 ) -> None:
     body = _canonical_test_post_policy().policy_body
@@ -563,18 +567,18 @@ def test_locked_post_submit_policy_parser_rejects_conflicting_classifications(
     else:
         body["entries"][0]["classification"] = "project_warning"
     with pytest.raises(ValueError, match="duplicate entries|classification mismatch"):
-        _parse_test_post_body(body)
+        _validate_test_post_body(body)
 
 
 @pytest.mark.parametrize(
     "blocking_severities",
     [[], ["critical"], ["high"]],
 )
-def test_locked_post_submit_policy_parser_rejects_blocking_severity_downgrade(blocking_severities: list[str]) -> None:
+def test_locked_post_submit_policy_validation_rejects_blocking_severity_downgrade(blocking_severities: list[str]) -> None:
     body = _canonical_test_post_policy().policy_body
     body["blocking_severities"] = blocking_severities
     with pytest.raises(ValueError, match="blocking_severities"):
-        _parse_test_post_body(body)
+        _validate_test_post_body(body)
 
 
 def test_checker_models_are_registered_for_alembic_metadata() -> None:
@@ -3912,11 +3916,11 @@ def test_old_checker_name_blocks_post_submit_compilation_without_alias(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field,damage",
-    [(name, "crossed") for name in ("required_checkers", "warning_checkers", "blocking_severities", "policy_body")]
+    [(name, "crossed") for name in ("required_checkers", "warning_checkers", "blocking_severities", "policy_body", "catalogue")]
     + [("submission." + name, damage) for name in _current_locked_test_facts()
        for damage in ("missing", "crossed")],
 )
-async def test_canonical_policy_sidecars_deny_before_manual_execution(field: str, damage: str) -> None:
+async def test_canonical_policy_sidecars_deny_before_manual_execution(field: str, damage: str, monkeypatch) -> None:
     from tests.checkers.post_submit.support import request
 
     source = request()
@@ -3956,6 +3960,13 @@ async def test_canonical_policy_sidecars_deny_before_manual_execution(field: str
                            "sha256:" + "b" * 64 if "sha256:" in previous else
                            "other" if name.endswith("version") else str(uuid4()))
         setattr(submission, name, replacement)
+    elif field == "catalogue":
+        from tests.checkers.post_submit.support import altered_catalogue
+
+        monkeypatch.setattr(
+            "app.modules.checkers.service.current_post_submit_catalogue",
+            lambda: altered_catalogue(index=8, state="disabled"),
+        )
     elif field == "policy_body":
         row.policy_body = {**row.policy_body, "guide_version": "crossed"}
     else:
@@ -3972,7 +3983,8 @@ async def test_canonical_policy_sidecars_deny_before_manual_execution(field: str
     service._enter_evaluation_pending = AsyncMock()
     service._write_checker_audit = AsyncMock()
     service._registry.run = AsyncMock()
-    with pytest.raises(CheckerPolicyInvalid, match="context|summaries"):
+    expected_error = "policy hash is invalid" if field == "catalogue" else "context|summaries"
+    with pytest.raises(CheckerPolicyInvalid, match=expected_error):
         await service.run_submission_checkers(
             pre_review_gate_system_actor(), submission.id, "check"
         )

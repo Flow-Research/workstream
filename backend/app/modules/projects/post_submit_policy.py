@@ -119,7 +119,7 @@ def parse_locked_post_submit_checker_policy_body(
     guide_version: str,
     policy_hash: str,
 ) -> CompiledPostSubmitPolicy:
-    """Reject unsupported bodies and validate exact current policy identity."""
+    """Validate the saved schema, guide identity and body hash independently of live eligibility."""
     if not isinstance(body, dict):
         raise ValueError("locked post-submit checker policy body is missing")
     policy = CompiledPostSubmitPolicy.model_validate_json(json.dumps(body))
@@ -127,7 +127,6 @@ def parse_locked_post_submit_checker_policy_body(
         raise ValueError("locked post-submit checker policy guide context mismatch")
     if policy.policy_hash != policy_hash:
         raise ValueError("locked post-submit checker policy hash is invalid")
-    policy.validate_catalogue(current_post_submit_catalogue())
     return policy
 
 

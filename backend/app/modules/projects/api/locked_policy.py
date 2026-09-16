@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Literal, Mapping, Protocol, get_args
+from typing import TYPE_CHECKING, Literal, Mapping, Protocol, get_args
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from .guide_activation import GuideActivationReceipt
 
 ProjectLockedPolicyGuideStatus = Literal["active", "superseded"]
 ProjectLockedPolicyEffectiveStatus = Literal["approved", "superseded"]
@@ -118,6 +121,11 @@ class ProjectLockedPolicyContextFacts:
     pre_submit_policy_status: ProjectLockedPolicyPreSubmitStatus
     pre_submit_compiler_version: str
     compiled_pre_submit_bundle: CanonicalJsonObject
+    activation_receipt: GuideActivationReceipt
+    artifact_policy: CanonicalJsonObject
+    compiled_post_submit_policy: CanonicalJsonObject
+    review_policy: CanonicalJsonObject
+    revision_policy: CanonicalJsonObject
 
     def __post_init__(self) -> None:
         """Reject lifecycle values outside the closed historical sets."""
@@ -137,10 +145,67 @@ class ProjectLockedPolicyContextFacts:
             or not self.pre_submit_compiler_version.strip()
         ):
             raise ValueError("project locked policy facts are invalid")
+        if not all(
+            isinstance(value, CanonicalJsonObject)
+            for value in (
+                self.effective_policy,
+                self.compiled_pre_submit_bundle,
+                self.artifact_policy,
+                self.compiled_post_submit_policy,
+                self.review_policy,
+                self.revision_policy,
+            )
+        ):
+            raise ValueError("project locked policy bodies must be canonical immutable values")
+        from .guide_activation import GuideActivationReceipt
+
+        receipt = GuideActivationReceipt.model_validate(
+            self.activation_receipt.model_dump(mode="json")
+        )
+        target, upstream = receipt.command.target.proposal, receipt.command.target.upstream
+        if (
+            (
+                self.project_id,
+                self.guide_id,
+                self.guide_version,
+                self.source_snapshot_id,
+                self.source_snapshot_hash,
+            )
+            != (
+                target.project_id,
+                target.guide_id,
+                target.guide_version,
+                target.source_snapshot_id,
+                target.source_snapshot_hash,
+            )
+            or (
+                self.effective_policy_id,
+                self.effective_policy_hash,
+                self.pre_submit_policy_id,
+                self.pre_submit_policy_bundle_hash,
+            )
+            != (
+                upstream.effective_policy_id,
+                upstream.effective_policy_hash,
+                upstream.pre_submit_policy_id,
+                upstream.pre_submit_bundle_hash,
+            )
+            or self.effective_policy.sha256 != self.effective_policy_hash
+            or self.compiled_pre_submit_bundle.sha256 != self.pre_submit_policy_bundle_hash
+            or self.artifact_policy.sha256 != target.artifact_policy_hash
+        ):
+            raise ValueError("project locked policy facts differ from activation")
+        object.__setattr__(self, "activation_receipt", receipt)
 
 
 class ProjectLockedPolicyContextPort(Protocol):
     """Transaction-bound PROJECT capability for exact locked policy facts."""
+
+    async def lock_active_policy_context(
+        self,
+        project_id: UUID,
+    ) -> ProjectLockedPolicyContextFacts:
+        """Lock the sole active complete guide for a new task context."""
 
     async def lock_locked_policy_context(
         self,

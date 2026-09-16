@@ -556,6 +556,14 @@ before product resources, binds the complete activation digest and rechecks live
 authority on replay. Composition without an authority adapter still denies.
 Public activation wiring and downstream task/revision integration remain pending.
 
+ARCH-03A completes the existing internal PROJECTS context port. New work selects
+one active activated guide; existing work resolves its exact frozen guide and
+policy selectors, including after a successor or contribution-policy retirement.
+The result includes the saved activation receipt, both checker-policy bodies,
+artifact/effective policy, review/revision semantics and recorded catalogue
+identities. It never substitutes current policies or reruns inference. CP08 next
+adds task-attempt lineage fields and their minimal existing writers together.
+
 ## v0.1 Success Standard
 
 Workstream v0.1 succeeds only when the complete lifecycle defined at the top of

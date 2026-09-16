@@ -1,143 +1,111 @@
-"""PROJECT persistence for exact task-locked policy lineage."""
+"""Complete active or exact frozen guide context under the caller's transaction."""
 
-from __future__ import annotations
-
-from collections.abc import Mapping
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.api import (
-    CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
     ProjectLockedPolicyContextRequest,
     ProjectLockedPolicyContextUnavailable,
+    ProjectGuideSetupFinalizationError,
 )
-from app.modules.projects.models import (
-    EffectiveProjectSubmissionArtifactPolicy,
-    GuideSourceSnapshot,
-    PreSubmitCheckerPolicy,
-    Project,
-    ProjectGuide,
-)
+from app.modules.projects.api.guide_proposals import GuideProposalError
+from app.modules.projects.api.post_policy import PostPolicySelection
+from app.modules.projects.guide_activation.custody import load_guide_activation
+from app.modules.projects.guide_compilation.repository import GuideCompilationIntegrityError
+from app.modules.projects.locked_policy_projection import complete_context
+from app.modules.projects.models import Project, ProjectGuide
+from app.modules.projects.post_policy.repository import PostPolicyRepository
+from app.modules.projects.repository import ProjectRepository
 
 
 class ProjectLockedPolicyRepository:
-    """Resolve one exact historical locked-policy context under PROJECT locks."""
+    """Resolve one complete graph without current CON or catalogue selection."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def lock_active_policy_context(self, project_id: UUID) -> ProjectLockedPolicyContextFacts:
+        """Select the sole active guide while retaining the Project fence."""
+        return await self._resolve(project_id, None)
+
     async def lock_locked_policy_context(
         self, request: ProjectLockedPolicyContextRequest
     ) -> ProjectLockedPolicyContextFacts:
-        """Lock, validate, and return the exact selected policy lineage."""
+        """Resolve only the stored selectors, including a superseded guide."""
+        return await self._resolve(request.project_id, request)
 
-        async def lock_by_id(model: Any, identifier: UUID) -> Any:
-            return await self._session.scalar(
-                select(model)
-                .where(model.id == str(identifier))
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
+    async def _resolve(self, project_id, request):
+        if not self._session.in_transaction() or self._session.in_nested_transaction():
+            raise ProjectLockedPolicyContextUnavailable("project_locked_policy_context_changed")
+        try:
+            # Reads must neither flush the caller's pending writes nor commit them.
+            with self._session.no_autoflush:
+                return await self._load(project_id, request)
+        except (
+            ValueError,
+            TypeError,
+            GuideProposalError,
+            ProjectGuideSetupFinalizationError,
+            GuideCompilationIntegrityError,
+        ) as exc:
+            raise ProjectLockedPolicyContextUnavailable(
+                "project_locked_policy_context_changed"
+            ) from exc
 
-        project = await lock_by_id(Project, request.project_id)
-        guide = await self._session.scalar(
-            select(ProjectGuide)
+    async def _load(self, project_id, request):
+        project = await self._session.scalar(
+            select(Project)
             .where(
-                ProjectGuide.project_id == str(request.project_id),
-                ProjectGuide.version == request.guide_version,
+                Project.id == str(project_id),
             )
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        snapshot = await lock_by_id(GuideSourceSnapshot, request.source_snapshot_id)
-        effective_policy = await lock_by_id(
-            EffectiveProjectSubmissionArtifactPolicy, request.effective_policy_id
+        if project is None or project.status != "active":
+            raise ValueError("active project unavailable")
+        selection = select(ProjectGuide).where(ProjectGuide.project_id == str(project_id))
+        selection = selection.where(
+            ProjectGuide.version == request.guide_version
+            if request
+            else ProjectGuide.status == "active"
         )
-        pre_submit_policy = await lock_by_id(PreSubmitCheckerPolicy, request.pre_submit_policy_id)
-        if (
-            project is None
-            or project.status != "active"
-            or guide is None
-            or guide.status not in {"active", "superseded"}
-            or snapshot is None
-            or effective_policy is None
-            or effective_policy.lifecycle_status not in {"approved", "superseded"}
-            or pre_submit_policy is None
-            or pre_submit_policy.lifecycle_status not in {"compiled", "superseded"}
-            or pre_submit_policy.compiler_version is None
-            or pre_submit_policy.compiled_bundle is None
-            or pre_submit_policy.compiled_bundle_hash is None
+        # Do not take Guide before Attempt: finalization owns Attempt -> Guide.
+        guide = (
+            await self._session.scalars(selection.execution_options(populate_existing=True))
+        ).one_or_none()
+        if guide is None:
+            raise ValueError("selected guide unavailable")
+        receipt = await load_guide_activation(self._session, guide)
+        target = receipt.command.target
+        locked, post_policy, post_custody = await PostPolicyRepository(self._session).lock_policy(
+            PostPolicySelection(
+                project_id=project_id,
+                guide_id=target.proposal.guide_id,
+                compilation_id=target.proposal.compilation_id,
+                policy_id=target.policy_id,
+            ),
+            allowed_guide_statuses=frozenset({"active", "superseded"}),
+        )
+        guide = locked.view.guide
+        refreshed = await load_guide_activation(self._session, guide)
+        if refreshed != receipt or (request is None and guide.status != "active"):
+            raise ValueError("selected activation changed")
+        projects = ProjectRepository(self._session)
+        review = await projects.lock_review_policy(guide.project_id, guide.version)
+        revision = await projects.lock_revision_policy(guide.project_id, guide.version)
+        facts = complete_context(locked, post_policy, post_custody, refreshed, review, revision)
+        if request is not None and request != ProjectLockedPolicyContextRequest(
+            project_id=facts.project_id,
+            guide_version=facts.guide_version,
+            source_snapshot_id=facts.source_snapshot_id,
+            source_snapshot_hash=facts.source_snapshot_hash,
+            effective_policy_id=facts.effective_policy_id,
+            effective_policy_hash=facts.effective_policy_hash,
+            pre_submit_policy_id=facts.pre_submit_policy_id,
+            pre_submit_policy_bundle_hash=facts.pre_submit_policy_bundle_hash,
         ):
-            raise ProjectLockedPolicyContextUnavailable("project_locked_policy_context_changed")
-        values = (
-            snapshot.manifest_json,
-            effective_policy.effective_policy,
-            pre_submit_policy.compiled_bundle,
-        )
-        if not all(isinstance(value, Mapping) for value in values):
-            raise ProjectLockedPolicyContextUnavailable("project_locked_policy_context_changed")
-        try:
-            canonical_snapshot = CanonicalJsonObject.from_mapping(snapshot.manifest_json)
-            canonical_effective = CanonicalJsonObject.from_mapping(
-                effective_policy.effective_policy
-            )
-            canonical_pre_submit = CanonicalJsonObject.from_mapping(
-                pre_submit_policy.compiled_bundle
-            )
-        except (TypeError, ValueError) as exc:
-            raise ProjectLockedPolicyContextUnavailable(
-                "project_locked_policy_context_changed"
-            ) from exc
-        expected = (
-            guide.project_id == str(request.project_id),
-            guide.version == request.guide_version,
-            snapshot.project_id == str(request.project_id),
-            snapshot.guide_id == guide.id,
-            snapshot.guide_version == request.guide_version,
-            snapshot.bundle_hash == request.source_snapshot_hash,
-            effective_policy.project_id == str(request.project_id),
-            effective_policy.guide_id == guide.id,
-            effective_policy.guide_version == request.guide_version,
-            effective_policy.source_snapshot_id == str(request.source_snapshot_id),
-            effective_policy.source_snapshot_hash == request.source_snapshot_hash,
-            effective_policy.effective_policy_hash == request.effective_policy_hash,
-            pre_submit_policy.project_id == str(request.project_id),
-            pre_submit_policy.guide_id == guide.id,
-            pre_submit_policy.guide_version == request.guide_version,
-            pre_submit_policy.source_snapshot_id == str(request.source_snapshot_id),
-            pre_submit_policy.source_snapshot_hash == request.source_snapshot_hash,
-            pre_submit_policy.effective_policy_id == str(request.effective_policy_id),
-            pre_submit_policy.effective_policy_hash == request.effective_policy_hash,
-            pre_submit_policy.compiled_bundle_hash == request.pre_submit_policy_bundle_hash,
-            canonical_snapshot.sha256 == request.source_snapshot_hash,
-            canonical_effective.sha256 == request.effective_policy_hash,
-            canonical_pre_submit.sha256 == request.pre_submit_policy_bundle_hash,
-        )
-        if not all(expected):
-            raise ProjectLockedPolicyContextUnavailable("project_locked_policy_context_changed")
-        try:
-            return ProjectLockedPolicyContextFacts(
-                project_id=request.project_id,
-                guide_id=UUID(guide.id),
-                guide_version=guide.version,
-                guide_status=guide.status,
-                source_snapshot_id=request.source_snapshot_id,
-                source_snapshot_hash=snapshot.bundle_hash,
-                effective_policy_id=request.effective_policy_id,
-                effective_policy_hash=effective_policy.effective_policy_hash,
-                effective_policy_status=effective_policy.lifecycle_status,
-                effective_policy=canonical_effective,
-                pre_submit_policy_id=request.pre_submit_policy_id,
-                pre_submit_policy_bundle_hash=pre_submit_policy.compiled_bundle_hash,
-                pre_submit_policy_status=pre_submit_policy.lifecycle_status,
-                pre_submit_compiler_version=pre_submit_policy.compiler_version,
-                compiled_pre_submit_bundle=canonical_pre_submit,
-            )
-        except (TypeError, ValueError) as exc:
-            raise ProjectLockedPolicyContextUnavailable(
-                "project_locked_policy_context_changed"
-            ) from exc
+            raise ValueError("frozen context selectors differ")
+        return facts

@@ -34,7 +34,7 @@ from tests.projects.guide_compilation.finalization.pg_support import finalize
 from tests.projects.guide_compilation.proposals.pg_support import seed_review_actor
 
 
-async def create_compiled_guide(factory, values, actor, *, version="v1"):
+async def create_compiled_guide(factory, values, actor, *, version="v1", artifact_proposal=None):
     """Create declarations with real AUTH, then execute/project/finalize scripted findings."""
     async with factory() as session, session.begin():
         resolved = ResolvedActor(
@@ -88,6 +88,8 @@ async def create_compiled_guide(factory, values, actor, *, version="v1"):
         update={"material": manifest}
     )
     outcome = result()
+    if artifact_proposal is not None:
+        outcome = outcome.model_copy(update={"submission_artifact_policy": artifact_proposal})
     refs = tuple(
         GuideEvidenceRef(
             source_item_id=item.source_item_id,
@@ -112,11 +114,24 @@ async def create_compiled_guide(factory, values, actor, *, version="v1"):
 
 
 @asynccontextmanager
-async def source_case(url):
+async def source_case(url, *, namespace=None, guide_version="v1", artifact_proposal=None):
     """An authorized draft Project plus a genuinely created complete guide source."""
     engine = create_async_engine(url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        if namespace is not None:
+            from app.modules.artifacts.models import ArtifactStorageNamespace
+            async with factory() as session, session.begin():
+                existing = await session.get(ArtifactStorageNamespace, "primary")
+                if existing is None:
+                    session.add(ArtifactStorageNamespace(
+                        id="primary", backend=namespace.backend, adapter=namespace.adapter,
+                        provider_profile=namespace.provider_profile,
+                        namespace_descriptor=namespace.namespace_descriptor,
+                        namespace_fingerprint=namespace.namespace_fingerprint,
+                    ))
+                else:
+                    assert existing.namespace_fingerprint == namespace.namespace_fingerprint
         values = ids()
         async with factory() as session, session.begin():
             await seed_authorized_project(
@@ -136,7 +151,8 @@ async def source_case(url):
             ).one()
             values.update(actor=UUID(service_id), link=UUID(link_id))
         actor, grant = await seed_review_actor(factory, values["project"])
-        values, finalization = await create_compiled_guide(factory, values, actor)
+        values, finalization = await create_compiled_guide(factory, values, actor, version=guide_version,
+                                                           artifact_proposal=artifact_proposal)
         yield values, factory, finalization, actor, grant
     finally:
         await engine.dispose()

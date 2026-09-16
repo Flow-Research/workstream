@@ -21,16 +21,27 @@ def current_schema_revision():
 
 async def run_guarded_revision_downgrade(database_url: str, revision: str) -> None:
     """Exercise a retained-data guard directly, without earlier guards masking it."""
+    await _run_revision_body(database_url, revision, "downgrade")
+
+
+async def run_scoped_revision_upgrade(database_url: str, revision: str) -> None:
+    """Restore one tested revision body without traversing later schema owners."""
+    await _run_revision_body(database_url, revision, "upgrade")
+
+
+async def _run_revision_body(database_url: str, revision: str, direction: str) -> None:
+    """Run the unchanged owned migration in one PostgreSQL transaction."""
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
     from alembic.script import ScriptDirectory
 
-    downgrade = ScriptDirectory.from_config(_config()).get_revision(revision).module.downgrade
+    module = ScriptDirectory.from_config(_config()).get_revision(revision).module
+    operation = getattr(module, direction)
     engine = create_async_engine(database_url)
 
     def run(connection):
         with Operations.context(MigrationContext.configure(connection)):
-            downgrade()
+            operation()
 
     try:
         async with engine.begin() as connection:

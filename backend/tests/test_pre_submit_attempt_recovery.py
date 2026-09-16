@@ -36,7 +36,6 @@ from tests.pre_submit_test_helpers import (
     submission_preparation_request,
 )
 from tests.submission_preparation_auth_helpers import install_submitter_grant
-from tests.project_create_fixtures import activate_retained_project_for_test
 from tests.test_default_pre_submit_execution import _AllowAuthority, _archive, _bytes, _request
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
 from app.modules.authorization.runtime import (
@@ -133,13 +132,6 @@ class _Harness:
     async def close(self):
         await self.request.prepared_artifact.close()
         self.manager.close()
-        async with self.engine.begin() as connection:
-            await connection.execute(text(
-                "alter table project_guides enable trigger guide_mutation_product_custody"
-            ))
-            await connection.execute(text(
-                "alter table project_guides enable trigger guide_lineage_lifecycle_guard"
-            ))
         await self.engine.dispose()
 
     def contributor_authority(self, session):
@@ -199,17 +191,6 @@ async def _harness(tmp_path: Path, database_url: str) -> _Harness:
             "insert into actor_identity_links "
             "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,last_verified_at) "
             "values (:link,:actor,'flow-test',:actor,'human','active','test',now())"
-        ), params)
-        await connection.execute(text(
-            "alter table project_guides disable trigger guide_mutation_product_custody"
-        ))
-        await connection.execute(text(
-            "alter table project_guides disable trigger guide_lineage_lifecycle_guard"
-        ))
-        await activate_retained_project_for_test(connection, lineage.project_id)
-        await connection.execute(text(
-            "update project_guides set status='active',approved_by=:actor,effective_at=now() "
-            "where id=:guide"
         ), params)
         await connection.execute(text(
             "insert into workstream_tasks "

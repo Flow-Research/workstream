@@ -67,7 +67,7 @@ async def load_guide_activation(session, guide):
     record = await session.scalar(
         select(GuideMutationIdempotencyRecord).where(
             GuideMutationIdempotencyRecord.operation_id == guide.activation_operation_id,
-        )
+        ).execution_options(populate_existing=True)
     )
     if record is None:
         raise ValueError("guide activation binding unavailable")

@@ -169,7 +169,7 @@ async def _exhausted_job(session, settings, tmp_path, context):
         )
     )
     from projects.unified_policy_fixtures import create_standalone_unified_policy
-    policy_bundle = await create_standalone_unified_policy(async_sessionmaker(session.bind, expire_on_commit=False), namespace, include_post_policy=True)
+    policy_bundle = await create_standalone_unified_policy(async_sessionmaker(session.bind, expire_on_commit=False), namespace)
     async with minted_source(tmp_path / "checker-output", b"recover checker output") as source:
         project_id, task_id, checker_run_id, admission = await _admit_checker_output(
             session, settings, namespace, source, policy_bundle=policy_bundle)

@@ -1,276 +1,238 @@
-"""PROJECT public locked-policy context capability tests."""
+"""Fail closed at exact complete-context boundaries using real activated sources."""
 
-from __future__ import annotations
-
-import asyncio
 from dataclasses import replace
-from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from httpx import AsyncClient
 import pytest
-from sqlalchemy import select, text, update
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm.attributes import set_committed_value
 
-from app.db import session as db_session
-from app.modules.projects.api import (
-    ProjectLockedPolicyContextRequest,
-    ProjectLockedPolicyContextUnavailable,
-)
+from app.modules.projects.api import ProjectLockedPolicyContextUnavailable
+from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
+    GuideMutationIdempotencyRecord,
+    GuideSourceSnapshot,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
+    ReviewPolicy,
+    RevisionPolicy,
 )
-from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
-from projects.guide_fixtures import (
-    complete_guide_payload,
-    create_guide,
-    create_project,
+from app.modules.projects.guide_compilation.models import (
+    ProjectGuideCompilationAttempt,
+    ProjectGuideProposalApproval,
+    ProjectGuideSetupFinalization,
 )
-from projects.policy_bundle_fixtures import create_approved_policy_bundle
-from project_create_fixtures import seed_active_guide_for_downstream_test
-from projects.client_fixtures import (
-    project_client as project_client,
-    project_database_env as project_database_env,
+from app.modules.projects.post_policy.models import PostPolicyOperation
+from tests.projects.locked_policy_fixtures import activated_context, frozen_request
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "activation",
+        "activation_digest",
+        "pre_approval",
+        "post_approval",
+        "finalization",
+        "catalogue",
+        "foreign_selector",
+        "foreign_project",
+        "snapshot_hash",
+        "effective_hash",
+        "pre_hash",
+        "post_hash",
+        "review_hash",
+        "revision_hash",
+        "review_incomplete",
+        "revision_incomplete",
+        "project_archived",
+        "pre_pending",
+        "snapshot_array",
+        "effective_array",
+        "pre_array",
+        "nonfinite_body",
+    ],
 )
+async def test_context_rejects_missing_or_substituted_custody(
+    clean_postgres_database, monkeypatch, failure
+):
+    async with activated_context(clean_postgres_database) as (factory, receipt, *_):
+        request = frozen_request(receipt)
+        async with factory() as session, session.begin():
+            owner = ProjectLockedPolicyRepository(session)
+            assert (await owner.lock_locked_policy_context(request)).activation_receipt == receipt
+            missing = {
+                "activation": GuideMutationIdempotencyRecord,
+                "pre_approval": ProjectGuideProposalApproval,
+                "finalization": ProjectGuideSetupFinalization,
+            }.get(failure)
+            altered = {
+                "activation_digest": (
+                    GuideMutationIdempotencyRecord,
+                    "request_digest",
+                    "sha256:" + "a" * 64,
+                ),
+                "catalogue": (
+                    ProjectGuideCompilationAttempt,
+                    "pre_catalogue_manifest_hash",
+                    "sha256:" + "a" * 64,
+                ),
+                "snapshot_hash": (GuideSourceSnapshot, "manifest_json", {"wrong": True}),
+                "effective_hash": (
+                    EffectiveProjectSubmissionArtifactPolicy,
+                    "effective_policy",
+                    {"wrong": True},
+                ),
+                "pre_hash": (PreSubmitCheckerPolicy, "compiled_bundle", {"wrong": True}),
+                "post_hash": (PostSubmitCheckerPolicy, "policy_body", {"wrong": True}),
+                "review_hash": (ReviewPolicy, "human_review_required", False),
+                "revision_hash": (RevisionPolicy, "max_revision_rounds", 999),
+                "review_incomplete": (ReviewPolicy, "semantics_status", "legacy_incomplete"),
+                "revision_incomplete": (RevisionPolicy, "semantics_status", "legacy_incomplete"),
+                "project_archived": (Project, "status", "archived"),
+                "pre_pending": (PreSubmitCheckerPolicy, "lifecycle_status", "pending_compilation"),
+                "snapshot_array": (GuideSourceSnapshot, "manifest_json", []),
+                "effective_array": (
+                    EffectiveProjectSubmissionArtifactPolicy,
+                    "effective_policy",
+                    [],
+                ),
+                "pre_array": (PreSubmitCheckerPolicy, "compiled_bundle", []),
+                "nonfinite_body": (
+                    EffectiveProjectSubmissionArtifactPolicy,
+                    "effective_policy",
+                    {"invalid": float("nan")},
+                ),
+            }.get(failure)
+            seen = []
 
+            def corrupt(row):
+                if missing is not None and isinstance(row, missing):
+                    seen.append(failure)
+                    return None
+                if altered is not None and isinstance(row, altered[0]):
+                    seen.append(failure)
+                    set_committed_value(row, altered[1], altered[2])
+                return row
 
-async def create_locked_policy_context_fixture(
-    client: AsyncClient, *, superseded=False,
-) -> ProjectLockedPolicyContextRequest:
-    """Create and activate one complete PROJECT policy lineage."""
-    project = await create_project(client, name=f"Locked Context {uuid4()}")
-    guide = await create_guide(client, project["id"], complete_guide_payload())
-    bundle = await create_approved_policy_bundle(client, project["id"], guide["id"])
-    if superseded:
-        from projects.unified_policy_fixtures import supersede_unified_submission_policy
-        await supersede_unified_submission_policy(project["id"], guide["id"], bundle["submission_artifact_policy"]["id"])
-    await seed_active_guide_for_downstream_test(
-        db_session.get_session_factory(),
-        project_id=project["id"],
-        guide_id=guide["id"],
-    )
-    snapshot = bundle["source_snapshot"]
-    effective = bundle["effective_policy"]
-    pre_submit = bundle["pre_submit_checker_policy"]
-    assert pre_submit is not None
-    return ProjectLockedPolicyContextRequest(
-        project_id=UUID(project["id"]),
-        guide_version=guide["version"],
-        source_snapshot_id=UUID(snapshot["id"]),
-        source_snapshot_hash=snapshot["bundle_hash"],
-        effective_policy_id=UUID(effective["id"]),
-        effective_policy_hash=effective["effective_policy_hash"],
-        pre_submit_policy_id=UUID(pre_submit["id"]),
-        pre_submit_policy_bundle_hash=pre_submit["compiled_bundle_hash"],
-    )
-
-
-async def _wait_for_project_database_lock(
-    database_url: str,
-    application_name: str,
-) -> None:
-    """Wait until one named PROJECT race participant blocks on PostgreSQL."""
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            deadline = asyncio.get_running_loop().time() + 30.0
-            while asyncio.get_running_loop().time() < deadline:
-                waiting = await connection.scalar(
-                    text(
-                        "select exists(select 1 from pg_stat_activity where "
-                        "application_name = :application_name "
-                        "and wait_event_type = 'Lock')"
-                    ),
-                    {"application_name": application_name},
-                )
-                if waiting:
-                    return
-                await asyncio.sleep(0.01)
-    finally:
-        await engine.dispose()
-    raise AssertionError(f"{application_name} never reached the PostgreSQL lock")
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_resolves_current(
-    project_client: AsyncClient,
-) -> None:
-    request = await create_locked_policy_context_fixture(project_client)
-    async with db_session.get_session_factory()() as session:
-        current = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
-        assert current.guide_status == "active"
-        assert current.effective_policy_status == "approved"
-        assert current.pre_submit_policy_status == "compiled"
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_resolves_superseded(
-    project_client: AsyncClient,
-) -> None:
-    request = await create_locked_policy_context_fixture(project_client, superseded=True)
-    async with db_session.get_session_factory()() as session:
-        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
-            request
-        )
-        assert historical.guide_status == "active"
-        assert historical.effective_policy_status == "superseded"
-        assert historical.pre_submit_policy_status == "superseded"
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_rejects_unknown_effective_policy(
-    project_client: AsyncClient,
-) -> None:
-    request = await create_locked_policy_context_fixture(project_client, superseded=True)
-    wrong_successor = replace(request, effective_policy_id=uuid4())
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(
-            ProjectLockedPolicyContextUnavailable,
-            match="project_locked_policy_context_changed",
-        ):
-            await ProjectLockedPolicyRepository(session).lock_locked_policy_context(wrong_successor)
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_rejects_pending_pre_submit(
-    project_client: AsyncClient,
-) -> None:
-    """Approved lineage cannot regress to pending before a locked reader observes it."""
-    from sqlalchemy.exc import IntegrityError
-
-    request = await create_locked_policy_context_fixture(project_client)
-    async with db_session.get_session_factory()() as session:
-        await session.execute(
-            update(PreSubmitCheckerPolicy)
-            .where(PreSubmitCheckerPolicy.id == str(request.pre_submit_policy_id))
-            .values(lifecycle_status="pending_compilation", superseded_at=None)
-        )
-        with pytest.raises(IntegrityError, match="proposal approval lifecycle mismatch"):
-            await session.commit()
-        await session.rollback()
-        current = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
-        assert current.pre_submit_policy_status == "compiled"
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_rejects_inactive_project(
-    project_client: AsyncClient,
-) -> None:
-    """Writer commits first: refresh stale identity-map state before returning facts."""
-    request = await create_locked_policy_context_fixture(project_client)
-    factory = db_session.get_session_factory()
-    async with factory() as observer:
-        project = await observer.get(Project, str(request.project_id))
-        assert project is not None and project.status == "active"
-        current = await ProjectLockedPolicyRepository(observer).lock_locked_policy_context(request)
-        assert current.project_id == request.project_id
-        await observer.commit()
-
-        async with factory() as writer:
-            await writer.execute(
-                update(Project).where(Project.id == str(request.project_id)).values(status="draft")
+            original_scalar, original_get, original_scalars = (
+                session.scalar,
+                session.get,
+                session.scalars,
             )
-            await writer.commit()
+            original_refresh = session.refresh
 
-        assert project.status == "active"  # The observer still holds its cached object.
-        with pytest.raises(ProjectLockedPolicyContextUnavailable) as denied:
-            await ProjectLockedPolicyRepository(observer).lock_locked_policy_context(request)
-        assert denied.value.code == "project_locked_policy_context_changed"
-        assert project.status == "draft"
-        assert not observer.new and not observer.dirty and not observer.deleted
+            async def scalar(*args, **kwargs):
+                return corrupt(await original_scalar(*args, **kwargs))
+
+            async def get(*args, **kwargs):
+                return corrupt(await original_get(*args, **kwargs))
+
+            async def scalars(statement, *args, **kwargs):
+                if (
+                    failure == "post_approval"
+                    and statement.column_descriptions[0]["entity"] is PostPolicyOperation
+                ):
+                    seen.append(failure)
+                    statement = statement.where(PostPolicyOperation.kind != "approve")
+                return await original_scalars(statement, *args, **kwargs)
+
+            async def refresh(row, *args, **kwargs):
+                await original_refresh(row, *args, **kwargs)
+                corrupt(row)
+
+            monkeypatch.setattr(session, "refresh", refresh)
+            monkeypatch.setattr(session, "scalar", scalar)
+            monkeypatch.setattr(session, "get", get)
+            monkeypatch.setattr(session, "scalars", scalars)
+            if failure == "foreign_selector":
+                request = replace(request, effective_policy_id=uuid4())
+            elif failure == "foreign_project":
+                request = replace(request, project_id=uuid4())
+            with pytest.raises(ProjectLockedPolicyContextUnavailable) as denied:
+                await owner.lock_locked_policy_context(request)
+            assert denied.value.code == "project_locked_policy_context_changed"
+            if not failure.startswith("foreign_"):
+                assert seen, "the intended corrupt read was not reached"
+            assert not session.new and not session.dirty and not session.deleted
 
 
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_serializes_project_status_change(
-    project_client: AsyncClient,
-    project_database_env: str,
-) -> None:
-    """Reader locks first: inactivation waits for the exact owning transaction."""
-    request = await create_locked_policy_context_fixture(project_client)
-    contender_name = f"project-inactivation-{uuid4()}"
-    factory = db_session.get_session_factory()
-    holder, contender = factory(), factory()
-    contender_call: asyncio.Task[Any] | None = None
-    try:
-        await ProjectLockedPolicyRepository(holder).lock_locked_policy_context(request)
-        await contender.execute(
-            text("select set_config('application_name', :application_name, true)"),
-            {"application_name": contender_name},
-        )
-        contender_call = asyncio.create_task(
-            contender.execute(
-                update(Project).where(Project.id == str(request.project_id)).values(status="draft")
+async def test_context_requires_caller_root_transaction(clean_postgres_database):
+    async with activated_context(clean_postgres_database) as (factory, receipt, *_):
+        async with factory() as session:
+            owner = ProjectLockedPolicyRepository(session)
+            with pytest.raises(ProjectLockedPolicyContextUnavailable):
+                await owner.lock_active_policy_context(receipt.contribution.project_id)
+            assert not session.in_transaction()
+            async with session.begin(), session.begin_nested():
+                with pytest.raises(ProjectLockedPolicyContextUnavailable):
+                    await owner.lock_locked_policy_context(frozen_request(receipt))
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("guide_status", "draft"),
+        ("effective_policy_status", "draft"),
+        ("pre_submit_policy_status", "pending_compilation"),
+        ("pre_submit_compiler_version", ""),
+        ("guide_version", ""),
+        ("effective_policy_id", None),
+    ],
+)
+async def test_context_rejects_invalid_public_facts(clean_postgres_database, field, value):
+    async with activated_context(clean_postgres_database) as (factory, receipt, *_):
+        async with factory() as session, session.begin():
+            facts = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(
+                frozen_request(receipt)
             )
-        )
-        await _wait_for_project_database_lock(project_database_env, contender_name)
-        assert not contender_call.done()
-        await holder.commit()
-        await contender_call
-        await contender.commit()
-        async with factory() as observer:
-            project = await observer.get(Project, str(request.project_id))
-            assert project is not None and project.status == "draft"
-    finally:
-        if contender_call is not None:
-            contender_call.cancel()
-            await asyncio.gather(contender_call, return_exceptions=True)
-        await holder.close()
-        await contender.close()
+        with pytest.raises(ValueError):
+            replace(facts, **{field: value})
 
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_does_not_substitute_successors(
-    project_client: AsyncClient,
-) -> None:
-    """Keep resolving exact historical IDs after a real approved successor exists."""
+
+async def test_context_refreshes_preloaded_custody(clean_postgres_database):
     from sqlalchemy import select
+    from app.modules.projects.models import ProjectGuide, SubmissionPolicyMutationIdempotencyRecord
+    from app.modules.projects.guide_compilation.models import (
+        ProjectGuideCompilationRequestOperation,
+    )
 
-    request = await create_locked_policy_context_fixture(project_client, superseded=True)
-    async with db_session.get_session_factory()() as session:
-        successor = (await session.scalars(select(EffectiveProjectSubmissionArtifactPolicy).where(
-            EffectiveProjectSubmissionArtifactPolicy.project_id == str(request.project_id),
-            EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
-        ))).one()
-        assert successor.id != str(request.effective_policy_id)
-        assert successor.supersedes_effective_policy_id == str(request.effective_policy_id)
-        historical = await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
-        assert historical.effective_policy_id == request.effective_policy_id
-        assert historical.pre_submit_policy_id == request.pre_submit_policy_id
-
-
-@pytest.mark.asyncio
-async def test_locked_policy_repository_postgresql_serializes_race(
-    project_client: AsyncClient,
-    project_database_env: str,
-) -> None:
-    """Prove exact PROJECT lineage observation holds its pre-submit row lock."""
-    request = await create_locked_policy_context_fixture(project_client)
-    contender_name = f"project-locked-policy-{uuid4()}"
-    holder = db_session.get_session_factory()()
-    contender = db_session.get_session_factory()()
-    contender_call: asyncio.Task[Any] | None = None
-    try:
-        held = await ProjectLockedPolicyRepository(holder).lock_locked_policy_context(request)
-        await contender.execute(
-            text("select set_config('application_name', :application_name, true)"),
-            {"application_name": contender_name},
-        )
-        contender_call = asyncio.create_task(
-            contender.scalar(
-                select(PreSubmitCheckerPolicy)
-                .where(PreSubmitCheckerPolicy.id == str(request.pre_submit_policy_id))
-                .with_for_update()
-            )
-        )
-        await _wait_for_project_database_lock(project_database_env, contender_name)
-        assert not contender_call.done()
-        await holder.rollback()
-        assert await contender_call is not None
-        assert held.pre_submit_policy_id == request.pre_submit_policy_id
-    finally:
-        if contender_call is not None:
-            contender_call.cancel()
-            await asyncio.gather(contender_call, return_exceptions=True)
-        await holder.close()
-        await contender.close()
+    async with activated_context(clean_postgres_database) as (factory, receipt, *_):
+        async with factory() as session, session.begin():
+            owner = ProjectLockedPolicyRepository(session)
+            expected = await owner.lock_locked_policy_context(frozen_request(receipt))
+            held = []
+            for model, field, bad in (
+                (Project, "status", "archived"),
+                (ProjectGuide, "status", "draft"),
+                (GuideMutationIdempotencyRecord, "request_digest", "sha256:" + "f" * 64),
+                (
+                    ProjectGuideCompilationAttempt,
+                    "pre_catalogue_manifest_hash",
+                    "sha256:" + "f" * 64,
+                ),
+                (ProjectGuideCompilationRequestOperation, "source_snapshot_id", str(uuid4())),
+                (ProjectGuideSetupFinalization, "facts_digest", "sha256:" + "f" * 64),
+                (ProjectGuideProposalApproval, "output_digest", "sha256:" + "f" * 64),
+                (SubmissionPolicyMutationIdempotencyRecord, "status", "reserved"),
+                (EffectiveProjectSubmissionArtifactPolicy, "effective_policy", {}),
+                (PreSubmitCheckerPolicy, "compiled_bundle", {}),
+                (PostSubmitCheckerPolicy, "policy_body", {}),
+                (PostPolicyOperation, "output_digest", "sha256:" + "f" * 64),
+                (ReviewPolicy, "human_review_required", False),
+                (RevisionPolicy, "max_revision_rounds", 999),
+            ):
+                statement = select(model)
+                if model is GuideMutationIdempotencyRecord:
+                    statement = statement.where(model.operation_id == receipt.operation_id)
+                rows = list(await session.scalars(statement))
+                assert rows
+                for row in rows:
+                    original = getattr(row, field)
+                    held.append((row, field, original))
+                    set_committed_value(row, field, bad)
+            assert await owner.lock_locked_policy_context(frozen_request(receipt)) == expected
+            for row, field, original in held:
+                assert getattr(row, field) == original, (type(row).__name__, field)
+            assert not session.dirty

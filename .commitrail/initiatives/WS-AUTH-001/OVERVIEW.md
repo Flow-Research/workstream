@@ -21,8 +21,8 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Public post-policy composition: POL-06B delivered using existing AUTH-12G.
 - Completed activation boundary: AUTH-12H exact-project manager authority for
   CP07 complete-guide activation/binding, with live-authority replay.
-- Next usable boundary: CP08 task-attempt lineage, then ARCH-03A complete internal
-  guide facts. POL-07B internal phase composition is delivered.
+- Next usable boundary: CP08 task-attempt lineage and minimal writers after
+  completed ARCH-03A internal guide context. POL-07B internal phase composition is delivered.
   Unavailable dispatcher contracts remain a separate contribution boundary.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
@@ -55,7 +55,7 @@ POL-04B/05A/05B and AUTH-12F4 supply live unified setup and public
 manager proposal review, pre-submit approval and manual correction dispatch.
 
 1. CP07 complete-guide activation/binding and AUTH-12H live authority are delivered.
-   CP08 supplies task-attempt lineage before ARCH-03A complete internal guide facts.
+   ARCH-03A supplies complete internal guide facts before CP08 lineage and minimal writers.
 2. ARCH-03B/03C replace broad AUTH-13 and ARCH-04D replaces AUTH-14/XINT-06B.
    AUTH-OUTBOX-01/02 bracket hidden CON-02B dispatch; ARCH-04E2 activates only
    the proven TASK routing handler before ARCH-04E3 live composition.

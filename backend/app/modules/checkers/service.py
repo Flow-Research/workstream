@@ -42,7 +42,9 @@ from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     PreSubmitCheckerPolicy,
 )
-from app.modules.checkers.api.post_submit_catalogue import CompiledPostSubmitPolicy
+from app.modules.checkers.api.post_submit_catalogue import (
+    CompiledPostSubmitPolicy, current_post_submit_catalogue,
+)
 from app.modules.checkers.api.post_submit import ExpectedPostSubmitContext, ObservedPostSubmitContext
 from app.modules.projects.post_submit_policy import (
     parse_locked_post_submit_checker_policy_body,
@@ -364,6 +366,7 @@ class CheckerService:
                 guide_version=locked_version,
                 policy_hash=locked_hash,
             )
+            locked_policy.validate_catalogue(current_post_submit_catalogue())
         except ValueError as exc:
             raise CheckerPolicyInvalid("locked post-submit checker policy hash is invalid") from exc
         try:

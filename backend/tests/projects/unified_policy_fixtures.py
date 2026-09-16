@@ -159,50 +159,31 @@ async def approve_unified_submission_policy(project_id, guide_id, policy_id, *, 
         ).model_dump(mode="json")
 
 
-async def create_standalone_unified_policy(sessions, namespace, *, guide_version="v1", artifact_proposal=None, include_post_policy=False):
-    """Arrange canonical setup before a lower-level artifact transaction starts."""
-    from tests.projects.guide_compilation.helpers import context, seed_database
-    from tests.projects.guide_compilation.finalization.pg_prerequisites import compilation_and_projections
-    from app.modules.projects.api.guide_documents import GuideDocumentManifestRequest
+async def create_standalone_unified_policy(sessions, namespace, *, guide_version="v1", artifact_proposal=None):
+    """Arrange complete activated context before a downstream artifact transaction."""
     from app.modules.projects.models import PreSubmitCheckerPolicy
+    from app.modules.projects.api.post_policy import PostPolicyApproval
+    from tests.projects.guide_activation.source_fixtures import source_case
+    from tests.projects.guide_activation.pg_support import publish_policy, activation_command
+    from tests.authorization.guide_activation.pg_support import activate
+    from tests.projects.guide_compilation.helpers import service_actor
+    from tests.projects.guide_compilation.proposals.pg_support import seed_selected_review_revision_inputs
+    from tests.projects.post_policy.pg_support import prepare_post_policy, operate
 
     url = sessions.kw["bind"].url.render_as_string(hide_password=False)
-    values = await seed_database(url, namespace=namespace, guide_version=guide_version)
+    async with source_case(url, namespace=namespace, guide_version=guide_version,
+                           artifact_proposal=artifact_proposal) as (values, _, command, actor, grant):
+        await seed_selected_review_revision_inputs(sessions, command, actor)
+        _, derived = await prepare_post_policy(sessions, command, actor, grant, service_actor(values))
+        approved = await operate(sessions, actor, command.project_id, grant, "approve",
+                                 PostPolicyApproval(target=derived.target, idempotency_key=uuid4()))
+        _, policy = await publish_policy(sessions, command.project_id)
+        await activate(sessions, actor, await activation_command(sessions, approved, policy))
+    upstream = approved.target.upstream
     async with sessions() as session:
-        manifest = await guide_document_manifest_port(session).load(GuideDocumentManifestRequest(
-            project_id=values["project"], guide_id=values["guide"],
-            guide_source_snapshot_id=values["snapshot"],
-            project_setup_run_id=values["setup_1"], setup_generation=1,
-        ))
-    compilation_context = context(values, guide_version=guide_version).model_copy(update={"material": manifest})
-    from tests.projects.guide_compilation.helpers import result
-    outcome = result()
-    if artifact_proposal is not None:
-        outcome = outcome.model_copy(update={"submission_artifact_policy": artifact_proposal})
-    command = await compilation_and_projections(
-        url, sessions, values, compilation_context=compilation_context, outcome=outcome,
-    )
-    await finalize(sessions, values, command)
-    async with sessions() as session:
-        policy = (await session.scalars(select(SubmissionArtifactPolicy).where(
-            SubmissionArtifactPolicy.guide_id == str(values["guide"]),
-        ))).one()
-        policy_id = policy.id
-    effective = await approve_unified_submission_policy(
-        str(values["project"]), str(values["guide"]), policy_id, sessions=sessions,
-    )
-    async with sessions() as session:
-        pre = (await session.scalars(select(PreSubmitCheckerPolicy).where(
-            PreSubmitCheckerPolicy.effective_policy_id == effective["id"],
-        ))).one()
-    if include_post_policy:
-        from tests.projects.post_submit_fixtures import seed_post_submit_policy_for_downstream_tests
-        await seed_post_submit_policy_for_downstream_tests(
-            project_id=str(values["project"]), guide_id=str(values["guide"]),
-            source_snapshot={"id": effective["source_snapshot_id"], "bundle_hash": effective["source_snapshot_hash"]},
-            pre_submit_checker_policy={"id": pre.id}, sessions=sessions,
-        )
-    return values, effective, pre
+        effective = await session.get(EffectiveProjectSubmissionArtifactPolicy, str(upstream.effective_policy_id))
+        pre = await session.get(PreSubmitCheckerPolicy, str(upstream.pre_submit_policy_id))
+        return values, EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective).model_dump(mode="json"), pre
 
 
 async def _approval_context(sessions, project_id, guide_id, policy_id):
