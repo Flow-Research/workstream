@@ -565,8 +565,12 @@ identities. It never substitutes current policies or reruns inference. CP08 uses
 that port in the existing TASK writers: screening stamps the activated contribution
 policy, claim copies it to the assignment, and hidden Submission creation copies
 the assignment's exact stamp. PostgreSQL rejects mismatched or replaced stamps.
-New work requires no superseded economic configuration. Remaining task projections and public authority
-cutover follow in ARCH-03B/03C; canonical checker materialization follows in
+New work requires no superseded economic configuration. ARCH-03B1 removes
+TaskService's private PROJECTS reads: the existing port now returns detached
+project descriptions and exact historical guide display facts. Draft task creation
+requires project existence, not an activated guide. Remaining queues and
+actor-specific projections stay in ARCH-03B; invalidation requires shared delivery
+claims, and public authority cutover remains ARCH-03C. Canonical checker materialization follows in
 ARCH-04B/04C.
 
 ## v0.1 Success Standard

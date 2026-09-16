@@ -14,7 +14,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: one CHECKERS catalogue, compiler/parser and implementation
   per checker ID serve active policy consumers; production post-submit phase
   execution remains unavailable.
-- Next usable boundary: ARCH-03B task projections after completed CP08 lineage
+- Next usable boundary: remaining ARCH-03B queues and actor-specific projections
+  after completed ARCH-03B1 detached metadata and CP08 lineage
   and minimal writers and ARCH-03A internal guide context, following delivered CP07 activation and AUTH-12H live manager authority. POL-04B unified setup, POL-05/06
   manager operations and POL-07B internal phase composition are delivered.
   The production post-submit phase remains unavailable until its separately

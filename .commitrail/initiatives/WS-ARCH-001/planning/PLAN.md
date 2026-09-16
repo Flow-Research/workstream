@@ -29,7 +29,8 @@ checker-remediation boundary before public Submission cutover.
 | [AUTH-12H](../../WS-AUTH-001/WS-AUTH-001-12H.md) | POL-07, CP07, merged AUTH-12B2 | Complete: exact manager authority and internal composition for CP07; ARCH-03A completes internal guide facts; HTTP exposure remains pending |
 | [ARCH-03A](../WS-ARCH-001-03A.md) | AUTH-12H, CP07 | Complete active and exact frozen PROJECTS guide facts before CP08 |
 | [CP08](../WS-ARCH-001-CP08.md) | ARCH-03A | Complete: TASK initial-attempt lineage schema, public facts and minimal existing writers together |
-| ARCH-03B | ARCH-03A, CP08 | Remaining TASK queues, projections and assignment invalidation |
+| [ARCH-03B1](../WS-ARCH-001-03B1.md) | ARCH-03A, CP08 | Complete: TaskService detached PROJECTS display and draft lookup |
+| ARCH-03B remaining | ARCH-03B1; AUTH-OUTBOX-01 and CON-02B for invalidation | Queues and actor-specific projections; hidden assignment invalidation only after shared committed claims |
 | ARCH-03C | ARCH-03B, AUTH-OUTBOX-02 | AUTH exact task/assignment activation and integrated readiness proof |
 | CP09 (later cleanup coordination) | All legacy consumers replaced, including CHECKER and public 02I path | Physical economic deletion; not on the allow_review critical path |
 | ARCH-04B | ARCH-04A, POL-07, ARCH-03C, merged ARCH-02H | ART exact stored Submission materialization |
@@ -59,7 +60,9 @@ ARCH-04A catalogue/schema before producing approval-eligible generations. Owners
 work concurrently if allowed paths do not overlap; shared catalogue/schema
 changes must be serialized or rebased, not implemented twice. ARCH-03A completes the existing internal guide-context port after AUTH-12H.
 CP08 completes its schema and minimal existing writers together; ARCH-03B retains
-queues/invalidation and broader projections. Subsequent
+queues/invalidation and broader projections after completed 03B1 metadata cutover.
+The invalidation handler additionally requires CON-02B committed claims; actor-wide
+changes need explicit per-project TASK events, not arbitrary outbox scope. Subsequent
 PR-sized contracts name exact files, public types, current migration head and
 runnable proof before implementation; they refine this design, not create a
 new permission requirement.

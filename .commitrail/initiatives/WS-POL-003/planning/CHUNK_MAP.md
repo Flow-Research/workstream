@@ -29,7 +29,7 @@ post-task requirement. Historical split parents 05/06 are not extra PRs.
 | `WS-AUTH-001-12G` | Activate exact fixed-service projection plus PM approval/correction authority for the hidden 06A manifest. | 06A |
 | `WS-POL-003-06B` | Live deterministic post-submit projection/approval cutover with zero additional inference. | 06A + AUTH-12G |
 | `WS-POL-003-07` | One typed facade over existing ART pre and CHECKER post contracts; no post-result persistence. | 06B + ARCH-04A registered capability proof + merged ART-04B1-04B3 |
-| `WS-AUTH-001-12H` | Activate guide publication only over the complete approved current-generation unified chain. CP08, WS-ARCH-001-03A/03B/03C, and CP09 remain downstream. | POL-07 + corrected AUTH-12B2 + CP05 active ContributionPolicy behavior + CP06 validation + CP07 ProjectGuide binding |
+| `WS-AUTH-001-12H` | Complete internal guide activation authority over the approved current-generation unified chain. CP08, ARCH-03A and ARCH-03B1 are delivered. Remaining ARCH-03B queues/actor projections come next; invalidation follows shared committed claims, then ARCH-03C public activation. CP09 remains later. | POL-07 + corrected AUTH-12B2 + CP05 active ContributionPolicy behavior + CP06 validation + CP07 ProjectGuide binding |
 | `WS-POL-003-08` | Supplementary visibility; separate remaining cleanup is parked and handled within each affected module. Essential review/correction belongs to 05A/05B and 06A/06B. | Planned after 07 + AUTH-12H + canonical WS-ARCH-001-04E manifest; any separately authorized retained-data change requires CP09's inventory, mapping and readability/recoverability proof for affected facts; no cleanup prerequisite for 04B |
 
 The 04E manifest proves canonical routing, not legacy-history preservation.

@@ -136,7 +136,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; exact run-scoped reads; S3-backed originals and isolated agent document inspection; exact document generation through separate manager approvals and internally authorized CP07 activation | Public activation wiring and task lineage; prove each enabled document reader |
 | Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody | Public activation wiring and downstream task lineage |
 | Contribution policy administration | **Hidden and proven** | Finance Authority adapter-binding lifecycle; ContributionPolicy read/create/update/publish/retire with exact Finance Authority; immutable operation and event history; internal exact selected-version validation; CP07 binding with live exact-project manager authority of the selected published version to the active guide generation | Public activation wiring and downstream TASK/assignment policy lineage |
-| Task readiness and claim | **Foundation with grant-backed contributor commands** | Task records, assignments and locked work context; claim/start/contributor context use exact-project Submitter grants; separate manager context and system-Operator start | Bind the guide's ContributionPolicyVersion before `READY` and carry it through TaskAssignment without a current-policy lookup; finish ready queues, remaining management/read authority and durable assignment invalidation |
+| Task readiness and claim | **Foundation with grant-backed contributor commands** | Task records, assignments and locked work context; claim/start/contributor context use exact-project Submitter grants; separate manager context and system-Operator start | Guide-bound ContributionPolicyVersion is already locked before `READY` and copied to TaskAssignment; detached project/guide display is delivered. Remaining: ready queues, actor-specific projections/authority and durable assignment invalidation |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission | Connect only the active unified guide/checker lineage and complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden and proven; unified-guide integration remains** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, blocking feedback before Submission creation, and one internal phase command covering execution/replay with the JSON precheck removed | Connect approved unified-guide pre-submit policy lineage through task/assignment preparation and complete the canonical public cutover; passing intake must never substitute for post-submit evaluation |
 | Immutable Submission creation | **Hidden foundation; public packet creation retired** | Contributor preparation authority; durable pre-submit reservation and exact completed-evidence recovery without rerunning checks; atomic admission consumption; TASK-owned admission-backed creation; fixed-service artifact binding; replay/concurrency/rollback proof | Stamp the assignment's exact ContributionPolicyVersion and complete unified policy lineage; finish downstream evaluation and the canonical public integration. The retained submission-list GET is not a usable creation POST |
@@ -426,7 +426,10 @@ Setup receipts remain immutable. The next guide boundary is:
    CP06 selected-policy validation, CP07 hidden activation/binding and AUTH-12H
    live manager authority and ARCH-03A complete internal guide context are complete.
    CP08 task-attempt lineage and its minimal existing writers are complete.
-   Next are ARCH-03B task projections and ARCH-03C authorization/public cutover. HTTP activation exposure remains
+   ARCH-03B1 detached project/guide display is complete. Next are the remaining
+   ARCH-03B queues and actor-specific projections. Invalidation follows delivery of
+   the shared committed-claim contract, before the ARCH-03C authorization/public
+   cutover. HTTP activation exposure remains
    pending and is not implied by an internal public port. The operation requires exact
    current compilation, sufficiency, separate pre/post approvals, review/revision
    inputs and an explicitly selected published ContributionPolicyVersion.
@@ -580,14 +583,16 @@ remaining trace sequence is:
 - Unified guide: POL-04B1/04B/04B2, POL-05A/AUTH-12F4/POL-05B,
   POL-06A/AUTH-12G/POL-06B, POL-07A/07B, AUTH-12H and ARCH-03A are delivered.
   The complete internal guide context and `CP08` exact task/assignment/Submission
-  contribution-policy stamps are available; next are ARCH-03B/03C. ARCH-04A supplies registered-capability
+  contribution-policy stamps and ARCH-03B1 detached display are available; remaining
+  ARCH-03B queues/projections and invalidation precede ARCH-03C. ARCH-04A supplies registered-capability
   contracts; activation does not require a Task, Submission or completed run.
 - Contribution lineage: CP05 authorization, CP06 validation and hidden `CP07` activation
   and `AUTH-12H` live manager authority are complete. `ARCH-03A` has completed
   the existing internal guide-context port. `CP08` delivers lineage fields
   and minimal Task/Assignment/Submission writers together without superseded economic
   readiness. Remaining work includes
-  queues/projections in `ARCH-03B` and authorization/public cutover in `ARCH-03C`. `CP09` physical cleanup waits for all remaining
+  remaining queues/projections in `ARCH-03B`, following delivered `ARCH-03B1`
+  metadata cutover, and authorization/public cutover in `ARCH-03C`. `CP09` physical cleanup waits for all remaining
   legacy consumers to be replaced; it is outside the `allow_review` critical path.
   Live assignment invalidation also requires shared dispatch and its exact
   service authority; current authority is still checked on every request.

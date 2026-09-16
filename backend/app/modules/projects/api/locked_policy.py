@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import hashlib
 import json
 from typing import TYPE_CHECKING, Literal, Mapping, Protocol, get_args
@@ -105,6 +106,48 @@ class ProjectLockedPolicyContextRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectDisplayFacts:
+    """Detached current project description; not a policy or authority input."""
+
+    id: UUID
+    name: str
+    slug: str
+    description: str | None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.id, UUID)
+            or not isinstance(self.name, str)
+            or not isinstance(self.slug, str)
+            or (self.description is not None and not isinstance(self.description, str))
+        ):
+            raise ValueError("project display facts are invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class GuideDisplayFacts:
+    """Detached description of the exact activated historical guide."""
+
+    id: UUID
+    project_id: UUID
+    version: str
+    change_summary: str | None
+    effective_at: datetime
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.id, UUID)
+            or not isinstance(self.project_id, UUID)
+            or not isinstance(self.version, str)
+            or not self.version.strip()
+            or (self.change_summary is not None and not isinstance(self.change_summary, str))
+            or not isinstance(self.effective_at, datetime)
+            or self.effective_at.utcoffset() is None
+        ):
+            raise ValueError("guide display facts are invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectLockedPolicyContextFacts:
     """Canonical PROJECT lineage resolved from exact historical locked rows."""
 
@@ -129,6 +172,8 @@ class ProjectLockedPolicyContextFacts:
     review_policy: CanonicalJsonObject
     review_semantics_format: ReviewSemanticsFormat
     revision_policy: CanonicalJsonObject
+    project: ProjectDisplayFacts
+    guide: GuideDisplayFacts
 
     def __post_init__(self) -> None:
         """Reject lifecycle values outside the closed historical sets."""
@@ -165,6 +210,15 @@ class ProjectLockedPolicyContextFacts:
         receipt = GuideActivationReceipt.model_validate(
             self.activation_receipt.model_dump(mode="json")
         )
+        if (
+            not isinstance(self.project, ProjectDisplayFacts)
+            or not isinstance(self.guide, GuideDisplayFacts)
+            or self.project.id != self.project_id
+            or (self.guide.project_id, self.guide.id, self.guide.version)
+            != (self.project_id, self.guide_id, self.guide_version)
+            or self.guide.effective_at != receipt.effective_at
+        ):
+            raise ValueError("project display facts differ from locked context")
         target, upstream = receipt.command.target.proposal, receipt.command.target.upstream
         if (
             (
@@ -213,6 +267,10 @@ class ProjectLockedPolicyContextFacts:
 
 class ProjectLockedPolicyContextPort(Protocol):
     """Transaction-bound PROJECT capability for exact locked policy facts."""
+
+    async def read_project_display(self, project_id: UUID) -> ProjectDisplayFacts | None:
+        """Read existence and display only, without readiness, flush, commit or row locks."""
+        ...
 
     async def lock_active_policy_context(
         self,

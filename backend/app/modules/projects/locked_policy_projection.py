@@ -5,6 +5,8 @@ from uuid import UUID
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
     ProjectLockedPolicyContextFacts,
+    ProjectDisplayFacts,
+    GuideDisplayFacts,
 )
 from app.modules.projects.guide_compilation.approval_custody import approved_projection_digest
 from app.modules.projects.api.policy_lineage import (
@@ -35,7 +37,7 @@ def _policy_body(kind, row, selection, guide):
     return CanonicalJsonObject.from_mapping(model.model_validate(values).model_dump(mode="json"))
 
 
-def complete_context(locked, post_policy, post_custody, receipt, review, revision):
+def complete_context(locked, post_policy, post_custody, receipt, review, revision, project):
     """Require exact activation and each approved output, without rerunning eligibility."""
     view = locked.view
     command = receipt.command
@@ -74,4 +76,13 @@ def complete_context(locked, post_policy, post_custody, receipt, review, revisio
         review_policy=_policy_body("review", review, command.review, view.guide),
         review_semantics_format=review.semantics_format,
         revision_policy=_policy_body("revision", revision, command.revision, view.guide),
+        project=ProjectDisplayFacts(
+            id=UUID(project.id), name=project.name, slug=project.slug,
+            description=project.description,
+        ),
+        guide=GuideDisplayFacts(
+            id=UUID(view.guide.id), project_id=UUID(view.guide.project_id),
+            version=view.guide.version, change_summary=view.guide.change_summary,
+            effective_at=view.guide.effective_at,
+        ),
     )

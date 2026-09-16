@@ -6,6 +6,7 @@ work accounting. Foundations through 02H and CP04B are complete; none restart.
 
 | Boundary | Owner outcome | Risk | Current dependency |
 |---|---|---|---|
+| [WS-ARCH-001-03B1](../WS-ARCH-001-03B1.md) | Detached TaskService project/guide display through the existing PROJECTS port | L1 | Complete; remaining 03B queues/projections next, invalidation waits for shared claims |
 | `WS-ARCH-001-02I` | Admission-only public API/dispatch cutover and removal of legacy route reachability; physical economic cleanup remains CP09 after zero consumers | L1 | Deferred after 02H plus split 03/04/05 remediation, revision, checker-output and REV admission prerequisites |
 | [WS-ARCH-001-CP05](../WS-ARCH-001-CP05.md) | AUTH exact ContributionPolicy activation | L1 | Complete; exact policy authority delivered in PR #387 |
 | [WS-ARCH-001-CP06](../WS-ARCH-001-CP06.md) | CON guide-activation/revision policy-validation port | L1 | Complete; explicit version/purpose validation and shared current resource fences |

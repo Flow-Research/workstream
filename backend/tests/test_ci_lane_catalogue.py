@@ -169,6 +169,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         modules_by_lane["task_lifecycle"]
         == {
             "tests/tasks/test_contribution_lineage.py",
+            "tests/tasks/test_project_display.py",
             "tests/tasks/test_contribution_lineage_migration.py",
             "tests/tasks/test_contribution_claim_races.py",
             "tests/tasks/test_submission_lineage.py",

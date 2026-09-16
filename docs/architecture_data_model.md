@@ -293,6 +293,14 @@ committing. A successor changes active selection but does not redirect frozen
 lookup; contribution-policy retirement does not rewrite its saved activation
 facts. Inactive Projects and incomplete or inconsistent custody remain
 unavailable. CP08 consumes this port in the existing task lifecycle writers.
+ARCH-03B1 adds detached `ProjectDisplayFacts` and `GuideDisplayFacts` to this
+same port result. Nested project/guide identities and guide effective time must
+match the validated activation context. Project name/slug/description are current
+display metadata, not policy hashes; guide display is from the exact selected
+historical guide. TaskService retains no PROJECTS ORM object or private repository.
+The same port's `read_project_display` is existence-only, including draft projects
+without guides, and performs no flush, commit or row lock. The separate pre-submit
+context consumer remains for its later intake cutover.
 
 Migration 0024 adds `WorkstreamTask.locked_contribution_policy_version_id`,
 `TaskAssignment.project_id` and `submitter_contribution_policy_version_id`, and

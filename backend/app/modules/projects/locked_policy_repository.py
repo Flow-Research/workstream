@@ -10,6 +10,7 @@ from app.modules.projects.api import (
     ProjectLockedPolicyContextRequest,
     ProjectLockedPolicyContextUnavailable,
     ProjectGuideSetupFinalizationError,
+    ProjectDisplayFacts,
 )
 from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.api.post_policy import PostPolicySelection
@@ -26,6 +27,17 @@ class ProjectLockedPolicyRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def read_project_display(self, project_id: UUID) -> ProjectDisplayFacts | None:
+        """Copy stored scalars without refreshing, flushing or locking caller-owned rows."""
+        with self._session.no_autoflush:
+            row = (await self._session.execute(
+                select(Project.id, Project.name, Project.slug, Project.description)
+                .where(Project.id == str(project_id))
+            )).one_or_none()
+        return None if row is None else ProjectDisplayFacts(
+            id=UUID(row.id), name=row.name, slug=row.slug, description=row.description,
+        )
 
     async def lock_active_policy_context(self, project_id: UUID) -> ProjectLockedPolicyContextFacts:
         """Select the sole active guide while retaining the Project fence."""
@@ -96,7 +108,7 @@ class ProjectLockedPolicyRepository:
         projects = ProjectRepository(self._session)
         review = await projects.lock_review_policy(guide.project_id, guide.version)
         revision = await projects.lock_revision_policy(guide.project_id, guide.version)
-        facts = complete_context(locked, post_policy, post_custody, refreshed, review, revision)
+        facts = complete_context(locked, post_policy, post_custody, refreshed, review, revision, project)
         if request is not None and request != ProjectLockedPolicyContextRequest(
             project_id=facts.project_id,
             guide_version=facts.guide_version,

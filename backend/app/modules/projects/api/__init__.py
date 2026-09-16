@@ -33,6 +33,8 @@ from app.modules.projects.api.guide_compilation_projections import (
 )
 from app.modules.projects.api.locked_policy import (
     CanonicalJsonObject,
+    ProjectDisplayFacts,
+    GuideDisplayFacts,
     ProjectLockedPolicyContextFacts,
     ProjectLockedPolicyContextPort,
     ProjectLockedPolicyContextRequest,
@@ -46,6 +48,8 @@ from app.modules.projects.api.locked_policy import (
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 __all__ = (
+    "ProjectDisplayFacts",
+    "GuideDisplayFacts",
     "project_guide_compilation_task_id",
     "ProjectGuideSetupFinalizationCommand",
     "ProjectGuideSetupFinalizationReceipt",

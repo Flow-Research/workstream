@@ -9,7 +9,8 @@ and the [capability ledger](../../../docs/roadmap_status.md).
   immutable ContributionRecords and optional
   project-policy-driven compensation awards without coupling lifecycle truth to
   an economic provider.
-- Next usable boundary: ARCH-03B task projections after completed CP08 lineage
+- Next usable boundary: remaining ARCH-03B queues and actor-specific projections
+  after completed ARCH-03B1 detached metadata and CP08 lineage
   and minimal writers, ARCH-03A internal guide context,
   [CP07 activation/binding](../WS-ARCH-001/WS-ARCH-001-CP07.md) and
   [AUTH-12H live authority](../WS-AUTH-001/WS-AUTH-001-12H.md), before task readiness.

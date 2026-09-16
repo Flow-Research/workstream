@@ -30,8 +30,6 @@ from app.modules.checkers.service import (
     CheckerService,
     pre_review_gate_system_actor,
 )
-from app.modules.projects.models import Project, ProjectGuide
-from app.modules.projects.repository import ProjectRepository
 from app.modules.tasks.authorization import can_admin_or_task_creator_manage
 from app.modules.tasks.lifecycle import (
     TASK_STATUS_DRAFT,
@@ -210,8 +208,6 @@ class TaskLockedContextInvalid(TaskServiceError):
 class LockedTaskContext:
     """Validated records bound to one task's stamped locked context."""
 
-    project: Project
-    guide: ProjectGuide
     facts: ProjectLockedPolicyContextFacts
     locked_post_submit_policy_body: PostSubmitPolicyBodySummary
 
@@ -233,7 +229,6 @@ class TaskService:
         self._post_submit_catalogue = post_submit_catalogue
         self._session = session
         self._repo = TaskRepository(session)
-        self._project_repo = ProjectRepository(session)
 
     async def create_task(
         self,
@@ -256,8 +251,14 @@ class TaskService:
             TaskProjectNotReady: If the project id is unknown.
         """
         require_any_role(actor, PROJECT_OPERATOR_ROLES)
-        project = await self._project_repo.get_project(project_id)
-        if project is None:
+        try:
+            project_identity = UUID(project_id)
+        except ValueError as exc:
+            raise TaskProjectNotReady("project not found") from exc
+        if str(project_identity) != project_id:
+            raise TaskProjectNotReady("project not found")
+        project = await self._project_contexts.read_project_display(project_identity)
+        if project is None or project.id != project_identity:
             raise TaskProjectNotReady("project not found")
 
         task = WorkstreamTask(
@@ -903,13 +904,8 @@ class TaskService:
             parsed = CompiledPostSubmitPolicy.model_validate_json(facts.compiled_post_submit_policy.value)
         except (ProjectLockedPolicyContextUnavailable, ValueError, TypeError) as exc:
             raise TaskLockedContextInvalid("task locked policy custody is invalid") from exc
-        # Display metadata only; ARCH-03B owns replacing the remaining private display reads.
-        project = await self._project_repo.get_project(task.project_id)
-        guide = await self._project_repo.get_guide_by_version(task.project_id, facts.guide_version)
-        if project is None or guide is None or guide.id != str(facts.guide_id):
-            raise TaskLockedContextInvalid("task locked guide display context is invalid")
         return LockedTaskContext(
-            project=project, guide=guide, facts=facts,
+            facts=facts,
             locked_post_submit_policy_body=PostSubmitPolicyBodySummary(
                 schema_version=parsed.schema_version, default_checkers=parsed.default_checkers,
                 required_checkers=parsed.required_checkers, warning_checkers=parsed.warning_checkers,
@@ -933,16 +929,16 @@ class TaskService:
         return TaskWorkContextResponse(
             task=self._worker_safe_task_response(task),
             project=TaskProjectContext(
-                id=context.project.id,
-                name=context.project.name,
-                slug=context.project.slug,
-                description=context.project.description,
+                id=str(context.facts.project.id),
+                name=context.facts.project.name,
+                slug=context.facts.project.slug,
+                description=context.facts.project.description,
             ),
             guide=TaskGuideContext(
-                id=context.guide.id,
-                version=context.guide.version,
-                change_summary=context.guide.change_summary,
-                effective_at=context.guide.effective_at,
+                id=str(context.facts.guide.id),
+                version=context.facts.guide.version,
+                change_summary=context.facts.guide.change_summary,
+                effective_at=context.facts.guide.effective_at,
             ),
             review_policy=TaskReviewPolicyContext(
                 policy_id=task.locked_review_policy_id or "",

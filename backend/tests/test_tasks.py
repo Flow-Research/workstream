@@ -46,6 +46,7 @@ from app.modules.actors.models import (
     LegacyActorIdentity,
     LegacyWorkflowEligibility,
 )
+from app.modules.projects.api import ProjectDisplayFacts
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
@@ -363,20 +364,21 @@ async def test_task_service_create_persists_canonical_attribution_and_audit() ->
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
     service = task_service(session, settings=get_settings())
-    service._project_repo.get_project = AsyncMock(return_value=MagicMock())
+    project = ProjectDisplayFacts(uuid4(), "Project", "project", None)
+    service._project_contexts.read_project_display = AsyncMock(return_value=project)
     service._repo.add_task = AsyncMock(side_effect=lambda task: task)
     service._write_task_audit = AsyncMock()
     response = MagicMock(name="task_response")
     service._task_response = MagicMock(return_value=response)
     payload = TaskCreate.model_validate(complete_task_payload())
 
-    result = await service.create_task(actor, "project-1", payload)
+    result = await service.create_task(actor, str(project.id), payload)
 
     assert service._repo.add_task.await_args is not None
     task = service._repo.add_task.await_args.args[0]
     assert result is response
     assert isinstance(task, WorkstreamTask)
-    assert task.project_id == "project-1"
+    assert task.project_id == str(project.id)
     assert task.created_by == actor.actor_id
     assert task.status == "draft"
     assert task.title == payload.title
@@ -2151,60 +2153,6 @@ async def test_submission_requirements_reject_detached_policy_not_matching_appro
     body = response.json()
     assert body["code"] == "task_locked_context_invalid"
     assert body["error"]["message"] == "Task locked context is invalid"
-
-
-async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
-    task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = await create_active_project(task_client)
-    started_task = await create_started_task(task_client, project["id"], monkeypatch)
-
-    v1_requirements = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/submission-requirements",
-        headers=auth_headers(),
-    )
-    assert v1_requirements.status_code == 200, v1_requirements.text
-
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    guide_v2 = await task_client.post(
-        f"/api/v1/projects/{project['id']}/guides",
-        headers=auth_headers(),
-        json=complete_guide_payload("v2"),
-    )
-    assert guide_v2.status_code == 201, guide_v2.text
-    policy_v2 = task_artifact_proposal().model_copy(
-        update={"required_artifacts": ("v2-answer.md",)}
-    )
-    await create_policy_bundle_for_guide(
-        task_client,
-        project["id"],
-        guide_v2.json()["id"],
-        policy_v2,
-    )
-    activate_v2 = await seed_active_guide_for_downstream_test(
-        db_session.get_session_factory(),
-        project_id=project["id"],
-        guide_id=guide_v2.json()["id"],
-    )
-    assert activate_v2["guide"]["version"] == "v2"
-
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
-    work_context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/work-context",
-        headers=auth_headers(),
-    )
-    requirements = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/submission-requirements",
-        headers=auth_headers(),
-    )
-
-    assert work_context.status_code == 200, work_context.text
-    assert requirements.status_code == 200, requirements.text
-    assert work_context.json()["guide"]["version"] == "v1"
-    assert requirements.json()["guide_version"] == "v1"
-    assert requirements.json()["required_artifacts"] == v1_requirements.json()["required_artifacts"]
-    assert requirements.json()["required_artifacts"][0]["path"] == "answer.md"
 
 
 async def test_tasks_under_same_active_guide_share_project_pre_submit_checker(

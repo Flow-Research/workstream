@@ -1,15 +1,14 @@
 # Chunk Contract: WS-ARCH-001-03B TASK Assignment API
 
-Status: non-executable planning skeleton after 03A. Risk: L1. Outcome: TASKS exposes claim, active
-assignment, contributor, predecessor and immutable locked-context commands and
-facts without importing PROJECTS or AUTH internals.
+Status: coordination contract after completed 03A and CP08. Risk: L1.
+Outcome: bounded TASK metadata, queues, actor-specific projections and assignment
+recovery through owner ports. Each implementation child supplies exact proof.
 
 The bounded [project-grant repair](../../../../changes/task-project-grant-authorization.md)
 already owns canonical contributor claim/start/work-context, separate management
 work-context and system-Operator start authority. Reuse its command/port and
-assignment transaction, not a second claim implementation. This skeleton still
-owns the missing contribution-policy attempt locks, queues, broader projections
-and invalidation behavior below; it is not completed by that repair.
+assignment transaction, not a second claim implementation. CP08 completes the contribution-policy attempt locks and minimal writers.
+This parent retains queues, broader projections and invalidation behavior below.
 
 The reconciled CP08 chunk owns contribution-policy fields and the minimal
 existing screening/claim/Submission copy paths together after ARCH-03A. This
@@ -47,7 +46,11 @@ already-submitted/evaluation/review history cannot be rewritten. Downstream
 needs-revision obligations and manager reassignment remain REV-owned work;
 there is no new direct manager assignment feature here.
 
-Build this as a hidden TASK-owned event handler with exact fixed-service
+Build this only after AUTH-OUTBOX-01 and CON-02B deliver the shared committed
+claim and typed-handler contracts. Current OUTBOX provides append-only persistence, and AUTH
+invalidation audit rows are not dispatched events. Actor-wide invalidation needs
+explicit per-project TASK fan-out; TASK and REV effects cannot share an implicit
+acknowledgement. The hidden TASK-owned event handler receives exact fixed-service
 authority supplied by 03C, using the shared outbox's committed claim contract.
 03C must wire AUTH invalidation events durably in their originating transaction;
 a response hint such as `auth13_assignment` is not a delivered reconciliation.
@@ -60,23 +63,24 @@ reviewed current-main delta proves the existing public type cannot carry it.
 Before implementation, replace this skeleton with a current-main contract that
 enumerates exact files, commands, migration head and reviewers.
 
-Acceptance: acquiring the task's lock fails when the then-active guide has
-no same-project published, complete, binding-valid immutable
-ContributionPolicyVersion; a newer publication alone cannot mutate an existing
-task or assignment. The later human-revision contract is the only controlled
-same-Task/TaskAssignment rebase boundary. Concurrent claims have one
-winner; inactive/replaced assignment,
-wrong contributor, internally inconsistent locked generation and invalid
-predecessor deny; a newer current guide does not stale-deny a frozen task;
-the assignment version must equal the task lock and any missing, cross-project,
-stale, or changed lineage denies before assignment creation; claim performs no
-policy selection and later publication cannot mutate either current-attempt
-lock; Submission creation stamps the exact attempt version before any later
-human-revision rebase;
-facts contain no ORM/session object; touched debt shrinks. Verify focused unit
-and PostgreSQL race tests, boundary validators, Ruff and hosted coverage.
-Required reviews: architecture, security, product/ops, QA, senior and test
-delta.
+The completed CP08 screening/claim/Submission lineage and concurrency proofs
+remain required regressions, not duplicate writers for this parent. For each
+remaining child, verify focused unit/PostgreSQL and public composition tests,
+boundary validators, Ruff and hosted coverage. Required reviews are selected
+from the child's actual architecture, security, product/ops, QA, senior and
+test-delta impact.
+
+## Current bounded sequence
+
+1. [ARCH-03B1](../../WS-ARCH-001-03B1.md): remove TaskService's private PROJECTS
+   draft/display reads using the existing port and immutable exact-guide facts.
+   Its public response shapes and authorization remain unchanged. The separate
+   pre-submit context consumer is explicitly outside this metadata cutover.
+2. Remaining 03B queues and actor-specific task projections, with exact field,
+   visibility/count/cursor and hidden command contracts before implementation.
+3. Assignment invalidation after the shared claim contract exists, followed by
+   ARCH-03C producer wiring, exact AUTH and public activation. No parallel worker
+   or fabricated claim value substitutes for those dependencies.
 
 ## Merge state
 
