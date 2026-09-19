@@ -1,0 +1,80 @@
+{
+  "canonical_sha256": "9f5209efbf3e67b8e1a50ed1bc635c2fdfd344c1d90457dc1cd200cc0745abdd",
+  "components": {
+    "schemas": {
+      "ActorProfileSelfResponse": {
+        "additionalProperties": false,
+        "description": "Privacy-bounded canonical profile returned to its human owner.",
+        "properties": {
+          "actor_kind": {"const": "human", "title": "Actor Kind", "type": "string"},
+          "actor_profile_id": {"title": "Actor Profile Id", "type": "string"},
+          "admin_roles": {"default": [], "items": {"type": "string"}, "title": "Admin Roles", "type": "array"},
+          "contact_email": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Contact Email"},
+          "created_at": {"format": "date-time", "title": "Created At", "type": "string"},
+          "display_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Display Name"},
+          "domains": {"default": ["contributor"], "items": {"const": "contributor", "type": "string"}, "title": "Domains", "type": "array"},
+          "last_seen_at": {"anyOf": [{"format": "date-time", "type": "string"}, {"type": "null"}], "title": "Last Seen At"},
+          "project_role_grants": {"default": [], "items": {"type": "string"}, "title": "Project Role Grants", "type": "array"},
+          "status": {"enum": ["active", "suspended", "deactivated"], "title": "Status", "type": "string"},
+          "updated_at": {"format": "date-time", "title": "Updated At", "type": "string"}
+        },
+        "required": ["actor_profile_id", "actor_kind", "status", "display_name", "contact_email", "created_at", "updated_at", "last_seen_at"],
+        "title": "ActorProfileSelfResponse",
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {"title": "Code", "type": "string"},
+          "correlation_id": {"title": "Correlation Id", "type": "string"},
+          "details": {"additionalProperties": true, "title": "Details", "type": "object"},
+          "message": {"title": "Message", "type": "string"},
+          "retryable": {"title": "Retryable", "type": "boolean"}
+        },
+        "required": ["code", "message", "details", "correlation_id", "retryable"],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {"anyOf": [{}, {"type": "null"}], "title": "Detail"},
+          "error": {"$ref": "#/components/schemas/ApiError"}
+        },
+        "required": ["error"],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Return the caller's canonical Contributor-domain profile.",
+    "operationId": "read_current_actor_profile_api_v1_actors_me_get",
+    "parameters": [
+      {"in": "header", "name": "X-Request-ID", "required": false, "schema": {"format": "uuid", "maxLength": 36, "minLength": 36, "type": "string"}},
+      {"in": "header", "name": "X-Correlation-ID", "required": false, "schema": {"format": "uuid", "maxLength": 36, "minLength": 36, "type": "string"}}
+    ],
+    "responses": {
+      "200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ActorProfileSelfResponse"}}}, "description": "Successful Response", "headers": {"X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}},
+      "400": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorResponse"}}}, "description": "Invalid request.", "headers": {"X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}},
+      "401": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorResponse"}}}, "description": "Authentication failed.", "headers": {"WWW-Authenticate": {"schema": {"type": "string"}}, "X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}},
+      "403": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorResponse"}}}, "description": "Permission denied.", "headers": {"X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}},
+      "500": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorResponse"}}}, "description": "Internal server error.", "headers": {"X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}},
+      "503": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorResponse"}}}, "description": "Identity verification unavailable.", "headers": {"X-Correlation-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}, "X-Request-ID": {"required": true, "schema": {"format": "uuid", "type": "string"}}}}
+    },
+    "security": [{"HTTPBearer": []}],
+    "summary": "Read Current Actor Profile",
+    "tags": ["actors"],
+    "x-workstream-action-id": "actor.profile.read_self"
+  },
+  "schema_version": 1,
+  "source": {
+    "action_id": "actor.profile.read_self",
+    "backend_git_sha": "d2416a448f5dc3815830290fb3b371eb610b1374",
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/actors/me"
+  }
+}

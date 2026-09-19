@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "workstream-mcp-server"
+version = "0.1.0"
+description = "Independent MCP adapter for the Workstream public API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "httpx==0.28.1",
+  "jsonschema==4.25.1",
+  "mcp==2.2.0",
+  "uvicorn==0.35.0",
+]
+
+[project.scripts]
+workstream-mcp = "workstream_mcp.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+  "build==1.6.1",
+  "mypy==2.3.1",
+  "pytest==9.1.1",
+  "pytest-asyncio==1.4.0",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["workstream_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"contracts/profile_get.json" = "workstream_mcp/contracts/profile_get.json"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/contracts/profile_get.json",
+  "/workstream_mcp",
+  "/pyproject.toml",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixture bearer strings exercise redaction and request isolation; they are not credentials.
+"tests/**/*.py" = ["S101", "S106", "S107"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["workstream_mcp"]

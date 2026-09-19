@@ -1,0 +1,16 @@
+{
+  "alembic_head": "0023_guide_activation_custody",
+  "cleanup_complete": true,
+  "database_cleanup_complete": true,
+  "database_name": "workstream_test_140cfcaae403",
+  "database_provisioned": true,
+  "database_role": "workstream_role_140cfcaae403",
+  "lane": "isolated",
+  "minio_bucket": null,
+  "minio_cleanup_complete": true,
+  "minio_prefix": null,
+  "minio_probe_complete": false,
+  "minio_provisioned": false,
+  "schema_version": 2,
+  "tree_sha": "ab51a4f62bb21b6ea9764678b17cc309b6dcfcc5"
+}
