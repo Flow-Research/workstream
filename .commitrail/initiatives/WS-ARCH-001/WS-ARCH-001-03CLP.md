@@ -48,16 +48,23 @@ AUTH invalidation event to make skip/expiry fit an unrelated permission.
 
 ## Design and decisions
 
-1. **PROJECTS owns configuration; TASK owns the lease.** Add a positive bounded
-   contributor lease duration to governed project configuration and include its
-   version/hash in the existing frozen guide-context contract. Do not reuse
-   ReviewPolicy or ContributionPolicy for an unrelated contributor timeout.
-   The policy-carrier decision is an explicit 03C3 source-design task: there is
-   no contributor-duration field today. Extend existing project configuration
-   and custody where possible; justify any necessary new policy record before
-   implementation. No separate policy engine or approval subsystem.
-   Exact unit/name, default and maximum must be explicit in 03C3's reviewed
-   contract. Missing/invalid configuration must not activate claimable work.
+1. **PROJECTS owns configuration; TASK owns the lease.** Add
+   `contributor_assignment_lease_duration_seconds` to existing versioned
+   `ProjectGuide` configuration through its authorized create and draft-update
+   operations. The manager configures a positive bounded duration in seconds;
+   two days is 172800 seconds. Reuse guide id/version and mutation generation
+   for version identity. Bind a closed immutable lease value and canonical hash
+   into the existing activation command/receipt; compare both to the locked
+   guide before consuming activation authority. Extend
+   `ProjectLockedPolicyContextFacts` with the validated duration/hash and freeze
+   those on the ready task, then copy them to the assignment. Update request
+   hashing, replay, responses, schemas, database guards and affected callers
+   together. No new policy table, mutation endpoint, policy engine, approval
+   subsystem, or reuse of reviewer/economic policy. Existing guide mutation
+   generation and active-guide immutability remain authoritative.
+   Initial default and maximum must be explicit in 03C3's reviewed contract;
+   this plan does not silently choose the example as a default. Missing/invalid
+   configuration must not activate claimable work.
 2. **Claim freezes duration and expiry.** The ready task carries its governed
    duration/identity; claim copies it to the new assignment, captures one
    PostgreSQL wall-clock instant after serialization locks, and computes the
@@ -78,15 +85,32 @@ AUTH invalidation event to make skip/expiry fit an unrelated permission.
    task's assignee in one transaction. Return the task to `ready` only from
    `claimed`/`in_progress` with no retained Submission for that assignment.
    Preserve locked task policy, attempts, admissions and artifact evidence.
-   If skip arrives after expiry, record expiry rather than disguising it as skip.
+   Do not add `claimed`/`in_progress` -> `ready` to generic
+   `ALLOWED_TASK_TRANSITIONS`: the retained manager `release_to_ready` path
+   changes only the task, so it must not bypass this exact-assignment operation.
+   An authorized own skip finding an active but expired assignment commits the
+   expiry release and returns its receipt with outcome `expired`, not `skipped`;
+   do not raise inside the transaction and roll back the release.
+   Across revocation, skip and expiry, the first authorized serialized release
+   wins one terminal reason, release timestamp and matching immutable event.
+   A later authorized trigger verifies the already-closed exact target and
+   returns that terminal outcome/no-op without relabeling, reopening or clearing
+   a successor. Delayed invalidation delivery acknowledges that verified
+   terminal outcome; it must not fabricate another release or get stuck retrying.
+   Expiry precedence for skip applies only while that assignment is still active.
 5. **Foreground checks are decisive; worker timing is not permission.** Start,
    preparation reservation/execution/recovery, admission consumption and final
    Submission creation check the exact active assignment against PostgreSQL
    time under the owning locks. `observed_at >= expires_at` is expired.
    A stale active row cannot authorize submission while the worker is delayed.
+   Ordinary foreground expiry denial need not release the assignment: public
+   ready discovery/reclaim waits for the sweep or an explicit authorized expiry
+   release. Own skip-at-expiry is the committed release case described above.
    Recheck after external processing and after lock waits, immediately at the
    final atomic admission/Submission mutation. Define this check as the
    serialization point; no requirement to predict the future commit timestamp.
+   Guard both the TASK public submission-context port and ART
+   `submission_materialization` direct locked-context consumer; neither is a bypass.
    A Submission validly created before that point wins; later cleanup cannot
    reopen it. An expired pre-submit attempt creates no Submission.
 6. **Periodic bounded Celery sweep.** A configurable recurring schedule scans
@@ -120,7 +144,7 @@ Before declaring the public task workflow complete, add these owner boundaries:
 
 | Boundary | Outcome | Required predecessor |
 |---|---|---|
-| ARCH-03C3 | Governed contributor duration, frozen task/assignment lease facts, minimal claim writer and migration together; no compatibility path | Delivered PROJECTS context/CP08; current-source policy-carrier review |
+| ARCH-03C3 | Governed contributor duration, frozen task/assignment lease facts, minimal claim writer and migration together; no compatibility path | Delivered PROJECTS context/CP08; existing ProjectGuide create/update/activation custody |
 | ARCH-03C4 | Exact TASK skip/expiry release, AUTH contracts and decisive foreground expiry guards across existing preparation/admission/Submission consumers | 03C3; reuse delivered 03B9/03C1 mechanics without broadening their authority |
 | Remaining ARCH-03C public integration | Exact contributor skip/history/queue exposure, fixed-service expiry authority and periodic worker composition, plus existing public task/guide readiness wiring | 03C2, 03C3, 03C4; public surface remains bounded through reviewed child contracts |
 
@@ -141,6 +165,9 @@ for two days, mocked ownership or disabled unrelated guards.
 | Configured claim-relative duration | PROJECTS contract/migration tests: positive duration survives approval/hash/context/task/assignment; zero, missing, invalid bounds reject; valid control follows identical guards |
 | PostgreSQL time and locked policy | TASK claim tests: skew app/client clocks, wait for serialization lock and compare stored claim/expiry with DB time; later policy change leaves locked task/assignment unchanged |
 | Skip and reclaim | TASK release integration: own active skip returns READY, old row terminal, new contributor and same-person reclaim create distinct IDs; unauthorized/project-substituted skip leaves rows unchanged |
+| Retained manager release | Existing manager `/release` on otherwise-valid claimed/in-progress task rejects and leaves task/assignment/evidence unchanged; screening-to-ready control still works |
+| Own skip at expiry | Otherwise-valid authorized own skip at DB expiry commits exactly `expired`, release time/evidence and READY; response says expired and both same/different actor can immediately reclaim with a fresh assignment |
+| Competing release triggers | Real committed AUTH invalidation cause, real skip/expiry authority, independent sessions in both serialization orders: exactly one terminal reason/time/event; later handler acknowledges verified closed target without mutation, duplicate event, or successor release |
 | Expiry without worker | Real preparation/admission creation tests with otherwise-valid exact policy, artifact custody and admission, due assignment and worker disabled: expiry-specific rejection, no Submission; identical unexpired control succeeds |
 | Processing crosses expiry | Delay external preparation or hold transaction lock until due; final admission/creation recheck rejects while already-expired-at-start tests remain separate |
 | Races and replay | Independent sessions: skip/expiry versus Submission, duplicate sweep, simultaneous reclaim and AUTH role changes; exactly one valid result, no deadlock or partial release; old claim/skip replay never mutates successor |
@@ -166,14 +193,21 @@ before implementation. Any retained-data conversion requires separate authority.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| No existing contributor lease | Inspect TASK claim/models/release and PROJECTS policies | Claim/history exist; contributor duration/expiry absent | Policy carrier and numerical bounds require 03C3 design |
+| No existing contributor lease | Inspect TASK claim/models/release and PROJECTS policies | Claim/history exist; contributor duration/expiry absent | Existing guide carrier selected; default/maximum require 03C3 decision |
 | Reuse existing owners | Inspect authorized_commands, assignment_invalidation, submission_composition and Celery workers | Existing authority, lineage and job owners identified | Future race/worker tests must execute |
 | Planning consistency | Markdown links, Commitrail validation, stale wording scan and focused plan review | Record exact results in PR | No runtime implementation claimed |
 
 ## Review findings
 
-Plan review must test expired active-row submission, same-person reclaim,
-processing across expiry, transaction-time skew and post-submit preservation.
+- Pin configuration to existing ProjectGuide mutation/activation custody rather
+  than leaving a new subsystem choice open; include canonical lease value/hash.
+- Protect retained manager release from generic transition widening.
+- Specify and test committed own skip-at-expiry, its expiry-specific receipt
+  and immediate reclaim; ordinary foreground denial does not promise cleanup.
+- Serialize competing revocation/skip/expiry into one terminal result, with
+  explicit idempotent acknowledgement for later triggers.
+
+These plan repairs require future runtime proofs in the named owner children.
 
 ## Reconciliation
 
@@ -181,5 +215,5 @@ processing across expiry, transaction-time skew and post-submit preservation.
   receipts remain complete; this adds human-requested task lease/skip behavior.
 - Next usable boundary: ARCH-03C2, then reviewed lease/skip owner children before
   public task completion. This plan does not authorize starting another chunk.
-- Remaining risks: policy carrier/default/bounds and retained-data prerequisites
+- Remaining risks: default/bounds and retained-data prerequisites
   must be resolved in 03C3; real implementation and concurrency evidence pending.

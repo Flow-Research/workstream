@@ -410,7 +410,8 @@ The next dependency-safe product sequence is:
    listed above. ARCH-03C1 supplies exact reconciler authority and decision-bound
    receipts. ARCH-03C2 next supplies atomic originating producer wiring and first
    handler registration. The adopted [contributor lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md) adds
-   governed claim-relative duration (03C3) and exact skip/expiry release with
+   a manager-configured duration on the versioned ProjectGuide and claim-relative
+   lease facts (03C3) and exact skip/expiry release with
    foreground submission guards (03C4). Periodic expiry-worker and public
    skip/history composition are required before task completion. These are
    planned, not delivered. Public task authority and exposure remain separately

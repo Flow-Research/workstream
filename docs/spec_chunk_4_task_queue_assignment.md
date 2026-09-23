@@ -15,7 +15,9 @@ The [capability ledger](roadmap_status.md) distinguishes those remaining owners.
 The adopted [lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
 requires project-configured, claim-relative contributor leases and voluntary
 skip before public task completion. This behavior is **not implemented yet**.
-PostgreSQL time starts and expires each exact assignment. Skip or expiry returns
+The manager configures `contributor_assignment_lease_duration_seconds` on the
+versioned ProjectGuide; activation binds its exact value/hash into the locked
+context. PostgreSQL time starts and expires each exact assignment. Skip or expiry returns
 unsubmitted work to `ready`, retains the terminal assignment, and permits a new
 claim by any authorized contributor, including the same person. A new claim
 gets a new assignment ID; old preparation/admission cannot transfer to it.
