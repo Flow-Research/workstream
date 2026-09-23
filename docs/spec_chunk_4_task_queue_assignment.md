@@ -12,7 +12,7 @@ The [capability ledger](roadmap_status.md) distinguishes those remaining owners.
 
 ## Planned contributor lease and voluntary skip
 
-The adopted [lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03C-lease-plan.md)
+The adopted [lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
 requires project-configured, claim-relative contributor leases and voluntary
 skip before public task completion. This behavior is **not implemented yet**.
 PostgreSQL time starts and expires each exact assignment. Skip or expiry returns

@@ -40,7 +40,7 @@ checker-remediation boundary before public Submission cutover.
 | [ARCH-03B9](../WS-ARCH-001-03B9.md) | ARCH-03B8, CON-02B and AUTH-OUTBOX-02 | Complete: hidden exact-assignment invalidation with committed cause and delivery custody |
 | [ARCH-03C1](../WS-ARCH-001-03C1.md) | ARCH-03B9, AUTH-OUTBOX-02 | Complete: exact reconciler authority and decision-bound release receipts |
 | ARCH-03C2 | ARCH-03C1 | Planned next: atomic originating producer publication and first handler registration with enforced prefork topology |
-| ARCH-03C3 | Delivered PROJECTS context and CP08 | Planned: governed contributor duration and claim-relative lease lineage; see [lease/skip plan](../WS-ARCH-001-03C-lease-plan.md) |
+| ARCH-03C3 | Delivered PROJECTS context and CP08 | Planned: governed contributor duration and claim-relative lease lineage; see [lease/skip plan](../WS-ARCH-001-03CLP.md) |
 | ARCH-03C4 | ARCH-03C3 and delivered TASK release mechanics | Planned: skip/expiry release and foreground admission/Submission fencing |
 | ARCH-03C public cutover | ARCH-03C2, ARCH-03C3/03C4 and hidden TASK owner contracts | Planned: exact public task/assignment authority and integrated readiness proof |
 | CP09 (later cleanup coordination) | All legacy consumers replaced, including CHECKER and public 02I path | Physical economic deletion; not on the allow_review critical path |

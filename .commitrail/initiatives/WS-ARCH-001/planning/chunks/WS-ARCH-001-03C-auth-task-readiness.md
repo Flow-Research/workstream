@@ -22,7 +22,7 @@ role-only fallback or public Submission cutover.
 
 ## Contributor lease and skip prerequisite
 
-The adopted [lease/skip plan](../../WS-ARCH-001-03C-lease-plan.md) adds 03C3
+The adopted [lease/skip plan](../../WS-ARCH-001-03CLP.md) adds 03C3
 governed duration/claim lineage and 03C4 exact release/foreground guards before
 public task completion. Remaining public composition also owns contributor
 skip/history access and the fixed-service periodic expiry worker. Preserve

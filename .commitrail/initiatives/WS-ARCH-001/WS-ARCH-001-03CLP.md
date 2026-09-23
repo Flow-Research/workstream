@@ -1,4 +1,4 @@
-# ARCH-03C — Contributor assignment lease and skip plan
+# WS-ARCH-001-03CLP — Contributor assignment lease and skip plan
 
 - Initiative: `WS-ARCH-001`
 - Durable disposition: `Complete`
@@ -130,7 +130,7 @@ worker may be presented as delivered by this planning PR. Downstream intake
 and post-submit integration retain their existing owners and consume these
 lease guards; they do not implement a second assignment lifecycle.
 
-## Acceptance criteria and future proof
+## Acceptance criteria
 
 The following are **future implementation tests**, not executed runtime evidence
 for this plan. Use real PostgreSQL and production AUTH/owner paths; no sleeping

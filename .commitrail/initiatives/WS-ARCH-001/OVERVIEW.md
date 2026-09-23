@@ -15,7 +15,7 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   per checker ID serve active policy consumers; production post-submit phase
   execution remains unavailable.
 - Next usable boundary: ARCH-03C2 atomic producer wiring and first handler
-  registration, then the [contributor lease/skip plan](WS-ARCH-001-03C-lease-plan.md)
+  registration, then the [contributor lease/skip plan](WS-ARCH-001-03CLP.md)
   (03C3/03C4) before public task completion. ARCH-03C1 supplies exact fixed-service
   reconciliation authority and decision-bound release receipts. ARCH-03B9 supplies the
   hidden exact-assignment operation and transaction fence. AUTH-OUTBOX-02 delivers
