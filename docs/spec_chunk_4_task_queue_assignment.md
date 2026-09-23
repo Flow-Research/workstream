@@ -10,6 +10,20 @@ hidden Submission creation. It does not claim the complete public task queue,
 submission public cutover, or authority-invalidation worker is delivered.
 The [capability ledger](roadmap_status.md) distinguishes those remaining owners.
 
+## Planned contributor lease and voluntary skip
+
+The adopted [lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03C-lease-plan.md)
+requires project-configured, claim-relative contributor leases and voluntary
+skip before public task completion. This behavior is **not implemented yet**.
+PostgreSQL time starts and expires each exact assignment. Skip or expiry returns
+unsubmitted work to `ready`, retains the terminal assignment, and permits a new
+claim by any authorized contributor, including the same person. A new claim
+gets a new assignment ID; old preparation/admission cannot transfer to it.
+Foreground preparation and Submission creation reject expired assignments even
+when periodic Celery cleanup is delayed. Expose an own-assignment expiry reason
+without disclosing another contributor. Existing task deadlines and reviewer
+leases are separate; already-created Submissions are never reopened by this flow.
+
 ## Records and ownership
 
 - `ActorProfile` and `ActorIdentityLink` are canonical actor and external
