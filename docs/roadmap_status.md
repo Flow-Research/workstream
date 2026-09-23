@@ -412,7 +412,7 @@ The next dependency-safe product sequence is:
    handler registration. The adopted [contributor lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md) adds
    a manager-configured duration on the versioned ProjectGuide and claim-relative
    lease facts (03C3) and exact skip/expiry release with
-   foreground submission guards (03C4). Periodic expiry-worker and public
+   foreground submission guards (03C4). Periodic Celery expiry scanning and public
    skip/history composition are required before task completion. These are
    planned, not delivered. Public task authority and exposure remain separately
    bounded. Public guide activation remains pending and is not implied by an
@@ -505,7 +505,7 @@ Delivered foundations (not a claim of full public integration)
 Remaining integration
   ARCH-03C2 invalidation producer + first handler registration
   -> ARCH-03C3/03C4 governed contributor leases + skip/expiry guards
-  -> bounded ARCH-03C public task authority, expiry worker and wiring
+  -> bounded ARCH-03C public task authority, Celery expiry scanning and wiring
   -> public guide activation + approved-guide intake integration
   -> immutable admitted Submission through the public path
   -> durable current post-submit result + required checks pass
