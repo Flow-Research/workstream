@@ -20,15 +20,6 @@ initiative evidence/status. Not allowed: TASK lifecycle ownership, private
 PROJECT/TASK imports, ART/checker/review activation, generic task permission,
 role-only fallback or public Submission cutover.
 
-## Contributor lease and skip prerequisite
-
-The adopted [lease/skip plan](../../WS-ARCH-001-03CLP.md) adds 03C3
-governed duration/claim lineage and 03C4 exact release/foreground guards before
-public task completion. Remaining public composition also owns contributor
-skip/history access and the fixed-service periodic expiry worker. Preserve
-03C2 authority-event wiring as its existing bounded change. Time expiry is
-not an AUTH revocation event; dispatcher authority cannot authorize it.
-
 ## Proposed exact surface/action manifest
 
 The bounded [project-grant repair](../../../../changes/task-project-grant-authorization.md)

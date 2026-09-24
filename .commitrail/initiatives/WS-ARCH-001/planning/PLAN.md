@@ -1,5 +1,15 @@
 # WS-ARCH-001 — Current delivery plan through allow_review
 
+## Deferred scope
+
+The [contributor lease/skip plan](../WS-ARCH-001-03CLP.md) is Stopped and outside
+v0.1. Its proposed 03C3/03C4 boundaries do not gate this dependency sequence.
+ARCH-03C2 and existing public task/guide integration remain next. The retained
+future design includes fresh revision submission windows; it changes no current
+REV lifecycle contract. Abandoned-assignment recovery needs an explicit release
+assessment; no generic manager release or authority revocation may be presented
+as a substitute for a safe recovery command.
+
 ## Current dependency contract
 
 This section and the corrected pending child contracts are the current
@@ -40,9 +50,7 @@ checker-remediation boundary before public Submission cutover.
 | [ARCH-03B9](../WS-ARCH-001-03B9.md) | ARCH-03B8, CON-02B and AUTH-OUTBOX-02 | Complete: hidden exact-assignment invalidation with committed cause and delivery custody |
 | [ARCH-03C1](../WS-ARCH-001-03C1.md) | ARCH-03B9, AUTH-OUTBOX-02 | Complete: exact reconciler authority and decision-bound release receipts |
 | ARCH-03C2 | ARCH-03C1 | Planned next: atomic originating producer publication and first handler registration with enforced prefork topology |
-| ARCH-03C3 | Delivered PROJECTS context and CP08 | Planned: governed contributor duration and claim-relative lease lineage; see [lease/skip plan](../WS-ARCH-001-03CLP.md) |
-| ARCH-03C4 | ARCH-03C3 and delivered TASK release mechanics | Planned: skip/expiry release and foreground admission/Submission fencing |
-| ARCH-03C public cutover | ARCH-03C2, ARCH-03C3/03C4 and hidden TASK owner contracts | Planned: exact public task/assignment authority and integrated readiness proof |
+| ARCH-03C public cutover | ARCH-03C2 and hidden TASK owner contracts | Planned: exact public task/assignment authority and integrated readiness proof |
 | CP09 (later cleanup coordination) | All legacy consumers replaced, including CHECKER and public 02I path | Physical economic deletion; not on the allow_review critical path |
 | ARCH-04B | ARCH-04A, POL-07, ARCH-03C, merged ARCH-02H | ART exact stored Submission materialization |
 | ARCH-04B2 | ARCH-04A and merged ART admission/verification/binding foundations | ART bounded checker output/log ingestion and verified binding, no routing |

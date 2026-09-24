@@ -15,8 +15,7 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   per checker ID serve active policy consumers; production post-submit phase
   execution remains unavailable.
 - Next usable boundary: ARCH-03C2 atomic producer wiring and first handler
-  registration, then the [contributor lease/skip plan](WS-ARCH-001-03CLP.md)
-  (03C3/03C4) before public task completion. ARCH-03C1 supplies exact fixed-service
+  registration, then public task activation. ARCH-03C1 supplies exact fixed-service
   reconciliation authority and decision-bound release receipts. ARCH-03B9 supplies the
   hidden exact-assignment operation and transaction fence. AUTH-OUTBOX-02 delivers
   shared live dispatcher authority, phase audit custody and Celery recovery after
@@ -51,3 +50,12 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   registered structural conformance, not durable runs. Following CP08, ARCH-03B/03C and ARCH-04B-04F build task readiness,
   post-submit checker/materialization, remediation, and `allow_review` before
   final public 02I cutover and later REV admission.
+
+## Deferred contributor leases and skip
+
+[03CLP](WS-ARCH-001-03CLP.md) is Stopped: contributor timed submission windows
+and voluntary skip are deferred from v0.1. They are not prerequisites for
+ARCH-03C2 or public task/guide integration. Preserve authorized ownership,
+locked policies, admission/retry and authority-revocation handling. Claims do
+not expire automatically. Review abandoned-assignment recovery before release;
+do not claim the retained screened-task release action can recover claimed work.

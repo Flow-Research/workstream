@@ -10,21 +10,17 @@ hidden Submission creation. It does not claim the complete public task queue,
 submission public cutover, or authority-invalidation worker is delivered.
 The [capability ledger](roadmap_status.md) distinguishes those remaining owners.
 
-## Planned contributor lease and voluntary skip
+## Deferred contributor leases and voluntary skip
 
-The adopted [lease/skip plan](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
-requires project-configured, claim-relative contributor leases and voluntary
-skip before public task completion. This behavior is **not implemented yet**.
-The manager configures `contributor_assignment_lease_duration_seconds` on the
-versioned ProjectGuide; activation binds its exact value/hash into the locked
-context. PostgreSQL time starts and expires each exact assignment. Skip or expiry returns
-unsubmitted work to `ready`, retains the terminal assignment, and permits a new
-claim by any authorized contributor, including the same person. A new claim
-gets a new assignment ID; old preparation/admission cannot transfer to it.
-Foreground preparation and Submission creation reject expired assignments even
-when periodic Celery cleanup is delayed. Expose an own-assignment expiry reason
-without disclosing another contributor. Existing task deadlines and reviewer
-leases are separate; already-created Submissions are never reopened by this flow.
+Timed contributor submission windows and voluntary skip are outside v0.1.
+[The stopped proposal](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
+retains the intended claim and revision window semantics for later scope review.
+No contributor-duration policy field, automatic expiry or public skip command
+is implemented. Task `deadline_at` is not an enforced claim lease. Existing
+ownership, locked policy, submission/retry and authority-revocation safeguards
+remain required. The manager release action handles screened tasks, not safe
+recovery of an abandoned claimed assignment. Recovery requires separate assessed
+owner behavior before it can be documented as usable.
 
 ## Records and ownership
 
