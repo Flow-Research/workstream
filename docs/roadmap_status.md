@@ -95,6 +95,15 @@ false invokes shared authorized acceptance without a human Review. Both routing
 integrations remain planned. Human review/revision, contribution and conditional
 compensation effects, operations and release proof complete v0.1.
 
+Contributor timed assignment leases and voluntary skip are **Deferred** from
+v0.1; [the stopped proposal](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
+preserves the future initial/revision submission-window design. Claims currently
+do not expire automatically. This does not defer authorized claim/start, exact
+assignment ownership, locked policies, safe submission/retry or authority
+revocation. Before release, resolve and document safe abandoned-assignment
+recovery or explicitly restrict pilot operations; no such recovery command is
+claimed delivered by this deferral.
+
 The [independent MCP package](../mcp_server/README.md) implements one profile
 tool. It is not a deployed service or the complete proposed tool catalogue.
 

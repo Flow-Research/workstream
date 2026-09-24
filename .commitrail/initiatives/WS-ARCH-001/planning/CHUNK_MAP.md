@@ -41,3 +41,7 @@ expands its current child contract into one existing-initiative change record
 with exact paths, schema head, proof commands and impact-routed reviewers.
 That expansion belongs to its implementation PR, not an extra approval loop.
 No new product implementation starts automatically on merge of this plan.
+
+The [03CLP contributor lease/skip proposal](../WS-ARCH-001-03CLP.md) is Stopped.
+Proposed 03C3/03C4 and expiry scheduling are deferred from v0.1, not predecessors
+of the public cutover above. Revisit only through explicit scope adoption.

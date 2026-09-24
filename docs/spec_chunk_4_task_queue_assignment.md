@@ -10,6 +10,18 @@ hidden Submission creation. It does not claim the complete public task queue,
 submission public cutover, or authority-invalidation worker is delivered.
 The [capability ledger](roadmap_status.md) distinguishes those remaining owners.
 
+## Deferred contributor leases and voluntary skip
+
+Timed contributor submission windows and voluntary skip are outside v0.1.
+[The stopped proposal](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03CLP.md)
+retains the intended claim and revision window semantics for later scope review.
+No contributor-duration policy field, automatic expiry or public skip command
+is implemented. Task `deadline_at` is not an enforced claim lease. Existing
+ownership, locked policy, submission/retry and authority-revocation safeguards
+remain required. The manager release action handles screened tasks, not safe
+recovery of an abandoned claimed assignment. Recovery requires separate assessed
+owner behavior before it can be documented as usable.
+
 ## Records and ownership
 
 - `ActorProfile` and `ActorIdentityLink` are canonical actor and external

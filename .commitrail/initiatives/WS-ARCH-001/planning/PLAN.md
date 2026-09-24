@@ -1,5 +1,15 @@
 # WS-ARCH-001 — Current delivery plan through allow_review
 
+## Deferred scope
+
+The [contributor lease/skip plan](../WS-ARCH-001-03CLP.md) is Stopped and outside
+v0.1. Its proposed 03C3/03C4 boundaries do not gate this dependency sequence.
+ARCH-03C2 and existing public task/guide integration remain next. The retained
+future design includes fresh revision submission windows; it changes no current
+REV lifecycle contract. Abandoned-assignment recovery needs an explicit release
+assessment; no generic manager release or authority revocation may be presented
+as a substitute for a safe recovery command.
+
 ## Current dependency contract
 
 This section and the corrected pending child contracts are the current
