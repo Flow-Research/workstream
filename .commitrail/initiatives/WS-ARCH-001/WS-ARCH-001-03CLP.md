@@ -81,9 +81,15 @@ intent, not an implementation-ready contract or authorization to resume.
    Closed windows under checking/review and final accepted/rejected work cannot
    be reopened by expiry. Revision-episode/queue/preparation closure must be
    coordinated atomically through the existing owners, not left detached.
-5. Reclaim creates a new assignment and initial window, even for the same
-   person. Make predecessor/source lineage explicit without copying the previous
-   contributor's identity or transferring their admission, artifacts or authority.
+5. Reclaim creates a new assignment and fresh submission window, even for the
+   same person. Only never-submitted work opens an initial window. Reclaim after
+   revision expiry must explicitly continue the retained revision lineage under
+   the new assignee, linked to the predecessor Review, Submission and findings;
+   it cannot silently reset to first-submission behavior. Existing TASK custody
+   rejects retained-submission initial paths and contributor substitution, so
+   reconcile TASK/REV continuation and authorized new-assignee custody before
+   resuming implementation. Do not copy the previous contributor's identity or
+   transfer their admission, artifacts or authority.
    Define required visibility of predecessor findings through authorized owner
    facts; no automatic private-data exposure or contributor credit inheritance.
    Existing exact-assignment checks must reject stale attempts after reclaim.
@@ -165,7 +171,11 @@ not executed runtime evidence for a stopped feature.
 ## Review findings
 
 The initial plan failed to distinguish a closed submitted window from an open
-revision window. This correction preserves that finding for any later restart.
+revision window. Reclaim of expired revision work also cannot be described as an
+initial submission path: current TASK custody rejects that retained-submission
+and new-contributor combination. Preserve explicit TASK/REV continuation as a
+future design requirement, not an implemented bypass. These corrections remain
+recorded for any later restart.
 Earlier safeguards remain: existing guide config carrier; no generic manager
 release bypass; expiry-specific committed skip receipt; single terminal outcome.
 
