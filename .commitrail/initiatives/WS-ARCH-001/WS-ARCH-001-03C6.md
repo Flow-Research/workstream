@@ -1,7 +1,7 @@
 # ARCH-03C6 — Exact-authorized task locked-context reads
 
 - Initiative: WS-ARCH-001
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: three exact-authorized public locked-context reads
   replace the role/creator-based task route, retaining historical policy identity.
 - Risk class: L1 (authorization, historical policy disclosure, audit schema).

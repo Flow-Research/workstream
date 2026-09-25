@@ -507,6 +507,9 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context": "project.task.locked_context.read",
+        "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context": "operations.task.locked_context.read",
+        "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context": "audit.task.locked_context.read",
         "GET /api/v1/tasks/{task_id}": "task.read",
         "GET /api/v1/tasks/{task_id}/submission-requirements": "task.submission_requirements.read",
         "GET /api/v1/projects/{project_id}/tasks/{task_id}": "project.task.read",
