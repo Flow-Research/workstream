@@ -72,5 +72,6 @@ async def test_state_visibility_probe_detects_restrictive_guard(admin_access, mo
     def ready_only(action, resource):
         return original(action, resource) and (action not in owner.TASK_LOCKED_CONTEXT_READ_ACTIONS or resource.task_status == "ready")
     monkeypatch.setattr(owner, "task_resource_guard", ready_only)
-    with pytest.raises(AssertionError, match="accepted"):
+    with pytest.raises(AssertionError, match="claimed") as detected:
         await test_locked_context_exact_fields_all_states_and_corrupt_custody(admin_access, "management")
+    assert "404 == 200" in str(detected.value)
