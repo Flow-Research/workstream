@@ -79,7 +79,7 @@ async def test_post_consume_rollback(admin_access, monkeypatch, failure):
 
 
 async def test_audit_write_rollback(admin_access, monkeypatch):
-    from sqlalchemy.exc import SQLAlchemyError
+    from sqlalchemy.exc import IntegrityError
     from app.modules.audit.service import AuditService
     from app.modules.authorization.runtime import AuthorizationEvidenceUnavailable
     from app.modules.tasks.models import WorkstreamTask
@@ -92,25 +92,47 @@ async def test_audit_write_rollback(admin_access, monkeypatch):
     async with factory() as initial:
         original_title = (await initial.get(WorkstreamTask, str(task))).title
     attempted = []
-    async with factory() as session:
-        async def fail_write(*args, **kwargs):
-            attempted.append(True)
-            row = await session.get(WorkstreamTask, str(task))
-            row.title = "failed audit write marker"
-            await session.flush()
-            raise SQLAlchemyError("audit persistence unavailable")
-        async def no_projection(*args, **kwargs):
-            raise AssertionError("projection after failed audit write")
-        monkeypatch.setattr(AuditService, "add_authority_event", fail_write)
-        monkeypatch.setattr(TaskRepository, "read_audit_task_evidence", no_projection)
-        command = task_commands(session, settings=get_settings(), authorization=PreparedTaskAuthorization(session, actor),
-                               audit=task_transition_audit(session), actor_profile_id=actor.actor_profile_id)
-        with pytest.raises(AuthorizationEvidenceUnavailable):
-            await command.audit_evidence(AuditTaskEvidenceRequest(project, task))
-        assert attempted and not session.in_transaction()
+    original_write = AuditService.add_authority_event
+    with monkeypatch.context() as patch:
+        async with factory() as session:
+            async def fail_write(service, value):
+                assert value.action_id == ACTION
+                row = await session.get(WorkstreamTask, str(task))
+                row.title = "failed audit write marker"
+                await session.flush()
+                await session.execute(text(
+                    "ALTER TABLE audit_events ADD CONSTRAINT test_reject_task_audit_insert "
+                    "CHECK (action_id <> 'audit.task.evidence.read') NOT VALID"
+                ))
+                try:
+                    return await original_write(service, value)
+                except IntegrityError as exc:
+                    assert "INSERT INTO audit_events" in exc.statement
+                    assert exc.orig.sqlstate == "23514"
+                    assert "test_reject_task_audit_insert" in str(exc.orig)
+                    attempted.append(value.event_id)
+                    raise
+            async def no_projection(*args, **kwargs):
+                raise AssertionError("projection after failed audit write")
+            patch.setattr(AuditService, "add_authority_event", fail_write)
+            patch.setattr(TaskRepository, "read_audit_task_evidence", no_projection)
+            command = task_commands(session, settings=get_settings(), authorization=PreparedTaskAuthorization(session, actor),
+                                   audit=task_transition_audit(session), actor_profile_id=actor.actor_profile_id)
+            with pytest.raises(AuthorizationEvidenceUnavailable):
+                await command.audit_evidence(AuditTaskEvidenceRequest(project, task))
+            assert len(attempted) == 1 and not session.in_transaction()
     async with factory() as independent:
         assert await count(independent, actor.actor_profile_id, ACTION) == 0
         assert (await independent.get(WorkstreamTask, str(task))).title == original_title
+    # The transaction-local constraint is rolled back too: the unchanged real
+    # writer succeeds once fault injection and the projection sentinel are gone.
+    response = await admin_access.signed.client.get(
+        path(project, task), headers=admin_access.target.headers,
+    )
+    assert response.status_code == 200, response.text
+    async with factory() as independent:
+        assert await count(independent, actor.actor_profile_id, ACTION) == 1
+
 
 @pytest.mark.parametrize("first", ("read", "revoke"))
 async def test_revocation_serialization(admin_access, auth_database_env, monkeypatch, first):

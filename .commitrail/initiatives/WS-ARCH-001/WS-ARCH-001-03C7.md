@@ -116,8 +116,10 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
 4. Real PostgreSQL wrong-project request returns without waiting on a foreign
    task lock. Revocation interleavings preserve live authority and lock order.
    Response/reference failures roll back a genuinely staged ALLOW and marker.
-   Separately, a failed audit write proves a real write attempt and marker rollback,
-   with no projection entry; it cannot claim a successfully staged ALLOW.
+   Separately, a transaction-local PostgreSQL constraint rejects the real authority
+   audit INSERT (SQLSTATE 23514 and exact constraint identity), proving marker
+   rollback with no projection entry. Removing the injection permits the same
+   authorized read and persists its ALLOW; the failed attempt stages no ALLOW.
 5. Migration retains predecessor rows byte-for-byte (all three 0004 pairs,
    ALLOW/DENY); exact new pair succeeds, substituted permission fails specifically
    at the constraint. Disabling that constraint makes the negative probe fail.
@@ -197,3 +199,13 @@ Submission or post-submit execution publicly delivered by this read operation.
 - QA-03C7-PLAN-01/02: use canonical record headings and exact future test nodes.
 - QA-03C7-PLAN-03: distinguish failed audit-write rollback from post-consume
   response failures; only the latter assert successfully staged ALLOW evidence.
+
+### External proof correction
+
+The original failed-write stub proved exception handling and marker rollback,
+but did not execute the authority audit INSERT. The replacement delegates to
+the unchanged real audit service and repository with a transaction-local
+constraint that rejects that action. It checks the INSERT statement, PostgreSQL
+error code and constraint identity, verifies rollback from an independent
+session, and proves a subsequent uninjected authorized read succeeds. Product
+behavior and roadmap capabilities are unchanged by this test-only correction.
