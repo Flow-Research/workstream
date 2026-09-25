@@ -98,6 +98,7 @@ async def test_task_read_nonhuman_admission_precedes_product_access(monkeypatch,
         app.dependency_overrides[get_auth_verification_result] = verified_nonhuman
         app.dependency_overrides[get_task_commands] = forbidden_commands
         monkeypatch.setattr(TaskRepository, "get_task", forbidden_lookup)
+        monkeypatch.setattr(TaskRepository, "lock_project_task", forbidden_lookup)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             response = await client.get(path(kind, new_record_id(), new_record_id()))
         assert reached == ["rate"]

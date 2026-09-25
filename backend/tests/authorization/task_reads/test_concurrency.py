@@ -15,7 +15,7 @@ from tests.auth_concurrency_support import wait_for_named_database_lock
 from tests.authorization.guide_activation.pg_support import revoke_manager_grant
 from tests.authorization.task_authority.test_concurrency import actor_context
 from tests.authorization.task_queues.support import grant_queue_role
-from tests.authorization.task_reads.support import task_case
+from tests.authorization.task_reads.support import path, task_case
 
 
 @pytest.mark.parametrize("kind", ("management_detail", "management_requirements"))
@@ -77,7 +77,8 @@ async def test_task_read_lock_order_and_refresh(admin_access, auth_database_env,
     actor = await actor_context(str(admin_access.target.id))
     factory = db_session.get_session_factory()
     order, facts_seen = [], []
-    for owner,method,label in ((TaskRepository,"get_task","task"),(TaskRepository,"get_active_assignment","assignment"),
+    for owner,method,label in ((TaskRepository,"get_task","task"),(TaskRepository,"lock_project_task","task"),
+                              (TaskRepository,"get_active_assignment","assignment"),
                               (AdminAuthorizationRepository,"lock_request_actor","actor"),
                               (AdminAuthorizationRepository,"find_active_project_role","grant"),
                               (AdminAuthorizationRepository,"find_effective_grant","grant")):
@@ -117,3 +118,30 @@ async def test_task_read_lock_order_and_refresh(admin_access, auth_database_env,
             assert result.title == stale.title
     assert order[:4] == ["task","assignment","actor","grant"], order
     assert len(facts_seen) == 1 and ActionId(facts_seen[0].operation.value).value.endswith("read")
+
+
+@pytest.mark.parametrize("kind", ("management_detail", "management_requirements", "management_work_context"))
+async def test_wrong_project_read_does_not_wait_on_foreign_task(admin_access, kind):
+    from app.modules.tasks.models import WorkstreamTask
+    from tests.authorization.task_queues.support import project_fixture
+    from tests.authorization.task_authority.test_postgresql import project_manager
+
+    foreign_project, _, task = await task_case(admin_access)
+    requested_project = await project_fixture()
+    manager = await project_manager(admin_access, requested_project)
+    url = (f"/api/v1/projects/{requested_project}/tasks/{task}/work-context"
+           if kind == "management_work_context" else path(kind, requested_project, task))
+    async with db_session.get_session_factory()() as holder:
+        async with holder.begin():
+            locked = await holder.get(WorkstreamTask, str(task), with_for_update=True)
+            assert locked.project_id == str(foreign_project)
+            assert foreign_project != requested_project
+            # The foreign row stays locked until after the HTTP response. A
+            # task-only SELECT FOR UPDATE cannot finish inside this boundary.
+            response = await asyncio.wait_for(
+                admin_access.signed.client.get(url, headers=manager.headers), timeout=10,
+            )
+            assert response.status_code == 404, response.text
+            expected_code = ("resource_not_found" if kind == "management_work_context"
+                             else "project_authorization_resource_not_found")
+            assert response.json()["error"]["code"] == expected_code

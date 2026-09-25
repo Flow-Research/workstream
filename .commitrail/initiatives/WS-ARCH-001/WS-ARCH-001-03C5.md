@@ -247,3 +247,16 @@ Its distinct unassigned contributor first lacks access, receives an actual
 project Submitter grant, can inspect ready work, and loses visibility after the
 other contributor claims it. Token roles are never substituted for those grants.
 The extra idempotency UUID is classified as a transport token, not a record ID.
+
+Project-scoped reads must match both project and task in the locking query,
+before taking a TASK row lock. The shared authority operation uses the existing
+`lock_project_task` owner method for supplied project selectors, including its
+manager work-context caller. A PostgreSQL HTTP regression holds a foreign task
+locked while all three manager reads return concealed 404 responses before the
+holder releases it. Same-project lock waiting, stale-row refresh and the existing
+TASK/assignment-before-AUTH order remain required. This repairs cross-project
+lock interference without changing the route, permission or response contract;
+the roadmap boundary is unchanged.
+Restoring the task-ID-only lookup makes each of the three regression cases time
+out at the HTTP request while the foreign row remains locked; the scoped query
+passes all three. The deliberately regressed implementation is not retained.

@@ -104,8 +104,9 @@ class AuthorizedTaskCommands:
         request_digest: str | None = None,
     ) -> tuple[WorkstreamTask, TaskAssignment | None, TaskAuthorityDecision]:
         # Match submission creation: TASK/assignment locks precede AUTH locks.
-        task = await self._repo.get_task(str(task_id), for_update=True)
-        if task is None or (project_id is not None and task.project_id != str(project_id)):
+        task = (await self._repo.lock_project_task(project_id, task_id) if project_id is not None
+                else await self._repo.get_task(str(task_id), for_update=True))
+        if task is None:
             raise TaskNotFound("task not found")
         assignment = await self._repo.get_active_assignment(task.id, for_update=True)
         facts = self._facts(
