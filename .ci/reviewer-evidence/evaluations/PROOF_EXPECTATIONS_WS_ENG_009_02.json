@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "created_after_blind_runs": true,
-  "evaluated_head": "f6c48c73e7a23a19d9c59e357ffe87c2e604291a",
+  "evaluated_head": "f25b3fc9f1585754df8e6659c1a138a5ff01e86c",
   "expectations": [
     {
       "case_id": "pq-architecture-composite-owner",

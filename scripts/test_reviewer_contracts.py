@@ -363,6 +363,9 @@ class ReviewerContractTests(unittest.TestCase):
     def test_blind_evaluation_allows_no_rejected_runs_when_none_occurred(self) -> None:
         mutated = copy.deepcopy(self.proof_results)
         mutated["rejected_runs"] = []
+        # Model a no-rerun fixture independently of the latest real evaluation.
+        for result in mutated["results"]:
+            result["independence"] = "accepted"
         self.assertEqual(
             proof_evaluation_failures(
                 self.proof_cases,

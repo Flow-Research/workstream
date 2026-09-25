@@ -54,7 +54,7 @@
     "backend/tests/architecture/test_test_structure_boundary.py::test_inventory_records_one_mixed_test_beyond_the_hard_limit",
     "backend/tests/architecture/test_test_structure_boundary.py::test_changed_debt_hash_is_rejected_as_stale",
     "backend/tests/architecture/test_test_structure_boundary.py::test_trusted_ledger_rejects_new_grown_or_unshrunk_debt",
-    "backend/tests/architecture/test_test_structure_boundary.py::test_skip_and_xfail_mechanisms_are_detected",
+    "backend/tests/test_coverage_contract.py::test_python_weakening_uses_lexical_syntax",
     "backend/tests/architecture/test_test_structure_boundary.py::test_malformed_exception_schema_fails_closed",
     "backend/tests/architecture/test_test_structure_boundary.py::test_non_string_policy_digest_fails_with_the_mapped_ledger_error",
     "backend/tests/architecture/test_test_structure_boundary.py::test_assertion_map_rejects_a_missing_new_test_node",

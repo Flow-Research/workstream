@@ -17,7 +17,8 @@ MCP also had a percentage floor. AGENTS.md and CONTRIBUTING.md required them.
 
 Allowed: Backend/MCP test workflows, their test runners and integrity tests,
 affected test-only redundant or retired-policy cases, AGENTS.md, CONTRIBUTING.md,
-PR guidance, the affected review skills and current engineering/roadmap documentation. Audit existing test
+PR guidance, the affected review skills, their existing evaluation evidence,
+behavior-ownership test references and current engineering/roadmap documentation. Audit existing test
 consumers before removing cases and record the retained behavioral proof below.
 Existing shared syntax/skip detection remains even if its old coverage-policy
 consumer is retired. Historical records are not rewritten.
@@ -88,8 +89,13 @@ Assess roadmap engineering quality language without claiming new product work.
   packaging/container/real-API checks, and PostgreSQL/S3 cleanup proof.
 - Inline hosted evidence validation now accepts the entire finite 0..100 range;
   low percentages cannot fail it. Missing/corrupt execution evidence still fails.
+- Refresh the existing reviewer exercise against the updated instruction bytes;
+  retain the fixed cases, expected contracts and validator. Record actual cold
+  evaluations and any rejected run, rather than relabeling old evidence as fresh.
 - Remove five direct `weak_python` duplicate cases from the architecture suite;
   its 82-case lexical owner matrix covers these same framework mechanisms.
+  Point the test-structure behavior catalogue to that retained owner test;
+  deleting a duplicate also requires repairing its evidence references.
   Architecture path-selection/integration tests remain. Total retirement is
   94 existing cases (89 obsolete quota/dead-policy cases and five duplicates),
   replaced by two small diagnostic/completeness contracts: net 92 fewer cases.
