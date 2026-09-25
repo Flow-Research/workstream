@@ -6,7 +6,7 @@
   replace the role/creator-based task route, retaining historical policy identity.
 - Risk class: L1 (authorization, historical policy disclosure, audit schema).
 
-## Intent and current-source review
+## Intent
 
 Merged ARCH-03C5 supplies exact task detail and requirements. ARCH-03B6 already
 owns three frozen locked-context projections and the shared historical resolver.
@@ -20,7 +20,7 @@ activation and removal of its retained broad route follow as ARCH-03C7, using
 03B8's existing bounded projection. Public guide/intake integration follows that
 remaining authority work. Leases and voluntary skip remain deferred.
 
-## Exact public contract
+## Bounded change
 
 All routes below are GET under `/api/v1` with UUID project/task selectors.
 
@@ -44,7 +44,10 @@ three administrative reads.
 ## Existing operation and transaction
 
 Extend `TaskAuthorityOperation`, catalogue and TASK resource rules with the
-three exact read actions. They are separate from mutation guards and reject
+three exact read actions. Replace the existing detail-only action set with a
+closed concealed-read union that includes these three actions and is shared by
+resource guards and HTTP denial/restaging. No compatibility alias. These actions
+are separate from mutation guards and reject
 idempotency/replay/request-digest command fields. Reuse
 `AuthorizedTaskCommands._locked_task` with both selectors, so wrong-project
 requests cannot lock a foreign task. Preserve TASK -> active assignment -> AUTH
@@ -52,6 +55,10 @@ actor/link -> matched grant -> historical PROJECTS custody lock ordering.
 
 Reuse the existing PREP adapter and project-admin authority locker; require
 system scope explicitly for the operational read, as for Operator start.
+`audit.read` is shared by all five admin roles, so permission alone is insufficient.
+Pass action-specific `allowed_roles` through the existing locker into the existing
+repository filter: Project Manager, Operator, or Audit Authority respectively.
+Do not change global role permissions or add a second grant-selection query.
 Use the already locked task and the sole `_load_locked_task_context` resolver,
 then the existing management/reference constructors. Do not call a second
 locking wrapper after AUTH. Validate/serialize the exact audience model before
@@ -76,17 +83,30 @@ history, corruption and private-field tests remain required.
 No new grantable permission, generic read workflow, new projection abstraction,
 policy writer, claim/start/submission mutation, checker execution, public audit
 history activation, leases/skip, compatibility route, retained-data deletion,
-baseline rewrite, threshold weakening or dependency change. Shared hidden owner
-methods and old role helpers remain only where traced unaffected Submission or
-audit consumers still require them; identify those dependencies explicitly.
+baseline rewrite, threshold weakening or dependency change. Remove `read_management_task_locked_context`,
+`read_operational_task_locked_context` and `read_audit_task_locked_context`: only
+tests consume them, and new commands already hold the task lock. Preserve the
+shared `_read_locked_context`/`_lock_scoped_task` methods required by existing
+requirements consumers, plus response constructors/historical resolver. Old role
+helpers remain only for traced unaffected Submission/audit callers.
 
-## Acceptance and proof
+## Acceptance criteria
 
 1. Signed HTTP matrix for all three audiences: project/system covering grants,
    foreign grants, creator without grant, forged token roles, Submitter and
    unrelated admin roles. Assert exact matched grant IDs, not only non-null.
-   Check Operator system-only scope and nonhuman admission nonentry.
-2. Exact project/task filtering: foreign/missing/denied 404 equivalence; hold a
+   A dual-role actor with Project Manager and Audit Authority must select exactly
+   the Audit Authority grant on the audit route. A creator-without-grant case
+   creates under a real Manager grant then revokes it. Operator project grants
+   are forbidden by the existing role-scope schema; test system-only dispatch
+   using a valid system Operator and a missing-keyword mutation, preserving
+   the schema control instead of inventing an invalid grant fixture. Check
+   nonhuman admission nonentry and independently omitted concealed-action/
+   command-field guards.
+2. For each of the three audiences, cover all nine persisted task states with
+   complete locked context; independently reload the exact state/context before
+   each read. A restrictive status-allowlist mutation must fail.
+   Exact project/task filtering: foreign/missing/denied 404 equivalence; hold a
    real foreign task row locked and require each wrong-project route to return
    before release. Restoring a task-only lookup must fail this regression.
 3. Valid same-project reads wait on TASK, refresh stale rows and retain lock
@@ -96,13 +116,26 @@ audit consumers still require them; identify those dependencies explicitly.
 4. Exact original policy references/checker summary survive a distinct successor
    guide; operational/audit projections exclude management fields. Draft/corrupt
    history fails without committing ALLOW. Response serialization and audit
-   insertion failures roll back evidence. Preserve existing historical fixtures.
+   insertion failures roll back evidence. Before injecting response failure,
+   observe a genuine selected projection and staged ALLOW, then independently
+   prove response/audit failure rolled back both evidence and a transaction
+   marker. Preserve existing historical fixtures.
 5. Migration preserves retained evidence, accepts each new exact action/permission
    pair and rejects mismatches under real PostgreSQL; guard-removal mutation
    proves the intended check. Keep baseline, 0002, 0003 and head downgrade refusal.
-6. Old endpoint, wrapper and wrapper-only tests are removed; affected callers use
+6. `tests/tasks/test_locked_context.py` retains immutable DTO/private-field
+   contracts; selector/scope/corruption/TASK-wait proofs move to authorized
+   operations. `test_project_display.py` before/after distinct successor checks
+   use all three public routes with actual grants. Caller-pending transaction
+   tests tied only to removed wrappers are replaced by authorized transaction
+   proof; requirements still retain their shared caller-owned resolver tests.
+   `test_tasks.py` and the API drill use the new route; old wrapper-only and
+   old-public-surface expectations are removed.
+   Old endpoint, wrapper and wrapper-only tests are removed; affected callers use
    the canonical new route with actual grants. API/OpenAPI, selected MCP snapshot
    and exact catalogue/lane inventories agree without broad allowlists.
+
+## Evidence
 
 Verification: focused PostgreSQL/HTTP/contracts and affected TASK tests; Ruff,
 module/AUTH boundaries, structural inventory, Markdown links and Commitrail;
