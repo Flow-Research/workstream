@@ -90,7 +90,8 @@ trace those consumers explicitly, but do not widen this PR into their cutover.
 - One migration; existing Alembic head/schema assertions and exact inventories.
 - `tests/authorization/task_audit_evidence/`, migration test; affected
   `tests/tasks/test_audit_evidence.py`, `tests/test_tasks.py`, `tests/test_checkers.py`, API/catalogue/lane
-  tests and `scripts/api_contract_e2e.py`/`test_lane_catalogue.py`.
+  tests and `scripts/api_contract_e2e.py`/`test_lane_catalogue.py`; the API drill
+  idempotency key registration in `scripts/identifier_generation_classifications.json`.
 - Selected MCP authorization-context snapshot: enum/digest/source provenance.
 - README, glossary, canonical TASK/AUTH/data-model specs, operating manuals, roadmap and
   existing ARCH navigation; update any present local roadmap exports together.
@@ -167,7 +168,8 @@ Keep `tests/tasks/test_audit_evidence.py::test_task_evidence_sql_privacy`,
 as existing inner-reader proofs; update only its obsolete hidden-surface test.
 Run focused signed
 PostgreSQL cases and existing inner evidence/recovery tests; Ruff, module/AUTH/
-test boundaries, ownership inventory, exact lanes, stale wording, Markdown links,
+test boundaries, ownership and identifier-generation inventories, exact lanes,
+stale wording, Markdown links,
 Commitrail and hosted full PostgreSQL/MinIO coverage. Current schema head 0004;
 expected head 0005. Runtime results are separate from this plan's feasibility.
 

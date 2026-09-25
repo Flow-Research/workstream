@@ -192,6 +192,7 @@
     "scripts/validate_test_lane_evidence.py|pytest_sessionstart|Assign:96ca77b89b17784d|0": "uuid4:reference:test_collection_generator",
     "scripts/validate_test_lane_evidence.py|pytest_sessionstart|Assign:5fccc25881d9669b|0": "uuid4:reference:test_collection_generator",
     "scripts/validate_test_lane_evidence.py|_restore_uuid4|Assign:8b0b4983f1c036c6|0": "uuid4:reference:test_collection_generator",
-    "scripts/api_contract_e2e.py|exercise_api_contract|Assign:0763b9ec26080618|0": "uuid4:call:transport_token"
+    "scripts/api_contract_e2e.py|exercise_api_contract|Assign:0763b9ec26080618|0": "uuid4:call:transport_token",
+    "scripts/api_contract_e2e.py|exercise_api_contract|Assign:f04894cf69f57489|0": "uuid4:call:transport_token"
   }
 }
