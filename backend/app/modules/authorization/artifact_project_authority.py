@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.modules.authorization.catalogue import ActionAvailability, ActionId
+from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.domain.task_authority import (
     TASK_ACTIONS, TASK_SUBMITTER_ACTIONS, evaluate_task_authority,
 )
@@ -35,12 +36,19 @@ async def lock_project_authority(repository, context, scope, action, locked_cont
         raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
     return await lock_project_admin_authority(
         repository, context, scope, action.permission_id, locked_context,
-        system_scope_only=action.action_id is ActionId.OPERATIONS_TASK_START_OVERRIDE,
+        system_scope_only=action.action_id in {
+            ActionId.OPERATIONS_TASK_START_OVERRIDE, ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
+        },
+        allowed_roles={
+            ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.PROJECT_MANAGER}),
+            ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.OPERATOR}),
+            ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.AUDIT_AUTHORITY}),
+        }.get(action.action_id),
     )
 
 
 async def lock_project_admin_authority(
-    repository, context, scope, permission_id, locked_context, *, system_scope_only=False,
+    repository, context, scope, permission_id, locked_context, *, system_scope_only=False, allowed_roles=None,
 ):
     """Lock a project-covering admin grant, or require a system grant for override."""
     if (
@@ -56,6 +64,7 @@ async def lock_project_admin_authority(
         permission_id,
         scope_project_id=scope.project_id,
         system_scope_only=system_scope_only,
+        allowed_roles=allowed_roles,
         for_update=True,
     )
     if grant is None:

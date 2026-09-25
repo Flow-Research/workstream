@@ -465,16 +465,23 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}/tasks/{task_id}/submission-requirements",
     }
     assert task_read_routes <= set(protected_inventory)
-    new_manager_reads = {route for route in task_read_routes if "/projects/" in route}
-    assert len(route_inventory) == 82
+    locked_context_routes = {
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context",
+        "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context",
+        "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context",
+    }
+    assert locked_context_routes <= set(protected_inventory)
+    assert "/api/v1/tasks/{task_id}/locked-context" not in schema["paths"]
+    new_manager_reads = {route for route in task_read_routes if "/projects/" in route} | locked_context_routes
+    assert len(route_inventory) == 84
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
-        "97ca137cb6ffe96cb58f81cbb1d786772b48ed8996d159473d3be04928a77eca"
+        "084018802bed7dcd19ac334e9c8dfcaa137a5027c05e00aa4169b769b19bbec9"
     )
-    assert len(protected_inventory) == 80
+    assert len(protected_inventory) == 82
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
-        "54b9a1fbb6c5cf1dffc47fa6c7b43da333baf22e733556eff4a6973a9b4dc7d4"
+        "05cd0a7b209401c45d6c9da53944736ebf97ddf135a5c335e508e012f0e107ff"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
@@ -500,6 +507,9 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context": "project.task.locked_context.read",
+        "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context": "operations.task.locked_context.read",
+        "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context": "audit.task.locked_context.read",
         "GET /api/v1/tasks/{task_id}": "task.read",
         "GET /api/v1/tasks/{task_id}/submission-requirements": "task.submission_requirements.read",
         "GET /api/v1/projects/{project_id}/tasks/{task_id}": "project.task.read",

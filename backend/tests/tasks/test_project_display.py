@@ -15,6 +15,7 @@ from app.modules.projects.api import ProjectDisplayFacts, GuideDisplayFacts
 from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
 from app.modules.projects.models import Project, ProjectGuide, PostSubmitCheckerPolicy, EffectiveProjectSubmissionArtifactPolicy
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
+from tests.authorization.task_locked_context.support import KINDS, path, grant_development_context_roles
 from tests.projects.locked_policy_fixtures import activated_context, frozen_request
 from tests.test_tasks import (
     task_database_env as task_database_env,
@@ -191,19 +192,16 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
         ) if getattr(stored, name) is not None}
     for name, expected in expected_policies.items():
         assert original[name] == expected
-    locked_reads = (
-        "read_management_task_locked_context", "read_operational_task_locked_context",
-        "read_audit_task_locked_context",
-    )
+    await grant_development_context_roles(db_session.get_session_factory())
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     original_locked = {}
-    async with db_session.get_session_factory()() as session:
-        service = task_service(session, settings=get_settings())
-        for method in locked_reads:
-            original_locked[method] = (await getattr(service, method)(
-                UUID(project["id"]), UUID(task["id"]),
-            )).model_dump(mode="json")
+    for kind in KINDS:
+        response = await task_client.get(path(kind, project["id"], task["id"]), headers=auth_headers())
+        assert response.status_code == 200, response.text
+        original_locked[kind] = response.json()
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     summary_key = "locked_post_submit_checker_policy_body_summary"
-    original_summary = original_locked[locked_reads[0]][summary_key]
+    original_summary = original_locked["management"][summary_key]
     assert original_summary["required_checkers"] == []
     requirements_url = f"/api/v1/tasks/{task['id']}/submission-requirements"
     first_requirements = await task_client.get(requirements_url, headers=auth_headers())
@@ -255,10 +253,12 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
             args = (UUID(project["id"]), UUID(task["id"])) + ((owner,) if method == requirement_reads[0] else ())
             result = await getattr(service, method)(*args)
             assert result.model_dump(mode="json", exclude_none=True) == first_requirements.json()
-        for method in locked_reads:
-            locked = (await getattr(service, method)(UUID(project["id"]), UUID(task["id"]))).model_dump(mode="json")
-            assert locked == original_locked[method]
-            assert locked["locked_contribution_policy_version_id"] == expected_policies["contribution_policy_version_id"]
+    for kind in KINDS:
+        response = await task_client.get(path(kind, project["id"], task["id"]), headers=auth_headers())
+        assert response.status_code == 200, response.text
+        locked = response.json()
+        assert locked == original_locked[kind]
+        assert locked["locked_contribution_policy_version_id"] == expected_policies["contribution_policy_version_id"]
     manager_requirements = await task_client.get(
         f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements", headers=auth_headers(),
     )

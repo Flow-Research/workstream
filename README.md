@@ -607,8 +607,8 @@ responses with distinct fixed task facts and exact historical policy identities,
 without obsolete payment fields or submission flags. ARCH-03B6 supplies distinct
 locked-context projections through the same historical resolver: management
 includes the bounded checker summary; operational and audit reads expose only
-exact policy references and remain internal. The retained management route's
-authority cutover remains ARCH-03C. ARCH-03B7 supplies immutable contributor and
+exact policy references. ARCH-03C6 exposes all three through distinct
+exact-authorized routes and removes the old task-only management route. ARCH-03B7 supplies immutable contributor and
 management requirements through one historical translator. Its hidden contributor
 read reuses exact assignment visibility after locking TASK; the retained requirements
 route and separate Manager route use ARCH-03C5 live exact authority. ARCH-03B8 supplies bounded internal Audit Authority task evidence;
@@ -620,7 +620,8 @@ the create/screen/release role-only path with exact Project Manager authority,
 atomic audit evidence and durable replay. ARCH-03C4 exposes separate contributor-ready,
 manager-planning and Operator-status queues with current scoped grants and signed
 pagination. ARCH-03C5 exposes separate Contributor/Manager detail and requirements,
-removing their old role/creator wrappers. Locked-context and audit read authority
+removing their old role/creator wrappers. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
+locked-context reads with exact current grants. Audit history authority
 cutover remains pending. Canonical checker materialization follows in
 ARCH-04B/04C.
 

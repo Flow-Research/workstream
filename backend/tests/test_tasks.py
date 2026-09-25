@@ -34,7 +34,6 @@ from tests.submission_fixtures import seed_finalized_submission_for_checker_test
 
 from app.core.config import get_settings
 from app.core.hashing import canonical_json_hash
-from app.core.permissions import PermissionDenied
 from app.db import models as db_models
 from app.db import session as db_session
 from app.db.base import Base
@@ -354,21 +353,6 @@ def task_service_actor(*roles: str) -> ActorContext:
         auth_source="dev_mock",
         is_dev_auth=True,
     )
-
-
-async def test_retained_locked_context_wrapper_preserves_operator_scope() -> None:
-    actor = task_service_actor("project_manager")
-    service = task_service(MagicMock(spec=AsyncSession), settings=get_settings())
-    task = MagicMock(spec=WorkstreamTask)
-    task.id, task.created_by = "task-1", actor.actor_id
-    context, response = MagicMock(), MagicMock()
-    service._get_task = AsyncMock(return_value=task)
-    service._load_locked_task_context = AsyncMock(return_value=context)
-    service._management_locked_context_response = MagicMock(return_value=response)
-    assert await service.get_task_locked_context(actor, task.id) is response
-    service._get_task.assert_awaited_once_with(task.id, for_update=True)
-    service._load_locked_task_context.assert_awaited_once_with(task)
-    service._management_locked_context_response.assert_called_once_with(task, context)
 
 
 async def test_task_service_finalize_requeues_locked_latest_submission(
@@ -1488,7 +1472,9 @@ async def test_task_router_service_errors_use_canonical_request_context(
             f"/api/v1/tasks/{new_record_id()}/submission-requirements",
             None,
         ),
-        ("get_task_locked_context", "GET", "/api/v1/tasks/task-id/locked-context", None),
+        ("management_locked_context", "GET", f"/api/v1/projects/{new_record_id()}/tasks/{new_record_id()}/locked-context", None),
+        ("operational_locked_context", "GET", f"/api/v1/operations/projects/{new_record_id()}/tasks/{new_record_id()}/locked-context", None),
+        ("audit_locked_context", "GET", f"/api/v1/audit/projects/{new_record_id()}/tasks/{new_record_id()}/locked-context", None),
         ("screen", "POST", f"/api/v1/tasks/{new_record_id()}/screen", None),
         ("release", "POST", f"/api/v1/tasks/{new_record_id()}/release", None),
         ("list_task_submissions", "GET", "/api/v1/tasks/task-id/submissions", None),
@@ -1499,7 +1485,7 @@ async def test_task_router_service_errors_use_canonical_request_context(
 
     for service_method, method, path, payload in cases:
         owner = ("app.modules.tasks.authorized_commands.AuthorizedTaskCommands."
-                 if service_method in {"create_task", "screen", "release", "contributor_detail", "contributor_requirements"}
+                 if service_method in {"create_task", "screen", "release", "contributor_detail", "contributor_requirements", "management_locked_context", "operational_locked_context", "audit_locked_context"}
                  else "app.modules.tasks.service.TaskService.")
         monkeypatch.setattr(owner + service_method, fail_with_service_error)
         response = await task_client.request(
@@ -1513,20 +1499,6 @@ async def test_task_router_service_errors_use_canonical_request_context(
         assert response.json()["detail"] == "bounded task failure"
         assert response.json()["error"]["code"] == "invalid_request"
         assert response.json()["error"]["correlation_id"] == response.headers["x-correlation-id"]
-
-    async def fail_with_permission_error(*_args, **_kwargs):
-        raise PermissionDenied("bounded permission failure")
-
-    monkeypatch.setattr("app.modules.tasks.service.TaskService.get_task_locked_context", fail_with_permission_error)
-    denied = await task_client.get("/api/v1/tasks/task-id/locked-context", headers=auth_headers())
-
-    assert denied.status_code == 403
-    assert denied.json()["detail"] == "bounded permission failure"
-    assert denied.json()["error"]["code"] == "permission_not_granted"
-
-
-
-
 
 async def test_task_can_be_created_in_draft(task_client: AsyncClient) -> None:
     project = await create_active_project(task_client)
@@ -1926,14 +1898,14 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     assert "source" not in requirements_body["forbidden_artifacts"][0]
 
     worker_locked_context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        f"/api/v1/projects/{project['id']}/tasks/{started_task['id']}/locked-context",
         headers=auth_headers(),
     )
-    assert worker_locked_context.status_code == 403
+    assert worker_locked_context.status_code == 404
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     locked_context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        f"/api/v1/projects/{project['id']}/tasks/{started_task['id']}/locked-context",
         headers=auth_headers(),
     )
     assert locked_context.status_code == 200, locked_context.text
@@ -3353,7 +3325,7 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     )
     assert wrong_manager_audit.status_code == 404
     wrong_manager_locked_context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        f"/api/v1/projects/{project['id']}/tasks/{started_task['id']}/locked-context",
         headers=auth_headers(),
     )
     assert wrong_manager_locked_context.status_code == 404
@@ -3417,7 +3389,7 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     assert "requester_actor_id" not in multi_role_worker_audit.text
     assert "post_submit_checks_processing" in multi_role_worker_audit.text
     multi_role_worker_locked_context = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        f"/api/v1/projects/{project['id']}/tasks/{started_task['id']}/locked-context",
         headers=auth_headers(),
     )
     assert multi_role_worker_locked_context.status_code == 404
@@ -4862,7 +4834,7 @@ async def test_catalogue_rollout_blocks_task_transition_without_writes(
         monkeypatch.setattr(get_settings(), "artifact_pre_submission_checker_disabled_ids", disabled)
     if transition == "release":
         historical = await task_client.get(
-            f"/api/v1/tasks/{task['id']}/locked-context", headers=auth_headers(),
+            f"/api/v1/projects/{project['id']}/tasks/{task['id']}/locked-context", headers=auth_headers(),
         )
         assert historical.status_code == 200, historical.text
     response = await task_client.post(

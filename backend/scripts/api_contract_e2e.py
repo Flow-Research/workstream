@@ -2043,13 +2043,21 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         manager_requirements = await request_json(
             client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements", project_reader_token,
         )
+        locked_context = await request_json(
+            client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}/locked-context", project_reader_token,
+        )
+        operational_context = await request_json(
+            client, "GET", f"/api/v1/operations/projects/{project['id']}/tasks/{task['id']}/locked-context", operator_token,
+        )
+        assert operational_context == {key: value for key, value in locked_context.items()
+                                       if key != "locked_post_submit_checker_policy_body_summary"}
         removed_project_manager = await client.post(
             f"/api/v1/admin-role-grants/{project_manager_grant.json()['resource_id']}/revoke",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Prove mutation replay reauthorizes current project authority"},
         )
         assert removed_project_manager.status_code == 200, removed_project_manager.text
-        for suffix in ("", "/submission-requirements"):
+        for suffix in ("", "/submission-requirements", "/locked-context"):
             await request_json(
                 client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}{suffix}",
                 project_reader_token, expected_status=404,
@@ -2134,23 +2142,17 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         await request_json(
             client,
             "GET",
-            f"/api/v1/tasks/{task['id']}/locked-context",
+            f"/api/v1/projects/{project['id']}/tasks/{task['id']}/locked-context",
             worker_token,
-            expected_status=403,
-        )
-        locked_context = await request_json(
-            client,
-            "GET",
-            f"/api/v1/tasks/{task['id']}/locked-context",
-            project_reader_token,
+            expected_status=404,
         )
         ensure(
             locked_context["locked_guide_source_snapshot_hash"].startswith("sha256:"),
-            "operator locked context omitted source snapshot hash",
+            "management locked context omitted source snapshot hash",
         )
         ensure(
             locked_context["locked_pre_submit_checker_bundle_hash"].startswith("sha256:"),
-            "operator locked context omitted pre-submit checker hash",
+            "management locked context omitted pre-submit checker hash",
         )
         await request_json(
             client,

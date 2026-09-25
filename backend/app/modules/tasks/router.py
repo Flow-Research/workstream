@@ -22,7 +22,7 @@ from app.modules.tasks.schemas import (
     ContributorTaskSubmissionRequirements, ManagementTaskSubmissionRequirements,
     SubmissionResponse,
     TaskCreate,
-    ManagementTaskLockedContext,
+    ManagementTaskLockedContext, OperationalTaskLockedContext, AuditTaskLockedContext,
     TaskResponse,
     TaskTransitionRequest,
     TaskWithAssignmentResponse,
@@ -239,26 +239,54 @@ async def get_management_task_submission_requirements(
 
 
 @router.get(
-    "/tasks/{task_id}/locked-context",
-    response_model=ManagementTaskLockedContext,
-    response_model_exclude_none=True,
-    responses=TASK_LOCKED_CONTEXT_RESPONSES,
+    "/projects/{project_id}/tasks/{task_id}/locked-context", response_model=ManagementTaskLockedContext,
+    response_model_exclude_none=True, responses=TASK_LOCKED_CONTEXT_RESPONSES,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.MANAGEMENT_LOCKED_CONTEXT.value},
 )
-async def get_task_locked_context(
-    request: Request,
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ManagementTaskLockedContext | JSONResponse:
-    """Return management locked provenance through the retained authority wrapper."""
+async def get_management_task_locked_context(
+    request: Request, project_id: UUID, task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+):
+    """Read original locked policy provenance under exact management authority."""
     try:
-        return await task_service(session, settings=request.app.state.settings).get_task_locked_context(actor, task_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        return await commands.management_locked_context(project_id, task_id)
     except TaskServiceError as exc:
-        if getattr(exc, "code", None) is not None:
-            return task_domain_error_response(request, exc)
-        raise task_http_error(exc) from exc
+        return task_read_error(request, exc)
+
+
+@router.get(
+    "/operations/projects/{project_id}/tasks/{task_id}/locked-context", response_model=OperationalTaskLockedContext,
+    response_model_exclude_none=True, responses=TASK_LOCKED_CONTEXT_RESPONSES,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.OPERATIONAL_LOCKED_CONTEXT.value},
+)
+async def get_operational_task_locked_context(
+    request: Request, project_id: UUID, task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+):
+    """Read original locked policy provenance under exact operational authority."""
+    try:
+        return await commands.operational_locked_context(project_id, task_id)
+    except TaskServiceError as exc:
+        return task_read_error(request, exc)
+
+
+@router.get(
+    "/audit/projects/{project_id}/tasks/{task_id}/locked-context", response_model=AuditTaskLockedContext,
+    response_model_exclude_none=True, responses=TASK_LOCKED_CONTEXT_RESPONSES,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.AUDIT_LOCKED_CONTEXT.value},
+)
+async def get_audit_task_locked_context(
+    request: Request, project_id: UUID, task_id: UUID,
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+):
+    """Read original locked policy provenance under exact audit authority."""
+    try:
+        return await commands.audit_locked_context(project_id, task_id)
+    except TaskServiceError as exc:
+        return task_read_error(request, exc)
 
 
 @router.post(

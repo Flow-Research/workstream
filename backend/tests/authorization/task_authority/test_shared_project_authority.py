@@ -47,7 +47,7 @@ async def test_prepared_guide_ingest_binds_exact_project_and_locked_manager_gran
         assert facts.grant_requests == [
             (
                 (context.actor_profile_id, PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST),
-                {"scope_project_id": project_id, "system_scope_only": False, "for_update": True},
+                {"scope_project_id": project_id, "system_scope_only": False, "allowed_roles": None, "for_update": True},
             )
         ]
 

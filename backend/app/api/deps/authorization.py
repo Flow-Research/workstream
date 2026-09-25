@@ -47,7 +47,7 @@ from app.modules.authorization.runtime import (
     ProjectDiagnosticReadResourceContext,
     ServiceAuthorizationContext,
 )
-from app.modules.authorization.catalogue import ActionId, TASK_DETAIL_READ_ACTIONS
+from app.modules.authorization.catalogue import ActionId, TASK_CONCEALED_READ_ACTIONS
 from app.schemas.auth import AuthVerificationResult
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ async def get_task_commands(
                 error_message="Task authority unavailable",
                 retryable=True,
             ) from evidence_error
-        if isinstance(exc.__cause__, AuthorizationDenied) and exc.__cause__.decision.action_id in TASK_DETAIL_READ_ACTIONS:
+        if isinstance(exc.__cause__, AuthorizationDenied) and exc.__cause__.decision.action_id in TASK_CONCEALED_READ_ACTIONS:
             raise authorization_http_error(exc.__cause__) from exc
         raise StructuredHTTPException(
             status_code=403,
@@ -261,7 +261,7 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-    if exc.decision.action_id in concealed_project_reads | TASK_DETAIL_READ_ACTIONS:
+    if exc.decision.action_id in concealed_project_reads | TASK_CONCEALED_READ_ACTIONS:
         return StructuredHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project authorization resource not found",

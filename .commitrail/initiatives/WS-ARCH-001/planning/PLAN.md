@@ -43,7 +43,8 @@ checker-remediation boundary before public Submission cutover.
 | [ARCH-03C3](../WS-ARCH-001-03C3.md) | ARCH-03C2 and hidden TASK owner contracts | Complete: exact manager create/screen/release authority, atomic evidence and replay |
 | [ARCH-03C4](../WS-ARCH-001-03C4.md) | ARCH-03C3 | Complete: exact-authorized contributor, manager and operational public queues |
 | [ARCH-03C5](../WS-ARCH-001-03C5.md) | ARCH-03C4 | Complete: exact-authorized Contributor/Manager detail and requirements |
-| ARCH-03C remaining public cutover | ARCH-03C5 and hidden TASK owner contracts | Planned: locked-context and audit read authority and integrated readiness proof |
+| [ARCH-03C6](../WS-ARCH-001-03C6.md) | ARCH-03C5 | Complete: distinct exact-authorized locked-context reads |
+| ARCH-03C7 and remaining public cutover | ARCH-03C6 and hidden TASK owner contracts | Planned: bounded Audit Authority history access and integrated readiness proof |
 | CP09 (later cleanup coordination) | All legacy consumers replaced, including CHECKER and public 02I path | Physical economic deletion; not on the allow_review critical path |
 | ARCH-04B | ARCH-04A, POL-07, ARCH-03C, merged ARCH-02H | ART exact stored Submission materialization |
 | ARCH-04B2 | ARCH-04A and merged ART admission/verification/binding foundations | ART bounded checker output/log ingestion and verified binding, no routing |
