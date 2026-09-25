@@ -36,7 +36,8 @@ For every changed test:
 
 - Removed/skipped tests without explanation.
 - Assertions weakened to match new behavior.
-- Coverage lowered without approval.
+- Required behavioral proof lost without retained proof or a retired requirement;
+  a lower diagnostic coverage percentage alone is not a finding.
 - Bug fix without regression coverage when feasible.
 
 ## Completeness probe

@@ -36,7 +36,8 @@ adopted through the blind evaluation recorded by `WS-CI-005-03`.
 
 - Any weakening without explicit human approval.
 - New skipped failures.
-- Lowered coverage threshold.
+- A percentage quota introduced as a merge gate, or diagnostic coverage used
+  instead of required behavior and complete-execution proof.
 - Removed lint/typecheck/test gate.
 - Package script changed to hide errors.
 
