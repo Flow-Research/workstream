@@ -63,6 +63,45 @@ def test_cursor_cap_probe(monkeypatch):
         test_cursor_validation(monkeypatch)
 
 
+async def test_http_cursor_rejection_before_task(admin_access):
+    from app.api.deps.authorization import get_task_commands
+    app = admin_access.signed.client._transport.app
+    project, task = new_record_id(), new_record_id()
+    value = dict(project_id=str(project), task_id=str(task),
+                 created_at=datetime.now(UTC).isoformat(), event_id=str(new_record_id()))
+    raw = json.dumps(value)
+    invalid = ["{", raw + " " * 513,
+               json.dumps(value | {"project_id": str(new_record_id())}),
+               json.dumps(value | {"task_id": str(new_record_id())}),
+               raw[:-1] + ',"event_id":"' + value["event_id"] + '"}']
+    reached = []
+    async def forbidden():
+        reached.append(True)
+        raise HTTPException(status_code=418, detail="TASK composition reached")
+    app.dependency_overrides[get_task_commands] = forbidden
+    try:
+        for cursor in invalid:
+            response = await admin_access.signed.client.get(path(project, task),
+                headers=admin_access.target.headers, params={"cursor": cursor})
+            assert response.status_code == 422, response.text
+            assert response.json()["detail"] == "task evidence request is invalid"
+            assert not reached
+        # A valid cursor and the same signed actor reach the observed dependency.
+        response = await admin_access.signed.client.get(path(project, task),
+            headers=admin_access.target.headers, params={"cursor": raw})
+        assert response.status_code == 418
+        assert response.json()["detail"] == "TASK composition reached"
+        assert reached == [True]
+    finally:
+        app.dependency_overrides.pop(get_task_commands)
+
+
+async def test_http_cursor_cap_probe(admin_access, monkeypatch):
+    monkeypatch.setattr(owner, "TASK_EVIDENCE_CURSOR_LIMIT", 10000)
+    with pytest.raises(AssertionError, match="418 == 422"):
+        await test_http_cursor_rejection_before_task(admin_access)
+
+
 def test_command_field_guard():
     resource = TaskAuthorityResourceContext(resource_id=new_record_id(), scope_project_id=new_record_id(),
         actor_profile_id=new_record_id(), identity_link_id=new_record_id(), task_status="draft",

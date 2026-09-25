@@ -727,7 +727,7 @@ GUIDE_PROPOSAL_ACTION_IDS = frozenset({
 })
 
 
-def _validate_action_definitions(definitions: tuple[ActionDefinition, ...]) -> None:
+def _validate_action_definition_rows(definitions: tuple[ActionDefinition, ...]) -> None:
     """Validate closed row types before indexing executable action availability."""
     if any(
         not isinstance(definition, ActionDefinition)
@@ -740,10 +740,24 @@ def _validate_action_definitions(definitions: tuple[ActionDefinition, ...]) -> N
         raise RuntimeError("authorization action catalogue contains an invalid row")
 
 
+def _validate_action_definitions(definitions: tuple[ActionDefinition, ...]) -> None:
+    """Validate closed metadata after action identity and availability checks."""
+    if set(definitions) != set(ACTION_DEFINITIONS):
+        raise RuntimeError("authorization action metadata mismatch")
+    if any(
+        definition.availability is not ActionAvailability.PLANNED
+        for definition in definitions
+        if definition.action_id in FUTURE_INTENT_REQUIRED_ACTIONS
+    ):
+        raise RuntimeError("future-intent action availability mismatch")
+    if {definition.owner for definition in definitions} != set(ActionOwner):
+        raise RuntimeError("authorization action owner catalogue is incomplete")
+
+
 def _index_actions(
     definitions: tuple[ActionDefinition, ...],
 ) -> MappingProxyType[ActionId, ActionDefinition]:
-    _validate_action_definitions(definitions)
+    _validate_action_definition_rows(definitions)
     indexed = {definition.action_id: definition for definition in definitions}
     _require_catalogue_counts()
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
@@ -831,15 +845,7 @@ def _index_actions(
         ActionId.AUDIT_TASK_EVIDENCE_READ,
     } | TASK_LOCKED_CONTEXT_READ_ACTIONS:
         raise RuntimeError("authorization active action boundary mismatch")
-    if set(definitions) != set(ACTION_DEFINITIONS):
-        raise RuntimeError("authorization action metadata mismatch")
-    if any(
-        indexed[action].availability is not ActionAvailability.PLANNED
-        for action in FUTURE_INTENT_REQUIRED_ACTIONS
-    ):
-        raise RuntimeError("future-intent action availability mismatch")
-    if {definition.owner for definition in definitions} != set(ActionOwner):
-        raise RuntimeError("authorization action owner catalogue is incomplete")
+    _validate_action_definitions(definitions)
     return MappingProxyType(indexed)
 
 

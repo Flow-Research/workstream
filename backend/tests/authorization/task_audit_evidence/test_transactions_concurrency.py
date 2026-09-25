@@ -19,16 +19,23 @@ from tests.authorization.task_reads.support import task_case
 from tests.authorization.task_audit_evidence.support import ACTION, grant_audit, path
 
 
-@pytest.mark.parametrize("failure", ("projection", "serialization", "validation"))
+@pytest.mark.parametrize("failure", ("projection", "serialization", "validation", "reference"))
 async def test_post_consume_rollback(admin_access, monkeypatch, failure):
     from pydantic import TypeAdapter
     from app.modules.tasks.models import WorkstreamTask
     from app.modules.tasks.repository import TaskRepository
+    from app.modules.tasks.service import TaskValidationError
     from tests.authorization.task_locked_context.test_transactions import count
+    from tests.tasks.test_audit_evidence import NOW, store_event
     project, _, task = await task_case(admin_access)
     await grant_audit(admin_access, project)
     actor = await actor_context(str(admin_access.target.id))
     factory = db_session.get_session_factory()
+    if failure == "reference":
+        async with factory() as initial, initial.begin():
+            await store_event(initial, str(task), when=NOW, event_type="TaskClaimed", typed_source=True,
+                payload={"references": {"project_id": str(project), "task_id": str(task),
+                    "assignment_id": "invalid-reference", "authorization_decision_id": str(project)}})
     async with factory() as session:
         original_title = (await session.get(WorkstreamTask, str(task))).title
     staged = []
@@ -59,9 +66,11 @@ async def test_post_consume_rollback(admin_access, monkeypatch, failure):
             raise RuntimeError("response failure")
         if failure == "projection":
             monkeypatch.setattr(TaskRepository, "read_audit_task_evidence", broken_read)
-        else:
+        elif failure != "reference":
             monkeypatch.setattr(TypeAdapter, "dump_json" if failure == "serialization" else "validate_json", broken_response)
-        with pytest.raises(RuntimeError, match="failure"):
+        expected = TaskValidationError if failure == "reference" else RuntimeError
+        message = "task audit evidence is invalid" if failure == "reference" else "failure"
+        with pytest.raises(expected, match=message):
             await command.audit_evidence(AuditTaskEvidenceRequest(project, task))
         assert len(staged) == 1 and not session.in_transaction()
     async with factory() as independent:

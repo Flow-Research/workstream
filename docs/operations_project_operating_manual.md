@@ -223,13 +223,13 @@ ARCH-03B6 supplies distinct management, operational and
 audit locked-context projections through one historical resolver. ARCH-03C6 exposes the three projections with distinct current grants. ARCH-03B7 supplies immutable contributor and manager
 requirements from the original locked effective policy. Its separate manager read
 and Contributor read are public through ARCH-03C5; both use the original locked
-policy even after a newer guide is activated. ARCH-03B8 supplies bounded internal Audit
-Authority task evidence. ARCH-03B9 supplies hidden exact-assignment invalidation,
+policy even after a newer guide is activated. ARCH-03B8 supplies the bounded Audit
+Authority evidence projection, exposed publicly under exact authority by ARCH-03C7.
+ARCH-03B9 supplies hidden exact-assignment invalidation,
 AUTH-OUTBOX-02 supplies shared delivery, and ARCH-03C1 supplies exact reconciler
 authority and decision-bound receipts. ARCH-03C2 delivers atomic producer
 publication and first handler registration with enforced prefork topology.
-Remaining Audit Authority history access
-stays separately bounded under ARCH-03C.
+Public guide activation and approved-guide intake integration remain next.
 
 The intended unified flow uses one compilation result for sufficiency and
 artifact/pre-submit/post-submit proposals. Once finalized, its `ProjectSetupRun`,

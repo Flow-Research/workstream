@@ -63,7 +63,9 @@ Migration `0005_task_evidence_authority`, after `0004_task_context_authority`,
 extends only the existing closed audit action/permission constraint with
 `audit.task.evidence.read` / `audit.read`. Preserve prior records and exact pairs;
 do not rewrite data or add a downgrade path. Update current schema fingerprints,
-head checks and existing exact catalogue/route/lane inventories together.
+head checks and existing exact catalogue/route/lane inventories together. Keep
+catalogue validation within existing size limits by separating row-shape from
+closed-metadata validation without changing validation precedence.
 
 ## Cleanup and explicit retained dependencies
 
@@ -127,7 +129,8 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
 Implementation test functions under `tests/authorization/task_audit_evidence/`:
 
 - `test_contracts.py`: `test_public_contract`, `test_cursor_validation`,
-  `test_cursor_cap_probe`, `test_command_field_guard`, `test_command_guard_probe`,
+  `test_cursor_cap_probe`, `test_http_cursor_rejection_before_task`,
+  `test_http_cursor_cap_probe`, `test_command_field_guard`, `test_command_guard_probe`,
   `test_nonhuman_admission`.
 - `test_authority.py`: `test_exact_role_matrix`, `test_dual_role_grant_identity`,
   `test_continuation_rechecks_authority`, `test_role_filter_probe`.

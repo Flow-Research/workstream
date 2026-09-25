@@ -270,9 +270,10 @@ evidence keys, forbidden artifact rules, storage reference rules, packaging
 rules, hash algorithm, size limits, and attestation terms before submission.
 ARCH-03B7 supplies separate immutable contributor and management result types
 with the same safe fields. Both use the original locked policy, never the current
-guide. The hidden contributor read applies existing assignment visibility after
-TASK locking; the management read stays internal and the retained public route
-keeps its existing authority wrapper until ARCH-03C.
+guide. ARCH-03C5 exposes both reads under exact current authority after TASK
+locking: the contributor requires the current assignment and covered Submitter
+grant; the manager requires covered Project Manager authority. The superseded
+public authority wrapper is removed.
 
 ## Task Locked Context
 

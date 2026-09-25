@@ -224,7 +224,8 @@ ARCH-03B5 reuses these ports in authorized work-context responses below.
 ARCH-03C5 also exposes their exact standalone Contributor and Manager reads,
 replacing the old broad detail wrapper. Command responses retain their existing
 contracts; no compatibility alias is added.
-ARCH-03B8 supplies the bounded internal audit evidence read described below.
+ARCH-03B8 supplies the bounded audit evidence projection; ARCH-03C7 exposes it
+publicly under exact Audit Authority as described below.
 
 
 ## Current contributor and manager work context
@@ -383,7 +384,7 @@ fixed-service AUTH/PREP implementation for the sole
 producer wiring and registers this sole production handler under enforced
 prefork delivery. ARCH-03C4 separately delivers the three public queues.
 ARCH-03C5 supplies detail and requirements authority; ARCH-03C6 supplies
-locked-context authority. Audit history access remains separately bounded.
+locked-context authority; ARCH-03C7 supplies bounded public Audit Authority history.
 
 Each `TaskAssignmentAuthorityInvalidationRequested` event (protocol version 1)
 addresses one original project/task/assignment/contributor and one immutable AUTH
