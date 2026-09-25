@@ -240,3 +240,10 @@ reads require shared authority wiring, migration preservation, affected-call
 replacement and independent role/transaction/concurrency proofs. They share one
 existing operation; splitting the proof from that cutover would leave obsolete
 contracts or incomplete regression protection. No additional workflow is added.
+
+The public API drill captures Manager requirements while the covering grant is
+active, then proves both Manager reads conceal after its deliberate revocation.
+Its distinct unassigned contributor first lacks access, receives an actual
+project Submitter grant, can inspect ready work, and loses visibility after the
+other contributor claims it. Token roles are never substituted for those grants.
+The extra idempotency UUID is classified as a transport token, not a record ID.
