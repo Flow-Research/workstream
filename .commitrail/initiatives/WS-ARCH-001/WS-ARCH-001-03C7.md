@@ -16,7 +16,7 @@ This is audit inspection, not submission, review, checker activation or an expor
 Leases and voluntary skip remain deferred. Open CI PRs own unrelated workflow
 changes; this PR does not alter workflow selection or thresholds.
 
-## Contract and existing owners
+## Bounded change
 
 Expose `GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence`, action
 `audit.task.evidence.read`, existing permission `audit.read`, covered project or
@@ -97,7 +97,7 @@ No lifecycle transition, grant permission, claim/start, retained data, business
 policy, API compatibility alias, new generic framework, worker, deployment,
 frontend, private guide fixture, dependency or CI gate/threshold change.
 
-## Acceptance and verification
+## Acceptance criteria
 
 1. Signed role/scope matrix proves only project/system Audit Authority succeeds;
    dual-role actor selects the exact audit grant, stored ALLOW and DENY identities
@@ -112,7 +112,9 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
    SQL column/transaction/no-lock tests rather than rewriting them as HTTP tests.
 4. Real PostgreSQL wrong-project request returns without waiting on a foreign
    task lock. Revocation interleavings preserve live authority and lock order.
-   Response/reference/audit failures roll back a genuinely staged ALLOW and marker.
+   Response/reference failures roll back a genuinely staged ALLOW and marker.
+   Separately, a failed audit write proves a real write attempt and marker rollback,
+   with no projection entry; it cannot claim a successfully staged ALLOW.
 5. Migration retains predecessor rows byte-for-byte (all three 0004 pairs,
    ALLOW/DENY); exact new pair succeeds, substituted permission fails specifically
    at the constraint. Disabling that constraint makes the negative probe fail.
@@ -120,15 +122,35 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
    forbidden command fields and rollback/serialization boundaries. Positive
    controls must reach the intended guard; do not obtain denial via another guard.
 
-Future implementation tests are grouped as `test_contracts`, `test_authority`,
-`test_history` and `test_transactions_concurrency` under the new test package,
-plus `tests/migrations/test_task_evidence_authority.py`. Run focused signed
+## Evidence
+
+Named future test functions under `tests/authorization/task_audit_evidence/`:
+
+- `test_contracts.py`: `test_public_contract`, `test_cursor_validation`,
+  `test_cursor_cap_probe`, `test_command_field_guard`, `test_command_guard_probe`,
+  `test_nonhuman_admission`.
+- `test_authority.py`: `test_exact_role_matrix`, `test_dual_role_grant_identity`,
+  `test_continuation_rechecks_authority`, `test_role_filter_probe`.
+- `test_history.py`: `test_all_task_states`, `test_state_guard_probe`,
+  `test_history_pagination_and_privacy`, `test_invalid_reference_is_sanitized`.
+- `test_transactions_concurrency.py`: `test_post_consume_rollback`,
+  `test_audit_write_rollback`, `test_wrong_project_does_not_wait`,
+  `test_task_only_lock_probe`, `test_revocation_serialization`.
+- `tests/migrations/test_task_evidence_authority.py`:
+  `test_evidence_migration_retains_rows`, `test_evidence_migration_exact_pair`.
+
+Retained/reconciled existing nodes include `tests/test_tasks.py::test_full_task_claim_start_flow_writes_audit_events`,
+`::test_finalization_repair_is_authorized_attributed_and_idempotent`,
+`::test_task_service_finalization_provenance_fails_closed_without_lock_audit`,
+and the five old-route call sites in checker tests. Their new private assertions
+read committed records through the owner, not an HTTP redaction imitation.
+Run focused signed
 PostgreSQL cases and existing inner evidence/recovery tests; Ruff, module/AUTH/
 test boundaries, ownership inventory, exact lanes, stale wording, Markdown links,
 Commitrail and hosted full PostgreSQL/MinIO coverage. Current schema head 0004;
 expected head 0005. Runtime results are separate from this plan's feasibility.
 
-## Review and next boundary
+## Risk and review routing
 
 Before code: security/architecture/reuse and QA/product-ops plan review, including
 feasibility of retained recovery assertions after old-route removal. After a
@@ -149,3 +171,6 @@ Submission or post-submit execution publicly delivered by this read operation.
 - ARCH-03C7-PLAN-03: include the five checker-test callers. Preserve full-payload
   checker/requester/provenance assertions through the retained internal reader;
   replace obsolete public redaction assertions with fixed-field privacy and denial.
+- QA-03C7-PLAN-01/02: use canonical record headings and exact future test nodes.
+- QA-03C7-PLAN-03: distinguish failed audit-write rollback from post-consume
+  response failures; only the latter assert successfully staged ALLOW evidence.
