@@ -63,9 +63,17 @@ actor identity. Reuse the owner operation identifier as the replay selector;
 never accept actor or authority facts in a body.
 
 Add a bounded project-current discovery read under `contribution.policy.read`.
-The owner first locates the single current non-retired policy, then authorizes
-that exact policy through the existing read port before returning published and
-open-draft version selectors. An independent Finance actor can recover these
+The owner performs bounded nonlocking ID-only preselection (at most two
+candidates), rejecting absence or ambiguity. Do not reuse `get_reusable_policy`:
+its FOR UPDATE would acquire product locks before AUTH. Authorize the selected
+exact policy using the existing read port, then obtain current draft/published
+selectors with one nonlocking project-scoped query. Return only that same
+still-non-retired aggregate; reject retirement/replacement, disappearance or
+multiple non-retired aggregates after AUTH. Never return the preselection row.
+A same-aggregate draft created between selection and AUTH is returned from the
+post-AUTH projection. A replacement aggregate requires a new read/authorization.
+Do not assume the partial active-policy unique index also prevents duplicate
+draft aggregates. Fail closed on this corruption without a new migration. An independent Finance actor can recover these
 selectors without the creator's receipt or idempotency key. Exact-ID reads keep
 retired history available to authorized Finance callers. Absence/foreign/denial
 remain concealed; no parallel policy list, cursor or permission system.
@@ -84,18 +92,43 @@ Do not silently convert invalid compensated rules to unpaid rules.
    grant and service callers cannot access or mutate the resource. Exact project
    filters prevent foreign resource locks/data access; concealed errors persist.
 3. Same-key same-command replay returns immutable original results after live
-   reauthorization; altered command/project/actor or stale version cannot reuse
-   it. Header errors reject before product composition; duplicate headers reject.
+   exact read reauthorization, including after product state advances. Altered
+   command/project/actor under that key conflicts; a fresh operation against a
+   stale version fails current-state guards. Header errors reject before product composition; duplicate headers reject.
 4. Public bodies cannot supply actor IDs, authority facts or storage fields.
    Both required contribution rules remain mandatory. Unpaid publication succeeds;
    malformed graphs and unsupported/foreign/unavailable compensated bindings fail
    using the existing validator, preserving state and evidence atomically.
-5. Route validation/serialization/storage failures roll back actual staged
-   lifecycle and authority rows; use independent-session verification. The API
-   exposes existing behavior without replaying side effects or committing early.
+5. Invalid headers reject before CON composition/actor resolution. Invalid bodies
+   reject before any CON operation or policy-authority decision; ordinary FastAPI
+   dependency resolution may already have admitted identity and composed the port.
+   Post-consume response validation/serialization failure observes real staged
+   lifecycle and ALLOW rows, then proves their rollback independently. A targeted
+   real audit INSERT failure proves its exact PostgreSQL error, no later response
+   construction, rollback and successful same-key retry after injection removal.
+   It does not claim a successfully staged ALLOW. No early commits.
 6. Discovery returns only authorized current policy and draft/published selectors;
    exact historical reads remain available. OpenAPI and current documentation
    describe policy administration as public, activation/intake as still pending.
+
+## HTTP contract
+
+All paths are relative to `/api/v1/projects/{project_id}/contribution-policies`.
+All responses use the canonical owner facts; authenticated context supplies actor.
+
+| Method and suffix | Existing action | Response |
+|---|---|---|
+| POST `/drafts` | contribution.policy.create_draft | ContributionPolicyMutationResult |
+| GET `/current` | contribution.policy.read | ContributionPolicyProjectSelection (policy ID, published and open-draft IDs) |
+| GET `/{policy_id}` with optional version_id query | contribution.policy.read | ContributionPolicyView |
+| PUT `/{policy_id}/versions/{version_id}` | contribution.policy.update_draft | ContributionPolicyMutationResult |
+| POST `/{policy_id}/versions/{version_id}/publication` | contribution.policy.publish | ContributionPolicyMutationResult |
+| POST `/{policy_id}/versions/{version_id}/retirement` | contribution.policy.retire | ContributionPolicyMutationResult |
+
+Mutation headers map their single UUID Idempotency-Key to the existing CON
+request `operation_id` (a caller replay selector, not a generated row identifier).
+Closed bodies carry only name, rule graph, or an empty decision object as
+applicable. They cannot supply actor IDs or a second operation ID.
 
 ## Risk and review routing
 
@@ -107,19 +140,52 @@ Do not silently convert invalid compensated rules to unpaid rules.
 
 ## Evidence
 
-Focused future signed PostgreSQL tests will cover the six criteria above using
-existing real AUTH/CON composition. Run the existing owner validation/publication
-proof where affected, route/schema and boundary checks, Ruff, Markdown links,
-stale wording and Commitrail checks. Hosted canonical PostgreSQL/MinIO lanes and
-coverage remain mandatory. No real inference or private guide input is needed.
-Plan feasibility is inspected evidence, not runtime proof.
+Future nodes below are under `backend/tests/contributions/public_policy/`.
+They are proof requirements, not a claim of executed implementation tests.
+
+| Behavior atom | Named future proof and valid control |
+|---|---|
+| All six routes, exact actions, strict fields and typed responses | `test_contracts.py::test_public_policy_contract`; replace the obsolete `test_policy_routes_absent.py`, retain binding-hidden assertions |
+| Signed complete unpaid workflow, project/system Finance | `test_workflow.py::test_public_policy_lifecycle`; both required rules, no bindings; exact policy/version/event identities and stored matched grant |
+| Lost-response handoff | `test_workflow.py::test_second_finance_recovers_draft`; create with A, revoke A publicly, independently grant B, discover without A receipt/key, B edits/publishes; A created_by preserved, B actor and exact grant recorded |
+| Current published and open-draft discovery together | `test_discovery.py::test_current_selectors`; publish, create successor draft, discover both exact version IDs |
+| Retirement/replacement between preselection and AUTH | `test_discovery.py::test_discovery_rechecks_after_authorization`; pause selection, retire/replace under another valid Finance actor, resume; no replacement disclosure; fresh read succeeds |
+| Same-aggregate draft appears during read | `test_discovery.py::test_discovery_refreshes_same_policy`; return the post-AUTH draft selector, not stale preselection |
+| Corrupt duplicate draft aggregate | `test_discovery.py::test_ambiguous_current_policy_is_concealed`; otherwise-valid direct SQL second draft, fail closed, remove it and restore positive control |
+| No product lock before discovery AUTH | `test_discovery.py::test_discovery_does_not_take_product_locks`; hold the policy row independently, prove discovery does not wait and observe pre-AUTH ID-only SQL |
+| Roles, scope and revocation | `test_workflow.py::test_public_policy_denials`; valid exact target, signed PM/Operator/Contributor/foreign Finance and revoked identity; existing CP05 principal matrix remains owner proof; nonhuman route admission tested separately |
+| Immutable replay after advancement | `test_workflow.py::test_policy_replay_after_publication`; original draft operation still returns its original receipt; no extra lifecycle rows |
+| Key actor/project/body substitutions | `test_workflow.py::test_policy_replay_conflicts`; B holds live same-project Finance; A holds live grants on both real projects; otherwise-valid requests fail the event actor/project/digest comparison, original replay succeeds |
+| Fresh stale-version mutation | `test_workflow.py::test_new_operation_rejects_stale_version`; real successor state and fresh key isolate the lifecycle guard from replay-digest checks |
+| Header/body rejection | `test_contracts.py::test_mutation_input_admission`; all four mutation routes, missing/duplicate/malformed key uses fail-if-entered CON dependency; forbidden body fields use fail-if-invoked owner operation; valid input reaches each intended boundary |
+| Graph and binding validation | `test_workflow.py::test_invalid_policy_graph`; complete valid compensated control with active same-project unit and verified binding; vary only binding project/status/capability, assert intended guard and unchanged lifecycle/AUTH rows; retain existing deep CON validator tests |
+| Post-consume response rollback | `test_failures.py::test_response_failure_rolls_back`; observe actual lifecycle+ALLOW in caller and absence independently, inject validation/serialization failure, verify all effects absent independently and same-key retry succeeds |
+| Actual storage failure | `test_failures.py::test_real_audit_insert_failure`; unchanged real writer under temporary PostgreSQL constraint, exact INSERT/constraint/SQLSTATE proof and marker rollback; clean same-key retry |
+
+Run focused discriminating probes against the new behavior: remove the
+post-AUTH same-policy/currentness check (retirement test fails); replace
+ambiguity rejection with first-row selection (duplicate test fails); return
+preselection selectors instead of the post-AUTH projection (fresh draft test
+fails); select first duplicate header (admission test fails); move commit ahead
+of response validation (rollback test fails). Run each control restored and
+keep mutations ephemeral. Existing replay and binding guards are reused, not
+reimplemented merely to add tests.
+
+Run affected owner proofs, route/schema and boundary checks, Ruff, Markdown
+links, stale wording and Commitrail checks. Hosted canonical PostgreSQL/MinIO
+lanes and coverage remain mandatory. No real inference/private guide input is
+needed. Plan feasibility is inspected evidence, not runtime proof.
 
 ## Review findings
 
 Initial feasibility review confirmed that public activation cannot precede a
 usable public published-policy prerequisite. It also identified lost-selector
 recovery; project-current discovery is included instead of requiring the next
-Finance actor to possess the creator's original response.
+Finance actor to possess the creator's original response. Further plan review
+requires nonlocking preselection, post-AUTH refresh, ambiguity rejection,
+immutable replay after advancement, independently authorized negative controls,
+and separate actual-INSERT versus post-consume rollback proofs. These are
+incorporated above before implementation.
 
 ## Reconciliation
 
