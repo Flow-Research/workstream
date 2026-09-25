@@ -97,8 +97,12 @@ active queue or approval gate.
 
 - Explain the goal, scope, non-goals, and important design decisions.
 - Keep the change small enough to review.
-- Run the relevant tests, lint, type checks, and coverage checks.
-- Preserve security defaults and existing coverage floors.
+- Run the relevant behavior tests, lint and type checks; full hosted suites and
+  real API drills remain required. Coverage is diagnostic, not a merge threshold.
+- Preserve security defaults and meaningful negative-path proof. Do not add tests
+  to meet a percentage or count. For test removals/consolidations, name the
+  retained behavioral proof or the retired requirement. Keep real database,
+  transaction, concurrency and storage checks where those boundaries matter.
 - Record important reviewer findings and how they were resolved.
 - Reconcile with current `main` and rerun affected checks.
 - Before marking the PR ready, assess its impact on
@@ -169,7 +173,7 @@ in progress; that report does not block ordinary contributions.
 
 Existing claim, schema, policy, dependency, and evidence files remain as
 historical design input. They do not replace focused tests, hosted Backend
-lanes, coverage floors, internal review, CodeRabbit, or human merge approval.
+lanes, real integration proof, internal review, CodeRabbit, or human merge approval.
 Behavior-mutation enforcement must not resume until a fresh changed-line-aware
 plan is approved and proves that unchanged executable lines cannot block a
 declaration-only change.

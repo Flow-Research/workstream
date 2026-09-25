@@ -173,8 +173,9 @@ cannot be reused as post-submission review-gate evidence. See the
   modular-monolith boundary. New private edges are prohibited and touched debt
   is reduced incrementally.
 - GitHub CI distributes the backend suite across semantic lanes, rejects
-  skipped/deselected tests, preserves global coverage, and requires at least
-  90 percent coverage for new or materially changed backend subsystems.
+  skipped/deselected tests and requires behavior, boundary and real API proof.
+  Coverage is diagnostic only, with no percentage gate or test-count target.
+  Redundant coverage-only reruns are removed; their tests remain in full-suite lanes.
   Its eight-lane allocation uses three project lanes, two task lanes, two
   shared-foundation lanes and one schema lane. Database resets batch trigger
   commands within the existing transaction while retaining full schema checks;

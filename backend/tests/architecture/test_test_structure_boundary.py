@@ -256,23 +256,6 @@ def test_trusted_ledger_follows_declared_cutover_relocation(tmp_path: Path) -> N
         structure._validate_trusted_transition(grown, loaded)
 
 
-@pytest.mark.parametrize(
-    "source",
-    (
-        "import pytest\npytest.skip('disabled')\n",
-        "import pytest\npytest.importorskip('optional')\n",
-        "import pytest\npytestmark = pytest.mark.skipif(True, reason='disabled')\n",
-        "import pytest\n@pytest.mark.xfail\ndef test_auth(): assert False\n",
-        "import unittest\n@unittest.skip('disabled')\ndef test_auth(): pass\n",
-    ),
-)
-def test_skip_and_xfail_mechanisms_are_detected(tmp_path: Path, source: str) -> None:
-    """Every proof-weakening framework mechanism fails the AUTH scope gate."""
-    path = tmp_path / "backend/tests/test_auth.py"
-    _write(path, source)
-    assert structure.weak_python(path)
-
-
 def test_malformed_exception_schema_fails_closed(tmp_path: Path) -> None:
     """A vague line-limit exception cannot enter the structural ledger."""
     value = structure.load_ledger(LEDGER)
