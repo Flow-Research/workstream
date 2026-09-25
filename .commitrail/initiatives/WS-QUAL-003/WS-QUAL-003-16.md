@@ -47,6 +47,11 @@ integration checks blocking; coverage percentages are diagnostic only.
   those assertions after confirming their modules remain in the full lane
   inventory; retain recursive inventory, exact execution custody,
   empty-selection rejection, failure propagation, and cleanup checks.
+- The slower complete semantic lane exposed a time-dependent stale-gate test:
+  its fresh `started_at` was created at collection, so the expected result
+  changed if execution began after the 15-minute production threshold. Build
+  timestamps at test execution from explicit age offsets; retain both fresh and
+  stale boundary outcomes.
 
 ## Bounded change
 
@@ -54,6 +59,8 @@ integration checks blocking; coverage percentages are diagnostic only.
 
 - `backend/tests/test_authorization.py`: correct the cursor/decision inputs and
   remove only the unreachable cursor case and synthetic transaction aggregate.
+- `backend/tests/test_checkers.py`: make stale automatic-gate timing cases
+  independent of time spent between collection and execution.
 - `backend/tests/authorization/project_roles/`: the five focused PostgreSQL
   issue, revoke, unique-constraint, lifecycle, and cancellation/retry tests and
   their minimal owner-scoped fixture.

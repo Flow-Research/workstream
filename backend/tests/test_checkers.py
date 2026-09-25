@@ -1509,25 +1509,28 @@ def test_checker_run_response_redacts_internal_fields_by_actor_access() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "started_at", "expected"),
+    ("status", "started_at_offset", "expected"),
     [
-        ("queued", datetime.now(UTC) - timedelta(hours=1), False),
+        ("queued", -timedelta(hours=1), False),
         ("running", None, False),
-        ("running", datetime.now(UTC), False),
+        ("running", timedelta(0), False),
         (
             "running",
-            datetime.now(UTC).replace(tzinfo=None)
-            - PRE_REVIEW_GATE_RUNNING_TIMEOUT
-            - timedelta(seconds=1),
+            -PRE_REVIEW_GATE_RUNNING_TIMEOUT - timedelta(seconds=1),
             True,
         ),
     ],
 )
 def test_stale_automatic_gate_detection_is_bounded(
     status: str,
-    started_at: datetime | None,
+    started_at_offset: timedelta | None,
     expected: bool,
 ) -> None:
+    started_at = (
+        None
+        if started_at_offset is None
+        else datetime.now(UTC).replace(tzinfo=None) + started_at_offset
+    )
     run = SimpleNamespace(
         status=status,
         started_at=started_at,
