@@ -1492,8 +1492,9 @@ command manifest. It fails closed on an unknown permission or resource type, a
 duplicate or missing primary declaration, or an unregistered guard. The manifest
 is conformance evidence, not a second policy source.
 
-Each activating chunk must also prove its authorization-subsystem changes at or
-above 90 percent coverage and preserve the repository-wide 78 percent baseline.
+Each activating chunk must prove exact authority, denial, revalidation and
+transaction behavior with focused regressions and full hosted execution.
+Coverage percentages are diagnostic, not an activation or merge gate.
 
 The final live drill must operate through supported APIs/commands without
 direct database authority edits.

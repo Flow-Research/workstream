@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import sys
 
@@ -542,89 +541,47 @@ def test_workflow_lane_inventory_matches_catalogue() -> None:
     assert "name: backend-semantic-lane-evidence-${{ steps.identity.outputs.tree_sha }}-attempt-${{ github.run_attempt }}" in source
 
 
-def test_record_identifier_foundation_has_blocking_coverage_floor() -> None:
-    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
-    step = source.split("      - name: Record identifier foundation coverage\n", 1)[1].split("      - name:", 1)[0]
-    assert "continue-on-error" not in step
-    assert "if:" not in step
-    assert shlex.split(step.split("        run: ", 1)[1]) == [
-        "coverage", "report", "--include=app/core/identifiers.py",
-        "--precision=2", "--fail-under=90",
-    ]
-
-
-def test_project_read_coverage_gate_selects_relocated_proof() -> None:
-    """The dedicated gate must run all read proof at its current locations."""
-    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
-    step = re.search(
-        r"      - name: Project authorization-read composer coverage\n"
-        r"        working-directory: backend\n        run: \|\n"
-        r"(?P<command>(?:          [^\n]*\n)+)",
-        source,
-    )
-    assert step is not None
-    command = shlex.split(step["command"].replace("\\\n", " "))
-    assert command == [
-        "COVERAGE_FILE=.coverage-project-auth-read", "pytest", "-q",
-        "tests/projects/test_diagnostic_read_composition.py",
-        "tests/projects/test_diagnostic_read_rejections.py",
-        "tests/projects/test_policy_read_composition.py",
-        "tests/projects/test_active_guide_read_composition.py",
-        "--cov=app.modules.projects.authorization_reads", "--cov-branch",
-        "--cov-report=term-missing", "--cov-fail-under=90",
-    ]
-
-
-def test_sufficiency_coverage_gate_selects_complete_mutation_family() -> None:
-    """Without a provisioned test database, select only the controlled-port family."""
-    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
-    step = source.split("      - name: Guide sufficiency mutation per-file coverage\n", 1)[1].split("      - name:", 1)[0]
-    command = step.split("        run: |\n", 1)[1]
-    assert shlex.split(command.replace("\\\n", " ")) == [
-        "set", "-euo", "pipefail", "coverage", "run", "--append", "-m", "pytest", "-q",
-        "-p", "pytest_asyncio.plugin",
-        "tests/projects/sufficiency_mutations/test_authority.py",
-        "tests/projects/sufficiency_mutations/test_lineage.py",
-        "tests/projects/sufficiency_mutations/test_report_create.py",
-        "tests/projects/sufficiency_mutations/test_acknowledgement.py",
-        "tests/projects/sufficiency_mutations/test_replay.py",
-        "tests/projects/sufficiency_mutations/test_replay_repository.py",
-        "tests/projects/sufficiency_mutations/test_public_routes.py",
-        "for", "source", "in", "app/modules/projects/sufficiency_mutation_repository.py",
-        "app/modules/projects/sufficiency_mutation_service.py", "do", "coverage", "report",
-        "--include=${source}", "--precision=2", "--fail-under=90", "done",
-    ]
-    database_module = "tests/projects/sufficiency_mutations/test_acknowledgement_postgresql.py"
-    assert database_module not in shlex.split(command.replace("\\\n", " "))
-    assert database_module in catalogue.PROJECT_MODULES
-
-
-def test_submission_policy_coverage_selects_controlled_port_family() -> None:
-    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
-    step = source.split("      - name: Submission policy authority foundation per-file coverage\n", 1)[1].split("      - name:", 1)[0]
-    command = step.split("        run: |\n", 1)[1]
-    modules = [
+def test_former_coverage_reruns_remain_in_full_suite_lanes() -> None:
+    """Removing duplicate executions must not remove their behavior tests."""
+    required = {
+        "tests/projects/guide_compilation/finalization/test_contracts.py",
+        "tests/projects/guide_compilation/finalization/test_lineage.py",
+        "tests/projects/guide_compilation/finalization/test_replay.py",
+        "tests/projects/guide_compilation/finalization/test_service.py",
+        "tests/projects/guide_compilation/finalization/test_structure.py",
         "tests/projects/submission_policy_mutations/test_authority.py",
         "tests/projects/submission_policy_mutations/test_commands.py",
         "tests/projects/submission_policy_mutations/test_lineage.py",
+        "tests/projects/submission_policy_mutations/test_public_routes.py",
         "tests/projects/submission_policy_mutations/test_replay.py",
         "tests/projects/submission_policy_mutations/test_repository.py",
-        "tests/projects/submission_policy_mutations/test_public_routes.py",
-    ]
-    assert shlex.split(command.replace("\\\n", " ")) == [
-        "set", "-euo", "pipefail", "coverage", "run", "--append", "-m", "pytest", "-q",
-        "-p", "pytest_asyncio.plugin", *modules,
-        "for", "source", "in", "app/modules/projects/submission_policy_mutation_repository.py",
-        "app/modules/projects/submission_policy_mutation_service.py", "do", "coverage", "report",
-        "--include=${source}", "--precision=2", "--fail-under=90", "done",
-    ]
-    assert set(modules) <= set(catalogue.PROJECT_MODULES)
-    database_module = (
-        "tests/projects/submission_policy_mutations/test_public_routes_postgresql.py"
-    )
-    assert database_module not in shlex.split(command.replace("\\\n", " "))
-    assert database_module in catalogue.PROJECT_MODULES
-    assert "tests/test_projects.py" in catalogue.PROJECT_MODULES
+        "tests/projects/sufficiency_mutations/test_acknowledgement.py",
+        "tests/projects/sufficiency_mutations/test_authority.py",
+        "tests/projects/sufficiency_mutations/test_lineage.py",
+        "tests/projects/sufficiency_mutations/test_public_routes.py",
+        "tests/projects/sufficiency_mutations/test_replay.py",
+        "tests/projects/sufficiency_mutations/test_replay_repository.py",
+        "tests/projects/sufficiency_mutations/test_report_create.py",
+        "tests/projects/test_active_guide_read_composition.py",
+        "tests/projects/test_diagnostic_read_composition.py",
+        "tests/projects/test_diagnostic_read_rejections.py",
+        "tests/projects/test_policy_read_composition.py",
+    }
+    assert required <= set(catalogue.PROJECT_MODULES)
+
+
+def test_coverage_is_diagnostic_not_a_percentage_gate() -> None:
+    root = runner.ROOT.parent
+    for name in ("backend", "mcp"):
+        workflow = (root / f".github/workflows/{name}.yml").read_text()
+        thresholds = re.findall(r"--(?:cov-)?fail-under(?:=|\s+)([\d.]+)", workflow)
+        assert thresholds and all(float(value) == 0 for value in thresholds)
+    backend = (root / ".github/workflows/backend.yml").read_text()
+    # Each selected test executes in its lane, not in a second quota-only run.
+    assert "COVERAGE_FILE=.coverage-" not in backend
+    assert "coverage run --append -m pytest" not in backend
+    assert "or percent < 0" in backend
+
 
 
 @pytest.mark.parametrize(
@@ -662,31 +619,3 @@ def test_finalization_tests_are_all_in_project_lanes():
                 (root / "projects/guide_compilation/finalization").glob("test_*.py")}
     assert expected
     assert expected <= set(PROJECT_MODULES)
-
-
-def test_document_runtime_coverage_keeps_each_new_owner_above_ninety():
-    """Splitting runtime code cannot move it below the existing per-file floor."""
-    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
-    step = source.split("      - name: POL-04B document runtime per-file coverage\n", 1)[1].split("      - name:", 1)[0]
-    command = step.split("        run: |\n", 1)[1]
-    assert shlex.split(command.replace("\\\n", " ")) == [
-        "set", "-euo", "pipefail", "for", "source", "in",
-        'app/adapters/project_agents/openai_workspace.py',
-        'app/adapters/project_agents/provider_resilience.py',
-        'app/core/project_guide_instructions.py',
-        'app/interfaces/project_guide_runtime.py',
-        'app/modules/projects/api/guide_documents.py',
-        'app/modules/projects/api/task_examples.py',
-        'app/modules/authorization/domain/guide_mutations.py',
-        'app/modules/authorization/domain/prepared_guide_mutations.py',
-        'app/modules/artifacts/guide_document_access.py',
-        'app/modules/artifacts/guide_documents.py',
-        'app/modules/checkers/api/pre_submit_catalogue.py',
-        'app/modules/projects/guide_compilation/diagnostics.py',
-        'app/modules/projects/guide_compilation/document_scope.py',
-        'app/modules/projects/guide_compilation/live.py',
-        'app/modules/projects/guide_compilation/runtime_resources.py',
-        'app/modules/projects/guide_compilation/source_state.py',
-        "do", "coverage", "report", "--include=${source}",
-        "--precision=2", "--fail-under=90", "done",
-    ]

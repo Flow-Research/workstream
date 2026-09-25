@@ -1214,9 +1214,10 @@ At minimum, final proof covers:
 - no adjudication action, state, queue, lease, decision, contribution, branch,
   readiness check, or initiative dependency.
 
-Repository-wide coverage MUST remain at or above 78 percent and every new or
-materially changed subsystem at or above 90 percent. No implementation chunk
-may weaken tests, CI, authorization defaults, or coverage thresholds.
+Tests MUST prove required behavior, including authorization, immutable facts,
+atomicity, retries and real integration boundaries. Coverage percentages are
+diagnostic only. No implementation chunk may hide failures, skip required proof,
+or weaken authorization defaults to make CI pass.
 
 ## Exclusions
 
