@@ -1,4 +1,4 @@
-"""Hidden, bounded task lifecycle evidence; selectors never confer authority."""
+"""Bounded task lifecycle evidence; selectors never confer authority."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,7 +28,7 @@ class TaskEvidenceCursor:
 
 @dataclass(frozen=True, slots=True)
 class AuditTaskEvidenceRequest:
-    """Future callers must authorize this exact scope before using the read."""
+    """Callers must authorize this exact scope before using the read."""
 
     project_id: UUID
     task_id: UUID
@@ -101,7 +101,7 @@ class AuditTaskEvidencePage:
 
 
 class AuditTaskEvidencePort(Protocol):
-    """Internal evidence facts; ARCH-03C supplies covered Audit Authority."""
+    """Evidence facts; the public operation supplies covered Audit Authority."""
 
     async def read_audit_task_evidence(self, request: AuditTaskEvidenceRequest) -> AuditTaskEvidencePage | None:
         """Conceal absent/foreign tasks without owning the caller transaction."""
