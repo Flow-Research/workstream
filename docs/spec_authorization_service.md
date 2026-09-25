@@ -1572,3 +1572,24 @@ matched-grant evidence precede projection; DTO validation/serialization precedes
 commit. Missing and unauthorized reads conceal consistently, without changing
 claim/start command errors. Database migration 0003 admits only these four exact
 action/permission pairs after the UUIDv7 baseline and queue migration.
+
+
+### ARCH-03C6 task locked-context reads
+
+`project.task.locked_context.read` uses `project.task.manage` with a covering
+Project Manager grant. `operations.task.locked_context.read` uses
+`operations.status.read` with a system Operator grant. `audit.task.locked_context.read`
+uses `audit.read` with a covering Audit Authority grant. Exact role filters apply:
+other administrative roles sharing `audit.read` cannot use the audit projection.
+No grantable permission is added. Token roles and task creator identity do not
+authorize these operations.
+
+The shared concealed-read guard rejects mutation/replay fields. TASK filters
+project and task before locking, then acquires assignment, actor/link and grant
+locks before resolving historical PROJECTS custody. All task states are readable
+only with complete valid locked context. Nonhuman admission and missing/foreign/
+denied reads conceal with 404; malformed selectors and invalid custody return
+422. Serialization occurs before ALLOW commit. Migration 0004 extends the existing
+audit constraint with only these three exact action/permission pairs and preserves
+retained evidence. The prior task-only route is removed; bounded Audit Authority
+history access remains ARCH-03C7.

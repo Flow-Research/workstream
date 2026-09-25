@@ -9,7 +9,8 @@ CP08 delivers exact contribution-policy lineage through task, assignment and
 hidden Submission creation. ARCH-03C2 delivers exact assignment-invalidation
 publication and registered delivery. ARCH-03C4 delivers the three public task
 queues with exact project authority. ARCH-03C5 delivers distinct Contributor and
-Manager task detail and requirements. Public Submission cutover remains pending;
+Manager task detail and requirements. ARCH-03C6 exposes the three distinct
+locked-context reads with exact current grants. Public Submission cutover remains pending;
 the [capability ledger](roadmap_status.md) identifies its owner.
 
 ## Records and ownership
@@ -258,8 +259,7 @@ missing or invalid locked custody returns the existing 422
 `task_locked_context_invalid`. Ordinary unassigned draft is not contributor work;
 a fully locked own-active draft remains visible under the existing authority rule.
 
-Retained locked-context and audit-route authority replacement remain separately
-scoped. ARCH-03C2 already delivers authority-loss assignment invalidation.
+Retained audit-route authority replacement remains separately scoped. ARCH-03C2 already delivers authority-loss assignment invalidation.
 
 ## Task locked-context projections
 
@@ -274,19 +274,29 @@ version, checker ID groups and blocking severities); its collections are immutab
 Operational/audit results exclude bodies, work/source content, actor identities,
 artifacts, storage locations and economics.
 
-The three hidden owner reads require exact project/task UUIDs, filter both before
-resolving policy custody and lock TASK before PROJECTS. They use the existing
-historical validator, including exact activation-receipt and stored-body checks;
-a newer active guide does not change the result. They neither flush nor commit
-caller-owned work and do not grant authority. Missing and foreign tasks conceal
-identically; incomplete or inconsistent locks fail with `task_locked_context_invalid`.
+ARCH-03C6 exposes these distinct GET routes (prefix `/api/v1`):
 
-The retained `/tasks/{task_id}/locked-context` route returns the same management
-projection under its existing role/creator wrapper and loads the task once.
-ARCH-03C still owns replacement of that authority and public operational/audit
-activation. There is no audience-switching endpoint, fallback schema or new
-TASK public API dependency. Retained audit-route authority replacement remains
-separate ARCH-03C work.
+| Route | Exact live authority |
+|---|---|
+| `/projects/{project_id}/tasks/{task_id}/locked-context` | Covering project/system Project Manager |
+| `/operations/projects/{project_id}/tasks/{task_id}/locked-context` | System Operator |
+| `/audit/projects/{project_id}/tasks/{task_id}/locked-context` | Covering project/system Audit Authority |
+
+The existing authorized command owner validates UUID selectors, filters project
+and task before acquiring a TASK row lock, then locks the active assignment,
+AUTH actor/link and exact role grant before historical PROJECTS custody. Its
+transaction contains PREP consumption, projection and response serialization;
+response or audit failure rolls back ALLOW. Read actions reject mutation/replay
+fields and do not impose a task-state allowlist. All nine persisted states require
+complete valid historical context, so an ordinary unlocked draft returns 422
+`task_locked_context_invalid`. Missing, foreign-project and unauthorized reads
+conceal with the same 404. Nonhuman callers cannot reach TASK dependencies.
+
+The shared historical validator checks exact activation receipts and stored
+policy bodies; a newer active guide never changes the result. Only Management
+receives the bounded checker summary. The old task-only route, role/creator
+wrapper and unused hidden locked-context wrappers are removed. Shared historical
+resolution remains for requirements. Audit history activation remains ARCH-03C7.
 
 
 ## Task submission requirements projections
@@ -356,8 +366,8 @@ fixed-service AUTH/PREP implementation for the sole
 `task.assignment.authority_reconcile` action. ARCH-03C2 delivers atomic AUTH
 producer wiring and registers this sole production handler under enforced
 prefork delivery. ARCH-03C4 separately delivers the three public queues.
-ARCH-03C5 supplies detail and requirements authority; locked-context and audit
-read authority remain separately bounded.
+ARCH-03C5 supplies detail and requirements authority; ARCH-03C6 supplies
+locked-context authority. Audit history access remains separately bounded.
 
 Each `TaskAssignmentAuthorityInvalidationRequested` event (protocol version 1)
 addresses one original project/task/assignment/contributor and one immutable AUTH
@@ -452,5 +462,5 @@ Projection or response failure rolls back ALLOW evidence. A valid missing,
 foreign or denied selector has the same concealed 404; malformed UUID syntax
 returns 422. Nonhuman callers are rejected before TASK access. These reads do
 not authorize claim or submission, and no old role/creator wrapper remains for
-them. Shared helpers used by retained submission/locked-context/audit reads are
+them. Shared helpers used by retained submission/audit reads are
 not yet removed.

@@ -181,6 +181,12 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/authorization/task_reads/test_transactions.py",
             "tests/authorization/task_reads/test_visibility.py",
             "tests/authorization/task_reads/test_concurrency.py",
+    "tests/authorization/task_locked_context/test_authority.py",
+    "tests/authorization/task_locked_context/test_contracts.py",
+    "tests/authorization/task_locked_context/test_transactions.py",
+    "tests/authorization/task_locked_context/test_visibility.py",
+    "tests/authorization/task_locked_context/test_concurrency.py",
+
             "tests/tasks/test_management_queue.py",
             "tests/tasks/test_task_detail.py",
             "tests/tasks/test_work_context.py",

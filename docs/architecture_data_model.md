@@ -875,10 +875,10 @@ a covering Project Manager grant. No policy row is written by these reads.
 ARCH-03B6 provides explicit management,
 operational and audit locked-context projections containing exact source,
 effective/pre/post-submit policy, review, revision and ContributionPolicy references.
-Only management includes the bounded post-submit checker summary. The existing
-`locked-context` route retains its token-role/creator management wrapper;
-operational and audit methods remain internal. ARCH-03C owns canonical authority
-and public activation. Contribution-policy provenance comes from the guide-bound
+Only management includes the bounded post-submit checker summary. ARCH-03C6 exposes three distinct project-scoped reads with covering
+Project Manager, system Operator or covering Audit Authority grants. The old
+task-only route and unused owner wrappers are removed; shared historical
+resolution remains. Read serialization and ALLOW evidence commit atomically. Contribution-policy provenance comes from the guide-bound
 task lock copied to `TaskAssignment` and stamped on each immutable Submission;
 future ReviewLease propagation must copy that Submission stamp.
 None of these reads recomputes from the current active guide.

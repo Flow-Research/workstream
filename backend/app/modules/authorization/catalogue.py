@@ -106,6 +106,9 @@ class ActionId(StrEnum):
     TASK_SUBMISSION_REQUIREMENTS_READ = "task.submission_requirements.read"
     PROJECT_TASK_READ = "project.task.read"
     PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ = "project.task.submission_requirements.read"
+    PROJECT_TASK_LOCKED_CONTEXT_READ = "project.task.locked_context.read"
+    OPERATIONS_TASK_LOCKED_CONTEXT_READ = "operations.task.locked_context.read"
+    AUDIT_TASK_LOCKED_CONTEXT_READ = "audit.task.locked_context.read"
     TASK_WORK_CONTEXT_READ = "task.work_context.read"
     PROJECT_TASK_WORK_CONTEXT_READ = "project.task.work_context.read"
 
@@ -233,7 +236,11 @@ class ActionId(StrEnum):
     CONTRIBUTION_POLICY_RETIRE = "contribution.policy.retire"
 
 
-TASK_DETAIL_READ_ACTIONS = frozenset({
+TASK_LOCKED_CONTEXT_READ_ACTIONS = frozenset({
+    ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ, ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
+    ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ,
+})
+TASK_CONCEALED_READ_ACTIONS = TASK_LOCKED_CONTEXT_READ_ACTIONS | frozenset({
     ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
     ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
 })
@@ -271,6 +278,7 @@ class ActionOwner(StrEnum):
     ARCH_03C3 = "WS-ARCH-001-03C3"
     ARCH_03C4 = "WS-ARCH-001-03C4"
     ARCH_03C5 = "WS-ARCH-001-03C5"
+    ARCH_03C6 = "WS-ARCH-001-03C6"
     ARCH_03C1 = "WS-ARCH-001-03C1"
     AUTH_OUTBOX_01 = "WS-AUTH-001-OUTBOX-01"
     AUTH_14 = "WS-AUTH-001-14"
@@ -489,6 +497,9 @@ ACTION_DEFINITIONS = (
     _active(ActionId.TASK_READ, PermissionId.TASK_QUEUE_READ, ActionOwner.ARCH_03C5),
     _active(ActionId.TASK_SUBMISSION_REQUIREMENTS_READ, PermissionId.TASK_QUEUE_READ, ActionOwner.ARCH_03C5),
     _active(ActionId.PROJECT_TASK_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C5),
+    _active(ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C6),
+    _active(ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ, PermissionId.OPERATIONS_STATUS_READ, ActionOwner.ARCH_03C6),
+    _active(ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ, PermissionId.AUDIT_READ, ActionOwner.ARCH_03C6),
     _active(ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C5),
     _active(ActionId.TASK_QUEUE_READ, PermissionId.TASK_QUEUE_READ, ActionOwner.ARCH_03C4),
     _active(ActionId.PROJECT_TASK_QUEUE_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C4),
@@ -690,7 +701,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 75 or len(ACTION_IDS) != 128:
+    if len(PERMISSION_IDS) != 75 or len(ACTION_IDS) != 131:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 26:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -813,7 +824,7 @@ def _index_actions(
         ActionId.TASK_QUEUE_READ, ActionId.PROJECT_TASK_QUEUE_READ, ActionId.OPERATIONS_TASK_QUEUE_READ,
         ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
-    }:
+    } | TASK_LOCKED_CONTEXT_READ_ACTIONS:
         raise RuntimeError("authorization active action boundary mismatch")
     if set(definitions) != set(ACTION_DEFINITIONS):
         raise RuntimeError("authorization action metadata mismatch")

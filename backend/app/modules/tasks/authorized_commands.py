@@ -30,6 +30,7 @@ from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import (
     ContributorTaskLifecycle, ContributorTaskWorkContext, ManagementTaskWorkContext,
     ContributorTaskSubmissionRequirements, ManagementTaskSubmissionRequirements,
+    ManagementTaskLockedContext, OperationalTaskLockedContext, AuditTaskLockedContext,
     AssignmentResponse,
     TaskCreate,
     TaskResponse,
@@ -328,10 +329,19 @@ class AuthorizedTaskCommands:
     async def management_requirements(self, project_id: UUID, task_id: UUID) -> ManagementTaskSubmissionRequirements:
         return await self._read_task_projection(task_id, TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS, project_id)
 
+    async def management_locked_context(self, project_id: UUID, task_id: UUID) -> ManagementTaskLockedContext:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.MANAGEMENT_LOCKED_CONTEXT, project_id)
+
+    async def operational_locked_context(self, project_id: UUID, task_id: UUID) -> OperationalTaskLockedContext:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.OPERATIONAL_LOCKED_CONTEXT, project_id)
+
+    async def audit_locked_context(self, project_id: UUID, task_id: UUID) -> AuditTaskLockedContext:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.AUDIT_LOCKED_CONTEXT, project_id)
+
     async def _read_task_projection(self, task_id: UUID, operation: TaskAuthorityOperation, project_id: UUID | None = None):
         """Consume exact authority and serialize detached facts before committing evidence."""
         if not isinstance(task_id, UUID) or (
-            operation in {TaskAuthorityOperation.MANAGEMENT_READ, TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS}
+            operation not in {TaskAuthorityOperation.READ, TaskAuthorityOperation.REQUIREMENTS}
             and not isinstance(project_id, UUID)
         ):
             raise TaskValidationError("task read selectors are invalid")
@@ -340,6 +350,9 @@ class AuthorizedTaskCommands:
             TaskAuthorityOperation.MANAGEMENT_READ: ManagementTaskDetail,
             TaskAuthorityOperation.REQUIREMENTS: ContributorTaskSubmissionRequirements,
             TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS: ManagementTaskSubmissionRequirements,
+            TaskAuthorityOperation.MANAGEMENT_LOCKED_CONTEXT: ManagementTaskLockedContext,
+            TaskAuthorityOperation.OPERATIONAL_LOCKED_CONTEXT: OperationalTaskLockedContext,
+            TaskAuthorityOperation.AUDIT_LOCKED_CONTEXT: AuditTaskLockedContext,
         }[operation]
         async with self._session.begin():
             task, _, _ = await self._locked_task(task_id, operation, project_id=project_id)
@@ -354,8 +367,12 @@ class AuthorizedTaskCommands:
                 context = await self._contexts._load_locked_task_context(task)
                 if operation is TaskAuthorityOperation.REQUIREMENTS:
                     response = self._contexts._contributor_submission_requirements_response(task, context)
-                else:
+                elif operation is TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS:
                     response = ManagementTaskSubmissionRequirements(**self._contexts._submission_requirement_values(task, context))
+                elif operation is TaskAuthorityOperation.MANAGEMENT_LOCKED_CONTEXT:
+                    response = self._contexts._management_locked_context_response(task, context)
+                else:
+                    response = response_type(**self._contexts._locked_context_reference_values(task))
             if response is None:
                 raise TaskNotFound("task not found")
             adapter = TypeAdapter(response_type)

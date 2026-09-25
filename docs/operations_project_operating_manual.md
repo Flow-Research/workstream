@@ -220,8 +220,7 @@ Detail responses use `task_id`; neither detail response exposes policy/payment
 bodies. Managers can inspect drafts, but requirements without locked policy
 context return 422. Token roles and creator attribution supply no product authority.
 ARCH-03B6 supplies distinct management, operational and
-audit locked-context projections through one historical resolver. Operational and
-audit methods remain internal. ARCH-03B7 supplies immutable contributor and manager
+audit locked-context projections through one historical resolver. ARCH-03C6 exposes the three projections with distinct current grants. ARCH-03B7 supplies immutable contributor and manager
 requirements from the original locked effective policy. Its separate manager read
 and Contributor read are public through ARCH-03C5; both use the original locked
 policy even after a newer guide is activated. ARCH-03B8 supplies bounded internal Audit
@@ -229,7 +228,7 @@ Authority task evidence. ARCH-03B9 supplies hidden exact-assignment invalidation
 AUTH-OUTBOX-02 supplies shared delivery, and ARCH-03C1 supplies exact reconciler
 authority and decision-bound receipts. ARCH-03C2 delivers atomic producer
 publication and first handler registration with enforced prefork topology.
-Remaining locked-context and audit read authority
+Remaining Audit Authority history access
 stays separately bounded under ARCH-03C.
 
 The intended unified flow uses one compilation result for sufficiency and
@@ -336,16 +335,24 @@ and manager task facts, the exact historical guide, review/revision references
 `contribution_policy_version_id`. It omits obsolete payment amounts and
 submission/precheck flags. Contributor `lifecycle.next_actions` contains only
 currently applicable claim/start hints; management has no contributor lifecycle.
-Executing a hint always rechecks authority. The retained
-`GET /api/v1/tasks/{task_id}/locked-context` route still uses token-role
-checks for either the `admin` token role or the `project_manager` token role;
-it is not a canonical Operator/Audit projection.
-It returns the canonical management projection: exact guide/policy references
-and an immutable bounded post-submit checker summary. Hidden operational and
-audit projections return references only, without policy bodies or task content.
-All three validate the task's historical activation custody, even after another
-guide becomes active. They do not select current policy. Its authorization
-cutover and operational/audit public access remain planned in ARCH-03C.
+Executing a hint always rechecks authority. Locked policy provenance uses three
+separate reads (all prefixed by `/api/v1`):
+
+- Project Manager: `GET /projects/{project_id}/tasks/{task_id}/locked-context`,
+  requiring a covering project/system Project Manager grant.
+- Operator: `GET /operations/projects/{project_id}/tasks/{task_id}/locked-context`,
+  requiring a system Operator grant.
+- Audit Authority: `GET /audit/projects/{project_id}/tasks/{task_id}/locked-context`,
+  requiring a covering project/system Audit Authority grant.
+
+Management returns exact guide/policy references and the bounded post-submit
+checker summary. Operator and Audit Authority return references only. All three
+validate the task's original activation custody, including after guide replacement.
+They require complete valid locked context in every task state; incomplete or
+corrupt context returns 422. Missing, foreign-project and unauthorized reads
+return the same 404. Token roles and creator attribution grant no access.
+The old task-only locked-context route is removed. Bounded audit history access
+remains separate ARCH-03C7 work.
 
 ### Submission Quality Gate
 

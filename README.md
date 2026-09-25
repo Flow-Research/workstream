@@ -620,7 +620,8 @@ the create/screen/release role-only path with exact Project Manager authority,
 atomic audit evidence and durable replay. ARCH-03C4 exposes separate contributor-ready,
 manager-planning and Operator-status queues with current scoped grants and signed
 pagination. ARCH-03C5 exposes separate Contributor/Manager detail and requirements,
-removing their old role/creator wrappers. Locked-context and audit read authority
+removing their old role/creator wrappers. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
+locked-context reads with exact current grants. Audit history authority
 cutover remains pending. Canonical checker materialization follows in
 ARCH-04B/04C.
 

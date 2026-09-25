@@ -71,7 +71,7 @@ Never select today's policy or require current installed checker capability.
 
 Allowed: existing TASK authorization API, commands, router, service and response
 model wording; AUTH catalogue/resource rules/project authority dispatch; migration
-`0004_task_locked_context_authority` after 0003, Alembic admission and schema
+`0004_task_context_authority` after 0003, Alembic admission and schema
 fingerprint fixtures; affected route/call-site/action inventories and tests;
 MCP authorization-context selected snapshot for additive ActionId changes;
 canonical API drill; current TASK/AUTH specs, README/manual/roadmap and ARCH
@@ -156,3 +156,25 @@ Base is `4fd44fae` after merged PR #440. No open product PR owns these reads.
 Open CI initiatives remain separate. Roadmap and current navigation must advance
 locked-context reads to delivered and name only audit history as remaining
 03C read authority. No local spreadsheet exports are present.
+
+
+## Delivered boundary and retained dependencies
+
+The three routes reuse AuthorizedTaskCommands, PREP and the historical policy
+resolver. The closed action catalogue gains three actions and no permission.
+Migration 0004 admits only their evidence pairs. The task-only route and four
+unused service wrappers are removed. Existing requirements retain their shared
+resolver; unaffected Submission and broad audit-history callers still use their
+traced authority helpers. Replacing audit-history access is ARCH-03C7, not a
+compatibility path in this change.
+
+Proof locations: `authorization/task_locked_context` covers exact grants,
+concealment, revocation, rollback, all-state historical facts and lock ordering;
+`tasks/test_project_display.py` retains distinct-successor public history proof;
+`tasks/test_locked_context.py` retains immutable/private-field DTO proof;
+`migrations/test_task_context_authority.py` covers exact SQL pairs and retention.
+Old wrapper-only tests are replaced by the authorized operation proofs. Hosted
+CI supplies full-suite, API drill and MCP evidence; local runs remain focused.
+No local roadmap spreadsheet exports are present. Current docs and navigation
+advance only locked-context reads; public guide activation and audit history
+remain pending.

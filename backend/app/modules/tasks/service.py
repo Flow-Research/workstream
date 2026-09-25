@@ -59,8 +59,6 @@ from app.modules.tasks.schemas import (
     SubmissionPackagingRequirements,
     SubmissionResponse,
     ManagementTaskLockedContext,
-    OperationalTaskLockedContext,
-    AuditTaskLockedContext,
     TaskResponse,
 )
 from app.schemas.auth import ActorContext
@@ -247,33 +245,6 @@ class TaskService:
             context = await self._load_locked_task_context(task)
             return self._contributor_submission_requirements_response(task, context)
 
-    async def get_task_locked_context(
-        self,
-        actor: ActorContext,
-        task_id: str,
-    ) -> ManagementTaskLockedContext:
-        """Return management provenance under the retained role/creator authority.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task whose locked provenance should be returned.
-
-        Returns:
-            Exact locked policy references and the management checker summary.
-
-        Raises:
-            PermissionDenied: If the actor lacks a retained management role.
-            TaskNotFound: If the task is unknown.
-            TaskLockedContextInvalid: If locked context is incomplete or stale.
-        """
-        require_any_role(actor, PROJECT_OPERATOR_ROLES)
-        with self._session.no_autoflush:
-            task = await self._get_task(task_id, for_update=True)
-            if not can_admin_or_task_creator_manage(actor, task):
-                raise TaskNotFound("task not found")
-            context = await self._load_locked_task_context(task)
-            return self._management_locked_context_response(task, context)
-
     async def _lock_scoped_task(self, project_id: UUID, task_id: UUID) -> WorkstreamTask:
         """Validate exact selectors and refresh a scoped TASK under the caller's lock."""
         if not isinstance(project_id, UUID) or not isinstance(task_id, UUID):
@@ -291,27 +262,6 @@ class TaskService:
         with self._session.no_autoflush:
             task = await self._lock_scoped_task(project_id, task_id)
             return task, await self._load_locked_task_context(task)
-
-    async def read_management_task_locked_context(
-        self, project_id: UUID, task_id: UUID,
-    ) -> ManagementTaskLockedContext:
-        """Read exact management facts; the caller supplies authority and transaction."""
-        task, context = await self._read_locked_context(project_id, task_id)
-        return self._management_locked_context_response(task, context)
-
-    async def read_operational_task_locked_context(
-        self, project_id: UUID, task_id: UUID,
-    ) -> OperationalTaskLockedContext:
-        """Read hidden operational references without granting Operator access."""
-        task, _context = await self._read_locked_context(project_id, task_id)
-        return OperationalTaskLockedContext(**self._locked_context_reference_values(task))
-
-    async def read_audit_task_locked_context(
-        self, project_id: UUID, task_id: UUID,
-    ) -> AuditTaskLockedContext:
-        """Read hidden audit references without evidence or policy bodies."""
-        task, _context = await self._read_locked_context(project_id, task_id)
-        return AuditTaskLockedContext(**self._locked_context_reference_values(task))
 
     async def list_task_submissions(
         self,
