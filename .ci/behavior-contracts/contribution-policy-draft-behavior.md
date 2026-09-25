@@ -1,5 +1,10 @@
 # Chunk Contract: WS-ARCH-001-CP04A — Hidden ContributionPolicy Draft Behavior
 
+Current exposure amendment: CP05A replaces the original hidden-route restriction
+with exact Finance-authorized public policy administration. The owner behavior,
+deny-default composition, transaction and lineage requirements below remain.
+
+
 ## Goal
 
 Expose the CONTRIBUTIONS-owned public policy capability and implement hidden,
@@ -172,7 +177,7 @@ convenience, not acceptance evidence for an unlisted behavior.
 | Optional version selects only the exact requested version | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_read.py::test_read_returns_requested_version_only` | focused local command and hosted CI |
 | Read returns immutable server-owned graph facts | CONTRIBUTIONS public views | `tests/contributions/test_policy_read.py::test_read_view_contains_immutable_server_owned_graph_facts` | focused local command and hosted CI |
 | Read returns no ORM rows | CONTRIBUTIONS public views | `tests/contributions/test_policy_read.py::test_read_view_contains_no_orm_rows` | focused local command and hosted CI |
-| No ContributionPolicy route is registered | Delivery API registry | `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
+| CP05A exposes exactly the Finance-authorized policy routes | Delivery API registry | `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
 
 #### Create- and update-draft behavior
 
@@ -250,7 +255,7 @@ convenience, not acceptance evidence for an unlisted behavior.
 
 | Behavior atom | Owner and implementation surface | Required future proof | Execution custody |
 |---|---|---|---|
-| The hidden policy service exposes exactly create_draft, update_draft, read, publish and retire, with no direct downstream commands | CONTRIBUTIONS static public API shape only; not runtime side-effect proof | `tests/contributions/test_policy_negative_scope.py::test_cp04b_exposes_only_hidden_policy_commands` | focused local command and hosted CI |
+| The policy service exposes exactly create_draft, update_draft, read, read_current, publish and retire, with no direct downstream commands | CONTRIBUTIONS static public API shape only; not runtime side-effect proof | `tests/contributions/test_policy_negative_scope.py::test_policy_owner_exposes_only_policy_operations` | focused local command and hosted CI |
 | CP05 activates exactly the five registered AUTH policy actions; default composition still denies | AUTH catalogue | `tests/authorization/test_contribution_policy_registration.py::test_cp05_activates_only_exact_registered_policy_actions` | focused local command and hosted CI; security reviewer owns verdict |
 | No production or test behavior container reaches 500 lines | CP04A production/tests | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_changed_behavior_files_remain_below_500_lines` | focused local preflight and hosted CI |
 | Every test has one primary behavior | CP04A tests and structural-debt ledger | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_tests_map_one_to_one_to_contract_behavior_atoms` plus `scripts.test_structure_boundary validate` | focused local preflight and hosted CI; test-delta reviewer owns verdict |
@@ -264,7 +269,7 @@ substitution is not acceptance evidence.
 
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/schemas.py app/modules/compensation/policy_binding_service.py app/modules/projects/api app/modules/projects/contribution_policy.py app/adapters/contributions app/adapters/compensation app/adapters/projects tests/contributions
-cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/public_policy/test_contracts.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py
 cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-url> .venv/bin/python -m scripts.run_isolated_tests --metadata-json /tmp/cp04a-postgresql.json --timeout-seconds 1800 --lane cp04a_postgresql -- .venv/bin/python -m pytest -q tests/contributions/test_policy_integration_postgresql.py tests/contributions/test_policy_draft_concurrency.py tests/contributions/test_policy_event_postgresql.py tests/migrations/test_compensation_adapter_identity.py tests/test_alembic.py
 cd backend && .venv/bin/python -m coverage erase && .venv/bin/python -m pytest -q tests/contributions tests/test_contributions.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.schemas --cov=app.modules.compensation.policy_binding_service --cov=app.modules.projects.api --cov=app.modules.projects.contribution_policy --cov=app.adapters.contributions --cov=app.adapters.compensation --cov=app.adapters.projects --cov-report=
 cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/api/*' --fail-under=90

@@ -568,7 +568,18 @@ canonical evidence ownership. The existing Celery pre-review gate still calls
 service. That service's `evaluate_post_submission` uses
 `UnavailablePostSubmissionExecution` and raises
 `PostSubmissionExecutionUnavailable` until its durable execution and authority
-boundaries land. CON now provides internal exact selected-policy validation: a
+boundaries land. Finance Authority can publicly discover, create, update, publish,
+read and retire a project's ContributionPolicy under
+`/api/v1/projects/{project_id}/contribution-policies`. The current-policy read
+recovers draft and published version IDs for another authorized Finance actor.
+Each mutation requires one UUID `Idempotency-Key`; the authenticated actor and
+existing CON transaction own authorization and immutable replay. Both contribution
+types must explicitly declare compensated or unpaid rules. Unpaid publication
+needs no compensation binding; compensated rules retain verified binding checks.
+Project Managers do not acquire Finance powers. Public compensation-binding
+administration remains pending.
+
+CON provides internal exact selected-policy validation: a
 new guide binding must match the active policy’s current published version;
 the revision-adoption purpose validates an explicitly supplied historical version
 without reselection. Both validate complete rules and current unit/binding

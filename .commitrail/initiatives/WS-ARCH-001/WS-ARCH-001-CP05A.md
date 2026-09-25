@@ -1,7 +1,7 @@
 # WS-ARCH-001-CP05A — Public ContributionPolicy administration
 
 - Initiative: WS-ARCH-001
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Finance Authority can discover, create, edit, publish,
   read and retire the existing project ContributionPolicy through the public API.
 
@@ -135,18 +135,24 @@ applicable. They cannot supply actor IDs or a second operation ID.
 
 - Risk class: L1, bounded Finance authorization/public policy exposure.
 - Required reviewers: security/architecture/reuse; QA/test-delta/product-ops;
-  documentation. CI integrity only if verification machinery changes materially.
+  documentation. CI integrity for exact ownership/lane registration changes.
 - Human review focus: Finance versus manager powers, project scoping, recovery,
   unchanged explicit unpaid/compensated semantics and no premature activation.
+- Size rationale: the cohesive public-policy boundary exceeds the preferred
+  500-line review guideline because it includes signed PostgreSQL recovery,
+  isolation, replay, revocation and transaction proofs plus current navigation.
+  Product changes stay within the existing CON owner and delivery composition;
+  there is no new migration, permission, economic behavior or independent chunk.
 
 ## Evidence
 
-Future nodes below are under `backend/tests/contributions/public_policy/`.
-They are proof requirements, not a claim of executed implementation tests.
+Named proof nodes below are under `backend/tests/contributions/public_policy/`.
+They bind the implemented behavior to focused tests; full hosted evidence belongs
+in the PR trust summary.
 
-| Behavior atom | Named future proof and valid control |
+| Behavior atom | Named proof and valid control |
 |---|---|
-| All six routes, exact actions, strict fields and typed responses | `test_contracts.py::test_public_policy_contract`; replace the obsolete `test_policy_routes_absent.py`, retain binding-hidden assertions |
+| All six routes, exact actions, strict fields and typed responses | `test_contracts.py::test_public_policy_contract`; replaces the obsolete `test_policy_routes_absent.py`; binding-hidden assertions remain |
 | Signed complete unpaid workflow, project/system Finance | `test_workflow.py::test_public_policy_lifecycle`; both required rules, no bindings; exact policy/version/event identities and stored matched grant |
 | Lost-response handoff | `test_workflow.py::test_second_finance_recovers_draft`; create with A, revoke A publicly, independently grant B, discover without A receipt/key, B edits/publishes; A created_by preserved, B actor and exact grant recorded; revoked A must be denied after the actual revoke |
 | Current published and open-draft discovery together | `test_discovery.py::test_current_selectors`; publish, create successor draft, discover both exact version IDs |
@@ -166,13 +172,12 @@ They are proof requirements, not a claim of executed implementation tests.
 | Post-consume response rollback | `test_failures.py::test_response_failure_rolls_back`; observe actual lifecycle+ALLOW in caller and absence independently, inject validation/serialization failure, verify all effects absent independently and same-key retry succeeds |
 | Actual storage failure | `test_failures.py::test_real_audit_insert_failure`; unchanged real writer under temporary PostgreSQL constraint, exact INSERT/constraint/SQLSTATE proof and marker rollback; clean same-key retry |
 
-Run focused discriminating probes against the new behavior: remove the
+Discriminating probes against the new behavior: remove the
 post-AUTH same-policy/currentness check (retirement test fails); replace
 ambiguity rejection with first-row selection (duplicate test fails); return
 preselection selectors instead of the post-AUTH projection (fresh draft test
 fails); select first duplicate header (admission test fails); move commit ahead
-of response validation (rollback test fails). Run each control restored and
-keep mutations ephemeral. Remove the repository project-correlation predicate
+of response validation (rollback test fails). Controls run on restored code; mutations remain ephemeral. Remove the repository project-correlation predicate
 for the foreign-selector proof: the held foreign row must then cause a wait or
 the read must disclose the wrong resource, failing the original assertion. Existing replay and binding guards are reused, not
 reimplemented merely to add tests.
@@ -196,9 +201,29 @@ incorporated above before implementation.
 ## Reconciliation
 
 - Current-source reconciliation: CP05/CP06/CP07/AUTH-12H and ARCH-03C7 are
-  delivered; public policy administration and activation remain absent.
+  delivered. This change adds public Finance policy administration and selector
+  recovery; public guide activation remains absent.
 - Next usable boundary: manager activation context and public activation using
   CP07/AUTH-12H, then approved-guide intake integration. The API drill's internal
   activation helper is removed when its complete public replacement lands.
 - Remaining risks: compensated policy creation still needs an existing verified
   binding; public binding administration and fulfillment are not claimed here.
+
+
+## Implementation proof and limits
+
+The public dependency composes the existing AUTH adapter and CON owner, with
+one caller transaction and declared-response validation before commit. No role,
+permission, policy lifecycle, binding rule, migration or compensation behavior
+is added. The sole new owner read uses bounded ID-only preselection and a fresh
+same-aggregate projection. The original hidden-route assertion is removed;
+required owner, scope, binding and replay proofs are retained.
+
+Six ephemeral discriminators detected aggregate replacement, first-candidate
+ambiguity acceptance, stale selector return, foreign-row locking after removal
+of project correlation, first-duplicate-header acceptance, and commit before
+response validation. The response failures run after real lifecycle/ALLOW staging;
+the audit failure reaches the unchanged real INSERT and verifies PostgreSQL
+constraint `23514`, transaction-local marker rollback and same-key recovery.
+These are isolated PostgreSQL/ASGI proofs, not hosted transport or compensation
+provider execution. No local sheet exports are present.

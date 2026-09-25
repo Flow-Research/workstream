@@ -1,5 +1,10 @@
 # Chunk Contract: WS-ARCH-001-CP04B — Hidden ContributionPolicy Publication
 
+Current exposure amendment: CP05A replaces the original hidden-route restriction
+with exact Finance-authorized public policy administration. The owner behavior,
+deny-default composition, transaction and lineage requirements below remain.
+
+
 ## Goal
 
 Implement hidden publish and retire behavior using CP04A's public API,
@@ -207,7 +212,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 
 ## Acceptance criteria
 
-- [ ] Publish/retire remain hidden and production deny-default.
+- [ ] Publish/retire use exact CP05A Finance composition; uncomposed owner calls remain deny-default.
 - [ ] Publish facts equal digest/binding facts recomputed from locked rows.
 - [ ] Concurrent child mutation, binding suspension, unit retirement,
   competing publication, opaque-port denial, close failure, and
@@ -230,7 +235,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 
 | Criterion | Required future proof | Execution custody |
 |---|---|---|
-| Publish/retire remain concealed, route-unreachable, and production deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/test_policy_routes_absent.py::test_policy_routes_are_not_registered` | focused local command and hosted CI |
+| Publish/retire use CP05A public Finance composition; uncomposed owner calls remain deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
 | Publish consumes exact server-recomputed graph digest and binding ids, and the public request cannot carry caller graph facts | `tests/contributions/test_policy_publish.py::{test_publish_uses_locked_server_owned_graph,test_publish_request_cannot_carry_caller_graph_facts}` | focused local command and hosted CI |
 | PREP denial occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_prepare_denial_has_no_product_effect` | focused local command and hosted CI |
 | PREP consume exception occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_consume_exception_has_no_product_effect` | focused local command and hosted CI |
@@ -278,7 +283,7 @@ database do not satisfy the contract.
 
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions
-cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_publication_authorization.py tests/contributions/test_policy_routes_absent.py tests/contributions/test_policy_publish.py tests/contributions/test_policy_publication_recovery.py tests/contributions/test_policy_retire.py tests/contributions/test_policy_publication_auth_parity.py tests/contributions/test_cp04b_file_structure.py tests/contributions/test_cp04b_contract_projection.py tests/authorization/test_contribution_policy_registration.py tests/authorization/guide_compilation/test_migration_contract.py tests/projects/guide_compilation/test_migration_contract.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
+cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_publication_authorization.py tests/contributions/public_policy/test_contracts.py tests/contributions/test_policy_publish.py tests/contributions/test_policy_publication_recovery.py tests/contributions/test_policy_retire.py tests/contributions/test_policy_publication_auth_parity.py tests/contributions/test_cp04b_file_structure.py tests/contributions/test_cp04b_contract_projection.py tests/authorization/test_contribution_policy_registration.py tests/authorization/guide_compilation/test_migration_contract.py tests/projects/guide_compilation/test_migration_contract.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
 cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.adapters.contributions --cov-report=term-missing --cov-fail-under=90
 cd backend && .venv/bin/coverage report --include='app/modules/contributions/api/policies.py' --precision=2 --fail-under=90
 cd backend && .venv/bin/coverage report --include='app/modules/contributions/models.py' --precision=2 --fail-under=90

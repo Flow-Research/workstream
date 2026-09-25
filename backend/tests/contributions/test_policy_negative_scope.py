@@ -3,6 +3,6 @@
 from app.modules.contributions.service import ContributionPolicyService
 
 
-def test_cp04b_exposes_only_hidden_policy_commands() -> None:
+def test_policy_owner_exposes_only_policy_operations() -> None:
     public = {name for name in dir(ContributionPolicyService) if not name.startswith("_")}
-    assert public == {"create_draft", "publish", "read", "retire", "update_draft"}
+    assert public == {"create_draft", "publish", "read", "read_current", "retire", "update_draft"}
