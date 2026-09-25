@@ -137,13 +137,31 @@ Named future test functions under `tests/authorization/task_audit_evidence/`:
   `test_audit_write_rollback`, `test_wrong_project_does_not_wait`,
   `test_task_only_lock_probe`, `test_revocation_serialization`.
 - `tests/migrations/test_task_evidence_authority.py`:
-  `test_evidence_migration_retains_rows`, `test_evidence_migration_exact_pair`.
+  `test_evidence_migration_retains_rows`, `test_evidence_migration_exact_pair`,
+  `test_evidence_constraint_probe`.
 
 Retained/reconciled existing nodes include `tests/test_tasks.py::test_full_task_claim_start_flow_writes_audit_events`,
 `::test_finalization_repair_is_authorized_attributed_and_idempotent`,
 `::test_task_service_finalization_provenance_fails_closed_without_lock_audit`,
-and the five old-route call sites in checker tests. Their new private assertions
-read committed records through the owner, not an HTTP redaction imitation.
+Their private assertions read committed records through the owner, not an HTTP
+redaction imitation. The complete affected caller disposition is:
+
+| Existing node (under `backend/tests/`) | Disposition |
+|---|---|
+| `test_tasks.py::test_task_router_service_errors_use_canonical_request_context` | Replace obsolete route/wrapper case with new operation |
+| `test_tasks.py::test_full_task_claim_start_flow_writes_audit_events` | Retain all stored transition/provenance assertions through repository |
+| `test_tasks.py::test_different_worker_cannot_start_or_read_claimed_task` | Retain start/detail guards; audit denial covered by new signed matrix |
+| `test_tasks.py::test_retained_packet_reads_preserve_locked_lineage_and_redact_audit` | Retain packet lineage and stored audit facts; replace obsolete public redaction in new privacy proof |
+| `test_tasks.py::test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task_audit` | Compare committed lifecycle evidence before/after denied mutations |
+| `test_tasks.py::test_cross_worker_cannot_list_submissions_or_audit_after_submit` | Retain submission denial; audit denial covered by new signed matrix |
+| `test_tasks.py::test_finalization_repair_is_authorized_attributed_and_idempotent` | Retain repair authority, exact stored requester/provenance and event counts |
+| `test_checkers.py::test_locked_submission_checker_run_persists_results_and_allows_review` | Retain stored gate trigger facts through repository |
+| `test_checkers.py::test_checker_revision_routing_and_reads_for_retained_packet_versions` | Retain checker/revision/submission guards; replace obsolete audit redaction with fixed privacy/denial proof |
+| `test_checkers.py::test_retained_packet_setup_failure_stays_blocked_until_repaired` | Retain stored blocked/gate payload and repair evidence; replace obsolete worker audit view |
+
+Keep `tests/tasks/test_audit_evidence.py::test_task_evidence_sql_privacy`,
+`::test_task_evidence_caller_transaction`, and `::test_task_evidence_does_not_lock`
+as existing inner-reader proofs; update only its obsolete hidden-surface test.
 Run focused signed
 PostgreSQL cases and existing inner evidence/recovery tests; Ruff, module/AUTH/
 test boundaries, ownership inventory, exact lanes, stale wording, Markdown links,
