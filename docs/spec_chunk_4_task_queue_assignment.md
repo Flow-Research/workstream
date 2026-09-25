@@ -53,9 +53,9 @@ Contributor commands and work context use canonical project authority:
 | `GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context` | Covered Project Manager; exact route project and task |
 | `POST /api/v1/operations/tasks/{task_id}/start` | System Operator; another contributor's active assignment and nonblank reason |
 
-Locked-context and audit reads retain their existing wrappers. Their broader
-replacement and projection contracts remain owned by ARCH-03B/03C; this bounded
-repair does not certify those routes as fully cut over.
+ARCH-03C6 delivers the three distinct locked-context reads with exact current
+grants and removes their obsolete wrappers. Audit history access remains
+separately scoped to ARCH-03C7.
 
 There is no self-activation endpoint. A contributor cannot acquire permission
 by creating a worker profile, supplying skill tags, or presenting a token role.
