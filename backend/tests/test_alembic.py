@@ -538,6 +538,7 @@ def test_root_upgrade_refuses_nonempty_unstamped_schema_before_product_ddl(
 
 @pytest.mark.parametrize("revision,message", [
     (BASELINE_REVISION, "0001_uuid7_v01 cannot be downgraded; recreate the database"),
+    ("0002_task_queue_authority", "Workstream v0.1 migrations cannot be downgraded; recreate the database"),
     (HEAD_REVISION, "Workstream v0.1 migrations cannot be downgraded; recreate the database"),
 ])
 def test_downgrade_refuses_without_mutation(

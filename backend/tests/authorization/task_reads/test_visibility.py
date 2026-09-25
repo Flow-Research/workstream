@@ -22,6 +22,7 @@ async def test_task_read_contributor_visibility(admin_access, kind):
     assert (await request()).status_code == 200
     claimed = await client.post(f"/api/v1/tasks/{task}/claim", headers=actor.headers | {"Idempotency-Key": str(uuid4())})
     assert claimed.status_code == 200, claimed.text
+    assignment_id = claimed.json()["assignment"]["id"]
     factory = db_session.get_session_factory()
     states = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
     assert len(states) == 9
@@ -29,8 +30,18 @@ async def test_task_read_contributor_visibility(admin_access, kind):
         async with factory() as session, session.begin():
             row = await session.get(WorkstreamTask, str(task))
             row.status = state
+        async with factory() as independent:
+            stored = await independent.get(WorkstreamTask, str(task))
+            assignment = await independent.get(TaskAssignment, assignment_id)
+            assert stored.status == state
+            assert stored.assigned_to == str(actor.id)
+            assert (assignment.task_id, assignment.contributor_id, assignment.status) == (
+                str(task), str(actor.id), "active",
+            )
         response = await request()
         assert response.status_code == 200, (state, response.text)
+        if kind.endswith("detail"):
+            assert response.json()["status"] == state
     other = await admin_access.signed.actor("other-owner")
     cases = {
         "wrong_contributor": ("claimed", str(actor.id), str(other.id), "active"),

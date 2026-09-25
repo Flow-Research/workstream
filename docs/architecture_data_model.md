@@ -867,10 +867,11 @@ Task context APIs read this already-stamped context. `work-context` and
 projections from the locked rows. ARCH-03B7 makes requirements immutable with
 separate contributor and management result types and one historical translator.
 Nested rules, storage constraints and typed packaging cannot carry arbitrary
-policy fields. The hidden contributor read locks TASK before checking existing
-ready/unassigned-or-own-active-assignment visibility and resolving PROJECTS.
-The manager read is internal; the retained requirements route preserves its
-existing role/creator wrapper until ARCH-03C. No policy row is written by these reads.
+policy fields. ARCH-03C5 exposes separate Contributor and Manager requirements
+reads using exact current project authority. TASK and assignment locks precede
+AUTH and historical PROJECTS resolution. Contributor visibility requires
+ready/unassigned work or an exact own active assignment; Manager access requires
+a covering Project Manager grant. No policy row is written by these reads.
 ARCH-03B6 provides explicit management,
 operational and audit locked-context projections containing exact source,
 effective/pre/post-submit policy, review, revision and ContributionPolicy references.

@@ -216,3 +216,27 @@ The roadmap impact is the delivered public detail/requirements boundary and its
 remaining locked-context/audit dependency. Current entry pages and canonical
 TASK specification are reconciled together. No local spreadsheet exports are
 present. Leases, voluntary skip and public Submission cutover remain deferred.
+
+## Review-driven proof reconciliation
+
+Affected callers include the canonical OpenAPI route/action inventory and exact
+CI lane-owner set. Their strict equality checks retain all previous routes and
+hashes while adding the two new manager paths and all four action declarations.
+The retained finalization test proves original guide lineage on stored TASK and
+Submission rows; its public detail assertion now verifies the bounded DTO.
+Denied task reads conceal with 404, while the separately retained Submission
+read keeps its existing 403 contract.
+
+The PostgreSQL visibility matrix independently reloads each committed task state
+and exact active assignment before its HTTP read, with returned detail status
+also asserted. Nonhuman admission has a command-dependency and TASK-repository
+nonentry observer for all four routes. Downgrade refusal retains explicit
+baseline, 0002 and current-head cases with before/after database snapshots.
+Current chunk navigation and the data-model description are reconciled with the
+public authority boundary.
+
+This L1 diff exceeds the preferred size guideline because the four related
+reads require shared authority wiring, migration preservation, affected-call
+replacement and independent role/transaction/concurrency proofs. They share one
+existing operation; splitting the proof from that cutover would leave obsolete
+contracts or incomplete regression protection. No additional workflow is added.

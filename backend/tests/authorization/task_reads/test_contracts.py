@@ -69,3 +69,37 @@ async def test_task_read_invalid_internal_selectors(method):
             with pytest.raises(TaskValidationError):
                 await getattr(commands,method)(invalid,new_record_id())
     session.begin.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", READS)
+async def test_task_read_nonhuman_admission_precedes_product_access(monkeypatch, kind):
+    from types import SimpleNamespace
+    from httpx import ASGITransport, AsyncClient
+    from app.api.deps.auth import get_auth_verification_result
+    from app.api.deps.authorization import enforce_authorization_read_rate_limit, get_task_commands
+    from app.core.config import Settings
+    from app.modules.tasks.repository import TaskRepository
+    from tests.authorization.task_reads.support import path
+
+    for subject_kind in ("service", "agent", "space"):
+        app = create_app(Settings(environment="test"))
+        reached = []
+        async def consume_rate():
+            reached.append("rate")
+        async def verified_nonhuman():
+            return SimpleNamespace(token=SimpleNamespace(subject_kind=subject_kind))
+        async def forbidden_commands():
+            reached.append("commands")
+            raise AssertionError("nonhuman reached TASK command dependency")
+        async def forbidden_lookup(*args, **kwargs):
+            reached.append("task")
+            raise AssertionError("nonhuman reached TASK repository")
+        app.dependency_overrides[enforce_authorization_read_rate_limit] = consume_rate
+        app.dependency_overrides[get_auth_verification_result] = verified_nonhuman
+        app.dependency_overrides[get_task_commands] = forbidden_commands
+        monkeypatch.setattr(TaskRepository, "get_task", forbidden_lookup)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get(path(kind, new_record_id(), new_record_id()))
+        assert reached == ["rate"]
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "project_authorization_resource_not_found"

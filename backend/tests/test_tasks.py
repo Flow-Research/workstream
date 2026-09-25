@@ -2450,8 +2450,8 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
         headers=auth_headers(),
         json={"reason": "start"},
     )
-    # Retained detail/audit reads have not yet had their separate authority
-    # cutover; exercise their non-owner visibility rule with the accepted role.
+    # The retained audit read still uses its accepted token role. The detail
+    # read checks the exact grant and assignment independently of that role.
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
     read = await task_client.get(f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers())
     audit = await task_client.get(
@@ -2996,7 +2996,9 @@ async def test_retained_submission_finalization_preserves_locked_guide_after_act
     assert persisted_task.locked_guide_version == "v1"
     task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
     assert task.status_code == 200, task.text
-    assert task.json()["locked_guide_version"] == "v1"
+    assert task.json()["task_id"] == started_task["id"]
+    assert task.json()["status"] == persisted_task.status
+    assert "locked_guide_version" not in task.json()
     assert "locked_guide_source_snapshot_hash" not in task.json()
 
 
@@ -3155,7 +3157,8 @@ async def test_future_roles_cannot_view_unassigned_task_or_submissions(
         headers=auth_headers(),
     )
 
-    assert task_read.status_code == 403
+    assert task_read.status_code == 404
+    assert task_read.json()["error"]["code"] == "project_authorization_resource_not_found"
     assert submissions_read.status_code == 403
 
 
