@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "aec59ace5253a586b0b2cb98f715fa8c084f9fb08950aacffdc116af5e8c4109",
+  "canonical_sha256": "0547c39a7336a3ae0590cf5bf22fa4b92de874a3671ae35680d6528092db1a10",
   "components": {
     "schemas": {
       "ActionId": {
@@ -20,6 +20,7 @@
           "project.task.locked_context.read",
           "operations.task.locked_context.read",
           "audit.task.locked_context.read",
+          "audit.task.evidence.read",
           "task.work_context.read",
           "project.task.work_context.read",
           "actor.profile.read_self",
@@ -522,7 +523,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "f3775f060dc811b11f459e064346b543a9831afc",
+    "backend_git_sha": "b26c7d198ae647d273ba231608d0e32d8f3afa4a",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"
