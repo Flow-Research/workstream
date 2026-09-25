@@ -30,7 +30,7 @@ def test_locked_context_public_contract(kind):
 @pytest.mark.parametrize("kind", KINDS)
 def test_locked_context_read_rejects_command_fields(kind):
     resource = TaskAuthorityResourceContext(resource_id=new_record_id(), scope_project_id=new_record_id(),
-        actor_profile_id=new_record_id(), identity_link_id=new_record_id(), task_status="accepted",
+        actor_profile_id=new_record_id(), identity_link_id=new_record_id(), task_status="review_pending",
         assigned_to=None, assignment_id=None, assignment_contributor_id=None,
         locked_context_hash="sha256:" + "a"*64, reason=None)
     action = ActionId(KINDS[kind][1])
