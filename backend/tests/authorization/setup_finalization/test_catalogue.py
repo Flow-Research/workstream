@@ -205,6 +205,7 @@ def test_exact_active_action_inventory():
         ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ,
         ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
         ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ,
+        ActionId.AUDIT_TASK_EVIDENCE_READ,
         ActionId.TASK_QUEUE_READ,
         ActionId.PROJECT_TASK_QUEUE_READ,
         ActionId.OPERATIONS_TASK_QUEUE_READ,

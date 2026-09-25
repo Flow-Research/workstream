@@ -471,17 +471,20 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context",
     }
     assert locked_context_routes <= set(protected_inventory)
+    evidence_route = "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence"
+    assert evidence_route in protected_inventory
+    assert "/api/v1/tasks/{task_id}/audit-events" not in schema["paths"]
     assert "/api/v1/tasks/{task_id}/locked-context" not in schema["paths"]
-    new_manager_reads = {route for route in task_read_routes if "/projects/" in route} | locked_context_routes
+    new_manager_reads = {route for route in task_read_routes if "/projects/" in route} | locked_context_routes | {evidence_route}
     assert len(route_inventory) == 84
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
-        "084018802bed7dcd19ac334e9c8dfcaa137a5027c05e00aa4169b769b19bbec9"
+        "f70ea30244dc319f08a964b6c66a11ff27df251e9b5ddf5c3726e4ef99587635"
     )
     assert len(protected_inventory) == 82
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
-        "05cd0a7b209401c45d6c9da53944736ebf97ddf135a5c335e508e012f0e107ff"
+        "6ec18abb4e1f3fd352b3c476f85b1bdc53f07e921c9a6cada7b5f8afb4976939"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
@@ -510,6 +513,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context": "project.task.locked_context.read",
         "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context": "operations.task.locked_context.read",
         "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context": "audit.task.locked_context.read",
+        "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence": "audit.task.evidence.read",
         "GET /api/v1/tasks/{task_id}": "task.read",
         "GET /api/v1/tasks/{task_id}/submission-requirements": "task.submission_requirements.read",
         "GET /api/v1/projects/{project_id}/tasks/{task_id}": "project.task.read",

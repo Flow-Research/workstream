@@ -2214,41 +2214,40 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client, "GET", f"/api/v1/tasks/{task['id']}/submissions", worker_token,
         )
         ensure(submissions == [], "claim/start unexpectedly created a Submission")
-        audit_events = await request_json(
-            client, "GET", f"/api/v1/tasks/{task['id']}/audit-events", project_reader_token,
+        audit_token = issue_flow_token(
+            f"real-api-audit-reader-{run_id}", [], issuer=flow_issuer,
+            audience=flow_audience, secret=flow_secret,
         )
-        audit_transitions = {
-            (event["event_type"], event["from_status"], event["to_status"])
-            for event in audit_events
-        }
-        assert audit_transitions == {
-            ("TaskCreated", None, "draft"),
-            ("TaskScreened", "draft", "screening"),
-            ("TaskReleased", "screening", "ready"),
-            ("TaskClaimed", "ready", "claimed"),
+        audit_actor = await request_json(client, "GET", "/api/v1/actors/me", audit_token)
+        audit_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"target_actor_profile_id": audit_actor["actor_profile_id"],
+                  "role": "audit_authority", "scope_type": "project", "scope_project_id": project["id"],
+                  "reason": "Inspect bounded task evidence"},
+        )
+        assert audit_grant.status_code == 201, audit_grant.text
+        evidence_path = f"/api/v1/audit/projects/{project['id']}/tasks/{task['id']}/evidence"
+        history = await request_json(client, "GET", evidence_path, audit_token)
+        assert history["project_id"] == project["id"] and history["task_id"] == task["id"]
+        assert history["next_cursor"] is None
+        assert {(event["event_type"], event["from_status"], event["to_status"]) for event in history["items"]} == {
+            ("TaskCreated", None, "draft"), ("TaskScreened", "draft", "screening"),
+            ("TaskReleased", "screening", "ready"), ("TaskClaimed", "ready", "claimed"),
             ("TaskStarted", "claimed", "in_progress"),
         }
-        for event in audit_events:
-            if event["event_type"] in {"TaskCreated", "TaskScreened", "TaskReleased"}:
-                assert event["actor_id"] == project_reader_profile["actor_profile_id"]
-                assert event["event_payload"]["references"]["authorization_decision_id"]
+        for event in history["items"]:
+            assert set(event) == {"event_id", "event_type", "from_status", "to_status", "actor_id",
+                                  "created_at", "assignment_id", "authorization_decision_id"}
+            assert event["authorization_decision_id"]
             if event["event_type"] in {"TaskClaimed", "TaskStarted"}:
                 assert event["actor_id"] == canonical_actor["actor_profile_id"]
-                assert event["actor_roles"] == [] and event["claim_snapshot"] == {}
-                references = event["event_payload"]["references"]
-                assert references["task_id"] == task["id"]
-                assert references["assignment_id"] == claim["assignment"]["id"]
-                assert references["authorization_decision_id"]
-        worker_audit_events = await request_json(
-            client,
-            "GET",
-            f"/api/v1/tasks/{task['id']}/audit-events",
-            worker_token,
-        )
-        assert all(event["claim_snapshot"] == {} for event in worker_audit_events)
-        assert all(
-            "artifact_hash_manifest" not in event["event_payload"] for event in worker_audit_events
-        )
+                assert event["assignment_id"] == claim["assignment"]["id"]
+            else:
+                assert event["actor_id"] == project_reader_profile["actor_profile_id"]
+                assert event["assignment_id"] is None
+        for denied_token in (project_reader_token, worker_token, operator_token):
+            await request_json(client, "GET", evidence_path, denied_token, expected_status=404)
         await request_json(
             client,
             "GET",

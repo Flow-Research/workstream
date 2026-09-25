@@ -24,6 +24,7 @@ from app.modules.tasks.api.task_detail import (
     ContributorTaskDetail, ContributorTaskDetailRequest, ManagementTaskDetail, ManagementTaskDetailRequest,
 )
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage, TaskTransitionAuditPort, TaskTransitionFacts
+from app.modules.tasks.api.audit_evidence import AuditTaskEvidenceRequest, AuditTaskEvidencePage, TaskEvidenceInvalid
 from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask
 from app.modules.tasks.command_replay import TaskCommandReplay
 from app.modules.tasks.repository import TaskRepository
@@ -337,6 +338,23 @@ class AuthorizedTaskCommands:
 
     async def audit_locked_context(self, project_id: UUID, task_id: UUID) -> AuditTaskLockedContext:
         return await self._read_task_projection(task_id, TaskAuthorityOperation.AUDIT_LOCKED_CONTEXT, project_id)
+
+    async def audit_evidence(self, request: AuditTaskEvidenceRequest) -> AuditTaskEvidencePage:
+        """Read bounded history under live exact authority, committing only valid facts."""
+        if type(request) is not AuditTaskEvidenceRequest:
+            raise TaskValidationError("task evidence request is invalid")
+        request.__post_init__()
+        async with self._session.begin():
+            await self._locked_task(request.task_id, TaskAuthorityOperation.AUDIT_EVIDENCE, project_id=request.project_id)
+            try:
+                response = await self._repo.read_audit_task_evidence(request)
+                if response is None:
+                    raise TaskNotFound("task not found")
+                adapter = TypeAdapter(AuditTaskEvidencePage)
+                response = adapter.validate_json(adapter.dump_json(response, warnings="error"))
+            except TaskEvidenceInvalid:
+                raise TaskValidationError("task audit evidence is invalid") from None
+        return response
 
     async def _read_task_projection(self, task_id: UUID, operation: TaskAuthorityOperation, project_id: UUID | None = None):
         """Consume exact authority and serialize detached facts before committing evidence."""

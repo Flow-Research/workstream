@@ -281,8 +281,8 @@ provenance: source snapshot id/hash, effective policy id/hash, pre-submit policy
 id/bundle hash, post-submit policy id/version/hash, review and revision policy
 id/generation/hash, and ContributionPolicy version UUID. Management additionally
 receives a bounded post-submit checker summary; operational and audit projections
-contain references only. ARCH-03B6 implements the projections; the operational
-and audit methods remain internal and ARCH-03C owns canonical authority/public access.
+contain references only. ARCH-03B6 implements the projections; ARCH-03C6 exposes
+the three separate reads under exact current manager, Operator and Audit Authority grants.
 
 ## Task Contract
 
@@ -474,7 +474,7 @@ The person accountable for a submitted packet, even when agents or external tool
 
 ## Task Audit Evidence Page
 
-An internal bounded lifecycle projection for one exact project/task. It contains
+A bounded lifecycle projection for one exact project/task. It contains
 fixed event facts and validated claim/start assignment and authorization-decision
-references. ARCH-03B8 supplies its immutable contract; live Audit Authority access
-remains ARCH-03C. It is not a forensic payload export or an authorization token.
+references. ARCH-03B8 supplies its immutable contract; ARCH-03C7 supplies live
+covered Audit Authority access. It is not a forensic payload export or an authorization token.

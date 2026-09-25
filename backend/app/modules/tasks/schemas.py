@@ -470,29 +470,6 @@ class SubmissionResponse(BaseModel):
     evidence_items: list[EvidenceItemResponse] = Field(default_factory=list)
 
 
-class AuditEventResponse(BaseModel):
-    """Response schema for audit events."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    entity_type: str
-    entity_id: str
-    event_type: str
-    from_status: str | None
-    to_status: str | None
-    actor_id: str | None
-    external_subject: str | None
-    external_issuer: str | None
-    actor_roles: list[str]
-    claim_snapshot: dict[str, Any] = Field(default_factory=dict)
-    auth_source: str | None
-    is_dev_auth: bool | None
-    reason: str | None
-    event_payload: dict[str, Any]
-    created_at: datetime
-
-
 class ContributorTaskQueueResponse(BaseModel):
     """A live ready page; its cursor neither reserves work nor conveys authority."""
 

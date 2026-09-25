@@ -857,10 +857,14 @@ the work is split into another project/guide. The task stores
 policy or newly compiled checker.
 
 
-ARCH-03B8 adds no storage: its internal task audit evidence page projects fixed
+ARCH-03B8 adds no storage: its bounded task audit evidence page projects fixed
 shared audit fields with exact project/task scope in one SQL statement. Typed
 claim/start references bind assignment and authorization decision without raw
-payload exposure. The shared persisted audit namespace and records are unchanged.
+payload exposure. ARCH-03C7 exposes the page to exact covered Audit Authority
+using existing TASK/AUTH locks and atomic ALLOW evidence. Draft and empty history
+need no policy body. Migration 0005 extends only the existing authorization
+action/permission constraint for `audit.task.evidence.read` / `audit.read`; retained
+records and the shared persisted audit namespace are unchanged.
 
 Task context APIs read this already-stamped context. `work-context` and
 `submission-requirements` return task-visible contributor-safe guide and requirement

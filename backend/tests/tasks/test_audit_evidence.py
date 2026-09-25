@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import event as sql_events, select
 
 from app.db import session as db_session
-from app.main import create_app
 from app.modules.audit.repository import AuditRepository, LIFECYCLE_AUTH_SOURCE
 from app.modules.audit.schemas import (
     LifecycleAuditEntityType, LifecycleAuditEventInput, LifecycleAuditEventType,
@@ -293,9 +292,3 @@ async def test_task_evidence_does_not_lock(task_client):
         async with factory() as reader:
             page = await asyncio.wait_for(read_once(reader, request(project, task)), timeout=5)
             assert page.items and reader.in_transaction()
-
-
-def test_task_evidence_hidden_surface():
-    paths = create_app().openapi()["paths"]
-    assert not any("audit-task-evidence" in path or "task-evidence" in path for path in paths)
-    assert "AuditTaskEvidencePage" not in create_app().openapi()["components"]["schemas"]

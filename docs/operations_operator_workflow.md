@@ -11,7 +11,8 @@ Contributor, management and operational task queues have exact-authorized public
 reads with distinct fields and signed pagination. Contributor/Manager detail and
 requirements are public through ARCH-03C5. ARCH-03C6 exposes separate Manager,
 system-Operator and Audit Authority locked-context reads with exact current
-grants. Bounded Audit Authority history access remains ARCH-03C7. See the
+grants. ARCH-03C7 exposes bounded task history only to covered Audit Authority;
+Operator grants do not grant that access. See the
 [capability ledger](roadmap_status.md) for current availability.
 
 ## Roles

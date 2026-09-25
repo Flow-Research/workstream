@@ -14,7 +14,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: one CHECKERS catalogue, compiler/parser and implementation
   per checker ID serve active policy consumers; production post-submit phase
   execution remains unavailable.
-- Next usable boundary: ARCH-03C7 bounded Audit Authority history access.
+- Next usable boundary: public guide activation and approved-guide intake integration.
+  [ARCH-03C7](WS-ARCH-001-03C7.md) exposes bounded exact-authorized task history.
   [ARCH-03C6](WS-ARCH-001-03C6.md) exposes distinct exact-authorized locked-context reads.
   [ARCH-03C5](WS-ARCH-001-03C5.md) exposes exact-authorized task detail and requirements.
   [ARCH-03C4](WS-ARCH-001-03C4.md) exposes the three exact-authorized public queues.

@@ -611,7 +611,7 @@ exact policy references. ARCH-03C6 exposes all three through distinct
 exact-authorized routes and removes the old task-only management route. ARCH-03B7 supplies immutable contributor and
 management requirements through one historical translator. Its hidden contributor
 read reuses exact assignment visibility after locking TASK; the retained requirements
-route and separate Manager route use ARCH-03C5 live exact authority. ARCH-03B8 supplies bounded internal Audit Authority task evidence;
+route and separate Manager route use ARCH-03C5 live exact authority. ARCH-03B8 supplies bounded task evidence, publicly authorized by ARCH-03C7;
 ARCH-03B9 supplies hidden exact-assignment invalidation with committed cause
 verification and a same-transaction delivery fence. ARCH-03C1 supplies real
 fixed-service authority and exact decision receipts; ARCH-03C2 supplies atomic
@@ -621,8 +621,10 @@ atomic audit evidence and durable replay. ARCH-03C4 exposes separate contributor
 manager-planning and Operator-status queues with current scoped grants and signed
 pagination. ARCH-03C5 exposes separate Contributor/Manager detail and requirements,
 removing their old role/creator wrappers. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
-locked-context reads with exact current grants. Audit history authority
-cutover remains pending. Canonical checker materialization follows in
+locked-context reads with exact current grants. ARCH-03C7 exposes bounded task
+history only to covered Audit Authority and removes the old payload-bearing
+task-only audit route. Public guide activation and approved-guide intake
+integration remain pending. Canonical checker materialization follows in
 ARCH-04B/04C.
 
 ## v0.1 Success Standard

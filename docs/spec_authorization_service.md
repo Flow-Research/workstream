@@ -716,7 +716,8 @@ active project. Signed cursors bind action/project/limit/order, while decision
 evidence separately binds the hash of the presented cursor. Authority, projection,
 JSON validation and the successful decision commit share one transaction.
 ARCH-03C5 activates detail/requirements and ARCH-03C6 activates the three
-locked-context actions. Bounded audit-history activation remains ARCH-03C7.
+locked-context actions. ARCH-03C7 activates bounded task-history reads under
+covered Audit Authority; no other role sharing `audit.read` receives this action.
 
 The [AUTH-12F4 contract](../.commitrail/initiatives/WS-AUTH-001/planning/chunks/WS-AUTH-001-12F4-submission-policy-approval.md)
 activates exact complete-compilation review-package read and correction under
@@ -1592,5 +1593,16 @@ only with complete valid locked context. Nonhuman admission and missing/foreign/
 denied reads conceal with 404; malformed selectors and invalid custody return
 422. Serialization occurs before ALLOW commit. Migration 0004 extends the existing
 audit constraint with only these three exact action/permission pairs and preserves
-retained evidence. The prior task-only route is removed; bounded Audit Authority
-history access remains ARCH-03C7.
+retained evidence. The prior task-only route is removed.
+
+### ARCH-03C7 task lifecycle evidence
+
+`audit.task.evidence.read` uses `audit.read` but explicitly filters to covered
+Audit Authority grants; all other admin roles sharing that permission are denied.
+It reuses TASK PREP and the concealed-read guard, rejects command/replay fields,
+and binds exact task facts. TASK owns scoped task/assignment locks before AUTH
+actor/link and matched grant, then reads the fixed bounded evidence projection.
+Every page revalidates current authority; cursor position confers none. All states,
+including draft without policy locks, are inspectable. Page serialization precedes
+ALLOW commit. Database migration 0005 adds only this exact action/permission pair
+and retains previous evidence. This is not an authorization-decision export.

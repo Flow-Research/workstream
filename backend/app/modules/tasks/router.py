@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from uuid import UUID
 from app.api.deps.authorization import get_task_commands, enforce_human_authorization_read
 from app.modules.tasks.queue_router import router as queue_router
 from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
 from app.modules.tasks.api import TaskAuthorityOperation, ContributorTaskDetail, ManagementTaskDetail
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +20,6 @@ from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
 from app.modules.tasks.schemas import (
     ContributorTaskWorkContext, ManagementTaskWorkContext,
-    AuditEventResponse,
     ContributorTaskSubmissionRequirements, ManagementTaskSubmissionRequirements,
     SubmissionResponse,
     TaskCreate,
@@ -30,6 +31,7 @@ from app.modules.tasks.schemas import (
 from app.modules.tasks.service import TaskProjectNotReady, TaskServiceError, TaskNotFound
 from app.adapters.tasks import task_service
 from app.schemas.auth import ActorContext
+from app.modules.tasks.api.audit_evidence import AuditTaskEvidenceRequest, AuditTaskEvidencePage, TaskEvidenceCursor
 
 router = APIRouter(tags=["tasks"])
 # Static queue routes precede the project-scoped task UUID route.
@@ -389,20 +391,50 @@ async def finalize_submission(
         raise task_http_error(exc) from exc
 
 
-@router.get("/tasks/{task_id}/audit-events", response_model=list[AuditEventResponse])
-async def list_task_audit_events(
-    request: Request,
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> list[AuditEventResponse]:
-    """Return audit events for one task."""
+TASK_EVIDENCE_CURSOR_LIMIT = 512
+
+
+def task_evidence_request(
+    project_id: UUID, task_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(description="JSON next_cursor position from the previous page")] = None,
+) -> AuditTaskEvidenceRequest:
+    """Bound untrusted cursor characters and scope before any TASK operation."""
     try:
-        return await task_service(session, settings=request.app.state.settings).list_task_audit_events(actor, task_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        after = None
+        if cursor is not None:
+            if len(cursor) > TASK_EVIDENCE_CURSOR_LIMIT:
+                raise ValueError("cursor too large")
+            # Preserve pairs so duplicate keys cannot silently overwrite scope.
+            pairs = json.loads(cursor, object_pairs_hook=list)
+            if (not isinstance(pairs, list) or len(pairs) != 4
+                    or any(not isinstance(pair, tuple) or len(pair) != 2
+                           or not all(isinstance(value, str) for value in pair) for pair in pairs)
+                    or {pair[0] for pair in pairs} != {"project_id", "task_id", "created_at", "event_id"}):
+                raise ValueError("cursor shape invalid")
+            values = dict(pairs)
+            after = TaskEvidenceCursor(UUID(values["project_id"]), UUID(values["task_id"]),
+                                       datetime.fromisoformat(values["created_at"]), UUID(values["event_id"]))
+        return AuditTaskEvidenceRequest(project_id, task_id, limit, after)
+    except (ValueError, TypeError, RecursionError):
+        raise HTTPException(status_code=422, detail="task evidence request is invalid") from None
+
+
+@router.get(
+    "/audit/projects/{project_id}/tasks/{task_id}/evidence", response_model=AuditTaskEvidencePage,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.AUDIT_EVIDENCE.value},
+)
+async def get_task_evidence(
+    request: Request,
+    query: Annotated[AuditTaskEvidenceRequest, Depends(task_evidence_request)],
+    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
+) -> AuditTaskEvidencePage:
+    """Inspect fixed lifecycle evidence under current covered Audit Authority."""
+    try:
+        return await commands.audit_evidence(query)
     except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
+        return task_read_error(request, exc)
 
 
 @router.post(

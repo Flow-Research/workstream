@@ -1,7 +1,7 @@
 # ARCH-03C7 — Exact-authorized bounded task audit history
 
 - Initiative: WS-ARCH-001
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: expose existing bounded lifecycle evidence to covered
   Audit Authority and remove the obsolete task-only audit route.
 - Risk class: L1 (authorization, private audit data, append-only evidence schema).
@@ -90,7 +90,7 @@ trace those consumers explicitly, but do not widen this PR into their cutover.
   `tests/tasks/test_audit_evidence.py`, `tests/test_tasks.py`, `tests/test_checkers.py`, API/catalogue/lane
   tests and `scripts/api_contract_e2e.py`/`test_lane_catalogue.py`.
 - Selected MCP authorization-context snapshot: enum/digest/source provenance.
-- README, canonical TASK/AUTH/data-model specs, operating manuals, roadmap and
+- README, glossary, canonical TASK/AUTH/data-model specs, operating manuals, roadmap and
   existing ARCH navigation; update any present local roadmap exports together.
 
 No lifecycle transition, grant permission, claim/start, retained data, business
@@ -124,7 +124,7 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
 
 ## Evidence
 
-Named future test functions under `tests/authorization/task_audit_evidence/`:
+Implementation test functions under `tests/authorization/task_audit_evidence/`:
 
 - `test_contracts.py`: `test_public_contract`, `test_cursor_validation`,
   `test_cursor_cap_probe`, `test_command_field_guard`, `test_command_guard_probe`,

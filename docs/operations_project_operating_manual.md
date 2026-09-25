@@ -352,8 +352,25 @@ They require complete valid locked context in every task state; incomplete or
 corrupt context returns 422. Missing, foreign-project and unauthorized reads
 return the same 404. Caller token claims and task creation history do not
 authorize these reads.
-The old task-only locked-context route is removed. Bounded audit history access
-remains separate ARCH-03C7 work.
+The old task-only locked-context route is removed.
+
+### Bounded task history
+
+`GET /audit/projects/{project_id}/tasks/{task_id}/evidence` requires a current
+covering project/system Audit Authority grant. Project Manager, Operator, Finance
+Authority, Access Administrator and Submitter roles alone cannot use it, even
+where their permission catalogue contains `audit.read`.
+
+The page contains only stored event identity/type, status transition, actor ID,
+timestamp and validated assignment/authorization-decision references. Private
+payloads, reasons, claims, external identities and policy bodies are excluded.
+All task states, including an unbound draft, are inspectable. `limit` defaults to
+50 (maximum 100). To continue, JSON-encode the returned `next_cursor` object into
+the `cursor` query parameter. Each page checks current authority again; the
+cursor is a position, not permission or an export snapshot. Wrong-project,
+missing and unauthorized requests return 404; malformed cursors or invalid
+stored evidence return sanitized 422. The old `/tasks/{task_id}/audit-events`
+route is removed. Submission recovery retains its separate internal evidence reader.
 
 ### Submission Quality Gate
 

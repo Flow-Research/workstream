@@ -54,8 +54,8 @@ Contributor commands and work context use canonical project authority:
 | `POST /api/v1/operations/tasks/{task_id}/start` | System Operator; another contributor's active assignment and nonblank reason |
 
 ARCH-03C6 delivers the three distinct locked-context reads with exact current
-grants and removes their obsolete wrappers. Audit history access remains
-separately scoped to ARCH-03C7.
+grants and removes their obsolete wrappers. ARCH-03C7 delivers bounded
+Audit Authority task history and removes the old unbounded task-only audit route.
 
 There is no self-activation endpoint. A contributor cannot acquire permission
 by creating a worker profile, supplying skill tags, or presenting a token role.
@@ -169,9 +169,9 @@ lock. Pages are live views, not reservations; claim rechecks authority and state
 ARCH-03C4 authorizes the exact project collection before calling this port
 or using a client cursor, with current-grant/revocation and concealment proof.
 No per-task AUTH handle or token role can substitute for that collection gate.
-ARCH-03B8 supplies hidden task audit evidence. ARCH-03B9 supplies the hidden
+ARCH-03B8 supplies bounded task audit evidence, exposed by ARCH-03C7. ARCH-03B9 supplies the hidden
 assignment-invalidation operation; ARCH-03C1 supplies its real authority.
-Producer wiring and public evidence access remain separate.
+Producer wiring is delivered by ARCH-03C2; public evidence access by ARCH-03C7.
 
 
 ## Management and operational queues
@@ -259,7 +259,7 @@ missing or invalid locked custody returns the existing 422
 `task_locked_context_invalid`. Ordinary unassigned draft is not contributor work;
 a fully locked own-active draft remains visible under the existing authority rule.
 
-Retained audit-route authority replacement remains separately scoped. ARCH-03C2 already delivers authority-loss assignment invalidation.
+Audit history authority is delivered by ARCH-03C7. ARCH-03C2 already delivers authority-loss assignment invalidation.
 
 ## Task locked-context projections
 
@@ -296,7 +296,7 @@ The shared historical validator checks exact activation receipts and stored
 policy bodies; a newer active guide never changes the result. Only Management
 receives the bounded checker summary. The old task-only route, role/creator
 wrapper and unused hidden locked-context wrappers are removed. Shared historical
-resolution remains for requirements. Audit history activation remains ARCH-03C7.
+resolution remains for requirements. ARCH-03C7 delivers audit history authority.
 
 
 ## Task submission requirements projections
@@ -329,13 +329,15 @@ values, after locking TASK/assignment and consuming AUTH. The old role/creator
 wrapper is removed. There is no generic audience selector, compatibility alias
 or new compiler.
 
-## Hidden task audit evidence
+## Bounded task audit evidence
 
 ARCH-03B8 supplies `AuditTaskEvidencePort` through `TaskRepository`, delegating
-one fixed-column query to the shared audit owner. This is internal lifecycle
-evidence for future covered Audit Authority access; ARCH-03C owns exact live
-authority and routing. Existing contributor/manager audit reads and submission
-recovery remain separate current consumers until their authority cutover.
+one fixed-column query to the shared audit owner. ARCH-03C7 exposes it through
+`GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence`, action
+`audit.task.evidence.read`, permission `audit.read`, restricted explicitly to a
+covering project/system Audit Authority grant. Other roles sharing that permission
+cannot read it. The old contributor/creator route and payload schema are removed.
+Submission and checker recovery retain their internal repository consumers.
 
 The request binds exact project/task UUIDs and a 1..100 limit. Its cursor binds
 that same scope and `(created_at, event_id)`. One TASK-left-join-AUDIT statement
@@ -354,8 +356,22 @@ gain no inferred references. SQL extracts only four named JSON scalar references
 raw claims, roles, external identity, reasons, arbitrary payloads or policy bodies.
 It does not export authority-decision history or claim forensic completeness.
 
-Reads are nonlocking and do not flush, commit or roll back. The caller retains
-its transaction; later claim/command authorization never relies on these facts.
+The inner repository read is nonlocking and does not flush, commit or roll back.
+The public operation owns TASK -> active assignment -> AUTH actor/link -> exact
+grant locks and consumes PREP before the projection. Project membership is part
+of the task lock query, so wrong-project requests cannot wait on a foreign row.
+It validates and serializes the page before committing ALLOW evidence. Projection,
+reference or serialization failure rolls back that decision; failed audit writes
+prevent projection entry. No historical policy body is loaded, including for draft.
+
+Public `limit` defaults to 50. Optional `cursor` is JSON encoding the returned
+`next_cursor`: exactly `project_id`, `task_id`, `created_at`, `event_id`, all strings.
+The parser caps raw input at 512 characters before decoding, rejects duplicate or
+extra keys, validates aware timestamps/UUIDs and requires exact route scope.
+It is an untrusted position, not authority; each page consumes fresh live authority.
+Absent anchor positions are valid. Invalid requests/evidence return sanitized 422;
+missing, foreign and denied requests conceal alike with 404. Later commands never
+rely on these read facts. There is no compatibility route or export subsystem.
 
 
 ## Hidden exact-assignment authority invalidation
@@ -436,7 +452,7 @@ assignment for manager work.
 
 `TaskCreated`, `TaskScreened` and `TaskReleased` retain exact task/project/decision
 references without assignment. Creation retains source type; screen/release retain
-complete locked policy references. The internal audit projection exposes its fixed
+complete locked policy references. The bounded audit projection exposes its fixed
 scalar fields, including the decision reference, without private payloads.
 
 A new command for an invalid task state is denied by AUTH with 403. A currently
@@ -462,5 +478,5 @@ Projection or response failure rolls back ALLOW evidence. A valid missing,
 foreign or denied selector has the same concealed 404; malformed UUID syntax
 returns 422. Nonhuman callers are rejected before TASK access. These reads do
 not authorize claim or submission, and no old role/creator wrapper remains for
-them. Shared helpers used by retained submission/audit reads are
+them. Shared helpers used by retained submission reads and internal audit recovery are
 not yet removed.
