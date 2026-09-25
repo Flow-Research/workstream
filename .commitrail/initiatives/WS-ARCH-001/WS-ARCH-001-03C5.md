@@ -260,3 +260,9 @@ the roadmap boundary is unchanged.
 Restoring the task-ID-only lookup makes each of the three regression cases time
 out at the HTTP request while the foreign row remains locked; the scoped query
 passes all three. The deliberately regressed implementation is not retained.
+
+Reconciliation with the delivered MCP self-service tools includes their selected
+authorization-context OpenAPI snapshot: its transitive `ActionId` enumeration
+must include these four task-read actions. Refresh only those entries and the
+snapshot digest/provenance; retain the exact contract comparison and all other
+selected schema facts. This is an affected consumer, not a new MCP tool or API.
