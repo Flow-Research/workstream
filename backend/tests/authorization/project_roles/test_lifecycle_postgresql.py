@@ -27,6 +27,7 @@ from app.modules.authorization.schemas import (
 )
 from tests.authorization.project_roles.fixtures import (
     RoleMutationCase,
+    authorization_database_env as authorization_database_env,
     authorization_factory as authorization_factory,
     mutation_runtime,
     project_role_qualification,

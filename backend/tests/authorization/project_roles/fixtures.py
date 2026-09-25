@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.identifiers import new_record_id
+from app.core import identifiers
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.models import AdminRoleGrant
@@ -27,6 +27,11 @@ from app.modules.authorization.schemas import (
     QualificationUnavailableReason,
 )
 from project_create_fixtures import seed_historical_project
+
+
+def _new_record_id() -> UUID:
+    """Resolve the runtime ID generator after deterministic collection restores it."""
+    return identifiers.new_record_id()
 
 
 @pytest.fixture
@@ -47,13 +52,13 @@ async def authorization_factory(authorization_database_env: str) -> AsyncIterato
 
 @dataclass(frozen=True)
 class RoleMutationCase:
-    caller_id: UUID = field(default_factory=new_record_id)
-    caller_link_id: UUID = field(default_factory=new_record_id)
-    target_id: UUID = field(default_factory=new_record_id)
-    target_link_id: UUID = field(default_factory=new_record_id)
-    project_id: UUID = field(default_factory=new_record_id)
-    manager_grant_id: UUID = field(default_factory=new_record_id)
-    bootstrap_grant_id: UUID = field(default_factory=new_record_id)
+    caller_id: UUID = field(default_factory=_new_record_id)
+    caller_link_id: UUID = field(default_factory=_new_record_id)
+    target_id: UUID = field(default_factory=_new_record_id)
+    target_link_id: UUID = field(default_factory=_new_record_id)
+    project_id: UUID = field(default_factory=_new_record_id)
+    manager_grant_id: UUID = field(default_factory=_new_record_id)
+    bootstrap_grant_id: UUID = field(default_factory=_new_record_id)
     context: HumanAuthorizationContext = field(init=False)
 
     def __post_init__(self) -> None:
@@ -66,8 +71,8 @@ class RoleMutationCase:
                 actor_status=ActorStatus.ACTIVE,
                 identity_link_id=self.caller_link_id,
                 identity_link_status=IdentityLinkStatus.ACTIVE,
-                request_id=new_record_id(),
-                correlation_id=new_record_id(),
+                request_id=_new_record_id(),
+                correlation_id=_new_record_id(),
             ),
         )
 
