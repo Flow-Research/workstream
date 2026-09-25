@@ -13,10 +13,6 @@ from workstream_mcp import schemas
         ({"output_schema": {"type": "object"}}, {"type": "object"}),
         ({"outputSchema": {"type": "string"}}, {"type": "string"}),
         ({"schema": {"type": "array"}}, {"type": "array"}),
-        (
-            {"components": {"schemas": {"ActorProfileSelfResponse": {"type": "boolean"}}}},
-            {"type": "boolean"},
-        ),
         ({"type": "object"}, {"type": "object"}),
         (
             {
@@ -49,16 +45,21 @@ def test_selected_schema_rejects_unusable_document() -> None:
 
 
 def test_profile_schema_and_validator_are_cached_and_valid() -> None:
-    schemas.profile_output_schema.cache_clear()
-    schemas.profile_output_validator.cache_clear()
+    schemas._contract_output_schema.cache_clear()  # noqa: SLF001
+    schemas._contract_output_validator.cache_clear()  # noqa: SLF001
     schema = schemas.profile_output_schema()
     assert schema["title"] == "ActorProfileSelfResponse"
     assert schemas.profile_output_schema() is schema
     assert schemas.profile_output_validator() is schemas.profile_output_validator()
+    assert schemas.profile_update_output_schema()["title"] == "ActorProfileSelfResponse"
+    assert (
+        schemas.authorization_context_output_schema()["title"]
+        == "ActorAuthorizationContextResponse"
+    )
 
 
 def test_invalid_packaged_document_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    schemas.profile_output_schema.cache_clear()
+    schemas._contract_output_schema.cache_clear()  # noqa: SLF001
 
     class BrokenResource:
         def read_text(self, *, encoding: str) -> str:
@@ -72,4 +73,4 @@ def test_invalid_packaged_document_fails_closed(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(schemas, "files", lambda _: BrokenFiles())
     with pytest.raises(schemas.ContractError):
         schemas.profile_output_schema()
-    schemas.profile_output_schema.cache_clear()
+    schemas._contract_output_schema.cache_clear()  # noqa: SLF001

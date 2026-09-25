@@ -89,7 +89,7 @@ jobs:
               --header 'Content-Type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
               http://127.0.0.1:18080/mcp \
-              | python -c 'import json, sys; assert [tool["name"] for tool in json.load(sys.stdin)["result"]["tools"]] == ["workstream_profile_get"]'; then
+              | python -c 'import json, sys; assert [tool["name"] for tool in json.load(sys.stdin)["result"]["tools"]] == ["workstream_profile_get", "workstream_profile_update", "workstream_authorization_context_get"]'; then
               exit 0
             fi
             sleep 1

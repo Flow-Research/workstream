@@ -3,23 +3,25 @@
 - Disposition: Planned
 - Prepared by: OxVictor
 - Purpose: Contributor implementation guide with confirmed caller-token design
-- Repository baseline reconciled: `723c88ff125b7692163891a1dea3d7eb81b07cb3`
+- Repository baseline reconciled: `2a3a392fe014583a0675c0a3e1f5612daba0fda4`
 - Pinned API handoff baseline: `6feef39834737eed106773fdaed6003561fd021a`
-- Delivered boundary: [One-tool profile foundation](WS-MCP-002-01.md), merged in PR #418.
-- Next usable boundary: separately bound deployment work or the next verified
-  public-API tool binding; no later tool starts automatically.
+- Delivered foundation: [One-tool profile foundation](WS-MCP-002-01.md), merged in PR #418.
+- Current change: [Own profile editing and project authorization context](WS-MCP-002-02.md).
+- Next usable boundary: WS-MCP-002-03 administrative reads after this change is
+  reviewed and merged; no later tool starts automatically.
 
 ## Current implementation
 
 [`mcp_server/`](../../../mcp_server/README.md) is an independently packaged
-Streamable HTTP adapter with one tool, `workstream_profile_get`, a container,
+Streamable HTTP adapter with three self-service tools: profile read, profile
+update and exact-project authorization context. It includes a container,
 selected response-schema validation and additive CI. Its integration tests
 exercise the installed adapter against the real Workstream API. Workstream
 still owns token verification and authorization. This is delivered packaging,
 not proof of a deployed public gateway, production Flow integration or the
-remaining 26 tools. The initiative remains Planned because that larger scope
-is unfinished. The baseline hashes below describe the original design/proof,
-not the current repository head.
+remaining 24 tools. The initiative remains Planned because that larger scope
+is unfinished. Historical hashes below describe their stated design/proof;
+each implemented binding records its current source baseline separately.
 
 ## 1. What I Understand We Are Building
 
@@ -100,7 +102,11 @@ The package will have a few clear responsibilities:
 | Error mapping | Return safe, accurate failures without leaking internal data |
 | Configuration | Validate the trusted API address, transport settings, and deployment limits |
 
-Use the official Python MCP SDK with a pinned package lock. The executed local baseline is MCP SDK 1.29.0 with OpenAI Agents SDK 0.22.2 and Streamable HTTP protocol `2025-11-25`. Start from this tested baseline; verify the selected package release and client/protocol behavior when packaging it. An untested SDK-major or newer protocol is not a prerequisite. This is Streamable HTTP, not the superseded HTTP+SSE transport.
+Use the official Python MCP SDK with a pinned package lock. The earlier local
+experiment used MCP SDK 1.29.0 and protocol `2025-11-25`; that is historical
+proof only. The independently packaged adapter delivered by PR #418 pins MCP
+SDK 2.2.0 and Streamable HTTP protocol `2026-07-28`, with package, client and
+real-process tests. This is Streamable HTTP, not the superseded HTTP+SSE transport.
 
 ## 5. Identity and Permissions
 
@@ -380,12 +386,14 @@ The maintainer's [clarification](https://github.com/Flow-Research/workstream/pul
 
 ## 9. Chunk Map and PR Boundaries
 
-The caller-token decision is settled and the first profile binding is delivered.
+The caller-token decision is settled. WS-MCP-002-01 delivered the independent
+profile-read foundation in PR #418. WS-MCP-002-02 delivers profile editing and
+exact-project authorization context, bringing the catalogue to three tools.
 Reconcile each later binding with its public API when that chunk starts; do not
-reopen credential architecture or repeat the independent foundation.
+reopen credential architecture or require all 27 implementations at once.
 
-The following stable IDs replace the four broad headings. Row 01 is complete;
-rows 02–10 remain planned, with proposed ownership under `mcp_server/`, not
+The following stable IDs replace the four broad headings. Rows 01 and 02 are
+implemented; rows 03–10 remain planned, with proposed ownership under `mcp_server/`, not
 claims that later tools exist. Each row is one bounded outcome. Tool names omit
 only the common `workstream_` prefix; all 27 names in section 6 appear exactly
 once. Each row also owns its change record and affected tests/docs, not backend
@@ -425,23 +433,18 @@ Review will follow the repository's risk routing, including security and archite
 
 ## 10. Contributor continuation
 
-The delivered [WS-MCP-002-01](WS-MCP-002-01.md) and
-[package README](../../../mcp_server/README.md) describe the implemented boundary.
-The [executable local drill](../../../experiments/mcp_caller_token/README.md)
-is earlier design evidence, not work to implement again.
-The local proof passed 15 named real-process checks and 24 focused tests using
-unmodified Workstream and isolated PostgreSQL. Three distinct callers include
-first admission through MCP; concurrent clients and alternating credentials on
-one HTTP client preserve identity and denial. These tests use local signed
-fixtures, not a deployed Flow issuer or a live model call.
+PR #418 delivered [WS-MCP-002-01](WS-MCP-002-01.md), and
+[WS-MCP-002-02](WS-MCP-002-02.md) adds the two remaining self-service tools.
+The resulting catalogue has three of the proposed 27 tools: profile read,
+profile update and exact-project authorization context. The package remains an
+independently deployed custom bearer-header adapter, not a public deployment.
 
-The package implements only `workstream_profile_get`: closed empty input, fixed
-`GET /api/v1/actors/me`, and the authorized `ActorProfileSelfResponse`.
-It captures that response schema and preserves first admission without grants.
-Do not repeat its packaging work. Future deployment needs its own environment
-and supported-client proof; later bindings need current route/schema verification.
+The next usable boundary is WS-MCP-002-03: authorization definitions and
+administrative read projections. Start it only after this chunk is reviewed and
+merged, recapture each selected operation from then-current backend OpenAPI, and
+preserve the existing fixed-route, caller-token and no-private-import boundaries.
 
-Keep the 27-tool inventory and later mutation boundaries. Guide uploads/setup
+Keep the remaining 24-tool inventory and later mutation boundaries. Guide uploads/setup
 completion and missing policy-selector recovery remain outside that inventory;
 do not silently add tools to repair those workflow limits. GitHub permissions
 govern contribution; these technical prerequisites are not another approval system.

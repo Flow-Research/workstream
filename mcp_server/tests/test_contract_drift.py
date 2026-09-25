@@ -12,16 +12,21 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTRACT = ROOT / "mcp_server" / "contracts" / "profile_get.json"
+CONTRACTS = ROOT / "mcp_server" / "contracts"
 BACKEND = ROOT / "backend"
+OPERATIONS = {
+    "profile_get": ("/api/v1/actors/me", "get"),
+    "profile_update": ("/api/v1/actors/me", "patch"),
+    "authorization_context_get": ("/api/v1/actors/me/authorization-context", "get"),
+}
 
 
 def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _selected(openapi: dict[str, Any]) -> dict[str, Any]:
-    operation = openapi["paths"]["/api/v1/actors/me"]["get"]
+def _selected(openapi: dict[str, Any], path: str, method: str) -> dict[str, Any]:
+    operation = openapi["paths"][path][method]
     names: set[str] = set()
     pending: list[Any] = [operation]
     while pending:
@@ -68,31 +73,28 @@ def _running_openapi() -> dict[str, Any]:
     return value
 
 
-def test_profile_contract_has_a_tamper_evident_selected_fragment() -> None:
-    snapshot = json.loads(CONTRACT.read_text(encoding="utf-8"))
+@pytest.mark.parametrize("name", OPERATIONS)
+def test_contract_has_a_tamper_evident_selected_fragment(name: str) -> None:
+    snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))
     captured = {"operation": snapshot["operation"], "components": snapshot["components"]}
     assert hashlib.sha256(_canonical(captured)).hexdigest() == snapshot["canonical_sha256"]
 
 
-def test_profile_contract_matches_current_backend_openapi_when_command_is_provided(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_contracts_match_current_backend_openapi_when_command_is_provided() -> None:
     if "WORKSTREAM_MCP_OPENAPI_COMMAND" not in os.environ:
         pytest.skip("backend OpenAPI comparison is run in the isolated backend environment")
-    snapshot = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    captured = {"operation": snapshot["operation"], "components": snapshot["components"]}
-
     openapi = _running_openapi()
-    assert snapshot["source"]["openapi_version"] == openapi["openapi"]
-    assert captured == _selected(openapi)
+    for name, (path, method) in OPERATIONS.items():
+        snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))
+        captured = {"operation": snapshot["operation"], "components": snapshot["components"]}
+        assert snapshot["source"]["openapi_version"] == openapi["openapi"]
+        assert captured == _selected(openapi, path, method)
 
 
 def test_selected_fragment_follows_transitive_schema_references() -> None:
     openapi = {
         "paths": {
-            "/api/v1/actors/me": {
-                "get": {"responses": {"200": {"$ref": "#/components/schemas/Outer"}}}
-            }
+            "/selected": {"get": {"responses": {"200": {"$ref": "#/components/schemas/Outer"}}}}
         },
         "components": {
             "schemas": {
@@ -101,5 +103,5 @@ def test_selected_fragment_follows_transitive_schema_references() -> None:
             }
         },
     }
-    selected = _selected(openapi)
+    selected = _selected(openapi, "/selected", "get")
     assert set(selected["components"]["schemas"]) == {"Inner", "Outer"}

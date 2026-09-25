@@ -1,9 +1,14 @@
-# Workstream MCP Profile Foundation
+# Workstream MCP Self-Service Adapter
 
-An independently installed adapter exposing one tool:
-`workstream_profile_get`. It calls the public Workstream
-`GET /api/v1/actors/me` operation with the caller's bearer. There are no MCP
-resources, prompts, mutations or administrative tools in this package.
+An independently installed adapter exposing three caller-owned tools:
+
+- `workstream_profile_get` calls `GET /api/v1/actors/me`.
+- `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
+- `workstream_authorization_context_get` calls
+  `GET /api/v1/actors/me/authorization-context` for one supplied project.
+
+Each call forwards the caller's bearer to its fixed public Workstream operation.
+There are no MCP resources, prompts or administrative tools in this package.
 
 ## Authentication Boundary
 
@@ -39,11 +44,14 @@ Configuration is read from environment variables; `.env.example` documents
 the settings but is not loaded automatically. No server-wide caller token is
 configured. A separate Workstream API must already be running.
 
-Tool arguments are exactly `{}`. The result contains the authorized full
-self-profile response; first admission can create the actor/link and update
-admission timestamps, but does not grant roles. Suspended self-read and
-deactivated/revoked-link denial follow Workstream. Errors are MCP tool failures
-with safe status/code information, not fabricated profiles.
+The profile read takes `{}`. Profile update accepts at least one of
+`display_name` and `contact_email`, preserving omission and explicit `null` while
+matching Workstream's normalization and bounds. Authorization context requires
+one `project_id`; Workstream decides whether the caller may see that exact
+project. First admission can create the actor/link and update admission
+timestamps, but does not grant roles. Lifecycle and access denials follow
+Workstream. Errors are MCP tool failures with safe status/code information, not
+fabricated results.
 
 ## Deployment Boundary
 
@@ -63,10 +71,13 @@ payloads in proxy telemetry. Do not expose the container directly as a public
 HTTP service. Browser-origin requests are rejected by this native-client profile.
 
 The adapter disables redirects, environment proxy inheritance and automatic
-retries. Connections may be pooled, but caller credentials and profile results
-are not shared or cached. Response validation is pinned to the selected public
-contract in `contracts/profile_get.json`; upstream drift must be reviewed, not
-silently accepted. There is no fallback service or backend-private import.
+retries. A profile-update transport failure, upstream 5xx response, or unexpected
+success/redirect response is reported as non-retryable uncertain execution;
+the adapter does not retry the unkeyed mutation. Connections may be pooled, but
+caller credentials and results are not shared or cached. Response validation is
+pinned to the three selected public contracts in `contracts/`; upstream drift
+must be reviewed, not silently accepted. There is no fallback service or
+backend-private import.
 
 ## Verification
 
@@ -81,10 +92,10 @@ Real API tests require the repository's isolated PostgreSQL runner, controlled
 fixture identities and a separate installed adapter process. Never supply a
 production database or real user token to a test. Integration and container
 commands are recorded in the additive MCP workflow and the
-[first-chunk record](../.commitrail/initiatives/WS-MCP-002/WS-MCP-002-01.md).
-The selected schema is compared with the running backend's OpenAPI operation;
-custom admission and lifecycle semantics are exercised separately.
+[current chunk record](../.commitrail/initiatives/WS-MCP-002/WS-MCP-002-02.md).
+Selected schemas are compared with the running backend OpenAPI operations;
+custom admission, lifecycle and exact-project semantics are exercised separately.
 
 Local fixture evidence does not certify the deployed Flow provider, a public
-gateway or all MCP clients. The remaining 26 mapped tools belong to later
+gateway or all MCP clients. The remaining 24 mapped tools belong to later
 bounded changes in the [initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md).

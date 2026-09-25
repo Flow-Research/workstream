@@ -4,29 +4,46 @@ from typing import Any
 
 from starlette.testclient import TestClient
 
-from workstream_mcp.schemas import INPUT_SCHEMA, profile_output_schema
-from workstream_mcp.tools.profile import TOOL_NAME, definition
+from workstream_mcp.schemas import (
+    AUTHORIZATION_CONTEXT_INPUT_SCHEMA,
+    EMPTY_INPUT_SCHEMA,
+    PROFILE_UPDATE_INPUT_SCHEMA,
+    authorization_context_output_schema,
+    profile_output_schema,
+    profile_update_output_schema,
+)
+from workstream_mcp.tools.context import TOOL_NAME as CONTEXT_TOOL_NAME
+from workstream_mcp.tools.context import definition as context_definition
+from workstream_mcp.tools.profile import (
+    PROFILE_GET_TOOL_NAME,
+    PROFILE_UPDATE_TOOL_NAME,
+    get_definition,
+    update_definition,
+)
 
 
-def test_only_profile_tool_has_closed_empty_input_and_selected_output() -> None:
-    tool = definition()
-    assert tool.name == TOOL_NAME
-    assert (
-        tool.input_schema
-        == INPUT_SCHEMA
-        == {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        }
+def test_tool_definitions_are_closed_and_use_selected_outputs() -> None:
+    profile_get = get_definition()
+    profile_update = update_definition()
+    context_get = context_definition()
+
+    assert profile_get.input_schema == EMPTY_INPUT_SCHEMA
+    assert profile_get.output_schema == profile_output_schema()
+    assert profile_update.input_schema == PROFILE_UPDATE_INPUT_SCHEMA
+    assert profile_update.output_schema == profile_update_output_schema()
+    assert context_get.input_schema == AUTHORIZATION_CONTEXT_INPUT_SCHEMA
+    assert context_get.output_schema == authorization_context_output_schema()
+    # All three calls can write admission/audit state in Workstream.
+    assert all(
+        tool.annotations is not None and tool.annotations.read_only_hint is False
+        for tool in (profile_get, profile_update, context_get)
     )
-    assert tool.output_schema == profile_output_schema()
-    assert tool.annotations is not None
-    # First admission can create an actor/link, so this must not be advertised as side-effect-free.
-    assert tool.annotations.read_only_hint is False
+    assert profile_update.annotations is not None
+    assert profile_update.annotations.destructive_hint is True
+    assert profile_update.annotations.idempotent_hint is False
 
 
-def test_mcp_tool_listing_exposes_exactly_one_tool(
+def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
     adapter: tuple[TestClient, list[Any], dict[str, Any]],
 ) -> None:
     client, _, _ = adapter
@@ -37,12 +54,19 @@ def test_mcp_tool_listing_exposes_exactly_one_tool(
     )
     assert response.status_code == 200
     listed = response.json()["result"]["tools"]
-    assert [item["name"] for item in listed] == [TOOL_NAME]
-    assert listed[0]["inputSchema"] == INPUT_SCHEMA
-    assert listed[0]["outputSchema"] == profile_output_schema()
+    assert [item["name"] for item in listed] == [
+        PROFILE_GET_TOOL_NAME,
+        PROFILE_UPDATE_TOOL_NAME,
+        CONTEXT_TOOL_NAME,
+    ]
+    assert [item["inputSchema"] for item in listed] == [
+        EMPTY_INPUT_SCHEMA,
+        PROFILE_UPDATE_INPUT_SCHEMA,
+        AUTHORIZATION_CONTEXT_INPUT_SCHEMA,
+    ]
 
 
-def test_discover_exposes_capabilities_on_modern_2026_path(
+def test_discover_exposes_tools_without_resources_or_prompts(
     adapter: tuple[TestClient, list[Any], dict[str, Any]],
 ) -> None:
     client, _, _ = adapter

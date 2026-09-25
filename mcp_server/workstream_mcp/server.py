@@ -20,8 +20,28 @@ from workstream_mcp.auth import CredentialError, request_bearer, request_correla
 from workstream_mcp.config import Settings
 from workstream_mcp.errors import adapter_failure
 from workstream_mcp.http_gateway import WorkstreamGateway, create_http_client
-from workstream_mcp.schemas import profile_output_schema
-from workstream_mcp.tools.profile import TOOL_NAME, definition, invoke
+from workstream_mcp.schemas import (
+    authorization_context_output_schema,
+    profile_output_schema,
+    profile_update_output_schema,
+)
+from workstream_mcp.tools.context import (
+    TOOL_NAME as AUTHORIZATION_CONTEXT_TOOL_NAME,
+)
+from workstream_mcp.tools.context import (
+    definition as context_definition,
+)
+from workstream_mcp.tools.context import (
+    invoke as invoke_context,
+)
+from workstream_mcp.tools.profile import (
+    PROFILE_GET_TOOL_NAME,
+    PROFILE_UPDATE_TOOL_NAME,
+    get_definition,
+    invoke_get,
+    invoke_update,
+    update_definition,
+)
 
 SERVER_NAME = "workstream-mcp"
 
@@ -81,19 +101,30 @@ def _install_sdk_log_filter() -> None:
 def create_app(settings: Settings) -> Starlette:
     _install_sdk_log_filter()
     profile_output_schema()
+    profile_update_output_schema()
+    authorization_context_output_schema()
     gateway: WorkstreamGateway | None = None
 
     async def list_tools(
         request: ServerRequestContext[Any], params: PaginatedRequestParams | None
     ) -> ListToolsResult:
-        return ListToolsResult(tools=[definition()])
+        return ListToolsResult(
+            tools=[get_definition(), update_definition(), context_definition()]
+        )
 
     async def call_tool(
         request: ServerRequestContext[Any], params: CallToolRequestParams
     ) -> CallToolResult:
-        if params.name != TOOL_NAME:
+        if params.name not in {
+            PROFILE_GET_TOOL_NAME,
+            PROFILE_UPDATE_TOOL_NAME,
+            AUTHORIZATION_CONTEXT_TOOL_NAME,
+        }:
             return adapter_failure("unknown_tool", status=404)
-        if params.arguments != {}:
+        arguments = params.arguments if params.arguments is not None else {}
+        if not isinstance(arguments, dict):
+            return adapter_failure("invalid_tool_input", status=400)
+        if params.name == PROFILE_GET_TOOL_NAME and arguments != {}:
             return adapter_failure("invalid_tool_input", status=400)
         http_request = request.request
         if http_request is None:
@@ -104,7 +135,12 @@ def create_app(settings: Settings) -> Starlette:
             return adapter_failure("invalid_credentials", status=401)
         if gateway is None:
             return adapter_failure("adapter_unavailable", status=503)
-        return await invoke(gateway, bearer, request_correlation_id(http_request.headers))
+        correlation_id = request_correlation_id(http_request.headers)
+        if params.name == PROFILE_GET_TOOL_NAME:
+            return await invoke_get(gateway, bearer, correlation_id)
+        if params.name == PROFILE_UPDATE_TOOL_NAME:
+            return await invoke_update(gateway, bearer, correlation_id, arguments)
+        return await invoke_context(gateway, bearer, correlation_id, arguments)
 
     server: Server[Any] = Server(
         SERVER_NAME,

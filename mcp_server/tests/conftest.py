@@ -29,6 +29,19 @@ def profile_fixture(**overrides: Any) -> dict[str, Any]:
     return profile
 
 
+def authorization_context_fixture(**overrides: Any) -> dict[str, Any]:
+    context = {
+        "actor_profile_id": "caa1b82d-ef2d-43fd-a1dd-c65981940796",
+        "status": "active",
+        "project_id": "0cd81e1e-0844-4a1b-9cb9-9d4cb2c99418",
+        "admin_roles": [],
+        "project_roles": ["submitter"],
+        "effective_action_ids": ["task.claim"],
+    }
+    context.update(overrides)
+    return context
+
+
 @pytest.fixture
 def adapter(
     monkeypatch: pytest.MonkeyPatch,

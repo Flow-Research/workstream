@@ -1,0 +1,523 @@
+{
+  "canonical_sha256": "eb6584b9ac5e135097cbfc1778ee48929e07ac06fb9eb3f822effeaa5c821fcd",
+  "components": {
+    "schemas": {
+      "ActionId": {
+        "type": "string",
+        "enum": [
+          "task.queue.read",
+          "project.task.queue.read",
+          "operations.task.queue.read",
+          "project.task.create",
+          "project.task.screen",
+          "project.task.release",
+          "task.claim",
+          "task.start",
+          "task.work_context.read",
+          "project.task.work_context.read",
+          "actor.profile.read_self",
+          "actor.profile.update_self",
+          "authorization.permission_catalogue.read",
+          "authorization.admin_role_definitions.read",
+          "admin_role_grant.list",
+          "actor.admin_role_grant_history.read",
+          "admin_role_grant.issue",
+          "admin_role_grant.revoke",
+          "admin_role_grant.bootstrap",
+          "actor.profile.read",
+          "actor.profile.suspend",
+          "actor.profile.reactivate",
+          "actor.profile.deactivate",
+          "actor.identity_link.read",
+          "actor.identity_link.revoke",
+          "actor.identity_link.reactivate",
+          "task.assignment.authority_reconcile",
+          "outbox.dispatch",
+          "actor.service.provision",
+          "project.contributor_candidate.list",
+          "project_role_grant.list",
+          "project_role_grant.read",
+          "project_role_grant.issue",
+          "project_role_grant.revoke",
+          "project.read",
+          "actor.authorization_context.read",
+          "project.setup_run.read",
+          "project.guide_sufficiency_report.list",
+          "project.guide_sufficiency_report.read",
+          "project.submission_artifact_policy.list",
+          "project.submission_artifact_policy.read",
+          "project.effective_submission_artifact_policy.read",
+          "project.pre_submit_checker_policy.read",
+          "project.active_guide.read",
+          "project.create",
+          "project.guide.create",
+          "project.guide.update",
+          "project.guide_source_snapshot.create",
+          "project.guide_compilation.request",
+          "project.guide_compilation.review_package.read",
+          "project.guide_compilation.correction.request",
+          "project.guide_compilation.request_automatic",
+          "project.guide_compilation.execute",
+          "project.review_policy.update",
+          "project.revision_policy.update",
+          "project.guide_sufficiency_report.create",
+          "project.guide_sufficiency.run",
+          "project.guide_sufficiency.warnings.acknowledge",
+          "project.submission_artifact_policy.create",
+          "project.submission_artifact_policy.derive",
+          "project.submission_artifact_policy.update",
+          "project.submission_artifact_policy.approve",
+          "project.post_submit_checker_policy.approve",
+          "project.post_submit_checker_policy.correction.request",
+          "project.post_submit_checker_policy.derive",
+          "project.setup_run.update",
+          "project.guide.activate",
+          "operations.task.start_override",
+          "operations.submission_gate.repair",
+          "operations.checker.retry",
+          "submission.create",
+          "review.queue.read",
+          "review.queue.inspect",
+          "review.claim",
+          "review.release",
+          "review.decline_preference",
+          "review.preference_expiry.run",
+          "review.lease_expiry.run",
+          "review.context.read",
+          "review.chain.read",
+          "review.finding_evidence.ingest",
+          "review.decision",
+          "review.finding_response_evidence.ingest",
+          "review.lease.force_release",
+          "review.queue.routing.override",
+          "review.queue.routing.correct",
+          "review.queue.close",
+          "review.reconcile.run",
+          "review.artifact_reference.reconcile",
+          "review.projection.rebuild",
+          "review.revision_context.repair",
+          "review.revision_obligation.close",
+          "review.revision_context.legacy_close",
+          "review.lifecycle.activation.manage",
+          "artifact.binding.read",
+          "artifact.replica.read",
+          "artifact.receipt.read",
+          "artifact.verification_job.read",
+          "artifact.verification_job.retry",
+          "artifact.recovery_attempt.read",
+          "artifact.audit.read",
+          "operations.artifact_storage_admission.read",
+          "artifact.guide_source.ingest",
+          "artifact.guide_source.read",
+          "artifact.submission_bundle.prepare",
+          "artifact.submission.binding.create",
+          "artifact.checker_output.binding.create",
+          "artifact.verification.execute",
+          "artifact.pending_work.scan",
+          "artifact.put_attempt.resolve",
+          "artifact.pre_submit.checker_input.materialize",
+          "artifact.post_submit.checker_input.materialize",
+          "artifact.checker_output.write",
+          "artifact.review_packet.materialize",
+          "artifact.review_evidence.binding.create",
+          "compensation.adapter_binding.read",
+          "compensation.adapter_binding.create",
+          "compensation.adapter_binding.suspend",
+          "compensation.adapter_binding.resume",
+          "contribution.policy.read",
+          "contribution.policy.create_draft",
+          "contribution.policy.update_draft",
+          "contribution.policy.publish",
+          "contribution.policy.retire"
+        ],
+        "title": "ActionId",
+        "description": "Closed action identifiers reserved by approved owner chunks."
+      },
+      "ActorAuthorizationContextResponse": {
+        "properties": {
+          "actor_profile_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Actor Profile Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "deactivated"
+            ],
+            "title": "Status"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Project Id"
+          },
+          "admin_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Admin Roles"
+          },
+          "project_roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "submitter",
+                "reviewer"
+              ]
+            },
+            "type": "array",
+            "title": "Project Roles"
+          },
+          "effective_action_ids": {
+            "items": {
+              "$ref": "#/components/schemas/ActionId"
+            },
+            "type": "array",
+            "title": "Effective Action Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actor_profile_id",
+          "status",
+          "project_id",
+          "admin_roles",
+          "project_roles",
+          "effective_action_ids"
+        ],
+        "title": "ActorAuthorizationContextResponse",
+        "description": "Self-only effective authority projected onto one canonical project."
+      },
+      "ApiError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "correlation_id": {
+            "type": "string",
+            "title": "Correlation Id"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "description": "Canonical machine-readable API error."
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "description": "Canonical error plus additive legacy compatibility fields."
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "required": [
+          "detail",
+          "error"
+        ],
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "operation": {
+    "tags": [
+      "actors"
+    ],
+    "summary": "Read Current Actor Authorization Context",
+    "description": "Return the caller's effective authority for one canonical project.",
+    "operationId": "read_current_actor_authorization_context_api_v1_actors_me_authorization_context_get",
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "parameters": [
+      {
+        "name": "project_id",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[^\\x00]*$",
+          "title": "Project Id"
+        }
+      },
+      {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        }
+      },
+      {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ActorAuthorizationContextResponse"
+            }
+          }
+        },
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "400": {
+        "description": "Invalid request.",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "500": {
+        "description": "Internal server error.",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "422": {
+        "description": "Validation Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Authentication failed.",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Permission denied.",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      },
+      "503": {
+        "description": "Identity verification unavailable.",
+        "headers": {
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "x-workstream-action-id": "actor.authorization_context.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "action_id": "actor.authorization_context.read",
+    "backend_git_sha": "2a3a392fe014583a0675c0a3e1f5612daba0fda4",
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/actors/me/authorization-context"
+  }
+}

@@ -221,11 +221,11 @@ cannot be reused as post-submission review-gate evidence. See the
   bearer unchanged and Workstream verifies it. The
   [local one-tool experiment](../experiments/mcp_caller_token/README.md) passed
   15 real-process checks and 24 focused tests, including first admission and
-  caller isolation. Merged PR #418 delivered the
-  [independent one-tool package](../mcp_server/README.md), container and additive
-  CI, including real-API profile/lifecycle parity. The remaining 26 mapped tools
-  and deployment remain separate work; packaging and local fixture proof do not
-  certify a deployed Flow issuer, public MCP gateway or every MCP client.
+  caller isolation. Independent packaging and the three bounded self-service
+  tools are delivered through WS-MCP-002-02: profile read, profile update and
+  exact-project authorization context. Twenty-four proposed tools remain;
+  WS-MCP-002-03 administrative reads are next. This remains a custom
+  authentication adapter, not a public deployment or a 27-tool release.
   The public-client drill targets currently usable APIs only; hidden and
   unfinished lifecycle routes are not completion targets. Draft-guide policy
   probes additionally cover optional fields, conditional headers and exact

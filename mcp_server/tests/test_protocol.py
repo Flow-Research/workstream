@@ -11,6 +11,8 @@ from starlette.testclient import TestClient
 
 from workstream_mcp.config import Settings
 from workstream_mcp.server import create_app
+from workstream_mcp.tools.context import TOOL_NAME as CONTEXT_TOOL_NAME
+from workstream_mcp.tools.profile import PROFILE_UPDATE_TOOL_NAME
 
 
 @pytest.mark.parametrize(
@@ -73,6 +75,145 @@ def test_duplicate_authorization_does_not_dispatch(
     assert response.status_code == 200
     assert response.json()["result"]["isError"] is True
     assert received == []
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        (PROFILE_UPDATE_TOOL_NAME, {}),
+        (PROFILE_UPDATE_TOOL_NAME, {"display_name": "   "}),
+        (PROFILE_UPDATE_TOOL_NAME, {"display_name": 7}),
+        (PROFILE_UPDATE_TOOL_NAME, {"display_name": "d" * 201}),
+        (PROFILE_UPDATE_TOOL_NAME, {"contact_email": "e" * 321}),
+        (
+            PROFILE_UPDATE_TOOL_NAME,
+            {"display_name": "valid", "contact_email": "   "},
+        ),
+        (PROFILE_UPDATE_TOOL_NAME, {"display_name": "valid", "extra": "denied"}),
+        (PROFILE_UPDATE_TOOL_NAME, {"display_name": "bad\x00value"}),
+        (CONTEXT_TOOL_NAME, {}),
+        (CONTEXT_TOOL_NAME, {"project_id": ""}),
+        (CONTEXT_TOOL_NAME, {"project_id": None}),
+        (CONTEXT_TOOL_NAME, {"project_id": 7}),
+        (CONTEXT_TOOL_NAME, {"project_id": "bad\x00project"}),
+        (CONTEXT_TOOL_NAME, {"project_id": "p" * 101}),
+        (CONTEXT_TOOL_NAME, {"project_id": "project", "url": "https://invalid.example"}),
+    ],
+)
+def test_new_tool_invalid_inputs_do_not_dispatch(
+    adapter: tuple[TestClient, list[Any], dict[str, Any]],
+    name: str,
+    arguments: dict[str, Any],
+) -> None:
+    client, received, _ = adapter
+    response = mcp_call(client, name=name, arguments=arguments)
+    assert response.status_code == 200
+    assert response.json()["result"]["isError"] is True
+    assert received == []
+
+
+def test_profile_update_normalizes_text_and_preserves_omission_and_null(
+    adapter: tuple[TestClient, list[Any], dict[str, Any]],
+) -> None:
+    client, received, upstream = adapter
+    upstream["json"] = {**upstream["json"], "display_name": "Victor", "contact_email": None}
+
+    first = mcp_call(
+        client,
+        name=PROFILE_UPDATE_TOOL_NAME,
+        arguments={"display_name": "  Victor  "},
+    )
+    second = mcp_call(
+        client,
+        name=PROFILE_UPDATE_TOOL_NAME,
+        arguments={"contact_email": None},
+    )
+
+    assert first.json()["result"].get("isError", False) is False
+    assert second.json()["result"].get("isError", False) is False
+    assert json.loads(received[0].content) == {"display_name": "Victor"}
+    assert json.loads(received[1].content) == {"contact_email": None}
+    assert all(request.method == "PATCH" for request in received)
+
+
+def test_new_tools_accept_exact_maximum_input_lengths(
+    adapter: tuple[TestClient, list[Any], dict[str, Any]],
+) -> None:
+    client, received, upstream = adapter
+    display_name = "d" * 200
+    contact_email = "e" * 320
+    project_id = "p" * 100
+
+    profile_response = mcp_call(
+        client,
+        name=PROFILE_UPDATE_TOOL_NAME,
+        arguments={"display_name": display_name, "contact_email": contact_email},
+    )
+    assert profile_response.json()["result"].get("isError", False) is False
+    assert json.loads(received[0].content) == {
+        "display_name": display_name,
+        "contact_email": contact_email,
+    }
+
+    from conftest import authorization_context_fixture
+
+    upstream["json"] = authorization_context_fixture()
+    context_response = mcp_call(
+        client,
+        name=CONTEXT_TOOL_NAME,
+        arguments={"project_id": project_id},
+    )
+    assert context_response.json()["result"].get("isError", False) is False
+    assert received[1].url.params["project_id"] == project_id
+
+
+def test_authorization_context_forwards_caller_and_exact_project(
+    adapter: tuple[TestClient, list[Any], dict[str, Any]],
+) -> None:
+    from conftest import authorization_context_fixture
+
+    client, received, upstream = adapter
+    upstream["json"] = authorization_context_fixture()
+    response = mcp_call(
+        client,
+        token="context-caller",
+        name=CONTEXT_TOOL_NAME,
+        arguments={"project_id": "project/one"},
+    )
+
+    assert response.json()["result"].get("isError", False) is False
+    assert len(received) == 1
+    assert received[0].headers["authorization"] == "Bearer context-caller"
+    assert received[0].url.params["project_id"] == "project/one"
+
+
+def test_authorization_context_concealment_returns_no_stale_authority(
+    adapter: tuple[TestClient, list[Any], dict[str, Any]],
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 404
+    upstream["json"] = {
+        "error": {
+            "code": "project_authorization_resource_not_found",
+            "message": "private project detail",
+            "details": {"project_roles": ["submitter"], "effective_action_ids": ["task.claim"]},
+        }
+    }
+    response = mcp_call(
+        client,
+        name=CONTEXT_TOOL_NAME,
+        arguments={"project_id": "project/one"},
+    )
+
+    result = response.json()["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["status"] == 404
+    assert result["structuredContent"]["code"] == "project_authorization_resource_not_found"
+    serialized = json.dumps(result)
+    assert "private project detail" not in serialized
+    assert "project_roles" not in serialized
+    assert "effective_action_ids" not in serialized
+    assert len(received) == 1
 
 
 def test_every_response_is_no_store_and_profile_is_not_cross_caller_cached(
