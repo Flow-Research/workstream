@@ -6,10 +6,7 @@ from sqlalchemy import text
 from app.core.identifiers import new_record_id
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.catalogue import PermissionId
-from app.modules.authorization.project_role_service import (
-    ProjectRoleGrantMutationService,
-    project_role_issue_lock_key,
-)
+from app.modules.authorization.project_role_service import project_role_issue_lock_key
 from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
@@ -31,6 +28,7 @@ from tests.authorization.project_roles.fixtures import (
     authorization_factory as authorization_factory,
     mutation_runtime,
     project_role_qualification,
+    project_role_mutation_service,
     role_mutation_case as role_mutation_case,
 )
 
@@ -46,7 +44,7 @@ async def _prepare_submitter_issue(session, repository, prepared, case: RoleMuta
         reason_digest=derive_reason_digest(reason),
     )
     key = new_record_id()
-    reservation = await ProjectRoleGrantMutationService(session).reserve(
+    reservation = await project_role_mutation_service(session).reserve(
         key=key, actor_profile_id=case.caller_id, request=request
     )
     assert isinstance(reservation, ClaimedReservation)
@@ -88,7 +86,7 @@ async def _issue_submitter_for_revoke(session, repository, prepared, case):
     request, reservation, resource, decision, reason = await _prepare_submitter_issue(
         session, repository, prepared, case
     )
-    issued = await ProjectRoleGrantMutationService(session).complete_issue(
+    issued = await project_role_mutation_service(session).complete_issue(
         claim=reservation.claim,
         request=request,
         decision=decision,
@@ -115,7 +113,7 @@ async def test_project_role_issue_rejects_substituted_prepared_authority(
         )
         assert decision.allowed is True
         assert decision.matched_grant_id == case.manager_grant_id
-        service = ProjectRoleGrantMutationService(session)
+        service = project_role_mutation_service(session)
         substitutions = (
             decision.model_copy(update={"action_id": ActionId.PROJECT_ROLE_GRANT_REVOKE}),
             decision.model_copy(update={"permission_id": PermissionId.PROJECT_READ}),
@@ -172,7 +170,7 @@ async def _prepare_revoke(session, repository, prepared, case: RoleMutationCase)
         reason_digest=derive_reason_digest(reason),
     )
     key = new_record_id()
-    reservation = await ProjectRoleGrantMutationService(session).reserve(
+    reservation = await project_role_mutation_service(session).reserve(
         key=key, actor_profile_id=case.caller_id, request=request
     )
     assert isinstance(reservation, ClaimedReservation)
@@ -266,7 +264,7 @@ async def test_project_role_revoke_rejects_substituted_prepared_authority(
         _, _, reservation, request, reason, grant, resource, decision = await _prepare_revoke(
             session, repository, prepared, case
         )
-        service = ProjectRoleGrantMutationService(session)
+        service = project_role_mutation_service(session)
         substitutions = (
             (
                 decision.model_copy(update={"action_id": ActionId.PROJECT_ROLE_GRANT_ISSUE}),
@@ -317,7 +315,7 @@ async def test_project_role_revoke_survives_target_lifecycle_loss(
             resource,
             decision,
         ) = await _prepare_revoke(session, repository, prepared, case)
-        revoked = await ProjectRoleGrantMutationService(session).complete_revoke(
+        revoked = await project_role_mutation_service(session).complete_revoke(
             claim=reservation.claim,
             request=request,
             decision=decision,

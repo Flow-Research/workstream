@@ -34,6 +34,13 @@ def _new_record_id() -> UUID:
     return identifiers.new_record_id()
 
 
+def project_role_mutation_service(session):
+    """Use the same publication composition as the production AUTH adapter."""
+    from app.adapters.auth import project_role_mutation_service as compose
+
+    return compose(session)
+
+
 @pytest.fixture
 def authorization_database_env(isolated_database_env: str) -> str:
     """Use the shared migrated, per-test PostgreSQL database."""

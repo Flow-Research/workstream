@@ -8,10 +8,7 @@ from sqlalchemy import text
 from app.core.identifiers import new_record_id
 from app.modules.authorization import router as authorization_router
 from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.project_role_service import (
-    ProjectRoleGrantMutationService,
-    project_role_issue_lock_key,
-)
+from app.modules.authorization.project_role_service import project_role_issue_lock_key
 from app.modules.authorization.runtime import (
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
@@ -31,6 +28,7 @@ from tests.authorization.project_roles.fixtures import (
     authorization_database_env as authorization_database_env,
     authorization_factory as authorization_factory,
     mutation_runtime,
+    project_role_mutation_service,
     project_role_qualification,
     role_mutation_case as role_mutation_case,
 )
@@ -57,7 +55,7 @@ async def _cancel_waiting_prepare(
             text("select set_config('application_name', :name, true)"),
             {"name": application_name},
         )
-        await ProjectRoleGrantMutationService(waiter).reserve(
+        await project_role_mutation_service(waiter).reserve(
             key=key, actor_profile_id=case.caller_id, request=request
         )
         waiter_pid = await waiter.scalar(text("select pg_backend_pid()"))
@@ -96,7 +94,7 @@ async def _cancel_waiting_prepare(
 
 
 async def _retry_same_key(waiter, prepared, repository, case, request, key, scope) -> None:
-    reservation = await ProjectRoleGrantMutationService(waiter).reserve(
+    reservation = await project_role_mutation_service(waiter).reserve(
         key=key, actor_profile_id=case.caller_id, request=request
     )
     assert isinstance(reservation, ClaimedReservation)
@@ -133,7 +131,7 @@ async def _retry_same_key(waiter, prepared, repository, case, request, key, scop
     decision = await prepared.consume(
         handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, prepared_input, resource
     )
-    created = await ProjectRoleGrantMutationService(waiter).complete_issue(
+    created = await project_role_mutation_service(waiter).complete_issue(
         claim=reservation.claim,
         request=request,
         decision=decision,
