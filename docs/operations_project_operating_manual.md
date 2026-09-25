@@ -350,7 +350,8 @@ checker summary. Operator and Audit Authority return references only. All three
 validate the task's original activation custody, including after guide replacement.
 They require complete valid locked context in every task state; incomplete or
 corrupt context returns 422. Missing, foreign-project and unauthorized reads
-return the same 404. Token roles and creator attribution grant no access.
+return the same 404. Caller token claims and task creation history do not
+authorize these reads.
 The old task-only locked-context route is removed. Bounded audit history access
 remains separate ARCH-03C7 work.
 

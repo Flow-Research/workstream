@@ -31,6 +31,14 @@ def test_task_context_migration(isolated_database_env, migration_lock):
             try:
                 await insert(connection, "project.read", "project.read")
                 await insert(connection, "task.queue.read", "task.queue.read")
+                for action, permission in (
+                    ("task.read", "task.queue.read"),
+                    ("task.submission_requirements.read", "task.queue.read"),
+                    ("project.task.read", "project.task.manage"),
+                    ("project.task.submission_requirements.read", "project.task.manage"),
+                ):
+                    for allowed in (False, True):
+                        await insert(connection, action, permission, allowed=allowed)
             finally:
                 await connection.close()
         async def snapshot():

@@ -715,7 +715,8 @@ that order, then read TASK without row locks. Contributor discovery requires an
 active project. Signed cursors bind action/project/limit/order, while decision
 evidence separately binds the hash of the presented cursor. Authority, projection,
 JSON validation and the successful decision commit share one transaction.
-Remaining detail and projection actions in the manifest are proposed.
+ARCH-03C5 activates detail/requirements and ARCH-03C6 activates the three
+locked-context actions. Bounded audit-history activation remains ARCH-03C7.
 
 The [AUTH-12F4 contract](../.commitrail/initiatives/WS-AUTH-001/planning/chunks/WS-AUTH-001-12F4-submission-policy-approval.md)
 activates exact complete-compilation review-package read and correction under

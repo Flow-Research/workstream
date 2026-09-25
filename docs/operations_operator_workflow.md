@@ -8,8 +8,10 @@ below is planned and unavailable until its owning REV/CON chunks, exact AUTH
 activation, and REV-13 joint release complete.
 
 Contributor, management and operational task queues have exact-authorized public
-reads with distinct fields and signed pagination. Remaining task detail,
-requirements, locked-context and audit read authority stays ARCH-03C work. See the
+reads with distinct fields and signed pagination. Contributor/Manager detail and
+requirements are public through ARCH-03C5. ARCH-03C6 exposes separate Manager,
+system-Operator and Audit Authority locked-context reads with exact current
+grants. Bounded Audit Authority history access remains ARCH-03C7. See the
 [capability ledger](roadmap_status.md) for current availability.
 
 ## Roles
