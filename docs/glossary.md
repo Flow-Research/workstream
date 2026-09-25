@@ -271,8 +271,9 @@ rules, hash algorithm, size limits, and attestation terms before submission.
 ARCH-03B7 supplies separate immutable contributor and management result types
 with the same safe fields. Both use the original locked policy, never the current
 guide. ARCH-03C5 exposes both reads under exact current authority after TASK
-locking: the contributor requires the current assignment and covered Submitter
-grant; the manager requires covered Project Manager authority. The superseded
+locking: the contributor requires an active same-project Submitter grant and
+either a ready, unassigned task or their own current active assignment; the
+manager requires covered Project Manager authority. The superseded
 public authority wrapper is removed.
 
 ## Task Locked Context
