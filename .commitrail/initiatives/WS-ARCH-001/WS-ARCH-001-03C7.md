@@ -6,7 +6,7 @@
   Audit Authority and remove the obsolete task-only audit route.
 - Risk class: L1 (authorization, private audit data, append-only evidence schema).
 
-## Intent and current-source reconciliation
+## Intent
 
 Main includes ARCH-03C6. ARCH-03B8 already owns the immutable bounded evidence
 projection and one project/task-scoped AUDIT query. The remaining
@@ -23,6 +23,9 @@ Expose `GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence`, actio
 system `Audit Authority` only. Other admin roles sharing `audit.read`, contributor
 ownership, task creation and token roles do not confer access. Nonhuman admission
 precedes TASK composition. Missing/foreign/denied selectors conceal alike as 404.
+Pass `allowed_roles=frozenset({AdminRole.AUDIT_AUTHORITY})` through the existing
+project-admin locker and repository grant filter; a permission-only lookup is
+insufficient because all five administrative roles share `audit.read`.
 
 Reuse `AuditTaskEvidenceRequest`, `AuditTaskEvidencePage` and the TASK repository
 projection. All nine task states, including an unbound draft, are inspectable;
@@ -33,7 +36,13 @@ reason, external identity, source/artifact URI or policy body is returned.
 
 Query `limit` defaults to 50 and is bounded 1..100. Optional `cursor` is bounded
 JSON encoding the existing `TaskEvidenceCursor` (project/task, aware timestamp,
-event UUID); parse and validate scope before TASK SQL. Return the existing typed
+event UUID), capped at 512 raw characters before decoding. Require exactly
+`project_id`, `task_id`, `created_at`, `event_id`, all string values; reject duplicate
+keys, extra/missing keys, naive/malformed timestamps, malformed UUIDs and crossed
+scope. A route dependency raises sanitized 422 before entering the TASK operation;
+direct callers validate the typed request before starting its transaction. This
+does not promise that authentication/rate-control or identity SQL is absent.
+Return the existing typed
 cursor object as `next_cursor`. It is a live ascending position, not a capability,
 snapshot or proof that an anchor exists. Revalidate current authority on every
 page. Unlike queue-specific signed audience tokens, these fixed evidence
@@ -78,7 +87,7 @@ trace those consumers explicitly, but do not widen this PR into their cutover.
   current shared error mapping needs an exact action declaration.
 - One migration; existing Alembic head/schema assertions and exact inventories.
 - `tests/authorization/task_audit_evidence/`, migration test; affected
-  `tests/tasks/test_audit_evidence.py`, `tests/test_tasks.py`, API/catalogue/lane
+  `tests/tasks/test_audit_evidence.py`, `tests/test_tasks.py`, `tests/test_checkers.py`, API/catalogue/lane
   tests and `scripts/api_contract_e2e.py`/`test_lane_catalogue.py`.
 - Selected MCP authorization-context snapshot: enum/digest/source provenance.
 - README, canonical TASK/AUTH/data-model specs, operating manuals, roadmap and
@@ -96,6 +105,8 @@ frontend, private guide fixture, dependency or CI gate/threshold change.
 2. Exact public route/action/response and old route/schema/wrapper absence;
    invalid UUID/limit/cursor/cross-scope cursor fails before product locks/read;
    nonhuman actor cannot enter TASK composition. Empty/draft and all states work.
+   Oversized/deep/duplicate-key/extra-key/malformed-offset cursor controls and a
+   pre-decode-cap removal probe protect the parser boundary.
 3. Real pagination covers ties, limit-one traversal, exhaustion, absent anchors,
    project/task isolation and fixed private-field exclusion. Retain the inner
    SQL column/transaction/no-lock tests rather than rewriting them as HTTP tests.
@@ -128,3 +139,13 @@ atomic read evidence and absence of obsolete public authority.
 After this boundary, reconcile ARCH-03C completion and proceed separately to
 public guide activation/approved-guide intake integration. Do not claim immutable
 Submission or post-submit execution publicly delivered by this read operation.
+
+## Plan corrections
+
+- SEC-03C7-PLAN-01: make the exact Audit Authority role filter explicit, with
+  dual-role matched-grant equality and every other shared-permission role denied.
+- SEC-03C7-PLAN-02: define the pre-decode bound and closed cursor syntax; no
+  signing framework or promise about pre-authentication validation is added.
+- ARCH-03C7-PLAN-03: include the five checker-test callers. Preserve full-payload
+  checker/requester/provenance assertions through the retained internal reader;
+  replace obsolete public redaction assertions with fixed-field privacy and denial.
