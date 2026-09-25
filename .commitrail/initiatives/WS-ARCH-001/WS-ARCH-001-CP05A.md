@@ -35,7 +35,8 @@ bounded change, not a reason to expose an unusable activation POST first.
 - Existing AUTH adapter composition only; no new role, permission or action.
 - Focused `backend/tests/contributions/` HTTP tests and signed Finance fixtures;
   existing contract, route/action inventory, semantic-lane and behavior-ownership
-  registrations; API drill may exercise this policy workflow without claiming
+  registrations and the two current `.ci/behavior-contracts/contribution-policy-*`
+  proof references that name the obsolete hidden-route test; API drill may exercise this policy workflow without claiming
   full public activation. Retain existing CON behavior and binding proof.
 - README, canonical contribution specification, operating manual, roadmap and
   current ARCH navigation; this record; local sheet exports only if present.
@@ -147,13 +148,16 @@ They are proof requirements, not a claim of executed implementation tests.
 |---|---|
 | All six routes, exact actions, strict fields and typed responses | `test_contracts.py::test_public_policy_contract`; replace the obsolete `test_policy_routes_absent.py`, retain binding-hidden assertions |
 | Signed complete unpaid workflow, project/system Finance | `test_workflow.py::test_public_policy_lifecycle`; both required rules, no bindings; exact policy/version/event identities and stored matched grant |
-| Lost-response handoff | `test_workflow.py::test_second_finance_recovers_draft`; create with A, revoke A publicly, independently grant B, discover without A receipt/key, B edits/publishes; A created_by preserved, B actor and exact grant recorded |
+| Lost-response handoff | `test_workflow.py::test_second_finance_recovers_draft`; create with A, revoke A publicly, independently grant B, discover without A receipt/key, B edits/publishes; A created_by preserved, B actor and exact grant recorded; revoked A must be denied after the actual revoke |
 | Current published and open-draft discovery together | `test_discovery.py::test_current_selectors`; publish, create successor draft, discover both exact version IDs |
 | Retirement/replacement between preselection and AUTH | `test_discovery.py::test_discovery_rechecks_after_authorization`; pause selection, retire/replace under another valid Finance actor, resume; no replacement disclosure; fresh read succeeds |
 | Same-aggregate draft appears during read | `test_discovery.py::test_discovery_refreshes_same_policy`; return the post-AUTH draft selector, not stale preselection |
 | Corrupt duplicate draft aggregate | `test_discovery.py::test_ambiguous_current_policy_is_concealed`; otherwise-valid direct SQL second draft, fail closed, remove it and restore positive control |
 | No product lock before discovery AUTH | `test_discovery.py::test_discovery_does_not_take_product_locks`; hold the policy row independently, prove discovery does not wait and observe pre-AUTH ID-only SQL |
-| Roles, scope and revocation | `test_workflow.py::test_public_policy_denials`; valid exact target, signed PM/Operator/Contributor/foreign Finance and revoked identity; existing CP05 principal matrix remains owner proof; nonhuman route admission tested separately |
+| Roles, scope and revocation | `test_workflow.py::test_public_policy_denials`; valid exact target, signed PM/Operator/Contributor/foreign Finance and revoked identity; existing CP05 principal matrix remains owner proof |
+| Foreign selector non-wait/non-access | `test_discovery.py::test_foreign_policy_selector_does_not_wait`; valid live Finance grants and two real projects; independently hold foreign policy/version rows, then exact read/update/publish/retire with requested-project path plus foreign IDs must promptly conceal without foreign read/lock; same-project unlocked control succeeds |
+| Live authority changes | `test_workflow.py::test_public_policy_revocation`; real stored active grant/profile/link control, independently revoke grant, deactivate profile or revoke identity link, observe public denial with otherwise-valid policy, restore through supported fixture authority and prove success; cannot rely on an absent grant as another failure |
+| Nonhuman API admission | `test_contracts.py::test_nonhuman_policy_admission`; validly signed nonhuman token is rejected before CON composition; valid human control reaches composition |
 | Immutable replay after advancement | `test_workflow.py::test_policy_replay_after_publication`; original draft operation still returns its original receipt; no extra lifecycle rows |
 | Key actor/project/body substitutions | `test_workflow.py::test_policy_replay_conflicts`; B holds live same-project Finance; A holds live grants on both real projects; otherwise-valid requests fail the event actor/project/digest comparison, original replay succeeds |
 | Fresh stale-version mutation | `test_workflow.py::test_new_operation_rejects_stale_version`; real successor state and fresh key isolate the lifecycle guard from replay-digest checks |
@@ -168,7 +172,9 @@ ambiguity rejection with first-row selection (duplicate test fails); return
 preselection selectors instead of the post-AUTH projection (fresh draft test
 fails); select first duplicate header (admission test fails); move commit ahead
 of response validation (rollback test fails). Run each control restored and
-keep mutations ephemeral. Existing replay and binding guards are reused, not
+keep mutations ephemeral. Remove the repository project-correlation predicate
+for the foreign-selector proof: the held foreign row must then cause a wait or
+the read must disclose the wrong resource, failing the original assertion. Existing replay and binding guards are reused, not
 reimplemented merely to add tests.
 
 Run affected owner proofs, route/schema and boundary checks, Ruff, Markdown
