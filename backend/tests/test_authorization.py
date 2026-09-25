@@ -834,16 +834,6 @@ def test_authorization_read_cursor_rejects_missing_payload_keys(missing_key: str
         )
 
 
-def test_authorization_read_cursor_rejects_oversized_decoded_value() -> None:
-    value = base64.urlsafe_b64encode(b"{" + b" " * 383 + b"}").decode().rstrip("=")
-    assert len(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))) > 384
-    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
-        AuthorizationReadCursorCodec(bytes(range(32))).decode(
-            value,
-            query_digest=DIGEST,
-        )
-
-
 def test_authorization_read_cursor_rejects_missing_envelope_and_duplicate_keys() -> None:
     missing_signature = (
         base64.urlsafe_b64encode(
@@ -7856,7 +7846,7 @@ async def test_admin_mutations_reject_decisions_not_bound_to_exact_request(
             target_actor_id=target_id,
             role=AdminRole.OPERATOR,
             scope_type=AdminScope.SYSTEM,
-            reason_digest=DIGEST,
+            reason_digest=derive_reason_digest("Bounded reason"),
         )
         action_id = ActionId.ADMIN_ROLE_GRANT_ISSUE
         permission_id = PermissionId.ADMIN_ROLE_GRANT
@@ -7866,7 +7856,7 @@ async def test_admin_mutations_reject_decisions_not_bound_to_exact_request(
         request = AdminRoleGrantRevokeRequest(
             operation=AuthorityOperation.ADMIN_ROLE_GRANT_REVOKE,
             grant_id=grant_id,
-            reason_digest=DIGEST,
+            reason_digest=derive_reason_digest("Bounded reason"),
         )
         action_id = ActionId.ADMIN_ROLE_GRANT_REVOKE
         permission_id = PermissionId.ADMIN_ROLE_REVOKE

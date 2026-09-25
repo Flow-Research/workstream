@@ -22,6 +22,7 @@
   The human expanded this change to use reviewed commit checkpoints in one PR;
   projection proof is its first stage, not its completion boundary.
 - AUTH admin-access slice: [13 — lifecycle proof audit](WS-QUAL-003-13.md).
+- AUTH test-input slice: [14 — make cursor and decision-boundary tests discriminating](WS-QUAL-003-14.md).
 - After 13's intended merge outcome: inventory the remaining service-actor
   provisioning and profile/link lifecycle families, then remaining AUTH owners.
   Do not repeat the selected actor, authentication or admin-access audit.
