@@ -7,23 +7,30 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.authorization.catalogue import ActionAvailability, ActionId
+from app.modules.authorization.catalogue import ActionAvailability, ActionId, TASK_DETAIL_READ_ACTIONS
 from app.modules.authorization.domain.audit import AuthorizationDenialCode, MatchedAuthorityKind
 
+
+TASK_CONTRIBUTOR_READ_ACTIONS = frozenset({
+    ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ, ActionId.TASK_WORK_CONTEXT_READ,
+})
+TASK_MANAGER_READ_ACTIONS = frozenset({
+    ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
+    ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
+})
 
 TASK_SUBMITTER_ACTIONS = frozenset(
     {
         ActionId.TASK_CLAIM,
         ActionId.TASK_START,
-        ActionId.TASK_WORK_CONTEXT_READ,
+        *TASK_CONTRIBUTOR_READ_ACTIONS,
     }
 )
 TASK_MANAGER_ACTIONS = frozenset({
     ActionId.PROJECT_TASK_CREATE, ActionId.PROJECT_TASK_SCREEN, ActionId.PROJECT_TASK_RELEASE,
 })
-TASK_ACTIONS = TASK_SUBMITTER_ACTIONS | TASK_MANAGER_ACTIONS | {
+TASK_ACTIONS = TASK_SUBMITTER_ACTIONS | TASK_MANAGER_ACTIONS | TASK_MANAGER_READ_ACTIONS | {
     ActionId.OPERATIONS_TASK_START_OVERRIDE,
-    ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
 }
 
 
@@ -81,6 +88,10 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
             ActionId.PROJECT_TASK_CREATE: "draft", ActionId.PROJECT_TASK_SCREEN: "draft",
             ActionId.PROJECT_TASK_RELEASE: "screening",
         }[action]
+    if action in TASK_DETAIL_READ_ACTIONS and any(value is not None for value in (
+        resource.idempotency_key, resource.replay_assignment_id, resource.request_digest, resource.replay_command_id,
+    )):
+        return False
     if resource.request_digest is not None or resource.replay_command_id is not None:
         return False
     own_assignment = (
@@ -126,9 +137,9 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
             and resource.assigned_to != resource.actor_profile_id
             and bool(resource.reason and resource.reason.strip())
         )
-    if action is ActionId.TASK_WORK_CONTEXT_READ:
+    if action in TASK_CONTRIBUTOR_READ_ACTIONS:
         return unassigned_ready or own_assignment
-    return action is ActionId.PROJECT_TASK_WORK_CONTEXT_READ
+    return action in TASK_MANAGER_READ_ACTIONS
 
 
 def evaluate_task_authority(action, context, authority, resource, lifecycle_denial):

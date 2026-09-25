@@ -1745,7 +1745,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
             idempotency_key=str(uuid4()),
         )
-        await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", project_reader_token)
+        manager_detail = await request_json(client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}", project_reader_token)
+        assert manager_detail["task_id"] == task["id"]
         screened = await request_json(
             client,
             "POST",
@@ -2081,6 +2082,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/tasks/{task['id']}/submission-requirements",
             worker_token,
         )
+        manager_requirements = await request_json(
+            client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements", project_reader_token,
+        )
+        assert manager_requirements == submission_requirements
         ensure(
             submission_requirements["required_artifacts"][0]["path"] == "answer.md",
             "submission requirements did not expose the locked artifact path",
@@ -2228,7 +2233,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "GET",
             f"/api/v1/tasks/{task['id']}",
             reviewer_token,
-            expected_status=403,
+            expected_status=404,
         )
 
     print("Public API drill passed through authorized task claim/start; hidden submission not exercised")

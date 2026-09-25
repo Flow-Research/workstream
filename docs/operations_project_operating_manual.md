@@ -211,18 +211,25 @@ pages may lose a task when someone claims it. Unauthorized and absent projects
 are concealed alike. Well-shaped invalid or forged cursors return 422 after
 authorization and do not commit a successful queue decision. Request-shape
 validation rejects cursors over 512 characters before endpoint authorization.
-ARCH-03B4 also supplies hidden contributor and manager detail facts; these are
-not new public endpoints. ARCH-03B6 supplies distinct management, operational and
+Contributors read task instructions at `GET /api/v1/tasks/{task_id}` and locked
+requirements at `GET /api/v1/tasks/{task_id}/submission-requirements`. They need
+an active same-project Submitter grant and ready unassigned work or their own
+active assignment. Managers use `GET /api/v1/projects/{project_id}/tasks/{task_id}`
+and its `/submission-requirements` route with a covering Manager grant.
+Detail responses use `task_id`; neither detail response exposes policy/payment
+bodies. Managers can inspect drafts, but requirements without locked policy
+context return 422. Token roles and creator attribution supply no product authority.
+ARCH-03B6 supplies distinct management, operational and
 audit locked-context projections through one historical resolver. Operational and
 audit methods remain internal. ARCH-03B7 supplies immutable contributor and manager
 requirements from the original locked effective policy. Its separate manager read
-is internal; the existing submission-requirements route retains its role/creator
-visibility wrapper pending ARCH-03C. ARCH-03B8 supplies bounded internal Audit
+and Contributor read are public through ARCH-03C5; both use the original locked
+policy even after a newer guide is activated. ARCH-03B8 supplies bounded internal Audit
 Authority task evidence. ARCH-03B9 supplies hidden exact-assignment invalidation,
 AUTH-OUTBOX-02 supplies shared delivery, and ARCH-03C1 supplies exact reconciler
 authority and decision-bound receipts. ARCH-03C2 delivers atomic producer
 publication and first handler registration with enforced prefork topology.
-Remaining task detail, requirements, locked-context and audit read authority
+Remaining locked-context and audit read authority
 stays separately bounded under ARCH-03C.
 
 The intended unified flow uses one compilation result for sufficiency and

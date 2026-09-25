@@ -227,51 +227,6 @@ class TaskService:
         self._session = session
         self._repo = TaskRepository(session)
 
-    async def get_task(self, actor: ActorContext, task_id: str) -> TaskResponse:
-        """Return one task visible to authorized workflow actors.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task id to load.
-
-        Returns:
-            Matching task response.
-
-        Raises:
-            PermissionDenied: If the actor cannot view tasks.
-            TaskNotFound: If the task id is unknown.
-        """
-        require_any_role(actor, TASK_VIEW_ROLES)
-        task = await self._get_task(task_id)
-        await self._ensure_task_visible(actor, task)
-        return self._task_response(actor, task)
-
-    async def get_task_submission_requirements(
-        self,
-        actor: ActorContext,
-        task_id: str,
-    ) -> ContributorTaskSubmissionRequirements:
-        """Return exact Contributor submission requirements for a locked task.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task whose locked requirements should be returned.
-
-        Returns:
-            Contributor-facing submission artifact requirements.
-
-        Raises:
-            PermissionDenied: If the actor cannot view tasks.
-            TaskNotFound: If the task is unknown or hidden.
-            TaskLockedContextInvalid: If locked context is incomplete or stale.
-        """
-        require_any_role(actor, TASK_VIEW_ROLES)
-        with self._session.no_autoflush:
-            task = await self._get_task(task_id, for_update=True)
-            await self._ensure_task_visible(actor, task)
-            context = await self._load_locked_task_context(task)
-            return self._contributor_submission_requirements_response(task, context)
-
     async def read_management_task_submission_requirements(
         self, project_id: UUID, task_id: UUID,
     ) -> ManagementTaskSubmissionRequirements:

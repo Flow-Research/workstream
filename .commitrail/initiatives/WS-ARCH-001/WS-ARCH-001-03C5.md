@@ -1,7 +1,7 @@
 # ARCH-03C5 — Exact-authorized task detail and submission requirements
 
 - Initiative: WS-ARCH-001
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: contributor and manager task detail and submission
   requirements use exact live project authority and canonical detached projections.
 - Risk class: L1 (authorization, public reads, immutable policy disclosure).
@@ -169,13 +169,13 @@ superseded service wrappers and tests solely asserting their old authority.
 
 ## Evidence
 
-These are planned tests, not execution claims:
+The implementation keeps the following proof boundaries:
 
 | Named proof | Boundary and negative control |
 |---|---|
 | `test_task_read_authority_matrix` | Four real HTTP routes; each authorized role, exact issued grant/action/project/digest; wrong tenant/role, Manager-only Contributor denial; substituted grant ID must fail |
 | `test_task_read_contributor_visibility` | Ready-unassigned and all nine persisted states with own active assignment; assignee/contributor mismatch, unrelated/released assignment and draft-unassigned controls; remove individual correlation predicates to prove discrimination |
-| `test_task_read_historical_requirements` | Real v1 `answer.md` locked task; activate distinct v2 `v2-answer.md`; both public audiences retain exact v1 requirements and stored locked identifiers/hashes |
+| `test_task_display_survives_guide_successor_for_contributor_and_manager` | Real v1 `answer.md` locked task; activate distinct v2 `v2-answer.md`; both public audiences retain exact v1 requirements and stored locked identifiers/hashes |
 | `test_task_read_lock_order_and_refresh` | Real independent sessions, TASK/assignment before AUTH; both read/revoke orderings and stale identity-map refresh; omitted/reordered lock probe |
 | `test_task_read_rollback` | Four reads, independently observe staged ALLOW; inject projection, historical-context (requirements), DTO validation/serialization, and audit-write failures; independent session finds no committed ALLOW |
 | `test_task_read_migration` | Upgrade baseline/0002→0003, unchanged prior evidence, all four exact allow/deny pairs, wrong pair rejection and guard-removal control |
@@ -185,3 +185,34 @@ Plan review identified the command/read guard distinction, precommit DTO proof,
 precise historical semantics, database-only constraint ownership and exact
 caller/schema changes. This record incorporates those corrections. Normal
 Commitrail headings are used; the lead runs its validator before implementation.
+
+
+## Implementation reconciliation
+
+The four routes now use the existing prepared TASK transaction and canonical
+projections. The two superseded TaskService read wrappers are removed. Shared
+visibility and response helpers remain required by the separately retained
+Submission, locked-context and audit consumers; no compatibility route or alias
+was added. Static queue routes precede the project task selector.
+
+Migration 0003 extends only the database audit action/permission constraint.
+Baseline and 0002 evidence remain intact. Short catalogue registrations follow
+the existing compact declaration layout; catalogue values, structural limits,
+coverage requirements and ownership gates are unchanged except for the four
+explicit registrations. No new behavioral target requires an ownership row.
+
+Focused PostgreSQL evidence covers signed HTTP role and exact-grant decisions,
+live grant/profile/link revocation, both read/revoke orderings, lock wait/refresh,
+projection/serialization/validation/audit rollback, historical requirements and
+migration preservation. Removing each of the three independent assignment
+correlations fails the pure guard test for both Contributor reads. Removing the
+TASK row lock fails the real PostgreSQL lock-wait regression. Substituting the
+observed persisted grant ID fails the exact equality assertion after a successful
+HTTP response. Hosted full-suite,
+coverage and public API drill evidence belong to the PR's exact-head checks;
+these local probes do not claim production deployment or external inference.
+
+The roadmap impact is the delivered public detail/requirements boundary and its
+remaining locked-context/audit dependency. Current entry pages and canonical
+TASK specification are reconciled together. No local spreadsheet exports are
+present. Leases, voluntary skip and public Submission cutover remain deferred.

@@ -356,34 +356,18 @@ def task_service_actor(*roles: str) -> ActorContext:
     )
 
 
-async def test_task_service_read_contexts_preserve_visibility_and_operator_scope() -> None:
+async def test_retained_locked_context_wrapper_preserves_operator_scope() -> None:
     actor = task_service_actor("project_manager")
-    session = MagicMock(spec=AsyncSession)
-    service = task_service(session, settings=get_settings())
+    service = task_service(MagicMock(spec=AsyncSession), settings=get_settings())
     task = MagicMock(spec=WorkstreamTask)
-    task.id = "task-1"
-    task.created_by = actor.actor_id
-    context = MagicMock(name="locked_context")
-    task_response = MagicMock(name="task_response")
-    requirements_response = MagicMock(name="requirements_response")
-    locked_response = MagicMock(name="locked_response")
+    task.id, task.created_by = "task-1", actor.actor_id
+    context, response = MagicMock(), MagicMock()
     service._get_task = AsyncMock(return_value=task)
-    service._ensure_task_visible = AsyncMock()
     service._load_locked_task_context = AsyncMock(return_value=context)
-    service._task_response = MagicMock(return_value=task_response)
-    service._contributor_submission_requirements_response = MagicMock(return_value=requirements_response)
-    service._management_locked_context_response = MagicMock(return_value=locked_response)
-
-    assert await service.get_task(actor, task.id) is task_response
-    assert await service.get_task_submission_requirements(actor, task.id) is requirements_response
-    assert await service.get_task_locked_context(actor, task.id) is locked_response
-
-    assert service._get_task.await_args_list == [
-        call(task.id), call(task.id, for_update=True), call(task.id, for_update=True),
-    ]
-    assert service._ensure_task_visible.await_count == 2
-    assert service._load_locked_task_context.await_count == 2
-    service._contributor_submission_requirements_response.assert_called_once_with(task, context)
+    service._management_locked_context_response = MagicMock(return_value=response)
+    assert await service.get_task_locked_context(actor, task.id) is response
+    service._get_task.assert_awaited_once_with(task.id, for_update=True)
+    service._load_locked_task_context.assert_awaited_once_with(task)
     service._management_locked_context_response.assert_called_once_with(task, context)
 
 
@@ -1497,11 +1481,11 @@ async def test_task_router_service_errors_use_canonical_request_context(
 
     cases = [
         ("create_task", "POST", f"/api/v1/projects/{new_record_id()}/tasks", complete_task_payload()),
-        ("get_task", "GET", "/api/v1/tasks/task-id", None),
+        ("contributor_detail", "GET", f"/api/v1/tasks/{new_record_id()}", None),
         (
-            "get_task_submission_requirements",
+            "contributor_requirements",
             "GET",
-            "/api/v1/tasks/task-id/submission-requirements",
+            f"/api/v1/tasks/{new_record_id()}/submission-requirements",
             None,
         ),
         ("get_task_locked_context", "GET", "/api/v1/tasks/task-id/locked-context", None),
@@ -1515,7 +1499,7 @@ async def test_task_router_service_errors_use_canonical_request_context(
 
     for service_method, method, path, payload in cases:
         owner = ("app.modules.tasks.authorized_commands.AuthorizedTaskCommands."
-                 if service_method in {"create_task", "screen", "release"}
+                 if service_method in {"create_task", "screen", "release", "contributor_detail", "contributor_requirements"}
                  else "app.modules.tasks.service.TaskService.")
         monkeypatch.setattr(owner + service_method, fail_with_service_error)
         response = await task_client.request(
@@ -1533,8 +1517,8 @@ async def test_task_router_service_errors_use_canonical_request_context(
     async def fail_with_permission_error(*_args, **_kwargs):
         raise PermissionDenied("bounded permission failure")
 
-    monkeypatch.setattr("app.modules.tasks.service.TaskService.get_task", fail_with_permission_error)
-    denied = await task_client.get("/api/v1/tasks/task-id", headers=auth_headers())
+    monkeypatch.setattr("app.modules.tasks.service.TaskService.get_task_locked_context", fail_with_permission_error)
+    denied = await task_client.get("/api/v1/tasks/task-id/locked-context", headers=auth_headers())
 
     assert denied.status_code == 403
     assert denied.json()["detail"] == "bounded permission failure"
@@ -1816,13 +1800,13 @@ async def test_worker_task_response_redacts_locked_policy_hashes(
     payload["external_task_id"] = "private-external-task"
     ready_task = await create_ready_task(task_client, project["id"], payload=payload)
     operator_response = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}",
+        f"/api/v1/projects/{project['id']}/tasks/{ready_task['id']}",
         headers=auth_headers(),
     )
 
     assert operator_response.status_code == 200, operator_response.text
 
-    await seed_task_test_actor("worker-one")
+    await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "worker-one")
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
 
     response = await task_client.get(
@@ -2003,7 +1987,7 @@ async def test_task_context_apis_fail_closed_when_locked_context_is_missing(
     task = await create_draft_task(task_client, project["id"])
 
     response = await task_client.get(
-        f"/api/v1/tasks/{task['id']}/submission-requirements",
+        f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements",
         headers=auth_headers(),
     )
 
@@ -2097,7 +2081,7 @@ async def test_submission_requirements_reject_detached_policy_not_matching_appro
     ready_task = await create_ready_task(task_client, project["id"])
     await corrupt_locked_policy_reads(monkeypatch, ready_task["id"], "schema")
     response = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/submission-requirements",
+        f"/api/v1/projects/{project['id']}/tasks/{ready_task['id']}/submission-requirements",
         headers=auth_headers(),
     )
 
