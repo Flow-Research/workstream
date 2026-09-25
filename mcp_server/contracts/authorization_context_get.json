@@ -523,7 +523,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "b26c7d198ae647d273ba231608d0e32d8f3afa4a",
+    "backend_git_sha": "0a1b2598572f840c57a19a0bb4a1b3663f183889",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"
