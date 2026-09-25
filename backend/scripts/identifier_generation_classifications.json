@@ -99,6 +99,7 @@
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|For:2361b5bcb156a6d3|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Expr:0e63b949fa0c5c9e|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_api_contract|Assign:b1380329c76a35f8|0": "uuid4:call:drill_namespace",
+    "scripts/api_contract_e2e.py|exercise_api_contract|Assign:c6a553aee9c04176|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_api_contract|Assign:103ecbb8264501ea|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_api_contract|Assign:26d4d5445595d20c|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_api_contract|Assign:7e1a035b5ddbb9b2|0": "uuid4:call:transport_token",

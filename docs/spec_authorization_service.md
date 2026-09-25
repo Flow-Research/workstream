@@ -1554,3 +1554,21 @@ profile/link locks before event/attempt locks. CON-02B owns committed claim/leas
 validation and outcome hashing. AUTH-OUTBOX-02 binds exact recomposed facts and
 stores immutable claim/invoke/finalize audit references with matching SQL guards.
 Historical replay retains its original references and consumes fresh live authority. A pre-invocation decision cannot authorize post-I/O finalization.
+
+
+### ARCH-03C5 task detail and requirements reads
+
+The closed actions `task.read` and `task.submission_requirements.read` use
+`task.queue.read` with an active exact-project Submitter grant. Their guard is
+ready/unassigned work or the exact own active assignment, matching work context.
+`project.task.read` and `project.task.submission_requirements.read` use
+`project.task.manage` with a covering project- or system-scoped Project Manager
+grant. They are read actions, separate from manager command receipt/state guards.
+No new permission or token-role fallback is introduced.
+
+TASK owns the transaction and locks task/assignment before AUTH actor/link and
+grant; historical policy locks follow for requirements. Exact PREP facts and
+matched-grant evidence precede projection; DTO validation/serialization precedes
+commit. Missing and unauthorized reads conceal consistently, without changing
+claim/start command errors. Database migration 0003 admits only these four exact
+action/permission pairs after the UUIDv7 baseline and queue migration.

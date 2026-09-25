@@ -8,7 +8,8 @@ the existing task-record and assignment foundation, including the bounded
 CP08 delivers exact contribution-policy lineage through task, assignment and
 hidden Submission creation. ARCH-03C2 delivers exact assignment-invalidation
 publication and registered delivery. ARCH-03C4 delivers the three public task
-queues with exact project authority. Public Submission cutover remains pending;
+queues with exact project authority. ARCH-03C5 delivers distinct Contributor and
+Manager task detail and requirements. Public Submission cutover remains pending;
 the [capability ledger](roadmap_status.md) identifies its owner.
 
 ## Records and ownership
@@ -38,6 +39,10 @@ Contributor commands and work context use canonical project authority:
 | `GET /api/v1/projects/{project_id}/tasks/ready` | Active same-project Submitter; active project; ready unassigned tasks |
 | `GET /api/v1/projects/{project_id}/tasks` | Covering project or system Project Manager; management projection |
 | `GET /api/v1/operations/projects/{project_id}/tasks` | System Operator; status-only operational projection |
+| `GET /api/v1/tasks/{task_id}` | Active same-project Submitter; ready unassigned task or exact own active assignment |
+| `GET /api/v1/tasks/{task_id}/submission-requirements` | Same exact Submitter authority; original locked policy requirements |
+| `GET /api/v1/projects/{project_id}/tasks/{task_id}` | Covered Project Manager; exact project/task; all task states |
+| `GET /api/v1/projects/{project_id}/tasks/{task_id}/submission-requirements` | Covered Project Manager; exact project/task and original locked policy |
 | `POST /api/v1/projects/{project_id}/tasks` | Covered Project Manager; existing project; guide not required for draft |
 | `POST /api/v1/tasks/{task_id}/screen` | Covered Project Manager; draft; approved active guide and complete policy lineage |
 | `POST /api/v1/tasks/{task_id}/release` | Covered Project Manager; screening; frozen policy validation and nonblank decision reason |
@@ -47,8 +52,7 @@ Contributor commands and work context use canonical project authority:
 | `GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context` | Covered Project Manager; exact route project and task |
 | `POST /api/v1/operations/tasks/{task_id}/start` | System Operator; another contributor's active assignment and nonblank reason |
 
-Task detail, submission-requirements, locked-context and audit reads retain their
-existing wrappers. Their broader
+Locked-context and audit reads retain their existing wrappers. Their broader
 replacement and projection contracts remain owned by ARCH-03B/03C; this bounded
 repair does not certify those routes as fully cut over.
 
@@ -194,7 +198,7 @@ the actor, matched grant and project in the canonical order, and commits its
 authorization evidence atomically with response construction. Each page records
 the exact grant used; pagination never supplies authority.
 
-## Hidden contributor and management task detail
+## Contributor and management task detail
 
 ARCH-03B4 adds separate `ContributorTaskDetailPort` and
 `ManagementTaskDetailPort` reads to TaskRepository. Each requires exact project
@@ -203,8 +207,8 @@ contributor UUID and returns unassigned READY work or exact own-active-assignmen
 work. Both task assignee and assignment contributor must match, with exact
 assignment task/project membership. Released history cannot confer access; it
 does not hide otherwise unassigned READY work. This is object visibility, not
-a permission decision; future public callers must establish current exact
-authority and must not trust a caller-supplied contributor identity.
+a permission decision. ARCH-03C5 establishes current exact authority before
+calling these owner reads and binds contributor identity from the request actor.
 
 Both immutable detail values contain title, description, type, difficulty, tags,
 estimate, status, acceptance/rejection criteria, deadline and timestamps, with
@@ -215,10 +219,10 @@ hashes, artifacts or retired payment fields. SQL filters project/task/visibility
 before returning a result; missing and invisible tasks both yield no result in
 one query. Reads do not flush, commit, roll back or lock the caller's work.
 
-These detail ports remain internal as standalone reads. ARCH-03B5 reuses them
-in existing authorized work-context responses below. The existing standalone
-detail endpoint and command response consumers still require their exact ARCH-03C
-authority/cutover; no parallel public route or compatibility alias is added.
+ARCH-03B5 reuses these ports in authorized work-context responses below.
+ARCH-03C5 also exposes their exact standalone Contributor and Manager reads,
+replacing the old broad detail wrapper. Command responses retain their existing
+contracts; no compatibility alias is added.
 ARCH-03B8 supplies the bounded internal audit evidence read described below.
 
 
@@ -254,8 +258,8 @@ missing or invalid locked custody returns the existing 422
 `task_locked_context_invalid`. Ordinary unassigned draft is not contributor work;
 a fully locked own-active draft remains visible under the existing authority rule.
 
-Standalone detail endpoints, retained audit-route authority replacement, and
-assignment invalidation retain their separately scoped work.
+Retained locked-context and audit-route authority replacement remain separately
+scoped. ARCH-03C2 already delivers authority-loss assignment invalidation.
 
 ## Task locked-context projections
 
@@ -308,12 +312,12 @@ Invalid selectors reject before SQL. Both methods preserve caller transactions
 without implicit flush, commit, rollback or nested transaction, and keep original
 requirements after a successor guide activates. They grant no authority.
 
-The existing `/tasks/{task_id}/submission-requirements` route uses the same
-contributor-safe constructor for its current callers, including managers. Its
-existing role/creator visibility wrapper remains an explicit ARCH-03C dependency;
-it loads and locks TASK once before visibility and historical policy resolution.
-The distinct manager model/read is internal and absent from OpenAPI. There is no
-new public route, generic audience selector, compatibility alias or new compiler.
+ARCH-03C5 exposes `/tasks/{task_id}/submission-requirements` only to exact
+Submitter authority, and `/projects/{project_id}/tasks/{task_id}/submission-requirements`
+to covering Manager authority. Both reuse the same safe historical requirement
+values, after locking TASK/assignment and consuming AUTH. The old role/creator
+wrapper is removed. There is no generic audience selector, compatibility alias
+or new compiler.
 
 ## Hidden task audit evidence
 
@@ -352,8 +356,8 @@ fixed-service AUTH/PREP implementation for the sole
 `task.assignment.authority_reconcile` action. ARCH-03C2 delivers atomic AUTH
 producer wiring and registers this sole production handler under enforced
 prefork delivery. ARCH-03C4 separately delivers the three public queues.
-Task-detail, requirements, locked-context and audit read authority remain
-separately bounded.
+ARCH-03C5 supplies detail and requirements authority; locked-context and audit
+read authority remain separately bounded.
 
 Each `TaskAssignmentAuthorityInvalidationRequested` event (protocol version 1)
 addresses one original project/task/assignment/contributor and one immutable AUTH
@@ -427,3 +431,26 @@ scalar fields, including the decision reference, without private payloads.
 
 A new command for an invalid task state is denied by AUTH with 403. A currently
 authorized replay whose task has advanced returns 409 instead of mutating it.
+
+
+### Exact detail and requirements authority
+
+ARCH-03C5 replaces the broad task-detail response with the existing detached
+`ContributorTaskDetail` and `ManagementTaskDetail` contracts. The identifier is
+`task_id`, with no `id` alias; Contributor fields exclude source and actor facts.
+The separate Manager route retains management work instructions and source
+attribution without treating a Manager as a Submitter. Manager draft detail is
+available; requirements fail with `task_locked_context_invalid` if the task has
+no complete locked policy context.
+
+Each read locks TASK and its active assignment before live AUTH actor/link and
+grant validation. Requirements then resolve historical PROJECTS policy custody.
+Current checker installation is not historical authority. Exact DTO validation
+and serialization occur before committing the authorization decision, which
+records the exact matched grant and a digest binding the locked TASK facts.
+Projection or response failure rolls back ALLOW evidence. A valid missing,
+foreign or denied selector has the same concealed 404; malformed UUID syntax
+returns 422. Nonhuman callers are rejected before TASK access. These reads do
+not authorize claim or submission, and no old role/creator wrapper remains for
+them. Shared helpers used by retained submission/locked-context/audit reads are
+not yet removed.

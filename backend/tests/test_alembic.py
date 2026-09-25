@@ -79,7 +79,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
-    assert [revision.revision for revision in revisions] == [HEAD_REVISION, BASELINE_REVISION]
+    assert [revision.revision for revision in revisions] == [HEAD_REVISION, "0002_task_queue_authority", BASELINE_REVISION]
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
@@ -538,6 +538,7 @@ def test_root_upgrade_refuses_nonempty_unstamped_schema_before_product_ddl(
 
 @pytest.mark.parametrize("revision,message", [
     (BASELINE_REVISION, "0001_uuid7_v01 cannot be downgraded; recreate the database"),
+    ("0002_task_queue_authority", "Workstream v0.1 migrations cannot be downgraded; recreate the database"),
     (HEAD_REVISION, "Workstream v0.1 migrations cannot be downgraded; recreate the database"),
 ])
 def test_downgrade_refuses_without_mutation(

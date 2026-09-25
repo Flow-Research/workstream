@@ -259,6 +259,11 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
             locked = (await getattr(service, method)(UUID(project["id"]), UUID(task["id"]))).model_dump(mode="json")
             assert locked == original_locked[method]
             assert locked["locked_contribution_policy_version_id"] == expected_policies["contribution_policy_version_id"]
+    manager_requirements = await task_client.get(
+        f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements", headers=auth_headers(),
+    )
+    assert manager_requirements.status_code == 200, manager_requirements.text
+    assert manager_requirements.json() == first_requirements.json()
     manager = await task_client.get(
         f"/api/v1/projects/{project['id']}/tasks/{task['id']}/work-context", headers=auth_headers(),
     )
@@ -268,6 +273,9 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
     )
     assert foreign.status_code == 404, foreign.text
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    contributor_requirements = await task_client.get(requirements_url, headers=auth_headers())
+    assert contributor_requirements.status_code == 200, contributor_requirements.text
+    assert contributor_requirements.json() == first_requirements.json()
     contributor = await task_client.get(url, headers=auth_headers())
     assert contributor.status_code == 200, contributor.text
     contributor_body, manager_body = contributor.json(), manager.json()

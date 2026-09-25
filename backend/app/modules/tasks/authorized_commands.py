@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from uuid import UUID
 from app.core.identifiers import new_record_id
 
+from pydantic import TypeAdapter
+
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +20,16 @@ from app.modules.tasks.api.authorization import (
     TaskAuthorityOperation,
     TaskAuthorizationPort,
 )
-from app.modules.tasks.api.task_detail import ContributorTaskDetailRequest, ManagementTaskDetailRequest
+from app.modules.tasks.api.task_detail import (
+    ContributorTaskDetail, ContributorTaskDetailRequest, ManagementTaskDetail, ManagementTaskDetailRequest,
+)
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage, TaskTransitionAuditPort, TaskTransitionFacts
 from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask
 from app.modules.tasks.command_replay import TaskCommandReplay
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import (
     ContributorTaskLifecycle, ContributorTaskWorkContext, ManagementTaskWorkContext,
+    ContributorTaskSubmissionRequirements, ManagementTaskSubmissionRequirements,
     AssignmentResponse,
     TaskCreate,
     TaskResponse,
@@ -99,8 +104,9 @@ class AuthorizedTaskCommands:
         request_digest: str | None = None,
     ) -> tuple[WorkstreamTask, TaskAssignment | None, TaskAuthorityDecision]:
         # Match submission creation: TASK/assignment locks precede AUTH locks.
-        task = await self._repo.get_task(str(task_id), for_update=True)
-        if task is None or (project_id is not None and task.project_id != str(project_id)):
+        task = (await self._repo.lock_project_task(project_id, task_id) if project_id is not None
+                else await self._repo.get_task(str(task_id), for_update=True))
+        if task is None:
             raise TaskNotFound("task not found")
         assignment = await self._repo.get_active_assignment(task.id, for_update=True)
         facts = self._facts(
@@ -308,6 +314,52 @@ class AuthorizedTaskCommands:
             response = self._contexts.task_response_for_authority(task, can_manage=False)
             self._replay.complete(receipt, assignment, facts, response)
             await self._session.flush()
+        return response
+
+    async def contributor_detail(self, task_id: UUID) -> ContributorTaskDetail:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.READ)
+
+    async def management_detail(self, project_id: UUID, task_id: UUID) -> ManagementTaskDetail:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.MANAGEMENT_READ, project_id)
+
+    async def contributor_requirements(self, task_id: UUID) -> ContributorTaskSubmissionRequirements:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.REQUIREMENTS)
+
+    async def management_requirements(self, project_id: UUID, task_id: UUID) -> ManagementTaskSubmissionRequirements:
+        return await self._read_task_projection(task_id, TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS, project_id)
+
+    async def _read_task_projection(self, task_id: UUID, operation: TaskAuthorityOperation, project_id: UUID | None = None):
+        """Consume exact authority and serialize detached facts before committing evidence."""
+        if not isinstance(task_id, UUID) or (
+            operation in {TaskAuthorityOperation.MANAGEMENT_READ, TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS}
+            and not isinstance(project_id, UUID)
+        ):
+            raise TaskValidationError("task read selectors are invalid")
+        response_type = {
+            TaskAuthorityOperation.READ: ContributorTaskDetail,
+            TaskAuthorityOperation.MANAGEMENT_READ: ManagementTaskDetail,
+            TaskAuthorityOperation.REQUIREMENTS: ContributorTaskSubmissionRequirements,
+            TaskAuthorityOperation.MANAGEMENT_REQUIREMENTS: ManagementTaskSubmissionRequirements,
+        }[operation]
+        async with self._session.begin():
+            task, _, _ = await self._locked_task(task_id, operation, project_id=project_id)
+            exact_project = UUID(task.project_id)
+            if operation is TaskAuthorityOperation.READ:
+                response = await self._repo.read_contributor_task_detail(
+                    ContributorTaskDetailRequest(exact_project, task_id, self._actor_id),
+                )
+            elif operation is TaskAuthorityOperation.MANAGEMENT_READ:
+                response = await self._repo.read_management_task_detail(ManagementTaskDetailRequest(exact_project, task_id))
+            else:
+                context = await self._contexts._load_locked_task_context(task)
+                if operation is TaskAuthorityOperation.REQUIREMENTS:
+                    response = self._contexts._contributor_submission_requirements_response(task, context)
+                else:
+                    response = ManagementTaskSubmissionRequirements(**self._contexts._submission_requirement_values(task, context))
+            if response is None:
+                raise TaskNotFound("task not found")
+            adapter = TypeAdapter(response_type)
+            response = adapter.validate_json(adapter.dump_json(response, warnings="error"))
         return response
 
     async def contributor_work_context(self, task_id: UUID) -> ContributorTaskWorkContext:

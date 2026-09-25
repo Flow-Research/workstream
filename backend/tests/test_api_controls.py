@@ -458,13 +458,21 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/operations/projects/{project_id}/tasks",
     }
     assert queue_routes <= set(protected_inventory)
-    assert len(route_inventory) == 80
-    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes)
-    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes)
+    task_read_routes = {
+        "GET /api/v1/tasks/{task_id}",
+        "GET /api/v1/tasks/{task_id}/submission-requirements",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/submission-requirements",
+    }
+    assert task_read_routes <= set(protected_inventory)
+    new_manager_reads = {route for route in task_read_routes if "/projects/" in route}
+    assert len(route_inventory) == 82
+    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
+    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "97ca137cb6ffe96cb58f81cbb1d786772b48ed8996d159473d3be04928a77eca"
     )
-    assert len(protected_inventory) == 78
+    assert len(protected_inventory) == 80
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "54b9a1fbb6c5cf1dffc47fa6c7b43da333baf22e733556eff4a6973a9b4dc7d4"
     )
@@ -492,6 +500,10 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        "GET /api/v1/tasks/{task_id}": "task.read",
+        "GET /api/v1/tasks/{task_id}/submission-requirements": "task.submission_requirements.read",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}": "project.task.read",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/submission-requirements": "project.task.submission_requirements.read",
         f"GET {post_policy_prefix}": "project.guide_compilation.review_package.read",
         f"POST {post_policy_prefix}/approval": "project.post_submit_checker_policy.approve",
         f"POST {post_policy_prefix}/corrections": "project.post_submit_checker_policy.correction.request",

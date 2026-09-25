@@ -293,7 +293,7 @@ def test_requirement_public_surface_and_removed_symbols():
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/ContributorTaskSubmissionRequirements",
     }
-    assert "ManagementTaskSubmissionRequirements" not in schema["components"]["schemas"]
+    assert set(schema["components"]["schemas"]["ManagementTaskSubmissionRequirements"]["properties"]) == FIELDS
     assert "SubmissionRequirementsResponse" not in schema["components"]["schemas"]
     assert not hasattr(schemas, "SubmissionRequirementsResponse")
     assert not hasattr(TaskService, "_submission_requirements_response")

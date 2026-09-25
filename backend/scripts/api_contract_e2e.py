@@ -1745,7 +1745,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
             idempotency_key=str(uuid4()),
         )
-        await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", project_reader_token)
+        manager_detail = await request_json(client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}", project_reader_token)
+        assert manager_detail["task_id"] == task["id"]
         screened = await request_json(
             client,
             "POST",
@@ -1992,6 +1993,20 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert renewed_submitter.status_code == 201, renewed_submitter.text
         assert renewed_submitter.json()["id"] != role_grant_id
         assert renewed_submitter.json()["status"] == "active"
+        other_contributor = await request_json(client, "GET", "/api/v1/actors/me", unassigned_worker_token)
+        await request_json(
+            client, "GET", f"/api/v1/tasks/{task['id']}", unassigned_worker_token,
+            expected_status=404,
+        )
+        other_submitter_grant = await client.post(
+            f"/api/v1/projects/{project['id']}/role-grants",
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
+            json=role_issue_body | {
+                "target_actor_profile_id": other_contributor["actor_profile_id"],
+                "reason": "Authorize a distinct contributor to inspect unassigned work",
+            },
+        )
+        assert other_submitter_grant.status_code == 201, other_submitter_grant.text
         # Public discovery uses three independent grant-backed projections.
         operator_token = issue_flow_token(
             f"real-api-queue-operator-{run_id}", [], issuer=flow_issuer,
@@ -2025,12 +2040,20 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 assert item["title"] == task["title"]
                 assert "source_ref" not in item and "assigned_to" not in item
             await request_json(client, "GET", queue_paths[kind], forbidden, expected_status=404)
+        manager_requirements = await request_json(
+            client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}/submission-requirements", project_reader_token,
+        )
         removed_project_manager = await client.post(
             f"/api/v1/admin-role-grants/{project_manager_grant.json()['resource_id']}/revoke",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Prove mutation replay reauthorizes current project authority"},
         )
         assert removed_project_manager.status_code == 200, removed_project_manager.text
+        for suffix in ("", "/submission-requirements"):
+            await request_json(
+                client, "GET", f"/api/v1/projects/{project['id']}/tasks/{task['id']}{suffix}",
+                project_reader_token, expected_status=404,
+            )
         concealed_replay = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}/revoke",
             headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_revoke_key},
@@ -2081,6 +2104,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/tasks/{task['id']}/submission-requirements",
             worker_token,
         )
+        assert manager_requirements == submission_requirements
         ensure(
             submission_requirements["required_artifacts"][0]["path"] == "answer.md",
             "submission requirements did not expose the locked artifact path",
@@ -2228,7 +2252,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "GET",
             f"/api/v1/tasks/{task['id']}",
             reviewer_token,
-            expected_status=403,
+            expected_status=404,
         )
 
     print("Public API drill passed through authorized task claim/start; hidden submission not exercised")

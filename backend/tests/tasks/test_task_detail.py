@@ -275,9 +275,9 @@ async def test_task_detail_nonlocking(task_client, method):
             assert detail.task_id == UUID(task["id"])
 
 
-def test_task_detail_ports_remain_hidden():
+def test_task_detail_ports_have_exact_public_audiences():
     schema = create_app().openapi()
-    assert "/api/v1/projects/{project_id}/tasks/{task_id}" not in schema["paths"]
+    assert "/api/v1/projects/{project_id}/tasks/{task_id}" in schema["paths"]
 
     def reference_paths(value, reference, path=()):
         if isinstance(value, dict):
@@ -291,7 +291,9 @@ def test_task_detail_ports_remain_hidden():
 
     for audience in ("Contributor", "Management"):
         reference = f"#/components/schemas/{audience}TaskDetail"
-        assert list(reference_paths(schema, reference)) == [
+        route = "/api/v1/tasks/{task_id}" if audience == "Contributor" else "/api/v1/projects/{project_id}/tasks/{task_id}"
+        assert set(reference_paths(schema, reference)) == {
             ("components", "schemas", f"{audience}TaskWorkContext", "properties", "task"),
-        ]
-    assert schema["paths"]["/api/v1/tasks/{task_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/TaskResponse")
+            ("paths", route, "get", "responses", "200", "content", "application/json", "schema"),
+        }
+    assert schema["paths"]["/api/v1/tasks/{task_id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/ContributorTaskDetail")

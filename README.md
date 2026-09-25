@@ -601,8 +601,8 @@ project-scoped ready queue facts with bounded live pagination; it exposes no
 queue endpoint or authority. ARCH-03B3 adds hidden all-state management queues
 with planning fields and operational queues with IDs/status/timestamps only.
 ARCH-03B4 adds hidden contributor and management task detail with fixed
-fields and project/assignment visibility. Existing public detail remains pending
-the exact AUTH cutover. ARCH-03B5 replaces the existing contributor/manager work-context
+fields and project/assignment visibility, now exposed through ARCH-03C5 exact
+Contributor and Manager authority. ARCH-03B5 replaces the existing contributor/manager work-context
 responses with distinct fixed task facts and exact historical policy identities,
 without obsolete payment fields or submission flags. ARCH-03B6 supplies distinct
 locked-context projections through the same historical resolver: management
@@ -611,7 +611,7 @@ exact policy references and remain internal. The retained management route's
 authority cutover remains ARCH-03C. ARCH-03B7 supplies immutable contributor and
 management requirements through one historical translator. Its hidden contributor
 read reuses exact assignment visibility after locking TASK; the retained requirements
-route keeps its current authority wrapper. ARCH-03B8 supplies bounded internal Audit Authority task evidence;
+route and separate Manager route use ARCH-03C5 live exact authority. ARCH-03B8 supplies bounded internal Audit Authority task evidence;
 ARCH-03B9 supplies hidden exact-assignment invalidation with committed cause
 verification and a same-transaction delivery fence. ARCH-03C1 supplies real
 fixed-service authority and exact decision receipts; ARCH-03C2 supplies atomic
@@ -619,8 +619,9 @@ AUTH event publication and production handler registration. ARCH-03C3 replaces
 the create/screen/release role-only path with exact Project Manager authority,
 atomic audit evidence and durable replay. ARCH-03C4 exposes separate contributor-ready,
 manager-planning and Operator-status queues with current scoped grants and signed
-pagination. Remaining task-detail, requirements, locked-context and audit read
-authority cutover remains pending. Canonical checker materialization follows in
+pagination. ARCH-03C5 exposes separate Contributor/Manager detail and requirements,
+removing their old role/creator wrappers. Locked-context and audit read authority
+cutover remains pending. Canonical checker materialization follows in
 ARCH-04B/04C.
 
 ## v0.1 Success Standard
