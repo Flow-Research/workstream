@@ -491,8 +491,9 @@ the remaining service-actor, profile/link and other AUTH families or the full
 suite audit. Remaining work includes those AUTH families and the TASK, CHECKER,
 ART, CON, REV, and tooling audit. The audit requires behavioral proof, not only
 file splitting or coverage percentages. Real PostgreSQL, concurrency, storage,
-and full hosted coverage checks remain required. Product implementation is
-already progressing alongside this audit with separate file ownership.
+and full hosted behavior/integration checks remain required. Product
+implementation is already progressing alongside this audit with separate file
+ownership.
 
 Commitrail's contribution-path and reviewer-routing improvements are delivered.
 They support this work; they do not complete a product capability or create a

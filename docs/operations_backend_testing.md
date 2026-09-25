@@ -128,7 +128,8 @@ It does not cache current source or reuse analysis across validation calls.
 The seven ordinary lanes use private, 2 GiB RAM-backed PostgreSQL data directories
 to reduce ephemeral reset I/O. A runtime guard verifies the mount, capacity,
 data directory and enabled `fsync`, `full_page_writes` and `synchronous_commit`
-before tests. Real SQL, transaction, lock, isolation and coverage checks remain.
+before tests. Real SQL, transaction, lock, isolation, and full hosted behavior
+checks remain.
 The schema-contract lane and aggregate job retain disk-backed databases.
 This is not a production configuration or proof of host-power-loss durability:
 [Docker tmpfs data disappears when the container stops](https://docs.docker.com/engine/storage/tmpfs/).

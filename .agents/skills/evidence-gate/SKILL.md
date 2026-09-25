@@ -10,7 +10,7 @@ Run deterministic proof checks before reviewer fanout.
 The lead runs shared checks once per clean candidate and supplies the exact
 target, command, exit status, producer, and artifact location. Reviewers inspect
 that evidence and run only discriminating probes their specialty still needs.
-Keep full backend/coverage runs in hosted CI; do not duplicate them locally.
+Keep full backend-suite runs in hosted CI; do not duplicate them locally.
 Unavailable hosted evidence remains pending, never an inferred pass.
 
 ## Check

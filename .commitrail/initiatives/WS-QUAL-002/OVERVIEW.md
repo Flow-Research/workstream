@@ -22,4 +22,4 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   merged; hosted mutation enforcement remains retired.
 - Populate ownership records by subsystem before enabling completeness or
   changed-line mutation checks. Backend semantic lanes remain authoritative;
-  [coverage percentages are diagnostic only](../../changes/behavior-proof-not-coverage.md).
+  [coverage is diagnostic only](../WS-QUAL-003/WS-QUAL-003-16.md).

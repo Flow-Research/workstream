@@ -148,9 +148,8 @@ class LightweightAgentGateTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("include-hidden-files: true", workflow)
-        self.assertIn("coverage report --precision=2 --fail-under=0", workflow)
-        self.assertNotIn("--fail-under=90", workflow)
-        self.assertNotIn("--fail-under=78", workflow)
+        self.assertIn("coverage report --precision=2", workflow)
+        self.assertNotIn("fail-under", workflow)
         self.assertNotIn("pull_request_review:", agent_gates)
         self.assertNotIn("--require-pr-approval", agent_gates)
         self.assertNotIn("pull-requests:", agent_gates)

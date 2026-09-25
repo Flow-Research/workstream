@@ -460,7 +460,7 @@ jobs:
 
       - name: Backend coverage diagnostics (no percentage gate)
         working-directory: backend
-        run: coverage report --precision=2 --fail-under=0
+        run: coverage report --precision=2
 
       - name: Record hosted timing, complete execution and diagnostic coverage
         working-directory: backend
