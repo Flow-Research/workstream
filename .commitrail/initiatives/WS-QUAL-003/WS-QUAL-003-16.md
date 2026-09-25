@@ -128,7 +128,7 @@ recorded here.
 
 | Claim | Proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Full backend collection | `uv run pytest --collect-only -q` | 7,845 tests collected; exit 0 | Collection is not execution; the count is not a target. |
+| Full backend collection | `uv run pytest --collect-only -q` (before the latest `main` merge) | 7,845 tests collected; exit 0 | Earlier local collection only; not bound to the current PR head and superseded by exact-head hosted execution. Collection is not execution; the count is not a target. |
 | Focused prepared-service checks | Prepared dependency rollback and consumed-handle tests | Four non-DB cases passed | Does not execute PostgreSQL. |
 | Structural debt and assertion custody | `uv run python -m scripts.test_structure_boundary validate --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json` | Pass; combined 67-assertion map validates | Semantic behavior and PostgreSQL execution remain hosted gates. |
 | Formatting, lint, markdown, stale wording, and diff | Ruff, repository link/stale scans, and `git diff --check` | Pass | None for static checks. |
