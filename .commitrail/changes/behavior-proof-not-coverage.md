@@ -4,20 +4,20 @@
 - Durable disposition: Complete
 - Intended merge outcome: percentage coverage no longer gates contributions; full behavior verification remains blocking, with redundant coverage-only execution removed.
 
-## Intent and current behavior
+## Intent
 
 The human explicitly retires mandatory test-coverage percentages. Thousands of
 passing tests and high coverage did not prevent defects found by real API drills.
 Tests must protect meaningful behavior rather than satisfy line-count quotas.
-The Backend workflow currently has global, subsystem and per-file floors plus
-four extra focused executions after the complete semantic lanes. MCP also has
-a percentage floor. AGENTS.md and CONTRIBUTING.md still require these floors.
+Before this change, the Backend workflow had global, subsystem and per-file
+floors plus four extra focused executions after the complete semantic lanes.
+MCP also had a percentage floor. AGENTS.md and CONTRIBUTING.md required them.
 
 ## Bounded change
 
 Allowed: Backend/MCP test workflows, their test runners and integrity tests,
 affected test-only redundant or retired-policy cases, AGENTS.md, CONTRIBUTING.md,
-PR guidance and current engineering/roadmap documentation. Audit existing test
+PR guidance, the affected review skills and current engineering/roadmap documentation. Audit existing test
 consumers before removing cases and record the retained behavioral proof below.
 Existing shared syntax/skip detection remains even if its old coverage-policy
 consumer is retired. Historical records are not rewritten.
@@ -60,7 +60,7 @@ No unreviewed repository-wide purge. Record candidates not yet safely removable.
 - Human review focus: retirement of coverage quotas is intentional; correctness,
   real integration checks and test completeness are not retired.
 
-## Verification and evidence
+## Evidence
 
 Run workflow integrity, lane catalogue and affected tooling tests locally;
 Markdown/stale scans and Commitrail checks; full hosted Backend and MCP workflows
