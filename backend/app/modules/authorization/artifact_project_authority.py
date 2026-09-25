@@ -43,6 +43,7 @@ async def lock_project_authority(repository, context, scope, action, locked_cont
             ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.PROJECT_MANAGER}),
             ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.OPERATOR}),
             ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.AUDIT_AUTHORITY}),
+            ActionId.AUDIT_TASK_EVIDENCE_READ: frozenset({AdminRole.AUDIT_AUTHORITY}),
         }.get(action.action_id),
     )
 

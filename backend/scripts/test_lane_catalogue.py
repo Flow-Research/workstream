@@ -120,6 +120,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/migrations/test_task_queue_authority.py",
     "tests/migrations/test_task_read_authority.py",
     "tests/migrations/test_task_context_authority.py",
+    "tests/migrations/test_task_evidence_authority.py",
     "tests/migrations/test_service_identity_schema.py",
     "tests/migrations/test_project_role_schema.py",
     "tests/test_mutation_policy.py",
@@ -373,6 +374,10 @@ TASK_MODULES = (
     "tests/authorization/task_locked_context/test_transactions.py",
     "tests/authorization/task_locked_context/test_visibility.py",
     "tests/authorization/task_locked_context/test_concurrency.py",
+    "tests/authorization/task_audit_evidence/test_contracts.py",
+    "tests/authorization/task_audit_evidence/test_authority.py",
+    "tests/authorization/task_audit_evidence/test_history.py",
+    "tests/authorization/task_audit_evidence/test_transactions_concurrency.py",
 
     "tests/authorization/task_queues/test_authority.py",
     "tests/authorization/task_queues/test_contracts.py",

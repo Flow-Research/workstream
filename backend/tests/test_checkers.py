@@ -76,6 +76,7 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, WorkstreamTask
 from tests.submission_fixtures import seed_finalized_submission_for_checker_test
 from tests.test_tasks import (
+    stored_task_audit_events,
     auth_headers,
     complete_guide_payload,
     complete_submission_payload,
@@ -2805,12 +2806,8 @@ async def test_locked_submission_checker_run_persists_results_and_allows_review(
         checker_run.locked_revision_policy_generation,
         checker_run.locked_revision_policy_hash,
     )
-    audit_response = await checker_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit_response.status_code == 200, audit_response.text
-    audit_events = {event["event_type"]: event for event in audit_response.json()}
+    audit_response = await stored_task_audit_events(started_task['id'])
+    audit_events = {event["event_type"]: event for event in audit_response}
     assert "pre_review_gate_started" in audit_events
     assert "pre_review_gate_passed" in audit_events
     assert audit_events["pre_review_gate_started"]["event_payload"]["trigger_source"] == (
@@ -3250,25 +3247,10 @@ async def test_checker_revision_routing_and_reads_for_retained_packet_versions(
     assert "routing_recommendation" not in worker_run.text
     assert "outcome_source" not in worker_run.text
     worker_audit = await checker_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
-    assert worker_audit.status_code == 200, worker_audit.text
-    worker_gate_events = [
-        event
-        for event in worker_audit.json()
-        if event["event_type"] == "post_submit_checks_processing"
-    ]
-    assert worker_gate_events
-    assert all(event["actor_id"] is None for event in worker_gate_events)
-    assert all(event["external_subject"] is None for event in worker_gate_events)
-    assert all(event["external_issuer"] is None for event in worker_gate_events)
-    assert all(event["actor_roles"] == [] for event in worker_gate_events)
-    assert all(event["auth_source"] is None for event in worker_gate_events)
-    assert all(event["is_dev_auth"] is None for event in worker_gate_events)
-    assert "pre_review_gate_needs_revision" not in worker_audit.text
-    assert "outcome_source" not in worker_audit.text
-    assert "review_decision_id" not in worker_audit.text
+    assert worker_audit.status_code == 404, worker_audit.text
 
     await seed_task_test_actor("worker-two")
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
@@ -3287,7 +3269,7 @@ async def test_checker_revision_routing_and_reads_for_retained_packet_versions(
         headers=auth_headers(),
     )
     denied_audit = await checker_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
     assert denied_submit.status_code == 405
@@ -3412,12 +3394,8 @@ async def test_retained_packet_setup_failure_stays_blocked_until_repaired(
         task = await session.get(WorkstreamTask, started_task["id"])
     assert task is not None
     assert task.status == "evaluation_pending"
-    manager_audit = await checker_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert manager_audit.status_code == 200, manager_audit.text
-    manager_events = {event["event_type"]: event for event in manager_audit.json()}
+    manager_audit = await stored_task_audit_events(started_task['id'])
+    manager_events = {event["event_type"]: event for event in manager_audit}
     assert "pre_review_gate_blocked" in manager_events
     assert manager_events["pre_review_gate_blocked"]["event_payload"]["routing_recommendation"] == (
         "task_setup_blocked"
@@ -3444,26 +3422,10 @@ async def test_retained_packet_setup_failure_stays_blocked_until_repaired(
     assert "acceptance_criteria" not in worker_read.text
 
     worker_audit = await checker_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
-    assert worker_audit.status_code == 200, worker_audit.text
-    assert "task_setup_blocked" not in worker_audit.text
-    assert "acceptance_criteria" not in worker_audit.text
-    assert "routing_recommendation" not in worker_audit.text
-    assert "checker_run_id" not in worker_audit.text
-    worker_gate_events = [
-        event
-        for event in worker_audit.json()
-        if event["event_type"] == "post_submit_checks_processing"
-    ]
-    assert worker_gate_events
-    assert all(event["actor_id"] is None for event in worker_gate_events)
-    assert all(event["external_subject"] is None for event in worker_gate_events)
-    assert all(event["external_issuer"] is None for event in worker_gate_events)
-    assert all(event["actor_roles"] == [] for event in worker_gate_events)
-    assert all(event["auth_source"] is None for event in worker_gate_events)
-    assert all(event["is_dev_auth"] is None for event in worker_gate_events)
+    assert worker_audit.status_code == 404, worker_audit.text
 
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])

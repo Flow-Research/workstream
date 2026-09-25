@@ -48,7 +48,6 @@ from app.modules.tasks.models import (
 from app.modules.tasks.api.task_detail import ContributorTaskDetailRequest
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import (
-    AuditEventResponse,
     ForbiddenArtifactRequirement,
     PostSubmitPolicyBodySummary,
     RequiredArtifactRequirement,
@@ -68,30 +67,6 @@ TASK_VIEW_ROLES = {"admin", "project_manager", "worker"}
 SUBMISSION_FINALIZE_ROLES = {"admin", "project_manager"}
 SUBMISSION_FINALIZED_EVENT_TYPE = "submission_finalized"
 PRE_REVIEW_GATE_DISPATCH_FAILED_EVENT_TYPE = "pre_review_gate_dispatch_failed"
-CONTRIBUTOR_VISIBLE_AUDIT_PAYLOAD_KEYS = {
-    "assignment_id",
-    "locked_guide_version",
-    "locked_review_policy_id",
-    "locked_review_policy_generation",
-    "locked_review_policy_hash",
-    "locked_revision_policy_id",
-    "locked_revision_policy_generation",
-    "locked_revision_policy_hash",
-    "locked_contribution_policy_version_id",
-    "source_type",
-    "submission_id",
-    "submission_version",
-    "supersedes_submission_id",
-    "contributor_id",
-}
-CONTRIBUTOR_REDACTED_AUDIT_EVENTS = {
-    "pre_review_gate_started",
-    "pre_review_gate_passed",
-    "pre_review_gate_needs_revision",
-    "pre_review_gate_blocked",
-    PRE_REVIEW_GATE_DISPATCH_FAILED_EVENT_TYPE,
-    "pre_review_gate_repair_requested",
-}
 SUBMISSION_CREATE_REQUIRED_PACKET_FIELDS = (
     "summary",
     "package_hash",
@@ -576,30 +551,6 @@ class TaskService:
     def _requester_provenance_payload(actor: ActorContext) -> dict[str, str]:
         """Build the minimal requester provenance safe to send through Celery."""
         return requester_provenance_payload(actor)
-
-    async def list_task_audit_events(
-        self,
-        actor: ActorContext,
-        task_id: str,
-    ) -> list[AuditEventResponse]:
-        """Return audit events for one task.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            task_id: Task whose audit trail should be loaded.
-
-        Returns:
-            Audit events ordered by creation time.
-        """
-        require_any_role(actor, TASK_VIEW_ROLES)
-        task = await self._get_task(task_id)
-        await self._ensure_task_visible(actor, task)
-        events = await self._repo.list_audit_events("task", task.id)
-        has_operator_access = can_admin_or_task_creator_manage(actor, task)
-        return [
-            self._audit_response(actor, event, has_operator_access=has_operator_access)
-            for event in events
-        ]
 
     async def _get_submission(self, submission_id: str) -> Submission:
         """Load a submission packet or raise a service error.
@@ -1351,45 +1302,6 @@ class TaskService:
                 evidence_item.uri = None
                 evidence_item.hash = None
                 evidence_item.metadata = {}
-        return response
-
-    def _audit_response(
-        self,
-        actor: ActorContext,
-        event: AuditEvent,
-        *,
-        has_operator_access: bool,
-    ) -> AuditEventResponse:
-        """Build a public audit response with claim snapshots redacted.
-
-        Args:
-            actor: Verified actor reading the audit event.
-            event: Persisted audit event.
-            has_operator_access: Whether the actor has scoped operator access
-                to the task that owns this audit event.
-
-        Returns:
-            Audit response safe for the current task audit endpoint.
-        """
-        response = AuditEventResponse.model_validate(event)
-        response.claim_snapshot = {}
-        if not has_operator_access:
-            response.event_payload = {
-                key: value
-                for key, value in response.event_payload.items()
-                if key in CONTRIBUTOR_VISIBLE_AUDIT_PAYLOAD_KEYS
-            }
-            if response.event_type in CONTRIBUTOR_REDACTED_AUDIT_EVENTS:
-                response.event_type = "post_submit_checks_processing"
-                response.from_status = None
-                response.to_status = None
-                response.actor_id = None
-                response.external_subject = None
-                response.external_issuer = None
-                response.actor_roles = []
-                response.auth_source = None
-                response.is_dev_auth = None
-                response.reason = None
         return response
 
     def _ensure_transition_allowed(self, from_status: str, to_status: str) -> None:

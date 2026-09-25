@@ -1,9 +1,9 @@
 # Chunk Contract: WS-ARCH-001-03C AUTH Task Readiness Activation
 
-Status: Planned for the remaining task-read rows. Completed
-03C1–03C5 supply fixed-service authority, producer/handler integration, public queues, manager
-commands and contributor/manager detail and requirements; their rows remain below for context. The remaining rows require a
-current-source contract before execution.
+Status: Complete through ARCH-03C7. Fixed-service invalidation, public task
+commands, queues, detail/requirements, locked context and bounded Audit Authority
+history use their exact owner contracts. Public guide activation and approved-guide
+intake integration remain separate.
 Risk: L1. Outcome: each remaining action becomes usable only through its owner
 public API and integrated readiness proof.
 
@@ -13,7 +13,7 @@ registration with enforced prefork topology; completed [03C3](../../WS-ARCH-001-
 manager create/screen/release; completed [03C4](../../WS-ARCH-001-03C4.md)
 public queues; completed [03C5](../../WS-ARCH-001-03C5.md) contributor/manager
 detail and submission requirements; 03C6 delivers distinct locked-context reads.
-03C7 retains bounded Audit Authority history access.
+[03C7](../../WS-ARCH-001-03C7.md) delivers bounded Audit Authority history access.
 03C1 does not publish or dispatch retained invalidations. Combining the first
 producer with handler registration keeps newly emitted events drainable.
 
@@ -31,8 +31,8 @@ owns the active `task.claim`, `task.start`, `task.work_context.read`,
 `project.task.work_context.read` and `operations.task.start_override` actions.
 Reuse those registrations and extend their exact locked-context proof with the
 CP08-delivered contribution-policy attempt lineage. 03C3 activates the three manager create/screen/release rows below. 03C4 activates the three queue rows. 03C5 activates the four contributor/manager
-detail and requirements rows. Locked-context registrations are delivered by 03C6; the remaining evidence row is proposed,
-not claims of usable actions. Invalidation publication and handler registration
+detail and requirements rows. Locked-context registrations are delivered by 03C6; the evidence row is delivered
+by 03C7. Invalidation publication and handler registration
 are delivered separately by 03C2.
 
 | Surface | Action | Permission / principal |
@@ -115,4 +115,4 @@ commands, migration head and reviewers.
 
 ## Merge state
 
-- Outcome on merge: `Planned`
+- Outcome on merge: `Complete`

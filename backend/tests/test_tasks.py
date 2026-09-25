@@ -1480,12 +1480,12 @@ async def test_task_router_service_errors_use_canonical_request_context(
         ("list_task_submissions", "GET", "/api/v1/tasks/task-id/submissions", None),
         ("get_submission", "GET", "/api/v1/submissions/submission-id", None),
         ("finalize_submission", "POST", "/api/v1/submissions/submission-id/finalize", None),
-        ("list_task_audit_events", "GET", "/api/v1/tasks/task-id/audit-events", None),
+        ("audit_evidence", "GET", f"/api/v1/audit/projects/{new_record_id()}/tasks/{new_record_id()}/evidence", None),
     ]
 
     for service_method, method, path, payload in cases:
         owner = ("app.modules.tasks.authorized_commands.AuthorizedTaskCommands."
-                 if service_method in {"create_task", "screen", "release", "contributor_detail", "contributor_requirements", "management_locked_context", "operational_locked_context", "audit_locked_context"}
+                 if service_method in {"create_task", "screen", "release", "contributor_detail", "contributor_requirements", "management_locked_context", "operational_locked_context", "audit_locked_context", "audit_evidence"}
                  else "app.modules.tasks.service.TaskService.")
         monkeypatch.setattr(owner + service_method, fail_with_service_error)
         response = await task_client.request(
@@ -2110,6 +2110,14 @@ async def test_release_requires_decision_reason(task_client: AsyncClient) -> Non
     assert "release decision reason" in response.json()["detail"]
 
 
+async def stored_task_audit_events(task_id: str) -> list[dict]:
+    """Inspect committed owner evidence for internal lifecycle/provenance assertions."""
+    from app.modules.tasks.repository import TaskRepository
+    async with db_session.get_session_factory()() as session:
+        rows = await TaskRepository(session).list_audit_events("task", task_id)
+        return [{column.name: getattr(row, column.name) for column in AuditEvent.__table__.columns} for row in rows]
+
+
 async def test_full_task_claim_start_flow_writes_audit_events(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -2139,12 +2147,8 @@ async def test_full_task_claim_start_flow_writes_audit_events(
     assert start.json()["status"] == "in_progress"
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    audit = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit.status_code == 200, audit.text
-    events = audit.json()
+    audit = await stored_task_audit_events(ready_task['id'])
+    events = audit
     assert [event["to_status"] for event in events] == [
         "draft",
         "screening",
@@ -2422,12 +2426,10 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
         headers=auth_headers(),
         json={"reason": "start"},
     )
-    # The retained audit read still uses its accepted token role. The detail
-    # read checks the exact grant and assignment independently of that role.
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
     read = await task_client.get(f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers())
     audit = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{ready_task['id']}/evidence",
         headers=auth_headers(),
     )
 
@@ -2438,7 +2440,7 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
 
 
 
-async def test_retained_packet_reads_preserve_locked_lineage_and_redact_audit(
+async def test_retained_packet_reads_preserve_locked_lineage_and_stored_audit(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2556,73 +2558,22 @@ async def test_retained_packet_reads_preserve_locked_lineage_and_redact_audit(
     ):
         assert internal_field not in task_body
 
-    audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit.status_code == 200, audit.text
-    audit_events = {event["event_type"]: event for event in audit.json()}
-    submission_event = audit_events["submission_created"]
-    assert submission_event["event_type"] == "submission_created"
-    assert submission_event["from_status"] == "in_progress"
-    assert submission_event["to_status"] == "submitted"
+    events = {event["event_type"]: event for event in await stored_task_audit_events(started_task["id"])}
+    submission_event = events["submission_created"]
+    assert (submission_event["from_status"], submission_event["to_status"]) == ("in_progress", "submitted")
     assert submission_event["event_payload"]["submission_id"] == submission["id"]
     assert submission_event["event_payload"]["submission_version"] == 1
-    assert "package_hash" not in submission_event["event_payload"]
-    assert "artifact_hash_manifest" not in submission_event["event_payload"]
-    assert "locked_guide_source_snapshot_id" not in submission_event["event_payload"]
-    assert "locked_guide_source_snapshot_hash" not in submission_event["event_payload"]
-    assert (
-        "locked_effective_project_submission_artifact_policy_hash"
-        not in (submission_event["event_payload"])
-    )
-    assert "locked_pre_submit_checker_bundle_hash" not in submission_event["event_payload"]
-    assert "locked_post_submit_checker_policy_hash" not in submission_event["event_payload"]
-
-    async with db_session.get_session_factory()() as session:
-        stored_submission_event = await session.scalar(
-            select(AuditEvent).where(
-                AuditEvent.entity_id == started_task["id"],
-                AuditEvent.event_type == "submission_created",
-            )
-        )
-    assert stored_submission_event is not None
-    assert (
-        stored_submission_event.event_payload["locked_post_submit_checker_policy_hash"]
-        == persisted_submission.locked_post_submit_checker_policy_hash
-    )
-    assert stored_submission_event.event_payload["package_hash"] == "sha256:package-v1"
+    assert submission_event["event_payload"]["locked_post_submit_checker_policy_hash"] == persisted_submission.locked_post_submit_checker_policy_hash
+    assert submission_event["event_payload"]["package_hash"] == "sha256:package-v1"
     assert "package_uri" not in submission_event["event_payload"]
-    finalized_event = audit_events["submission_finalized"]
-    assert finalized_event["actor_id"] == worker_actor_id
-    assert finalized_event["external_subject"] == "worker-one"
-    assert "finalized_at" not in finalized_event["event_payload"]
-    async with db_session.get_session_factory()() as session:
-        stored_finalized_event = await session.scalar(
-            select(AuditEvent).where(
-                AuditEvent.entity_id == started_task["id"],
-                AuditEvent.event_type == "submission_finalized",
-            )
-        )
-    assert stored_finalized_event is not None
-    assert (
-        stored_finalized_event.event_payload["finalized_at"].replace("+00:00", "Z")
-        == submission["finalized_at"]
-    )
-    assert "pre_review_gate_started" not in audit_events
-    assert "post_submit_checks_processing" in audit.text
-
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    manager_audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert manager_audit.status_code == 200, manager_audit.text
-    manager_audit_events = {event["event_type"]: event for event in manager_audit.json()}
-    gate_started_event = manager_audit_events["pre_review_gate_started"]
-    assert gate_started_event["actor_id"] == "workstream-system:pre-review-gate"
-    assert gate_started_event["event_payload"]["requester_actor_id"] == worker_actor_id
-    assert gate_started_event["event_payload"]["requester_external_subject"] == "worker-one"
+    finalized = events["submission_finalized"]
+    assert finalized["actor_id"] == worker_actor_id
+    assert finalized["external_subject"] == "worker-one"
+    assert finalized["event_payload"]["finalized_at"].replace("+00:00", "Z") == submission["finalized_at"]
+    gate = events["pre_review_gate_started"]
+    assert gate["actor_id"] == "workstream-system:pre-review-gate"
+    assert gate["event_payload"]["requester_actor_id"] == worker_actor_id
+    assert gate["event_payload"]["requester_external_subject"] == "worker-one"
 
 
 async def test_release_rejects_detached_effective_policy_not_matching_approval(
@@ -3039,11 +2990,7 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task
     await seed_finalized_submission_for_checker_test(
         started_task["id"], complete_submission_payload(),
     )
-    audit_before = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit_before.status_code == 200, audit_before.text
+    audit_before = await stored_task_audit_events(started_task["id"])
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     screen = await task_client.post(
@@ -3067,10 +3014,7 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task
         headers=auth_headers(),
         json={"reason": "try start"},
     )
-    audit_after = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
+    audit_after = await stored_task_audit_events(started_task["id"])
 
     assert screen.status_code == 403
     assert release.status_code == 403
@@ -3081,8 +3025,7 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task
     assert claim.json()["error"]["code"] == "permission_not_granted"
     assert start.status_code == 403, start.text
     assert start.json()["error"]["code"] == "permission_not_granted"
-    assert audit_after.status_code == 200, audit_after.text
-    assert len(audit_after.json()) == len(audit_before.json())
+    assert len(audit_after) == len(audit_before)
 
 
 async def test_cross_worker_cannot_list_submissions_or_audit_after_submit(
@@ -3102,7 +3045,7 @@ async def test_cross_worker_cannot_list_submissions_or_audit_after_submit(
         headers=auth_headers(),
     )
     audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
 
@@ -3320,7 +3263,7 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     )
     assert wrong_manager_finalize.status_code == 403
     wrong_manager_audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
     assert wrong_manager_audit.status_code == 404
@@ -3352,12 +3295,8 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     assert checker_run["triggered_by_subject"] == "workstream-system:pre-review-gate"
     assert checker_run["triggered_by_issuer"] == "workstream"
     assert checker_run["trigger_auth_source"] == "workstream_system"
-    audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert audit.status_code == 200, audit.text
-    audit_events = {event["event_type"]: event for event in audit.json()}
+    audit = await stored_task_audit_events(started_task['id'])
+    audit_events = {event["event_type"]: event for event in audit}
     finalized_event = audit_events["submission_finalized"]
     assert finalized_event["actor_id"] == await actor_id("worker-one")
     assert finalized_event["external_subject"] == "worker-one"
@@ -3381,13 +3320,10 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
 
     set_dev_actor(monkeypatch, roles="worker,project_manager", subject="worker-one")
     multi_role_worker_audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        f"/api/v1/audit/projects/{project['id']}/tasks/{started_task['id']}/evidence",
         headers=auth_headers(),
     )
-    assert multi_role_worker_audit.status_code == 200, multi_role_worker_audit.text
-    assert "pre_review_gate_passed" not in multi_role_worker_audit.text
-    assert "requester_actor_id" not in multi_role_worker_audit.text
-    assert "post_submit_checks_processing" in multi_role_worker_audit.text
+    assert multi_role_worker_audit.status_code == 404, multi_role_worker_audit.text
     multi_role_worker_locked_context = await task_client.get(
         f"/api/v1/projects/{project['id']}/tasks/{started_task['id']}/locked-context",
         headers=auth_headers(),
@@ -3407,12 +3343,8 @@ async def test_finalization_repair_is_authorized_attributed_and_idempotent(
     )
     assert repeated_checker_runs.status_code == 200, repeated_checker_runs.text
     assert len(repeated_checker_runs.json()) == 1
-    repeated_audit = await task_client.get(
-        f"/api/v1/tasks/{started_task['id']}/audit-events",
-        headers=auth_headers(),
-    )
-    assert repeated_audit.status_code == 200, repeated_audit.text
-    repeated_event_types = [event["event_type"] for event in repeated_audit.json()]
+    repeated_audit = await stored_task_audit_events(started_task['id'])
+    repeated_event_types = [event["event_type"] for event in repeated_audit]
     assert repeated_event_types.count("submission_finalized") == 1
     assert repeated_event_types.count("pre_review_gate_started") == 1
     assert repeated_event_types.count("pre_review_gate_passed") == 1

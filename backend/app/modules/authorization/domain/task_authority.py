@@ -31,6 +31,7 @@ TASK_MANAGER_ACTIONS = frozenset({
 })
 TASK_ACTIONS = TASK_SUBMITTER_ACTIONS | TASK_MANAGER_ACTIONS | TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {
     ActionId.OPERATIONS_TASK_START_OVERRIDE,
+    ActionId.AUDIT_TASK_EVIDENCE_READ,
 }
 
 
@@ -139,7 +140,7 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
         )
     if action in TASK_CONTRIBUTOR_READ_ACTIONS:
         return unassigned_ready or own_assignment
-    return action in TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS
+    return action in TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {ActionId.AUDIT_TASK_EVIDENCE_READ}
 
 
 def evaluate_task_authority(action, context, authority, resource, lifecycle_denial):
