@@ -46,7 +46,8 @@ bounded change, not a reason to expose an unusable activation POST first.
   proof references that name the obsolete hidden-route test; API drill may exercise this policy workflow without claiming
   full public activation. Retain existing CON behavior and binding proof.
 - README, canonical contribution specification, operating manual, roadmap and
-  current ARCH/AUTH/CON/POL navigation and authorization activation-custody prose; this record; local sheet exports only if present.
+  current ARCH/AUTH/CON/POL navigation, `docs/operations_authorization_service.md`
+  and authorization activation-custody prose; this record; local sheet exports only if present.
 
 ### Not allowed
 
@@ -301,3 +302,7 @@ atomic policy, AUTH-evidence and replay commit, and describes discovery as a dra
 selector, a published selector, or both. The roadmap already states this outcome
 and sequence, so this correction requires no additional roadmap edit. Runtime
 code, tests and authorization behavior are unchanged.
+
+The README and authorization operating manual also distinguish delivered CP08
+Task/Assignment/Submission lineage from the remaining public activation and
+approved-guide intake integration.

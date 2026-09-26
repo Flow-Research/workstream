@@ -595,7 +595,8 @@ AUTH-12H supplies explicit live authority for an active Project Manager scoped t
 that exact project. Shared prepared authorization locks current identity and grant
 before product resources, binds the complete activation digest and rechecks live
 authority on replay. Composition without an authority adapter still denies.
-Public activation wiring and downstream task/revision integration remain pending.
+Manager activation context and public guide activation remain pending;
+approved-guide intake and revision integration remain separate.
 
 ARCH-03A completes the existing internal PROJECTS context port. New work selects
 one active activated guide; existing work resolves its exact frozen guide and
