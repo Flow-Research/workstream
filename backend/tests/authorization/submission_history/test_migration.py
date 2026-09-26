@@ -57,9 +57,11 @@ def test_audit_migration_preserves_prior_evidence(isolated_database_env, migrati
             assert await conn.fetch("select to_jsonb(a)::text from audit_events a order by id") == snapshot
         finally:
             await conn.close()
+    cfg = config()
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[3] / "alembic"))
     with migration_lock():
         asyncio.run(reset())
-        command.upgrade(config(), "0005_task_evidence_authority")
+        command.upgrade(cfg, "0005_task_evidence_authority")
         before = asyncio.run(seed())
-        command.upgrade(config(), "head")
+        command.upgrade(cfg, "head")
         asyncio.run(probe(before))
