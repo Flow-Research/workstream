@@ -386,7 +386,8 @@ submission: foreign keys alone do not make ownership immutable. Extend the
 unmerged migration with parent-first table locking, exact run/result ownership
 constraints, immutable run identity/locked-input guards and append-only result
 guards. Refuse inconsistent retained rows without rewriting or deleting data.
-Run currentness and operational completion fields remain mutable; retained
+Run currentness may retire and audit binding may be filled once. Operational
+completion fields may change only before a terminal outcome; retained
 identity, predecessor, locked policies and artifact inputs do not. Protect deletion
 and truncation as well as updates. Match ORM constraints and schema fingerprints.
 
@@ -414,8 +415,42 @@ composite result and predecessor foreign keys. Run mutable fields are status,
 routing_recommendation, outcome_source, passed_count, warning_count,
 failed_count, blocking_count, started_at, completed_at, failure_code, failure_message;
 audit_event_id may be filled once and currentness may move only true to false.
-All remaining run fields are immutable, including trigger attribution, queued/created
-times, locked policies and artifact inputs. Results are insert-only. Deletion and
+Once status is completed/failed or completed_at is set, all outcome fields are
+immutable. All remaining run fields are immutable, including trigger attribution, queued/created
+times, locked policies and artifact inputs. Results may be inserted only while their exact owning run is queued/running
+with no completion timestamp; insertion locks that parent to serialize with
+completion. Results are thereafter immutable. Deletion and
 truncation fail independently of foreign keys. Migration locks audit_events then
 checker_runs then checker_results before preflight and DDL; already-immutable
 Submission custody is unchanged. The existing unmerged 0006 is extended.
+
+
+## Terminal outcome and nested-parent proof repair
+
+Extend the existing L1 custody repair within migration 0006, its schema fingerprint,
+shared retained-run fixture and the seven existing history test modules. Update
+current custody documentation where necessary; no new runtime executor, migration
+chain, fallback or AUTH-18 work. Preserve existing retained rows byte-for-byte.
+
+- Freeze status, routing, counts, execution timestamps and failure facts after
+  completed/failed status or a completion timestamp. Keep only the already-governed
+  one-way currentness retirement and initial audit binding available afterward.
+- Result insertion must lock the exact run/task/submission parent and reject a
+  finished parent. Preserve the composite ownership rejection for mismatched
+  parents. Test both insertion-first and completion-first interleavings in real
+  PostgreSQL; do not rely on an unlocked snapshot or FK key-share lock.
+- Seed new test evidence by creating an unfinished run, flushing results, then
+  completing it. This updates a shared fixture, not a replacement runtime writer;
+  inspect every shared fixture consumer and direct run/result insertion before edits.
+- Add separate terminal-field rejection/rollback and append rejection proofs,
+  positive unfinished-to-terminal controls, and clause-removal mutation probes.
+- Compare every public nested evidence/result value with the exact stored parent,
+  across contributor and manager list/detail routes. Include same-shaped foreign
+  submission/run rows and same-submission sibling runs, and prove wrong-parent
+  substitutions fail the test rather than merely counting rows or DTO fields.
+
+Security/architecture and QA/test-delta review assess terminal-state semantics,
+serialization, fixture dependencies and discriminating nested assertions before
+readiness. CI integrity checks the schema fingerprint and retained proof; docs
+review checks current custody wording. Human review focus: completed outcomes and
+nested evidence cannot be changed or attributed to another retained parent.

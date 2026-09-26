@@ -1611,9 +1611,10 @@ Types:
 
 Retained run identity, task/Submission ownership, predecessor, trigger attribution,
 locked policies and artifact inputs are immutable in PostgreSQL. The predecessor
-must belong to the same task and Submission. Operational completion fields may
-change; currentness can retire from true to false and the audit reference may be
-filled once. Run deletion and truncation are rejected. These storage guarantees
+must belong to the same task and Submission. Status, routing, counts, execution
+timestamps and failure facts cannot change after completed/failed status or a
+completion timestamp. Currentness can retire from true to false and the audit
+reference may be filled once, including after completion. Run deletion and truncation are rejected. These storage guarantees
 do not activate canonical post-submit execution or recovery.
 
 Fields:
@@ -1673,8 +1674,10 @@ Routing recommendation:
 
 ## CheckerResult
 
-Retained rows are insert-only. A composite foreign key binds the run, task and
-Submission together; updates, deletion and truncation are rejected.
+Results may be inserted only while their exact owning run is queued/running and
+has no completion timestamp. Insertion locks that parent to serialize with
+completion. A composite foreign key binds the run, task and Submission together;
+updates, deletion and truncation are rejected. Completed evidence cannot grow.
 
 Fields:
 

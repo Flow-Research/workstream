@@ -137,7 +137,7 @@ async def test_run_locked_inputs_cannot_change(task_client, monkeypatch, field, 
 
 
 async def test_completion_and_same_parent_successor_remain_valid(task_client, monkeypatch):
-    case = await history_case(task_client, monkeypatch)
+    case = await history_case(task_client, monkeypatch, run_status="running")
     async with db_session.get_session_factory()() as session, session.begin():
         old = await session.get(CheckerRun, case[3])
         old.is_current_for_submission = False
@@ -179,3 +179,107 @@ async def test_run_custody_cannot_be_reactivated_or_reassigned(task_client, monk
         assert rejected.value.orig.sqlstate == "23514"
         await session.rollback()
         assert getattr(await session.get(CheckerRun, case[3]), field) == first
+
+
+async def _finish_run(session, run_id, terminal):
+    from datetime import UTC, datetime
+    run = await session.get(CheckerRun, run_id)
+    run.status = terminal if terminal != "timestamp" else "running"
+    run.completed_at = datetime.now(UTC) if terminal == "timestamp" else None
+    await session.commit()
+
+
+def _result(case):
+    from app.modules.checkers.models import CheckerResult
+    return CheckerResult(
+        id=str(new_record_id()), checker_run_id=case[3], task_id=case[1], submission_id=case[2],
+        checker_name="check_evidence_present", status="passed", severity="info",
+        blocks_review=False, message="Retained result", worker_message="Evidence present",
+        worker_visible=True, worker_evidence_refs=[], metadata_json={},
+    )
+
+
+@pytest.mark.parametrize("terminal", ["completed", "failed", "timestamp"])
+async def test_terminal_outcome_fields_cannot_change(task_client, monkeypatch, terminal):
+    from datetime import UTC, datetime, timedelta
+    case = await history_case(task_client, monkeypatch, run_status="running")
+    async with db_session.get_session_factory()() as session:
+        await _finish_run(session, case[3], terminal)
+        before = await session.scalar(text("select to_jsonb(r) from checker_runs r where id=:id"), {"id": case[3]})
+        changes = dict(status="queued", routing_recommendation="needs_revision", outcome_source="none",
+                       passed_count=1, warning_count=1, failed_count=1, blocking_count=1,
+                       started_at=datetime.now(UTC) + timedelta(days=1),
+                       completed_at=None if terminal == "timestamp" else datetime.now(UTC),
+                       failure_code="changed", failure_message="Changed outcome")
+        for field, value in changes.items():
+            run = await session.get(CheckerRun, case[3])
+            assert getattr(run, field) != value, field
+            setattr(run, field, value)
+            with pytest.raises(IntegrityError, match="checker run outcome is immutable") as rejected:
+                await session.commit()
+            assert rejected.value.orig.sqlstate == "23514", field
+            await session.rollback()
+            assert await session.scalar(text("select to_jsonb(r) from checker_runs r where id=:id"), {"id": case[3]}) == before
+
+
+@pytest.mark.parametrize("state", ["queued", "running", "completed", "failed", "timestamp"])
+async def test_result_insertion_requires_unfinished_parent(task_client, monkeypatch, state):
+    from app.modules.checkers.models import CheckerResult
+    case = await history_case(task_client, monkeypatch, run_status="running")
+    async with db_session.get_session_factory()() as session:
+        await _finish_run(session, case[3], state)
+        session.add(_result(case))
+        if state in {"queued", "running"}:
+            await session.flush()
+            await _finish_run(session, case[3], "completed")
+            assert await session.scalar(select(CheckerResult.id).where(CheckerResult.checker_run_id == case[3]))
+        else:
+            with pytest.raises(IntegrityError, match="finished checker run cannot receive results") as rejected:
+                await session.commit()
+            assert rejected.value.orig.sqlstate == "23514"
+            await session.rollback()
+            assert list(await session.scalars(select(CheckerResult.id).where(CheckerResult.checker_run_id == case[3]))) == []
+        assert (await session.get(CheckerRun, case[3])).status == ("running" if state == "timestamp" else "completed" if state in {"queued", "running"} else state)
+
+
+@pytest.mark.parametrize("first", ["completion", "insertion"])
+async def test_result_insertion_serializes_with_completion(task_client, monkeypatch, first):
+    import asyncio
+    from app.modules.checkers.models import CheckerResult
+    case = await history_case(task_client, monkeypatch, run_status="running")
+    factory = db_session.get_session_factory()
+    async with factory() as holder, factory() as waiter, factory() as observer:
+        waiter_pid = await waiter.scalar(text("select pg_backend_pid()"))
+        async def complete(session):
+            await session.execute(text("update checker_runs set status='completed', completed_at=clock_timestamp() where id=:id"), {"id": case[3]})
+        async def append(session):
+            session.add(_result(case))
+            await session.flush()
+        holding, waiting = (complete, append) if first == "completion" else (append, complete)
+        await holding(holder)
+        async def contender():
+            await waiting(waiter)
+            await waiter.commit()
+        pending = asyncio.create_task(contender())
+        try:
+            async with asyncio.timeout(10):
+                while not await observer.scalar(text("select exists(select 1 from pg_locks where pid=:pid and not granted)"), {"pid": waiter_pid}):
+                    assert not pending.done(), "contender bypassed the parent's completion lock"
+                    await asyncio.sleep(0.01)
+            assert not pending.done()
+            await holder.commit()
+            if first == "completion":
+                with pytest.raises(IntegrityError, match="finished checker run cannot receive results"):
+                    await asyncio.wait_for(pending, 10)
+                await waiter.rollback()
+            else:
+                await asyncio.wait_for(pending, 10)
+        finally:
+            await holder.rollback()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+        run = await observer.get(CheckerRun, case[3])
+        assert run.status == "completed" and run.completed_at is not None
+        results = list(await observer.scalars(select(CheckerResult).where(CheckerResult.checker_run_id == case[3])))
+        assert len(results) == (1 if first == "insertion" else 0)

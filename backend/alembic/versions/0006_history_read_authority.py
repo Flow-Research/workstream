@@ -89,17 +89,36 @@ def _checker_custody():
              OR (NOT OLD.is_current_for_submission AND NEW.is_current_for_submission) THEN
             RAISE EXCEPTION 'checker run custody is immutable' USING ERRCODE='23514';
           END IF;
+          IF (OLD.status IN ('completed','failed') OR OLD.completed_at IS NOT NULL)
+             AND (to_jsonb(NEW) - ARRAY['audit_event_id','is_current_for_submission'])
+                 IS DISTINCT FROM
+                 (to_jsonb(OLD) - ARRAY['audit_event_id','is_current_for_submission']) THEN
+            RAISE EXCEPTION 'checker run outcome is immutable' USING ERRCODE='23514';
+          END IF;
           RETURN NEW;
         END $$
     """)
     op.execute("""
         CREATE FUNCTION protect_checker_result_custody() RETURNS trigger LANGUAGE plpgsql AS $$
+        DECLARE parent_status text; parent_completed_at timestamptz;
         BEGIN
+          IF TG_OP = 'INSERT' THEN
+            SELECT status, completed_at INTO parent_status, parent_completed_at
+            FROM checker_runs
+            WHERE id=NEW.checker_run_id AND task_id=NEW.task_id AND submission_id=NEW.submission_id
+            FOR UPDATE;
+            -- Missing/mismatched ownership remains the composite foreign key's error.
+            IF FOUND AND (parent_status NOT IN ('queued','running') OR parent_completed_at IS NOT NULL) THEN
+              RAISE EXCEPTION 'finished checker run cannot receive results' USING ERRCODE='23514';
+            END IF;
+            RETURN NEW;
+          END IF;
           RAISE EXCEPTION 'checker result custody is immutable' USING ERRCODE='23514';
         END $$
     """)
     for table, owner in (("checker_runs", "run"), ("checker_results", "result")):
-        op.execute(f"CREATE TRIGGER checker_{owner}_custody BEFORE UPDATE OR DELETE ON {table} "
+        events = "INSERT OR UPDATE OR DELETE" if owner == "result" else "UPDATE OR DELETE"
+        op.execute(f"CREATE TRIGGER checker_{owner}_custody BEFORE {events} ON {table} "
                    f"FOR EACH ROW EXECUTE FUNCTION protect_checker_{owner}_custody()")
         op.execute(f"CREATE TRIGGER checker_{owner}_no_truncate BEFORE TRUNCATE ON {table} "
                    f"FOR EACH STATEMENT EXECUTE FUNCTION protect_checker_{owner}_custody()")

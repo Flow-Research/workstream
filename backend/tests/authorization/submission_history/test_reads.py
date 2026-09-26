@@ -17,11 +17,11 @@ from tests.test_tasks import (
 )
 
 
-async def history_case(client, monkeypatch):
+async def history_case(client, monkeypatch, *, run_status="completed"):
     project = await create_active_project(client)
     task = await create_started_task(client, project["id"], monkeypatch)
     submission = await seed_retained_submission(task["id"], complete_submission_payload())
-    run = await seed_retained_checker_run(submission)
+    run = await seed_retained_checker_run(submission, status=run_status)
     return project["id"], task["id"], submission, run
 
 

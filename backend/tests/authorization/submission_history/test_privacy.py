@@ -113,3 +113,76 @@ async def test_denied_read_never_loads_private_rows(task_client, monkeypatch):
         assert len(events) == 4
         assert all(event.after_facts["allowed"] is False for event in events)
         assert await session.get(Submission, case[2]) is not None
+
+
+@pytest.mark.parametrize("manager", [False, True])
+async def test_nested_values_match_exact_stored_parents(task_client, monkeypatch, manager):
+    from app.core.identifiers import new_record_id
+    from app.modules.tasks.models import EvidenceItem
+    from app.modules.checkers.models import CheckerRun, CheckerResult
+
+    project = await create_active_project(task_client)
+    task = await create_started_task(task_client, project["id"], monkeypatch)
+    submission = await seed_retained_submission(task["id"], complete_submission_payload())
+    run = await seed_retained_checker_run(submission, results=({"worker_message": "Original visible"},
+        {"worker_visible": False, "message": "Original management only"}))
+    foreign_task = await create_started_task(task_client, project["id"], monkeypatch, subject="foreign-nested-owner")
+    foreign_payload = complete_submission_payload()
+    for item in foreign_payload["evidence_items"]:
+        item["label"] = "Foreign " + item["label"]
+    foreign_submission = await seed_retained_submission(foreign_task["id"], foreign_payload)
+    foreign_run = await seed_retained_checker_run(foreign_submission, results=(
+        {"worker_message": "Foreign visible"}, {"worker_visible": False, "message": "Foreign management only"}))
+    async with db_session.get_session_factory()() as session, session.begin():
+        original = await session.get(CheckerRun, run)
+        values = {column.name: getattr(original, column.name) for column in CheckerRun.__table__.columns}
+        sibling_id = str(new_record_id())
+        values.update(id=sibling_id, attempt_number=2, is_current_for_submission=False,
+                      supersedes_checker_run_id=run, status="running", completed_at=None)
+        sibling = CheckerRun(**values)
+        session.add(sibling)
+        await session.flush()
+        original_results = list(await session.scalars(select(CheckerResult).where(CheckerResult.checker_run_id == run)))
+        for result in original_results:
+            values = {column.key: getattr(result, column.key if column.key != "metadata" else "metadata_json")
+                      for column in CheckerResult.__table__.columns}
+            values["metadata_json"] = values.pop("metadata")
+            values.update(id=str(new_record_id()), checker_run_id=sibling_id,
+                          worker_message="Sibling visible", message="Sibling management")
+            session.add(CheckerResult(**values))
+        await session.flush()
+        sibling.status, sibling.completed_at = "completed", original.completed_at
+    async with db_session.get_session_factory()() as session:
+        evidence = list(await session.scalars(select(EvidenceItem).order_by(EvidenceItem.id)))
+        results = list(await session.scalars(select(CheckerResult).order_by(CheckerResult.id)))
+        assert {str(row.submission_id) for row in evidence} == {submission, foreign_submission}
+        assert {str(row.checker_run_id) for row in results} == {run, sibling_id, foreign_run}
+        expected_evidence = [{field: str(getattr(row, field)) if field == "id" else getattr(row, field)
+                              for field in EVIDENCE_FIELDS}
+                             for row in evidence if str(row.submission_id) == submission]
+        result_fields = MANAGER_RESULT_FIELDS if manager else RESULT_FIELDS
+        expected_results = {
+            run_id: [{field: str(getattr(row, field)) if field == "id" else getattr(row, field)
+                      for field in result_fields}
+                     for row in results if str(row.checker_run_id) == run_id and (manager or row.worker_visible)]
+            for run_id in (run, sibling_id)
+        }
+        assert expected_evidence and all(expected_results.values())
+        assert expected_results[run] != expected_results[sibling_id]
+        for row in results:
+            if str(row.checker_run_id) in expected_results:
+                assert str(row.submission_id) == submission and str(row.task_id) == task["id"]
+    set_dev_actor(monkeypatch, roles="", subject="project-manager-subject" if manager else "worker-one")
+    for action, path in history_paths(project["id"], task["id"], submission, run, manager=manager).items():
+        response = await task_client.get(path, headers=auth_headers())
+        assert response.status_code == 200, response.text
+        items = response.json()["items"] if action.endswith("list") else [response.json()]
+        checker = "checker" in action
+        expected_ids = {run, sibling_id} if action == "submission.checker_run.list" else {run} if checker else {submission}
+        assert {item["id"] for item in items} == expected_ids
+        for item in items:
+            if checker:
+                assert item["submission_id"] == submission and item["task_id"] == task["id"]
+                assert item["results"] == expected_results[item["id"]]
+            else:
+                assert item["evidence_items"] == expected_evidence

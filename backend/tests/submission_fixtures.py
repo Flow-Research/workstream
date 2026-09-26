@@ -73,7 +73,7 @@ async def seed_retained_submission(
     return submission_id
 
 
-async def seed_retained_checker_run(submission_id: str, *, routing="allow_review", results=()) -> str:
+async def seed_retained_checker_run(submission_id: str, *, routing="allow_review", results=(), status="completed") -> str:
     """Seed retained CHECKERS evidence under real foreign keys and immutable guards.
 
     This is a storage prerequisite, not a claim that runtime evaluation executed.
@@ -89,7 +89,7 @@ async def seed_retained_checker_run(submission_id: str, *, routing="allow_review
         run = CheckerRun(
             id=run_id, task_id=submission.task_id, submission_id=submission.id,
             submission_version=submission.version, trigger_source="retained_evidence",
-            status="completed", routing_recommendation=routing, outcome_source="auto_checker",
+            status="running", routing_recommendation=routing, outcome_source="auto_checker",
             triggered_by=submission.contributor_id, triggered_by_subject="retained-subject",
             triggered_by_issuer="retained-issuer", trigger_auth_source="flow",
             attempt_number=1, is_current_for_submission=True,
@@ -98,7 +98,7 @@ async def seed_retained_checker_run(submission_id: str, *, routing="allow_review
             package_hash=submission.package_hash,
             artifact_hash_manifest=submission.artifact_hash_manifest,
             artifact_manifest_hash=canonical_artifact_manifest_hash(submission.artifact_hash_manifest),
-            created_at=now, queued_at=now, started_at=now, completed_at=now,
+            created_at=now, queued_at=now, started_at=now, completed_at=None,
             results=[CheckerResult(**dict(dict(
                 id=str(new_record_id()), checker_run_id=run_id, task_id=submission.task_id,
                 submission_id=submission.id, checker_name="check_evidence_present",
@@ -108,5 +108,8 @@ async def seed_retained_checker_run(submission_id: str, *, routing="allow_review
             ), **item)) for item in results],
         )
         session.add(run)
+        await session.flush()  # Result insertion occurs before the terminal outcome.
+        run.status = status
+        run.completed_at = now if status in {"completed", "failed"} else None
         await session.commit()
     return run_id
