@@ -86,11 +86,40 @@ machine assertion map supplements it and does not replace it:
 | Injected AUTH decision, invalidation and idempotency-completion failures fully roll back and allow retry | Prior failure slice | `tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry` in PR #446 | Already owned by PR #446 / PostgreSQL transaction |
 | Current admin authority is serialized against revocation in both orders | Prior failure/race slice | `tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning` in PR #446 | Already owned by PR #446 / PostgreSQL waiter/blocker |
 
-The old loops to reconcile explicitly are the nonhuman-kind loop, the service
-`/actors/me` self-denial loop, same-key identical race, same-key drift race,
-fixed-identity race, shared-subject race, sensitive-value collection and final
-stored-profile/event/audit checks. Each old assertion maps once to one of these
-exact survivors or to the named PR #446 node.
+The old loop/comprehension inventory is source-exact (line numbers refer to
+the baseline node at `7ff306f`):
+
+| Baseline lines | Old loop/comprehension | Disposition |
+|---|---|---|
+| 416, 670 | Build and exercise agent/space credentials | `test_only_authorized_human_can_provision_service_actor`; privacy requests also inspect their tokens |
+| 720 | Iterate service self-profile path | `test_provisioned_service_cannot_read_human_self_profile` |
+| 734 | Collect same-key race status codes | `test_same_key_concurrent_identical_requests_replay_one_result` |
+| 748, 750 | Collect same-key drift outcomes and select mismatch | `test_same_key_concurrent_payload_drift_is_rejected` |
+| 766, 768 | Collect fixed-identity race outcome and select conflict | PR #446's `test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization` |
+| 795, 797 | Collect shared-subject race outcome and select conflict | `test_distinct_identities_cannot_claim_same_subject` |
+| 917, 923, 935–936 | Build the private-value set, including nonhuman token subjects/IDs | `test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit` |
+| 955–956 | Check private values against every captured response and application log | Same privacy test |
+| 995, 1007 | Build service-profile ID lists for grant-absence queries | `test_service_provisioning_persists_only_scoped_audit_and_no_grants` |
+| 1014, 1019–1020, 1022, 1024 | Check every service lifecycle, event and audit row | Same persisted-audit test; response/log/audit secrecy remains in the privacy test |
+
+The old `run_reservation_race` barrier only synchronized Python callers; it did
+not observe database lock custody. It is replaced by the shared owner-lock
+observer and its hosted PostgreSQL negative control. The same-key fixed-identity
+race is not recreated because PR #446 owns its exact control-row proof. Every
+old assertion still has exactly one machine-checked disposition in the
+assertion map; this table separately accounts for iterable behavior that the
+assertion mapper does not model.
+
+### Structural-scope finding
+
+While validating the new files, the structural validator omitted the
+`authorization/service_actors` owner directory from its unconditional scope.
+Several focused modules did not directly import the authorization package, so
+they could otherwise evade test-size and skip/xfail checks despite residing in
+the AUTH owner. The bounded repair adds that exact directory to the existing
+scope and a regression proving nested service-actor tests are included. This
+does not broaden production scope, lane selection, CI policy or test execution;
+it makes the existing AUTH structural policy inspect its own test package.
 
 ### Alternatives considered
 
@@ -165,6 +194,11 @@ None. This is a test-evidence refactor with unchanged product semantics.
   `backend/tests/authorization/admin_access/fixtures.py`; this exposes the app
   already created by the signed fixture without private transport access or a
   second bootstrap path.
+- Add `backend/tests/authorization/service_actors/` to the structural
+  validator's unconditional owner scope and cover that boundary in
+  `backend/tests/architecture/test_test_structure_boundary.py`. This fixes the
+  discovered scanner gap required to enforce the existing limits on these
+  tests.
 - Remove only imports made unused by deleting the selected function from
   `backend/tests/test_auth.py`.
 - Register every added test module in the existing shared-foundations lane and
@@ -177,7 +211,9 @@ None. This is a test-evidence refactor with unchanged product semantics.
 
 ### Not allowed
 
-- No production/API/schema/migration/workflow or CI-policy edits.
+- No production/API/schema/migration/runtime workflow, lane selection,
+  thresholds or CI-policy edits; the explicitly allowed test-structure scanner
+  scope above is the only enforcement-tool change.
 - No edits to unrelated test families, product documentation, roadmap, or
   initiative index.
 - No shared-fixture changes beyond carrying the existing app reference through
@@ -186,31 +222,35 @@ None. This is a test-evidence refactor with unchanged product semantics.
 
 ## Acceptance criteria
 
-- [ ] Old test assertion and materially distinct loop inventory is complete;
+- [x] Old test assertion and materially distinct loop inventory is complete;
   each item maps once to a final node or justified redundancy.
-- [ ] Successful provisioning asserts exact response contract and persisted
+- [x] Successful provisioning asserts exact response contract and persisted
   configured issuer, opaque subject, service actor profile, creator, active
   lifecycle, and no service self-access.
-- [ ] Exact same-key replay returns the original result; mismatch and fixed
+- [x] Exact same-key replay returns the original result; mismatch and fixed
   identity/subject conflicts remain distinct and leave no unintended state.
-- [ ] Human/admin, ordinary, service, agent and space authority boundaries and
+- [x] Human/admin, ordinary, service, agent and space authority boundaries and
   validation/privacy outcomes retain their distinguishing expected responses.
-- [ ] `PROJECT_SETUP` provisioning and canonical-issuer-unavailable failure
+- [x] `PROJECT_SETUP` provisioning and canonical-issuer-unavailable failure
   retain exact separate proof.
-- [ ] Success-event and generic commit failures retain rollback/retry proof
+- [x] Success-event and generic commit failures retain rollback/retry proof
   without duplicating PR #446's AUTH evidence-write failures.
-- [ ] Success evidence is private as intended; idempotency is completed, no
+- [x] Success evidence is private as intended; idempotency is completed, no
   pending reservations remain, and service actors receive no admin/project
   grants.
 - [ ] Same-key races observe the exact PostgreSQL reservation waiter and
   blocker; a negative control that bypasses reservation contention makes the
   observer fail. Shared-subject contention observes the AUTH control-row
   waiter; fixed-identity contention maps to PR #446.
-- [ ] No new structural debt; all new modules/tests/helpers meet policy limits.
-- [ ] Every moved module has one existing shared-foundations lane owner;
-  exact-head hosted Backend and applicable CI pass with no skipped/deselected
-  tests.
-- [ ] Roadmap remains unchanged because delivered capability and API exposure
+- [x] No new structural debt; all new modules/tests/helpers meet policy limits.
+- [x] The test-structure validator unconditionally scopes the service-actor
+  owner directory, and its regression proves a nested file cannot evade size or
+  skip/xfail detection.
+- [x] Every moved module has one existing shared-foundations lane owner; the
+  catalogue test passes and the focused package collects 30 nodes with no
+  skips/deselections. Exact-head hosted Backend and applicable CI remain
+  required before ready-for-merge.
+- [x] Roadmap remains unchanged because delivered capability and API exposure
   are unchanged; verify again after main reconciliation.
 
 ## Risk, reviewers, and human focus

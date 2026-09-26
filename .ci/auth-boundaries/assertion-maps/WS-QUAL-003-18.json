@@ -1,0 +1,3731 @@
+{
+  "chunk_id": "WS-QUAL-003-18",
+  "mappings": [
+    {
+      "invariant_category": "Signed human setup is available through the existing admin fixture.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:524:524:40baaa4bf61dec6e4c7d4e03e0f8afcb8c767bc69cd5da84a45858a100578301",
+      "old_content_sha256": "40baaa4bf61dec6e4c7d4e03e0f8afcb8c767bc69cd5da84a45858a100578301",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        524,
+        524
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Signed human setup is available through the existing admin fixture.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:526:526:b10a9d46e70a998aefe4616096d50acd1ab66720725b47be7ad7a1fe45f1a696",
+      "old_content_sha256": "b10a9d46e70a998aefe4616096d50acd1ab66720725b47be7ad7a1fe45f1a696",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        526,
+        526
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "An unprovisioned service principal cannot self-authorize or create a profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_unprovisioned_service_cannot_provision_itself",
+      "old_assertion_id": "assertion:540:540:e9fc4cc7c2db40339fed0430461ee46ab39155275150cfb3b4839a3218a07b51",
+      "old_content_sha256": "e9fc4cc7c2db40339fed0430461ee46ab39155275150cfb3b4839a3218a07b51",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        540,
+        540
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "An unprovisioned service principal cannot self-authorize or create a profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_unprovisioned_service_cannot_provision_itself",
+      "old_assertion_id": "assertion:541:541:2ee2e143ae3c6b1ae56defbe7f52c95a222aad5d9efd2b939bf20ad74eccef97",
+      "old_content_sha256": "2ee2e143ae3c6b1ae56defbe7f52c95a222aad5d9efd2b939bf20ad74eccef97",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        541,
+        541
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "An unprovisioned service principal cannot self-authorize or create a profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_unprovisioned_service_cannot_provision_itself",
+      "old_assertion_id": "assertion:542:542:fe17608f380ffe23d567bd221a62c26ca9f9673d69cb6ae547dcb8654a6cc6cb",
+      "old_content_sha256": "fe17608f380ffe23d567bd221a62c26ca9f9673d69cb6ae547dcb8654a6cc6cb",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        542,
+        542
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning returns the closed response schema.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:549:549:899d894e84fd223dc98229c0c79a34ac97dbc5f89f9ce5693b81b45f77b556a3",
+      "old_content_sha256": "899d894e84fd223dc98229c0c79a34ac97dbc5f89f9ce5693b81b45f77b556a3",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        549,
+        549
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning returns the closed response schema.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:551:559:b14322a1d5441395378e04e2cbfa6ec44062d669a88eeeb18fb9dba0acf6069c",
+      "old_content_sha256": "b14322a1d5441395378e04e2cbfa6ec44062d669a88eeeb18fb9dba0acf6069c",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        551,
+        559
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning returns the exact fixed service identity and active lifecycle.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:560:560:8fc05b5e23cec531b6ee15ed2590e01ca94ebc6daf00b1f49c306cc442c3c108",
+      "old_content_sha256": "8fc05b5e23cec531b6ee15ed2590e01ca94ebc6daf00b1f49c306cc442c3c108",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        560,
+        560
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning returns the exact fixed service identity and active lifecycle.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:561:561:014c70e55b4aea178513477ea83806bb621e561efc6259d9de37193e64f7ebc8",
+      "old_content_sha256": "014c70e55b4aea178513477ea83806bb621e561efc6259d9de37193e64f7ebc8",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        561,
+        561
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning returns the exact fixed service identity and active lifecycle.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:562:562:0b241876d55a6787885ba92d4231f553db1ffa965ab0a2aded8ae5ea125a26b0",
+      "old_content_sha256": "0b241876d55a6787885ba92d4231f553db1ffa965ab0a2aded8ae5ea125a26b0",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        562,
+        562
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning response conceals issuer, subject and reason.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_privacy.py::test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit",
+      "old_assertion_id": "assertion:563:563:919a1af434bb6f46cb34aabfb69d3a15e6b06d896766a74d7b9002d892d8a78e",
+      "old_content_sha256": "919a1af434bb6f46cb34aabfb69d3a15e6b06d896766a74d7b9002d892d8a78e",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        563,
+        563
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning response conceals issuer, subject and reason.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_privacy.py::test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit",
+      "old_assertion_id": "assertion:564:564:b31bf9ddcda3deeee0722dc4766bee7d1a80a4a94ac8006fc288482cc422a9f2",
+      "old_content_sha256": "b31bf9ddcda3deeee0722dc4766bee7d1a80a4a94ac8006fc288482cc422a9f2",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        564,
+        564
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning response conceals issuer, subject and reason.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_privacy.py::test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit",
+      "old_assertion_id": "assertion:565:565:06842c2ffe15ddbeadd53a3f2e0883aec8885e864aa0867968218d4848d8002b",
+      "old_content_sha256": "06842c2ffe15ddbeadd53a3f2e0883aec8885e864aa0867968218d4848d8002b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        565,
+        565
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:568:568:55853d8cf9a1be4386f9ae11da186adb25d4cd05d88d861d6a9ac26a42c7c1f2",
+      "old_content_sha256": "55853d8cf9a1be4386f9ae11da186adb25d4cd05d88d861d6a9ac26a42c7c1f2",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        568,
+        568
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:569:569:bad067cdbcf75fb1fdb51d8ea6fbdaee7c94a09fb97580453b96093df037057c",
+      "old_content_sha256": "bad067cdbcf75fb1fdb51d8ea6fbdaee7c94a09fb97580453b96093df037057c",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        569,
+        569
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:570:575:7bf5fd31cf83aecc62bc941b9b7fe02ab703ba6467e6787284419c086f76f328",
+      "old_content_sha256": "7bf5fd31cf83aecc62bc941b9b7fe02ab703ba6467e6787284419c086f76f328",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        570,
+        575
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:576:576:e63d1c4f54fb7274f717335e101e82aef8b5d0e256b04371e5171ea7be1fcedc",
+      "old_content_sha256": "e63d1c4f54fb7274f717335e101e82aef8b5d0e256b04371e5171ea7be1fcedc",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        576,
+        576
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:577:583:26a0d655a1283aec763fa2f9368df69909ba1b823f571bd8aef8029a67281d66",
+      "old_content_sha256": "26a0d655a1283aec763fa2f9368df69909ba1b823f571bd8aef8029a67281d66",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        577,
+        583
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Persisted service profile and identity-link fields bind the exact authorized identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_actor_provisioning_binds_exact_identity",
+      "old_assertion_id": "assertion:584:584:a70777738d78792982c70476cbeb9593b7bed5bd839b03667befa20cbb8b3abd",
+      "old_content_sha256": "a70777738d78792982c70476cbeb9593b7bed5bd839b03667befa20cbb8b3abd",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        584,
+        584
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioned service credentials cannot use the human-only provisioning route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_use_human_provisioning_route",
+      "old_assertion_id": "assertion:590:590:a79e9428953d119e3707fb7dfa57074b9ab9e8d84d22c33e94e95591c0ae2d48",
+      "old_content_sha256": "a79e9428953d119e3707fb7dfa57074b9ab9e8d84d22c33e94e95591c0ae2d48",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        590,
+        590
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioned service credentials cannot use the human-only provisioning route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_use_human_provisioning_route",
+      "old_assertion_id": "assertion:591:591:0e3cc0e436835771889eb0fb3afe886c1da6c80f4dc3e56b6082e1705f50feb6",
+      "old_content_sha256": "0e3cc0e436835771889eb0fb3afe886c1da6c80f4dc3e56b6082e1705f50feb6",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        591,
+        591
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioned service credentials cannot use the human-only provisioning route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_use_human_provisioning_route",
+      "old_assertion_id": "assertion:592:592:8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_content_sha256": "8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        592,
+        592
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Successful create touches only the authenticated caller lifecycle timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:594:594:4fb940a8a77b0ce79df8b9b6108c5cde88e6c20407ac8a3193dc522cbe9beb5d",
+      "old_content_sha256": "4fb940a8a77b0ce79df8b9b6108c5cde88e6c20407ac8a3193dc522cbe9beb5d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        594,
+        594
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Successful create touches only the authenticated caller lifecycle timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:595:595:ea044bbde6e61e3409a304da8b136739f52e478c6ef2f3a6b6980af93e533593",
+      "old_content_sha256": "ea044bbde6e61e3409a304da8b136739f52e478c6ef2f3a6b6980af93e533593",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        595,
+        595
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Exact committed replay returns the original result and updates authenticated caller timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:602:602:be894fa57e00cbe1d9d3dfc7707170ce0a0daa0f06cc8ea6c64e9f471e53718d",
+      "old_content_sha256": "be894fa57e00cbe1d9d3dfc7707170ce0a0daa0f06cc8ea6c64e9f471e53718d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        602,
+        602
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Exact committed replay returns the original result and updates authenticated caller timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:603:603:4f884c3efe9e6898808dedd55ed30c614684d5889bb773c839ba80ec9c85a48c",
+      "old_content_sha256": "4f884c3efe9e6898808dedd55ed30c614684d5889bb773c839ba80ec9c85a48c",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        603,
+        603
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Exact committed replay returns the original result and updates authenticated caller timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:604:604:8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_content_sha256": "8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        604,
+        604
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Exact committed replay returns the original result and updates authenticated caller timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:606:606:f4aed65eaf90676807d8216534dea07c7bdaac4f409286af25bbe39606021bf2",
+      "old_content_sha256": "f4aed65eaf90676807d8216534dea07c7bdaac4f409286af25bbe39606021bf2",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        606,
+        606
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Exact committed replay returns the original result and updates authenticated caller timestamps.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_exact_replay_returns_original_provisioning_response",
+      "old_assertion_id": "assertion:607:607:afbdd37b245cdadb8226f7a32f43db2a8353098ae4bdeba5b2ad093bea6ef62d",
+      "old_content_sha256": "afbdd37b245cdadb8226f7a32f43db2a8353098ae4bdeba5b2ad093bea6ef62d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        607,
+        607
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Unavailable replay rolls back caller timestamp changes and leaves service state unchanged.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_unavailable_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:629:629:78e1e096c8a846455ea464e545cff9380cabf02f79723b785f0cb90baa1e9da5",
+      "old_content_sha256": "78e1e096c8a846455ea464e545cff9380cabf02f79723b785f0cb90baa1e9da5",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        629,
+        629
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Unavailable replay rolls back caller timestamp changes and leaves service state unchanged.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_unavailable_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:630:630:c51b2e983a6305a0d24de29f70746d3b1fc6f253f8baf6303937a28ad783828b",
+      "old_content_sha256": "c51b2e983a6305a0d24de29f70746d3b1fc6f253f8baf6303937a28ad783828b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        630,
+        630
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Unavailable replay rolls back caller timestamp changes and leaves service state unchanged.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_unavailable_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:631:631:5b47792fbc65944f04570fccb2821d890b9e3dbe008a9fa1b8d3dcb3812fb07e",
+      "old_content_sha256": "5b47792fbc65944f04570fccb2821d890b9e3dbe008a9fa1b8d3dcb3812fb07e",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        631,
+        631
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Unavailable replay rolls back caller timestamp changes and leaves service state unchanged.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_unavailable_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:632:632:8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_content_sha256": "8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        632,
+        632
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Mismatched replay is rejected without changing caller or service state.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_mismatched_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:639:639:026e2f7649203ba32d956dc5a0e070ca873719fc54cf381663294e6044680bf5",
+      "old_content_sha256": "026e2f7649203ba32d956dc5a0e070ca873719fc54cf381663294e6044680bf5",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        639,
+        639
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Mismatched replay is rejected without changing caller or service state.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_mismatched_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:640:640:84066c80b2bc5a573864a6b1e5974aa38a103f3540c009ecf4a25802cca0611a",
+      "old_content_sha256": "84066c80b2bc5a573864a6b1e5974aa38a103f3540c009ecf4a25802cca0611a",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        640,
+        640
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Mismatched replay is rejected without changing caller or service state.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_mismatched_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:641:641:5b47792fbc65944f04570fccb2821d890b9e3dbe008a9fa1b8d3dcb3812fb07e",
+      "old_content_sha256": "5b47792fbc65944f04570fccb2821d890b9e3dbe008a9fa1b8d3dcb3812fb07e",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        641,
+        641
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Mismatched replay is rejected without changing caller or service state.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_mismatched_replay_does_not_touch_actor_or_service_state",
+      "old_assertion_id": "assertion:642:642:8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_content_sha256": "8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        642,
+        642
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "A fixed service identity cannot be rebound to a different subject.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_fixed_identity_cannot_be_rebound",
+      "old_assertion_id": "assertion:649:649:9b1e93f3e8283321e7f11131fcdc0da4d6d90c45ef8ea5658efecea8b196090b",
+      "old_content_sha256": "9b1e93f3e8283321e7f11131fcdc0da4d6d90c45ef8ea5658efecea8b196090b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        649,
+        649
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "A fixed service identity cannot be rebound to a different subject.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_fixed_identity_cannot_be_rebound",
+      "old_assertion_id": "assertion:650:653:d0df5c8bc7f3377b0abb7c561df87a44b3afd60c0f2ff64862faaa1bc5675725",
+      "old_content_sha256": "d0df5c8bc7f3377b0abb7c561df87a44b3afd60c0f2ff64862faaa1bc5675725",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        650,
+        653
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "A subject already linked to one service identity cannot be linked again.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_subject_cannot_be_linked_to_second_identity",
+      "old_assertion_id": "assertion:659:659:11b80a8044db30060b053c66bef836428591439c6423b7176aec0a15da495578",
+      "old_content_sha256": "11b80a8044db30060b053c66bef836428591439c6423b7176aec0a15da495578",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        659,
+        659
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "A subject already linked to one service identity cannot be linked again.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_subject_cannot_be_linked_to_second_identity",
+      "old_assertion_id": "assertion:660:660:1aec58ae8e7e9bacabe356402a19b347a79c957a92b574a108daaa10e19d9378",
+      "old_content_sha256": "1aec58ae8e7e9bacabe356402a19b347a79c957a92b574a108daaa10e19d9378",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        660,
+        660
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "A subject already linked to one service identity cannot be linked again.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_subject_cannot_be_linked_to_second_identity",
+      "old_assertion_id": "assertion:661:661:44c711f1e12104dee0c1c0c987d684c22147a78708e0b6c6cdb812eb40e2b896",
+      "old_content_sha256": "44c711f1e12104dee0c1c0c987d684c22147a78708e0b6c6cdb812eb40e2b896",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        661,
+        661
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Only the authorized human administrator may provision service actors.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_only_authorized_human_can_provision_service_actor",
+      "old_assertion_id": "assertion:668:668:a8ddb8cb6a1a133437d9beec9a3b6f5fd806bfd3b24c586fea1f2da220f3b6dc",
+      "old_content_sha256": "a8ddb8cb6a1a133437d9beec9a3b6f5fd806bfd3b24c586fea1f2da220f3b6dc",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        668,
+        668
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Only the authorized human administrator may provision service actors.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_only_authorized_human_can_provision_service_actor",
+      "old_assertion_id": "assertion:669:669:5a78781777302ac4aa5d42434e123c5323a34dc6439e13210156c9aecfded5e5",
+      "old_content_sha256": "5a78781777302ac4aa5d42434e123c5323a34dc6439e13210156c9aecfded5e5",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        669,
+        669
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Only the authorized human administrator may provision service actors.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_only_authorized_human_can_provision_service_actor",
+      "old_assertion_id": "assertion:676:676:236a3c4cd0aa0199338a9cb0b8318bb88a2138fdc4f96510e8878de4dda31f68",
+      "old_content_sha256": "236a3c4cd0aa0199338a9cb0b8318bb88a2138fdc4f96510e8878de4dda31f68",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        676,
+        676
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Only the authorized human administrator may provision service actors.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_only_authorized_human_can_provision_service_actor",
+      "old_assertion_id": "assertion:677:677:bc0c1e114e497e5eb4035ea4c4e13b2225bf4928ba95041fdcb15fcc9468a477",
+      "old_content_sha256": "bc0c1e114e497e5eb4035ea4c4e13b2225bf4928ba95041fdcb15fcc9468a477",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        677,
+        677
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:686:686:304550c0d035ee202f8dc357a53f83b3e5ec28fde5eda61e656572d97da6ed2b",
+      "old_content_sha256": "304550c0d035ee202f8dc357a53f83b3e5ec28fde5eda61e656572d97da6ed2b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        686,
+        686
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:687:687:8aafea6a2c5472a804e54833d21a0fe9f99897ec572d34f99b6732fe39bbec1d",
+      "old_content_sha256": "8aafea6a2c5472a804e54833d21a0fe9f99897ec572d34f99b6732fe39bbec1d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        687,
+        687
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:688:688:de906a77cd76c5788fcb3947eff97d52df33b2a03a5196bfd36ee7fd5e77f664",
+      "old_content_sha256": "de906a77cd76c5788fcb3947eff97d52df33b2a03a5196bfd36ee7fd5e77f664",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        688,
+        688
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:699:699:6b64f16d142c1c9a7294963e42ddf14536266d658b855dd84e5894d064b6a886",
+      "old_content_sha256": "6b64f16d142c1c9a7294963e42ddf14536266d658b855dd84e5894d064b6a886",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        699,
+        699
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:700:700:7857e6b50148659f2732485d1aff22b9fe85f33e6a01fb10c21419dc88756e51",
+      "old_content_sha256": "7857e6b50148659f2732485d1aff22b9fe85f33e6a01fb10c21419dc88756e51",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        700,
+        700
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:707:707:96b34f598be5de61d44e8069b81bae60f75003229f50586580df0d414b9ce903",
+      "old_content_sha256": "96b34f598be5de61d44e8069b81bae60f75003229f50586580df0d414b9ce903",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        707,
+        707
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:708:708:efeaa534f31c1906c761e6de4c44ffa220adbc7001f787a061bac30857726c22",
+      "old_content_sha256": "efeaa534f31c1906c761e6de4c44ffa220adbc7001f787a061bac30857726c22",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        708,
+        708
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:715:715:3b969fab0ac4fe104a900f1fe5139262d90408678762049517532ae89c238ff0",
+      "old_content_sha256": "3b969fab0ac4fe104a900f1fe5139262d90408678762049517532ae89c238ff0",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        715,
+        715
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:716:716:d55c3b02d475cc22c3192c9a681ee63fe2531020916b4c8897563e280314c5a8",
+      "old_content_sha256": "d55c3b02d475cc22c3192c9a681ee63fe2531020916b4c8897563e280314c5a8",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        716,
+        716
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:717:717:f520c5e0ac132ea6d6060d41b7e778e27c2f0e9d0173c89585281d6e5b709fef",
+      "old_content_sha256": "f520c5e0ac132ea6d6060d41b7e778e27c2f0e9d0173c89585281d6e5b709fef",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        717,
+        717
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Malformed input and idempotency values fail validation without echo.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_invalid_provisioning_inputs_are_rejected_without_echo",
+      "old_assertion_id": "assertion:718:718:ea7b33facbf300ec50e2aee03a5a3559345c73415d43b09f24bd3be401552754",
+      "old_content_sha256": "ea7b33facbf300ec50e2aee03a5a3559345c73415d43b09f24bd3be401552754",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        718,
+        718
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service actors cannot access the human self-profile route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_read_human_self_profile",
+      "old_assertion_id": "assertion:722:722:d6fb8cd01b19c5ed39a5db07a1058225f085b19a3810d25382ab5502f0d27b80",
+      "old_content_sha256": "d6fb8cd01b19c5ed39a5db07a1058225f085b19a3810d25382ab5502f0d27b80",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        722,
+        722
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service actors cannot access the human self-profile route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_read_human_self_profile",
+      "old_assertion_id": "assertion:723:723:06e1339dbf3a4e5a025f56adda664b35d22c024c2a4d2b572b13dbbec1110858",
+      "old_content_sha256": "06e1339dbf3a4e5a025f56adda664b35d22c024c2a4d2b572b13dbbec1110858",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        723,
+        723
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service actors cannot access the human self-profile route.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_provisioned_service_cannot_read_human_self_profile",
+      "old_assertion_id": "assertion:724:724:8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_content_sha256": "8a7e5a294cf7475a58007606bb5b5fd95fddfde34d7cdacac83ebfb171b5912d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        724,
+        724
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Concurrent same-key identical requests serialize and return one committed result.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_same_key_concurrent_identical_requests_replay_one_result",
+      "old_assertion_id": "assertion:734:734:a04b69f45e97a322500284becb1237b0461bd9ec0c2a86bfa4b56ec6ddba9072",
+      "old_content_sha256": "a04b69f45e97a322500284becb1237b0461bd9ec0c2a86bfa4b56ec6ddba9072",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        734,
+        734
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Concurrent same-key identical requests serialize and return one committed result.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_same_key_concurrent_identical_requests_replay_one_result",
+      "old_assertion_id": "assertion:735:735:c5e4b037911e0bc4e2ba4980de1f126220a2a13858009cc222f83fda6ba3c6e7",
+      "old_content_sha256": "c5e4b037911e0bc4e2ba4980de1f126220a2a13858009cc222f83fda6ba3c6e7",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        735,
+        735
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Concurrent same-key payload drift produces one success and one mismatch.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_same_key_concurrent_payload_drift_is_rejected",
+      "old_assertion_id": "assertion:748:748:059d089e947d84e0a320256b83553c9a638dec3b1eb9d71446db7608d4beaa5b",
+      "old_content_sha256": "059d089e947d84e0a320256b83553c9a638dec3b1eb9d71446db7608d4beaa5b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        748,
+        748
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Concurrent same-key payload drift produces one success and one mismatch.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_same_key_concurrent_payload_drift_is_rejected",
+      "old_assertion_id": "assertion:749:754:d402c3fc3569ce69c9007833d42312fd0f579f8fb181c7b1a668da8dcc95be84",
+      "old_content_sha256": "d402c3fc3569ce69c9007833d42312fd0f579f8fb181c7b1a668da8dcc95be84",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        749,
+        754
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PR #446 already proves distinct keys cannot duplicate a fixed service identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:766:766:42a101f95ac8aea47c003394b63329ab1b2cfd65e33b52de4cd7be523115d23b",
+      "old_content_sha256": "42a101f95ac8aea47c003394b63329ab1b2cfd65e33b52de4cd7be523115d23b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        766,
+        766
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PR #446 already proves distinct keys cannot duplicate a fixed service identity.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:767:772:e592c124ad9d22fd45558c75f8a2bad1518ca56825a9065d3e50460c735ae3e4",
+      "old_content_sha256": "e592c124ad9d22fd45558c75f8a2bad1518ca56825a9065d3e50460c735ae3e4",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        767,
+        772
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Distinct fixed identities contending for one subject leave one identity-link owner.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_distinct_identities_cannot_claim_same_subject",
+      "old_assertion_id": "assertion:795:795:38b544bc84788ca3c65a6fe915ec354a35e0c19e59119fcb13334c5b07fd68e7",
+      "old_content_sha256": "38b544bc84788ca3c65a6fe915ec354a35e0c19e59119fcb13334c5b07fd68e7",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        795,
+        795
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Distinct fixed identities contending for one subject leave one identity-link owner.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_concurrency.py::test_distinct_identities_cannot_claim_same_subject",
+      "old_assertion_id": "assertion:796:801:b0790f2a91c991d5385ee5f7af013f305c1ab0768b8d2f7e20b332ef9492bcff",
+      "old_content_sha256": "b0790f2a91c991d5385ee5f7af013f305c1ab0768b8d2f7e20b332ef9492bcff",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        796,
+        801
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:828:828:bb7bae22e9978133f280cf5ba9c63f5f796ce343d29429aea7823fd17db43cfd",
+      "old_content_sha256": "bb7bae22e9978133f280cf5ba9c63f5f796ce343d29429aea7823fd17db43cfd",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        828,
+        828
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:829:829:a52b032c6373dddd3e9db33991252aebc7aeb30b9e2e817374083bad720d2171",
+      "old_content_sha256": "a52b032c6373dddd3e9db33991252aebc7aeb30b9e2e817374083bad720d2171",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        829,
+        829
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:830:830:c6ad1931102a995e76a6278110777aeec2c72ab19abe21a6484743a208084b7f",
+      "old_content_sha256": "c6ad1931102a995e76a6278110777aeec2c72ab19abe21a6484743a208084b7f",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        830,
+        830
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:831:831:6b171dd56b7cec1a354cdae245204a3ed18de5b631bbe58c4c16f7359d923947",
+      "old_content_sha256": "6b171dd56b7cec1a354cdae245204a3ed18de5b631bbe58c4c16f7359d923947",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        831,
+        831
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:832:832:0f9f0cbe06668d1e90fe53531c5a150245f9dab034f1cca753c60450a0cd2aef",
+      "old_content_sha256": "0f9f0cbe06668d1e90fe53531c5a150245f9dab034f1cca753c60450a0cd2aef",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        832,
+        832
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Failure to write successful provisioning evidence rolls back and permits same-key retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_success_evidence_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:839:839:cf973308c1b3add02bb3941db41b754433a6a892a921c6e4555cc26eb466098d",
+      "old_content_sha256": "cf973308c1b3add02bb3941db41b754433a6a892a921c6e4555cc26eb466098d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        839,
+        839
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Commit failure rolls back all service provisioning state and permits retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_commit_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:864:864:3dfb947b2b05002aaf5ba60ae59b667e05344110e6c11a07975ed89a3e69f16f",
+      "old_content_sha256": "3dfb947b2b05002aaf5ba60ae59b667e05344110e6c11a07975ed89a3e69f16f",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        864,
+        864
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Commit failure rolls back all service provisioning state and permits retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_commit_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:865:865:ce832005e8cced33382703f239ca95f3e30ec79cd3fe651269c169fdb70460a2",
+      "old_content_sha256": "ce832005e8cced33382703f239ca95f3e30ec79cd3fe651269c169fdb70460a2",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        865,
+        865
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Commit failure rolls back all service provisioning state and permits retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_commit_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:866:866:886bb5c940f5fc2e554aef5d7338667d9df56356ab008a899aea79b6e38c81de",
+      "old_content_sha256": "886bb5c940f5fc2e554aef5d7338667d9df56356ab008a899aea79b6e38c81de",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        866,
+        866
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Commit failure rolls back all service provisioning state and permits retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_commit_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:867:867:44c711f1e12104dee0c1c0c987d684c22147a78708e0b6c6cdb812eb40e2b896",
+      "old_content_sha256": "44c711f1e12104dee0c1c0c987d684c22147a78708e0b6c6cdb812eb40e2b896",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        867,
+        867
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Commit failure rolls back all service provisioning state and permits retry.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_commit_failure_rolls_back_and_allows_retry",
+      "old_assertion_id": "assertion:873:873:03fa91ac5ccb1a8dd148da08b491efc2330de466caaebb35117df7ef4cf6595c",
+      "old_content_sha256": "03fa91ac5ccb1a8dd148da08b491efc2330de466caaebb35117df7ef4cf6595c",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        873,
+        873
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:885:885:5a7c6293a2379013ea80a275e440444d45654ae4987f088c92ccecb5e7d3f0f1",
+      "old_content_sha256": "5a7c6293a2379013ea80a275e440444d45654ae4987f088c92ccecb5e7d3f0f1",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        885,
+        885
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:886:886:12fd94d7c0880ff3d8c7c65b73f83853f7d50eafb59a9f5c5878004f7cc4d4b3",
+      "old_content_sha256": "12fd94d7c0880ff3d8c7c65b73f83853f7d50eafb59a9f5c5878004f7cc4d4b3",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        886,
+        886
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:888:888:4dee5d21cee131a5380281ba6776341d21e681cb7451695672ce5e2ba0bfcfff",
+      "old_content_sha256": "4dee5d21cee131a5380281ba6776341d21e681cb7451695672ce5e2ba0bfcfff",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        888,
+        888
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:889:889:4c7c7c14db0d9666f2911dd3bfd7f2bbaf19b284fe6323bc0d24a6f09984961c",
+      "old_content_sha256": "4c7c7c14db0d9666f2911dd3bfd7f2bbaf19b284fe6323bc0d24a6f09984961c",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        889,
+        889
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:890:890:dbd8d1461628b8afa9251aa5918489822bf8f4fb40d6ae043d64adbb71502b8f",
+      "old_content_sha256": "dbd8d1461628b8afa9251aa5918489822bf8f4fb40d6ae043d64adbb71502b8f",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        890,
+        890
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:891:897:d9d65431145aad35cc22878054b538ee17f9dd9e7790e7eed5daa055516a2a7d",
+      "old_content_sha256": "d9d65431145aad35cc22878054b538ee17f9dd9e7790e7eed5daa055516a2a7d",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        891,
+        897
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "PROJECT_SETUP is bound to its exact configured issuer, subject and service profile.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_project_setup_identity_is_provisioned",
+      "old_assertion_id": "assertion:898:898:3261e430f17f5d1a664c2f1423a697e5a7d8a762dbfe83e81ebc9d89d17a9c18",
+      "old_content_sha256": "3261e430f17f5d1a664c2f1423a697e5a7d8a762dbfe83e81ebc9d89d17a9c18",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        898,
+        898
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Canonical issuer unavailability fails closed with its exact API error.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_canonical_issuer_unavailable_fails_closed",
+      "old_assertion_id": "assertion:914:914:0edeee4a15e8f061555b53289f42118d6c6d69a6375b0b2c8297cfad047243b0",
+      "old_content_sha256": "0edeee4a15e8f061555b53289f42118d6c6d69a6375b0b2c8297cfad047243b0",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        914,
+        914
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Canonical issuer unavailability fails closed with its exact API error.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_rejections.py::test_canonical_issuer_unavailable_fails_closed",
+      "old_assertion_id": "assertion:915:915:c3096ebebb4a0d3885d7c46df0e7d18714c6b1471e6def32d8718019214ba506",
+      "old_content_sha256": "c3096ebebb4a0d3885d7c46df0e7d18714c6b1471e6def32d8718019214ba506",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        915,
+        915
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Request credentials and private inputs are absent from responses and application logs.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_privacy.py::test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit",
+      "old_assertion_id": "assertion:955:955:4f4a8fef70dbf4f7a32991f60d00a97826110f80f4cb49214278487596f4fd11",
+      "old_content_sha256": "4f4a8fef70dbf4f7a32991f60d00a97826110f80f4cb49214278487596f4fd11",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        955,
+        955
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Request credentials and private inputs are absent from responses and application logs.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_privacy.py::test_provisioning_secrets_are_not_exposed_in_responses_logs_or_audit",
+      "old_assertion_id": "assertion:956:956:91c2dd315fcc7cb41a014e27e04a1b878eac67b4a2773d455df4103064af8905",
+      "old_content_sha256": "91c2dd315fcc7cb41a014e27e04a1b878eac67b4a2773d455df4103064af8905",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        956,
+        956
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1013:1013:75b8faf2be1c02b6026eed14fa0ece69fa027bb966a3264aec861e3da1019799",
+      "old_content_sha256": "75b8faf2be1c02b6026eed14fa0ece69fa027bb966a3264aec861e3da1019799",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1013,
+        1013
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1014:1014:a060e8665e1c01ee182fe359a1ad5cb819da605b8b7afbf1ef0c3ac651823870",
+      "old_content_sha256": "a060e8665e1c01ee182fe359a1ad5cb819da605b8b7afbf1ef0c3ac651823870",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1014,
+        1014
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1015:1015:0fb132204e6b7987580ee7a9299f22c1869aa344407c84da33effcd90710f3c3",
+      "old_content_sha256": "0fb132204e6b7987580ee7a9299f22c1869aa344407c84da33effcd90710f3c3",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1015,
+        1015
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1016:1016:941b802d576f2f16432a1c304db5a5d50136e722a4669ed7728865cddc859d1b",
+      "old_content_sha256": "941b802d576f2f16432a1c304db5a5d50136e722a4669ed7728865cddc859d1b",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1016,
+        1016
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1017:1017:6f227bab84aeba20fdae6cde6e07e6af20f44db07c6b00662d4e8dd5b489b131",
+      "old_content_sha256": "6f227bab84aeba20fdae6cde6e07e6af20f44db07c6b00662d4e8dd5b489b131",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1017,
+        1017
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1018:1018:a020f30a0c0d1cf981511243abfc0ca31be645b1bd4e52be5b1aa68f700963d1",
+      "old_content_sha256": "a020f30a0c0d1cf981511243abfc0ca31be645b1bd4e52be5b1aa68f700963d1",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1018,
+        1018
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1019:1019:296bd68d62c40f41e30a0e08d4a11bcb7d77a3fa79d6233e339d5dbd4663c279",
+      "old_content_sha256": "296bd68d62c40f41e30a0e08d4a11bcb7d77a3fa79d6233e339d5dbd4663c279",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1019,
+        1019
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1020:1020:aefb88dea93adfa56dc6ca2158844540d3a27943c3d4ff274853f8331bc85e00",
+      "old_content_sha256": "aefb88dea93adfa56dc6ca2158844540d3a27943c3d4ff274853f8331bc85e00",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1020,
+        1020
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1022:1022:ac22d37fea1289be681be6d1d2f5afbdb4593bdd4fbb946be9e4cecbe8656cfc",
+      "old_content_sha256": "ac22d37fea1289be681be6d1d2f5afbdb4593bdd4fbb946be9e4cecbe8656cfc",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1022,
+        1022
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1023:1023:da01f0f6e32e0b6fa63dfceb6e1d2648af37b878d36b2cbfe8317eaf131fd955",
+      "old_content_sha256": "da01f0f6e32e0b6fa63dfceb6e1d2648af37b878d36b2cbfe8317eaf131fd955",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1023,
+        1023
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Provisioning creates scoped audit evidence and no service grants or pending reservations.",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_success.py::test_service_provisioning_persists_only_scoped_audit_and_no_grants",
+      "old_assertion_id": "assertion:1024:1024:1147a0fbc2d97ee3149d196d668b80706627c0dde4b1edbf03510a1453051364",
+      "old_content_sha256": "1147a0fbc2d97ee3149d196d668b80706627c0dde4b1edbf03510a1453051364",
+      "old_revision": "7ff306f094ec28835e9da0506a2aeb38882569b7",
+      "old_source_span": [
+        1024,
+        1024
+      ],
+      "old_test_node": "tests/test_auth.py::test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "denial_side_effects": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        },
+        "transaction_ownership": {
+          "not_applicable_reason": "This assertion does not establish this security dimension."
+        }
+      },
+      "target_layer": "integration"
+    }
+  ],
+  "schema": "workstream.auth-assertion-map.v1"
+}

@@ -184,6 +184,10 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/admin_access/test_timestamp_concurrency_postgresql.py",
     "tests/authorization/admin_access/test_read_concurrency_postgresql.py",
     "tests/authorization/service_actors/test_provisioning_atomicity.py",
+    "tests/authorization/service_actors/test_provisioning_concurrency.py",
+    "tests/authorization/service_actors/test_provisioning_privacy.py",
+    "tests/authorization/service_actors/test_provisioning_rejections.py",
+    "tests/authorization/service_actors/test_provisioning_success.py",
     "tests/test_auth_concurrency_observer.py",
     "tests/test_authorization.py",
     "tests/authorization/test_catalogue.py",
@@ -380,7 +384,6 @@ TASK_MODULES = (
     "tests/authorization/task_audit_evidence/test_authority.py",
     "tests/authorization/task_audit_evidence/test_history.py",
     "tests/authorization/task_audit_evidence/test_transactions_concurrency.py",
-
     "tests/authorization/task_queues/test_authority.py",
     "tests/authorization/task_queues/test_contracts.py",
     "tests/authorization/task_queues/test_transactions.py",

@@ -189,7 +189,6 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/authorization/task_audit_evidence/test_authority.py",
             "tests/authorization/task_audit_evidence/test_history.py",
             "tests/authorization/task_audit_evidence/test_transactions_concurrency.py",
-
             "tests/tasks/test_management_queue.py",
             "tests/tasks/test_task_detail.py",
             "tests/tasks/test_work_context.py",
@@ -268,6 +267,10 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/authorization/admin_access/test_timestamp_concurrency_postgresql.py",
         "tests/authorization/admin_access/test_read_concurrency_postgresql.py",
         "tests/authorization/service_actors/test_provisioning_atomicity.py",
+        "tests/authorization/service_actors/test_provisioning_concurrency.py",
+        "tests/authorization/service_actors/test_provisioning_privacy.py",
+        "tests/authorization/service_actors/test_provisioning_rejections.py",
+        "tests/authorization/service_actors/test_provisioning_success.py",
         "tests/actors/test_first_access_postgresql.py",
         "tests/authorization/guide_compilation_projections/test_replay_evidence.py",
         "tests/test_auth_concurrency_observer.py",

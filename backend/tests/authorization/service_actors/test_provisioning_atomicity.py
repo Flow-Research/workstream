@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
@@ -17,6 +18,12 @@ from tests.authorization.admin_access.support import (
     actor_observation,
     assert_unavailable,
     authority_snapshot,
+)
+from tests.authorization.service_actors.provisioning_support import (
+    actor_record_counts,
+    provision,
+    provisioning_payload,
+    service_records_for_identity,
 )
 
 
@@ -55,12 +62,8 @@ async def _service_binding(
 
 async def _actor_record_counts() -> tuple[int, int]:
     async with db_session.get_session_factory()() as session:
-        profiles = int(
-            await session.scalar(select(func.count()).select_from(ActorProfile)) or 0
-        )
-        links = int(
-            await session.scalar(select(func.count()).select_from(ActorIdentityLink)) or 0
-        )
+        profiles = int(await session.scalar(select(func.count()).select_from(ActorProfile)) or 0)
+        links = int(await session.scalar(select(func.count()).select_from(ActorIdentityLink)) or 0)
         return profiles, links
 
 
@@ -311,3 +314,74 @@ async def test_authority_revocation_serializes_with_service_provisioning(
         if succeeded
         else set()
     )
+
+
+async def test_success_evidence_failure_rolls_back_and_allows_retry(
+    admin_access: AdminAccess,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    access = admin_access
+    identity = ServiceIdentity.ARTIFACT_BINDING
+    subject = "service-success-event-failure-retry"
+    key = str(new_record_id())
+    payload = provisioning_payload(identity, subject)
+    before_authority = await authority_snapshot()
+    before_actor_records = await actor_record_counts()
+    original_event = AuditService.add_authority_event
+
+    async def fail_success_event(self, event):
+        if event.event_type is AuthorityEventType.SERVICE_ACTOR_PROVISIONED:
+            raise SQLAlchemyError("injected service success evidence failure")
+        return await original_event(self, event)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AuditService, "add_authority_event", fail_success_event)
+        failed = await provision(access, key, payload)
+
+    assert_unavailable(failed)
+    assert await authority_snapshot() == before_authority
+    assert await actor_record_counts() == before_actor_records
+    assert await _service_binding(identity, subject) == ((), ())
+
+    retried = await provision(access, key, payload)
+    assert retried.status_code == 201, retried.text
+    [row] = await service_records_for_identity(identity)
+    assert row.profile_id == retried.json()["actor_profile_id"]
+    assert (row.issuer, row.subject) == (access.signed.issuer, subject)
+
+
+async def test_commit_failure_rolls_back_and_allows_retry(
+    admin_access: AdminAccess,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    access = admin_access
+    identity = ServiceIdentity.ARTIFACT_PUT_RESOLVER
+    subject = "service-commit-failure-retry"
+    key = str(new_record_id())
+    payload = provisioning_payload(identity, subject)
+    before_authority = await authority_snapshot()
+    before_actor_records = await actor_record_counts()
+    original_commit = AsyncSession.commit
+    fail_once = True
+
+    async def fail_first_commit(session: AsyncSession) -> None:
+        nonlocal fail_once
+        if fail_once:
+            fail_once = False
+            raise SQLAlchemyError("injected provisioning commit failure")
+        await original_commit(session)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncSession, "commit", fail_first_commit)
+        failed = await provision(access, key, payload)
+
+    assert_unavailable(failed)
+    assert await authority_snapshot() == before_authority
+    assert await actor_record_counts() == before_actor_records
+    assert await _service_binding(identity, subject) == ((), ())
+
+    retried = await provision(access, key, payload)
+    assert retried.status_code == 201, retried.text
+    [row] = await service_records_for_identity(identity)
+    assert row.profile_id == retried.json()["actor_profile_id"]
+    assert (row.issuer, row.subject) == (access.signed.issuer, subject)

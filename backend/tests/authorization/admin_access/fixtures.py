@@ -24,7 +24,7 @@ async def signed_access(auth_database_env, rsa_signing_material) -> AsyncIterato
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://testserver"
         ) as client:
-            yield SignedAccess(client, private_key, settings.token_issuer)
+            yield SignedAccess(client, private_key, settings.token_issuer, app)
     finally:
         await db_session.dispose_engine()
 
