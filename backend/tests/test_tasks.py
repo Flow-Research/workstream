@@ -792,11 +792,6 @@ async def admit_and_grant_project_submitter(
     return {"actor_profile_id": actor_profile_id, "grant_id": response.json()["id"]}
 
 
-def hold_pre_review_enqueue(*, checker_run_id: str, requester_provenance: dict) -> str:
-    """Hold a pre-review gate enqueue while preserving the production call shape."""
-    return f"held:{checker_run_id}"
-
-
 async def seed_task_test_actor(subject: str, *, stored_role: str = "worker") -> str:
     """Seed identity facts for row/read tests; never seed eligibility or a grant."""
     async with db_session.get_session_factory()() as session:
@@ -935,10 +930,6 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
             .values(status="in_progress")
         )
         await session.commit()
-    monkeypatch.setattr(
-        "app.modules.tasks.service.enqueue_pre_review_gate",
-        hold_pre_review_enqueue,
-    )
     set_dev_actor(monkeypatch, roles="worker", subject=subject)
     submission_id = await seed_retained_submission(
         task["id"], complete_submission_payload(),

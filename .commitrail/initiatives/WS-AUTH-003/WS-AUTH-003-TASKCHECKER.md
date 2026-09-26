@@ -340,3 +340,9 @@ have no surviving consumers. Shared canonical submission creation remains intact
 History decisions preserve the existing project audit selector. The exact task,
 submission, checker run, actor and query are bound by resource_context_digest;
 tests compare the exact project, matched grant and independently computed digest.
+
+The existing WS-QUAL-003-12 assertion map is reconciled with the removal: old
+role-projection/normalization assertions are explicitly classified as retired
+requirements and point to the actual identity-only verifier contract. Required
+issuer, subject, signature and scope proof remains. No mapping validator or
+structural limit is relaxed.

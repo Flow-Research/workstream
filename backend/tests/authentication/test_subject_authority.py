@@ -1,4 +1,4 @@
-"""Nonhuman token identity is never human compatibility authority."""
+"""Verification preserves nonhuman identity without granting product authority."""
 
 from collections.abc import AsyncIterator
 
@@ -24,13 +24,14 @@ from tests.authentication.support import (
         ("space", "space:identity"),
     ],
 )
-async def test_nonhuman_tokens_receive_no_legacy_authority(rsa_signing_material, kind, scope):
+async def test_nonhuman_verification_returns_identity_only(rsa_signing_material, kind, scope):
     private_key, jwk = rsa_signing_material
     verifier = FlowAuthVerifier(production_verifier_settings(), jwks_transport=jwks_transport(jwk))
     result = await verifier.verify(
         issue_asymmetric_token(private_key, subject_kind=kind, scope=scope)
     )
     assert result.token.subject_kind == kind
+    assert set(result.model_dump()) == {"token"}
 
 
 async def test_agent_token_is_denied_by_actor_admission(rsa_signing_material):

@@ -103,14 +103,10 @@ async def test_target_projection_independent_state_predicates(task_client, monke
 async def test_target_projection_excludes_retained_submission(task_client, monkeypatch):
     from sqlalchemy import update
     from app.modules.tasks.models import WorkstreamTask
-    from app.modules.tasks.service import TaskService
     from tests.submission_fixtures import seed_retained_submission
     from tests.test_tasks import complete_submission_payload
 
     s = await setup_assignment(task_client, monkeypatch, started=True)
-    async def hold_dispatch(*_args, **_kwargs):
-        pass
-    monkeypatch.setattr(TaskService, "_enqueue_pre_review_gate_after_commit", hold_dispatch)
     await seed_retained_submission(s.task["id"], complete_submission_payload())
     async with s.sessions() as session, session.begin():
         # Isolate retained evidence from the separate task-state exclusion.
