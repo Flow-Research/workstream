@@ -150,3 +150,32 @@ async def test_completion_and_same_parent_successor_remain_valid(task_client, mo
         current = await session.scalar(select(CheckerRun).where(CheckerRun.submission_id == case[2], CheckerRun.is_current_for_submission.is_(True)))
         assert current.supersedes_checker_run_id == case[3] and current.attempt_number == 2
         assert (await session.get(CheckerRun, case[3])).passed_count == 1
+
+
+@pytest.mark.parametrize("field", ["is_current_for_submission", "audit_event_id"])
+async def test_run_custody_cannot_be_reactivated_or_reassigned(task_client, monkeypatch, field):
+    from app.modules.tasks.models import AuditEvent
+    case = await history_case(task_client, monkeypatch)
+    async with db_session.get_session_factory()() as session:
+        run = await session.get(CheckerRun, case[3])
+        if field == "is_current_for_submission":
+            assert run.is_current_for_submission is True
+            first, replacement = False, True
+        else:
+            assert run.audit_event_id is None
+            events = list(await session.scalars(select(AuditEvent.id).where(
+                AuditEvent.project_id == case[0],
+            ).order_by(AuditEvent.id).limit(2)))
+            assert len(events) == 2 and events[0] != events[1]
+            first, replacement = events
+        setattr(run, field, first)
+        await session.commit()
+    async with db_session.get_session_factory()() as session:
+        run = await session.get(CheckerRun, case[3])
+        assert getattr(run, field) == first
+        setattr(run, field, replacement)
+        with pytest.raises(IntegrityError, match="checker run custody is immutable") as rejected:
+            await session.commit()
+        assert rejected.value.orig.sqlstate == "23514"
+        await session.rollback()
+        assert getattr(await session.get(CheckerRun, case[3]), field) == first
