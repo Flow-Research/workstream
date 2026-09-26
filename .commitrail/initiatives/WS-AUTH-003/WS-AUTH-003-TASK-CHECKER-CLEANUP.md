@@ -74,8 +74,8 @@ authority. Existing four GET paths become contributor-only fixed projections;
 manager variants add `/projects/{project_id}` to the same resource paths. No
 operator/auditor/reviewer authority is inferred or activated. Lists are bounded
 and preserve version ordering/continuation without exposing other contributors'
-rows. Contributor list authorization binds task/project/actor, then filters
-Submission ownership; details bind the exact persisted submission contributor.
+rows. Contributor list resolution requires an existing Submission owned by the actor
+before authorizing task/project/actor; no owned history returns concealed 404; details bind the exact persisted submission contributor.
 Checker ownership resolves through its immutable Submission, never the current
 assignee. CHECKERS owns its retained result projection through a typed public
 read port; AUTH sees only exact server-loaded resource facts, not checker internals.
@@ -163,7 +163,8 @@ fields: id, task_id, version, status, summary, submitted_at, locked_at,
 supersedes_submission_id, and evidence descriptors (id/type/label/size_bytes).
 Management adds contributor_id, task_assignment_id and exact locked guide/policy
 identifiers, versions and policy hashes including ContributionPolicy version ID.
-Neither projection includes attestation, package URI/hash/manifest, evidence
+Neither projection includes locked_payment_policy_version or economic fields,
+attestation, package URI/hash/manifest, evidence
 URI/hash/metadata, external subject/issuer/claims or provider coordinates.
 
 Contributor checker-run fields: id, task_id, submission_id, submission_version,
@@ -218,3 +219,90 @@ queued work; deleted POSTs, worker names and authority imports cannot return.
 
 These refinements resolve SEC-PLAN-01/02 and ARCH-PLAN-01/02 through explicit
 contracts; implementation and final proof remain required.
+
+
+## Concrete implementation and proof inventory
+
+The following paths are the allowed production surface (new owner history modules
+are explicitly named):
+
+- `backend/app/modules/tasks/{router,service,repository,schemas,authorization}.py`,
+  `backend/app/modules/tasks/api/{__init__,submission_history}.py`,
+  `backend/app/modules/tasks/submission_history.py`;
+- `backend/app/modules/checkers/{router,service,repository,schemas,gate_queue,pre_review_gate}.py`,
+  `backend/app/modules/checkers/api/{__init__,history}.py`,
+  `backend/app/modules/checkers/history.py`;
+- `backend/app/modules/authorization/{catalogue,prepared,runtime,kernel,artifact_project_authority,history_authorization}.py`,
+  `backend/app/modules/authorization/domain/{action_groups,submission_history}.py`,
+  `backend/app/modules/authorization/api/{__init__,resources}.py`;
+- `backend/app/adapters/{tasks,checkers}/__init__.py`,
+  `backend/app/api/deps/{auth,authorization,history}.py`,
+  `backend/app/api/router.py`, `backend/app/schemas/auth.py`,
+  `backend/app/adapters/auth/{flow,dev}.py`, `backend/app/core/{config,permissions}.py`,
+  `backend/app/modules/actors/{service,repository}.py`,
+  `backend/app/workers/{checkers,celery_app}.py`;
+- additive `backend/alembic/versions/0006_submission_history_authority.py` after
+  `0005_task_evidence_authority`; no baseline migration or retained-data edits.
+
+Affected tests are `backend/tests/{test_tasks,test_checkers,test_auth,test_api_controls,test_db_session,test_ci_lane_catalogue,submission_fixtures}.py`,
+`backend/tests/authentication/`, `backend/tests/actors/`,
+`backend/tests/authorization/task_authority/`, and new
+`backend/tests/authorization/submission_history/` (fixtures, contracts, reads,
+privacy, authority, transactions, migration and absence modules).
+Exact dependent import/fixture repairs in existing tests are permitted; assertion
+semantics must be retained unless the table below explicitly retires the behavior.
+Scripts are `backend/scripts/{api_contract_e2e,test_structure_boundary}.py`;
+inventories are `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`,
+`.ci/behavior-ownership/`, `.ci/module-boundaries/`, and the existing lane catalogue.
+Documentation scope is README, canonical authentication/authorization/checker/task
+specifications, operating manual, roadmap, and this AUTH initiative's navigation.
+An additional shared consumer must be recorded before changing its implementation.
+
+Future tests under `backend/tests/authorization/submission_history/`:
+
+| Test | Proof |
+|---|---|
+| `test_exact_route_action_and_grant` | All eight GET paths, both valid PM grant scopes (project and system), exact recorded grant equality |
+| `test_list_requires_owned_history` | A owns history; same-project B has Submitter but receives 404; A succeeds; removal of ownership predicate fails |
+| `test_historical_owner_after_reassignment` | submitted/evaluation_pending/review_pending/needs_revision; released and reassigned; original owner succeeds, successor denied, same-person reclaim preserves history |
+| `test_fixed_projection_and_selected_columns` | Separate audience DTOs and selected SQL columns, sentinel secrets and economic fields absent; hidden results and internal-only routing filtered |
+| `test_cursor_scope_and_continuation` | Multiple pages, bounds/order, malformed/duplicate keys, cross-action/project/actor substitution rejected |
+| `test_wrong_project_does_not_wait` | Held foreign task row, invalid project request returns 404 without waiting |
+| `test_allow_commits_exact_evidence` | Independent session sees exact action/grant/project/resource digest after successful response |
+| `test_product_query_failure_rolls_back` | Failure after prepared consumption yields retryable 503; no committed ALLOW or product mutation |
+| `test_response_failure_rolls_back` | Actual invalid projection fails validation, retryable 503, no committed ALLOW |
+| `test_audit_insert_failure_rolls_back` | PostgreSQL rejects actual authorization audit INSERT; retryable 503 and rollback |
+| `test_authority_unavailable` | AUTH failure yields retryable 503, no response or committed ALLOW |
+| `test_denied_read_never_loads_private_rows` | Revocation, foreign owner and service/agent admission fail before private projection; concealed 404 for human resource denial |
+| `test_removed_mutation_and_worker_surface` | Both old POSTs absent, old Celery task absent, deleted dependency/source names absent |
+| `test_hidden_creation_does_not_queue_old_execution` | Canonical admission-backed creation remains valid, no old queue invocation or CheckerRun side effect |
+| `test_verification_is_identity_only` | Flow/dev token-only result; role claims cannot grant access; no runtime identity compatibility write; issuer/subject/audience/scope/time validation preserved |
+| `test_audit_migration_preserves_prior_evidence` | Seed all prior permitted action/permission pairs and both dispositions; byte-identical snapshot after upgrade; eight new exact pairs allowed, cross-pairs rejected; downgrade refuses and preserves rows |
+
+A successful denied-resource path returns 404; malformed pagination returns422;
+service/agent tokens fail canonical human admission. For each transaction failure,
+observe independent-session audit state and unchanged retained product rows.
+History has no task-state/current-assignment eligibility predicate: independently
+introducing either predicate must fail the historical ownership matrix.
+
+| Existing test / group | Disposition |
+|---|---|
+| `test_retained_packet_reads_preserve_locked_lineage_and_stored_audit` | Retarget to canonical authorized history; retain immutable lineage/audit proof |
+| `test_retained_submission_versions_are_readable_without_exposing_packet_hashes` | Retarget to new pages and fixed redaction |
+| `test_retained_submission_finalization_preserves_locked_guide_after_activation` | Replace old private-finalization setup with canonical admission-backed creation; retain historical guide proof |
+| `test_retained_version_read_does_not_rewrite_prior_finalized_packet` | Retarget; compare stored rows before/after |
+| cross-worker submission history denial tests | Retarget to distinct canonical actors/grants, exact concealed404 |
+| `test_checker_revision_routing_and_reads_for_retained_packet_versions` | Retain historical read/version/currentness assertions; remove obsolete routing execution assertions |
+| `test_retained_packet_checker_trial_exposes_only_role_visible_results` | Replace trial writer with retained-row fixture and fixed audience read |
+| `test_worker_can_read_only_worker_visible_checker_result_fields`, `test_worker_cannot_see_hidden_checker_results` | Retarget to Submitter authority and SQL/response privacy proof |
+| token-role/future-role authorization, manual checker trigger/retry, gate finalization/requeue/repair and automatic queue-only tests | Delete superseded behavior tests; keep database immutability/currentness/lineage constraints as independent retained-row tests |
+| old checker-run OpenAPI role-sensitive response test | Replace with fixed read schemas and removed POST assertions |
+| `authentication/test_registered_actor_dependency.py`, role normalization and development role config tests | Delete; canonical verifier and no-compatibility-write proofs remain |
+
+The retained checker fixture inserts constraint-valid CheckerRun and CheckerResult
+rows through ORM in the migrated PostgreSQL database, with real Submission and
+policy foreign keys, attempt/currentness, matching locked hashes and all guards
+enabled. It never invokes the deleted checker writer, queue or fabricated actor.
+Canonical submission fixtures use the existing admission-backed creation path
+where creation invariants are under test. Retained compatibility actor rows are
+seeded only to prove byte-identical data custody, never to grant authority.
