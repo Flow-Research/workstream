@@ -33,7 +33,7 @@ wrapper would preserve the superseded implementation.
 - TASK retained-submission history, its routes/public contracts/repositories and
   application adapters; CHECKERS retained-run/result history, public contracts,
   routes/repository and obsolete service/queue/worker removal.
-- AUTH exact history actions, resource facts, prepared decisions and existing
+- AUTH exact history actions, resource facts, staged read decisions and existing
   project authority dispatch; one forward additive audit-constraint migration.
 - Authentication result/verifier/dependency removal of token-role compatibility;
   ACTORS removal of the unused compatibility writer and its dead helpers.
@@ -185,7 +185,7 @@ explicit project predicate for management) to resolve immutable target facts.
 Foreign owner/project rows must not cause a wait on a task owned elsewhere.
 Then use the exact scoped TASK lock and existing task-first AUTH lock order,
 with fresh canonical human actor/link and exact matched grant, followed by the
-scoped project lock. Recheck the target/query binding before consuming authority,
+scoped project lock. Recheck the target/query binding before requiring authority,
 and validate the detached closed response before committing AUTH evidence.
 Valid missing/foreign/denied reads share concealed 404; unavailable AUTH/storage
 rolls back and returns retryable 503. No live authority is inferred from a prior
@@ -269,9 +269,9 @@ Future tests under `backend/tests/authorization/submission_history/`:
 | `test_cursor_scope_and_continuation` | Multiple pages, bounds/order, malformed/duplicate keys, cross-action/project/actor substitution rejected |
 | `test_wrong_project_does_not_wait` | Held foreign task row, invalid project request returns 404 without waiting |
 | `test_allow_commits_exact_evidence` | Independent session sees exact action/grant/project/resource digest after successful response |
-| `test_product_query_failure_rolls_back` | Failure after prepared consumption yields retryable 503; no committed ALLOW or product mutation |
+| `test_product_query_failure_rolls_back` | Failure after staged ALLOW yields retryable 503; no committed ALLOW or product mutation |
 | `test_response_failure_rolls_back` | Actual invalid projection fails validation, retryable 503, no committed ALLOW |
-| `test_audit_insert_failure_rolls_back` | PostgreSQL rejects actual authorization audit INSERT; retryable 503 and rollback |
+| `test_audit_insert_failure_rolls_back` | PostgreSQL rejects actual authorization audit INSERT before projection; projection nonentry, retryable 503 and rollback |
 | `test_authority_unavailable` | AUTH failure yields retryable 503, no response or committed ALLOW |
 | `test_denied_read_never_loads_private_rows` | Revocation, foreign owner and service/agent admission fail before private projection; concealed 404 for human resource denial |
 | `test_removed_mutation_and_worker_surface` | Both old POSTs absent, old Celery task absent, deleted dependency/source names absent |
@@ -306,3 +306,20 @@ enabled. It never invokes the deleted checker writer, queue or fabricated actor.
 Canonical submission fixtures use the existing admission-backed creation path
 where creation invariants are under test. Retained compatibility actor rows are
 seeded only to prove byte-identical data custody, never to grant authority.
+
+
+Final feasibility reconciliation: history uses the existing `AuthorizationService.require`
+read transaction, not PREP: owner-qualified selector, scoped TASK lock and recheck,
+fresh actor/grant/Project authority, staged ALLOW, fixed projection, validation,
+then caller commit. There is no mutation gap requiring a capability lifecycle.
+
+Reassignment/state history controls are constraint-valid retained-data fixtures,
+not a newly supported release/reclaim workflow. Preserve the existing production
+invalidation rule and its regression: an existing Submission prevents assignment
+invalidation/release. Controlled retained rows prove that history authorization
+itself never uses today's assignment or task state.
+
+Consumer scan adds `backend/app/modules/projects/router.py` and
+`backend/app/modules/projects/create_router.py`: remove their unused
+`PermissionDenied` import/helper/catch with `core.permissions`. Canonical project
+AUTH decisions and public behavior remain unchanged.
