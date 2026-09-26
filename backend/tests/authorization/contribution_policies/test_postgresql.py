@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import session as db_session
-from app.modules.contributions.api import ContributionPolicyConflict, ContributionPolicyUnavailable
+from app.modules.contributions.api import ContributionPolicyConflict, ContributionPolicyAuthorizationDenied
 from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import AdminRoleGrant
 from .postgresql_support import world, snapshot
@@ -73,9 +73,9 @@ async def test_policy_revoked_grant_denies_fresh_mutation_and_exact_replay(admin
     response = await admin_access.signed.revoke(admin_access.admin, target.grant)
     assert response.status_code == 200, response.text
     before = await snapshot(target.project)
-    with pytest.raises(ContributionPolicyConflict):
+    with pytest.raises(ContributionPolicyAuthorizationDenied, match="^contribution_policy_unavailable$"):
         await target.execute("create_draft", request)
-    with pytest.raises((ContributionPolicyConflict, ContributionPolicyUnavailable)):
+    with pytest.raises(ContributionPolicyAuthorizationDenied, match="^contribution_policy_unavailable$"):
         await target.execute("update_draft", target.request("update_draft", result))
     assert await snapshot(target.project) == before
 

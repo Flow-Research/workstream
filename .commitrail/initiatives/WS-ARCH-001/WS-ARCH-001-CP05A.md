@@ -40,7 +40,7 @@ bounded change, not a reason to expose an unusable activation POST first.
   and refresh the exact structural ledger with shrinking kernel debt.
   No new role, permission, action or migration.
 - Focused `backend/tests/contributions/` HTTP tests and signed Finance fixtures;
-  `backend/tests/authorization/contribution_policies/{test_contracts,test_scope_locks}.py`; existing
+  `backend/tests/authorization/contribution_policies/{test_contracts,test_scope_locks,test_revocation,test_postgresql}.py`; existing
   contract, route/action inventory, semantic-lane and behavior-ownership
   registrations and the two current `.ci/behavior-contracts/contribution-policy-*`
   proof references that name the obsolete hidden-route test; API drill may exercise this policy workflow without claiming
@@ -279,3 +279,8 @@ Documentation review reconciled four stale current exposure claims in the
 publication proof map, roadmap, CON overview and authorization-custody guide.
 The public request documentation also makes existing aggregate-name retention
 explicit. No AUTH permission or policy lifecycle is changed by these repairs.
+
+The existing real revocation race and sequential revoked-grant proofs expect the exact typed denial on
+post-revocation mutation and replay, replacing its obsolete generic-conflict
+expectation. Both policy-first and revocation-first ordering, unchanged persisted
+state and the positive committed policy outcome remain asserted.
