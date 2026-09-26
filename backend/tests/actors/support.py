@@ -12,9 +12,7 @@ from app.core.config import get_settings
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.service import ResolvedActor
 from app.schemas.auth import (
-    ActorContext,
     VerifiedIssuerToken,
-    actor_id_from_external_identity,
 )
 
 ISSUER = "https://identity.test"
@@ -77,16 +75,4 @@ def verified_token(subject: str, *, kind: str = "human") -> VerifiedIssuerToken:
         token_id=f"token-{subject}",
         subject_kind=kind,
         scopes=frozenset({"workstream:access" if kind == "human" else "workstream:service"}),
-    )
-
-
-def legacy_actor(subject: str, roles: tuple[str, ...] = ("worker",)) -> ActorContext:
-    return ActorContext(
-        actor_id=actor_id_from_external_identity(ISSUER, subject),
-        external_subject=subject,
-        external_issuer=ISSUER,
-        roles=roles,
-        claim_snapshot={"roles": list(roles)},
-        auth_source="dev_mock",
-        is_dev_auth=True,
     )

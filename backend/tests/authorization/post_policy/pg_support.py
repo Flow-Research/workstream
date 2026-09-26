@@ -30,14 +30,12 @@ from tests.projects.post_policy.pg_support import prepare_upstream
 def forbid_runtime_calls(monkeypatch):
     from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
     from app.modules.artifacts.guide_document_access import ScopedGuideDocumentGrant
-    from app.modules.checkers.service import CheckerService
 
     async def forbidden(*args, **kwargs):
         raise AssertionError("post-policy authorization accessed inference, documents or evaluator")
 
     monkeypatch.setattr(OpenAIAgentSdkProjectGuideRuntime, "compile_project_guide", forbidden)
     monkeypatch.setattr(ScopedGuideDocumentGrant, "open", forbidden)
-    monkeypatch.setattr(CheckerService, "run_submission_checkers", forbidden)
 
 
 @asynccontextmanager

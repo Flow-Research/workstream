@@ -542,8 +542,6 @@ async def provision_guide_artifact_pipeline_services(
         assert body["actor_status"] == "active"
 
 
-
-
 def ensure(condition: bool, message: str) -> None:
     """Raise a normal assertion error when a system invariant is false.
 
@@ -553,8 +551,6 @@ def ensure(condition: bool, message: str) -> None:
     """
     if not condition:
         raise AssertionError(message)
-
-
 
 
 def assert_local_database_url(database_url: str) -> None:
@@ -2210,10 +2206,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         # Public packet submission was retired. Do not simulate its success or
         # expose the hidden admission-backed command to keep this drill running.
-        submissions = await request_json(
+        await request_json(
             client, "GET", f"/api/v1/tasks/{task['id']}/submissions", worker_token,
+            expected_status=404,
         )
-        ensure(submissions == [], "claim/start unexpectedly created a Submission")
         audit_token = issue_flow_token(
             f"real-api-audit-reader-{run_id}", [], issuer=flow_issuer,
             audience=flow_audience, secret=flow_secret,

@@ -1,4 +1,4 @@
-# WS-AUTH-003-TASK-CHECKER-CLEANUP — Remove alternate TASK/checker authorization
+# WS-AUTH-003-TASKCHECKER — Remove alternate TASK/checker authorization
 
 - Initiative: WS-AUTH-003
 - Durable disposition: Planned
@@ -152,8 +152,8 @@ Project Manager authority, never platform-admin status or token roles.
 | `/projects/{project_id}/checker-runs/{checker_run_id}` | `project.checker_run.read` | checker_history / run |
 
 TASK owns immutable submission target/ownership facts and its public read port.
-CHECKERS owns retained run/result queries and projections, consuming only TASK's
-public target/ownership port. AUTH adapters implement the owners' typed authority
+CHECKERS owns retained run/result queries and projections. Application
+composition resolves its minimal references through TASK's public ownership port. AUTH adapters implement the owners' typed authority
 ports; application composition wires them. No new CHECKERS import of TASK private
 models/repositories, no TASK import of CHECKERS private services, and no extension
 of generic task-operation facts to smuggle checker reads through another action.
@@ -233,15 +233,16 @@ are explicitly named):
   `backend/app/modules/checkers/api/{__init__,history}.py`,
   `backend/app/modules/checkers/history.py`;
 - `backend/app/modules/authorization/{catalogue,prepared,runtime,kernel,artifact_project_authority,history_authorization}.py`,
-  `backend/app/modules/authorization/domain/{action_groups,submission_history}.py`,
+  `backend/app/modules/authorization/domain/{action_groups,audit,audit_targets,submission_history}.py`,
   `backend/app/modules/authorization/api/{__init__,resources}.py`;
-- `backend/app/adapters/{tasks,checkers}/__init__.py`,
+- `backend/app/adapters/{auth,tasks,checkers}/__init__.py`,
   `backend/app/api/deps/{auth,authorization,history}.py`,
   `backend/app/api/router.py`, `backend/app/schemas/auth.py`,
   `backend/app/adapters/auth/{flow,dev}.py`, `backend/app/core/{config,permissions}.py`,
-  `backend/app/modules/actors/{service,repository}.py`,
+  `backend/app/modules/actors/{models,service,repository}.py`,
+  `backend/app/interfaces/auth.py`,
   `backend/app/workers/{checkers,celery_app}.py`;
-- additive `backend/alembic/versions/0006_submission_history_authority.py` after
+- additive `backend/alembic/versions/0006_history_read_authority.py` after
   `0005_task_evidence_authority`; no baseline migration or retained-data edits.
 
 Affected tests are `backend/tests/{test_tasks,test_checkers,test_auth,test_api_controls,test_db_session,test_ci_lane_catalogue,submission_fixtures}.py`,
@@ -251,7 +252,7 @@ Affected tests are `backend/tests/{test_tasks,test_checkers,test_auth,test_api_c
 privacy, authority, transactions, migration and absence modules).
 Exact dependent import/fixture repairs in existing tests are permitted; assertion
 semantics must be retained unless the table below explicitly retires the behavior.
-Scripts are `backend/scripts/{api_contract_e2e,test_structure_boundary}.py`;
+Scripts are `backend/scripts/{api_contract_e2e,behavior_ownership,test_structure_boundary}.py`;
 inventories are `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`,
 `.ci/behavior-ownership/`, `.ci/module-boundaries/`, and the existing lane catalogue.
 Documentation scope is README, canonical authentication/authorization/checker/task
@@ -323,3 +324,19 @@ Consumer scan adds `backend/app/modules/projects/router.py` and
 `backend/app/modules/projects/create_router.py`: remove their unused
 `PermissionDenied` import/helper/catch with `core.permissions`. Canonical project
 AUTH decisions and public behavior remain unchanged.
+
+
+Implementation boundary reconciliation: TASK already depends on CHECKERS public
+compiler contracts, so CHECKERS cannot import TASK even through a public port.
+CHECKERS exposes only a minimal run/submission/task reference. Application
+composition resolves that through TASK's public ownership selector before locks
+and authorization, then requests the fixed CHECKERS projection. This preserves
+acyclic owners and the intended exact historical ownership without a new subsystem.
+History DTOs live in each owner's dependency-free public history module; delivery
+imports owner adapters rather than private repositories or AUTH implementations.
+Removed unused CHECKERS repository and obsolete TASK get/list/evidence-lock helpers
+have no surviving consumers. Shared canonical submission creation remains intact.
+
+History decisions preserve the existing project audit selector. The exact task,
+submission, checker run, actor and query are bound by resource_context_digest;
+tests compare the exact project, matched grant and independently computed digest.

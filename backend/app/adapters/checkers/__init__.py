@@ -106,3 +106,9 @@ def installed_post_submit_catalogue() -> PostSubmitCatalogue:
     from app.modules.checkers.runner import default_checker_registry
 
     return build_post_submit_catalogue(default_checker_registry())
+
+
+def checker_history_repository(session):
+    """Compose retained CHECKERS reads through TASK's public ownership port."""
+    from app.modules.checkers.history import CheckerHistoryRepository
+    return CheckerHistoryRepository(session)

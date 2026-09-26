@@ -1338,3 +1338,13 @@ reads pages of 100 without TASK locks; all pages commit together, so total work
 and held AUTH lock time grow with affected assignments. There is no truncation or
 historical invalidation backfill. Timed contributor expiry and voluntary skip
 remain deferred; this handler releases work for supported authority loss only.
+
+
+### Canonical submission and checker history
+
+The [TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history)
+defines eight exact read actions and distinct contributor/manager projections.
+AUTH stages a fresh matched-grant decision; the caller commits it only with a
+validated response. Authentication has no token-role compatibility projection or
+identity-observation writer. Retained actor classification data remains evidence,
+never an authority source. No manual checker or finalize-repair route survives.

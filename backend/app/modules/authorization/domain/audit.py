@@ -14,6 +14,9 @@ from app.modules.authorization.catalogue import ActionId, PermissionId
 CONTEXT_DIGEST_RESOURCE_TYPES = (
     "outbox_event",
     "task_authority",
+    "task_submission_history",
+    "submission_history",
+    "checker_history",
     "artifact_put_attempt",
     "artifact_verification_job",
     "artifact_pending_work",
@@ -39,6 +42,9 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
 AuthorizationDecisionResourceType = Literal[
     "outbox_event",
     "task_authority",
+    "task_submission_history",
+    "submission_history",
+    "checker_history",
     "actor_profile",
     "actor_authorization_context",
     "project",

@@ -148,7 +148,11 @@ async def test_foreign_contributor_denial_precedes_task_lookup():
 
 
 @pytest.mark.asyncio
-async def test_command_orders_authority_task_art_persistence_and_final_consumption():
+async def test_command_orders_authority_task_art_persistence_and_final_consumption(monkeypatch):
+    from app.workers.celery_app import celery_app
+    def unexpected_dispatch(*args, **kwargs):
+        pytest.fail("canonical submission creation queued alternate checker execution")
+    monkeypatch.setattr(celery_app, "send_task", unexpected_dispatch)
     request = _request()
     events = []
 

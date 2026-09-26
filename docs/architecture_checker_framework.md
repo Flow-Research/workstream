@@ -545,7 +545,8 @@ bytes and checker outputs are persisted; it does not redesign these routes.
 ARCH-04C owns CHECKERS result/currentness and its completion event, not TASK
 mutations. ARCH-04E owns the current `allow_review` manifest and TASK transition;
 ARCH-04F owns contributor-readable non-allow remediation before public cutover.
-The legacy direct CHECKERS-to-TASK mutation is not a second canonical path.
+The direct CHECKERS-to-TASK mutation, fabricated system actor and alternate
+Celery gate are removed. Canonical durable execution and routing remain unavailable.
 
 `review_pending` marks readiness for the separately owned WS-REV lifecycle.
 WS-REV alone creates `ReviewPacketManifest`, review queues, reviewer leases,
@@ -713,3 +714,15 @@ policy, whose complete body is separately reviewed and approved. Projection and 
 open guide documents nor invoke a model or runtime checker. Supported structural
 checks do not establish substantive work quality, and capability suggestions do
 not register implementations or bypass required gaps.
+
+
+## Retained history reads
+
+CHECKERS selects fixed run/result columns and obtains immutable Submission
+ownership through TASK's public history port. Contributor reads require current
+Submitter authority for the original Submission contributor, not today's assignee.
+Separate Project Manager reads expose internal result summaries and locked lineage,
+without raw metadata, provider locations, token claims or obsolete payment fields.
+Hidden result rows and internal-only routing results are never returned to contributors.
+No manual execution endpoint accompanies these reads. See the
+[TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history).

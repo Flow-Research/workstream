@@ -78,6 +78,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/api/deps/history.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/api/deps/post_policy.py"
     },
     {
@@ -139,10 +143,6 @@
     {
       "group": "shared",
       "target": "backend/app/core/identifiers.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/app/core/permissions.py"
     },
     {
       "group": "lifecycle",
@@ -550,6 +550,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/submission_history.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/task_authority.py"
     },
     {
@@ -571,6 +575,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/guide_proposal_authorization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/history_authorization.py"
     },
     {
       "group": "auth",
@@ -694,6 +702,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/history.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/policy_compilation.py"
     },
     {
@@ -726,7 +738,7 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/checkers/gate_queue.py"
+      "target": "backend/app/modules/checkers/history.py"
     },
     {
       "group": "artifacts",
@@ -746,10 +758,6 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/checkers/pre_review_gate.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/checkers/pre_submit_defaults.py"
     },
     {
@@ -758,23 +766,11 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/checkers/repository.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/checkers/router.py"
     },
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/runner.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/checkers/schemas.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/checkers/service.py"
     },
     {
       "group": "lifecycle",
@@ -1246,6 +1242,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/submission_history.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/task_detail.py"
     },
     {
@@ -1255,10 +1255,6 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/assignment_invalidation.py"
-    },
-    {
-      "group": "lifecycle",
-      "target": "backend/app/modules/tasks/authorization.py"
     },
     {
       "group": "lifecycle",
@@ -1305,6 +1301,10 @@
       "target": "backend/app/modules/tasks/submission_composition.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/submission_history.py"
+    },
+    {
       "group": "auth",
       "target": "backend/app/schemas/auth.py"
     },
@@ -1323,10 +1323,6 @@
     {
       "group": "shared",
       "target": "backend/app/workers/celery_app.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/workers/checkers.py"
     },
     {
       "group": "shared",
@@ -1445,7 +1441,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "5d61e796c357a7c203de4fc4b56f508fa6c6f92fad6ef1059a5f5c47bbb7cc1f",
+  "authority_digest": "df8c617a17828cb1a310462ce2cee2ff0efba1b53b74de351831bcf479e3f10a",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

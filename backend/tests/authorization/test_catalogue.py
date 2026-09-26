@@ -21,7 +21,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 132
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 140
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {

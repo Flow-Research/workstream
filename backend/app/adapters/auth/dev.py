@@ -8,11 +8,9 @@ from app.core.config import Settings
 from app.interfaces.auth import AuthVerificationError
 from app.schemas.auth import (
     AuthVerificationResult,
-    LegacyAuthorizationCompatibilityContext,
     MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS,
     VerifiedIssuerToken,
     actor_id_from_external_identity,
-    normalize_legacy_roles,
 )
 
 DEVELOPMENT_ENVIRONMENTS = {"local", "dev", "development", "test"}
@@ -58,7 +56,7 @@ class DevelopmentAuthVerifier:
         return self._issuer
 
     async def verify(self, token: str) -> AuthVerificationResult:
-        """Verify a local bearer token and return canonical and legacy views.
+        """Verify a local bearer token and return canonical identity.
 
         Args:
             token: Bearer token from the incoming request.
@@ -73,7 +71,6 @@ class DevelopmentAuthVerifier:
         if token != self._settings.dev_auth_token:
             raise AuthVerificationError("invalid development auth token")
 
-        roles = normalize_legacy_roles(self._settings.dev_auth_roles)
         now = int(datetime.now(UTC).timestamp())
         return AuthVerificationResult(
             token=VerifiedIssuerToken(
@@ -86,9 +83,5 @@ class DevelopmentAuthVerifier:
                 subject_kind="human",
                 scopes=frozenset({"workstream:access"}),
             ),
-            legacy=LegacyAuthorizationCompatibilityContext(
-                roles=roles,
-                auth_source="dev_mock",
-                is_dev_auth=True,
-            ),
+
         )

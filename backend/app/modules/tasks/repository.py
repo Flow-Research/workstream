@@ -8,7 +8,6 @@ from uuid import UUID
 
 from sqlalchemy import Row, Select, and_, or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.api import (
@@ -36,7 +35,6 @@ from app.modules.tasks.api.assignment_invalidation import (
 )
 from app.modules.tasks.models import (
     AuditEvent,
-    EvidenceItem,
     Submission,
     TaskAssignment,
     WorkstreamTask,
@@ -503,31 +501,6 @@ class TaskRepository:
         await self._session.refresh(submission)
         return submission
 
-    async def get_submission(
-        self,
-        submission_id: str,
-        *,
-        populate_existing: bool = False,
-    ) -> Submission | None:
-        """Load one submission by id with evidence items.
-
-        Args:
-            submission_id: Submission id to load.
-            populate_existing: Whether to refresh an already-loaded ORM instance
-                from the database.
-
-        Returns:
-            Submission when found; otherwise ``None``.
-        """
-        statement = (
-            select(Submission)
-            .options(selectinload(Submission.evidence_items))
-            .where(Submission.id == submission_id)
-        )
-        if populate_existing:
-            statement = statement.execution_options(populate_existing=True)
-        result = await self._session.execute(statement)
-        return result.scalar_one_or_none()
 
     async def get_latest_submission_for_task(
         self,
@@ -560,35 +533,6 @@ class TaskRepository:
         result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def list_submissions_for_task(self, task_id: str) -> Sequence[Submission]:
-        """List submission versions for one task.
-
-        Args:
-            task_id: Task whose submissions should be listed.
-
-        Returns:
-            Submission versions ordered from oldest to newest.
-        """
-        result = await self._session.execute(
-            select(Submission)
-            .options(selectinload(Submission.evidence_items))
-            .where(Submission.task_id == task_id)
-            .order_by(Submission.version.asc(), Submission.submitted_at.asc())
-        )
-        return result.scalars().all()
-
-    async def lock_submission_evidence(self, submission_id: str, locked_at: datetime) -> None:
-        """Stamp evidence rows with the submission lock timestamp.
-
-        Args:
-            submission_id: Submission whose evidence rows should be locked.
-            locked_at: Timestamp applied to each evidence item.
-        """
-        result = await self._session.execute(
-            select(EvidenceItem).where(EvidenceItem.submission_id == submission_id)
-        )
-        for evidence in result.scalars():
-            evidence.locked_at = locked_at
 
     async def finalize_submission_if_unlocked(
         self,

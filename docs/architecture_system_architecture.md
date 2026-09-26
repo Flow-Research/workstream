@@ -299,7 +299,6 @@ POST /projects
 POST /projects/:id/tasks
 POST /tasks/:id/claim
 POST /tasks/:id/submit
-POST /submissions/:id/finalize          # operational repair for the automatic checker gate
 GET /submissions/:id/checker-runs
 planned reviewer current-work read under /api/v1
 planned active-lease decision mutation under /api/v1

@@ -2,7 +2,7 @@
 
 These fixtures do not prove Submission creation or ART admission, return an
 HTTP response, or make a hidden endpoint public. They seed a stored Submission
-and exercise the existing finalization/enqueue owners for downstream tests.
+with valid locked lineage; they never execute a checker or enqueue work.
 """
 
 from app.core.config import get_settings
@@ -17,14 +17,13 @@ from app.modules.actors.models import ActorIdentityLink
 from app.modules.tasks.models import EvidenceItem, Submission, TaskAssignment, WorkstreamTask
 from app.modules.tasks.schemas import SubmissionCreate
 from app.modules.tasks.submission_composition import build_submission
-from app.schemas.auth import ActorContext
+from datetime import UTC, datetime
 
 
-async def seed_finalized_submission_for_checker_test(
+async def seed_retained_submission(
     task_id: str, payload: dict, *, predecessor_id: str | None = None,
-    raise_on_dispatch_failure: bool = True,
 ) -> str:
-    """Seed one upstream packet, then run real finalization and checker enqueue."""
+    """Seed a retained locked packet with guards enabled; not an intake proof."""
     packet = SubmissionCreate.model_validate(payload)
     submission_id = str(new_record_id())
     async with db_session.get_session_factory()() as session:
@@ -43,11 +42,6 @@ async def seed_finalized_submission_for_checker_test(
             ActorIdentityLink.actor_profile_id == task.assigned_to,
         ))
         assert link is not None and link.status == "active"
-        actor = ActorContext(
-            actor_id=task.assigned_to, external_subject=link.subject,
-            external_issuer=link.issuer, roles=("worker",), claim_snapshot={},
-            auth_source="dev_mock", is_dev_auth=True,
-        )
         service = task_service(session, settings=get_settings())
         await service._load_locked_task_context(task)
         submission = build_submission(
@@ -71,9 +65,48 @@ async def seed_finalized_submission_for_checker_test(
         session.add(submission)
         task.status = "submitted"
         await session.flush()
-        await service._finalize_submission_for_evaluation(actor, task, submission)
+        locked_at = datetime.now(UTC)
+        submission.locked_at = locked_at
+        for item in submission.evidence_items:
+            item.locked_at = locked_at
         await session.commit()
-        await service._enqueue_pre_review_gate_after_commit(
-            actor, submission_id, raise_on_failure=raise_on_dispatch_failure,
-        )
     return submission_id
+
+
+async def seed_retained_checker_run(submission_id: str, *, routing="allow_review", results=()) -> str:
+    """Seed retained CHECKERS evidence under real foreign keys and immutable guards.
+
+    This is a storage prerequisite, not a claim that runtime evaluation executed.
+    """
+    from app.modules.checkers.models import CheckerRun, CheckerResult
+    from app.modules.checkers.runner import canonical_artifact_manifest_hash
+
+    run_id = str(new_record_id())
+    async with db_session.get_session_factory()() as session:
+        submission = await session.get(Submission, submission_id)
+        assert submission is not None
+        now = datetime.now(UTC)
+        run = CheckerRun(
+            id=run_id, task_id=submission.task_id, submission_id=submission.id,
+            submission_version=submission.version, trigger_source="retained_evidence",
+            status="completed", routing_recommendation=routing, outcome_source="auto_checker",
+            triggered_by=submission.contributor_id, triggered_by_subject="retained-subject",
+            triggered_by_issuer="retained-issuer", trigger_auth_source="flow",
+            attempt_number=1, is_current_for_submission=True,
+            **{column.name: getattr(submission, column.name) for column in CheckerRun.__table__.columns
+               if column.name.startswith("locked_")},
+            package_hash=submission.package_hash,
+            artifact_hash_manifest=submission.artifact_hash_manifest,
+            artifact_manifest_hash=canonical_artifact_manifest_hash(submission.artifact_hash_manifest),
+            created_at=now, queued_at=now, started_at=now, completed_at=now,
+            results=[CheckerResult(**dict(dict(
+                id=str(new_record_id()), checker_run_id=run_id, task_id=submission.task_id,
+                submission_id=submission.id, checker_name="check_evidence_present",
+                status="passed", severity="info", blocks_review=False,
+                message="internal sentinel", worker_message="Evidence present",
+                worker_suggested_fix=None, worker_visible=True,
+            ), **item)) for item in results],
+        )
+        session.add(run)
+        await session.commit()
+    return run_id

@@ -23,7 +23,7 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 DDL_LOCK_DIRECTORY = Path("/tmp")
 # Match the PostgreSQL 16 engine used by Backend CI. Catalog identity rendering
 # differs across major versions; regenerate only after comparing actual objects.
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "a86392fc200fd60146b8ff959ae77d131d3df7dd02e2f7b607b012e80aeae1be"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "687f072972865eb286295408b2fc3dca723410bf684c814aab77c9e7733607c8"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -343,7 +343,6 @@ async def _drop_test_database_schema(database_url: str) -> None:
         await connection.execute("create schema public")
     finally:
         await connection.close()
-
 
 
 def _rebuild_test_database_schema(database_url: str) -> None:

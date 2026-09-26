@@ -263,6 +263,14 @@ new_permissions = frozenset(
 )
 
 expected = {
+    "task.submission.list": ("submission.read_own", "task-checker-auth-cleanup"),
+    "submission.read": ("submission.read_own", "task-checker-auth-cleanup"),
+    "submission.checker_run.list": ("submission.read_own", "task-checker-auth-cleanup"),
+    "checker_run.read": ("submission.read_own", "task-checker-auth-cleanup"),
+    "project.task.submission.list": ("project.task.manage", "task-checker-auth-cleanup"),
+    "project.submission.read": ("project.task.manage", "task-checker-auth-cleanup"),
+    "project.submission.checker_run.list": ("project.task.manage", "task-checker-auth-cleanup"),
+    "project.checker_run.read": ("project.task.manage", "task-checker-auth-cleanup"),
     "task.assignment.authority_reconcile": ("task.assignment.authority_reconcile", "WS-ARCH-001-03C1"),
     "outbox.dispatch": ("outbox.dispatch", "WS-AUTH-001-OUTBOX-01"),
     "actor.profile.read_self": ("actor.profile.read_self", "WS-AUTH-001-07B"),
@@ -424,6 +432,14 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "task.submission.list",
+    "submission.read",
+    "submission.checker_run.list",
+    "checker_run.read",
+    "project.task.submission.list",
+    "project.submission.read",
+    "project.submission.checker_run.list",
+    "project.checker_run.read",
     "task.assignment.authority_reconcile",
     "outbox.dispatch",
     "project.guide.activate",

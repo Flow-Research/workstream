@@ -1,0 +1,87 @@
+"""Fixed SQL projections and live grant privacy over retained checker results."""
+
+from uuid import uuid4
+
+import pytest
+from sqlalchemy import event, select
+from sqlalchemy.engine import Engine
+
+from app.db import session as db_session
+from app.modules.tasks.models import AuditEvent, Submission
+from app.modules.tasks.submission_history import SubmissionHistoryRepository
+from app.modules.checkers.history import CheckerHistoryRepository
+from tests.submission_fixtures import seed_retained_submission, seed_retained_checker_run
+from tests.test_tasks import (create_active_project, create_started_task, complete_submission_payload,
+                             set_dev_actor, auth_headers, actor_id)
+from .test_reads import history_paths, history_case
+
+
+@pytest.mark.parametrize("routing", ["allow_review", "checker_retry", "task_setup_blocked"])
+async def test_fixed_projection_and_selected_columns(task_client, monkeypatch, routing):
+    project = await create_active_project(task_client)
+    task = await create_started_task(task_client, project["id"], monkeypatch)
+    submission = await seed_retained_submission(task["id"], complete_submission_payload())
+    run = await seed_retained_checker_run(submission, routing=routing, results=(
+        {"metadata_json": {"secret": "RAW_RESULT_SENTINEL"}},
+        {"checker_name": "check_submission_packet", "worker_visible": False,
+         "worker_message": "HIDDEN_RESULT_SENTINEL", "message": "hidden internal"},
+    ))
+    case = project["id"], task["id"], submission, run
+    captured = []
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        lowered = statement.lower()
+        if lowered.lstrip().startswith("select") and any(f"from {table}" in lowered for table in ("submissions", "checker_results", "checker_runs", "evidence_items")):
+            captured.append(lowered.split("from", 1)[0])
+    event.listen(Engine, "before_cursor_execute", capture)
+    try:
+        for manager in (False, True):
+            set_dev_actor(monkeypatch, roles="", subject="project-manager-subject" if manager else "worker-one")
+            for action, path in history_paths(*case, manager=manager).items():
+                response = await task_client.get(path, headers=auth_headers())
+                assert response.status_code == 200, response.text
+                assert "RAW_RESULT_SENTINEL" not in response.text
+                value = response.json()
+                item = value["items"][0] if action.endswith("list") else value
+                if "checker" in action:
+                    expected = 2 if manager else 1 if routing == "allow_review" else 0
+                    assert len(item["results"]) == expected
+                    if not manager:
+                        assert "HIDDEN_RESULT_SENTINEL" not in response.text
+                        assert "internal" not in response.text
+                for field in ("package_hash", "package_uri", "artifact_hash_manifest", "worker_attestation", "locked_payment_policy_version"):
+                    assert field not in item
+    finally:
+        event.remove(Engine, "before_cursor_execute", capture)
+    assert captured
+    for statement in captured:
+        assert not any(f".{field}" in statement for field in (
+            "package_uri", "package_hash", "artifact_hash_manifest", "metadata", "worker_attestation",
+            "triggered_by_subject", "triggered_by_issuer", "locked_payment_policy_version",
+        )), statement
+
+
+async def test_denied_read_never_loads_private_rows(task_client, monkeypatch):
+    from app.modules.authorization.models import ProjectRoleGrant
+    case = await history_case(task_client, monkeypatch)
+    who = await actor_id("worker-one")
+    async with db_session.get_session_factory()() as session:
+        grant = await session.scalar(select(ProjectRoleGrant).where(ProjectRoleGrant.actor_profile_id == who))
+        grant_id = str(grant.id)
+    set_dev_actor(monkeypatch, roles="", subject="project-manager-subject")
+    revoke = await task_client.post(f"/api/v1/projects/{case[0]}/role-grants/{grant_id}/revoke",
+                                   headers=auth_headers() | {"Idempotency-Key": str(uuid4())}, json={"reason": "Withdraw history access"})
+    assert revoke.status_code == 200, revoke.text
+    set_dev_actor(monkeypatch, roles="admin,project_manager,worker", subject="worker-one")
+    async def forbidden(*args, **kwargs):
+        pytest.fail("private projection entered without live grant")
+    monkeypatch.setattr(SubmissionHistoryRepository, "read", forbidden)
+    monkeypatch.setattr(CheckerHistoryRepository, "read", forbidden)
+    for path in history_paths(*case).values():
+        response = await task_client.get(path, headers=auth_headers())
+        assert response.status_code == 404, response.text
+    async with db_session.get_session_factory()() as session:
+        events = list(await session.scalars(select(AuditEvent).where(AuditEvent.actor_id == who,
+                                AuditEvent.action_id.in_(tuple(history_paths(*case))))))
+        assert len(events) == 4
+        assert all(event.after_facts["allowed"] is False for event in events)
+        assert await session.get(Submission, case[2]) is not None

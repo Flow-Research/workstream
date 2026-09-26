@@ -32,8 +32,7 @@ from app.modules.reviews.schemas import (
 )
 from app.modules.tasks.models import Submission
 from project_create_fixtures import grant_system_project_manager, insert_historical_project
-from tests.test_checkers import get_submission_and_automatic_pre_review_run
-from tests.submission_fixtures import seed_finalized_submission_for_checker_test
+from tests.submission_fixtures import seed_retained_submission, seed_retained_checker_run
 from tests.test_tasks import (
     auth_headers,
     complete_submission_payload,
@@ -94,13 +93,15 @@ async def _reviewable_lineage(
         monkeypatch,
         subject="review-worker-two",
     )
-    submission_id = await seed_finalized_submission_for_checker_test(
+    submission_id = await seed_retained_submission(
         task["id"], complete_submission_payload(),
     )
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
-    assert checker["status"] == "completed"
-    assert checker["routing_recommendation"] == "allow_review"
+    run_id = await seed_retained_checker_run(submission_id)
+    async with db_session.get_session_factory()() as session:
+        stored = await session.get(Submission, submission_id)
+        submission = {"id": stored.id, "version": stored.version}
+    checker = {"id": run_id}
     return project, task, submission | {"checker_run_id": checker["id"]}
 
 
@@ -109,15 +110,17 @@ async def _additional_reviewable_submission(
     project: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[dict, dict]:
-    """Seed another stored submission and evaluate it for queue-owner tests."""
+    """Seed another retained submission and checker record for queue-owner tests."""
     task = await create_started_task(client, project["id"], monkeypatch)
-    submission_id = await seed_finalized_submission_for_checker_test(
+    submission_id = await seed_retained_submission(
         task["id"], complete_submission_payload(),
     )
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
-    assert checker["status"] == "completed"
-    assert checker["routing_recommendation"] == "allow_review"
+    run_id = await seed_retained_checker_run(submission_id)
+    async with db_session.get_session_factory()() as session:
+        stored = await session.get(Submission, submission_id)
+        submission = {"id": stored.id, "version": stored.version}
+    checker = {"id": run_id}
     return task, submission | {"checker_run_id": checker["id"]}
 
 

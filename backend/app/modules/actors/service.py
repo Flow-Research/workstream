@@ -12,7 +12,6 @@ from app.core.identifiers import new_record_id
 from app.modules.actors.models import (
     ActorIdentityLink,
     ActorProfile,
-    LegacyActorIdentity,
 )
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.schemas import (
@@ -29,7 +28,7 @@ from app.modules.audit.schemas import (
 )
 from app.modules.audit.service import AuditService
 from app.modules.authorization.runtime import ActorSelfResourceContext
-from app.schemas.auth import ActorContext, VerifiedIssuerToken
+from app.schemas.auth import VerifiedIssuerToken
 
 
 class ActorRegistryError(Exception):
@@ -347,11 +346,6 @@ class ActorService:
             requested_fields=tuple(sorted(requested_fields)),
         )
 
-    async def refresh_legacy_identity(self, actor: ActorContext) -> LegacyActorIdentity:
-        """Persist token observations only in the non-authoritative compatibility table."""
-        identity = await self._repo.upsert_legacy_identity(self._legacy_identity_from_actor(actor))
-        await self._session.commit()
-        return identity
 
     @staticmethod
     def self_response(
@@ -381,20 +375,6 @@ class ActorService:
         await self._session.refresh(resolved.identity_link)
         return resolved
 
-    @staticmethod
-    def _legacy_identity_from_actor(actor: ActorContext) -> LegacyActorIdentity:
-        """Project privacy-bounded compatibility fields from verified context."""
-        return LegacyActorIdentity(
-            actor_id=actor.actor_id,
-            external_subject=actor.external_subject,
-            external_issuer=actor.external_issuer,
-            display_name=None,
-            email=None,
-            last_seen_roles=list(actor.roles),
-            last_claim_snapshot={"roles": list(actor.roles)},
-            auth_source=actor.auth_source,
-            is_dev_auth=actor.is_dev_auth,
-        )
 
     @staticmethod
     def _validate_link(

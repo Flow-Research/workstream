@@ -30,7 +30,6 @@ async def test_nonhuman_tokens_receive_no_legacy_authority(rsa_signing_material,
     result = await verifier.verify(
         issue_asymmetric_token(private_key, subject_kind=kind, scope=scope)
     )
-    assert result.legacy is None
     assert result.token.subject_kind == kind
 
 

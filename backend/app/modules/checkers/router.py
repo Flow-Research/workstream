@@ -1,137 +1,80 @@
-"""FastAPI routes for checker feedback and durable checker runs."""
-
-from __future__ import annotations
+"""Canonical contributor and Project Manager checker history reads."""
 
 from typing import Annotated
+from uuid import UUID
+from fastapi import APIRouter, Depends, Query
+from app.api.deps.authorization import enforce_human_authorization_read
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.api.deps.history import HistoryReadOperation, get_history_reads
 
-from app.api.deps.auth import get_registered_actor
-from app.core.permissions import PermissionDenied
-from app.db.session import get_db_session
-from app.modules.checkers.schemas import (
-    CheckerRunRequest,
-    CheckerRunPublicResponse,
-    CheckerRunResponse,
+
+from app.modules.checkers.api.history import (
+    ContributorCheckerHistoryPage,
+    ManagementCheckerHistoryPage,
+    ContributorCheckerHistory,
+    ManagementCheckerHistory,
 )
-from app.modules.checkers.service import CheckerService, CheckerServiceError
-from app.schemas.auth import ActorContext
+
 
 router = APIRouter(tags=["checkers"])
 
-CHECKER_RUN_PUBLIC_RESPONSE = {
-    200: {
-        "model": CheckerRunPublicResponse,
-        "description": (
-            "Role-sensitive checker run response. Worker-readable OpenAPI "
-            "documents only the public subset; admin and project_manager actors "
-            "may receive additional internal routing and provenance fields."
-        ),
-    }
-}
-
-
-def checker_http_error(exc: CheckerServiceError) -> HTTPException:
-    """Convert a checker service error into an HTTP error.
-
-    Args:
-        exc: Checker service exception with an API status code.
-
-    Returns:
-        HTTP exception carrying the service error details.
-    """
-    return HTTPException(status_code=exc.status_code, detail=str(exc))
-
-
-def permission_http_error(exc: PermissionDenied) -> HTTPException:
-    """Convert a permission failure into a 403 HTTP error.
-
-    Args:
-        exc: Permission exception raised by the service layer.
-
-    Returns:
-        HTTP exception with a forbidden status.
-    """
-    return HTTPException(status_code=403, detail=str(exc))
-
-
-def checker_run_response(payload: CheckerRunResponse | list[CheckerRunResponse]) -> JSONResponse:
-    """Serialize role-sensitive checker-run responses without null hidden fields."""
-    return JSONResponse(content=jsonable_encoder(payload, exclude_none=True))
-
-
-@router.post(
-    "/submissions/{submission_id}/checker-runs",
-    response_model=None,
-    responses=CHECKER_RUN_PUBLIC_RESPONSE,
+@router.get("/submissions/{submission_id}/checker-runs", response_model=ContributorCheckerHistoryPage,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "submission.checker_run.list"},
 )
-async def run_submission_checkers(
-    submission_id: str,
-    payload: CheckerRunRequest,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> JSONResponse:
-    """Trigger a durable internal checker run for a finalized submission."""
-    try:
-        result = await CheckerService(session).run_submission_checkers(
-            actor,
-            submission_id,
-            payload.trigger_reason,
-        )
-        return checker_run_response(result)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except CheckerServiceError as exc:
-        raise checker_http_error(exc) from exc
+async def read_contributor_checker_runs(
+    submission_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> ContributorCheckerHistoryPage:
+    """Read retained checker runs under fresh contributor authority."""
+    return await history.read(
+        "checker_runs", submission_id, limit=limit, cursor=cursor,
+    )
 
 
-@router.get(
-    "/submissions/{submission_id}/checker-runs",
-    response_model=None,
-    responses={
-        200: {
-            "model": list[CheckerRunPublicResponse],
-            "description": (
-                "Role-sensitive checker run list. Worker-readable OpenAPI "
-                "documents only the public subset; admin and project_manager "
-                "actors may receive additional internal routing and provenance fields."
-            ),
-        }
-    },
+@router.get("/projects/{project_id}/submissions/{submission_id}/checker-runs", response_model=ManagementCheckerHistoryPage,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "project.submission.checker_run.list"},
 )
-async def list_submission_checker_runs(
-    submission_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> JSONResponse:
-    """Return checker runs for one visible submission."""
-    try:
-        result = await CheckerService(session).list_submission_checker_runs(actor, submission_id)
-        return checker_run_response(result)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except CheckerServiceError as exc:
-        raise checker_http_error(exc) from exc
+async def read_management_checker_runs(
+    submission_id: UUID,
+    project_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> ManagementCheckerHistoryPage:
+    """Read retained checker runs under fresh management authority."""
+    return await history.read(
+        "checker_runs", submission_id, project_id=project_id, limit=limit, cursor=cursor,
+    )
 
 
-@router.get(
-    "/checker-runs/{checker_run_id}",
-    response_model=None,
-    responses=CHECKER_RUN_PUBLIC_RESPONSE,
+@router.get("/checker-runs/{checker_run_id}", response_model=ContributorCheckerHistory,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "checker_run.read"},
 )
-async def get_checker_run(
-    checker_run_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> JSONResponse:
-    """Return one visible checker run."""
-    try:
-        result = await CheckerService(session).get_checker_run(actor, checker_run_id)
-        return checker_run_response(result)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except CheckerServiceError as exc:
-        raise checker_http_error(exc) from exc
+async def read_contributor_checker_run(
+    checker_run_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+) -> ContributorCheckerHistory:
+    """Read retained checker run under fresh contributor authority."""
+    return await history.read(
+        "checker_run", checker_run_id,
+    )
+
+
+@router.get("/projects/{project_id}/checker-runs/{checker_run_id}", response_model=ManagementCheckerHistory,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "project.checker_run.read"},
+)
+async def read_management_checker_run(
+    checker_run_id: UUID,
+    project_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+) -> ManagementCheckerHistory:
+    """Read retained checker run under fresh management authority."""
+    return await history.read(
+        "checker_run", checker_run_id, project_id=project_id,
+    )

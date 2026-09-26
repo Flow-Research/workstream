@@ -165,10 +165,8 @@ def test_archive_limit_compiler_rejects_rule_substitution(alteration, field, pri
 @pytest.mark.parametrize("field", ["maximum_archive_entries", "maximum_archive_size_bytes"])
 def test_locked_archive_limit_rejects_malformed_values(value, field):
     from app.modules.tasks.service import TaskLockedContextInvalid
-    from app.modules.checkers.service import CheckerService
 
     policy = {**_effective_policy(), field: value}
-    assert not CheckerService._effective_policy_shape_is_valid(policy)
     with pytest.raises(TaskLockedContextInvalid):
         task_service(None, settings=get_settings())._optional_policy_non_negative_int(policy, field, minimum=1)
 

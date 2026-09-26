@@ -481,3 +481,35 @@ returns 422. Nonhuman callers are rejected before TASK access. These reads do
 not authorize claim or submission, and no old role/creator wrapper remains for
 them. Shared helpers used by retained submission reads and internal audit recovery are
 not yet removed.
+
+
+## Retained submission and checker history
+
+| Contributor path | Exact action |
+|---|---|
+| `GET /tasks/{task_id}/submissions` | `task.submission.list` |
+| `GET /submissions/{submission_id}` | `submission.read` |
+| `GET /submissions/{submission_id}/checker-runs` | `submission.checker_run.list` |
+| `GET /checker-runs/{checker_run_id}` | `checker_run.read` |
+
+Each has a separate manager path prefixed `/projects/{project_id}` and action
+prefixed `project.`. All paths use `/api/v1`. Contributor access requires current
+exact-project `submission.read_own` through a Submitter grant and immutable
+Submission ownership. Task history requires at least one owned Submission.
+Manager access requires `project.task.manage` through a covering Project Manager
+grant, including valid system scope; admin/token-role status is insufficient.
+Foreign/missing/denied resources share404. Services and agents are not admitted.
+
+Owner-qualified target selection precedes the scoped TASK lock. AUTH then locks
+current actor/link, matched grant and Project. Detached fixed projections validate
+before caller-owned commit; query, validation or audit-write failure rolls back.
+No private artifacts or arbitrary metadata enter these DTOs. Lists return `items`
+and `next_cursor`, default25/max100. Submission order is `(version,id)`; checker
+order is `(created_at,id)`. Cursors bind actor/action/project/parent/limit and carry
+no authority. Every page reauthorizes.
+
+The old manual checker POST and submission-finalize repair POST are removed, as
+are their queue/worker and token-role dependencies. This does not activate durable
+post-submit execution, routing or recovery. Existing assignment invalidation still
+refuses release after a Submission; retained-history tests do not introduce a new
+reclaim workflow.

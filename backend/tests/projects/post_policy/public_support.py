@@ -15,7 +15,6 @@ from tests.projects.guide_compilation.proposals.public_support import proposal_c
 def post_policy_worker(monkeypatch):
     """Configure only an isolated broker and forbid inference/evaluation entry points."""
     from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
-    from app.modules.checkers.service import CheckerService
     from app.modules.artifacts.guide_document_access import ScopedGuideDocumentGrant
 
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "memory://")
@@ -26,7 +25,6 @@ def post_policy_worker(monkeypatch):
     async def forbidden(*args, **kwargs):
         pytest.fail("policy setup accessed inference or a submitted-work evaluator")
     monkeypatch.setattr(OpenAIAgentSdkProjectGuideRuntime, "compile_project_guide", forbidden)
-    monkeypatch.setattr(CheckerService, "run_submission_checkers", forbidden)
     monkeypatch.setattr(ScopedGuideDocumentGrant, "open", forbidden)
     yield post_policy
     get_settings.cache_clear()

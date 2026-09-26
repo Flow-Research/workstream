@@ -24,6 +24,7 @@ from app.modules.authorization.domain.contribution_policies import ContributionP
 from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain import task_authority, task_queues
+from app.modules.authorization.domain.submission_history import HistoryReadResourceContext
 from app.modules.authorization.domain.guide_mutations import (
     ProjectGuideMutationResourceContext, ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSourceSnapshotMutationResourceContext,
@@ -825,7 +826,6 @@ PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION = MappingProxyType(
 )
 
 
-
 class ActorAuthorizationContextResourceContext(BaseModel):
     """Self-owned selector for authority projected onto one project."""
 
@@ -1193,7 +1193,7 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
 
 
 AuthorizationResourceContext = (
-    task_queues.QueueReadResourceContext | task_authority.TaskAuthorityResourceContext | ActorSelfResourceContext
+    HistoryReadResourceContext | task_queues.QueueReadResourceContext | task_authority.TaskAuthorityResourceContext | ActorSelfResourceContext
     | ProjectReadResourceContext | ProjectDiagnosticReadResourceContext
     | ProjectPolicyReadResourceContext
     | ProjectActiveGuideReadResourceContext

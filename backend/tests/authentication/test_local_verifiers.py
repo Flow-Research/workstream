@@ -45,8 +45,6 @@ async def test_local_hmac_fixture_uses_final_claim_shape() -> None:
 
     assert verifier.canonical_issuer() == result.token.issuer
     assert result.token.token_id == "local-token-id"
-    assert result.legacy is not None
-    assert result.legacy.roles == ("reviewer",)
 
 
 async def test_flow_auth_rejects_subject_above_persisted_identity_bound() -> None:

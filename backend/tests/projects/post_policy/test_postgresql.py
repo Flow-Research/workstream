@@ -26,7 +26,6 @@ async def test_post_policy_operation_preserves_finalization_without_provider_or_
             upstream_approval_output_digest=canonical_json_hash(upstream.model_dump(mode='json')))
         from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
         from app.modules.artifacts.guide_document_access import ScopedGuideDocumentGrant
-        from app.modules.checkers.service import CheckerService
         from tests.projects.guide_compilation.finalization.pg_support import stored_state
 
         async def forbidden(*args, **kwargs):
@@ -34,7 +33,8 @@ async def test_post_policy_operation_preserves_finalization_without_provider_or_
 
         monkeypatch.setattr(OpenAIAgentSdkProjectGuideRuntime, 'compile_project_guide', forbidden)
         monkeypatch.setattr(ScopedGuideDocumentGrant, 'open', forbidden)
-        monkeypatch.setattr(CheckerService, 'run_submission_checkers', forbidden)
+        from app.adapters.artifacts import CheckerPhaseService
+        monkeypatch.setattr(CheckerPhaseService, 'evaluate_post_submission', forbidden)
         original = await stored_state(factory, command)
         receipts = []
         for _ in range(2):

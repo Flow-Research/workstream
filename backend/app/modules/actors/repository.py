@@ -7,13 +7,11 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import exists, func, or_, select, update
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.actors.models import (
     ActorIdentityLink,
     ActorProfile,
-    LegacyActorIdentity,
 )
 
 
@@ -203,54 +201,3 @@ class ActorRepository:
             )
         )
         await self._session.flush()
-
-    async def get_legacy_identity(
-        self,
-        actor_id: str,
-        *,
-        populate_existing: bool = False,
-    ) -> LegacyActorIdentity | None:
-        """Load non-authoritative legacy token-observation metadata."""
-        return await self._session.get(
-            LegacyActorIdentity,
-            actor_id,
-            populate_existing=populate_existing,
-        )
-
-    async def upsert_legacy_identity(
-        self,
-        identity: LegacyActorIdentity,
-    ) -> LegacyActorIdentity:
-        """Refresh bounded compatibility metadata without touching canonical actors."""
-        await self._session.execute(
-            insert(LegacyActorIdentity)
-            .values(
-                actor_id=identity.actor_id,
-                external_subject=identity.external_subject,
-                external_issuer=identity.external_issuer,
-                display_name=identity.display_name,
-                email=identity.email,
-                last_seen_roles=identity.last_seen_roles,
-                last_claim_snapshot=identity.last_claim_snapshot,
-                auth_source=identity.auth_source,
-                is_dev_auth=identity.is_dev_auth,
-            )
-            .on_conflict_do_update(
-                index_elements=[LegacyActorIdentity.actor_id],
-                set_={
-                    "external_subject": identity.external_subject,
-                    "external_issuer": identity.external_issuer,
-                    "last_seen_roles": identity.last_seen_roles,
-                    "last_claim_snapshot": identity.last_claim_snapshot,
-                    "auth_source": identity.auth_source,
-                    "is_dev_auth": identity.is_dev_auth,
-                    "last_seen_at": func.now(),
-                    "updated_at": func.now(),
-                },
-            )
-        )
-        await self._session.flush()
-        persisted = await self.get_legacy_identity(identity.actor_id, populate_existing=True)
-        if persisted is None:
-            raise RuntimeError("legacy identity upsert did not return a row")
-        return persisted

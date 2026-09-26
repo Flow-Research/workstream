@@ -18,7 +18,7 @@ from app.modules.tasks.api.assignment_invalidation import (
 from app.modules.tasks.models import TaskAssignment, WorkstreamTask, Submission
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.service import TaskService
-from tests.submission_fixtures import seed_finalized_submission_for_checker_test
+from tests.submission_fixtures import seed_retained_submission
 from tests.test_tasks import (
     auth_headers,
     complete_submission_payload,
@@ -281,7 +281,7 @@ async def test_existing_submission_and_revision_history_are_never_released(
 
     # Reuse the admitted downstream packet fixture; this is not new ART intake proof.
     monkeypatch.setattr(TaskService, "_enqueue_pre_review_gate_after_commit", hold_dispatch)
-    submission_id = await seed_finalized_submission_for_checker_test(
+    submission_id = await seed_retained_submission(
         s.task["id"], complete_submission_payload()
     )
     await revoke(s, "suspend")

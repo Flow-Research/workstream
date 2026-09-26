@@ -469,14 +469,18 @@ Before locking a submission packet:
   flow uses one internal pre-submit phase command with ART-owned evidence.
   Broader public Submission caller migration remains WS-ARCH-001-02I
 - no submission row is created until blocking pre-submit checks pass
-- successful submission creation stamps the immutable submission boundary and queues the Celery pre-review gate
-- the intended Operator repair/requeue operation for an already locked submission
-  is `operations.submission_gate.repair`, not the normal contributor handoff.
-  That canonical action remains planned. The retained
-  `/api/v1/submissions/{submission_id}/finalize` route still uses token-role
-  checks for either the `admin` token role or the `project_manager` token role;
-  it must not be described as that activated
-  Operator operation
+- canonical durable post-submit execution and routing remain unavailable
+- the obsolete `/submissions/{submission_id}/finalize` repair and manual
+  `POST /submissions/{submission_id}/checker-runs` routes are removed. Planned
+  exact-authority recovery must not use them.
+
+Retained submission/checker inspection is available independently of execution.
+The original contributor needs a current exact-project Submitter grant. A manager
+uses the corresponding `/projects/{project_id}` route with a covering Project
+Manager grant. Lists use `limit` (default25, maximum100) and `cursor`, returning
+`items` and `next_cursor`; each page rechecks authority. Reassignment or a READY
+task does not transfer somebody else's history. Management reads exclude artifact
+locations, raw result metadata, identity claims and obsolete economic fields.
 
 ## Reviewer Simulation Gate
 

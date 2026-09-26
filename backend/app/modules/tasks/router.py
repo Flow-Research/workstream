@@ -12,16 +12,11 @@ from app.modules.tasks.api import TaskAuthorityOperation, ContributorTaskDetail,
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.auth import get_registered_actor
 from app.core.api_controls import StructuredHTTPException, error_response, parse_idempotency_key
-from app.core.permissions import PermissionDenied
-from app.db.session import get_db_session
 from app.modules.tasks.schemas import (
     ContributorTaskWorkContext, ManagementTaskWorkContext,
     ContributorTaskSubmissionRequirements, ManagementTaskSubmissionRequirements,
-    SubmissionResponse,
     TaskCreate,
     ManagementTaskLockedContext, OperationalTaskLockedContext, AuditTaskLockedContext,
     TaskResponse,
@@ -29,9 +24,15 @@ from app.modules.tasks.schemas import (
     TaskWithAssignmentResponse,
 )
 from app.modules.tasks.service import TaskProjectNotReady, TaskServiceError, TaskNotFound
-from app.adapters.tasks import task_service
-from app.schemas.auth import ActorContext
 from app.modules.tasks.api.audit_evidence import AuditTaskEvidenceRequest, AuditTaskEvidencePage, TaskEvidenceCursor
+
+from app.api.deps.history import HistoryReadOperation, get_history_reads
+from app.modules.tasks.api.submission_history import (
+    ContributorSubmissionHistoryPage,
+    ManagementSubmissionHistoryPage,
+    ContributorSubmissionHistory,
+    ManagementSubmissionHistory,
+)
 
 router = APIRouter(tags=["tasks"])
 # Static queue routes precede the project-scoped task UUID route.
@@ -120,18 +121,6 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
         retryable=getattr(exc, "retryable", False),
         compatibility={"code": code, "details": details},
     )
-
-
-def permission_http_error(exc: PermissionDenied) -> HTTPException:
-    """Convert a permission failure into a 403 HTTP error.
-
-    Args:
-        exc: Permission exception raised by the service layer.
-
-    Returns:
-        HTTP exception with a forbidden status.
-    """
-    return HTTPException(status_code=403, detail=str(exc))
 
 
 @router.post(
@@ -331,66 +320,6 @@ async def release_task(
         raise task_http_error(exc) from exc
 
 
-@router.get(
-    "/tasks/{task_id}/submissions",
-    response_model=list[SubmissionResponse],
-    response_model_exclude_none=True,
-)
-async def list_task_submissions(
-    request: Request,
-    task_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> list[SubmissionResponse]:
-    """Return submission packet versions for one task."""
-    try:
-        return await task_service(session, settings=request.app.state.settings).list_task_submissions(actor, task_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.get(
-    "/submissions/{submission_id}",
-    response_model=SubmissionResponse,
-    response_model_exclude_none=True,
-)
-async def get_submission(
-    request: Request,
-    submission_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> SubmissionResponse:
-    """Return one submission packet version."""
-    try:
-        return await task_service(session, settings=request.app.state.settings).get_submission(actor, submission_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/submissions/{submission_id}/finalize",
-    response_model=SubmissionResponse,
-    response_model_exclude_none=True,
-)
-async def finalize_submission(
-    request: Request,
-    submission_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> SubmissionResponse:
-    """Repair or re-check the automatic pre-review gate for a locked submission."""
-    try:
-        return await task_service(session, settings=request.app.state.settings).finalize_submission(actor, submission_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
 TASK_EVIDENCE_CURSOR_LIMIT = 512
 
 
@@ -523,3 +452,65 @@ async def get_management_task_work_context(
         if getattr(exc, "code", None) is not None:
             return task_domain_error_response(request, exc)
         raise task_http_error(exc) from exc
+
+
+@router.get("/tasks/{task_id}/submissions", response_model=ContributorSubmissionHistoryPage,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "task.submission.list"},
+)
+async def read_contributor_submissions(
+    task_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> ContributorSubmissionHistoryPage:
+    """Read retained submissions under fresh contributor authority."""
+    return await history.read(
+        "submissions", task_id, limit=limit, cursor=cursor,
+    )
+
+
+@router.get("/projects/{project_id}/tasks/{task_id}/submissions", response_model=ManagementSubmissionHistoryPage,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "project.task.submission.list"},
+)
+async def read_management_submissions(
+    task_id: UUID,
+    project_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    cursor: Annotated[str | None, Query(max_length=1024)] = None,
+) -> ManagementSubmissionHistoryPage:
+    """Read retained submissions under fresh management authority."""
+    return await history.read(
+        "submissions", task_id, project_id=project_id, limit=limit, cursor=cursor,
+    )
+
+
+@router.get("/submissions/{submission_id}", response_model=ContributorSubmissionHistory,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "submission.read"},
+)
+async def read_contributor_submission(
+    submission_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+) -> ContributorSubmissionHistory:
+    """Read retained submission under fresh contributor authority."""
+    return await history.read(
+        "submission", submission_id,
+    )
+
+
+@router.get("/projects/{project_id}/submissions/{submission_id}", response_model=ManagementSubmissionHistory,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": "project.submission.read"},
+)
+async def read_management_submission(
+    submission_id: UUID,
+    project_id: UUID,
+    history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
+) -> ManagementSubmissionHistory:
+    """Read retained submission under fresh management authority."""
+    return await history.read(
+        "submission", submission_id, project_id=project_id,
+    )

@@ -1607,3 +1607,13 @@ Every page revalidates current authority; cursor position confers none. All stat
 including draft without policy locks, are inspectable. Page serialization precedes
 ALLOW commit. Database migration 0005 adds only this exact action/permission pair
 and retains previous evidence. This is not an authorization-decision export.
+
+
+### Canonical submission and checker history
+
+The [TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history)
+defines eight exact read actions and distinct contributor/manager projections.
+AUTH stages a fresh matched-grant decision; the caller commits it only with a
+validated response. Authentication has no token-role compatibility projection or
+identity-observation writer. Retained actor classification data remains evidence,
+never an authority source. No manual checker or finalize-repair route survives.

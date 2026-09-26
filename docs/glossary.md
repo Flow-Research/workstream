@@ -50,12 +50,11 @@ Money awards route downstream to payment-request/settlement adapters; points
 awards route to the project-points adapter. Downstream adapters cannot create
 award eligibility.
 
-## ActorContext
+## AuthorizationContext
 
-Legacy name for the trusted per-request identity context resolved from a
-verified Flow token. During WS-AUTH-001 migration it is replaced by a minimal
-`VerifiedIssuerToken` plus locally resolved `AuthorizationContext`. Token roles
-are not Workstream product authority.
+Canonical request actor and identity-link facts used by AUTH after external token
+verification. Product authority comes from current Workstream grants. The removed
+token-role `ActorContext` has no runtime replacement or compatibility projection.
 
 ## ActorIdentity
 

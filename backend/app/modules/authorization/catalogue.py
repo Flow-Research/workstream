@@ -94,6 +94,14 @@ class PermissionId(StrEnum):
 class ActionId(StrEnum):
     """Closed action identifiers reserved by approved owner chunks."""
 
+    TASK_SUBMISSION_LIST = "task.submission.list"
+    SUBMISSION_READ = "submission.read"
+    SUBMISSION_CHECKER_RUN_LIST = "submission.checker_run.list"
+    CHECKER_RUN_READ = "checker_run.read"
+    PROJECT_TASK_SUBMISSION_LIST = "project.task.submission.list"
+    PROJECT_SUBMISSION_READ = "project.submission.read"
+    PROJECT_SUBMISSION_CHECKER_RUN_LIST = "project.submission.checker_run.list"
+    PROJECT_CHECKER_RUN_READ = "project.checker_run.read"
     TASK_QUEUE_READ = "task.queue.read"
     PROJECT_TASK_QUEUE_READ = "project.task.queue.read"
     OPERATIONS_TASK_QUEUE_READ = "operations.task.queue.read"
@@ -237,6 +245,18 @@ class ActionId(StrEnum):
     CONTRIBUTION_POLICY_RETIRE = "contribution.policy.retire"
 
 
+HISTORY_READ_ACTIONS = frozenset({
+    ActionId.TASK_SUBMISSION_LIST,
+    ActionId.SUBMISSION_READ,
+    ActionId.SUBMISSION_CHECKER_RUN_LIST,
+    ActionId.CHECKER_RUN_READ,
+    ActionId.PROJECT_TASK_SUBMISSION_LIST,
+    ActionId.PROJECT_SUBMISSION_READ,
+    ActionId.PROJECT_SUBMISSION_CHECKER_RUN_LIST,
+    ActionId.PROJECT_CHECKER_RUN_READ,
+})
+
+
 TASK_LOCKED_CONTEXT_READ_ACTIONS = frozenset({
     ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ, ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
     ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ,
@@ -252,6 +272,7 @@ TASK_CONCEALED_READ_ACTIONS = TASK_LOCKED_CONTEXT_READ_ACTIONS | frozenset({
 class ActionOwner(StrEnum):
     """Closed implementation chunks allowed to activate reserved actions."""
 
+    TASK_CHECKER_CLEANUP = "task-checker-auth-cleanup"
     TASK_PROJECT_GRANT = "task-project-grant-authorization"
 
     AUTH_07B = "WS-AUTH-001-07B"
@@ -494,6 +515,14 @@ ACTION_DEFINITIONS = (
     ),
     _active(ActionId.PROJECT_SETUP_RUN_UPDATE, PermissionId.PROJECT_GUIDE_MANAGE, ActionOwner.AUTH_12B2),
     _active(ActionId.PROJECT_GUIDE_ACTIVATE, PermissionId.PROJECT_GUIDE_MANAGE, ActionOwner.AUTH_12H),
+    _active(ActionId.TASK_SUBMISSION_LIST, PermissionId.SUBMISSION_READ_OWN, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.SUBMISSION_READ, PermissionId.SUBMISSION_READ_OWN, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.SUBMISSION_CHECKER_RUN_LIST, PermissionId.SUBMISSION_READ_OWN, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.CHECKER_RUN_READ, PermissionId.SUBMISSION_READ_OWN, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.PROJECT_TASK_SUBMISSION_LIST, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.PROJECT_SUBMISSION_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.PROJECT_SUBMISSION_CHECKER_RUN_LIST, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_CHECKER_CLEANUP),
+    _active(ActionId.PROJECT_CHECKER_RUN_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_CHECKER_CLEANUP),
     _active(ActionId.TASK_CLAIM, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
     _active(ActionId.TASK_START, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
     _active(ActionId.TASK_WORK_CONTEXT_READ, PermissionId.TASK_QUEUE_READ, ActionOwner.TASK_PROJECT_GRANT),
@@ -705,7 +734,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 75 or len(ACTION_IDS) != 132:
+    if len(PERMISSION_IDS) != 75 or len(ACTION_IDS) != 140:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 26:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -843,7 +872,7 @@ def _index_actions(
         ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.AUDIT_TASK_EVIDENCE_READ,
-    } | TASK_LOCKED_CONTEXT_READ_ACTIONS:
+    } | TASK_LOCKED_CONTEXT_READ_ACTIONS | HISTORY_READ_ACTIONS:
         raise RuntimeError("authorization active action boundary mismatch")
     _validate_action_definitions(definitions)
     return MappingProxyType(indexed)

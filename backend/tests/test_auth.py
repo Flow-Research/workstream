@@ -36,13 +36,11 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
     AsyncSession,
 )
 
-from app.adapters.auth.dev import DevelopmentAuthVerifier
 from app.adapters.auth.flow import (
     FlowAuthVerifier,
 )
 from app.core.config import Settings, get_settings
 from app.core.identifiers import new_record_id
-from app.core.permissions import PermissionDenied, require_any_role
 from app.db import session as db_session
 from app.interfaces.auth import AuthVerificationUnavailableError
 from app.main import create_app
@@ -168,53 +166,6 @@ def current_task_name() -> str:
     if task is None:
         raise AssertionError("an asyncio task is required")
     return task.get_name()
-
-
-def test_legacy_compatibility_dependency_has_fixed_consumer_allowlist() -> None:
-    app_root = Path(__file__).resolve().parents[1] / "app"
-    sources = {
-        path.relative_to(app_root).as_posix(): path.read_text() for path in app_root.rglob("*.py")
-    }
-
-    assert {path for path, source in sources.items() if "get_registered_actor" in source} == {
-        "api/deps/auth.py",
-        "modules/checkers/router.py",
-        "modules/tasks/router.py",
-    }
-    assert {
-        path for path, source in sources.items() if "get_auth_verification_result" in source
-    } == {
-        "api/deps/api_controls.py",
-        "api/deps/auth.py",
-        "api/deps/authorization.py",
-        "modules/projects/guide_mutation_router.py",
-        "modules/projects/policy_mutation_router.py",
-    }
-    assert {path for path, source in sources.items() if "AuthVerificationResult" in source} == {
-        "adapters/auth/dev.py",
-        "adapters/auth/flow.py",
-        "api/deps/api_controls.py",
-        "api/deps/auth.py",
-        "api/deps/authorization.py",
-        "api/deps/rate_controls.py",
-        "core/auth.py",
-        "interfaces/auth.py",
-        "modules/projects/guide_mutation_router.py",
-        "modules/projects/policy_mutation_router.py",
-        "schemas/auth.py",
-    }
-    assert {
-        path
-        for path, source in sources.items()
-        if "LegacyAuthorizationCompatibilityContext" in source
-    } == {
-        "adapters/auth/dev.py",
-        "adapters/auth/flow.py",
-        "schemas/auth.py",
-    }
-    assert {path for path, source in sources.items() if "result.legacy" in source} == {
-        "api/deps/auth.py"
-    }
 
 
 async def test_valid_dev_token_resolves_canonical_profile(
@@ -1461,41 +1412,6 @@ async def test_actor_self_maps_actor_registry_failure_to_service_unavailable(
     assert response.json()["error"]["code"] == "service_unavailable"
     assert response.json()["error"]["message"] == "Service unavailable"
     assert response.json()["error"]["retryable"] is True
-
-
-async def test_permission_policy_allows_required_role() -> None:
-    actor = (
-        await DevelopmentAuthVerifier(
-            Settings(
-                environment="local",
-                auth_provider="dev",
-                dev_auth_token="local-token",
-                dev_auth_subject="subject",
-                dev_auth_issuer="issuer",
-                dev_auth_roles="contributor,reviewer",
-            )
-        ).verify("local-token")
-    ).legacy_actor(actor_id=str(new_record_id()))
-
-    require_any_role(actor, {"reviewer"})
-
-
-async def test_permission_policy_rejects_missing_role() -> None:
-    actor = (
-        await DevelopmentAuthVerifier(
-            Settings(
-                environment="local",
-                auth_provider="dev",
-                dev_auth_token="local-token",
-                dev_auth_subject="subject",
-                dev_auth_issuer="issuer",
-                dev_auth_roles="contributor",
-            )
-        ).verify("local-token")
-    ).legacy_actor(actor_id=str(new_record_id()))
-
-    with pytest.raises(PermissionDenied, match="actor lacks required role"):
-        require_any_role(actor, {"finance"})
 
 
 async def test_actor_profile_lifecycle_real_postgres_matrix(

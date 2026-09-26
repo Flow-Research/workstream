@@ -101,13 +101,11 @@ from app.modules.projects.schemas import (
     ProjectResponse,
     ProjectSetupRunResponse,
 )
-from app.schemas.auth import ActorContext
 from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     MatchedAuthorityKind,
     PreparedAuthorizationUnsupported,
 )
-from app.core.permissions import PermissionDenied
 from app.modules.projects.setup_queue import ProjectSetupQueueError
 from app.modules.projects.service import (
     ProjectNotFound,
@@ -303,16 +301,6 @@ class _DiagnosticStatementCaptureSession:
         return types.SimpleNamespace(scalars=lambda: types.SimpleNamespace(all=lambda: []))
 
 
-def _project_manager_actor() -> ActorContext:
-    return ActorContext(
-        actor_id="actor-1",
-        external_subject="subject-1",
-        external_issuer="https://identity.test",
-        roles=("project_manager",),
-        auth_source="dev_mock",
-    )
-
-
 class _IdentityResponse:
     @staticmethod
     def model_validate(value: Any) -> Any:
@@ -351,8 +339,6 @@ def isolated_project_settings_cache() -> Iterator[None]:
 def test_submission_policy_derivation_has_no_public_project_service_seam() -> None:
     """12F3 removes role-bearing inline derivation from import reachability."""
     assert not hasattr(ProjectService, "run_submission_artifact_policy_derivation_agent")
-
-
 
 
 def test_project_setup_queue_enqueues_exact_task_payload(
@@ -669,7 +655,6 @@ async def test_project_create_route_owns_commit_or_replay_rollback(
 @pytest.mark.parametrize(
     ("failure", "status_code", "error_code"),
     [
-        (PermissionDenied("denied"), 403, None),
         (
             ProjectCreateIdempotencyConflict("idempotency_mismatch"),
             409,
@@ -1157,8 +1142,6 @@ def test_policy_models_do_not_enforce_mutable_current_uniqueness() -> None:
         index_names = {index.name for index in model.__table__.indexes}
 
         assert index_names.isdisjoint(disallowed_current_indexes)
-
-
 
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:
@@ -1829,12 +1812,6 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
         assert denied.status_code == 404
 
 
-
-
-
-
-
-
 async def test_read_guide_source_snapshot_does_not_run_agents_before_committed_documents(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1870,11 +1847,6 @@ async def test_read_guide_source_snapshot_does_not_run_agents_before_committed_d
     assert policy is None
     assert effective_policy is None
     assert pre_submit_checker_policy is None
-
-
-
-
-
 
 
 def sha256_hash(seed: str) -> str:
@@ -2420,7 +2392,6 @@ async def test_guide_update_service_returns_exact_cached_response() -> None:
     )
 
 
-
 def test_guide_mutation_service_classifies_reservation_outcomes() -> None:
     _resolved, _project_id, _replay, service = _guide_mutation_edge_subject()
     record = SimpleNamespace(response_json={"id": "response"})
@@ -2724,7 +2695,6 @@ async def test_guide_source_metadata_replay_cannot_cross_project_or_guide(
     assert first_update.status_code == 200
     assert crossed_update.status_code == 409
     assert crossed_update.json()["error"]["code"] == "idempotency_mismatch"
-
 
 
 async def test_guide_creation_replay_waits_for_committed_documents(
@@ -3387,7 +3357,6 @@ async def test_project_guide_update_rejects_unknown_non_contract_fields(
     assert "guide_setup_checklist" in response.text
 
 
-
 async def test_guide_documents_requires_at_least_one_uploaded_source_item(
     project_client: AsyncClient,
 ) -> None:
@@ -3641,8 +3610,6 @@ async def test_submission_policy_rejects_snapshot_item_drift(
         await session.delete(item)
         with pytest.raises(IntegrityError, match="snapshot items are immutable"):
             await session.commit()
-
-
 
 
 async def test_sufficiency_report_rejects_unknown_request_fields(
@@ -4030,8 +3997,6 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert update_response.json()["detail"][0]["loc"] == ["body", "derivation_agent_name"]
 
 
-
-
 async def test_submission_artifact_policy_removed_agent_route_performs_no_runtime_calls(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -4120,8 +4085,6 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
         == (effective["effective_policy_hash"])
     )
     assert "require_file" in pre_submit_checker_policy.checker_configs
-
-
 
 
 async def test_approved_submission_artifact_policy_cannot_be_updated(
@@ -4689,14 +4652,6 @@ async def test_submission_artifact_policy_update_concurrent_cas_creates_one_succ
     assert sum(row.lifecycle_status == "superseded" for row in rows) == 1
 
 
-
-
-
-
-
-
-
-
 async def test_inline_guide_body_is_rejected_after_source_snapshot(
     project_client: AsyncClient,
 ) -> None:
@@ -4738,8 +4693,6 @@ async def test_removed_payment_policy_edit_after_source_snapshot_is_rejected(
 
     assert response.status_code == 422
     assert "payment_policy" in response.text
-
-
 
 
 async def test_manual_submission_artifact_policy_create_rejects_default_weakening(
@@ -5294,8 +5247,6 @@ async def test_sufficiency_warning_acknowledgement_rejects_unknown_fields(
 
     assert response.status_code == 422
     assert "extra" in response.text
-
-
 
 
 async def test_database_rejects_superseded_post_submit_policy_without_correction_provenance(

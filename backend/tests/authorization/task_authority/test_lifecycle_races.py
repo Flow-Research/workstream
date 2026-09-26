@@ -36,7 +36,6 @@ from app.modules.tasks.api import (
 from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
 from app.modules.tasks.models import AuditEvent, TaskAssignment
 from app.modules.tasks.repository import TaskRepository
-from app.schemas.auth import ActorContext
 from tests.test_tasks import (
     task_client as task_client,
     task_database_env as task_database_env,
@@ -237,7 +236,7 @@ async def _consume_submission_authority(session, context, task_id):
 async def _run_task_contributor_write(
     database_url: str,
     *,
-    actor: ActorContext,
+    actor: str,
     task_id: str,
     operation: str,
     application_name: str,
@@ -253,14 +252,14 @@ async def _run_task_contributor_write(
             entered.set()
             link_id = await session.scalar(
                 select(ActorIdentityLink.id).where(
-                    ActorIdentityLink.actor_profile_id == actor.actor_id,
+                    ActorIdentityLink.actor_profile_id == actor,
                 )
             )
             assert link_id is not None
             await session.rollback()
             # Cached active facts must not overrule the concurrently locked rows.
             context = HumanAuthorizationContext(
-                actor_profile_id=UUID(actor.actor_id),
+                actor_profile_id=UUID(actor),
                 actor_kind=ActorKind.HUMAN, actor_status=ActorStatus.ACTIVE,
                 identity_link_id=UUID(link_id), identity_link_status=IdentityLinkStatus.ACTIVE,
                 request_id=uuid4(), correlation_id=uuid4(),
@@ -387,7 +386,7 @@ async def contributor_lifecycle_race_cleanup(
 class ContributorRace:
     contributor_id: str
     identity_link_id: str
-    actor: ActorContext
+    actor: str
     task_id: str
     before: dict[str, object]
     task_application_name: str
@@ -419,15 +418,8 @@ async def _prepare_contributor_race(
         )
     assert identity_link_id is not None
     contributor_lifecycle_race_cleanup.append((contributor_id, identity_link_id))
-    actor = ActorContext(
-        actor_id=contributor_id,
-        external_subject=subject,
-        external_issuer="flow-test",
-        roles=("worker",),
-        claim_snapshot={"roles": ["worker"]},
-        auth_source="dev_mock",
-        is_dev_auth=True,
-    )
+    actor = contributor_id
+
     task_id = task["id"]
     before = await _read_task_contributor_race_snapshot(task_database_env, task_id)
     operation_label = "submit-auth" if operation == "submission_authority" else operation

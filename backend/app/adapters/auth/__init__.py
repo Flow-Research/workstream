@@ -228,3 +228,9 @@ def task_queue_authorization(kernel, secret):
     """Compose the canonical queue AUTH adapter without exporting private owners."""
     from app.modules.authorization.task_queue_read import TaskQueueReadAuthorization
     return TaskQueueReadAuthorization(kernel, secret)
+
+
+def history_read_authorization(kernel):
+    """Compose current AUTH decisions for owner-selected immutable history."""
+    from app.modules.authorization.history_authorization import HistoryReadAuthorization
+    return HistoryReadAuthorization(kernel)

@@ -167,3 +167,9 @@ class TransactionalSubmissionCreationCommand:
 def assignment_invalidation_targets(session: AsyncSession):
     """Compose the TASK-owned nonlocking exact-target projection."""
     return TaskRepository(session)
+
+
+def submission_history_repository(session):
+    """Compose TASK-owned immutable history selectors and projections."""
+    from app.modules.tasks.submission_history import SubmissionHistoryRepository
+    return SubmissionHistoryRepository(session)
