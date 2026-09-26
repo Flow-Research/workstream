@@ -21,7 +21,7 @@ for current product capability.
 | [WS-XINT-003](initiatives/WS-XINT-003/OVERVIEW.md) | Planned | Resume activation only against exact merged REV behavior |
 | WS-POL-002 | Superseded | Future guide inference belongs to WS-POL-003; reframe remaining executor work against current specifications |
 | WS-POL-001 | Complete | Follow-up belongs to current ART, POL, REV, or CON initiatives |
-| WS-QUAL-001 | Complete | Preserve global 78% and protected-subsystem 90% floors; blocking mutation rollout remains retired |
+| WS-QUAL-001 | Superseded | Percentage gates retired by [WS-QUAL-003-16](initiatives/WS-QUAL-003/WS-QUAL-003-16.md); full behavior/integration proof remains blocking; mutation rollout remains retired |
 | WS-CI-001 | Complete | Further CI optimization requires fresh measured work |
 | WS-CI-002 | Complete | Preserve protected-branch review authority |
 | WS-CI-003 | Superseded | Commitrail replaces triple projection and post-merge repair |

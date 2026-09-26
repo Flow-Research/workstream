@@ -103,7 +103,7 @@ current check, conversation, approval, and merge state.
 
 - [ ] No workflow weakening.
 - [ ] No lint/test/docstring gate weakening.
-- [ ] No coverage threshold weakening.
+- [ ] Tests protect meaningful behavior; removals identify retained proof or retired requirements. Coverage percentages are diagnostic only.
 - [ ] No package script weakening.
 - [ ] No unpinned new GitHub Action.
 - [ ] Checkout credential persistence disabled where checkout is used.

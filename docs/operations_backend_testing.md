@@ -22,7 +22,7 @@ schema is equivalent. A changed fingerprint requires comparing the actual
 schema objects on the CI engine; never bypass the check or accept an additional
 hash merely to make a different local engine pass.
 
-This legacy sequential command checks PostgreSQL provisioning and cleanup. It
+This focused sequential command checks PostgreSQL provisioning and cleanup. It
 is not complete full-suite proof because it does not start or bind a MinIO
 provider. Use the hosted semantic-lane workflow below for authoritative
 PostgreSQL, MinIO, exact-node, timing, API, and coverage custody.
@@ -40,7 +40,7 @@ export WORKSTREAM_TEST_ADMIN_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@lo
 unset WORKSTREAM_TEST_ADMIN_DATABASE_URL
 ```
 
-Run both phases for the legacy sequential local diagnostic. Hosted CI instead
+Run both phases for this sequential local diagnostic. Hosted CI instead
 uses eight independent matrix jobs, one per semantic lane, with a 20-minute lane
 limit and a separate fail-closed fan-in job.
 
@@ -50,7 +50,7 @@ It attempts to drop the owned database and ephemeral login after success,
 failure, timeout, or interruption. Host termination or a database error can
 prevent cleanup; recover manually with the database provisioning credential, targeting only the exact strict database and role names reported by local catalog inspection.
 
-## Candidate coverage floor
+## Diagnostic coverage, not a quality quota
 
 All coverage collection uses `backend/pyproject.toml` with
 `concurrency = ["thread", "greenlet"]`. SQLAlchemy async operations switch
@@ -58,14 +58,19 @@ greenlets within a thread; default thread-only tracing can assign executed
 lines to the wrong source file. Do not override that setting in local or
 hosted coverage commands. The coverage-contract suite checks actual line
 attribution across SQLAlchemy async switches using the repository configuration.
-This setting changes measurement, not test selection, exclusions or floors.
+This setting changes measurement, not test selection or exclusions.
 
-`coverage_policy.py --compute-floor` is a read-only preparation command. Point
-`--coverage-json` at temporary complete-app coverage JSON; the command validates
-the application-file inventory and prints the exact statement percentage
-truncated to six places. It does not configure or enforce a floor, write
-evidence, connect to Postgres, or act as the CI coverage policy. Keep coverage
-JSON temporary and non-secret; 01B2 owns baseline publication and enforcement.
+Backend and MCP coverage percentages do not gate merges. Backend combines the
+eight lane artifacts once for diagnostics, without subsystem/per-file quotas or
+focused reruns to raise a number. Artifact integrity and complete test execution
+remain blocking. The old floor-computation CLI and unused quota-policy helpers
+are removed; their module retains the shared lexical test-safety owner.
+
+Before adding a test, identify the behavior and failure it detects and inspect
+existing proof. Before deleting one, name its surviving behavior owner or explain
+why its requirement is retired. Preserve authorization, data isolation, lineage,
+rollback, concurrency, retry and real storage/database proof. Real API drills
+complement these tests; they do not replace controlled failure-path tests.
 
 ## Focused checks
 The API-guard tests are statically DB-free:
@@ -106,7 +111,7 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 ## Hosted semantic-lane full-suite proof
 
 The required GitHub check remains `Backend / test`. Eight matrix jobs each own a
-digest-pinned PostgreSQL service container, a digest-pinned MinIO container,
+digest-pinned PostgreSQL service container, a pinned-source MinIO image,
 and exactly one dependency lane. A step-level curl health loop admits MinIO
 before collection. This is semantic fan-out, not arbitrary test-count sharding:
 lane ownership remains repository-defined and exact.
@@ -123,7 +128,8 @@ It does not cache current source or reuse analysis across validation calls.
 The seven ordinary lanes use private, 2 GiB RAM-backed PostgreSQL data directories
 to reduce ephemeral reset I/O. A runtime guard verifies the mount, capacity,
 data directory and enabled `fsync`, `full_page_writes` and `synchronous_commit`
-before tests. Real SQL, transaction, lock, isolation and coverage checks remain.
+before tests. Real SQL, transaction, lock, isolation, and full hosted behavior
+checks remain.
 The schema-contract lane and aggregate job retain disk-backed databases.
 This is not a production configuration or proof of host-power-loss durability:
 [Docker tmpfs data disappears when the container stops](https://docs.docker.com/engine/storage/tmpfs/).
@@ -177,8 +183,8 @@ deselected, unexpectedly skipped, interrupted, or partially completed nodes.
 It also binds the exact head, manifest, per-lane isolation metadata, evidence,
 and coverage-file SHA-256 digests. Only then are exactly eight regular,
 non-symlink coverage files copied byte-for-byte for one literal
-`coverage combine`. The 78 percent global floor and every protected 90 percent
-subsystem floor remain blocking. The real API contract drill remains a separate
+`coverage combine`. Percentages are diagnostic, with no global or subsystem
+floor. The real API contract drill remains a separate
 isolated invocation inside the final required job.
 
 ### Evidence bundle
@@ -211,8 +217,8 @@ coverage tampering before coverage combination.
   database/role and MinIO namespace cleanup without exposing credentials.
 - Execution-validation failure: inspect node reconciliation, isolation metadata,
   and raw coverage digests before considering the test output.
-- API contract or coverage failure: the required job remains failed; lane
-  completion cannot compensate for either boundary.
+- API contract or evidence-integrity failure: the required job remains failed;
+  lane completion cannot compensate. A lower coverage percentage is not a failure.
 
 On the same exact head, rerun failed lanes (and their dependent final job), or
 rerun only the final job when the lane evidence already passed. Successful lanes
@@ -231,8 +237,8 @@ evidence. On a retry this wall time includes the wait between selected attempts;
 it is not fresh-run execution latency. When the repository owner explicitly accepts
 a measured target miss at the human merge checkpoint, that performance result
 does not override otherwise passing correctness, custody, service-contract,
-API, and coverage gates. Never lower coverage, skip nodes, or add a silent
-fallback to meet the target.
+API, and complete-execution gates. Coverage is diagnostic only. Never skip
+nodes or add a silent fallback to meet the target.
 
 ## Retired changed-scope behavior mutation
 
@@ -241,9 +247,10 @@ selection mutated unchanged executable lines whenever a small declaration or
 callable fragment changed, creating blockers that could not be resolved by the
 owning behavior assertions without implementation snapshots or gate bypasses.
 
-Backend semantic lanes, the repository-wide 78 percent coverage floor, named
-90 percent subsystem floors, lint, docstring coverage, service-contract proof,
-internal reviews, CodeRabbit, and human merge approval remain unchanged. The
+Backend semantic lanes, lint, docstring checks, service-contract proof,
+internal reviews, CodeRabbit, and human merge approval remain required.
+Test-coverage percentages are diagnostic only; the percentage floors and four
+duplicate coverage-only reruns are retired. The
 mutation policy, claim schema, examples, pinned manifest, and prior evidence
 remain in the repository as design input for a future changed-line-aware gate.
 They are not active contribution requirements. Behavior-mutation enforcement
@@ -275,8 +282,8 @@ callable or test fields, and fail validation when the target contains an
 executable callable or module-level runtime behavior such as calls, branches,
 loops, raises, awaits, mutation, I/O, SQL, validators, or other side effects.
 Until population and a separately approved changed-line reactivation chunk are
-complete, Backend lanes and existing coverage floors remain the only hosted
-test authority.
+complete, Backend lanes and real API integration checks remain the hosted
+test authority; no percentage quota substitutes for meaningful behavior proof.
 
 ### Local coverage-context evidence
 

@@ -169,10 +169,22 @@ definition or ownership boundary of Workstream.
   Fetch the PR head again after all checks and reviews finish. The most recent
   reviewable push requires approval from an eligible human other than its
   pusher, and every review conversation must be resolved before merge.
-- New or materially changed backend subsystems must remain at or above 90
-  percent test coverage. Until the dedicated global-coverage work reaches 90
-  percent, CI must also preserve the current repository-wide 78 percent
-  baseline and may not reduce it.
+- Test observable behavior and meaningful failure modes, not coverage percentages
+  or test counts. Coverage is diagnostic only; do not introduce global, subsystem,
+  per-file or branch percentage gates, or add tests merely to raise a score.
+  This policy supersedes percentage requirements in earlier change records and
+  behavior contracts; preserve those records as history, not current quotas.
+- Keep focused tests for authorization, isolation, locked lineage, immutable
+  evidence, rollback, concurrency and retries, alongside realistic public-API
+  end-to-end drills. Use real PostgreSQL/S3 where their behavior is the claim;
+  pure rules should not need infrastructure. A live-drill defect needs a focused
+  regression that fails on the reproduced defect, not only a happy-path rerun.
+- Before adding a test, inspect existing proof. Before removing or consolidating
+  one, identify its behavior and retained proof, or explain why the requirement
+  is obsolete. Remove duplicated assertions and implementation-only tests only
+  when no distinct contract or failure mode is lost. Do not replace the suite
+  with end-to-end-only tests, skip failures, or set a deletion quota. Full-suite
+  completeness and real integration checks remain blocking.
 
 ## Done Criteria
 
