@@ -122,11 +122,11 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "156398ba618e5fb0985606dcfa0053f799548ffe519b7c16f88325eb0b973551",
-      "end_line": 3753,
+      "content_sha256": "dd36d7a97be34cee6d739342dd0660ed4948b4fd4c0ce62e35196287c17d1c50",
+      "end_line": 3351,
       "hard_limit": 1200,
       "kind": "test_file",
-      "observed_lines": 3753,
+      "observed_lines": 3351,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -231,74 +231,62 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "35ea4695733f169857a178f1ca491d654e013edf51653aa518908366d06bf039",
-      "end_line": 3732,
+      "end_line": 3330,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 878,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": "test_actor_identity_link_lifecycle_real_postgres_concurrency",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 2855
+      "start_line": 2453
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "38568febc9191e71e2414b870ebab7b8ebc53c5815102452cb4f653fd2b2146e",
-      "end_line": 2419,
+      "end_line": 2017,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 528,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": "test_actor_identity_link_lifecycle_real_postgres_matrix",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1892
+      "start_line": 1490
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "d4a5e878449d2c9b8f7653422272f696802c2ee0e32f7542c245697632a3077b",
-      "end_line": 2852,
+      "end_line": 2450,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 431,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": "test_actor_profile_lifecycle_real_postgres_concurrency",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 2422
+      "start_line": 2020
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "e9761649c763306dbf9f3a736c185992f2fe4f29ccc899c0b704af51a2b0843b",
-      "end_line": 1889,
+      "end_line": 1487,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 473,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": "test_actor_profile_lifecycle_real_postgres_matrix",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1417
+      "start_line": 1015
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "d4894af25aaf1badf84ad707bb7488810125953ef6badaac1974504bb56bc3dc",
-      "end_line": 977,
+      "end_line": 976,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 641,
       "path": "backend/tests/test_auth.py",
       "qualified_symbol": "test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 337
-    },
-    {
-      "capability": "oversized_authorization_structure",
-      "content_sha256": "42aaf7d075a2f3d93682de927b2c34fdc3cf100c358385b6d19046db0c021a40",
-      "end_line": 1380,
-      "hard_limit": 120,
-      "kind": "test_function",
-      "observed_lines": 401,
-      "path": "backend/tests/test_auth.py",
-      "qualified_symbol": "test_service_actor_provisioning_failure_and_authority_races_are_atomic",
-      "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 980
+      "start_line": 336
     },
     {
       "capability": "oversized_authorization_structure",

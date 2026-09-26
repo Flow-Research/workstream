@@ -1,0 +1,1019 @@
+{
+  "chunk_id": "WS-QUAL-003-17",
+  "schema": "workstream.auth-assertion-map.v1",
+  "mappings": [
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1098:1098:e1fdd99408f50b087bd5f1819a6df5221ed6c11cc1f7d27afe73b68295ec3eee",
+      "old_content_sha256": "e1fdd99408f50b087bd5f1819a6df5221ed6c11cc1f7d27afe73b68295ec3eee",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1098,
+        1098
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1101:1101:c0e22160cb940ee67157cab207cacdcc668e4c97eedfc7996e8afc5074ca2d8a",
+      "old_content_sha256": "c0e22160cb940ee67157cab207cacdcc668e4c97eedfc7996e8afc5074ca2d8a",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1101,
+        1101
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1113:1113:c7848504ddbf742865cdb537ad392cef84f497b1dca07bab0f9a29cf730b15c6",
+      "old_content_sha256": "c7848504ddbf742865cdb537ad392cef84f497b1dca07bab0f9a29cf730b15c6",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1113,
+        1113
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1179:1179:df848c204fd27582a927613a2110045c27857ef23e738d346d64adf1e9b47e5c",
+      "old_content_sha256": "df848c204fd27582a927613a2110045c27857ef23e738d346d64adf1e9b47e5c",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1179,
+        1179
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1181:1181:769c358d97db778f164bcc9d0ca6892c29c0899628e36559fcbc5e9d60ea7da2",
+      "old_content_sha256": "769c358d97db778f164bcc9d0ca6892c29c0899628e36559fcbc5e9d60ea7da2",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1181,
+        1181
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1182:1182:4b61954af2e11eeeb258999945b3c3f374be45a522f2fb7677312f34b780d05e",
+      "old_content_sha256": "4b61954af2e11eeeb258999945b3c3f374be45a522f2fb7677312f34b780d05e",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1182,
+        1182
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1183:1183:87cb9c9dd2c3dbda992793c443c0e611d49614bca77e94dea55d0d54a3d6f43c",
+      "old_content_sha256": "87cb9c9dd2c3dbda992793c443c0e611d49614bca77e94dea55d0d54a3d6f43c",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1183,
+        1183
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1184:1184:b3057db74be4085321ef90c7d53535b9b99ba240163044c861eb47e27c706421",
+      "old_content_sha256": "b3057db74be4085321ef90c7d53535b9b99ba240163044c861eb47e27c706421",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1184,
+        1184
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1185:1185:9889e4bb06e0873bbdcbe0a453e9a18c847b2216453bcae8645e9c581c7a08ac",
+      "old_content_sha256": "9889e4bb06e0873bbdcbe0a453e9a18c847b2216453bcae8645e9c581c7a08ac",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1185,
+        1185
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1186:1186:5796958a34f23c6a9547765e7dbe33cbcc790d0b2accf2584649b1cb647b8e61",
+      "old_content_sha256": "5796958a34f23c6a9547765e7dbe33cbcc790d0b2accf2584649b1cb647b8e61",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1186,
+        1186
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1187:1187:58e9381e2340f7e4ffe5a60fd50b3ae968afa90e8ba3fb3916350a2313548e92",
+      "old_content_sha256": "58e9381e2340f7e4ffe5a60fd50b3ae968afa90e8ba3fb3916350a2313548e92",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1187,
+        1187
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1194:1194:5d71e4bd1091e11d4528e1cb692a2efa07510394494976e9f6aa7cef1d30a994",
+      "old_content_sha256": "5d71e4bd1091e11d4528e1cb692a2efa07510394494976e9f6aa7cef1d30a994",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1194,
+        1194
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Injected authority-write failure rolls back complete provisioning and allows exact retry",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_write_failure_rolls_back_provision_and_allows_retry",
+      "old_assertion_id": "assertion:1195:1195:488eac8a89503be6202cde42f660c65f314b9b9a2e7d959fa589c18e0b37e0bb",
+      "old_content_sha256": "488eac8a89503be6202cde42f660c65f314b9b9a2e7d959fa589c18e0b37e0bb",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1195,
+        1195
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": {
+          "not_applicable_reason": "This assertion does not establish concurrency behavior."
+        },
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": {
+          "not_applicable_reason": "This assertion does not establish lock_order behavior."
+        },
+        "replay": "preserved",
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1234:1234:b8d307ae9e2c9a859214427ba48b37ab02011c361346103493a423cb89076f3a",
+      "old_content_sha256": "b8d307ae9e2c9a859214427ba48b37ab02011c361346103493a423cb89076f3a",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1234,
+        1234
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1238:1238:ffa7c5eaed079bcfd551e438e22e91f36b7a7e38cb2b86ce2f5564b6268fab34",
+      "old_content_sha256": "ffa7c5eaed079bcfd551e438e22e91f36b7a7e38cb2b86ce2f5564b6268fab34",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1238,
+        1238
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1241:1241:75f64a33db1900ba2159d3da3828737da3c0cbbc93f5e81541c0ad98812ca3fd",
+      "old_content_sha256": "75f64a33db1900ba2159d3da3828737da3c0cbbc93f5e81541c0ad98812ca3fd",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1241,
+        1241
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1263:1263:7c6c68b70bc8239d64bb19e4c893e0e4b64288bbd8c3564f6a389a3de2a13a4f",
+      "old_content_sha256": "7c6c68b70bc8239d64bb19e4c893e0e4b64288bbd8c3564f6a389a3de2a13a4f",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1263,
+        1263
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1264:1264:4ca8bb13fb0d8234d1a82cc081f0d1875afe52b783ffb960a9f2e5c5c566f780",
+      "old_content_sha256": "4ca8bb13fb0d8234d1a82cc081f0d1875afe52b783ffb960a9f2e5c5c566f780",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1264,
+        1264
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1265:1267:16e781c5894d09008dd0d6090a28ccf9e2beed2f495573b66272fabb22826f19",
+      "old_content_sha256": "16e781c5894d09008dd0d6090a28ccf9e2beed2f495573b66272fabb22826f19",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1265,
+        1267
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Distinct request keys cannot create duplicate fixed-service identity bindings",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_distinct_keys_cannot_duplicate_service_actor_after_authority_serialization",
+      "old_assertion_id": "assertion:1268:1270:13983cf520f4be52989ced0e544503b1d192047eaa990cd7151d7c975b5ff6c7",
+      "old_content_sha256": "13983cf520f4be52989ced0e544503b1d192047eaa990cd7151d7c975b5ff6c7",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1268,
+        1270
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": {
+          "not_applicable_reason": "This assertion does not establish replay behavior."
+        },
+        "revocation": {
+          "not_applicable_reason": "This assertion does not establish revocation behavior."
+        },
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "persistence"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1280:1280:946db5a89427d1ac5b91a8994faa09bb154ef3ea232bf3d501c0eada3dd466d3",
+      "old_content_sha256": "946db5a89427d1ac5b91a8994faa09bb154ef3ea232bf3d501c0eada3dd466d3",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1280,
+        1280
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1324:1324:826633801684d83414a2026f17771a18423555f1215f129114d06a7dee8bada4",
+      "old_content_sha256": "826633801684d83414a2026f17771a18423555f1215f129114d06a7dee8bada4",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1324,
+        1324
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1325:1325:ea82399a8531c8b3b790df5f2f3d1540852498f03500fa21116a37ddf577245f",
+      "old_content_sha256": "ea82399a8531c8b3b790df5f2f3d1540852498f03500fa21116a37ddf577245f",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1325,
+        1325
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1327:1327:8dc37c8674f6853972b43ea485fbfc74257b296ddee45f0fc74e65ede9b2fdcc",
+      "old_content_sha256": "8dc37c8674f6853972b43ea485fbfc74257b296ddee45f0fc74e65ede9b2fdcc",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1327,
+        1327
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1329:1329:1a9afa3ccfcd6c9f3b4ac8552816c3c26138552d9de03cb11a2212a5d7f46eca",
+      "old_content_sha256": "1a9afa3ccfcd6c9f3b4ac8552816c3c26138552d9de03cb11a2212a5d7f46eca",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1329,
+        1329
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1341:1341:c696ef02651975ebbe7eaab05d25e96fb5d482c05b7d0dbb929bce32c1cdeeed",
+      "old_content_sha256": "c696ef02651975ebbe7eaab05d25e96fb5d482c05b7d0dbb929bce32c1cdeeed",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1341,
+        1341
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1342:1342:3e64b7958b0e6c6fc7e4aab348445036431c3a405d71276e235c0adf3ad456a5",
+      "old_content_sha256": "3e64b7958b0e6c6fc7e4aab348445036431c3a405d71276e235c0adf3ad456a5",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1342,
+        1342
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1381:1381:2c29de77ee740f30a595498f7330be7e0c8a4192d0bb7983dad5c5fdba84e2e6",
+      "old_content_sha256": "2c29de77ee740f30a595498f7330be7e0c8a4192d0bb7983dad5c5fdba84e2e6",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1381,
+        1381
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1409:1409:517a5866530d6125da3374e09529c1c17d43a85f5fa845becf7c134686bca190",
+      "old_content_sha256": "517a5866530d6125da3374e09529c1c17d43a85f5fa845becf7c134686bca190",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1409,
+        1409
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1410:1410:0fb132204e6b7987580ee7a9299f22c1869aa344407c84da33effcd90710f3c3",
+      "old_content_sha256": "0fb132204e6b7987580ee7a9299f22c1869aa344407c84da33effcd90710f3c3",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1410,
+        1410
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1412:1412:ab598ba1791612b2d1122a5cfc51021704385ffede0325f3dc9f0631acf74133",
+      "old_content_sha256": "ab598ba1791612b2d1122a5cfc51021704385ffede0325f3dc9f0631acf74133",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1412,
+        1412
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1414:1414:a82791b77266e5101654e8adfd694665093d47d82bd82db23a7e72eae988ed0c",
+      "old_content_sha256": "a82791b77266e5101654e8adfd694665093d47d82bd82db23a7e72eae988ed0c",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1414,
+        1414
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1416:1416:9407b07d8cc0cf561a72e7b0529e315b1ff6d084ccb58fb6fde3d386a0b0a76f",
+      "old_content_sha256": "9407b07d8cc0cf561a72e7b0529e315b1ff6d084ccb58fb6fde3d386a0b0a76f",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1416,
+        1416
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1417:1421:9894b9ca1b87272a419b54ca64de65e203701f54727e037ebea8a06f8f66e0e1",
+      "old_content_sha256": "9894b9ca1b87272a419b54ca64de65e203701f54727e037ebea8a06f8f66e0e1",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1417,
+        1421
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1422:1422:2f34a76209f5af7332c30ea051258bafc90f6b356b7143d3529a701c941344b9",
+      "old_content_sha256": "2f34a76209f5af7332c30ea051258bafc90f6b356b7143d3529a701c941344b9",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1422,
+        1422
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1423:1423:07f86566cda04c1b945fc5eb0c6dc55b25b887ca0050de598e5c3552a8c17d84",
+      "old_content_sha256": "07f86566cda04c1b945fc5eb0c6dc55b25b887ca0050de598e5c3552a8c17d84",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1423,
+        1423
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Service provisioning revalidates authority in the serialized revocation order",
+      "new_test_node": "tests/authorization/service_actors/test_provisioning_atomicity.py::test_authority_revocation_serializes_with_service_provisioning",
+      "old_assertion_id": "assertion:1425:1428:ea262344157b7cc27867a0d5e782f230bb2ca7ae8107a80d9f408295da395400",
+      "old_content_sha256": "ea262344157b7cc27867a0d5e782f230bb2ca7ae8107a80d9f408295da395400",
+      "old_revision": "3c6e23b20e7d59438407f542f4ba208b1602c5dd",
+      "old_source_span": [
+        1425,
+        1428
+      ],
+      "old_test_node": "tests/test_auth.py::test_service_actor_provisioning_failure_and_authority_races_are_atomic",
+      "security_dimensions": {
+        "concealment": {
+          "not_applicable_reason": "This assertion does not establish concealment behavior."
+        },
+        "concurrency": "preserved",
+        "denial_side_effects": "preserved",
+        "evidence": "preserved",
+        "lock_order": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "transaction_ownership": "preserved"
+      },
+      "target_layer": "integration"
+    }
+  ]
+}

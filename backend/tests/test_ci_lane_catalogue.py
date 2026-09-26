@@ -167,6 +167,13 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         == modules_by_lane["task_lifecycle_b"]
         == modules_by_lane["task_lifecycle_c"]
         == {
+            "tests/authorization/submission_history/test_reads.py",
+            "tests/authorization/submission_history/test_privacy.py",
+            "tests/authorization/submission_history/test_storage.py",
+            "tests/authorization/submission_history/test_isolation.py",
+            "tests/authorization/submission_history/test_migration.py",
+            "tests/authorization/submission_history/test_absence.py",
+            "tests/authorization/submission_history/test_failures.py",
             "tests/tasks/test_contribution_lineage.py",
             "tests/tasks/test_project_display.py",
             "tests/tasks/test_ready_queue.py",
@@ -267,6 +274,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/authorization/admin_access/test_grant_concurrency_postgresql.py",
         "tests/authorization/admin_access/test_timestamp_concurrency_postgresql.py",
         "tests/authorization/admin_access/test_read_concurrency_postgresql.py",
+        "tests/authorization/service_actors/test_provisioning_atomicity.py",
         "tests/actors/test_first_access_postgresql.py",
         "tests/authorization/guide_compilation_projections/test_replay_evidence.py",
         "tests/test_auth_concurrency_observer.py",
