@@ -53,8 +53,9 @@ bounded change, not a reason to expose an unusable activation POST first.
 New policy semantics, default policy creation, Project Manager policy mutation,
 new authorization powers, relaxed binding validation, award/payment/fulfillment
 implementation, guide activation or Submission exposure, checker execution,
-compatibility APIs, data deletion, new dependencies, weakened CI or coverage gates.
-Do not touch the ongoing PR #444 test-audit implementation or tooling policy.
+compatibility APIs, data deletion, new dependencies, weakened CI or required behavior proof.
+Preserve the merged WS-QUAL-003-16 test-audit implementation and tooling policy;
+this product chunk does not redesign them.
 
 ## Design and decisions
 
@@ -209,7 +210,7 @@ reimplemented merely to add tests.
 
 Run affected owner proofs, route/schema and boundary checks, Ruff, Markdown
 links, stale wording and Commitrail checks. Hosted canonical PostgreSQL/MinIO
-lanes and coverage remain mandatory. No real inference/private guide input is
+lanes and complete-execution evidence remain mandatory; coverage is diagnostic. No real inference/private guide input is
 needed. Plan feasibility is inspected evidence, not runtime proof.
 
 ## Review findings
@@ -284,3 +285,9 @@ The existing real revocation race and sequential revoked-grant proofs expect the
 post-revocation mutation and replay, replacing its obsolete generic-conflict
 expectation. Both policy-first and revocation-first ordering, unchanged persisted
 state and the positive committed policy outcome remain asserted.
+
+Main reconciliation preserves the merged test-necessity audit, including its
+project-role proof decomposition, behavior-based CI policy, and structural
+ledger reductions. CP05A's four public test modules remain selected alongside
+main's added project-role modules; its kernel reduction remains in the combined
+ledger. Public capability and next-boundary wording remains unchanged.
