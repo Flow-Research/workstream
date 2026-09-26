@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.modules.authorization.api import (
     ContributionPolicyMutationAuthorityFacts,
     ContributionPolicyReadFacts,
@@ -18,6 +20,7 @@ from app.modules.authorization.domain.contribution_policies import (
     CONTRIBUTION_POLICY_MUTATION_ACTIONS,
     CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
     ContributionPolicyReadResourceContext,
+    ContributionPolicyMutationScopeDenialResourceContext,
 )
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
@@ -144,10 +147,24 @@ class ContributionPolicyAuthorizationAdapter:
             raise BoundaryAuthorizationDenied("invalid mutation scope")
         self._assert_human_actor(actor_profile_id)
         action = self._action(str(action_id))
-        await self._invoke(self._prepared.lock_mutation_scope(
-            action,
-            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
-        ))
+        async def lock_scope():
+            try:
+                await self._prepared.lock_mutation_scope(
+                    action,
+                    PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+                )
+            except PreparedAuthorizationUnsupported as denial:
+                try:
+                    exists = await self._authorization._admin.project_exists(project_id)
+                except SQLAlchemyError as exc:
+                    raise AuthorizationUnavailable("contribution-policy authority unavailable") from exc
+                resource = ContributionPolicyMutationScopeDenialResourceContext(
+                    resource_type="project", resource_id=project_id,
+                    scope_project_id=project_id, project_exists=exists,
+                    requested_action=action,
+                )
+                await self._prepared.deny_unsupported(action, None, resource, denial)
+        await self._invoke(lock_scope())
 
     async def prepare_mutation(
         self, facts: ContributionPolicyMutationAuthorityFacts

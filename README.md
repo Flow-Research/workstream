@@ -568,7 +568,20 @@ canonical evidence ownership. The existing Celery pre-review gate still calls
 service. That service's `evaluate_post_submission` uses
 `UnavailablePostSubmissionExecution` and raises
 `PostSubmissionExecutionUnavailable` until its durable execution and authority
-boundaries land. CON now provides internal exact selected-policy validation: a
+boundaries land. Finance Authority can publicly discover, create, update, publish,
+read and retire a project's ContributionPolicy under
+`/api/v1/projects/{project_id}/contribution-policies`. The current-policy read
+recovers a draft selector, a published selector, or both for another authorized
+Finance actor.
+Each mutation requires one UUID `Idempotency-Key`. AUTH owns the authorization
+decision for the authenticated actor; the CON caller transaction atomically commits
+policy effects, AUTH evidence and immutable replay custody. Both contribution
+types must explicitly declare compensated or unpaid rules. Unpaid publication
+needs no compensation binding; compensated rules retain verified binding checks.
+Project Managers do not acquire Finance powers. Public compensation-binding
+administration remains pending.
+
+CON provides internal exact selected-policy validation: a
 new guide binding must match the active policy’s current published version;
 the revision-adoption purpose validates an explicitly supplied historical version
 without reselection. Both validate complete rules and current unit/binding
@@ -582,7 +595,8 @@ AUTH-12H supplies explicit live authority for an active Project Manager scoped t
 that exact project. Shared prepared authorization locks current identity and grant
 before product resources, binds the complete activation digest and rechecks live
 authority on replay. Composition without an authority adapter still denies.
-Public activation wiring and downstream task/revision integration remain pending.
+Manager activation context and public guide activation remain pending;
+approved-guide intake and revision integration remain separate.
 
 ARCH-03A completes the existing internal PROJECTS context port. New work selects
 one active activated guide; existing work resolves its exact frozen guide and

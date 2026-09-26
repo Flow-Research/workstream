@@ -29,6 +29,7 @@ LANES = (
     "project_lifecycle_c",
     "task_lifecycle_a",
     "task_lifecycle_b",
+    "task_lifecycle_c",
 )
 
 

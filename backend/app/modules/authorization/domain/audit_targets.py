@@ -15,10 +15,11 @@ from app.modules.authorization.domain.task_queues import QueueReadResourceContex
 
 def project_authority_audit_target(
     resource: object, action_id: ActionId,
-) -> tuple[str | None, str, str, str, str] | None:
+) -> tuple[str | None, str | None, str | None, str, str] | None:
     """Project-scoped exact contexts share bounded audit selectors, never raw facts."""
     from app.modules.authorization.domain.contribution_policies import (
         ContributionPolicyReadResourceContext, ContributionPolicyMutationResourceContext,
+        ContributionPolicyMutationScopeDenialResourceContext,
     )
     from app.modules.authorization.domain.adapter_bindings import (
         AdapterBindingReadResourceContext,
@@ -39,6 +40,11 @@ def project_authority_audit_target(
         ProjectGuideActivationResourceContext,
     )
 
+    if type(resource) is ContributionPolicyMutationScopeDenialResourceContext:
+        project_id = str(resource.scope_project_id)
+        if resource.project_exists:
+            return project_id, "project", project_id, "project", project_id
+        return None, None, None, "project", project_id
     if action_id is ActionId.PROJECT_GUIDE_ACTIVATE and isinstance(resource, ProjectGuideActivationResourceContext):
         project_id = str(resource.scope_project_id)
         return project_id, resource.resource_type, str(resource.resource_id), "project", project_id

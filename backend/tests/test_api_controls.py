@@ -476,13 +476,24 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     assert "/api/v1/tasks/{task_id}/audit-events" not in schema["paths"]
     assert "/api/v1/tasks/{task_id}/locked-context" not in schema["paths"]
     new_manager_reads = {route for route in task_read_routes if "/projects/" in route} | locked_context_routes | {evidence_route}
-    assert len(route_inventory) == 84
+    policy_prefix = "/api/v1/projects/{project_id}/contribution-policies"
+    policy_actions = {
+        f"GET {policy_prefix}/current": "contribution.policy.read",
+        f"GET {policy_prefix}/{{policy_id}}": "contribution.policy.read",
+        f"POST {policy_prefix}/drafts": "contribution.policy.create_draft",
+        f"PUT {policy_prefix}/{{policy_id}}/versions/{{version_id}}": "contribution.policy.update_draft",
+        f"POST {policy_prefix}/{{policy_id}}/versions/{{version_id}}/publication": "contribution.policy.publish",
+        f"POST {policy_prefix}/{{policy_id}}/versions/{{version_id}}/retirement": "contribution.policy.retire",
+    }
+    assert policy_actions.keys() <= set(protected_inventory)
+    new_manager_reads |= policy_actions.keys()
+    assert len(route_inventory) == 90
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "f70ea30244dc319f08a964b6c66a11ff27df251e9b5ddf5c3726e4ef99587635"
     )
-    assert len(protected_inventory) == 82
+    assert len(protected_inventory) == 88
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "6ec18abb4e1f3fd352b3c476f85b1bdc53f07e921c9a6cada7b5f8afb4976939"
     )
@@ -510,6 +521,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        **policy_actions,
         "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context": "project.task.locked_context.read",
         "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context": "operations.task.locked_context.read",
         "GET /api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context": "audit.task.locked_context.read",

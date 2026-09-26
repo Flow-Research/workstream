@@ -1,6 +1,7 @@
 """Scope locking preserves exact authorization without issuing mutation power."""
 
 from uuid import uuid4
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -61,9 +62,10 @@ async def test_scope_locks_all_authority_without_handle_or_evidence(action, monk
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action", ACTIONS)
 @pytest.mark.parametrize("failure", ("actor", "project", "missing_grant", "invalid_project", "invalid_actor", "service"))
-async def test_scope_substitution_denies_without_capability_or_evidence(action, failure):
+async def test_scope_substitution_denies_without_capability(action, failure):
     project = uuid4()
     auth, context, _, evidence = subject(action, project, grant_available=failure != "missing_grant")
+    auth._authorization._admin.project_exists = AsyncMock(return_value=True)
     if failure == "service":
         auth._authorization._context = auth._prepared._context = ServiceAuthorizationContext(
             actor_profile_id=context.actor_profile_id, actor_kind=ActorKind.SERVICE,
@@ -80,7 +82,16 @@ async def test_scope_substitution_denies_without_capability_or_evidence(action, 
             uuid4() if failure == "project" else project,
         )
     assert not auth._prepared._issued and not auth._authorization._sealed_prelocked
-    assert evidence.events == []
+    scoped_denial = action.startswith("contribution") and failure in {"project", "missing_grant"}
+    if scoped_denial:
+        assert len(evidence.events) == 1
+        assert evidence.events[0].after_facts["allowed"] is False
+        assert evidence.events[0].action_id == action
+        assert evidence.events[0].resource_type == "project"
+        auth._authorization._admin.project_exists.assert_awaited_once()
+    else:
+        assert evidence.events == []
+        auth._authorization._admin.project_exists.assert_not_awaited()
 
 
 @pytest.mark.asyncio

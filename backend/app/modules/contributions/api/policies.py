@@ -1,9 +1,11 @@
-"""Dependency-safe public contracts for hidden ContributionPolicy behavior."""
+"""Dependency-safe public contracts for ContributionPolicy behavior."""
 
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol, TypeAlias
 from uuid import UUID
+
+from pydantic import ConfigDict, with_config
 
 from app.modules.compensation.api import CompensationInstrumentType
 
@@ -22,10 +24,19 @@ class ContributionPolicyUnavailable(RuntimeError):
     """Fail closed or conceal inaccessible policy state."""
 
 
+class ContributionPolicyAuthorizationDenied(ContributionPolicyUnavailable):
+    """A canonical denied AUTH decision occurred before policy effects."""
+
+
+class ContributionPolicyAuthorizationUnavailable(ContributionPolicyUnavailable):
+    """AUTH could not safely evaluate, consume or persist a policy decision."""
+
+
 class ContributionPolicyConflict(RuntimeError):
     """Conceal stale, duplicate, foreign, or invalid mutations."""
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyDefinitionInput:
     """One requested immutable compensation definition."""
@@ -36,6 +47,7 @@ class PolicyDefinitionInput:
     adapter_binding_id: UUID
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyRuleInput:
     """One complete contribution rule replacement."""
@@ -53,6 +65,24 @@ class ContributionPolicyReadRequest:
     project_id: UUID
     contribution_policy_id: UUID
     contribution_policy_version_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyProjectReadRequest:
+    """Discover the current aggregate without requiring a previous receipt."""
+
+    actor_profile_id: UUID
+    project_id: UUID
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyProjectSelection:
+    """Current exact selectors; reading them grants no mutation authority."""
+
+    project_id: UUID
+    contribution_policy_id: UUID
+    current_published_version_id: UUID | None
+    open_draft_version_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -162,6 +192,17 @@ class ContributionPolicyMutationResult:
     from_version_status: str | None
     to_version_status: str
     occurred_at: datetime
+
+
+class ContributionPolicyOperationsPort(Protocol):
+    """Caller-owned policy operations used by public delivery composition."""
+
+    async def read_current(self, request: ContributionPolicyProjectReadRequest) -> ContributionPolicyProjectSelection: ...
+    async def read(self, request: ContributionPolicyReadRequest) -> ContributionPolicyView: ...
+    async def create_draft(self, request: ContributionPolicyCreateDraftRequest) -> ContributionPolicyMutationResult: ...
+    async def update_draft(self, request: ContributionPolicyUpdateDraftRequest) -> ContributionPolicyMutationResult: ...
+    async def publish(self, request: ContributionPolicyPublishRequest) -> ContributionPolicyMutationResult: ...
+    async def retire(self, request: ContributionPolicyRetireRequest) -> ContributionPolicyMutationResult: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

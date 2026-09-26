@@ -8,7 +8,7 @@ import pytest
 
 from app.adapters.auth.contribution_policies import ContributionPolicyAuthorization
 from app.modules.authorization.api import (
-    AuthorizationDenied,
+    AuthorizationDenied, AuthorizationUnavailable,
     ContributionPolicyReadFacts,
     PreparedAuthorizationInvalid,
 )
@@ -22,7 +22,7 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishAuthorizationFacts,
     ContributionPolicyRetireAuthorizationFacts,
     ContributionPolicyReadRequest,
-    ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
 )
 from .fixtures import ACTIONS, adapter, mutation
 
@@ -76,17 +76,21 @@ async def test_public_adapter_translates_exact_con_facts_through_real_auth(opera
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ("read", "scope", "prepare", "consume", "close"))
-async def test_public_adapter_conceals_authorization_boundary_failures(method):
+@pytest.mark.parametrize("failure", (AuthorizationDenied, AuthorizationUnavailable, PreparedAuthorizationInvalid, ValueError))
+async def test_public_adapter_preserves_authority_failure_classification(method, failure):
     facts = mutation(uuid4(), uuid4())
     port = Mock(
-        authorize_read=AsyncMock(side_effect=AuthorizationDenied("private")),
-        lock_mutation_scope=AsyncMock(side_effect=AuthorizationDenied("private")),
-        prepare_mutation=AsyncMock(side_effect=AuthorizationDenied("private")),
-        consume_mutation=AsyncMock(side_effect=PreparedAuthorizationInvalid("private")),
-        close_mutation=Mock(side_effect=PreparedAuthorizationInvalid("private")),
+        authorize_read=AsyncMock(side_effect=failure("private")),
+        lock_mutation_scope=AsyncMock(side_effect=failure("private")),
+        prepare_mutation=AsyncMock(side_effect=failure("private")),
+        consume_mutation=AsyncMock(side_effect=failure("private")),
+        close_mutation=Mock(side_effect=failure("private")),
     )
     bridge = ContributionPolicyAuthorization(port)
-    with pytest.raises(ContributionPolicyUnavailable, match="^contribution_policy_unavailable$"):
+    with pytest.raises(
+        ContributionPolicyAuthorizationDenied if failure is AuthorizationDenied else ContributionPolicyAuthorizationUnavailable,
+        match="^contribution_policy_unavailable$",
+    ):
         if method == "read":
             await bridge.authorize_contribution_policy_read(
                 ContributionPolicyReadRequest(
@@ -208,3 +212,41 @@ async def test_policy_audit_failure_conceals_and_denies_authority(operation):
             facts = mutation(context.actor_profile_id, project)
             handle = await auth.prepare_mutation(facts)
             await auth.consume_mutation(handle, facts)
+
+
+@pytest.mark.asyncio
+async def test_scope_existence_failure_is_unavailable_without_denial():
+    from sqlalchemy.exc import SQLAlchemyError
+    project = uuid4()
+    auth, context, _, evidence = adapter(project, grant_available=False)
+    auth._authorization._admin.project_exists = AsyncMock(side_effect=SQLAlchemyError("private"))
+    with pytest.raises(AuthorizationUnavailable, match="^contribution-policy authority unavailable$"):
+        await auth.lock_mutation_scope(action_id=ActionId.CONTRIBUTION_POLICY_CREATE_DRAFT,
+            actor_profile_id=context.actor_profile_id, project_id=project)
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", ("action", "input", "project", "policy"))
+async def test_scope_denial_rejects_substituted_or_invented_facts(invalid):
+    from pydantic import ValidationError
+    from app.modules.authorization.domain.contribution_policies import ContributionPolicyMutationScopeDenialResourceContext
+    from app.modules.authorization.runtime import (
+        AuthorizationDenialCode, PreparedAuthorizationInput, PreparedAuthorizationUnsupported,
+    )
+    project = uuid4()
+    auth, _, _, evidence = adapter(project, grant_available=False)
+    values = dict(resource_type="project", resource_id=project, scope_project_id=project,
+        project_exists=True, requested_action=ActionId.CONTRIBUTION_POLICY_CREATE_DRAFT)
+    if invalid in {"project", "policy"}:
+        values.update({"resource_id": uuid4()} if invalid == "project" else {"contribution_policy_id": uuid4()})
+        with pytest.raises(ValidationError):
+            ContributionPolicyMutationScopeDenialResourceContext(**values)
+    else:
+        context = ContributionPolicyMutationScopeDenialResourceContext(**values)
+        caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}) if invalid == "input" else None
+        action = ActionId.CONTRIBUTION_POLICY_RETIRE if invalid == "action" else ActionId.CONTRIBUTION_POLICY_CREATE_DRAFT
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await auth._prepared.deny_unsupported(action, caller_input, context,
+                PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED))
+    assert evidence.events == []

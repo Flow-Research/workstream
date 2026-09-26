@@ -219,6 +219,11 @@ ARCH_CP06_SELECTED_POLICY_TARGETS = frozenset(
         "backend/app/modules/contributions/selected_policy_validation.py",
     }
 )
+ARCH_CP05A_PUBLIC_POLICY_TARGETS = frozenset({
+    "backend/app/api/deps/contribution_policies.py",
+    "backend/app/api/routes/contribution_policies.py",
+    "backend/app/modules/contributions/api/policy_http.py",
+})
 ARCH_CP05_POLICY_AUTH_TARGETS = frozenset(
     {
         "backend/app/adapters/auth/contribution_policies.py",
@@ -667,6 +672,7 @@ def _validate_additive_partition_transition(
             | ARCH_CP04B_CONTRIBUTION_POLICY_TARGETS
         | ARCH_04A_POST_SUBMIT_TARGETS
         | ARCH_CP05_POLICY_AUTH_TARGETS
+        | ARCH_CP05A_PUBLIC_POLICY_TARGETS
         | ARCH_CP06_SELECTED_POLICY_TARGETS
         | ARCH_CP07_GUIDE_ACTIVATION_TARGETS
         | ARCH_03A_GUIDE_CONTEXT_TARGETS

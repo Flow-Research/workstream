@@ -12,7 +12,7 @@ from app.modules.authorization.api import (
     ContributionPolicyUpdateDraftFacts,
     ContributionPolicyPublishFacts,
     ContributionPolicyRetireFacts,
-    AuthorizationBoundaryError,
+    AuthorizationBoundaryError, AuthorizationDenied,
     action_id,
 )
 from app.modules.contributions.api import (
@@ -22,7 +22,15 @@ from app.modules.contributions.api import (
     ContributionPolicyMutationAuthorizationFacts,
     ContributionPolicyReadRequest,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
 )
+
+
+def _policy_authority_error(error: Exception) -> ContributionPolicyUnavailable:
+    """Preserve denial versus unavailable without exposing AUTH diagnostics."""
+    error_type = (ContributionPolicyAuthorizationDenied if isinstance(error, AuthorizationDenied)
+                  else ContributionPolicyAuthorizationUnavailable)
+    return error_type("contribution_policy_unavailable")
 
 
 class ContributionPolicyAuthorization:
@@ -46,7 +54,7 @@ class ContributionPolicyAuthorization:
                 ),
             )
         except (AuthorizationBoundaryError, ValueError) as exc:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable") from exc
+            raise _policy_authority_error(exc) from exc
 
     @staticmethod
     def _facts(
@@ -104,7 +112,7 @@ class ContributionPolicyAuthorization:
                 action_id=action_id(action), actor_profile_id=actor_profile_id, project_id=project_id,
             )
         except (AuthorizationBoundaryError, ValueError) as exc:
-            raise ContributionPolicyUnavailable('contribution_policy_unavailable') from exc
+            raise _policy_authority_error(exc) from exc
 
     async def prepare_contribution_policy_mutation(
         self, facts: ContributionPolicyAuthorizationFacts
@@ -113,7 +121,7 @@ class ContributionPolicyAuthorization:
         try:
             return await self._authorization.prepare_mutation(self._facts(facts))
         except (AuthorizationBoundaryError, ValueError) as exc:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable") from exc
+            raise _policy_authority_error(exc) from exc
 
     async def consume_contribution_policy_mutation(
         self, prepared: object, facts: ContributionPolicyAuthorizationFacts
@@ -122,11 +130,11 @@ class ContributionPolicyAuthorization:
         try:
             return await self._authorization.consume_mutation(prepared, self._facts(facts))
         except (AuthorizationBoundaryError, ValueError) as exc:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable") from exc
+            raise _policy_authority_error(exc) from exc
 
     def close_contribution_policy_mutation(self, prepared: object) -> None:
         """Invalidate prepared mutation authority through AUTH's public port."""
         try:
             self._authorization.close_mutation(prepared)
-        except AuthorizationBoundaryError as exc:
-            raise ContributionPolicyUnavailable("contribution_policy_unavailable") from exc
+        except (AuthorizationBoundaryError, ValueError) as exc:
+            raise _policy_authority_error(exc) from exc

@@ -1281,7 +1281,9 @@ Exact replay acquires fresh live authority and validates the retained decision;
 it returns the original receipt without a second allow or activation. Supersession
 or later ContributionPolicy retirement does not rewrite that evidence. Revoked
 actor/link/grant authority denies replay. Composition without the explicit adapter
-continues to deny; public activation and downstream task lineage remain pending.
+continues to deny. CP08 delivers Task, Assignment and hidden Submission policy
+lineage. Manager activation context and public guide activation remain pending,
+followed by approved-guide intake integration.
 
 ## Shared outbox dispatcher
 

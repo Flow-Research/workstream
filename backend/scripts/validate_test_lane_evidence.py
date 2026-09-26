@@ -24,7 +24,7 @@ if __package__ in {None, ""}:
 from scripts.record_id_collection import RecordIdCollection  # noqa: E402
 
 SCHEMA_VERSION = 1
-LANE_COUNT = 8
+LANE_COUNT = 9
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LANE_RE = re.compile(r"^[a-z][a-z0-9_]*$")

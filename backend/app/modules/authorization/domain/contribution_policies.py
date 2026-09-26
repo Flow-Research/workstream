@@ -3,9 +3,32 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.authorization.catalogue import ActionId
+
+
+class ContributionPolicyMutationScopeDenialResourceContext(BaseModel):
+    """Refused project scope before any policy/version facts exist."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    resource_type: Literal["project"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_exists: bool
+    requested_action: Literal[
+        ActionId.CONTRIBUTION_POLICY_CREATE_DRAFT,
+        ActionId.CONTRIBUTION_POLICY_UPDATE_DRAFT,
+        ActionId.CONTRIBUTION_POLICY_PUBLISH,
+        ActionId.CONTRIBUTION_POLICY_RETIRE,
+    ]
+
+    @model_validator(mode="after")
+    def exact_project(self):
+        """Bind the refused scope to the requested project only."""
+        if self.resource_id != self.scope_project_id:
+            raise ValueError("scope denial requires one exact project")
+        return self
 
 
 class ContributionPolicyReadResourceContext(BaseModel):
