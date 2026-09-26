@@ -183,6 +183,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/admin_access/test_grant_concurrency_postgresql.py",
     "tests/authorization/admin_access/test_timestamp_concurrency_postgresql.py",
     "tests/authorization/admin_access/test_read_concurrency_postgresql.py",
+    "tests/authorization/service_actors/test_provisioning_atomicity.py",
     "tests/test_auth_concurrency_observer.py",
     "tests/test_authorization.py",
     "tests/authorization/test_catalogue.py",

@@ -23,9 +23,11 @@
   projection proof is its first stage, not its completion boundary.
 - AUTH admin-access slice: [13 — lifecycle proof audit](WS-QUAL-003-13.md).
 - AUTH test-proof and coverage-policy audit: [16 — behavior-first test evidence](WS-QUAL-003-16.md).
-- After 13's intended merge outcome: inventory the remaining service-actor
-  provisioning and profile/link lifecycle families, then remaining AUTH owners.
-  Do not repeat the selected actor, authentication or admin-access audit.
+- AUTH service-provisioning failure and race proof: [17 — exact rollback and
+  contention evidence](WS-QUAL-003-17.md).
+- After 17: audit successful service-actor provisioning and actor-profile /
+  identity-link lifecycle families, then remaining AUTH owners. Do not repeat
+  the selected actor, authentication, admin-access, or failure/race audits.
   The full suite audit remains open.
 - Preserve: intended production semantics, public boundaries, real database/isolation/
   concurrency proof, full hosted execution, human merge. Coverage is diagnostic,

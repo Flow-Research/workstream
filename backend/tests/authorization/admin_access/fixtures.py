@@ -17,13 +17,14 @@ from tests.authorization.admin_access.support import AdminAccess, SignedAccess
 async def signed_access(auth_database_env, rsa_signing_material) -> AsyncIterator[SignedAccess]:
     private_key, jwk = rsa_signing_material
     settings = production_verifier_settings(database_url=auth_database_env)
+    assert settings.token_issuer is not None
     app = create_app(settings)
     app.state.auth_verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://testserver"
         ) as client:
-            yield SignedAccess(client, private_key)
+            yield SignedAccess(client, private_key, settings.token_issuer)
     finally:
         await db_session.dispose_engine()
 
