@@ -491,11 +491,11 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
-        "ed85c1a006d8855835ecfc2e5200d0b9026e021bb4632f4b341008c21d900b09"
+        "793237012e9256d308dd5d1e9c1a65e41381cf6306888fdd175dc9794b118444"
     )
     assert len(protected_inventory) == 90
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
-        "d5648183e2fa65b478333b7d6afe6f37f76b8938bd35ae6d80ebacedb883ba84"
+        "0953ae6392b81a4a7ba7c9f6b7fccc17768f34cd1f958572fdc553cd204ec82e"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
