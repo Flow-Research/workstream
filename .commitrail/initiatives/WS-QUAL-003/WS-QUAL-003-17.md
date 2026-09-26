@@ -92,7 +92,8 @@ redundancy rationale in the exact assertion map.
   each test has one primary invariant and remains within the AUTH structure
   limits.
 - [x] Each injected failure boundary proves no partial actor/link, authority,
-  idempotency or audit state and proves the same-key request can retry.
+  idempotency or audit state, including unchanged total actor-profile and
+  identity-link row counts, and proves the same-key request can retry.
 - [x] The distinct-key public API race proves the exact waiter is blocked by
   the exact authority-control lock holder and leaves one committed profile/link
   with one success evidence chain plus one conflict.
@@ -101,6 +102,8 @@ redundancy rationale in the exact assertion map.
   denied even when it reuses the prior key.
 - [x] Every assertion and materially distinct loop case from the removed test
   has one exact assertion-map disposition.
+- [x] Persisted identity-link assertions include the configured issuer as well
+  as service subject and actor-profile binding.
 - [x] PostgreSQL tests remain in existing required semantic lanes; no skips or
   deselections are introduced.
 - [x] The structural debt ledger and full selected-module collection validate.
@@ -130,7 +133,9 @@ redundancy rationale in the exact assertion map.
 
 ## Review findings
 
-No implementation review has run yet.
+Reviewers should inspect the exact issuer/subject/profile binding, total actor
+and link rollback counts, transaction boundaries, and the observed PostgreSQL
+control-row waiter for both public race scenarios.
 
 ## Reconciliation
 

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.config import get_settings
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.actors.api import ServiceIdentity
@@ -22,7 +23,7 @@ from tests.authorization.admin_access.support import (
 
 async def _service_binding(
     identity: ServiceIdentity, subject: str
-) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+) -> tuple[tuple[str, ...], tuple[tuple[str, str, str], ...]]:
     async with db_session.get_session_factory()() as session:
         profile_ids = tuple(
             str(value)
@@ -36,10 +37,14 @@ async def _service_binding(
             ).all()
         )
         links = tuple(
-            (str(row.id), str(row.actor_profile_id))
+            (str(row.id), str(row.actor_profile_id), row.issuer)
             for row in (
                 await session.execute(
-                    select(ActorIdentityLink.id, ActorIdentityLink.actor_profile_id).where(
+                    select(
+                        ActorIdentityLink.id,
+                        ActorIdentityLink.actor_profile_id,
+                        ActorIdentityLink.issuer,
+                    ).where(
                         ActorIdentityLink.subject == subject,
                         ActorIdentityLink.subject_kind == "service",
                     )
@@ -47,6 +52,17 @@ async def _service_binding(
             ).all()
         )
         return profile_ids, links
+
+
+async def _actor_record_counts() -> tuple[int, int]:
+    async with db_session.get_session_factory()() as session:
+        profiles = int(
+            await session.scalar(select(func.count()).select_from(ActorProfile)) or 0
+        )
+        links = int(
+            await session.scalar(select(func.count()).select_from(ActorIdentityLink)) or 0
+        )
+        return profiles, links
 
 
 async def _provision(access: AdminAccess, key: str, body: dict[str, str]):
@@ -82,6 +98,7 @@ async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
     }
     before_authority = await authority_snapshot()
     before_actor = await actor_observation(access.admin.id)
+    before_actor_records = await _actor_record_counts()
     original_event = AuditService.add_authority_event
 
     async def fail_event(self, event):
@@ -102,6 +119,7 @@ async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
     assert_unavailable(failed)
     assert await authority_snapshot() == before_authority
     assert await actor_observation(access.admin.id) == before_actor
+    assert await _actor_record_counts() == before_actor_records
     assert await _service_binding(identity, subject) == ((), ())
 
     retried = await _provision(access, key, body)
@@ -110,6 +128,7 @@ async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
     profile_id = retried.json()["actor_profile_id"]
     assert profile_ids == (profile_id,)
     assert len(links) == 1 and links[0][1] == profile_id
+    assert links[0][2] == get_settings().token_issuer
     committed = await authority_snapshot()
     rows = [
         row
@@ -155,6 +174,7 @@ async def test_distinct_keys_cannot_duplicate_service_actor_after_authority_seri
     profile_id = winner.json()["actor_profile_id"]
     assert profile_ids == (profile_id,)
     assert len(links) == 1 and links[0][1] == profile_id
+    assert links[0][2] == get_settings().token_issuer
 
     snapshot = await authority_snapshot()
     records = [
@@ -231,7 +251,7 @@ async def test_authority_revocation_serializes_with_service_provisioning(
     assert profile_ids == ((profile_id,) if succeeded else ())
     assert len(links) == int(succeeded)
     if succeeded:
-        assert links[0][1] == profile_id
+        assert links[0][1:] == (profile_id, get_settings().token_issuer)
     snapshot = await authority_snapshot()
     bootstrap = [
         row
