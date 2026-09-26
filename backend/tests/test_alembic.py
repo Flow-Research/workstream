@@ -79,7 +79,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
-    assert [revision.revision for revision in revisions] == [HEAD_REVISION, "0004_task_context_authority", "0003_task_read_authority", "0002_task_queue_authority", BASELINE_REVISION]
+    assert [revision.revision for revision in revisions] == [HEAD_REVISION, "0005_task_evidence_authority", "0004_task_context_authority", "0003_task_read_authority", "0002_task_queue_authority", BASELINE_REVISION]
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 

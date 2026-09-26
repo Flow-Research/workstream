@@ -328,9 +328,10 @@ obtains fresh authority. Replay returns ART's canonical result unchanged.
 The post command validates and delegates CHECKER's closed value contract.
 Production explicitly uses `UnavailablePostSubmissionExecution`; this does not
 install durable post-submit execution, authorize material reads, or prove attempt and
-currentness ownership. ARCH-04B/04C/04D/04E own that cutover. Existing post-submit
-run and history consumers remain until their replacement lands; the facade
-neither wraps their execution nor adds another policy compiler.
+currentness ownership. ARCH-04B/04C/04D/04E own that execution cutover.
+Retained run and submission history now use canonical AUTH and separate fixed
+contributor/manager projections. The alternate execution service and Celery worker are
+removed; the facade neither wraps them nor adds another policy compiler.
 
 POL-07A commits an ART attempt reservation after bounded ZIP inspection and
 before invoking any checker. Only the original request can consume the winning
@@ -509,7 +510,12 @@ Platform blocking severities are `critical` and `high`. Project policy may add
 stricter blocking severities, but it cannot remove those platform blocking
 severities.
 
-## Checker Run Flow
+## Checker Run Flow — Target Contract
+
+The following is the intended end-to-end lifecycle. Pre-submit intake and
+retained-history reads are implemented. Canonical durable post-submit execution,
+result routing and recovery remain unavailable pending ARCH-04B/04C/04D/04E/04F;
+the flow below is not a claim that those jobs or transitions are live.
 
 ```text
 Draft packet
@@ -557,9 +563,10 @@ Checker failures are not human review decisions. They do not `accept` or `reject
 
 If a checker crashes or cannot run because of platform infrastructure, the
 checker run remains failed as an infrastructure failure and the task does not
-move to human review. A retry requires Operator
+move to human review. The planned retry contract requires Operator
 `operations.checker.retry`, a reason, a new attempt/supersession record, and
-append-only audit evidence.
+append-only audit evidence. That action is currently unavailable; no public
+retry or repair route survives the alternate execution removal.
 
 This terminal retry is distinct from transport redelivery or recovery of an
 unfinished provider call. In-flight recovery retains its logical attempt and
@@ -573,9 +580,10 @@ criteria, or another task setup defect that is not contributor-fixable, the run 
 `task_setup_blocked`. That route is internal to covered Project Managers and
 authorized Operators and must not be shown to contributors as a revision request.
 
-## Readiness Proof
+## Readiness Proof — Target Contract
 
-When all blocking checks pass, the checker service stores readiness proof on the current checker run.
+Canonical readiness publication is pending. Its required contract stores proof
+on the current checker run when all blocking checks pass.
 
 The checker run records:
 
@@ -623,11 +631,15 @@ see:
 
 ## Recovery, Not Checker Override
 
+`operations.submission_gate.repair` and `operations.checker.retry` are planned,
+unavailable actions. The following describes their required future authority
+and evidence contract, not existing callable recovery routes.
+
 Critical- and high-severity checker failures cannot be converted into review
 readiness by an administrative grant. A covered Project Manager may repair task
-setup under `project.task.manage`; an Operator may use
-`operations.submission_gate.repair` or `operations.checker.retry` only for the
-registered recovery purpose.
+setup under `project.task.manage`. Future Operator submission-gate repair and
+checker retry must be limited to the registered recovery purpose once their
+canonical owner implementation and AUTH activation are delivered.
 
 Recovery requires:
 

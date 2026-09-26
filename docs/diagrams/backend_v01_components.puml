@@ -35,8 +35,8 @@ rectangle "File Store\n----\nEvidence and\nartifact objects" as file_store #E6FC
 package "FastAPI Backend - Modular Monolith" as backend #F8FBFF {
   package "HTTP + Auth Boundary" as http_boundary #EDF2FF {
     rectangle "API Router\n----\nHTTP only\nrequest -> service\nerror -> response" as api_router
-    rectangle "Current Actor\nDependency\n----\nBearer token ->\nActorContext" as current_actor
-    rectangle "Permission\nPolicies\n----\nRole and object\nvisibility checks" as permissions
+    rectangle "Current Actor\nDependency\n----\nVerified token ->\ncanonical actor" as current_actor
+    rectangle "Permission\nPolicies\n----\nLive scoped grants\nand exact resources" as permissions
     rectangle "Pydantic\nSchemas\n----\nRequest/response\ncontracts" as schemas
   }
 

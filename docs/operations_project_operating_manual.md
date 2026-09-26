@@ -396,7 +396,11 @@ missing and unauthorized requests return 404; malformed cursors or invalid
 stored evidence return sanitized 422. The old `/tasks/{task_id}/audit-events`
 route is removed. Submission recovery retains its separate internal evidence reader.
 
-### Submission Quality Gate
+### Submission Quality Gate — Target Contract
+
+Canonical post-submit execution, routing and recovery are not yet available.
+`operations.checker.retry` is planned; the removed alternate Celery worker and repair
+route do not provide it. The required future behavior is:
 
 A submission cannot move to human review until required checkers run against
 the exact submission version and artifact hashes. Critical- or high-severity

@@ -54,8 +54,9 @@ async def test_retired_packet_post_cannot_mutate_an_authorized_assignment(
     retained_read = await task_client.get(
         f"/api/v1/tasks/{task['id']}/submissions", headers=auth_headers(),
     )
-    assert retained_read.status_code == 200, retained_read.text
-    assert retained_read.json() == []
+    assert retained_read.status_code == 404, retained_read.text
+    assert retained_read.json()["error"]["code"] == "project_authorization_resource_not_found"
+    assert await _read_task_contributor_race_snapshot(task_database_env, task["id"]) == before
 
 
 async def test_retired_worker_endpoint_cannot_admit_or_self_authorize(task_client, monkeypatch):

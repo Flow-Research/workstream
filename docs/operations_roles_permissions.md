@@ -136,8 +136,8 @@ Recovery is a separate, reasoned, audited path.
 |---|---|---|
 | Normal covered task/setup repair | `project.task.manage` | Covered Project Manager |
 | Task start override | `operations.task.start_override` | Operator |
-| Submission gate repair | `operations.submission_gate.repair` | Operator |
-| Checker retry | `operations.checker.retry` | Operator |
+| Submission gate repair (planned; unavailable) | `operations.submission_gate.repair` | Operator |
+| Checker retry (planned; unavailable) | `operations.checker.retry` | Operator |
 | Review lease force release | `review.lease.force_release` | Operator under WS-REV-001 |
 | Revision-context repair | `project.task.manage` via planned `review.revision_context.repair` | Covered Project Manager |
 | Revision-obligation close | `project.task.manage` via planned `review.revision_obligation.close` | Covered Project Manager |

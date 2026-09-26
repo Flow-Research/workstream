@@ -16,7 +16,7 @@ Source: [backend_v01_components.puml](backend_v01_components.puml)
 | Services | Business rules: status transitions, policy locks, authorization decisions, audit intent. |
 | Repositories | SQLAlchemy 2.x async persistence only; no HTTP or auth decisions. |
 | Schemas | Pydantic input/output contracts and API validation. |
-| Auth adapter | Verifies external Flow tokens and returns `ActorContext`. |
+| Auth adapter | Returns verified external token identity; canonical ACTORS admission and AUTH grants provide authorization context. |
 | Storage port | Hides local filesystem, MinIO, and AWS S3 behind stable provider-neutral artifact references. |
 | Audit module | Writes append-only evidence for state changes and sensitive workflow events. |
 

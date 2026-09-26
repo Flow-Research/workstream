@@ -160,8 +160,9 @@ capabilities, not by calendar weeks or promised dates.
 
 Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
-submission packets, immutable artifact storage, automated checker execution,
-and the pre-review gate. Project-guide ingestion stores original documents,
+submission packets, immutable artifact storage, pre-submit intake checks,
+and authorized retained submission/checker history. Canonical durable post-submit
+execution, routing and recovery remain unavailable. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
 unified setup agent. Guide metadata in PostgreSQL also holds at least one required
 task example; the agent assesses the examples with the uploaded guide documents.

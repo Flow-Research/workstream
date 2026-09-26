@@ -47,11 +47,12 @@ authorize submission, review, or adjudication.
 Normal project repair uses covered Project Manager permission
 `project.task.manage`. The planned review/revision repair, obligation-close,
 legacy-close, and lifecycle-control actions are unavailable until their owning
-hidden behavior, AUTH activation, and REV-13 release. Existing Operator recovery
-is limited to the registered
-permissions `operations.task.start_override`,
-`operations.submission_gate.repair`, `operations.checker.retry`, and the
-WS-REV-owned `review.lease.force_release`.
+hidden behavior, AUTH activation, and REV-13 release. Task start override uses
+`operations.task.start_override`. Submission-gate repair
+(`operations.submission_gate.repair`) and checker retry
+(`operations.checker.retry`) are planned and unavailable; their old routes and
+Celery worker were removed. Review lease release remains governed by the separately
+owned WS-REV contract.
 
 Recovery requires exact resource scope, a reason, matched grant/permission, and
 append-only evidence. It does not erase prior evidence or bypass immutable

@@ -101,3 +101,116 @@ async def test_invalid_cursor_never_enters_private_projection(task_client, monke
     response = await task_client.get(history_paths(*case)["task.submission.list"],
                                     headers=auth_headers(), params={"cursor": cursor})
     assert response.status_code == 422, response.text
+
+
+async def test_same_task_history_separates_contributors(task_client, monkeypatch):
+    """Retained prerequisites prove projection isolation, not live post-submit reclaim."""
+    from app.core.identifiers import new_record_id
+    from app.modules.tasks.models import Submission
+    from app.modules.tasks.submission_composition import build_submission
+    from tests.test_tasks import actor_id
+
+    case = await history_case(task_client, monkeypatch)
+    other = await admit_and_grant_project_submitter(
+        task_client, monkeypatch, case[0], "second-history-contributor",
+    )
+    other_submission_id = str(new_record_id())
+    async with db_session.get_session_factory()() as session, session.begin():
+        task = await session.get(WorkstreamTask, case[1])
+        original = await session.get(Submission, case[2])
+        # Historical rows with all production constraints enabled. This does
+        # not activate assignment release/reclaim after a Submission exists.
+        assignment = TaskAssignment(
+            id=str(new_record_id()), project_id=case[0], task_id=case[1],
+            submitter_contribution_policy_version_id=original.contribution_policy_version_id,
+            contributor_id=other["actor_profile_id"], assigned_by="retained-prerequisite",
+            status="released", released_at=await session.scalar(select(func.clock_timestamp())),
+        )
+        session.add(assignment)
+        await session.flush()
+        second = build_submission(
+            submission_id=other_submission_id, task=task,
+            contributor_id=other["actor_profile_id"], version=2,
+            summary="Second contributor retained work", worker_attestation="Retained evidence",
+            supersedes_submission_id=None,
+            contribution_policy_version_id=assignment.submitter_contribution_policy_version_id,
+            task_assignment_id=assignment.id,
+        )
+        session.add(second)
+        await session.flush()
+        second.locked_at = await session.scalar(select(func.clock_timestamp()))
+    path = history_paths(*case)["task.submission.list"]
+    for subject, expected in (("worker-one", case[2]), ("second-history-contributor", other_submission_id)):
+        set_dev_actor(monkeypatch, roles="", subject=subject)
+        response = await task_client.get(path, headers=auth_headers(), params={"limit": 1})
+        assert response.status_code == 200, response.text
+        assert [item["id"] for item in response.json()["items"]] == [expected]
+        assert response.json()["next_cursor"] is None
+        who = await actor_id(subject)
+        async with db_session.get_session_factory()() as session:
+            assert await session.scalar(select(Submission.contributor_id).where(Submission.id == expected)) == who
+    set_dev_actor(monkeypatch, roles="", subject="project-manager-subject")
+    response = await task_client.get(history_paths(*case, manager=True)["task.submission.list"], headers=auth_headers())
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()["items"]] == [case[2], other_submission_id]
+
+
+@pytest.mark.parametrize("manager", [False, True])
+async def test_checker_pagination_and_cursor_audit(task_client, monkeypatch, manager):
+    """Retained runs exercise timestamp/id continuation and exact query evidence."""
+    from datetime import timedelta
+    from app.core.identifiers import new_record_id
+    from app.core.hashing import canonical_json_hash
+    from app.modules.checkers.models import CheckerRun
+    from app.modules.tasks.models import AuditEvent, Submission
+    from tests.test_tasks import actor_id
+
+    case = await history_case(task_client, monkeypatch)
+    async with db_session.get_session_factory()() as session, session.begin():
+        original = await session.get(CheckerRun, case[3])
+        template = {column.name: getattr(original, column.name) for column in CheckerRun.__table__.columns}
+        original.is_current_for_submission = False
+        await session.flush()
+        earlier_id, tied_id = str(new_record_id()), str(new_record_id())
+        for run_id, attempt, when, predecessor, current in (
+            (earlier_id, 2, original.created_at - timedelta(hours=1), original.id, False),
+            (tied_id, 3, original.created_at, earlier_id, True),
+        ):
+            values = dict(template)
+            values.update(id=run_id, attempt_number=attempt, supersedes_checker_run_id=predecessor,
+                          is_current_for_submission=current, created_at=when, queued_at=when,
+                          started_at=when, completed_at=when)
+            session.add(CheckerRun(**values))
+            await session.flush()
+        contributor_id = (await session.get(Submission, case[2])).contributor_id
+    subject = "project-manager-subject" if manager else "worker-one"
+    set_dev_actor(monkeypatch, roles="", subject=subject)
+    who = await actor_id(subject)
+    action = ("project." if manager else "") + "submission.checker_run.list"
+    path = history_paths(*case, manager=manager)["submission.checker_run.list"]
+    cursor = None
+    for index, expected in enumerate((earlier_id, case[3], tied_id)):
+        async with db_session.get_session_factory()() as session:
+            previous_events = set(await session.scalars(select(AuditEvent.id).where(
+                AuditEvent.actor_id == who, AuditEvent.action_id == action,
+            )))
+        params = {"limit": 1}
+        if cursor is not None:
+            params["cursor"] = cursor
+        response = await task_client.get(path, headers=auth_headers(), params=params)
+        assert response.status_code == 200, response.text
+        assert [item["id"] for item in response.json()["items"]] == [expected]
+        async with db_session.get_session_factory()() as session:
+            events = list(await session.scalars(select(AuditEvent).where(
+                AuditEvent.actor_id == who, AuditEvent.action_id == action,
+                AuditEvent.id.not_in(previous_events),
+            )))
+            assert len(events) == 1
+            assert events[0].after_facts["resource_context_digest"] == canonical_json_hash({"resource_context": {
+                "resource_type": "submission_history", "resource_id": case[2],
+                "scope_project_id": case[0], "task_id": case[1], "submission_id": case[2],
+                "contributor_id": contributor_id, "actor_profile_id": who,
+                "request_digest": canonical_json_hash({"action": action, "limit": 1, "cursor": cursor}),
+            }})
+        cursor = response.json()["next_cursor"]
+        assert (cursor is None) is (index == 2)

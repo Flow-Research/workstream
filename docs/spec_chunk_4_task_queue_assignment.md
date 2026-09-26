@@ -479,8 +479,9 @@ Projection or response failure rolls back ALLOW evidence. A valid missing,
 foreign or denied selector has the same concealed 404; malformed UUID syntax
 returns 422. Nonhuman callers are rejected before TASK access. These reads do
 not authorize claim or submission, and no old role/creator wrapper remains for
-them. Shared helpers used by retained submission reads and internal audit recovery are
-not yet removed.
+them. Retained submission reads now use the canonical history owner below;
+the obsolete TASK submission get/list/evidence-lock helpers are removed. The
+separate internal audit evidence reader remains for its recovery consumers.
 
 
 ## Retained submission and checker history

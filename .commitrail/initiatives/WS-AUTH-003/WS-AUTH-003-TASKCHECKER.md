@@ -242,10 +242,11 @@ are explicitly named):
   `backend/app/modules/actors/{models,service,repository}.py`,
   `backend/app/interfaces/auth.py`,
   `backend/app/workers/{checkers,celery_app}.py`;
-- additive `backend/alembic/versions/0006_history_read_authority.py` after
+- `backend/alembic/env.py` current-head inventory and additive
+  `backend/alembic/versions/0006_history_read_authority.py` after
   `0005_task_evidence_authority`; no baseline migration or retained-data edits.
 
-Affected tests are `backend/tests/{test_tasks,test_checkers,test_auth,test_api_controls,test_db_session,test_ci_lane_catalogue,submission_fixtures}.py`,
+Affected tests are `backend/tests/{test_tasks,test_checkers,test_auth,test_api_controls,test_db_session,test_ci_lane_catalogue,test_alembic,submission_fixtures}.py`,
 `backend/tests/authentication/`, `backend/tests/actors/`,
 `backend/tests/authorization/task_authority/`, and new
 `backend/tests/authorization/submission_history/` (fixtures, contracts, reads,
@@ -255,7 +256,8 @@ semantics must be retained unless the table below explicitly retires the behavio
 Scripts are `backend/scripts/{api_contract_e2e,behavior_ownership,test_structure_boundary}.py`;
 inventories are `.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json`,
 `.ci/behavior-ownership/`, `.ci/module-boundaries/`, and the existing lane catalogue.
-Documentation scope is README, canonical authentication/authorization/checker/task
+Documentation scope includes the backend component diagram source/render, system
+architecture and recovery-operation inventories, plus README, canonical authentication/authorization/checker/task
 specifications, operating manual, roadmap, and this AUTH initiative's navigation.
 An additional shared consumer must be recorded before changing its implementation.
 
@@ -267,12 +269,15 @@ Behavior proof under `backend/tests/authorization/submission_history/`:
 | `test_list_requires_owned_history` | A owns history; same-project B has Submitter but receives 404; A succeeds; removal of ownership predicate fails |
 | `test_historical_owner_after_reassignment` | submitted/evaluation_pending/review_pending/needs_revision; released and reassigned; original owner succeeds, successor denied, current assignment never grants historical ownership |
 | `test_fixed_projection_and_selected_columns` | Separate audience DTOs and selected SQL columns, sentinel secrets and economic fields absent; hidden results and internal-only routing filtered |
-| `test_cursor_scope_and_continuation` | Multiple pages, bounds/order, malformed/duplicate keys, cross-action/project/actor substitution rejected |
+| `test_cursor_scope_and_continuation`, `test_invalid_cursor_never_enters_private_projection` | Submission pages and bounds/order; malformed/duplicate keys and cross-action/project/actor substitution rejected |
+| `test_same_task_history_separates_contributors` | Two retained contributors/assignments on one task; contributor projection returns only owned rows; manager sees both; removing only the final SQL ownership predicate fails |
+| `test_checker_pagination_and_cursor_audit` | Both audiences traverse retained runs in `(created_at,id)` order, including equal timestamps, without duplicates; each AUTH digest binds the exact presented cursor and limit |
 | `test_wrong_project_does_not_wait` | Held foreign task row, invalid project request returns 404 without waiting |
 | `test_projection_failure_rolls_back` | Separate SQL and actual response-validation failures after staged ALLOW return retryable 503 and leave no committed ALLOW |
 | `test_audit_insert_failure_rolls_back` | PostgreSQL rejects actual authorization audit INSERT before projection; projection nonentry, retryable 503 and rollback |
 | `test_authority_unavailable` | AUTH failure yields retryable 503, no response or committed ALLOW |
-| `test_denied_read_never_loads_private_rows` | Revocation, foreign owner and service/agent admission fail before private projection; concealed 404 for human resource denial |
+| `test_denied_read_never_loads_private_rows` | Revoked human grant fails before private projection with concealed 404 |
+| `test_nonhuman_tokens_cannot_enter_history` | Service/agent tokens fail human admission before any history owner lookup |
 | `test_removed_mutation_and_worker_surface` | Both old POSTs absent, old Celery task absent, deleted dependency/source names absent |
 | Existing `test_submission_composition.py::test_command_orders_authority_task_art_persistence_and_final_consumption` | Service-level canonical creation order with exact authority/admission port results; unexpected Celery dispatch fails. This does not claim a real ART intake run |
 | Authentication token/development/subject contract tests and `test_removed_mutation_and_worker_surface` | Actual verifier returns identity only; retired production symbols absent; issuer/subject/audience/scope/time validation retained |
@@ -352,3 +357,24 @@ removes TASK's compatibility caller without inventing a replacement path or
 changing unrelated modules. The MCP authorization-context snapshot consumes the
 closed ActionId catalogue, so its selected fragment and digest are refreshed
 for the eight new read actions; MCP tool behavior is unchanged.
+
+Review repairs preserve the exact migration graph, including retained revision
+`0005_task_evidence_authority`. History proof separately covers the initial owner
+selector and final projection filter, plus checker continuation and non-null cursor
+audit binding. Current documentation marks canonical checker execution/recovery
+as unavailable rather than attributing the deleted alternate worker to main.
+
+The Alembic environment recognizes the new exact head while retaining each
+valid predecessor stamp; repeated upgrade must preserve the current database
+and downgrade must reach the explicit no-downgrade guard. Unknown old stamps
+continue to fail before schema mutation.
+
+The retired packet POST regression keeps its 405/no-mutation proof. Its follow-up
+read now asserts the required concealed 404 for a task without owned retained
+Submissions, and repeats the unchanged database snapshot assertion.
+
+Exact API and active-action inventories also include the eight history actions.
+`authorization/setup_finalization/test_catalogue.py` retains its complete exact
+set. The OpenAPI inventory preserves every unaffected route and explicitly binds
+the eight GETs, adds four manager reads and removes the two obsolete POSTs;
+counts and protected-route hashes change only for that declared delta.

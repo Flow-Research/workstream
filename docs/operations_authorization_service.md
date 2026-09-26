@@ -918,8 +918,8 @@ their canonical 401/503 and 429/503 behavior before private lookup.
 |---|---|---|
 | Normal covered task/setup repair | Covered Project Manager `project.task.manage` | Exact project, lifecycle guard, reason/evidence where mutation is corrective. |
 | Start override | Operator `operations.task.start_override` | Recovery-only path, exact task/project, reason, matched grant/permission, audit. |
-| Submission gate repair | Operator `operations.submission_gate.repair` | No submission/review rewrite; reason, matched authority, immutable checker evidence. |
-| Checker retry | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
+| Submission gate repair (planned; unavailable) | Operator `operations.submission_gate.repair` | No submission/review rewrite; reason, matched authority, immutable checker evidence. |
+| Checker retry (planned; unavailable) | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
 | Review lease force release | Operator `review.lease.force_release` under WS-REV-001 | Review-owned lease guards and evidence; no review decision. |
 
 Conceptual historical “admin override” statements are not operations. No
