@@ -1,10 +1,15 @@
-# Workstream v0.1 Backend Component View
+# Workstream v0.1 Backend Target Component View
 
-This is the C4-PlantUML component view for the FastAPI modular monolith.
+This is the target component view for the FastAPI modular monolith, not an
+inventory of delivered runtime components. Canonical authorized submission and
+checker history reads are implemented. Durable post-submit execution, the
+pre-review gate and checker recovery are planned and unavailable; the obsolete
+checker service and Celery worker have been removed. See the
+[current capability ledger](../roadmap_status.md) for delivery status.
 
 The backend stays one deployable service while keeping module boundaries strict. Routers handle HTTP, services own workflow rules, repositories own database access, schemas own API contracts, and adapters own external boundaries.
 
-![Workstream v0.1 Backend Component View](rendered/backend_v01_components.svg)
+![Workstream v0.1 Backend Target Component View](rendered/backend_v01_components.svg)
 
 Source: [backend_v01_components.puml](backend_v01_components.puml)
 
@@ -20,7 +25,7 @@ Source: [backend_v01_components.puml](backend_v01_components.puml)
 | Storage port | Hides local filesystem, MinIO, and AWS S3 behind stable provider-neutral artifact references. |
 | Audit module | Writes append-only evidence for state changes and sensitive workflow events. |
 
-## Current Module Priority
+## Target Lifecycle Order
 
 The v0.1 backend follows the Workstream product lifecycle in this dependency
 order:
