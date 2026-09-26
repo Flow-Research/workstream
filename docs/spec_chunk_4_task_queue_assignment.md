@@ -513,3 +513,6 @@ are their queue/worker and token-role dependencies. This does not activate durab
 post-submit execution, routing or recovery. Existing assignment invalidation still
 refuses release after a Submission; retained-history tests do not introduce a new
 reclaim workflow.
+
+TASK locked-context failures use the canonical `error.code` and `error.details`
+envelope; duplicate top-level code/details fields are removed.

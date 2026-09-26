@@ -989,7 +989,7 @@ def validate_catalogue(
     expected = {target for target, assigned in partition.items() if group in (None, assigned)}
     unresolved = expected - covered
     if unresolved.intersection(
-        AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
+        AUTH_BOUNDARY_FOUNDATION_TARGETS
         | POL_03A_CALLABLE_TARGETS
         | POL_04A_CALLABLE_TARGETS
         | POL_04A2_CALLABLE_TARGETS

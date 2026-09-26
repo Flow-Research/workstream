@@ -1138,9 +1138,8 @@ def test_task_context_openapi_documents_locked_context_domain_error(path: str) -
 
     assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
     domain_schema = next(option for option in response_422["oneOf"] if "properties" in option)
-    assert domain_schema["properties"]["code"]["enum"] == ["task_locked_context_invalid"]
-    assert "details" in domain_schema["properties"]
-    assert set(domain_schema["required"]) == {"code", "details", "error"}
+    assert domain_schema["properties"] == {"error": {"$ref": "#/components/schemas/ApiError"}}
+    assert set(domain_schema["required"]) == {"error"}
     assert domain_schema["additionalProperties"] is False
 
 
@@ -1737,11 +1736,9 @@ async def test_task_context_apis_fail_closed_when_locked_context_is_missing(
     )
 
     assert response.status_code == 422
-    assert set(response.json()) == {"code", "details", "error"}
-    assert response.json()["code"] == "task_locked_context_invalid"
+    assert set(response.json()) == {"error"}
     assert response.json()["error"]["code"] == "task_locked_context_invalid"
-    assert response.json()["error"]["details"] == response.json()["details"]
-    assert "locked_guide_version" in response.json()["details"]["missing_fields"]
+    assert "locked_guide_version" in response.json()["error"]["details"]["missing_fields"]
 
 
 @pytest.mark.parametrize(
@@ -1814,7 +1811,7 @@ async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
     response = await task_client.get(context_url, headers=auth_headers())
 
     assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
+    assert response.json()["error"]["code"] == "task_locked_context_invalid"
 
 
 async def test_submission_requirements_reject_detached_policy_not_matching_approval(
@@ -1832,7 +1829,7 @@ async def test_submission_requirements_reject_detached_policy_not_matching_appro
 
     assert response.status_code == 422
     body = response.json()
-    assert body["code"] == "task_locked_context_invalid"
+    assert body["error"]["code"] == "task_locked_context_invalid"
     assert body["error"]["message"] == "Task locked context is invalid"
 
 

@@ -75,7 +75,7 @@ async def test_manager_draft_detail_and_requirements(admin_access):
     detail = await admin_access.signed.client.get(path("management_detail", project, task), headers=manager.headers)
     assert detail.status_code == 200 and detail.json()["status"] == "draft"
     requirements = await admin_access.signed.client.get(path("management_requirements", project, task), headers=manager.headers)
-    assert requirements.status_code == 422 and requirements.json()["code"] == "task_locked_context_invalid"
+    assert requirements.status_code == 422 and requirements.json()["error"]["code"] == "task_locked_context_invalid"
     async with db_session.get_session_factory()() as session:
         assert list(await session.scalars(select(AuditEvent).where(AuditEvent.actor_id == str(manager.id), AuditEvent.action_id == READS["management_requirements"][1]))) == []
 

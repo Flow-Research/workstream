@@ -57,13 +57,8 @@ TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
     "oneOf": [
         {
             "type": "object",
-            "required": ["code", "details", "error"],
+            "required": ["error"],
             "properties": {
-                "code": {
-                    "type": "string",
-                    "enum": ["task_locked_context_invalid"],
-                },
-                "details": {"type": "object"},
                 "error": CANONICAL_ERROR_OBJECT_SCHEMA,
             },
             "additionalProperties": False,
@@ -119,7 +114,6 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
         message=message,
         details=details,
         retryable=getattr(exc, "retryable", False),
-        compatibility={"code": code, "details": details},
     )
 
 

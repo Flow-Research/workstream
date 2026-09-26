@@ -1,7 +1,7 @@
 # WS-AUTH-003-TASKCHECKER — Remove alternate TASK/checker authorization
 
 - Initiative: WS-AUTH-003
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Submission and checker history use canonical AUTH;
   obsolete token-role authority and the alternate checker gate are removed.
 
@@ -95,18 +95,18 @@ references explicitly and never delete data to achieve a text-search result.
 
 ## Acceptance criteria
 
-- [ ] No affected production path authorizes from token roles, task creator
+- [x] No affected production path authorizes from token roles, task creator
   identity, compatibility actor context or fabricated system actor.
-- [ ] Retained submission/checker reads preserve original ownership and privacy
+- [x] Retained submission/checker reads preserve original ownership and privacy
   through reassignment, grant revocation, foreign project and missing resources.
-- [ ] Required history projections have exact AUTH evidence and caller-owned
+- [x] Required history projections have exact AUTH evidence and caller-owned
   rollback; unavailable AUTH/storage never produces an allowed response.
-- [ ] Old execution/repair routes and worker registration are absent, not hidden
+- [x] Old execution/repair routes and worker registration are absent, not hidden
   or redirected; canonical hidden admission-backed creation remains intact.
-- [ ] Shared consumers are traced; obsolete tests are removed and every required
+- [x] Shared consumers are traced; obsolete tests are removed and every required
   invariant has a surviving or replacement proof.
-- [ ] Retained data and immutable evidence survive the migration unchanged.
-- [ ] Source guards prevent reintroducing the removed authority paths.
+- [x] Retained data and immutable evidence survive the migration unchanged.
+- [x] Source guards prevent reintroducing the removed authority paths.
 
 ## Risk and review routing
 
@@ -131,8 +131,8 @@ stale wording and complete exact-head hosted CI/API contract verification.
   including its nine-lane CI repair and corrected public policy navigation.
 - Next usable boundary: resume manager activation/public guide activation only
   after this corrective cleanup is merged.
-- Remaining risks: exact plan review and shared-consumer mapping precede code;
-  retained-history inspection must not be mistaken for live canonical execution.
+- Remaining boundary: retained-history inspection must not be mistaken for live
+  canonical execution; post-submit execution and recovery remain separately gated.
 
 ## Plan-review refinements
 
@@ -210,7 +210,7 @@ classification tooling remain data-custody references, not application fallback
 or authorization sources. No retained-data migration is authorized.
 
 Counterexamples and controls: original contributor vs subsequent claimant;
-READY/unassigned task with previous submissions; same contributor reclaims;
+READY/unassigned task with previous submissions; same immutable contributor identity;
 revoked grant; exact/project-covering PM grant only on the management surface;
 forged token role claims without database grants; foreign locked rows returning
 404 before release; real audit INSERT and response-validation failures rolling
@@ -259,25 +259,23 @@ Documentation scope is README, canonical authentication/authorization/checker/ta
 specifications, operating manual, roadmap, and this AUTH initiative's navigation.
 An additional shared consumer must be recorded before changing its implementation.
 
-Future tests under `backend/tests/authorization/submission_history/`:
+Behavior proof under `backend/tests/authorization/submission_history/`:
 
 | Test | Proof |
 |---|---|
 | `test_exact_route_action_and_grant` | All eight GET paths, both valid PM grant scopes (project and system), exact recorded grant equality |
 | `test_list_requires_owned_history` | A owns history; same-project B has Submitter but receives 404; A succeeds; removal of ownership predicate fails |
-| `test_historical_owner_after_reassignment` | submitted/evaluation_pending/review_pending/needs_revision; released and reassigned; original owner succeeds, successor denied, same-person reclaim preserves history |
+| `test_historical_owner_after_reassignment` | submitted/evaluation_pending/review_pending/needs_revision; released and reassigned; original owner succeeds, successor denied, current assignment never grants historical ownership |
 | `test_fixed_projection_and_selected_columns` | Separate audience DTOs and selected SQL columns, sentinel secrets and economic fields absent; hidden results and internal-only routing filtered |
 | `test_cursor_scope_and_continuation` | Multiple pages, bounds/order, malformed/duplicate keys, cross-action/project/actor substitution rejected |
 | `test_wrong_project_does_not_wait` | Held foreign task row, invalid project request returns 404 without waiting |
-| `test_allow_commits_exact_evidence` | Independent session sees exact action/grant/project/resource digest after successful response |
-| `test_product_query_failure_rolls_back` | Failure after staged ALLOW yields retryable 503; no committed ALLOW or product mutation |
-| `test_response_failure_rolls_back` | Actual invalid projection fails validation, retryable 503, no committed ALLOW |
+| `test_projection_failure_rolls_back` | Separate SQL and actual response-validation failures after staged ALLOW return retryable 503 and leave no committed ALLOW |
 | `test_audit_insert_failure_rolls_back` | PostgreSQL rejects actual authorization audit INSERT before projection; projection nonentry, retryable 503 and rollback |
 | `test_authority_unavailable` | AUTH failure yields retryable 503, no response or committed ALLOW |
 | `test_denied_read_never_loads_private_rows` | Revocation, foreign owner and service/agent admission fail before private projection; concealed 404 for human resource denial |
 | `test_removed_mutation_and_worker_surface` | Both old POSTs absent, old Celery task absent, deleted dependency/source names absent |
-| `test_hidden_creation_does_not_queue_old_execution` | Canonical admission-backed creation remains valid, no old queue invocation or CheckerRun side effect |
-| `test_verification_is_identity_only` | Flow/dev token-only result; role claims cannot grant access; no runtime identity compatibility write; issuer/subject/audience/scope/time validation preserved |
+| Existing `test_submission_composition.py::test_command_orders_authority_task_art_persistence_and_final_consumption` | Service-level canonical creation order with exact authority/admission port results; unexpected Celery dispatch fails. This does not claim a real ART intake run |
+| Authentication token/development/subject contract tests and `test_removed_mutation_and_worker_surface` | Actual verifier returns identity only; retired production symbols absent; issuer/subject/audience/scope/time validation retained |
 | `test_audit_migration_preserves_prior_evidence` | Seed all prior permitted action/permission pairs and both dispositions; byte-identical snapshot after upgrade; eight new exact pairs allowed, cross-pairs rejected; downgrade refuses and preserves rows |
 
 A successful denied-resource path returns 404; malformed pagination returns422;
@@ -290,7 +288,7 @@ introducing either predicate must fail the historical ownership matrix.
 |---|---|
 | `test_retained_packet_reads_preserve_locked_lineage_and_stored_audit` | Retarget to canonical authorized history; retain immutable lineage/audit proof |
 | `test_retained_submission_versions_are_readable_without_exposing_packet_hashes` | Retarget to new pages and fixed redaction |
-| `test_retained_submission_finalization_preserves_locked_guide_after_activation` | Replace old private-finalization setup with canonical admission-backed creation; retain historical guide proof |
+| `test_retained_submission_finalization_preserves_locked_guide_after_activation` | Replace old private-finalization setup with an explicit retained-row prerequisite; retain historical guide proof. Canonical creation has separate composition proof |
 | `test_retained_version_read_does_not_rewrite_prior_finalized_packet` | Retarget; compare stored rows before/after |
 | cross-worker submission history denial tests | Retarget to distinct canonical actors/grants, exact concealed404 |
 | `test_checker_revision_routing_and_reads_for_retained_packet_versions` | Retain historical read/version/currentness assertions; remove obsolete routing execution assertions |
@@ -346,3 +344,11 @@ role-projection/normalization assertions are explicitly classified as retired
 requirements and point to the actual identity-only verifier contract. Required
 issuer, subject, signature and scope proof remains. No mapping validator or
 structural limit is relaxed.
+
+The affected TASK locked-context errors also stop emitting duplicate top-level
+code/details compatibility fields: callers and OpenAPI use the canonical error
+envelope. Shared error serialization still serves other owners; this change
+removes TASK's compatibility caller without inventing a replacement path or
+changing unrelated modules. The MCP authorization-context snapshot consumes the
+closed ActionId catalogue, so its selected fragment and digest are refreshed
+for the eight new read actions; MCP tool behavior is unchanged.

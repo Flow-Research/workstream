@@ -107,7 +107,7 @@ async def test_list_requires_owned_history(task_client, monkeypatch):
         events = list(await session.scalars(select(AuditEvent).where(
             AuditEvent.actor_id == who, AuditEvent.action_id.in_(tuple(own_paths)),
         )))
-        assert not any(event.after_facts.get("allowed") for event in events)
+        assert events == []  # Foreign ownership is concealed before locking/AUTH.
 
 
 async def test_management_does_not_infer_authority_from_other_roles(task_client, monkeypatch):

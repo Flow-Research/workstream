@@ -44,7 +44,7 @@ async def test_verification_preserves_exact_subject_and_issuer(changed_field) ->
     assert (first_result.token.issuer, first_result.token.subject) == ("same-issuer", "same-subject")
     assert ((first_result.token.issuer, first_result.token.subject) ==
             (second_result.token.issuer, second_result.token.subject)) is False
-    assert set(first_result.model_fields) == {"token"}
+    assert set(first_result.model_dump()) == {"token"}
 
 
 @pytest.mark.parametrize("environment", ["production", "prod", "staging", "preview"])

@@ -522,6 +522,7 @@ Delivered foundations (not a claim of full public integration)
   ARCH-03C4 exact-authorized public task queues and ARCH-03C5 detail/requirements
   ARCH-03C6 distinct exact-authorized locked-context reads
   ARCH-03C7 bounded exact-authorized Audit Authority task history
+  canonical contributor/manager Submission and checker history; obsolete gate removed
     |
     v
 Remaining integration
