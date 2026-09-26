@@ -1,7 +1,7 @@
 # WS-QUAL-003-17 — AUTH service-provisioning failure and race proof
 
 - Initiative: WS-QUAL-003
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Replace one mixed service-actor failure/race test with
   small, independently identifiable PostgreSQL proofs for rollback, exact
   fixed-identity contention, and current-authority behavior during revocation.
@@ -145,12 +145,13 @@ control-row waiter for both public race scenarios.
 
 ## Reconciliation
 
-- Current-source reconciliation: PR #444 is merged. It retired coverage quotas
-  without changing the full behavior/integration run. This change does not
-  repeat its CI or documentation work.
-- Next usable boundary: continue the AUTH test audit with successful
-  service-actor provisioning and actor-profile/identity-link lifecycle proof;
-  do not repeat this failure/race slice.
+- Current-source reconciliation: PR #446 merged this exact rollback, identity
+  contention, and provision/revocation proof at
+  `7ff306f094ec28835e9da0506a2aeb38882569b7`. This boundary is complete; do not
+  repeat its failure/race slice.
+- Next usable boundary: successful service-actor provisioning is tracked in
+  [WS-QUAL-003-18](WS-QUAL-003-18.md); profile/identity-link lifecycle follows
+  after that boundary.
 - Remaining risks: the rest of `test_auth.py`, especially profile and
   identity-link lifecycle matrices, remains unaudited and is not certified by
   this change.

@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,7 @@ class SignedAccess:
     client: AsyncClient
     private_key: rsa.RSAPrivateKey
     issuer: str
+    app: FastAPI
 
     async def actor(self, label: str, *, roles: tuple[str, ...] = ()) -> SignedActor:
         subject = f"{label}-{uuid4()}"

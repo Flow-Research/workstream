@@ -25,7 +25,9 @@
 - AUTH test-proof and coverage-policy audit: [16 — behavior-first test evidence](WS-QUAL-003-16.md).
 - AUTH service-provisioning failure and race proof: [17 — exact rollback and
   contention evidence](WS-QUAL-003-17.md).
-- After 17: audit successful service-actor provisioning and actor-profile /
+- AUTH service-provisioning success proof: [18 — exact success and replay
+  evidence](WS-QUAL-003-18.md).
+- After 18: audit actor-profile /
   identity-link lifecycle families, then remaining AUTH owners. Do not repeat
   the selected actor, authentication, admin-access, or failure/race audits.
   The full suite audit remains open.

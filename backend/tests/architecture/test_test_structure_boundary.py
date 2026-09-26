@@ -98,9 +98,12 @@ def test_inventory_records_one_oversized_production_function(tmp_path: Path) -> 
     assert functions[0].observed_lines == 102
 
 
-def test_admin_access_directory_is_unconditionally_scoped(tmp_path: Path) -> None:
-    """Nested owner files need no AUTH basename or direct import to be checked."""
-    path = tmp_path / "backend/tests/authorization/admin_access/nested/test_cli.py"
+@pytest.mark.parametrize("owner", ["admin_access", "service_actors"])
+def test_authorization_owner_directory_is_unconditionally_scoped(
+    tmp_path: Path, owner: str
+) -> None:
+    """Nested authorization-owner files need no AUTH basename or direct import."""
+    path = tmp_path / f"backend/tests/authorization/{owner}/nested/test_cli.py"
     _write(path, "import pytest\npytestmark = pytest.mark.skip\n")
     assert path in structure.scoped_test_paths(tmp_path)
     assert structure.weak_python(path)

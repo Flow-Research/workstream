@@ -157,6 +157,7 @@ def scoped_test_paths(root: Path) -> list[Path]:
         "backend/tests/actors",
         "backend/tests/authentication",
         "backend/tests/authorization/admin_access",
+        "backend/tests/authorization/service_actors",
     ):
         selected = root / directory
         if selected.is_dir():
@@ -641,9 +642,7 @@ def _analyze_old_module(source: str) -> OldModuleAnalysis:
     return source.splitlines(keepends=True), functions, analysis.assertion_ranges
 
 
-def _assertion_inventory(
-    module: OldModuleAnalysis, node_id: str
-) -> dict[tuple[int, int], str]:
+def _assertion_inventory(module: OldModuleAnalysis, node_id: str) -> dict[tuple[int, int], str]:
     """Derive exact assertion spans/hashes inside one requested old test node."""
     lines, functions, assertion_ranges = module
     symbol = node_id.split("::", 1)[1].replace("::", ".") if "::" in node_id else ""
