@@ -1,5 +1,7 @@
 """Real HTTP/AUTH/PostgreSQL history reads; retained evidence is a seeded prerequisite."""
 
+from uuid import UUID
+
 import pytest
 from sqlalchemy import select
 
@@ -75,7 +77,9 @@ async def test_exact_route_action_and_grant(task_client, monkeypatch, audience):
             if field in nested:
                 continue
             stored_value = persisted[field]
-            if hasattr(stored_value, "isoformat"):
+            if isinstance(stored_value, UUID):
+                assert returned == str(stored_value), field
+            elif hasattr(stored_value, "isoformat"):
                 assert returned.replace("Z", "+00:00") == stored_value.isoformat()
             else:
                 assert returned == stored_value, field
