@@ -266,6 +266,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/authorization/admin_access/test_grant_concurrency_postgresql.py",
         "tests/authorization/admin_access/test_timestamp_concurrency_postgresql.py",
         "tests/authorization/admin_access/test_read_concurrency_postgresql.py",
+        "tests/authorization/service_actors/test_provisioning_atomicity.py",
         "tests/actors/test_first_access_postgresql.py",
         "tests/authorization/guide_compilation_projections/test_replay_evidence.py",
         "tests/test_auth_concurrency_observer.py",
