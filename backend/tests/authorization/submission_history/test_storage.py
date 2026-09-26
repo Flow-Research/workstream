@@ -283,3 +283,65 @@ async def test_result_insertion_serializes_with_completion(task_client, monkeypa
         assert run.status == "completed" and run.completed_at is not None
         results = list(await observer.scalars(select(CheckerResult).where(CheckerResult.checker_run_id == case[3])))
         assert len(results) == (1 if first == "insertion" else 0)
+
+
+async def test_parent_committing_after_lookup_cannot_receive_late_result(task_client, monkeypatch):
+    """Pause between the custody lookup and FK check without changing their decisions."""
+    import asyncio
+    from app.modules.checkers.models import CheckerResult
+    case = await history_case(task_client, monkeypatch)
+    factory = db_session.get_session_factory()
+    function_name = "protect_checker_result_custody()"
+    async with factory() as admin:
+        definition = await admin.scalar(text("select pg_get_functiondef(cast(:name as regprocedure))"), {"name": function_name})
+        instrumented = definition.replace(
+            "DECLARE parent_status text; parent_completed_at timestamptz;",
+            "DECLARE parent_status text; parent_completed_at timestamptz; parent_was_found boolean;",
+        ).replace("FOR UPDATE;", "FOR UPDATE; parent_was_found := FOUND; PERFORM pg_advisory_xact_lock(4476001);")
+        instrumented = instrumented.replace("IF NOT FOUND THEN", "IF NOT parent_was_found THEN")
+        assert instrumented != definition and "IF NOT parent_was_found THEN" in instrumented
+        await admin.execute(text(instrumented))
+        await admin.commit()
+    pending = None
+    try:
+        async with factory() as holder, factory() as waiter, factory() as gate:
+            # Keep this physical connection until the session-level barrier is released.
+            await gate.connection()
+            await gate.execute(text("select pg_advisory_lock(4476001)"))
+            try:
+                original = await holder.get(CheckerRun, case[3])
+                parent_id = str(new_record_id())
+                values = {column.name: getattr(original, column.name) for column in CheckerRun.__table__.columns}
+                values.update(id=parent_id, attempt_number=2, is_current_for_submission=False,
+                              supersedes_checker_run_id=original.id)
+                holder.add(CheckerRun(**values))
+                await holder.flush()  # Exact terminal parent exists, but is not visible to waiter.
+                waiter_pid = await waiter.scalar(text("select pg_backend_pid()"))
+                async def insert_child():
+                    waiter.add(_result((case[0], case[1], case[2], parent_id)))
+                    await waiter.commit()
+                pending = asyncio.create_task(insert_child())
+                async with asyncio.timeout(10):
+                    while not await gate.scalar(text("select exists(select 1 from pg_locks where pid=:pid and locktype='advisory' and not granted)"), {"pid": waiter_pid}):
+                        assert not pending.done(), "result did not reach the lookup/FK barrier"
+                        await asyncio.sleep(0.01)
+                await holder.commit()
+                await gate.execute(text("select pg_advisory_unlock(4476001)"))
+                with pytest.raises(IntegrityError) as rejected:
+                    await asyncio.wait_for(pending, 10)
+                assert rejected.value.orig.sqlstate == "23503"
+                assert rejected.value.orig.__cause__.constraint_name == "fk_checker_results_run_ownership"
+                await waiter.rollback()
+                assert (await gate.get(CheckerRun, parent_id)).status == "completed"
+                assert list(await gate.scalars(select(CheckerResult.id).where(CheckerResult.checker_run_id == parent_id))) == []
+            finally:
+                await holder.rollback()
+                await gate.execute(text("select pg_advisory_unlock(4476001)"))
+                if pending is not None:
+                    if not pending.done():
+                        pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+    finally:
+        async with factory() as admin:
+            await admin.execute(text(definition))
+            await admin.commit()

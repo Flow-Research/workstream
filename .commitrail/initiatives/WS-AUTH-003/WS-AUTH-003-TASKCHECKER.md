@@ -454,3 +454,18 @@ serialization, fixture dependencies and discriminating nested assertions before
 readiness. CI integrity checks the schema fingerprint and retained proof; docs
 review checks current custody wording. Human review focus: completed outcomes and
 nested evidence cannot be changed or attributed to another retained parent.
+
+
+A real two-session probe confirmed an additional missing-parent race: a terminal
+parent can commit after the BEFORE lookup but before the foreign-key check. The
+result guard must reject an invisible or mismatched parent immediately with the
+existing composite ownership constraint name and SQLSTATE 23503; it cannot defer
+that decision to the FK's later snapshot. Same-transaction parent/result writes
+remain valid. A test-only statement barrier reproduces this interleaving against
+the real function, and removing only the missing-parent rejection must fail it.
+
+The affected `backend/tests/test_review_queue_persistence.py` consumer must seed
+an unfinished run for its non-admissibility test, stage each invalid queue fact
+before completion, and roll back each attempt. Preserve the three exact REV
+rejections and then complete a valid run before its remaining lineage assertions.
+Do not disable the new custody guard or restore terminal rewriting in fixtures.

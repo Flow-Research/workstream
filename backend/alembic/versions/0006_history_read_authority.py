@@ -107,8 +107,12 @@ def _checker_custody():
             FROM checker_runs
             WHERE id=NEW.checker_run_id AND task_id=NEW.task_id AND submission_id=NEW.submission_id
             FOR UPDATE;
-            -- Missing/mismatched ownership remains the composite foreign key's error.
-            IF FOUND AND (parent_status NOT IN ('queued','running') OR parent_completed_at IS NOT NULL) THEN
+            -- A later FK snapshot must not admit a parent invisible to this check.
+            IF NOT FOUND THEN
+              RAISE EXCEPTION 'checker result violates fk_checker_results_run_ownership'
+                USING ERRCODE='23503', CONSTRAINT='fk_checker_results_run_ownership', TABLE='checker_results';
+            END IF;
+            IF parent_status NOT IN ('queued','running') OR parent_completed_at IS NOT NULL THEN
               RAISE EXCEPTION 'finished checker run cannot receive results' USING ERRCODE='23514';
             END IF;
             RETURN NEW;
