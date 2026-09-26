@@ -60,6 +60,26 @@ CONTEXT_EVIDENCE_KEYS = {
 OWNERSHIP_TEST_NODE_RE = re.compile(
     r"^backend/tests/(?:[A-Za-z0-9_]+/)*test_[A-Za-z0-9_]+\.py::[^\s]+$"
 )
+TASK_CHECKER_CLEANUP_TARGETS = frozenset({
+    "backend/app/api/deps/history.py",
+    "backend/app/modules/tasks/api/submission_history.py",
+    "backend/app/modules/tasks/submission_history.py",
+    "backend/app/modules/checkers/api/history.py",
+    "backend/app/modules/checkers/history.py",
+    "backend/app/modules/authorization/domain/submission_history.py",
+    "backend/app/modules/authorization/history_authorization.py",
+})
+TASK_CHECKER_CLEANUP_REMOVED_TARGETS = frozenset({
+    "backend/app/core/permissions.py",
+    "backend/app/modules/tasks/authorization.py",
+    "backend/app/modules/checkers/service.py",
+    "backend/app/modules/checkers/schemas.py",
+    "backend/app/modules/checkers/repository.py",
+    "backend/app/modules/checkers/gate_queue.py",
+    "backend/app/modules/checkers/pre_review_gate.py",
+    "backend/app/workers/checkers.py",
+})
+
 AUTH_BOUNDARY_FOUNDATION_TARGETS = frozenset(
     {
         "backend/app/modules/authorization/api/adapter_bindings.py",
@@ -625,14 +645,14 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS)
+        or removed - (TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
     additions = set(current_by_target) - set(trusted_targets)
     approved_additions = (
-        AUTH_BOUNDARY_FOUNDATION_TARGETS
+        AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
         | CON_02B_DELIVERY_TARGETS
         | AUTH_OUTBOX_02_TARGETS
         | ARCH_03C1_TARGETS

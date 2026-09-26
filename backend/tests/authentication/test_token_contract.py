@@ -36,6 +36,7 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
 
     result = await verifier.verify(issue_asymmetric_token(private_key))
 
+    assert set(result.model_dump()) == {"token"}
     assert verifier.canonical_issuer() == result.token.issuer
     assert result.token.model_dump().keys() == {
         "issuer",
@@ -51,8 +52,6 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
     assert result.token.subject == "opaque-subject-1"
     assert not hasattr(result.token, "roles")
     assert not hasattr(result.token, "email")
-    assert result.legacy is not None
-    assert result.legacy.roles == ("admin", "reviewer")
 
 
 @pytest.mark.parametrize(

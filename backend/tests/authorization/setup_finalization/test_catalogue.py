@@ -129,6 +129,14 @@ def test_exact_active_action_inventory():
         for definition in ACTION_DEFINITIONS
         if definition.availability is ActionAvailability.ACTIVE
     } == {
+        ActionId.TASK_SUBMISSION_LIST,
+        ActionId.SUBMISSION_READ,
+        ActionId.SUBMISSION_CHECKER_RUN_LIST,
+        ActionId.CHECKER_RUN_READ,
+        ActionId.PROJECT_TASK_SUBMISSION_LIST,
+        ActionId.PROJECT_SUBMISSION_READ,
+        ActionId.PROJECT_SUBMISSION_CHECKER_RUN_LIST,
+        ActionId.PROJECT_CHECKER_RUN_READ,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
         ActionId.PROJECT_GUIDE_ACTIVATE,

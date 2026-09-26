@@ -487,15 +487,15 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     }
     assert policy_actions.keys() <= set(protected_inventory)
     new_manager_reads |= policy_actions.keys()
-    assert len(route_inventory) == 90
+    assert len(route_inventory) == 92
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
-        "f70ea30244dc319f08a964b6c66a11ff27df251e9b5ddf5c3726e4ef99587635"
+        "793237012e9256d308dd5d1e9c1a65e41381cf6306888fdd175dc9794b118444"
     )
-    assert len(protected_inventory) == 88
+    assert len(protected_inventory) == 90
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
-        "6ec18abb4e1f3fd352b3c476f85b1bdc53f07e921c9a6cada7b5f8afb4976939"
+        "0953ae6392b81a4a7ba7c9f6b7fccc17768f34cd1f958572fdc553cd204ec82e"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
@@ -521,6 +521,14 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         if method in methods and "x-workstream-action-id" in operation
     }
     assert action_declarations == {
+        "GET /api/v1/tasks/{task_id}/submissions": "task.submission.list",
+        "GET /api/v1/submissions/{submission_id}": "submission.read",
+        "GET /api/v1/submissions/{submission_id}/checker-runs": "submission.checker_run.list",
+        "GET /api/v1/submissions/{submission_id}/checker-runs/{checker_run_id}": "checker_run.read",
+        "GET /api/v1/projects/{project_id}/tasks/{task_id}/submissions": "project.task.submission.list",
+        "GET /api/v1/projects/{project_id}/submissions/{submission_id}": "project.submission.read",
+        "GET /api/v1/projects/{project_id}/submissions/{submission_id}/checker-runs": "project.submission.checker_run.list",
+        "GET /api/v1/projects/{project_id}/submissions/{submission_id}/checker-runs/{checker_run_id}": "project.checker_run.read",
         **policy_actions,
         "GET /api/v1/projects/{project_id}/tasks/{task_id}/locked-context": "project.task.locked_context.read",
         "GET /api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context": "operations.task.locked_context.read",

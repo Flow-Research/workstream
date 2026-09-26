@@ -222,7 +222,7 @@ def _debt_for_path(path: Path, root: Path, *, test_file: bool) -> list[DebtItem]
                 _digest_lines(lines, 1, len(lines)),
                 len(lines),
                 HARD_LIMITS[file_kind],
-                "unassigned_legacy_auth",
+                "oversized_authorization_structure",
                 "WS-AUTH-003-CLOSE",
             )
         )
@@ -244,7 +244,7 @@ def _debt_for_path(path: Path, root: Path, *, test_file: bool) -> list[DebtItem]
                 _digest_lines(lines, node.lineno, node.end_lineno),
                 observed,
                 HARD_LIMITS[kind],
-                "unassigned_legacy_auth",
+                "oversized_authorization_structure",
                 "WS-AUTH-003-CLOSE",
             )
         )

@@ -81,7 +81,7 @@ Checker read APIs:
 
 ```text
 GET /api/v1/submissions/{submission_id}/checker-runs
-GET /api/v1/checker-runs/{checker_run_id}
+GET /api/v1/submissions/{submission_id}/checker-runs/{checker_run_id}
 ```
 
 Project managers and admins can see internal result messages and metadata. Assigned workers can only see worker-visible result rows and sanitized worker-facing fields.

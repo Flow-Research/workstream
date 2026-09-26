@@ -1,5 +1,5 @@
 @startuml task_lifecycle_sequence
-title Workstream v0.1 Task Lifecycle
+title Workstream v0.1 Target Task Lifecycle — Not Fully Live
 
 skinparam backgroundColor #FFFFFF
 skinparam shadowing false
@@ -24,8 +24,15 @@ participant "FastAPI\nBackend" as API
 participant "Flow Auth\nVerifier" as Auth
 participant "Workstream\nAuthorization" as Authorization
 database "Postgres" as DB
-participant "ART v2\nCapabilities" as Artifacts
+participant "ART\nCapabilities" as Artifacts
 participant "Checker\nRunner" as Checks
+
+note over PM, Checks
+Target sequence. Canonical history reads are delivered.
+Public guide activation and canonical post-submit execution,
+routing and recovery remain unavailable.
+Flow authenticates; canonical AUTH decides from live exact grants.
+end note
 
 PM -> UI : create project, guide, tasks,\nsetup/checker/review/revision configuration
 UI -> API : POST project / guide / configuration

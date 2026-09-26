@@ -24,7 +24,7 @@ class AuthVerifier(Protocol):
         """Return the exact configured issuer used for successful verification."""
 
     async def verify(self, token: str) -> AuthVerificationResult:
-        """Verify a bearer token and return canonical and compatibility views."""
+        """Verify a bearer token and return canonical verified identity."""
 
 
 class AuthHttpClientFactory(Protocol):

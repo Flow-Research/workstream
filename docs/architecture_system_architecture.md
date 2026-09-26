@@ -99,7 +99,9 @@ Async policy:
 - API handlers use async FastAPI patterns where I/O is involved.
 - Database access, file storage, checker execution orchestration, notifications, and audit writes use non-blocking boundaries.
 - Long-running setup and checker work must not block request/response paths.
-- Project setup automation and checker runs create records immediately, return an accepted/running state where applicable, and complete through a Celery worker.
+- Project setup automation runs through Celery. Canonical durable post-submit
+  checker execution remains unavailable; its target contract records accepted
+  work and completes it through a durable worker.
 - FastAPI background tasks are not used for Workstream product lifecycle jobs.
 - A different durable queue can replace Celery later only with an ADR-level reason.
 
@@ -281,8 +283,9 @@ local development, the implementation can store files on the local filesystem;
 hosted v0.1 uses AWS S3 and local/CI integration uses MinIO without changing
 submission or evidence semantics.
 
-Submission artifacts are hash-locked during successful submission creation
-before automatic checker execution is queued. Any changed artifact creates a new
+Submission artifacts are hash-locked during successful submission creation.
+Automatic post-submit execution is a pending integration boundary; the removed
+alternate checker worker is not dispatched. Any changed artifact requires a new
 submission version instead of mutating the old one.
 
 Every important lifecycle action creates an append-only audit event. State is readable from current records, and audit history explains how the system got there.
@@ -299,7 +302,6 @@ POST /projects
 POST /projects/:id/tasks
 POST /tasks/:id/claim
 POST /tasks/:id/submit
-POST /submissions/:id/finalize          # operational repair for the automatic checker gate
 GET /submissions/:id/checker-runs
 planned reviewer current-work read under /api/v1
 planned active-lease decision mutation under /api/v1

@@ -1,5 +1,11 @@
 @startuml backend_v01_components
-title Workstream v0.1 Backend Component View
+title Workstream v0.1 Backend Target Component View
+
+legend top left
+  Target architecture, not current runtime inventory.
+  Canonical history reads are delivered.
+  Durable post-submit execution, pre-review gate and recovery are unavailable.
+endlegend
 
 left to right direction
 
@@ -35,8 +41,8 @@ rectangle "File Store\n----\nEvidence and\nartifact objects" as file_store #E6FC
 package "FastAPI Backend - Modular Monolith" as backend #F8FBFF {
   package "HTTP + Auth Boundary" as http_boundary #EDF2FF {
     rectangle "API Router\n----\nHTTP only\nrequest -> service\nerror -> response" as api_router
-    rectangle "Current Actor\nDependency\n----\nBearer token ->\nActorContext" as current_actor
-    rectangle "Permission\nPolicies\n----\nRole and object\nvisibility checks" as permissions
+    rectangle "Current Actor\nDependency\n----\nVerified token ->\ncanonical actor" as current_actor
+    rectangle "Permission\nPolicies\n----\nLive scoped grants\nand exact resources" as permissions
     rectangle "Pydantic\nSchemas\n----\nRequest/response\ncontracts" as schemas
   }
 
@@ -44,7 +50,7 @@ package "FastAPI Backend - Modular Monolith" as backend #F8FBFF {
     rectangle "Project Guide\nService\n----\nProjects, guides,\nchecker/review/revision\npolicies" as project_service
     rectangle "Task Queue\nService\n----\nTask contract,\nscreening, release,\nclaim, assignment,\nstate guards" as task_service
     rectangle "Submission\nService\n----\nPackets, evidence,\nartifact manifest,\nversions, locking" as submission_service
-    rectangle "Checker\nService\n----\nChecker runs,\nblocking results,\npre-review gate" as checker_service
+    rectangle "Planned Checker\nEvaluation\n----\nChecker runs,\nblocking results,\npre-review gate" as checker_service
     rectangle "Review + Revision\nService\n----\naccept,\nneeds_revision,\nreject, findings,\nrevision replay" as review_service
     rectangle "Contribution /\nCompensation\nService\n----\nReviewer/submitter records,\naward fulfillment" as ledger_service
   }
@@ -63,7 +69,7 @@ package "FastAPI Backend - Modular Monolith" as backend #F8FBFF {
     rectangle "Flow Auth\nAdapter" as flow_adapter #FFF3BF
     rectangle "Storage Port" as storage_port #FFF3BF
     rectangle "Local Storage\nAdapter" as storage_adapter #FFF3BF
-    rectangle "Checker Runner\nAdapter" as checker_runner #FFF3BF
+    rectangle "Planned Checker Runner\nAdapter" as checker_runner #FFF3BF
   }
 }
 
@@ -73,7 +79,7 @@ http_boundary --> ports : verify actor
 
 workflow_services --> shared_rules : state, audit, policy rules
 workflow_services --> persistence : read/write records
-workflow_services --> ports : storage and checker execution
+workflow_services --> ports : storage and planned checker execution
 
 ports --> flow_auth : verify token
 ports --> file_store : store/read artifacts

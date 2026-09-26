@@ -36,6 +36,8 @@ from app.modules.authorization.domain.prepared_service import (
     fixed_service_scope_project, fixed_service_resource_matches,
 )
 from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
+from app.modules.authorization.domain.submission_history import history_read_denial
+from app.modules.authorization.catalogue import HISTORY_READ_ACTIONS
 from app.modules.authorization.domain.task_queues import TASK_QUEUE_ACTIONS, queue_read_denial
 from app.modules.authorization.domain.project_reads import project_read_denial
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -657,21 +659,15 @@ class AuthorizationService:
             ) = await self._admin_denial(action, resource_context, context)
             if denial is None:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
-        elif action is not None and action.action_id in TASK_QUEUE_ACTIONS:
+        elif action is not None and action.action_id in TASK_QUEUE_ACTIONS | HISTORY_READ_ACTIONS:
             (denial, context, matched_kind, matched_grant_id, matched_project_id,
-             revalidated) = await queue_read_denial(
+             revalidated) = await (history_read_denial if action.action_id in HISTORY_READ_ACTIONS else queue_read_denial)(
                 action, resource_context, context, self._admin,
                 self._locked_human_context, self._lifecycle_denial,
             )
         elif action is not None and action.action_id is ActionId.PROJECT_READ:
-            (
-                denial,
-                context,
-                matched_kind,
-                matched_grant_id,
-                matched_project_id,
-                revalidated,
-            ) = await project_read_denial(
+            (denial, context, matched_kind, matched_grant_id, matched_project_id,
+             revalidated) = await project_read_denial(
                 action, resource_context, context, self._admin,
                 self._revalidate_actor_self, self._lifecycle_denial,
             )

@@ -144,7 +144,6 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authentication/test_introspection.py",
     "tests/authentication/test_admission.py",
     "tests/authentication/test_development_contract.py",
-    "tests/authentication/test_registered_actor_dependency.py",
     "tests/actors/test_repository_contract.py",
     "tests/actors/test_admin_views.py",
     "tests/actors/test_resolution_service.py",
@@ -426,6 +425,13 @@ TASK_MODULES = (
     "tests/test_project_guide_compilation_contracts.py",
     "tests/test_review_queue_persistence.py",
     "tests/test_review_lease_persistence.py",
+    "tests/authorization/submission_history/test_reads.py",
+    "tests/authorization/submission_history/test_privacy.py",
+    "tests/authorization/submission_history/test_storage.py",
+    "tests/authorization/submission_history/test_isolation.py",
+    "tests/authorization/submission_history/test_migration.py",
+    "tests/authorization/submission_history/test_absence.py",
+    "tests/authorization/submission_history/test_failures.py",
     "tests/test_tasks.py",
 )
 

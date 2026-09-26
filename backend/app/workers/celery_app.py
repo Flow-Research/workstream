@@ -62,7 +62,6 @@ def create_celery_app() -> Celery:
         backend=settings.celery_result_backend_url,
         include=[
             "app.workers.artifacts",
-            "app.workers.checkers",
             "app.workers.project_setup",
             "app.workers.post_policy",
             "app.workers.outbox",

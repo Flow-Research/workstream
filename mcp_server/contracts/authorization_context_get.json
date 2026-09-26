@@ -1,10 +1,18 @@
 {
-  "canonical_sha256": "0547c39a7336a3ae0590cf5bf22fa4b92de874a3671ae35680d6528092db1a10",
+  "canonical_sha256": "10124f30bfbbb76a494277aff1d2c56e9813abfaf37e045cffda2eebe7df9949",
   "components": {
     "schemas": {
       "ActionId": {
         "type": "string",
         "enum": [
+          "task.submission.list",
+          "submission.read",
+          "submission.checker_run.list",
+          "checker_run.read",
+          "project.task.submission.list",
+          "project.submission.read",
+          "project.submission.checker_run.list",
+          "project.checker_run.read",
           "task.queue.read",
           "project.task.queue.read",
           "operations.task.queue.read",
@@ -523,7 +531,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "0a1b2598572f840c57a19a0bb4a1b3663f183889",
+    "backend_git_sha": "0645c5167a93e9bb6e4d4ff926bd13f305ee6b63",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"

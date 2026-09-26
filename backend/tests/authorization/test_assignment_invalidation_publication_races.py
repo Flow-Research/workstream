@@ -11,7 +11,6 @@ from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.api import TaskAuthorityDenied
-from app.schemas.auth import ActorContext
 from auth_concurrency_support import wait_for_named_database_lock
 from tests.authorization.task_authority.test_lifecycle_races import _run_task_contributor_write
 from tests.tasks.invalidation_support import setup_assignment
@@ -28,9 +27,7 @@ async def test_claim_and_loss_publish_only_committed_original_assignments(
     s = await setup_assignment(task_client, monkeypatch)
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     task = await create_ready_task(task_client, s.project["id"])
-    actor = ActorContext(actor_id=s.grant["actor_profile_id"], external_subject="invalidation-submitter",
-        external_issuer="flow-test", roles=("worker",), claim_snapshot={"roles": ["worker"]},
-        auth_source="dev_mock", is_dev_auth=True)
+    actor = s.grant["actor_profile_id"]
     token = uuid4().hex
     loss_name, claim_name = f"loss-{token}", f"claim-{token}"
     held, release, entered = asyncio.Event(), asyncio.Event(), asyncio.Event()

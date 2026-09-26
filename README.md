@@ -160,8 +160,9 @@ capabilities, not by calendar weeks or promised dates.
 
 Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
-submission packets, immutable artifact storage, automated checker execution,
-and the pre-review gate. Project-guide ingestion stores original documents,
+submission packets, immutable artifact storage, pre-submit intake checks,
+and authorized retained submission/checker history. Canonical durable post-submit
+execution, routing and recovery remain unavailable. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
 unified setup agent. Guide metadata in PostgreSQL also holds at least one required
 task example; the agent assesses the examples with the uploaded guide documents.
@@ -197,7 +198,7 @@ progress.
 - [Product Principles](docs/product_principles.md)
 - [Product Brief](docs/product_brief.md)
 - [First User Flows](docs/product_first_user_flows.md)
-- [Architecture Brief PDF](docs/architecture_brief/workstream_architecture_brief.pdf)
+- [Architecture Brief PDF — target architecture](docs/architecture_brief/workstream_architecture_brief.pdf)
 - [Architecture Diagrams](docs/diagrams/README.md)
 - [System Architecture](docs/architecture_system_architecture.md)
 - [Data Model](docs/architecture_data_model.md)
@@ -550,7 +551,7 @@ correction. Both correction origins use the same explicit manual dispatch.
 Derivation, reads, approval and correction creation do not invoke inference or
 post-submit evaluators. A periodic scan recovers publication failures from
 committed approvals; duplicate delivery retains one policy and receipt.
-The separate post-submission Celery worker evaluates submitted work.
+Canonical post-submission execution remains unavailable until its durable authority and completion boundaries land.
 The local Celery command above includes Beat; start it before creating guide sources.
 
 The Beat scheduler must run alongside the Celery execution processes so
@@ -563,12 +564,14 @@ without rerunning checks or issuing a new upload capability. An uncertain attemp
 cannot execute again under the same key. POL-07B connects the internal
 checker phase service and removes the standalone JSON precheck. Both fresh
 pre-submit execution and completed replay use that service, with ART retaining
-canonical evidence ownership. The existing Celery pre-review gate still calls
-`CheckerService.run_queued_pre_review_gate`; it does not call the new phase
-service. That service's `evaluate_post_submission` uses
-`UnavailablePostSubmissionExecution` and raises
-`PostSubmissionExecutionUnavailable` until its durable execution and authority
-boundaries land. Finance Authority can publicly discover, create, update, publish,
+canonical evidence ownership. The obsolete checker worker, manual execution and
+submission-finalize repair routes are removed. `evaluate_post_submission` remains
+explicitly unavailable until canonical durable execution and routing land.
+Submission and checker history use live exact-project Submitter authority for the
+original contributor. Separate `/projects/{project_id}` reads require a covering
+Project Manager grant and expose fixed management fields. Token roles confer no
+authority and authentication returns only the verified identity contract.
+Finance Authority can publicly discover, create, update, publish,
 read and retire a project's ContributionPolicy under
 `/api/v1/projects/{project_id}/contribution-policies`. The current-policy read
 recovers a draft selector, a published selector, or both for another authorized

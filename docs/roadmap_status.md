@@ -502,6 +502,16 @@ Commitrail's contribution-path and reviewer-routing improvements are delivered.
 They support this work; they do not complete a product capability or create a
 second permission system.
 
+Retained checker ownership is database-immutable; finished outcomes cannot change
+or receive additional results. Result insertion serializes with completion.
+Detail reads first resolve the authorized parent Submission, then query the exact
+run/task/submission.
+Retained submission/checker history now uses canonical AUTH with separate
+contributor and Project Manager projections. The obsolete token-role dependency,
+compatibility identity writer, manual checker execution, finalize repair and
+fabricated-actor Celery gate are removed. Retained records are preserved;
+canonical durable post-submit execution and recovery remain pending ARCH-04.
+
 ## Critical Dependency Map
 
 ```text
@@ -516,6 +526,7 @@ Delivered foundations (not a claim of full public integration)
   ARCH-03C4 exact-authorized public task queues and ARCH-03C5 detail/requirements
   ARCH-03C6 distinct exact-authorized locked-context reads
   ARCH-03C7 bounded exact-authorized Audit Authority task history
+  canonical contributor/manager Submission and checker history; obsolete gate removed
     |
     v
 Remaining integration

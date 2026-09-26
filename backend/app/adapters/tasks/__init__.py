@@ -1,5 +1,6 @@
 """TASK-owned composition adapters and transaction roots."""
 
+from app.modules.tasks.api.submission_history import SubmissionHistoryReadPort
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from uuid import UUID
@@ -167,3 +168,9 @@ class TransactionalSubmissionCreationCommand:
 def assignment_invalidation_targets(session: AsyncSession):
     """Compose the TASK-owned nonlocking exact-target projection."""
     return TaskRepository(session)
+
+
+def submission_history_repository(session) -> SubmissionHistoryReadPort:
+    """Compose TASK-owned immutable history selectors and projections."""
+    from app.modules.tasks.submission_history import SubmissionHistoryRepository
+    return SubmissionHistoryRepository(session)

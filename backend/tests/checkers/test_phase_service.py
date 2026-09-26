@@ -107,8 +107,7 @@ async def test_invalid_post_request_never_reaches_executor():
 
 def test_two_phase_commands_and_no_draft_packet_precheck_route():
     from app.main import create_app
-    from app.modules.checkers import schemas, runner
-    from app.modules.checkers.service import CheckerService
+    from app.modules.checkers import runner
 
     assert [name for name, method in inspect.getmembers(CheckerPhaseService, inspect.isfunction)
             if not name.startswith("_")] == ["evaluate_post_submission", "evaluate_pre_submission"]
@@ -117,7 +116,5 @@ def test_two_phase_commands_and_no_draft_packet_precheck_route():
     schema = app.openapi()
     assert all("submission-precheck" not in path for path in schema["paths"])
     for name in ("PreSubmitCheckRequest", "PreSubmitCheckResponse", "CheckerFeedbackItem"):
-        assert not hasattr(schemas, name)
         assert name not in schema["components"]["schemas"]
-    assert not hasattr(CheckerService, "pre_submit_check")
     assert not hasattr(runner, "pre_submit_static_feedback")

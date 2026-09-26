@@ -24,10 +24,8 @@ from app.interfaces.auth import (
     AuthVerifier,
 )
 from app.modules.actors.service import (
-    ActorDeactivated,
     ActorRegistryError,
     ActorService,
-    ActorSuspended,
     ResolvedActor,
     ServiceActorNotProvisioned,
     UnsupportedSubjectKind,
@@ -36,7 +34,7 @@ from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
     RateControlService,
 )
-from app.schemas.auth import ActorContext, AuthVerificationResult, VerifiedIssuerToken
+from app.schemas.auth import AuthVerificationResult, VerifiedIssuerToken
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -77,7 +75,7 @@ async def get_auth_verification_result(
         verifier: Configured auth verifier dependency.
 
     Returns:
-        Canonical and bounded compatibility verification result.
+        Canonical verified identity and coarse token scopes.
 
     Raises:
         HTTPException: If the bearer token is missing or invalid.
@@ -159,32 +157,3 @@ async def get_canonical_actor(
     except SQLAlchemyError as exc:
         await session.rollback()
         raise actor_registry_unavailable_error() from exc
-
-
-async def get_registered_actor(
-    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
-    resolved: Annotated[ResolvedActor, Depends(get_canonical_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ActorContext:
-    """Return the bounded legacy context after canonical actor resolution."""
-    if result.token.subject_kind != "human" or result.legacy is None:
-        raise StructuredHTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Unsupported subject kind",
-            error_code="unsupported_subject_kind",
-            error_message="Unsupported subject kind",
-        )
-    actor = result.legacy_actor(actor_id=resolved.profile.id)
-    try:
-        if resolved.profile.status == "suspended":
-            raise ActorSuspended("Actor is suspended")
-        if resolved.profile.status == "deactivated":
-            raise ActorDeactivated("Actor is deactivated")
-        await ActorService(session).refresh_legacy_identity(actor)
-    except ActorRegistryError as exc:
-        await session.rollback()
-        raise actor_registry_http_error(exc) from exc
-    except SQLAlchemyError as exc:
-        await session.rollback()
-        raise actor_registry_unavailable_error() from exc
-    return actor

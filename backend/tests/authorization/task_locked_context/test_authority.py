@@ -80,7 +80,7 @@ async def test_locked_context_concealment_and_draft(admin_access, kind):
     manager=await project_manager(admin_access,project)
     draft=await create_task(admin_access,project,manager,ready=False)
     response=await client.get(path(kind,project,draft),headers=admin_access.target.headers)
-    assert response.status_code==422 and response.json()["code"]=="task_locked_context_invalid"
+    assert response.status_code==422 and response.json()["error"]["code"]=="task_locked_context_invalid"
 
 
 @pytest.mark.parametrize("kind", KINDS)

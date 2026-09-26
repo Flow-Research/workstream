@@ -70,9 +70,6 @@ class Settings(BaseSettings):
     dev_auth_token: str | None = None
     dev_auth_subject: str | None = None
     dev_auth_issuer: str | None = None
-    dev_auth_email: str | None = None
-    dev_auth_display_name: str | None = None
-    dev_auth_roles: str = ""
     flow_auth_issuer: str = "https://auth.flow.local"
     flow_auth_audience: str = "workstream-api"
     flow_auth_local_hmac_secret: str | None = None

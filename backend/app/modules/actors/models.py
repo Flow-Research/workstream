@@ -192,7 +192,7 @@ class ActorIdentityLink(Base):
 
 
 class LegacyActorIdentity(Base):
-    """Non-authoritative token-observation row retained for intermediate workflows."""
+    """Historical token-observation evidence; no runtime writer or authority use."""
 
     __tablename__ = "legacy_actor_identities"
     __table_args__ = (

@@ -1,33 +1,28 @@
 from __future__ import annotations
 
-from uuid import UUID
 
 import pytest  # type: ignore[import-not-found]
 
 from app.adapters.auth.dev import DevelopmentAuthVerifier
 from app.adapters.auth.flow import (
     FlowAuthVerifier,
-    actor_id_from_flow_identity,
 )
 from app.core.config import Settings
-from app.schemas.auth import normalize_legacy_roles
 
 
 from tests.authentication.support import production_verifier_settings
 
 
-@pytest.mark.parametrize("changed_field", ["email", "subject", "issuer"])
-async def test_actor_id_uses_subject_and_issuer_not_email(changed_field) -> None:
+@pytest.mark.parametrize("changed_field", ["subject", "issuer"])
+async def test_verification_preserves_exact_subject_and_issuer(changed_field) -> None:
     first = Settings(
         environment="local",
         auth_provider="dev",
         dev_auth_token="local-token",
         dev_auth_subject="same-subject",
         dev_auth_issuer="same-issuer",
-        dev_auth_email="first@example.test",
     )
     alternate = {
-        "email": "second@example.test",
         "subject": "other-subject",
         "issuer": "other-issuer",
     }
@@ -39,15 +34,6 @@ async def test_actor_id_uses_subject_and_issuer_not_email(changed_field) -> None
     assert second.dev_auth_token is not None
     first_result = await first_verifier.verify(first.dev_auth_token)
     second_result = await second_verifier.verify(second.dev_auth_token)
-    first_actor = first_result.legacy_actor(
-        actor_id=actor_id_from_flow_identity("same-issuer", "same-subject")
-    )
-    second_actor = second_result.legacy_actor(
-        actor_id=actor_id_from_flow_identity(
-            "other-issuer" if changed_field == "issuer" else "same-issuer",
-            "other-subject" if changed_field == "subject" else "same-subject",
-        )
-    )
 
     assert first_verifier.canonical_issuer() == first_result.token.issuer == "same-issuer"
     assert (
@@ -55,12 +41,10 @@ async def test_actor_id_uses_subject_and_issuer_not_email(changed_field) -> None
         == second_result.token.issuer
         == ("other-issuer" if changed_field == "issuer" else "same-issuer")
     )
-    assert (first_actor.actor_id == second_actor.actor_id) is (changed_field == "email")
-    assert UUID(actor_id_from_flow_identity("same-issuer", "same-subject")) == UUID(
-        first_actor.actor_id
-    )
-    assert first_actor.email is None
-    assert second_actor.email is None
+    assert (first_result.token.issuer, first_result.token.subject) == ("same-issuer", "same-subject")
+    assert ((first_result.token.issuer, first_result.token.subject) ==
+            (second_result.token.issuer, second_result.token.subject)) is False
+    assert set(first_result.model_dump()) == {"token"}
 
 
 @pytest.mark.parametrize("environment", ["production", "prod", "staging", "preview"])
@@ -198,49 +182,3 @@ def test_flow_rejects_issuer_above_persisted_utf8_bound() -> None:
 async def test_flow_auth_verifier_boundary_rejects_unconfigured_verification() -> None:
     with pytest.raises(RuntimeError, match="WORKSTREAM_TOKEN_ISSUER"):
         FlowAuthVerifier(Settings(auth_provider="flow"))
-
-
-async def test_flow_role_normalization_ignores_non_string_values() -> None:
-    assert normalize_legacy_roles(
-        [
-            "contributor",
-            {"api_key": "must-not-persist"},
-            42,
-            " reviewer ",
-            "",
-        ]
-    ) == ("contributor", "reviewer")
-
-
-async def test_dev_role_normalization_uses_bounded_compatibility_contract() -> None:
-    roles = ",".join(f"role-{index}" for index in range(35))
-    result = await DevelopmentAuthVerifier(
-        Settings(
-            environment="local",
-            auth_provider="dev",
-            dev_auth_token="local-token",
-            dev_auth_subject="subject",
-            dev_auth_issuer="issuer",
-            dev_auth_roles=roles,
-        )
-    ).verify("local-token")
-
-    assert result.legacy is not None
-    assert result.legacy.roles == tuple(f"role-{index}" for index in range(32))
-
-
-@pytest.mark.parametrize("length", [128, 129], ids=["maximum", "overlong"])
-async def test_dev_role_length_filter_cannot_hide_behind_count_cap(length):
-    role = "x" * length
-    result = await DevelopmentAuthVerifier(
-        Settings(
-            environment="test",
-            auth_provider="dev",
-            dev_auth_token="local-token",
-            dev_auth_subject="subject",
-            dev_auth_issuer="issuer",
-            dev_auth_roles=f"{role},reviewer",
-        )
-    ).verify("local-token")
-    assert result.legacy is not None
-    assert result.legacy.roles == ((role, "reviewer") if length == 128 else ("reviewer",))

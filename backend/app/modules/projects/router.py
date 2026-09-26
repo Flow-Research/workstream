@@ -20,7 +20,6 @@ from app.api.deps.authorization import (
     get_authorization_service,
     prepared_authorization_service,
 )
-from app.core.permissions import PermissionDenied
 from app.core.api_controls import ApiErrorResponse, StructuredHTTPException
 from app.db.session import get_db_session
 from app.interfaces.artifacts import ArtifactLimitExceededError, ArtifactInputMismatchError, ArtifactStoreError
@@ -92,18 +91,6 @@ def project_http_error(exc: ProjectServiceError) -> HTTPException:
         HTTP exception carrying the service error details.
     """
     return HTTPException(status_code=exc.status_code, detail=str(exc))
-
-
-def permission_http_error(exc: PermissionDenied) -> HTTPException:
-    """Convert a permission failure into a 403 HTTP error.
-
-    Args:
-        exc: Permission exception raised by the service layer.
-
-    Returns:
-        HTTP exception with a forbidden status.
-    """
-    return HTTPException(status_code=403, detail=str(exc))
 
 
 def submission_policy_conflict_error(code: str) -> StructuredHTTPException:
@@ -621,12 +608,6 @@ async def get_current_pre_submit_checker_policy(
     response = PreSubmitCheckerPolicySummaryResponse.model_validate(policy)
     await session.commit()
     return response
-
-
-
-
-
-
 
 
 @router.get(

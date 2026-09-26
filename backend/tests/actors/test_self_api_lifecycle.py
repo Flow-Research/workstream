@@ -171,7 +171,6 @@ async def test_nonhuman_actor_self_api_denials_create_nothing(
     async def verification_override() -> AuthVerificationResult:
         return AuthVerificationResult(
             token=verified_token(f"http-{kind}", kind=kind),
-            legacy=None,
         )
 
     actor_client._transport.app.dependency_overrides[get_auth_verification_result] = (  # type: ignore[attr-defined]

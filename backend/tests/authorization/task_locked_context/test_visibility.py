@@ -45,7 +45,7 @@ async def test_locked_context_exact_fields_all_states_and_corrupt_custody(admin_
         assert (await independent.get(WorkstreamTask, str(task))).locked_post_submit_checker_policy_body["blocking_severities"] == []
     response = await admin_access.signed.client.get(path(kind, project, task), headers=admin_access.target.headers)
     assert response.status_code == 422, response.text
-    assert response.json()["code"] == "task_locked_context_invalid"
+    assert response.json()["error"]["code"] == "task_locked_context_invalid"
 
 
 async def test_task_creator_has_no_context_authority_after_revocation(admin_access):

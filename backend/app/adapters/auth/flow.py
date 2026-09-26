@@ -28,11 +28,8 @@ from app.interfaces.auth import (
 )
 from app.schemas.auth import (
     AuthVerificationResult,
-    LegacyAuthorizationCompatibilityContext,
     MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS,
     VerifiedIssuerToken,
-    actor_id_from_external_identity,
-    normalize_legacy_roles,
 )
 
 LOCAL_FLOW_AUTH_ENVIRONMENTS = {"local", "dev", "development", "test"}
@@ -46,11 +43,6 @@ SUPPORTED_ALGORITHMS = {
     "EdDSA": "OKP",
 }
 SUBJECT_KINDS = {"human", "service", "agent", "space"}
-
-
-def actor_id_from_flow_identity(external_issuer: str, external_subject: str) -> str:
-    """Build the historical stable Workstream actor identifier."""
-    return actor_id_from_external_identity(external_issuer, external_subject)
 
 
 def _decode_base64url(value: str) -> bytes:
@@ -355,7 +347,7 @@ class FlowAuthVerifier:
         if not isinstance(claims, dict):
             raise AuthVerificationError("token signature or claims are invalid")
 
-        result = self._result_from_verified_claims(claims, auth_source="flow")
+        result = self._result_from_verified_claims(claims)
         await self._apply_introspection(token, result.token)
         return result
 
@@ -377,7 +369,7 @@ class FlowAuthVerifier:
             maximum_bytes=self._settings.token_payload_max_bytes,
         )
         self._validate_local_claims(claims)
-        return self._result_from_verified_claims(claims, auth_source="flow")
+        return self._result_from_verified_claims(claims)
 
     def _validate_local_claims(self, claims: dict[str, Any]) -> None:
         if claims.get("iss") != self._issuer:
@@ -401,8 +393,6 @@ class FlowAuthVerifier:
     def _result_from_verified_claims(
         self,
         claims: dict[str, Any],
-        *,
-        auth_source: str,
     ) -> AuthVerificationResult:
         subject = claims.get("sub")
         token_id = claims.get("jti")
@@ -445,14 +435,7 @@ class FlowAuthVerifier:
             subject_kind=subject_kind,
             scopes=scopes,
         )
-        legacy = None
-        if subject_kind == "human":
-            legacy = LegacyAuthorizationCompatibilityContext(
-                roles=normalize_legacy_roles(claims.get("roles")),
-                auth_source=auth_source,
-                is_dev_auth=False,
-            )
-        return AuthVerificationResult(token=verified, legacy=legacy)
+        return AuthVerificationResult(token=verified)
 
     async def _resolve_key(self, kid: str) -> dict[str, Any]:
         now = self._monotonic()

@@ -260,12 +260,6 @@
       "repair_owner": "WS-ARCH-001-03"
     },
     {
-      "source_file": "backend/app/modules/checkers/pre_review_gate.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.models",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
       "source_file": "backend/app/modules/checkers/pre_submit_execution.py",
       "target_module": "artifacts",
       "imported_private_path": "app.modules.artifacts.sources",
@@ -282,48 +276,6 @@
       "target_module": "artifacts",
       "imported_private_path": "app.modules.artifacts.submission_manifest",
       "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "projects",
-      "imported_private_path": "app.modules.projects.models",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "projects",
-      "imported_private_path": "app.modules.projects.post_submit_policy",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "projects",
-      "imported_private_path": "app.modules.projects.repository",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.authorization",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.lifecycle",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.models",
-      "repair_owner": "WS-ARCH-001-03"
-    },
-    {
-      "source_file": "backend/app/modules/checkers/service.py",
-      "target_module": "tasks",
-      "imported_private_path": "app.modules.tasks.repository",
-      "repair_owner": "WS-ARCH-001-03"
     },
     {
       "source_file": "backend/app/modules/projects/create_router.py",
@@ -426,30 +378,6 @@
       "target_module": "audit",
       "imported_private_path": "app.modules.audit.repository",
       "repair_owner": "WS-ARCH-001-07"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/service.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.gate_queue",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/service.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.pre_review_gate",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/modules/tasks/service.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.service",
-      "repair_owner": "WS-ARCH-001-04"
-    },
-    {
-      "source_file": "backend/app/workers/checkers.py",
-      "target_module": "checkers",
-      "imported_private_path": "app.modules.checkers.service",
-      "repair_owner": "WS-ARCH-001-04"
     }
   ]
 }

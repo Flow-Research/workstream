@@ -3,15 +3,14 @@
 This folder contains the shareable Workstream architecture brief.
 
 - Source: [workstream_architecture_brief.md](workstream_architecture_brief.md)
-- PDF: [human-review-branch snapshot](workstream_architecture_brief.pdf)
+- PDF: [current target-architecture brief](workstream_architecture_brief.pdf)
 - Render script: [render_pdf.sh](render_pdf.sh)
 
 The brief uses the C4-PlantUML diagrams from `docs/diagrams/` and packages them into a single PDF for team review.
 
-The checked-in PDF and lifecycle images predate the versioned
-`human_review_required` setting. They describe the human branch, not the full
-amended acceptance scope. Use the Markdown source and current roadmap for that
-direction; the policy-setting change does not regenerate binary exports.
+The source, PDF and images distinguish delivered canonical history reads from
+unavailable post-submit execution, routing and recovery. Lifecycle diagrams are
+target views; the [roadmap](../roadmap_status.md) owns capability status.
 
 ## Render
 

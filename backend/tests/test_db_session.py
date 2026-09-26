@@ -53,7 +53,7 @@ async def test_get_engine_requires_workstream_database_url(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("entrypoint", [
-    "app.main", "app.workers.project_setup", "app.workers.post_policy", "app.workers.checkers",
+    "app.main", "app.workers.project_setup", "app.workers.post_policy",
 ])
 def test_fresh_runtime_process_resolves_model_graph(entrypoint):
     """API and worker startup must not depend on pytest or Alembic model imports."""

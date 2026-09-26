@@ -14,7 +14,6 @@ from app.api.deps.authorization import (
     get_prepared_authorization_service,
 )
 from app.core.api_controls import StructuredHTTPException
-from app.core.permissions import PermissionDenied
 from app.db.errors import integrity_constraint_name
 from app.db.session import get_db_session
 from app.modules.actors.service import ResolvedActor
@@ -99,8 +98,6 @@ async def create_project(
         else:
             await session.commit()
         return outcome.response
-    except PermissionDenied as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ProjectServiceError as exc:
         raise project_create_http_error(exc) from exc
     except IntegrityError as exc:

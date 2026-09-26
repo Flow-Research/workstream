@@ -314,7 +314,7 @@ async def test_work_context_missing_locked_context(task_client, monkeypatch):
     assert len(staged_ids) == 1
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "task_locked_context_invalid"
-    assert "locked_guide_version" in response.json()["details"]["missing_fields"]
+    assert "locked_guide_version" in response.json()["error"]["details"]["missing_fields"]
     assert await snapshot(factory, task["id"]) == (before, previous)
 
 

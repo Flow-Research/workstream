@@ -11,6 +11,7 @@ from app.modules.authorization.domain.action_groups import (
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext
 from app.modules.authorization.domain.task_queues import QueueReadResourceContext
+from app.modules.authorization.domain.submission_history import HistoryReadResourceContext
 
 
 def project_authority_audit_target(
@@ -51,7 +52,7 @@ def project_authority_audit_target(
     if type(resource) is AssignmentInvalidationResourceContext:
         project_id = str(resource.scope_project_id)
         return project_id, "task", str(resource.resource_id), "project", project_id
-    if isinstance(resource, (TaskAuthorityResourceContext, QueueReadResourceContext)):
+    if isinstance(resource, (TaskAuthorityResourceContext, QueueReadResourceContext, HistoryReadResourceContext)):
         project_id = str(resource.scope_project_id)
         return project_id, "project", project_id, "project", project_id
     if isinstance(resource, ProjectCreateResourceContext):

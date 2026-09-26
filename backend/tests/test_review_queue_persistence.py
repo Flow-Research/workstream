@@ -8,7 +8,7 @@ from app.core.identifiers import new_record_id
 
 from httpx import ASGITransport, AsyncClient
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.core.config import get_settings
@@ -32,8 +32,7 @@ from app.modules.reviews.schemas import (
 )
 from app.modules.tasks.models import Submission
 from project_create_fixtures import grant_system_project_manager, insert_historical_project
-from tests.test_checkers import get_submission_and_automatic_pre_review_run
-from tests.submission_fixtures import seed_finalized_submission_for_checker_test
+from tests.submission_fixtures import seed_retained_submission, seed_retained_checker_run
 from tests.test_tasks import (
     auth_headers,
     complete_submission_payload,
@@ -86,6 +85,7 @@ async def review_client(review_database_env: str) -> AsyncIterator[AsyncClient]:
 async def _reviewable_lineage(
     client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    *, checker_status: str = "completed",
 ) -> tuple[dict, dict, dict]:
     project = await create_active_project(client)
     task = await create_started_task(
@@ -94,13 +94,15 @@ async def _reviewable_lineage(
         monkeypatch,
         subject="review-worker-two",
     )
-    submission_id = await seed_finalized_submission_for_checker_test(
+    submission_id = await seed_retained_submission(
         task["id"], complete_submission_payload(),
     )
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
-    assert checker["status"] == "completed"
-    assert checker["routing_recommendation"] == "allow_review"
+    run_id = await seed_retained_checker_run(submission_id, status=checker_status)
+    async with db_session.get_session_factory()() as session:
+        stored = await session.get(Submission, submission_id)
+        submission = {"id": stored.id, "version": stored.version}
+    checker = {"id": run_id}
     return project, task, submission | {"checker_run_id": checker["id"]}
 
 
@@ -109,15 +111,17 @@ async def _additional_reviewable_submission(
     project: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[dict, dict]:
-    """Seed another stored submission and evaluate it for queue-owner tests."""
+    """Seed another retained submission and checker record for queue-owner tests."""
     task = await create_started_task(client, project["id"], monkeypatch)
-    submission_id = await seed_finalized_submission_for_checker_test(
+    submission_id = await seed_retained_submission(
         task["id"], complete_submission_payload(),
     )
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    submission, checker = await get_submission_and_automatic_pre_review_run(client, submission_id)
-    assert checker["status"] == "completed"
-    assert checker["routing_recommendation"] == "allow_review"
+    run_id = await seed_retained_checker_run(submission_id)
+    async with db_session.get_session_factory()() as session:
+        stored = await session.get(Submission, submission_id)
+        submission = {"id": stored.id, "version": stored.version}
+    checker = {"id": run_id}
     return task, submission | {"checker_run_id": checker["id"]}
 
 
@@ -358,7 +362,7 @@ async def test_database_rejects_non_admissible_checker_and_project_mismatch(
     review_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    project, task, submission = await _reviewable_lineage(review_client, monkeypatch)
+    project, task, submission = await _reviewable_lineage(review_client, monkeypatch, checker_status="running")
     for field, invalid_value in (
         ("status", "running"),
         ("routing_recommendation", "needs_revision"),
@@ -367,7 +371,11 @@ async def test_database_rejects_non_admissible_checker_and_project_mismatch(
         async with db_session.get_session_factory()() as session:
             checker = await session.get(CheckerRun, submission["checker_run_id"])
             assert checker is not None
+            completed_at = await session.scalar(select(func.clock_timestamp()))
+            checker.status = "completed"
             setattr(checker, field, invalid_value)
+            if checker.status == "completed":
+                checker.completed_at = completed_at
             await session.flush()
             session.add(
                 ReviewQueueEntry(
@@ -379,6 +387,12 @@ async def test_database_rejects_non_admissible_checker_and_project_mismatch(
             with pytest.raises(DBAPIError, match="review queue checker is not admissible"):
                 await session.flush()
             await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
+        checker = await session.get(CheckerRun, submission["checker_run_id"])
+        checker.completed_at = await session.scalar(select(func.clock_timestamp()))
+        checker.status = "completed"
+        await session.commit()
 
     other_task, other_submission = await _additional_reviewable_submission(
         review_client, project, monkeypatch
