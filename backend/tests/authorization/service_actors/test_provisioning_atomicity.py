@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.config import get_settings
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.actors.api import ServiceIdentity
@@ -128,7 +127,7 @@ async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
     profile_id = retried.json()["actor_profile_id"]
     assert profile_ids == (profile_id,)
     assert len(links) == 1 and links[0][1] == profile_id
-    assert links[0][2] == get_settings().token_issuer
+    assert links[0][2] == access.signed.issuer
     committed = await authority_snapshot()
     rows = [
         row
@@ -174,7 +173,7 @@ async def test_distinct_keys_cannot_duplicate_service_actor_after_authority_seri
     profile_id = winner.json()["actor_profile_id"]
     assert profile_ids == (profile_id,)
     assert len(links) == 1 and links[0][1] == profile_id
-    assert links[0][2] == get_settings().token_issuer
+    assert links[0][2] == access.signed.issuer
 
     snapshot = await authority_snapshot()
     records = [
@@ -251,7 +250,7 @@ async def test_authority_revocation_serializes_with_service_provisioning(
     assert profile_ids == ((profile_id,) if succeeded else ())
     assert len(links) == int(succeeded)
     if succeeded:
-        assert links[0][1:] == (profile_id, get_settings().token_issuer)
+        assert links[0][1:] == (profile_id, access.signed.issuer)
     snapshot = await authority_snapshot()
     bootstrap = [
         row

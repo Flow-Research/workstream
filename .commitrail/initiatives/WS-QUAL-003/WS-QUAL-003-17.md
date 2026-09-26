@@ -86,6 +86,12 @@ lines, helpers under 100 lines, and new modules under 500 lines. No original
 assertion is retired without a named surviving assertion or a specific
 redundancy rationale in the exact assertion map.
 
+Read the expected identity issuer from the same `SignedAccess` fixture that
+constructs the verifier, not process-global cached settings. A rollback check
+also compares total actor-profile and identity-link row counts before and after
+each injected failure so an unexpected row outside the requested subject cannot
+escape observation.
+
 ## Acceptance criteria
 
 - [x] The old 401-line function is replaced by focused named behavior tests;

@@ -37,6 +37,7 @@ class SignedActor:
 class SignedAccess:
     client: AsyncClient
     private_key: rsa.RSAPrivateKey
+    issuer: str
 
     async def actor(self, label: str, *, roles: tuple[str, ...] = ()) -> SignedActor:
         subject = f"{label}-{uuid4()}"
