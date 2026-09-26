@@ -252,7 +252,7 @@ Chunk 6 stores the checker-side source fields but does not implement human revie
 Read APIs:
 
 - GET `/api/v1/submissions/{submission_id}/checker-runs`
-- GET `/api/v1/checker-runs/{checker_run_id}`
+- GET `/api/v1/submissions/{submission_id}/checker-runs/{checker_run_id}`
 
 Checker read and trigger APIs use the existing external Flow authentication boundary. Workstream verifies Flow-issued tokens, resolves actor context, and applies object-level authorization. Chunk 6 must not introduce Workstream-owned login, password, session, or API key auth.
 

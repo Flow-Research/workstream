@@ -64,6 +64,10 @@ async def test_cursor_scope_and_continuation(task_client, monkeypatch):
     assert second.status_code == 200, second.text
     assert [item["id"] for item in second.json()["items"]] == [successor]
     assert second.json()["next_cursor"] is None
+    assert first.json()["items"][0]["version"] == 1
+    assert first.json()["items"][0]["supersedes_submission_id"] is None
+    assert second.json()["items"][0]["version"] == 2
+    assert second.json()["items"][0]["supersedes_submission_id"] == case[2]
     for params in ({"limit": 0}, {"limit": 101}, {"cursor": "bad"}, {"limit": 2, "cursor": cursor}):
         assert (await task_client.get(path, headers=auth_headers(), params=params)).status_code == 422
     alternate = history_paths(*case)["submission.checker_run.list"]
@@ -200,6 +204,16 @@ async def test_checker_pagination_and_cursor_audit(task_client, monkeypatch, man
         response = await task_client.get(path, headers=auth_headers(), params=params)
         assert response.status_code == 200, response.text
         assert [item["id"] for item in response.json()["items"]] == [expected]
+        item = response.json()["items"][0]
+        async with db_session.get_session_factory()() as session:
+            stored = await session.get(CheckerRun, expected)
+            assert item["submission_version"] == stored.submission_version
+            assert item["attempt_number"] == stored.attempt_number
+            assert item["supersedes_checker_run_id"] == stored.supersedes_checker_run_id
+            if manager:
+                for field in item:
+                    if field.startswith("locked_"):
+                        assert item[field] == getattr(stored, field)
         async with db_session.get_session_factory()() as session:
             events = list(await session.scalars(select(AuditEvent).where(
                 AuditEvent.actor_id == who, AuditEvent.action_id == action,
@@ -214,3 +228,44 @@ async def test_checker_pagination_and_cursor_audit(task_client, monkeypatch, man
             }})
         cursor = response.json()["next_cursor"]
         assert (cursor is None) is (index == 2)
+
+
+@pytest.mark.parametrize("manager", [False, True])
+async def test_checker_detail_resolves_parent_before_checker_lookup(task_client, monkeypatch, manager):
+    from app.modules.checkers.history import CheckerHistoryRepository
+    from tests.test_tasks import admit_and_grant_project_submitter
+    case = await history_case(task_client, monkeypatch)
+    if manager:
+        set_dev_actor(monkeypatch, roles="", subject="project-manager-subject")
+        project = str(UUID(int=123))
+    else:
+        await admit_and_grant_project_submitter(task_client, monkeypatch, case[0], "foreign-history-owner")
+        project = case[0]
+    async def forbidden(*args, **kwargs):
+        pytest.fail("CHECKERS entered before immutable parent ownership resolved")
+    monkeypatch.setattr(CheckerHistoryRepository, "read", forbidden)
+    path = history_paths(project, *case[1:], manager=manager)["checker_run.read"]
+    response = await task_client.get(path, headers=auth_headers())
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize("manager", [False, True])
+async def test_checker_detail_rejects_foreign_run_under_owned_parent(task_client, monkeypatch, manager):
+    from .test_storage import retained_pair
+    from app.modules.checkers.history import CheckerHistoryRepository
+    from app.modules.tasks.models import AuditEvent
+    case, other = await retained_pair(task_client, monkeypatch)
+    set_dev_actor(monkeypatch, roles="", subject="project-manager-subject" if manager else "worker-one")
+    called = []
+    original = CheckerHistoryRepository.read
+    async def capture(self, **kwargs):
+        called.append(kwargs)
+        return await original(self, **kwargs)
+    monkeypatch.setattr(CheckerHistoryRepository, "read", capture)
+    path = history_paths(*case[:3], other[2], manager=manager)["checker_run.read"]
+    response = await task_client.get(path, headers=auth_headers())
+    assert response.status_code == 404, response.text
+    assert len(called) == 1 and str(called[0]["submission_id"]) == case[2]
+    async with db_session.get_session_factory()() as session:
+        action = ("project." if manager else "") + "checker_run.read"
+        assert await session.scalar(select(AuditEvent.id).where(AuditEvent.action_id == action)) is None

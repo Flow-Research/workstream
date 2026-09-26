@@ -1,7 +1,6 @@
 """Fixed retained-checker history DTOs; no execution authority."""
 from datetime import datetime
-from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
@@ -71,10 +70,11 @@ class ManagementCheckerHistoryPage(BaseModel):
     next_cursor: str | None
 
 
-@dataclass(frozen=True, slots=True)
-class CheckerHistoryReference:
-    """Minimal CHECKERS-owned identity; the composition resolves TASK ownership."""
+class CheckerHistoryReadPort(Protocol):
+    """CHECKERS reads only within the already authorized immutable TASK parent."""
 
-    run_id: UUID
-    task_id: UUID
-    submission_id: UUID
+    async def read(
+        self, *, submission_id: UUID, task_id: UUID, manager: bool,
+        run_id: UUID | None = None, limit: int = 25,
+        after: tuple[datetime, UUID] | None = None,
+    ) -> tuple[list[ContributorCheckerHistory | ManagementCheckerHistory], bool]: ...

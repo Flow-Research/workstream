@@ -198,7 +198,7 @@ progress.
 - [Product Principles](docs/product_principles.md)
 - [Product Brief](docs/product_brief.md)
 - [First User Flows](docs/product_first_user_flows.md)
-- [Architecture Brief PDF](docs/architecture_brief/workstream_architecture_brief.pdf)
+- [Architecture Brief PDF — target architecture](docs/architecture_brief/workstream_architecture_brief.pdf)
 - [Architecture Diagrams](docs/diagrams/README.md)
 - [System Architecture](docs/architecture_system_architecture.md)
 - [Data Model](docs/architecture_data_model.md)

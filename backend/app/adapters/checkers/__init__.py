@@ -1,6 +1,7 @@
 """CHECKER-owned composition adapters."""
 
 import asyncio
+from app.modules.checkers.api.history import CheckerHistoryReadPort
 from typing import Any, BinaryIO, Protocol
 from pathlib import Path
 
@@ -108,7 +109,7 @@ def installed_post_submit_catalogue() -> PostSubmitCatalogue:
     return build_post_submit_catalogue(default_checker_registry())
 
 
-def checker_history_repository(session):
+def checker_history_repository(session) -> CheckerHistoryReadPort:
     """Compose retained CHECKERS reads through TASK's public ownership port."""
     from app.modules.checkers.history import CheckerHistoryRepository
     return CheckerHistoryRepository(session)

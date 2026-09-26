@@ -502,6 +502,8 @@ Commitrail's contribution-path and reviewer-routing improvements are delivered.
 They support this work; they do not complete a product capability or create a
 second permission system.
 
+Retained checker ownership is database-immutable; detail reads first resolve the
+authorized parent Submission, then query the exact run/task/submission.
 Retained submission/checker history now uses canonical AUTH with separate
 contributor and Project Manager projections. The obsolete token-role dependency,
 compatibility identity writer, manual checker execution, finalize repair and

@@ -1609,6 +1609,13 @@ Types:
 
 ## CheckerRun
 
+Retained run identity, task/Submission ownership, predecessor, trigger attribution,
+locked policies and artifact inputs are immutable in PostgreSQL. The predecessor
+must belong to the same task and Submission. Operational completion fields may
+change; currentness can retire from true to false and the audit reference may be
+filled once. Run deletion and truncation are rejected. These storage guarantees
+do not activate canonical post-submit execution or recovery.
+
 Fields:
 
 - `id`
@@ -1665,6 +1672,9 @@ Routing recommendation:
 `task_setup_blocked` means the task's locked contract or policy context is incomplete, stale, or unsafe to review. It is an internal project-manager route, not a contributor-facing revision outcome.
 
 ## CheckerResult
+
+Retained rows are insert-only. A composite foreign key binds the run, task and
+Submission together; updates, deletion and truncation are rejected.
 
 Fields:
 

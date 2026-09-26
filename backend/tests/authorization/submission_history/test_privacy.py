@@ -1,5 +1,6 @@
 """Fixed SQL projections and live grant privacy over retained checker results."""
 
+import re
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,8 @@ from tests.submission_fixtures import seed_retained_submission, seed_retained_ch
 from tests.test_tasks import (create_active_project, create_started_task, complete_submission_payload,
                              set_dev_actor, auth_headers, actor_id)
 from .test_reads import history_paths, history_case
+from .test_absence import (SUBMISSION_FIELDS, MANAGER_SUBMISSION_FIELDS, RUN_FIELDS, MANAGER_RUN_FIELDS,
+                           RESULT_FIELDS, MANAGER_RESULT_FIELDS, EVIDENCE_FIELDS)
 
 
 @pytest.mark.parametrize("routing", ["allow_review", "checker_retry", "task_setup_blocked"])
@@ -37,12 +40,36 @@ async def test_fixed_projection_and_selected_columns(task_client, monkeypatch, r
         for manager in (False, True):
             set_dev_actor(monkeypatch, roles="", subject="project-manager-subject" if manager else "worker-one")
             for action, path in history_paths(*case, manager=manager).items():
+                captured.clear()
                 response = await task_client.get(path, headers=auth_headers())
                 assert response.status_code == 200, response.text
                 assert "RAW_RESULT_SENTINEL" not in response.text
                 value = response.json()
                 item = value["items"][0] if action.endswith("list") else value
-                if "checker" in action:
+                checker = "checker" in action
+                expected_fields = (MANAGER_RUN_FIELDS if manager else RUN_FIELDS) if checker else (MANAGER_SUBMISSION_FIELDS if manager else SUBMISSION_FIELDS)
+                assert set(item) == expected_fields
+                nested_key = "results" if checker else "evidence_items"
+                nested_fields = (MANAGER_RESULT_FIELDS if manager else RESULT_FIELDS) if checker else EVIDENCE_FIELDS
+                assert all(set(nested) == nested_fields for nested in item[nested_key])
+                # Independently fixed inventories guard selected SQL, including fields DTOs discard.
+                allowed = {
+                    "submissions": (MANAGER_SUBMISSION_FIELDS if manager else SUBMISSION_FIELDS) - {"evidence_items"},
+                    "checker_runs": (MANAGER_RUN_FIELDS if manager else RUN_FIELDS) - {"results"},
+                    "checker_results": MANAGER_RESULT_FIELDS if manager else RESULT_FIELDS,
+                    "evidence_items": EVIDENCE_FIELDS,
+                }
+                assert captured
+                for statement in captured:
+                    for table, fields in allowed.items():
+                        selected = set(re.findall(rf"\b{table}\.([a-z_]+)", statement))
+                        # Minimal TASK ownership resolution also selects contributor_id for AUTH.
+                        if table == "submissions" and "workstream_tasks.project_id" in statement:
+                            assert selected == {"id", "task_id", "contributor_id"}
+                        else:
+                            if selected:
+                                assert selected == fields, statement
+                if checker:
                     expected = 2 if manager else 1 if routing == "allow_review" else 0
                     assert len(item["results"]) == expected
                     if not manager:
@@ -57,6 +84,7 @@ async def test_fixed_projection_and_selected_columns(task_client, monkeypatch, r
         assert not any(f".{field}" in statement for field in (
             "package_uri", "package_hash", "artifact_hash_manifest", "metadata", "worker_attestation",
             "triggered_by_subject", "triggered_by_issuer", "locked_payment_policy_version",
+            "uri", "hash", "locked_post_submit_checker_policy_body", "passed_count", "warning_count", "failed_count", "blocking_count",
         )), statement
 
 

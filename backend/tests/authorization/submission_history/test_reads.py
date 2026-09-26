@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.core.hashing import canonical_json_hash
 from app.modules.tasks.models import AuditEvent, Submission
+from app.modules.checkers.models import CheckerRun
 from app.modules.authorization.models import ProjectRoleGrant, AdminRoleGrant
 from tests.submission_fixtures import seed_retained_submission, seed_retained_checker_run
 from tests.test_tasks import (
@@ -28,7 +29,7 @@ def history_paths(project, task, submission, run, manager=False):
         "task.submission.list": f"{prefix}/tasks/{task}/submissions",
         "submission.read": f"{prefix}/submissions/{submission}",
         "submission.checker_run.list": f"{prefix}/submissions/{submission}/checker-runs",
-        "checker_run.read": f"{prefix}/checker-runs/{run}",
+        "checker_run.read": f"{prefix}/submissions/{submission}/checker-runs/{run}",
     }
 
 
@@ -55,6 +56,8 @@ async def test_exact_route_action_and_grant(task_client, monkeypatch, audience):
         grant_id = str(await session.scalar(query))
         stored = await session.get(Submission, submission)
         original = {column.name: getattr(stored, column.name) for column in Submission.__table__.columns}
+        stored_run = await session.get(CheckerRun, run)
+        run_original = {column.name: getattr(stored_run, column.name) for column in CheckerRun.__table__.columns}
         prior_audit = {row.id: {column.name: getattr(row, column.name)
                               for column in AuditEvent.__table__.columns}
                        for row in await session.scalars(select(AuditEvent))}
@@ -66,6 +69,16 @@ async def test_exact_route_action_and_grant(task_client, monkeypatch, audience):
         item = value["items"][0] if action.endswith("list") else value
         assert item["task_id"] == task
         assert ("contributor_id" in item) is (manager and action in {"task.submission.list", "submission.read"})
+        persisted = run_original if "checker" in action else original
+        nested = {"results", "evidence_items"}
+        for field, returned in item.items():
+            if field in nested:
+                continue
+            stored_value = persisted[field]
+            if hasattr(stored_value, "isoformat"):
+                assert returned.replace("Z", "+00:00") == stored_value.isoformat()
+            else:
+                assert returned == stored_value, field
         full_action = ("project." if manager else "") + action
         async with db_session.get_session_factory()() as session:
             event = await session.scalar(select(AuditEvent).where(
@@ -148,7 +161,7 @@ async def test_nonhuman_tokens_cannot_enter_history(signed_access, monkeypatch, 
         pytest.fail("nonhuman history request reached an owner")
     monkeypatch.setattr(SubmissionHistoryRepository, "resolve_submission", forbidden)
     monkeypatch.setattr(SubmissionHistoryRepository, "resolve_task_history", forbidden)
-    monkeypatch.setattr(CheckerHistoryRepository, "resolve_run_reference", forbidden)
+    monkeypatch.setattr(CheckerHistoryRepository, "read", forbidden)
     ids = [str(new_record_id()) for _ in range(4)]
     for manager in (False, True):
         for path in history_paths(*ids, manager=manager).values():

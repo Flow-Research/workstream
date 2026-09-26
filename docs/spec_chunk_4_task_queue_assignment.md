@@ -491,7 +491,7 @@ separate internal audit evidence reader remains for its recovery consumers.
 | `GET /tasks/{task_id}/submissions` | `task.submission.list` |
 | `GET /submissions/{submission_id}` | `submission.read` |
 | `GET /submissions/{submission_id}/checker-runs` | `submission.checker_run.list` |
-| `GET /checker-runs/{checker_run_id}` | `checker_run.read` |
+| `GET /submissions/{submission_id}/checker-runs/{checker_run_id}` | `checker_run.read` |
 
 Each has a separate manager path prefixed `/projects/{project_id}` and action
 prefixed `project.`. All paths use `/api/v1`. Contributor access requires current

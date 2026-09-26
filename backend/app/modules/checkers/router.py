@@ -51,30 +51,32 @@ async def read_management_checker_runs(
     )
 
 
-@router.get("/checker-runs/{checker_run_id}", response_model=ContributorCheckerHistory,
+@router.get("/submissions/{submission_id}/checker-runs/{checker_run_id}", response_model=ContributorCheckerHistory,
     dependencies=[Depends(enforce_human_authorization_read)],
     openapi_extra={"x-workstream-action-id": "checker_run.read"},
 )
 async def read_contributor_checker_run(
     checker_run_id: UUID,
+    submission_id: UUID,
     history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
 ) -> ContributorCheckerHistory:
     """Read retained checker run under fresh contributor authority."""
     return await history.read(
-        "checker_run", checker_run_id,
+        "checker_run", checker_run_id, submission_id=submission_id,
     )
 
 
-@router.get("/projects/{project_id}/checker-runs/{checker_run_id}", response_model=ManagementCheckerHistory,
+@router.get("/projects/{project_id}/submissions/{submission_id}/checker-runs/{checker_run_id}", response_model=ManagementCheckerHistory,
     dependencies=[Depends(enforce_human_authorization_read)],
     openapi_extra={"x-workstream-action-id": "project.checker_run.read"},
 )
 async def read_management_checker_run(
     checker_run_id: UUID,
+    submission_id: UUID,
     project_id: UUID,
     history: Annotated[HistoryReadOperation, Depends(get_history_reads)],
 ) -> ManagementCheckerHistory:
     """Read retained checker run under fresh management authority."""
     return await history.read(
-        "checker_run", checker_run_id, project_id=project_id,
+        "checker_run", checker_run_id, submission_id=submission_id, project_id=project_id,
     )

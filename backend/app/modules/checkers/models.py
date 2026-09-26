@@ -104,6 +104,12 @@ class CheckerRun(Base):
             ],
             name="fk_checker_runs_submission_locked_post_submit_policy_hash",
         ),
+        UniqueConstraint("id", "task_id", "submission_id", name="uq_checker_runs_ownership"),
+        ForeignKeyConstraint(
+            ["supersedes_checker_run_id", "task_id", "submission_id"],
+            ["checker_runs.id", "checker_runs.task_id", "checker_runs.submission_id"],
+            name="fk_checker_runs_predecessor_ownership",
+        ),
         UniqueConstraint(
             "submission_id",
             "attempt_number",
@@ -155,7 +161,7 @@ class CheckerRun(Base):
     audit_event_id: Mapped[str | None] = mapped_column(ForeignKey("audit_events.id"), index=True)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
     supersedes_checker_run_id: Mapped[str | None] = mapped_column(
-        ForeignKey("checker_runs.id"),
+        Uuid(as_uuid=False),
         index=True,
     )
     is_current_for_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -190,7 +196,7 @@ class CheckerRun(Base):
 
     results: Mapped[list[CheckerResult]] = relationship(
         back_populates="checker_run",
-        cascade="all, delete-orphan",
+        cascade="save-update, merge",
     )
 
 
@@ -198,20 +204,19 @@ class CheckerResult(Base):
     """One immutable checker result produced inside a durable checker run."""
 
     __tablename__ = "checker_results"
-    __table_args__ = (CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),)
+    __table_args__ = (
+        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        ForeignKeyConstraint(
+            ["checker_run_id", "task_id", "submission_id"],
+            ["checker_runs.id", "checker_runs.task_id", "checker_runs.submission_id"],
+            name="fk_checker_results_run_ownership",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
-    checker_run_id: Mapped[str] = mapped_column(
-        ForeignKey("checker_runs.id"),
-        nullable=False,
-        index=True,
-    )
-    task_id: Mapped[str] = mapped_column(
-        ForeignKey("workstream_tasks.id"), nullable=False, index=True
-    )
-    submission_id: Mapped[str] = mapped_column(
-        ForeignKey("submissions.id"), nullable=False, index=True
-    )
+    checker_run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    task_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
+    submission_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, index=True)
     checker_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     severity: Mapped[str] = mapped_column(String(30), nullable=False)

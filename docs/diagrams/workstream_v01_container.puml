@@ -1,5 +1,5 @@
 @startuml workstream_v01_container
-title Workstream v0.1 Container View
+title Workstream v0.1 Target Container View
 
 left to right direction
 
@@ -70,5 +70,11 @@ jobs --> checker : run checks
 checker --> postgres : results
 checker --> storage_adapter : materialize exact artifacts
 storage_adapter --> file_store : store/read
+
+legend bottom
+  Canonical retained-history reads are delivered.
+  Durable post-submit execution, routing and recovery are unavailable.
+  Checker/job relationships below describe target integration.
+endlegend
 
 @enduml

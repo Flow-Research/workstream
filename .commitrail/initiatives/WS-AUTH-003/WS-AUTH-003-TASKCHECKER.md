@@ -34,7 +34,7 @@ wrapper would preserve the superseded implementation.
   application adapters; CHECKERS retained-run/result history, public contracts,
   routes/repository and obsolete service/queue/worker removal.
 - AUTH exact history actions, resource facts, staged read decisions and existing
-  project authority dispatch; one forward additive audit-constraint migration.
+  project authority dispatch; the unmerged forward audit/custody migration and matching schema inventory.
 - Authentication result/verifier/dependency removal of token-role compatibility;
   ACTORS removal of the unused compatibility writer and its dead helpers.
 - Dead requester/system-actor helpers, obsolete worker registration/configuration
@@ -145,11 +145,11 @@ Project Manager authority, never platform-admin status or token roles.
 | `/tasks/{task_id}/submissions` | `task.submission.list` | task_submission_history / task |
 | `/submissions/{submission_id}` | `submission.read` | submission_history / submission |
 | `/submissions/{submission_id}/checker-runs` | `submission.checker_run.list` | submission_history / submission |
-| `/checker-runs/{checker_run_id}` | `checker_run.read` | checker_history / run |
+| `/submissions/{submission_id}/checker-runs/{checker_run_id}` | `checker_run.read` | checker_history / run |
 | `/projects/{project_id}/tasks/{task_id}/submissions` | `project.task.submission.list` | task_submission_history / task |
 | `/projects/{project_id}/submissions/{submission_id}` | `project.submission.read` | submission_history / submission |
 | `/projects/{project_id}/submissions/{submission_id}/checker-runs` | `project.submission.checker_run.list` | submission_history / submission |
-| `/projects/{project_id}/checker-runs/{checker_run_id}` | `project.checker_run.read` | checker_history / run |
+| `/projects/{project_id}/submissions/{submission_id}/checker-runs/{checker_run_id}` | `project.checker_run.read` | checker_history / run |
 
 TASK owns immutable submission target/ownership facts and its public read port.
 CHECKERS owns retained run/result queries and projections. Application
@@ -378,3 +378,44 @@ Exact API and active-action inventories also include the eight history actions.
 set. The OpenAPI inventory preserves every unaffected route and explicitly binds
 the eight GETs, adds four manager reads and removes the two obsolete POSTs;
 counts and protected-route hashes change only for that declared delta.
+
+## Retained-history custody repair
+
+The review reproduced coherent reassignment of a run/result to another valid
+submission: foreign keys alone do not make ownership immutable. Extend the
+unmerged migration with parent-first table locking, exact run/result ownership
+constraints, immutable run identity/locked-input guards and append-only result
+guards. Refuse inconsistent retained rows without rewriting or deleting data.
+Run currentness and operational completion fields remain mutable; retained
+identity, predecessor, locked policies and artifact inputs do not. Protect deletion
+and truncation as well as updates. Match ORM constraints and schema fingerprints.
+
+Replace unscoped run detail routes with submission-qualified routes above. TASK
+resolves the authorized parent before CHECKERS queries; the final query binds run,
+submission and task. Remove the unscoped reference reader and unused submission
+finalization helper. Add actual typed TASK/CHECKERS read ports used by composition,
+without adding cross-owner private imports or a parallel resolver.
+
+Replacement proofs must exercise coherent owner substitutions, result insertion
+with mismatched parents, rollback, deletion/truncation, valid currentness changes,
+and guard-removal mutations. Assert exact response field inventories, SQL omission
+of evidence storage coordinates/hashes, policy bodies and aggregate counts, and
+returned versions/predecessors/locked lineage against persisted facts. Test foreign
+parent denial before CHECKERS entry and mismatched run/parent concealment.
+
+Update the current HTML walkthrough and linked architecture brief, including its
+rendered assets, to distinguish delivered history from unavailable canonical
+post-submit execution/routing/recovery. These affected docs and schema inventories
+are allowed paths. No AUTH-18 implementation or execution activation is included.
+Existing L1 review tracks and exact-head hosted verification remain required.
+
+The exact custody contract uses unique run `(id, task_id, submission_id)` with
+composite result and predecessor foreign keys. Run mutable fields are status,
+routing_recommendation, outcome_source, passed_count, warning_count,
+failed_count, blocking_count, started_at, completed_at, failure_code, failure_message;
+audit_event_id may be filled once and currentness may move only true to false.
+All remaining run fields are immutable, including trigger attribution, queued/created
+times, locked policies and artifact inputs. Results are insert-only. Deletion and
+truncation fail independently of foreign keys. Migration locks audit_events then
+checker_runs then checker_results before preflight and DDL; already-immutable
+Submission custody is unchanged. The existing unmerged 0006 is extended.

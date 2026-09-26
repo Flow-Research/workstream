@@ -2,8 +2,6 @@
 
 from sqlalchemy import select, tuple_
 
-from uuid import UUID
-from app.modules.checkers.api.history import CheckerHistoryReference
 from app.modules.checkers.models import CheckerRun, CheckerResult
 from app.modules.checkers.api.history import (
     ContributorCheckerHistory, ManagementCheckerHistory,
@@ -14,14 +12,6 @@ from app.modules.checkers.api.history import (
 class CheckerHistoryRepository:
     def __init__(self, session):
         self._session = session
-
-    async def resolve_run_reference(self, run_id):
-        row = (await self._session.execute(select(
-            CheckerRun.id, CheckerRun.submission_id, CheckerRun.task_id,
-        ).where(CheckerRun.id == str(run_id)))).one_or_none()
-        if row is None:
-            return None
-        return CheckerHistoryReference(UUID(str(row.id)), UUID(str(row.task_id)), UUID(str(row.submission_id)))
 
     async def read(self, *, submission_id, task_id, manager, run_id=None, limit=25, after=None):
         schema = ManagementCheckerHistory if manager else ContributorCheckerHistory

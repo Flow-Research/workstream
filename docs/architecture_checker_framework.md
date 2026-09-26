@@ -730,8 +730,10 @@ not register implementations or bypass required gaps.
 
 ## Retained history reads
 
-CHECKERS selects fixed run/result columns and obtains immutable Submission
-ownership through TASK's public history port. Contributor reads require current
+Application composition first resolves immutable Submission ownership through
+TASK's typed public read port, then queries CHECKERS through its typed read port.
+Detail routes include the parent Submission; CHECKERS selects fixed columns using
+the exact run, Submission and task together. Contributor reads require current
 Submitter authority for the original Submission contributor, not today's assignee.
 Separate Project Manager reads expose internal result summaries and locked lineage,
 without raw metadata, provider locations, token claims or obsolete payment fields.

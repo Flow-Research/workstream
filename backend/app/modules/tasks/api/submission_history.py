@@ -96,3 +96,23 @@ class ManagementSubmissionHistoryPage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     items: list[ManagementSubmissionHistory]
     next_cursor: str | None
+
+
+class SubmissionHistoryReadPort(Protocol):
+    """TASK selects ownership before projection; the caller owns the transaction."""
+
+    async def resolve_submission(
+        self, submission_id: UUID, *, project_id: UUID | None, contributor_id: UUID | None,
+    ) -> SubmissionHistoryTarget | None: ...
+
+    async def resolve_task_history(
+        self, task_id: UUID, *, project_id: UUID | None, contributor_id: UUID | None,
+    ) -> SubmissionHistoryTarget | None: ...
+
+    async def lock_history_task(self, target: SubmissionHistoryTarget) -> bool: ...
+
+    async def read(
+        self, target: SubmissionHistoryTarget, *, manager: bool,
+        submission_id: UUID | None = None, limit: int = 25,
+        after: tuple[int, UUID] | None = None,
+    ) -> tuple[list[ContributorSubmissionHistory | ManagementSubmissionHistory], bool]: ...

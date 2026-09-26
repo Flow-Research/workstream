@@ -27,13 +27,14 @@ context, every Submission immutable artifact lineage, every valid human
 decision an attributable Review and reviewer contribution, and every accepted
 task an immutable FinalAcceptance before the submitter contribution.
 
-The following sequence and existing lifecycle diagrams depict the human-review
-branch. The versioned `human_review_required` defaults true in the existing locked
+The diagrams depict target architecture, not a fully connected live lifecycle.
+Canonical retained submission/checker history is delivered. Post-submit execution,
+routing and recovery are unavailable; their removed execution and repair paths are
+not alternatives. The lifecycle sequence depicts the planned human-review branch. The versioned `human_review_required` defaults true in the existing locked
 ReviewPolicy; false uses an authorized automated acceptance source and shared
 CON participant without a reviewer contribution. That runtime remains pending,
 not enabled by checker success alone. The [product-builder handoff](../../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next)
-describes the delivered setting; this source supersedes the older human-only PDF
-snapshot for that amendment.
+describes the delivered setting; the PDF and source present the same current boundary.
 
 v0.1 is focused on proving the internal lifecycle:
 
@@ -108,7 +109,7 @@ systems, or other uses of the resulting contribution facts.
 
 ## C2: v0.1 Container View
 
-The container view shows the bounded v0.1 implementation. It is intentionally
+The container view shows the bounded v0.1 target architecture. It is intentionally
 small: React + Vite for the planned internal operations UI, FastAPI for the
 backend, Postgres for records, a storage interface for artifacts, and an async
 checker/job boundary.
@@ -125,8 +126,8 @@ checker/job boundary.
 | --- | --- |
 | React + Vite operations UI | Planned internal operations dashboard for project, task, submission, review, and compensation fulfillment workflows. Reputation UI remains deferred. |
 | FastAPI backend | API contracts, workflow rules, auth dependency, lifecycle guards, module orchestration, and audit writes. |
-| Celery worker boundary | Durable project setup, checker, and background product-job execution. FastAPI background tasks are not the Workstream product-job boundary. |
-| Checker runner | Executes automated checks and stores checker results. |
+| Celery worker boundary | Durable project setup and registered background jobs; checker execution is a target boundary. FastAPI background tasks are not the Workstream product-job boundary. |
+| CHECKERS | Delivered retained-history reads; durable post-submit execution, routing and recovery remain unavailable. |
 | Storage interface | Keeps file/evidence semantics stable while local storage and the hosted AWS S3 profile implement the same provider-neutral port. |
 | Postgres | Durable record database for the full Workstream lifecycle. |
 
@@ -146,7 +147,7 @@ The backend component view zooms into the FastAPI container. It shows how the mo
 
 | Boundary | Responsibility |
 | --- | --- |
-| HTTP + auth boundary | Routers handle HTTP only. Actor resolution, permission checks, and Pydantic request/response validation stay at the boundary. |
+| HTTP + AUTH boundary | Flow verifies authentication; canonical AUTH owns decisions using live exact grants and server-loaded facts. The caller transaction atomically commits effects and AUTH evidence. |
 | Workflow services | Project guide, task queue, submission, checker, review/revision, and contribution/compensation services own business rules; reputation remains deferred. |
 | Shared domain rules | Lifecycle guards and audit writes stay shared instead of being scattered through routers. |
 | Persistence boundary | Repositories own SQLAlchemy async persistence and Postgres access. |
@@ -156,7 +157,9 @@ The backend component view zooms into the FastAPI container. It shows how the mo
 
 ## Lifecycle Sequence
 
-The sequence below shows the narrow v0.1 loop the system must prove before expansion.
+The sequence below shows the target v0.1 loop. Public guide activation and canonical
+post-submit execution/recovery remain pending. Retained history does not execute
+checkers or authorize acceptance.
 
 <div class="diagram sequence">
   <img src="images/task_lifecycle_sequence.png" alt="Workstream task lifecycle sequence diagram" />

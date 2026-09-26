@@ -18,11 +18,11 @@ from app.core.hashing import canonical_json_hash
 from app.db.session import get_db_session
 from app.modules.authorization.api import ActorIdentityFacts
 from app.adapters.auth import history_read_authorization
-from app.modules.tasks.api.submission_history import HistoryReadAuthorityFacts, HistoryReadAuthorityPort
+from app.modules.tasks.api.submission_history import HistoryReadAuthorityFacts, HistoryReadAuthorityPort, SubmissionHistoryReadPort
 from app.adapters.tasks import submission_history_repository
 from app.modules.tasks.api.submission_history import ContributorSubmissionHistoryPage, ManagementSubmissionHistoryPage
 from app.adapters.checkers import checker_history_repository
-from app.modules.checkers.api.history import ContributorCheckerHistoryPage, ManagementCheckerHistoryPage
+from app.modules.checkers.api.history import ContributorCheckerHistoryPage, ManagementCheckerHistoryPage, CheckerHistoryReadPort
 
 
 class _HistoryCursor(BaseModel):
@@ -91,22 +91,14 @@ def _missing():
 class HistoryReadOperation:
     """Resolve exact ownership, lock TASK then AUTH, validate projection then commit."""
 
-    def __init__(self, session, actor_id, authority: HistoryReadAuthorityPort, submissions, checkers):
+    def __init__(self, session: AsyncSession, actor_id: UUID, authority: HistoryReadAuthorityPort,
+                 submissions: SubmissionHistoryReadPort, checkers: CheckerHistoryReadPort):
         self._session, self._actor_id, self._authority = session, actor_id, authority
         self._submissions, self._checkers = submissions, checkers
 
-    async def _resolve_checker_owner(self, run_id, *, project_id, contributor_id):
-        reference = await self._checkers.resolve_run_reference(run_id)
-        if reference is None:
-            return None
-        target = await self._submissions.resolve_submission(
-            reference.submission_id, project_id=project_id, contributor_id=contributor_id,
-        )
-        return target if target is not None and target.task_id == reference.task_id else None
-
     async def read(
         self, kind: Literal["submissions", "submission", "checker_runs", "checker_run"],
-        resource_id: UUID, *, project_id: UUID | None = None, limit: int = 25, cursor: str | None = None,
+        resource_id: UUID, *, submission_id: UUID | None = None, project_id: UUID | None = None, limit: int = 25, cursor: str | None = None,
     ):
         manager = project_id is not None
         action = ("project." if manager else "") + {
@@ -119,17 +111,20 @@ class HistoryReadOperation:
         selectors = {"project_id": project_id, "contributor_id": None if manager else self._actor_id}
         resolve = (
             self._submissions.resolve_task_history if kind == "submissions" else
-            self._resolve_checker_owner if kind == "checker_run" else self._submissions.resolve_submission
+            self._submissions.resolve_submission
         )
+        parent_id = submission_id if kind == "checker_run" else resource_id
+        if parent_id is None:
+            raise _missing()
         try:
-            target = await resolve(resource_id, **selectors)
+            target = await resolve(parent_id, **selectors)
             if target is None:
                 raise _missing()
             if after is not None and after.project_id != target.project_id:
                 raise HTTPException(422, "Invalid history cursor")
             if not await self._submissions.lock_history_task(target):
                 raise _missing()
-            if await resolve(resource_id, **selectors) != target:
+            if await resolve(parent_id, **selectors) != target:
                 raise _missing()
             await self._authority.require_history(HistoryReadAuthorityFacts(
                 action=action, resource_type=(

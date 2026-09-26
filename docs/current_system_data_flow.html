@@ -408,16 +408,16 @@
   <main>
     <section class="hero">
       <p class="eyebrow">Current backend system only</p>
-      <h1>Workstream data flow from project guide to checker-routed submission</h1>
+      <h1>Workstream guide, task and retained submission history</h1>
       <p class="intro">
         This is a static walkthrough of the product flow with the adopted authorization target: external Flow authentication,
         project guides, locked policy context, task queue, submission packets, evidence,
-        automatic checker runs, audit records, and the current end states before human review.
+        retained checker history and authorization evidence. Canonical post-submit execution, routing and recovery are unavailable.
       </p>
       <div class="legend" aria-label="Legend">
         <span class="api">API boundary</span>
         <span class="db">Postgres record</span>
-        <span class="checker">Checker runner</span>
+        <span class="checker">Retained checker history</span>
         <span class="contributor">Contributor-facing route</span>
         <span class="blocked">Internal setup route</span>
       </div>
@@ -445,8 +445,8 @@
               <small>Owns lifecycle rules, API contracts, and object-level visibility.</small>
             </div>
             <div class="actor">
-              <strong>Checker Runner</strong>
-              <small>Runs registered checkers after submission finalization and records results.</small>
+              <strong>Checker History</strong>
+              <small>Reads retained findings through fresh canonical authorization; no execution or retry endpoint.</small>
             </div>
             <div class="actor">
               <strong>Postgres</strong>
@@ -536,7 +536,7 @@
 
             <article class="step">
               <span class="num">8</span>
-              <h3>Submission consumes the admission</h3>
+              <h3>Hidden Submission creation consumes admission</h3>
               <p>Under fresh human and fixed-service authority, one transaction locks the ready admission and task context, creates the immutable Submission and exact artifact binding, and marks the admission consumed.</p>
               <div class="data">
                 <code>Submission v1</code>
@@ -547,19 +547,19 @@
 
             <article class="step">
               <span class="num">9</span>
-              <h3>Automatic checkers execute</h3>
-              <p>Registered post-submit checkers materialize and rehash the exact immutable Submission binding, manifest, and locked policy context.</p>
+              <h3>Retained checker history is inspectable</h3>
+              <p>Contributor reads first resolve the owned immutable Submission. Separate Project Manager reads bind the exact project. Checker detail then selects the run within that Submission and task; retained run/result ownership cannot be reassigned.</p>
               <div class="data">
                 <code>CheckerRun</code>
                 <code>CheckerResult</code>
-                <code>attempt=1</code>
+                <code>immutable ownership</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">10</span>
-              <h3>Checker routing and lifecycle boundary</h3>
-              <p>The checker reports <code>allow_review</code> for passing work; this can move the task toward <code>review_pending</code>. It reports <code>needs_revision</code> for contributor-fixable failures and recommends <code>task_setup_blocked</code> for locked setup defects. A live review queue is not implied.</p>
+              <h3>Post-submit execution remains unavailable</h3>
+              <p>Stored routing recommendations are historical evidence. The removed execution and gate-repair paths do not run, route work or retry. Canonical execution and recovery require their separate exact-authority and durable-result implementation.</p>
               <div class="data">
                 <code>review_pending</code>
                 <code>needs_revision</code>
@@ -570,19 +570,19 @@
         </section>
 
         <section class="section" aria-labelledby="outcome-title" style="margin-top:18px">
-          <h2 id="outcome-title">Current End Of The Flow</h2>
+          <h2 id="outcome-title">Planned Post-Submit Outcomes — Unavailable</h2>
           <div class="outcomes">
             <div class="outcome good">
               <strong>review_pending</strong>
-              <p>All blocking post-submit checker policy requirements pass. The task reaches the review-pending boundary; the authorized human-review lifecycle consumes it when that lifecycle is available.</p>
+              <p>Target: passing required evaluation supplies evidence for policy-governed routing. History reads do not perform this transition.</p>
             </div>
             <div class="outcome revise">
               <strong>needs_revision</strong>
-              <p>Contributor-fixable checker failures are shown with safe feedback. This is not a human review decision.</p>
+              <p>Target: contributor-fixable findings inform the governed revision flow. Retained safe feedback remains readable; history reads do not start revisions.</p>
             </div>
             <div class="outcome blocked">
               <strong>task_setup_blocked</strong>
-              <p>Internal setup defect. Project managers repair the task or guide context, then run trusted checker retry.</p>
+              <p>Target: exact-authority recovery handles setup defects. Canonical checker retry and gate repair are unavailable.</p>
             </div>
           </div>
         </section>
@@ -608,11 +608,11 @@
             </div>
             <div class="record">
               <strong>Audit Events</strong>
-              <span>Task creation, status changes, admission publication/consumption, checker gate start/pass/block.</span>
+              <span>Task creation, status changes, admission publication/consumption, and fresh history-read AUTH decisions.</span>
             </div>
             <div class="record">
               <strong>Visibility Rules</strong>
-              <span>Project managers see project scope; contributors see assigned scope; unassigned contributors are blocked after claim.</span>
+              <span>History ownership follows the immutable Submission contributor, not the current assignee. Each page requires a live exact project grant. Management uses a separate fixed projection.</span>
             </div>
             <div class="record">
               <strong>Auth Boundary</strong>
@@ -636,18 +636,18 @@
           <li>Submission creation consumes one verified ready admission against the task's server-owned guide and policy context.</li>
           <li>Pre-submit evidence binds to the same manifest and admission.</li>
           <li>Checker runs bind to the immutable Submission, ArtifactBinding, ArtifactContent, and server-generated manifest identities.</li>
-          <li>Duplicate checker results fail the real API drill.</li>
+          <li>Run/result ownership and locked inputs cannot be rebound; result rows cannot be updated, deleted or truncated.</li>
           <li>Contributor-facing review decisions stay accept, needs_revision, and reject.</li>
         </ul>
 
         <div class="mini-flow">
-          <div><strong>Clean path:</strong> active guide -&gt; ready task -&gt; verified admission -&gt; immutable submission -&gt; checker pass -&gt; review_pending.</div>
-          <div><strong>Contributor-fix path:</strong> checker failure -&gt; needs_revision -&gt; new submission version.</div>
-          <div><strong>Setup-defect path:</strong> task_setup_blocked -&gt; project manager repair -&gt; trusted checker retry.</div>
+          <div><strong>Delivered foundations:</strong> guide/task policy lineage, hidden verified intake and immutable submission creation, authorized retained history.</div>
+          <div><strong>Unavailable integration:</strong> canonical post-submit execution and routing.</div>
+          <div><strong>Unavailable recovery:</strong> checker retry and gate repair.</div>
         </div>
 
         <p class="footer-note">
-          This file explains the current backend evaluation flow through checker routing. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
+          This file distinguishes delivered history inspection from planned evaluation. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
         </p>
       </aside>
     </div>
