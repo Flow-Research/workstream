@@ -46,7 +46,7 @@ bounded change, not a reason to expose an unusable activation POST first.
   proof references that name the obsolete hidden-route test; API drill may exercise this policy workflow without claiming
   full public activation. Retain existing CON behavior and binding proof.
 - README, canonical contribution specification, operating manual, roadmap and
-  current ARCH/CON navigation and authorization activation-custody prose; this record; local sheet exports only if present.
+  current ARCH/AUTH/CON/POL navigation and authorization activation-custody prose; this record; local sheet exports only if present.
 
 ### Not allowed
 
@@ -291,3 +291,13 @@ project-role proof decomposition, behavior-based CI policy, and structural
 ledger reductions. CP05A's four public test modules remain selected alongside
 main's added project-role modules; its kernel reduction remains in the combined
 ledger. Public capability and next-boundary wording remains unchanged.
+
+
+External documentation review corrected the AUTH, CON and POL overview navigation:
+CP05A delivers public Finance policy administration; manager activation context
+and public guide activation are next, followed by approved-guide intake. The
+README distinguishes AUTH decision ownership from the CON caller transaction's
+atomic policy, AUTH-evidence and replay commit, and describes discovery as a draft
+selector, a published selector, or both. The roadmap already states this outcome
+and sequence, so this correction requires no additional roadmap edit. Runtime
+code, tests and authorization behavior are unchanged.

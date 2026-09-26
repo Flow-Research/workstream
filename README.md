@@ -571,9 +571,11 @@ service. That service's `evaluate_post_submission` uses
 boundaries land. Finance Authority can publicly discover, create, update, publish,
 read and retire a project's ContributionPolicy under
 `/api/v1/projects/{project_id}/contribution-policies`. The current-policy read
-recovers draft and published version IDs for another authorized Finance actor.
-Each mutation requires one UUID `Idempotency-Key`; the authenticated actor and
-existing CON transaction own authorization and immutable replay. Both contribution
+recovers a draft selector, a published selector, or both for another authorized
+Finance actor.
+Each mutation requires one UUID `Idempotency-Key`. AUTH owns the authorization
+decision for the authenticated actor; the CON caller transaction atomically commits
+policy effects, AUTH evidence and immutable replay custody. Both contribution
 types must explicitly declare compensated or unpaid rules. Unpaid publication
 needs no compensation binding; compensated rules retain verified binding checks.
 Project Managers do not acquire Finance powers. Public compensation-binding

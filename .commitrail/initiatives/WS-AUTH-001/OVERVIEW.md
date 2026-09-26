@@ -12,8 +12,9 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Intent: provide deny-default, project-scoped authority with canonical human
   and service identities and attributable audit evidence.
 - Current boundary: hidden projections and atomic setup finalization have exact
-  request-local authority through AUTH-12J and AUTH-12B2; the five hidden
-  ContributionPolicy actions have exact Finance Authority through CP05.
+  request-local authority through AUTH-12J and AUTH-12B2; the five
+  ContributionPolicy actions have exact Finance Authority through CP05 and public
+  administration through CP05A.
 - Completed proposal boundary: AUTH-12F4 exact-project manager read, correction
   and pre-submit approval authority over hidden POL-05A behavior.
 - Completed post-policy boundary: AUTH-12G fixed setup derivation and exact-project
@@ -21,7 +22,13 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Public post-policy composition: POL-06B delivered using existing AUTH-12G.
 - Completed activation boundary: AUTH-12H exact-project manager authority for
   CP07 complete-guide activation/binding, with live-authority replay.
-- Next usable boundary: bounded public task activation.
+- Next usable boundary: manager activation context and public guide activation,
+  then approved-guide intake integration.
+  [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md) delivers public Finance
+  ContributionPolicy administration and recovery of a draft selector, a published
+  selector, or both. ARCH-03C3 through ARCH-03C7 deliver public task readiness,
+  queues, detail/requirements, locked context and audit history.
+  Completed foundations:
   [ARCH-03C2](../WS-ARCH-001/WS-ARCH-001-03C2.md) supplies atomic publication and
   registered assignment delivery with enforced prefork topology. ARCH-03C1 supplies exact fixed-service
   reconciliation authority and decision-bound release receipts. ARCH-03B9 supplies the

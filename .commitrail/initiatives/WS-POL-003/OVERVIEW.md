@@ -27,7 +27,13 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   Production post-submit phase execution remains unavailable.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
-- Next usable boundary: bounded public task activation. ARCH-03C2 supplies
+- Next usable boundary: manager activation context and public guide activation,
+  then approved-guide intake integration.
+  [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md) delivers public Finance
+  ContributionPolicy administration and recovery of a draft selector, a published
+  selector, or both. ARCH-03C3 through ARCH-03C7 deliver public task readiness,
+  queues, detail/requirements, locked context and audit history.
+  Completed foundations: ARCH-03C2 supplies
   atomic publication and registered assignment delivery with enforced prefork. ARCH-03C1 supplies exact fixed-service
   reconciliation authority and decision-bound release receipts. ARCH-03B9 supplies the
   hidden exact-assignment operation and transaction fence. AUTH-OUTBOX-02 delivers
