@@ -178,7 +178,7 @@ cannot be reused as post-submission review-gate evidence. See the
   skipped/deselected tests and requires behavior, boundary and real API proof.
   Coverage is diagnostic only, with no percentage gate or test-count target.
   Redundant coverage-only reruns are removed; their tests remain in full-suite lanes.
-  Its eight-lane allocation uses three project lanes, two task lanes, two
+  Its nine-lane allocation uses three project lanes, three task lanes, two
   shared-foundation lanes and one schema lane. Database resets batch trigger
   commands within the existing transaction while retaining full schema checks;
   authorization preflight runs alongside lanes and remains mandatory at fan-in.

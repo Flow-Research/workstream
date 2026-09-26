@@ -192,6 +192,7 @@ def test_minio_probe_cleans_up_and_preserves_async_cancellation(
         ("project_lifecycle_c", "workstream-ci-project-lifecycle-c-012345abcdef"),
         ("task_lifecycle_a", "workstream-ci-task-lifecycle-a-012345abcdef"),
         ("task_lifecycle_b", "workstream-ci-task-lifecycle-b-012345abcdef"),
+        ("task_lifecycle_c", "workstream-ci-task-lifecycle-c-012345abcdef"),
     ],
 )
 def test_committed_lane_buckets_use_validator_compatible_s3_grammar(
@@ -219,10 +220,11 @@ def test_lane_namespaces_do_not_collide_across_lanes_or_runner_suffixes() -> Non
             "project_lifecycle_c",
             "task_lifecycle_a",
             "task_lifecycle_b",
+            "task_lifecycle_c",
         )
         for suffix in ("012345abcdef", "fedcba543210")
     }
-    assert len(namespaces) == 16
+    assert len(namespaces) == 18
     with pytest.raises(runner.RunnerError, match="invalid_lane"):
         runner._minio_namespace("project_lifecycle", "not-hex")
     with pytest.raises(runner.RunnerError, match="invalid_minio_namespace"):

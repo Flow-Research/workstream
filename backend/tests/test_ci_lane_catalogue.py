@@ -24,7 +24,7 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 8
+    assert len(LANES) == 9
     assert all(lane.requires_postgres for lane in LANES)
     assert Counter(assigned)[catalogue.SCHEMA_MODULE] == 1
     assert all(
@@ -165,6 +165,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     assert (
         modules_by_lane["task_lifecycle_a"]
         == modules_by_lane["task_lifecycle_b"]
+        == modules_by_lane["task_lifecycle_c"]
         == {
             "tests/tasks/test_contribution_lineage.py",
             "tests/tasks/test_project_display.py",
@@ -401,15 +402,15 @@ def test_task_nodes_have_one_partition_owner() -> None:
         name: {row["nodeid"] for row in first["nodes"] if row["lane"] == name}
         for name in catalogue.PARTITIONED_TASK_LANES
     }
-    left, right = partitions.values()
-    assert left and right and not left.intersection(right)
-    assert left | right == set(nodes)
+    assert all(partitions.values())
+    owners = Counter(node for partition in partitions.values() for node in partition)
+    assert owners == Counter(nodes)
     assert len(first["nodes"]) == len(nodes)
     assert [row["nodeid"] for row in first["nodes"]] == sorted(nodes)
 
 
 @pytest.mark.parametrize("missing", catalogue.PARTITIONED_TASK_LANES)
-def test_either_missing_task_partition_rejects_inventory(missing) -> None:
+def test_any_missing_task_partition_rejects_inventory(missing) -> None:
     lanes = tuple(lane for lane in LANES if lane.name != missing)
     with pytest.raises(LaneError, match="invalid_lane_names"):
         runner.validate_lane_inventory(runner.discover_test_modules(), lanes=lanes)
@@ -551,8 +552,8 @@ def test_workflow_lane_inventory_matches_catalogue() -> None:
     assert source.count("path: backend/.ci/download\n          merge-multiple: false") == 1
     assert '--expected-head "${GITHUB_SHA}"' in source
     assert '--run-attempt "${GITHUB_RUN_ATTEMPT}"' in source
-    assert 'test "${#coverage_files[@]}" -eq 8' in source
-    assert "len(lanes) != 8" in source
+    assert 'test "${#coverage_files[@]}" -eq 9' in source
+    assert "len(lanes) != 9" in source
     assert 'Path(".ci/download"), expected_head, int(os.environ["GITHUB_RUN_ATTEMPT"])' in source
     assert 'timing_path = bundle / "job-start-epoch.txt"' in source
     assert (

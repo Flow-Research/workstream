@@ -306,3 +306,38 @@ code, tests and authorization behavior are unchanged.
 The README and authorization operating manual also distinguish delivered CP08
 Task/Assignment/Submission lineage from the remaining public activation and
 approved-guide intake integration.
+
+## CI completion repair
+
+The user authorized repairing the repeated TASK lane timeout in this PR. The
+two-part TASK partition exhausted the unchanged 1,200-second execution budget at
+different late-suite points (598/614 and 596/614 completed), without an assertion
+failure. The same tests previously completed in 801 seconds. This supports
+insufficient partition headroom, not a demonstrated product deadlock.
+
+Plan: extend the existing deterministic TASK node partition from two lanes to
+three. Reuse the existing catalogue, isolated runner, matrix and aggregate; do not
+add a scheduler or change test fixtures. Every canonical node must still execute
+exactly once, with independent database/role/MinIO custody per lane.
+
+Allowed repair files: `backend/scripts/test_lane_catalogue.py`,
+`.github/workflows/backend.yml`, `backend/tests/test_ci_lane_catalogue.py`,
+`backend/tests/test_test_lane_evidence.py`, `backend/tests/test_ci_test_lanes.py`,
+`scripts/test_lightweight_agent_gates.py`, `docs/operations_backend_testing.md`,
+`backend/scripts/validate_test_lane_evidence.py`,
+`backend/tests/test_isolated_database_runner.py`, `docs/roadmap_status.md`,
+and this record. Prohibited: product code, assertion weakening, skips, timeout
+increases, coverage/gate relaxation, altered database durability or reset rules.
+Risk: L1 CI evidence integrity. Reviewers: CI integrity and QA/test delta; focused
+documentation review for the changed operational instructions. Human focus:
+complete node-set preservation and all nine lane artifacts required by aggregate.
+
+Acceptance and verification: preserve the old canonical manifest's node union
+while assigning each TASK node to exactly one of three nonempty partitions; prove
+each missing partition is rejected, all nine artifacts are required and existing
+partial-retry validation remains intact. Run catalogue/runner/evidence/aggregate
+regressions, lightweight gate tests, links/stale wording and Commitrail checks;
+then require exact-head hosted completion of every canonical test and the API
+contract drill. Reconcile the roadmap's CI allocation from eight to nine lanes; CP05A's
+product outcome and next boundary remain unchanged. No local sheet exports
+are present.
