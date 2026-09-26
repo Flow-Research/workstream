@@ -12,7 +12,7 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   changed-line-aware mutation enforcement.
 - Governing sources: `.ci/behavior-ownership/`, backend scripts, tests, and
   `CONTRIBUTING.md`.
-- Preserve: current coverage floors; candidate output remains advisory;
+- Preserve: meaningful behavior and real integration proof; candidate output remains advisory;
   unchanged executable lines cannot block declaration-only changes.
 
 ## Delivered and remaining
@@ -21,5 +21,5 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   fail-closed validation, and local digest-bound coverage-context evidence are
   merged; hosted mutation enforcement remains retired.
 - Populate ownership records by subsystem before enabling completeness or
-  changed-line mutation checks. Backend semantic lanes and the 78/90 percent
-  coverage floors remain authoritative meanwhile.
+  changed-line mutation checks. Backend semantic lanes remain authoritative;
+  [coverage is diagnostic only](../WS-QUAL-003/WS-QUAL-003-16.md).

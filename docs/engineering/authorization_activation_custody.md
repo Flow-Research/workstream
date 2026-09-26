@@ -216,8 +216,9 @@ An activation entry in this map is a non-executable placeholder until that
 manifest exists. Its later preimplementation contract must enumerate exact
 allowed feature files, route/command and transaction tests, generated manifest
 delta, allow/deny/revalidation/rollback matrix, PostgreSQL concurrency cases,
-focused coverage commands for every changed subsystem at 90 percent or higher,
-and the full backend suite preserving the global 78 percent floor. Generic “as
+focused behavior regressions for every changed boundary,
+and the full backend suite with complete execution evidence. Coverage percentages
+are diagnostic, not activation or merge criteria. Generic “as
 applicable” proof or AUTH-only tests cannot authorize activation.
 
 `WS-ARCH-001-CP03` is split/non-executable. CP03A is the prerequisite executable

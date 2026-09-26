@@ -1574,16 +1574,13 @@ initiative and requires a separately planned egress capability.
   denied delete/admin actions, AWS public-access controls, lifecycle safety,
   and anonymous-read denial are covered by deployment proof;
 - cross-resource authorization and secret non-retention are covered;
-- new or materially changed backend subsystems remain at least 90 percent
-  covered and repository coverage does not fall below the current baseline;
-- backend CI runs the single exact full-suite 78 percent repository command,
-  then applies stable dedicated 90 percent `coverage report` steps separately
-  to every accumulated changed subsystem using the full suite's coverage data.
-  This avoids freezing partial test lists while later chunks expand a package;
-- independently executable services/examples retain their own exact 90 percent
-  test-and-coverage steps. CI integrity review confirms that the expected
-  unconditional steps occur in the backend `test` job after the full-suite test
-  step, without bypasses;
+- changed behavior has discriminating regression tests at its real boundary;
+  coverage percentages are diagnostic only, not global or per-subsystem gates;
+- backend CI executes and reconciles the full suite exactly once across its
+  semantic lanes, preserving real PostgreSQL/S3 proof and failure propagation;
+- independently executable services/examples retain their behavioral and
+  integration checks. CI integrity review confirms required execution without
+  bypasses; no percentage score substitutes for these proofs;
 - final proof uses real HTTP APIs and visible jobs/recovery, not direct database
   inspection.
 

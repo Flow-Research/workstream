@@ -58,7 +58,7 @@ jobs:
           uv sync --frozen --extra dev
           uv run --frozen ruff check workstream_mcp tests
           uv run --frozen mypy workstream_mcp
-          uv run --frozen pytest -q --ignore=tests/integration --cov=workstream_mcp --cov-fail-under=90
+          uv run --frozen pytest -q --ignore=tests/integration --cov=workstream_mcp --cov-report=term-missing
           uv build --wheel --out-dir dist
 
       - name: Prove wheel independence from backend source

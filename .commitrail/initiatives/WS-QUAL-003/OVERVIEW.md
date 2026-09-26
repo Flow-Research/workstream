@@ -22,12 +22,14 @@
   The human expanded this change to use reviewed commit checkpoints in one PR;
   projection proof is its first stage, not its completion boundary.
 - AUTH admin-access slice: [13 — lifecycle proof audit](WS-QUAL-003-13.md).
+- AUTH test-proof and coverage-policy audit: [16 — behavior-first test evidence](WS-QUAL-003-16.md).
 - After 13's intended merge outcome: inventory the remaining service-actor
   provisioning and profile/link lifecycle families, then remaining AUTH owners.
   Do not repeat the selected actor, authentication or admin-access audit.
   The full suite audit remains open.
 - Preserve: intended production semantics, public boundaries, real database/isolation/
-  concurrency proof, current coverage floors, full hosted execution, human merge.
+  concurrency proof, full hosted execution, human merge. Coverage is diagnostic,
+  not a completeness or merge gate.
 - Product work: POL-04A2 hidden finalization and AUTH-12B2 exact authority are
   delivered; POL-04B live cutover proceeds independently of this audit.
 
@@ -174,9 +176,10 @@ No fixed reduction percentage or same-day completion claim overrides safety.
 Repository-wide scope is L0; each bounded test-only change is routed by its
 actual safety impact. QA/test-delta and CI-integrity assess removed protection;
 security reviews changed authority proof. Other specialties are used only for
-their affected boundaries. Full tests, PostgreSQL and global/subsystem coverage
-stay in GitHub Actions. Focused local tests and targeted test-of-test mutations
-must show assertions detect the intended defect, not fixture failures.
+their affected boundaries. Full test execution and PostgreSQL stay in GitHub
+Actions; coverage reports are diagnostic only. Focused local tests and targeted
+test-of-test mutations must show assertions detect the intended defect, not
+fixture failures.
 
 Coverage is a guardrail, not proof completeness. This audit may add valuable
 cases while reducing duplicate execution, fixture cost and source volume.

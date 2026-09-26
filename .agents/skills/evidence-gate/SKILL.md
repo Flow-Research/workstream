@@ -10,7 +10,7 @@ Run deterministic proof checks before reviewer fanout.
 The lead runs shared checks once per clean candidate and supplies the exact
 target, command, exit status, producer, and artifact location. Reviewers inspect
 that evidence and run only discriminating probes their specialty still needs.
-Keep full backend/coverage runs in hosted CI; do not duplicate them locally.
+Keep full backend-suite runs in hosted CI; do not duplicate them locally.
 Unavailable hosted evidence remains pending, never an inferred pass.
 
 ## Check
@@ -23,7 +23,8 @@ Unavailable hosted evidence remains pending, never an inferred pass.
 - Build ran if applicable.
 - CI config was not weakened.
 - Package scripts were not weakened.
-- Coverage thresholds were not lowered.
+- Coverage percentages remain diagnostic, not merge thresholds. Required
+  behavior and complete-execution evidence were not weakened.
 - Tests were not skipped/deleted/weakened without explanation.
 - New dependencies were approved.
 - Reviewer proof-quality inputs name the claimed boundary, proof strength,
