@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.compensation import policy_adapter_binding_port
 from app.adapters.projects import project_contribution_policy_eligibility_port
 from app.modules.contributions.api import (
+    ContributionPolicyOperationsPort,
     ContributionPolicyMutationAuthorizationPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyValidationPort,
@@ -20,8 +21,8 @@ def contribution_policy_service(
     *,
     read_authorization: ContributionPolicyReadAuthorizationPort | None = None,
     mutation_authorization: ContributionPolicyMutationAuthorizationPort | None = None,
-) -> ContributionPolicyService:
-    """Compose hidden policy behavior exclusively through public owner ports."""
+) -> ContributionPolicyOperationsPort:
+    """Compose policy behavior exclusively through public owner ports."""
     return ContributionPolicyService(
         session,
         read_authorization=read_authorization,

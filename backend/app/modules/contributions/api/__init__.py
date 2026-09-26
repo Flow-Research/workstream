@@ -1,6 +1,9 @@
 """Dependency-safe public API for the CONTRIBUTIONS business module."""
 
 from app.modules.contributions.api.policies import (
+    ContributionPolicyOperationsPort,
+    ContributionPolicyProjectReadRequest,
+    ContributionPolicyProjectSelection,
     CompensationMode,
     ContributionPolicyConflict,
     ContributionPolicyCreateDraftRequest,
@@ -15,6 +18,7 @@ from app.modules.contributions.api.policies import (
     ContributionPolicyRetireAuthorizationFacts,
     ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
     ContributionType,
@@ -35,6 +39,9 @@ from app.modules.contributions.api.validation import (
 )
 
 __all__ = (
+    "ContributionPolicyOperationsPort",
+    "ContributionPolicyProjectReadRequest",
+    "ContributionPolicyProjectSelection",
     "ContributionPolicyValidationFacts",
     "ContributionPolicyValidationPort",
     "ContributionPolicyValidationPurpose",
@@ -53,6 +60,7 @@ __all__ = (
     "ContributionPolicyRetireAuthorizationFacts",
     "ContributionPolicyRetireRequest",
     "ContributionPolicyUnavailable",
+    "ContributionPolicyAuthorizationDenied", "ContributionPolicyAuthorizationUnavailable",
     "ContributionPolicyUpdateDraftRequest",
     "ContributionPolicyView",
     "ContributionType",

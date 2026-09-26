@@ -1,12 +1,14 @@
-"""Flush-only persistence for hidden ContributionPolicy behavior."""
+"""Flush-only persistence and bounded reads for ContributionPolicy behavior."""
 
 import hashlib
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import and_, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
+
+from app.modules.contributions.api import ContributionPolicyProjectSelection
 
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
@@ -31,6 +33,44 @@ class ContributionPolicyRepository:
     def __init__(self, session: AsyncSession) -> None:
         """Bind persistence to the caller-owned session and transaction."""
         self._session = session
+
+    async def current_policy_candidates(self, project_id: UUID) -> list[UUID]:
+        """Select IDs only, without locks; a second candidate means ambiguity."""
+        return list(await self._session.scalars(select(ContributionPolicy.id).where(
+            ContributionPolicy.project_id == str(project_id),
+            ContributionPolicy.status != "retired",
+        ).limit(2)))
+
+    async def current_policy_selection(
+        self, project_id: UUID, policy_id: UUID,
+    ) -> ContributionPolicyProjectSelection | None:
+        """Read one post-authorization snapshot; never switch selected aggregates."""
+        candidate_count = select(func.count()).select_from(ContributionPolicy).where(
+            ContributionPolicy.project_id == str(project_id),
+            ContributionPolicy.status != "retired",
+        ).correlate(None).scalar_subquery()
+        rows = (await self._session.execute(select(
+            ContributionPolicy.id, ContributionPolicy.current_published_version_id,
+            ContributionPolicyVersion.id.label("open_draft_version_id"),
+        ).outerjoin(ContributionPolicyVersion, and_(
+            ContributionPolicyVersion.contribution_policy_id == ContributionPolicy.id,
+            ContributionPolicyVersion.project_id == ContributionPolicy.project_id,
+            ContributionPolicyVersion.status == "draft",
+        )).where(
+            ContributionPolicy.project_id == str(project_id),
+            ContributionPolicy.id == policy_id, ContributionPolicy.status != "retired",
+            candidate_count == 1,
+        ).limit(2))).all()
+        if len(rows) != 1:
+            return None
+        row = rows[0]
+        if row.current_published_version_id is None and row.open_draft_version_id is None:
+            return None
+        return ContributionPolicyProjectSelection(
+            project_id=project_id, contribution_policy_id=row.id,
+            current_published_version_id=row.current_published_version_id,
+            open_draft_version_id=row.open_draft_version_id,
+        )
 
     async def lock_operation(self, operation_id: UUID) -> None:
         """Serialize requests sharing one immutable operation identifier."""

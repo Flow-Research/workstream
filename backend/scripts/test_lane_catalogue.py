@@ -10,7 +10,7 @@ PARTITIONED_PROJECT_LANES = (
     "project_lifecycle_b",
     "project_lifecycle_c",
 )
-PARTITIONED_TASK_LANES = ("task_lifecycle_a", "task_lifecycle_b")
+PARTITIONED_TASK_LANES = ("task_lifecycle_a", "task_lifecycle_b", "task_lifecycle_c")
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,10 @@ SHARED_FOUNDATION_MODULES = (
     "tests/contributions/test_selected_policy_validation.py",
     "tests/authorization/contribution_policies/test_selected_validation_postgresql.py",
     "tests/contributions/test_policy_retire.py",
-    "tests/contributions/test_policy_routes_absent.py",
+    "tests/contributions/public_policy/test_contracts.py",
+    "tests/contributions/public_policy/test_discovery.py",
+    "tests/contributions/public_policy/test_failures.py",
+    "tests/contributions/public_policy/test_workflow.py",
     "tests/test_coverage_contract.py",
     "tests/test_external_service_adapters.py",
     "tests/test_guide_artifacts.py",

@@ -13,6 +13,7 @@ from app.modules.contributions.api import (
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyReadRequest,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
 )
 from app.modules.contributions.models import ContributionPolicyLifecycleEvent
 
@@ -38,7 +39,7 @@ async def consume_and_close_policy_authority(
     finally:
         authorization.close_contribution_policy_mutation(prepared)
     if type(actor) is not UUID or actor != facts.actor_profile_id:
-        raise ContributionPolicyUnavailable("contribution_policy_unavailable")
+        raise ContributionPolicyAuthorizationUnavailable("contribution_policy_unavailable")
     return actor
 
 
@@ -79,6 +80,8 @@ async def begin_and_recover_policy_mutation(
                 contribution_policy_version_id=event.contribution_policy_version_id,
             )
         )
+    except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
+        raise
     except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
         raise ContributionPolicyConflict("contribution_policy_conflict") from exc
     return result_factory(event)

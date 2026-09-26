@@ -176,6 +176,30 @@ send `"<id>.<generation>.<policy_hash_without_sha256_prefix>"`. An authorized Pr
 Manager may attach review and revision policies in either order while the guide
 is draft; activation remains blocked until both are complete.
 
+Finance Authority administers the separate ContributionPolicy through these public
+project-scoped routes under `/api/v1/projects/{project_id}/contribution-policies`:
+
+| Operation | Route suffix |
+|---|---|
+| Recover current published/open draft selectors | `GET /current` |
+| Read an exact policy, optionally selecting `version_id` | `GET /{policy_id}` |
+| Create a draft with `name` | `POST /drafts` |
+| Replace both contribution rules | `PUT /{policy_id}/versions/{version_id}` |
+| Publish the complete draft | `POST /{policy_id}/versions/{version_id}/publication` |
+| Retire the current publication | `POST /{policy_id}/versions/{version_id}/retirement` |
+
+Each mutation takes exactly one UUID `Idempotency-Key`; publication and retirement
+use an empty JSON object. Update supplies `rules`, with one `accepted_submission`
+and one `completed_review` rule. Each rule explicitly chooses `unpaid` with no
+definitions, or `compensated` with valid unit/binding definitions. An unpaid policy
+requires no adapter binding. Public binding administration remains pending.
+The create command initializes the name for a new policy aggregate; a successor
+draft retains that aggregate's name. Current discovery lets another Finance actor resume a saved draft without the
+creator's receipt. Retired policies remain available through exact authorized
+reads. Replay rechecks live authority and returns the original receipt; a changed
+command under the same key conflicts. Manager checker approvals are separate and
+do not confer Finance powers or publish this policy.
+
 Complete guide activation now has one internal transaction that binds the exact
 separate approvals, review/revision inputs and selected published contribution
 policy. It supersedes the selected prior guide and activates a draft Project

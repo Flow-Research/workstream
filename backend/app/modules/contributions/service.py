@@ -1,4 +1,4 @@
-"""Hidden ContributionPolicy read and draft mutation orchestration."""
+"""ContributionPolicy read and draft mutation orchestration."""
 
 from decimal import Decimal
 from typing import cast
@@ -14,6 +14,8 @@ from app.modules.compensation.api import (
     PolicyAdapterBindingUnavailable,
 )
 from app.modules.contributions.api import (
+    ContributionPolicyProjectReadRequest,
+    ContributionPolicyProjectSelection,
     ContributionPolicyConflict,
     ContributionPolicyCreateDraftRequest,
     ContributionPolicyMutationAuthorizationFacts,
@@ -24,6 +26,7 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
     DenyContributionPolicyAuthorization,
@@ -58,7 +61,7 @@ from app.modules.projects.api import (
 
 
 class ContributionPolicyService:
-    """Run hidden policy behavior without route or commit ownership."""
+    """Run policy behavior without route or commit ownership."""
 
     def __init__(
         self,
@@ -69,7 +72,7 @@ class ContributionPolicyService:
         projects: ProjectContributionPolicyEligibilityPort | None = None,
         bindings: PolicyAdapterBindingPort | None = None,
     ) -> None:
-        """Compose hidden policy behavior inside a caller-owned session."""
+        """Compose policy behavior inside a caller-owned session."""
         deny = DenyContributionPolicyAuthorization()
         self._session = session
         self._repository = ContributionPolicyRepository(session)
@@ -89,7 +92,7 @@ class ContributionPolicyService:
     async def publish(
         self, request: ContributionPolicyPublishRequest
     ) -> ContributionPolicyMutationResult:
-        """Publish one exact complete draft through the hidden boundary."""
+        """Publish one exact complete draft through the policy owner."""
         return await self._publication.publish(request)
 
     async def retire(
@@ -103,6 +106,8 @@ class ContributionPolicyService:
         self._require_request(request, ContributionPolicyReadRequest, mutation=False)
         try:
             await self._read_authorization.authorize_contribution_policy_read(request)
+        except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
+            raise
         except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
             raise ContributionPolicyConflict("contribution_policy_not_found") from exc
         policy = await self._repository.get_policy(
@@ -116,6 +121,26 @@ class ContributionPolicyService:
         if version is None:
             raise ContributionPolicyConflict("contribution_policy_not_found")
         return self._view(policy, version)
+
+    async def read_current(self, request: ContributionPolicyProjectReadRequest) -> ContributionPolicyProjectSelection:
+        """Authorize one current aggregate, then refresh its exact public selectors."""
+        self._require_request(request, ContributionPolicyProjectReadRequest, mutation=False)
+        candidates = await self._repository.current_policy_candidates(request.project_id)
+        if len(candidates) != 1:
+            raise ContributionPolicyConflict("contribution_policy_not_found")
+        try:
+            await self._read_authorization.authorize_contribution_policy_read(ContributionPolicyReadRequest(
+                actor_profile_id=request.actor_profile_id, project_id=request.project_id,
+                contribution_policy_id=candidates[0],
+            ))
+        except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
+            raise
+        except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
+            raise ContributionPolicyConflict("contribution_policy_not_found") from exc
+        result = await self._repository.current_policy_selection(request.project_id, candidates[0])
+        if result is None:
+            raise ContributionPolicyConflict("contribution_policy_not_found")
+        return result
 
     async def create_draft(
         self, request: ContributionPolicyCreateDraftRequest
@@ -249,7 +274,7 @@ class ContributionPolicyService:
         selectors = ("actor_profile_id", "project_id")
         if mutation:
             selectors += ("operation_id",)
-        if type(request) is not ContributionPolicyCreateDraftRequest:
+        if type(request) not in {ContributionPolicyCreateDraftRequest, ContributionPolicyProjectReadRequest}:
             selectors += ("contribution_policy_id",)
         if type(request) is ContributionPolicyUpdateDraftRequest:
             selectors += ("contribution_policy_version_id",)

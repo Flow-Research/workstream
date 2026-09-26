@@ -305,11 +305,11 @@ def test_collection_accepts_a_minimal_base_environment(
 
 
 def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
-    elapsed = (1.125, 2.25, 0.5, 3.75, 1.0, 0.75, 0.625, 0.5)
+    elapsed = (1.125, 2.25, 0.5, 3.75, 1.0, 0.75, 0.625, 0.5, 0.25)
     lanes = [{"elapsed_seconds": value} for value in elapsed]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 10.5,
+        "aggregate_runner_seconds": 10.75,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):

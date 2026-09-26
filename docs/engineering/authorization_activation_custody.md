@@ -97,7 +97,8 @@ or matrix membership. CP03A establishes that target-only identity and owner
 eligibility without a service-action matrix row; all four binding actions
 were activated by CP03B. CP05 activates exactly the five policy actions for
 human Finance Authority through explicit AUTH composition, retaining CP01B
-registration custody. Public policy routes and service authority remain unavailable.
+registration custody. CP05A exposes the public human Finance policy routes;
+fixed-service policy authority remains unavailable.
 
 ## REV custody transfer
 

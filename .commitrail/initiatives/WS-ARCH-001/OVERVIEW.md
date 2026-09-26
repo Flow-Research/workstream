@@ -14,7 +14,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
 - Current boundary: one CHECKERS catalogue, compiler/parser and implementation
   per checker ID serve active policy consumers; production post-submit phase
   execution remains unavailable.
-- Next usable boundary: public guide activation and approved-guide intake integration.
+- Next usable boundary: manager activation context and public guide activation, then approved-guide intake integration.
+  [CP05A](WS-ARCH-001-CP05A.md) supplies public Finance policy administration and recoverable draft selectors.
   [ARCH-03C7](WS-ARCH-001-03C7.md) exposes bounded exact-authorized task history.
   [ARCH-03C6](WS-ARCH-001-03C6.md) exposes distinct exact-authorized locked-context reads.
   [ARCH-03C5](WS-ARCH-001-03C5.md) exposes exact-authorized task detail and requirements.
@@ -43,8 +44,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   owner-facing TASK/PROJECT/CHECKER/ART APIs, hidden atomic Submission
   composition, and exact contributor/binding activation are merged through
   02H; the public route remains unchanged.
-- Adapter-binding behavior and activation and hidden ContributionPolicy
-  draft/publication behavior and exact Finance Authority are complete.
+- Internal adapter-binding behavior and authority, public ContributionPolicy
+  administration and exact Finance Authority are complete.
   CP06 exact selected-policy validation and CP07 hidden complete-guide activation
   and [AUTH-12H live authority](../WS-AUTH-001/WS-AUTH-001-12H.md) are complete.
   [CP08](WS-ARCH-001-CP08.md) exact task-attempt lineage and minimal writers are complete.

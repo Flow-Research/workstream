@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.modules.contributions.api import ContributionPolicyConflict, ContributionPolicyUnavailable
+from app.modules.contributions.api import ContributionPolicyAuthorizationDenied
 from tests.authorization.admin_access.concurrency_support import ordered_owner_calls
 from .postgresql_support import world, snapshot
 
@@ -40,7 +40,7 @@ async def test_policy_revocation_obeys_real_prepare_lock_order(
     async def mutate():
         try:
             return await target.execute("update_draft", request)
-        except (ContributionPolicyConflict, ContributionPolicyUnavailable):
+        except ContributionPolicyAuthorizationDenied:
             return "denied"
 
     async def disable():
@@ -59,6 +59,6 @@ async def test_policy_revocation_obeys_real_prepare_lock_order(
         assert b == "denied"
     before = await snapshot(target.project)
     assert await mutate() == "denied"
-    with pytest.raises(ContributionPolicyConflict):
+    with pytest.raises(ContributionPolicyAuthorizationDenied, match="^contribution_policy_unavailable$"):
         await target.execute("create_draft", create)
     assert await snapshot(target.project) == before

@@ -4,12 +4,20 @@ Current pre-review work follows the [cross-owner dependency contract](../WS-ARCH
 and the [capability ledger](../../../docs/roadmap_status.md).
 
 - Disposition: Planned
-- Completed boundary: hidden policy behavior, exact Finance Authority, CP06 selected-policy validation and CP07 hidden guide activation/binding.
+- Completed boundary: public Finance ContributionPolicy administration, exact
+  Finance Authority, CP06 selected-policy validation and CP07 internal guide
+  activation/binding.
 - Intent: record completed authorized reviews and accepted submissions as
   immutable ContributionRecords and optional
   project-policy-driven compensation awards without coupling lifecycle truth to
   an economic provider.
-- Next usable boundary: bounded public task activation. ARCH-03C2 supplies
+- Next usable boundary: manager activation context and public guide activation,
+  then approved-guide intake integration.
+  [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md) delivers public Finance
+  ContributionPolicy administration and recovery of a draft selector, a published
+  selector, or both. ARCH-03C3 through ARCH-03C7 deliver public task readiness,
+  queues, detail/requirements, locked context and audit history.
+  Completed foundations: ARCH-03C2 supplies
   atomic publication and registered assignment delivery with enforced prefork. ARCH-03C1 supplies exact fixed-service
   reconciliation authority and decision-bound release receipts. ARCH-03B9 supplies the
   hidden exact-assignment operation and transaction fence. AUTH-OUTBOX-02 delivers
@@ -28,13 +36,15 @@ and the [capability ledger](../../../docs/roadmap_status.md).
 ## Delivered
 
 - Shared outbox, adapter-binding persistence and hidden lifecycle behavior,
-  contribution-policy persistence and hidden draft/publication/retirement
+  contribution-policy persistence and draft/publication/retirement
   behavior, and shared lifecycle-audit participation are merged.
 - [CP07A](../WS-ARCH-001/WS-ARCH-001-CP07A.md) aligns authority-before-resource
   locking and the database audit vocabulary for existing binding actions.
 - Finance Authority adapter-binding and five policy actions are active through
-  explicit AUTH composition; public policy routes remain unavailable. ContributionRecord, award, dispatch, fulfillment, and
-  public CON behavior are not yet complete.
+  explicit AUTH composition. [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md)
+  exposes public Finance policy administration and current draft/published selector
+  recovery. ContributionRecord, award and fulfillment behavior and their public
+  APIs remain unavailable; delivery of those economic effects is not activated.
 
 ## Remaining v0.1 sequence
 
@@ -42,7 +52,7 @@ Use the [current cross-owner dependency contract](../WS-ARCH-001/planning/PLAN.m
 for remaining integration and CP09 work; CON does not create a second policy/binding lane.
 
 [CP05](../WS-ARCH-001/WS-ARCH-001-CP05.md) delivered exact authorization for
-the hidden policy behavior.
+the internal policy operations; CP05A exposes their public Finance routes.
 
 1. Completed CP06 validates the expected version against the active policy's current
    published selector for new guide activation, without reselecting existing
