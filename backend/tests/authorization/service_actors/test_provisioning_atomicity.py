@@ -77,7 +77,7 @@ async def _provision(access: AdminAccess, key: str, body: dict[str, str]):
     [
         ("decision", AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED),
         ("invalidation", AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED),
-        ("reservation", None),
+        ("completion", None),
     ],
 )
 async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
@@ -109,7 +109,7 @@ async def test_authority_write_failure_rolls_back_provision_and_allows_retry(
         raise SQLAlchemyError("injected idempotency completion failure")
 
     with monkeypatch.context() as patch:
-        if failure == "reservation":
+        if failure == "completion":
             patch.setattr(AuthorityIdempotencyRepository, "complete", fail_completion)
         else:
             patch.setattr(AuditService, "add_authority_event", fail_event)
