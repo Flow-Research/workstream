@@ -193,7 +193,8 @@ use an empty JSON object. Update supplies `rules`, with one `accepted_submission
 and one `completed_review` rule. Each rule explicitly chooses `unpaid` with no
 definitions, or `compensated` with valid unit/binding definitions. An unpaid policy
 requires no adapter binding. Public binding administration remains pending.
-Current discovery lets another Finance actor resume a saved draft without the
+The create command initializes the name for a new policy aggregate; a successor
+draft retains that aggregate's name. Current discovery lets another Finance actor resume a saved draft without the
 creator's receipt. Retired policies remain available through exact authorized
 reads. Replay rechecks live authority and returns the original receipt; a changed
 command under the same key conflicts. Manager checker approvals are separate and

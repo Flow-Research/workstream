@@ -385,10 +385,11 @@ cannot be reused as post-submission review-gate evidence. See the
   by locking authority before product resources, and reconciles the database
   audit vocabulary for the existing binding actions. CP07 complete hidden guide
   activation/binding and AUTH-12H live exact-project manager authority are delivered.
-- Complete hidden ContributionPolicy draft/publication/retirement behavior is
-  persisted with immutable lifecycle history. All five actions have exact human
-  Finance Authority through explicit AUTH composition; default composition denies
-  access and public policy routes remain unavailable.
+- CP05A exposes ContributionPolicy discovery, read, draft update, publication
+  and retirement through exact human Finance Authority, preserving immutable
+  lifecycle history and default-denied uncomposed owners. Compensation-binding
+  administration remains internal; manager guide activation is the next public
+  setup boundary.
 - CP06 supplies internal caller-transaction validation of the exact selected
   ContributionPolicy version and its complete graph/resources. New guide binding
   requires the active current published selector. Controlled revision validates

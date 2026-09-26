@@ -269,7 +269,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 | Database failure after close rolls back publication custody, lifecycle state, and staged AUTH evidence | `tests/contributions/test_policy_integration_postgresql.py::test_late_publication_failure_rolls_back_custody_state_and_authorization` | hosted PostgreSQL lane only |
 | A closed opaque authority cannot be reused by CONTRIBUTIONS | `tests/contributions/test_policy_publication_authorization.py::test_closed_publication_authority_cannot_be_reused` | focused local command and hosted CI |
 | CONTRIBUTIONS publication facts have exact public AUTH digest parity | `tests/contributions/test_policy_publication_auth_parity.py::{test_publish_facts_match_public_auth_digest,test_retire_facts_match_public_auth_digest}` | focused local command and hosted CI |
-| All ContributionPolicy actions remain planned and unavailable | `tests/authorization/test_contribution_policy_registration.py` | focused local command and hosted CI |
+| CP05 activates exactly the five registered AUTH policy actions; uncomposed owner calls remain deny-default | `tests/authorization/test_contribution_policy_registration.py` | focused local command and hosted CI |
 | CP04B files remain bounded and every test has one primary behavior | `tests/contributions/test_cp04b_file_structure.py` | focused local command and hosted CI |
 | Every CP04B acceptance atom projects to an exact test name | `tests/contributions/test_cp04b_contract_projection.py` | focused local command and hosted CI |
 

@@ -28,13 +28,15 @@ and the [capability ledger](../../../docs/roadmap_status.md).
 ## Delivered
 
 - Shared outbox, adapter-binding persistence and hidden lifecycle behavior,
-  contribution-policy persistence and hidden draft/publication/retirement
+  contribution-policy persistence and draft/publication/retirement
   behavior, and shared lifecycle-audit participation are merged.
 - [CP07A](../WS-ARCH-001/WS-ARCH-001-CP07A.md) aligns authority-before-resource
   locking and the database audit vocabulary for existing binding actions.
 - Finance Authority adapter-binding and five policy actions are active through
-  explicit AUTH composition; public policy routes remain unavailable. ContributionRecord, award, dispatch, fulfillment, and
-  public CON behavior are not yet complete.
+  explicit AUTH composition. [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md)
+  exposes public Finance policy administration and current draft/published selector
+  recovery. ContributionRecord, award and fulfillment behavior and their public
+  APIs remain unavailable; delivery of those economic effects is not activated.
 
 ## Remaining v0.1 sequence
 

@@ -26,6 +26,7 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
     DenyContributionPolicyAuthorization,
@@ -105,6 +106,8 @@ class ContributionPolicyService:
         self._require_request(request, ContributionPolicyReadRequest, mutation=False)
         try:
             await self._read_authorization.authorize_contribution_policy_read(request)
+        except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
+            raise
         except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
             raise ContributionPolicyConflict("contribution_policy_not_found") from exc
         policy = await self._repository.get_policy(
@@ -130,6 +133,8 @@ class ContributionPolicyService:
                 actor_profile_id=request.actor_profile_id, project_id=request.project_id,
                 contribution_policy_id=candidates[0],
             ))
+        except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
+            raise
         except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
             raise ContributionPolicyConflict("contribution_policy_not_found") from exc
         result = await self._repository.current_policy_selection(request.project_id, candidates[0])

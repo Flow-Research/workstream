@@ -27,8 +27,8 @@ from app.modules.authorization.domain.guide_manager_resources import guide_manag
 from app.modules.authorization.domain import adapter_bindings, contribution_policies, guide_compilation as compilation
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
-    SUBMISSION_POLICY_MUTATIONS as _SUBMISSION_POLICY_MUTATIONS,
     PROJECT_SCOPED_ADMIN_MUTATIONS, CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
+    supports_prepared_denial,
 )
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.audit_targets import project_authority_audit_target
@@ -36,9 +36,6 @@ from app.modules.authorization.domain.prepared_service import (
     fixed_service_scope_project, fixed_service_resource_matches,
 )
 from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
-from app.modules.authorization.domain.task_authority import (
-    TASK_ACTIONS, TaskAuthorityResourceContext,
-)
 from app.modules.authorization.domain.task_queues import TASK_QUEUE_ACTIONS, queue_read_denial
 from app.modules.authorization.domain.project_reads import project_read_denial
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -81,13 +78,9 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectCreateResourceContext,
-    ProjectGuideMutationPrepareDenialResourceContext,
-    ProjectGuideSufficiencyMutationResourceContext,
-    ProjectSubmissionArtifactPolicyMutationResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
     ProjectPolicyReadResourceContext,
-    ProjectPolicyMutationPrepareDenialResourceContext,
     ProjectActiveGuideReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
@@ -339,7 +332,7 @@ class AuthorizationService:
         self._revalidate_actor_self = revalidate_actor_self
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
-        self._pending_denial_resource_context: AuthorizationResourceContext | None = None
+        self._pending_denial_resource_context: AuthorizationResourceContext | contribution_policies.ContributionPolicyMutationScopeDenialResourceContext | None = None
         self._sealed_prelocked: set[_PrelockedAuthority] = set()
         self._prepared_consumers: dict[object, object] = {}
 
@@ -613,46 +606,13 @@ class AuthorizationService:
         self,
         consumer_token: object,
         action_id: ActionId,
-        resource_context: AuthorizationResourceContext,
+        resource_context: AuthorizationResourceContext | contribution_policies.ContributionPolicyMutationScopeDenialResourceContext,
         denial: AuthorizationDenialCode,
     ) -> NoReturn:
         """Persist one exact prepare-time denial without issuing a capability."""
         self._validate_prepared_consumer(consumer_token)
         action = ACTION_BY_ID.get(action_id)
-        supported = (
-            (action_id in TASK_ACTIONS and isinstance(resource_context, TaskAuthorityResourceContext))
-            or
-            (
-                action_id is ActionId.PROJECT_CREATE
-                and isinstance(resource_context, ProjectCreateResourceContext)
-            )
-            or (
-                action_id in _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS
-                and isinstance(
-                    resource_context,
-                    (
-                        ProjectGuideMutationPrepareDenialResourceContext,
-                        ProjectGuideSufficiencyMutationResourceContext,
-                    ),
-                )
-            )
-            or (
-                action_id
-                in {
-                    ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-                    ActionId.PROJECT_REVISION_POLICY_UPDATE,
-                }
-                and isinstance(resource_context, ProjectPolicyMutationPrepareDenialResourceContext)
-            )
-            or (
-                action_id in _SUBMISSION_POLICY_MUTATIONS
-                and isinstance(
-                    resource_context,
-                    ProjectSubmissionArtifactPolicyMutationResourceContext,
-                )
-            )
-        )
-        if not supported:
+        if not supports_prepared_denial(action_id, resource_context):
             raise TypeError("unsupported prepared denial")
         await self._complete_decision(
             action=action,
@@ -946,7 +906,7 @@ class AuthorizationService:
         *,
         action,
         denial: AuthorizationDenialCode | None,
-        resource_context: AuthorizationResourceContext,
+        resource_context: AuthorizationResourceContext | contribution_policies.ContributionPolicyMutationScopeDenialResourceContext,
         context: AuthorizationContext,
         matched_kind: MatchedAuthorityKind | None,
         matched_grant_id: UUID | None,
@@ -1307,7 +1267,7 @@ class AuthorizationService:
         self,
         decision: AuthorizationDecision,
         actor_profile_id,
-        resource_context: AuthorizationResourceContext | None = None,
+        resource_context: AuthorizationResourceContext | contribution_policies.ContributionPolicyMutationScopeDenialResourceContext | None = None,
     ) -> None:
         """Write one privacy-bounded event without taking transaction ownership."""
         if decision.action_id is None or decision.permission_id is None:

@@ -6,7 +6,7 @@ from app.modules.contributions.api.policies import PolicyRuleInput
 
 
 class PolicyCreateInput(BaseModel):
-    """Name the first or next draft; actor and operation come from the request."""
+    """Initialize a new policy name; successor drafts retain the aggregate name."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     name: str = Field(min_length=1, max_length=200)

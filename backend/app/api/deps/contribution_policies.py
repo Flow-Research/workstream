@@ -20,6 +20,7 @@ from app.db.session import get_db_session
 from app.modules.contributions.api import (
     ContributionPolicyConflict, ContributionPolicyOperationsPort,
     ContributionPolicyUnavailable,
+    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
 )
 
 IDEMPOTENCY_PARAMETER = {
@@ -69,9 +70,17 @@ async def get_policy_request(
     try:
         async with session.begin():
             authority = contribution_policy_authorization(session, context)
-            yield PolicyRequest(session, contribution_policy_service(
-                session, read_authorization=authority, mutation_authorization=authority,
-            ), actor.actor_profile_id)
+            try:
+                yield PolicyRequest(session, contribution_policy_service(
+                    session, read_authorization=authority, mutation_authorization=authority,
+                ), actor.actor_profile_id)
+            except ContributionPolicyAuthorizationDenied as exc:
+                # CON prepares/consumes/closes AUTH before staging any policy effect.
+                # Preserve the kernel's canonical denial; other failures roll back.
+                await session.commit()
+                raise policy_http_error(404) from exc
+    except ContributionPolicyAuthorizationUnavailable as exc:
+        raise policy_http_error(503) from exc
     except ContributionPolicyUnavailable as exc:
         raise policy_http_error(404) from exc
     except ContributionPolicyConflict as exc:

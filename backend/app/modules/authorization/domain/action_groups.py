@@ -48,3 +48,52 @@ CONTEXT_DIGEST_ACTIONS = frozenset(
         *contribution_policies.CONTRIBUTION_POLICY_ACTIONS,
     }
 )
+
+
+def supports_prepared_denial(action_id: ActionId, resource_context: object) -> bool:
+    """Admit only the existing action/context pairs for prepare-time denial evidence."""
+    from app.modules.authorization.domain.task_authority import TASK_ACTIONS, TaskAuthorityResourceContext
+    from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
+    from app.modules.authorization.runtime import (
+        ProjectGuideMutationPrepareDenialResourceContext, ProjectGuideSufficiencyMutationResourceContext,
+        ProjectPolicyMutationPrepareDenialResourceContext, ProjectSubmissionArtifactPolicyMutationResourceContext,
+    )
+    return (
+        (
+            action_id in contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS
+            and type(resource_context) is contribution_policies.ContributionPolicyMutationScopeDenialResourceContext
+            and resource_context.requested_action == action_id
+        )
+        or
+        (action_id in TASK_ACTIONS and isinstance(resource_context, TaskAuthorityResourceContext))
+        or
+        (
+            action_id is ActionId.PROJECT_CREATE
+            and isinstance(resource_context, ProjectCreateResourceContext)
+        )
+        or (
+            action_id in GUIDE_BOUND_PROJECT_MANAGER_ACTIONS
+            and isinstance(
+                resource_context,
+                (
+                    ProjectGuideMutationPrepareDenialResourceContext,
+                    ProjectGuideSufficiencyMutationResourceContext,
+                ),
+            )
+        )
+        or (
+            action_id
+            in {
+                ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+                ActionId.PROJECT_REVISION_POLICY_UPDATE,
+            }
+            and isinstance(resource_context, ProjectPolicyMutationPrepareDenialResourceContext)
+        )
+        or (
+            action_id in SUBMISSION_POLICY_MUTATIONS
+            and isinstance(
+                resource_context,
+                ProjectSubmissionArtifactPolicyMutationResourceContext,
+            )
+        )
+    )

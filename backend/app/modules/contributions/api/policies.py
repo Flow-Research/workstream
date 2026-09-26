@@ -24,6 +24,14 @@ class ContributionPolicyUnavailable(RuntimeError):
     """Fail closed or conceal inaccessible policy state."""
 
 
+class ContributionPolicyAuthorizationDenied(ContributionPolicyUnavailable):
+    """A canonical denied AUTH decision occurred before policy effects."""
+
+
+class ContributionPolicyAuthorizationUnavailable(ContributionPolicyUnavailable):
+    """AUTH could not safely evaluate, consume or persist a policy decision."""
+
+
 class ContributionPolicyConflict(RuntimeError):
     """Conceal stale, duplicate, foreign, or invalid mutations."""
 

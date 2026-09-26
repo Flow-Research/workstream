@@ -30,16 +30,23 @@ bounded change, not a reason to expose an unusable activation POST first.
 - `backend/app/api/routes/contribution_policies.py`, its request dependency and
   top-level API router: closed request bodies, typed responses and transactions.
 - `backend/app/modules/contributions/api/`, `schemas.py`, `service.py`,
-  `repository.py`, and the existing CON application adapter: a narrow typed
+  `repository.py`, `policy_mutation_support.py`, and the existing CON application adapter: a narrow typed
   operations port and project-current discovery through the existing read action.
-- Existing AUTH adapter composition only; no new role, permission or action.
+- Existing application AUTH adapter composition and typed denial/unavailable
+  propagation; AUTH-owned scope-denial context in `domain/contribution_policies.py`,
+  `domain/audit_targets.py`, `domain/action_groups.py`, `prepared.py`, `kernel.py` and
+  `contribution_policy_authorization.py` to retain existing PREP scope denials.
+  Extract the touched prepare-denial classification into existing action groups
+  and refresh the exact structural ledger with shrinking kernel debt.
+  No new role, permission, action or migration.
 - Focused `backend/tests/contributions/` HTTP tests and signed Finance fixtures;
-  existing contract, route/action inventory, semantic-lane and behavior-ownership
+  `backend/tests/authorization/contribution_policies/{test_contracts,test_scope_locks}.py`; existing
+  contract, route/action inventory, semantic-lane and behavior-ownership
   registrations and the two current `.ci/behavior-contracts/contribution-policy-*`
   proof references that name the obsolete hidden-route test; API drill may exercise this policy workflow without claiming
   full public activation. Retain existing CON behavior and binding proof.
 - README, canonical contribution specification, operating manual, roadmap and
-  current ARCH navigation; this record; local sheet exports only if present.
+  current ARCH/CON navigation and authorization activation-custody prose; this record; local sheet exports only if present.
 
 ### Not allowed
 
@@ -55,6 +62,21 @@ Use one API composition dependency with authenticated human context and the
 existing exact Finance authorization adapter. End identity-read transactions
 before entering the caller-owned policy transaction. Validate response facts
 before commit so serialization failure rolls back mutation and authority evidence.
+Preserve a typed AUTH denial separately from unavailable/invalid AUTH execution.
+Every policy read/prelock/PREP denial precedes policy effects: the HTTP caller
+commits only this canonical denied decision before returning concealed 404.
+Evidence/storage or invalid prepared-boundary failures roll back and return
+retryable 503. Ordinary missing product state still returns concealed 404;
+other exceptions never use the denial commit path.
+
+A refused mutation scope has no final policy/version facts. Bind its requested
+project, observed existence and exact closed mutation action in an AUTH-owned
+scope-denial context. Extend existing `deny_unsupported` before its final-fact
+binding; only this scope-only context permits absent caller input. Observe project
+existence without a product lock after AUTH locks. Existing projects receive exact
+project audit selectors; absent projects retain only the requested target reference,
+with nullable project/resource selectors. Never invent policy/version IDs.
+Existence-query or audit-write failures remain unavailable, not denied.
 
 Expose project-scoped create-draft, exact version update/publish/retire and
 exact policy/version read. Require one UUID Idempotency-Key on mutations; reject
@@ -141,8 +163,11 @@ applicable. They cannot supply actor IDs or a second operation ID.
 - Size rationale: the cohesive public-policy boundary exceeds the preferred
   500-line review guideline because it includes signed PostgreSQL recovery,
   isolation, replay, revocation and transaction proofs plus current navigation.
-  Product changes stay within the existing CON owner and delivery composition;
-  there is no new migration, permission, economic behavior or independent chunk.
+  Product changes extend the existing CON owner, delivery composition and AUTH
+  prepare-denial evidence path; there is no new migration, permission, economic
+  behavior or independent chunk. The AUTH repair uses existing denial machinery
+  and moves its closed classification into existing action groups, shrinking the
+  touched oversized kernel rather than adding structural debt.
 
 ## Evidence
 
@@ -227,3 +252,30 @@ the audit failure reaches the unchanged real INSERT and verifies PostgreSQL
 constraint `23514`, transaction-local marker rollback and same-key recovery.
 These are isolated PostgreSQL/ASGI proofs, not hosted transport or compensation
 provider execution. No local sheet exports are present.
+
+
+## Implementation review corrections
+
+Security review identified rollback of canonical denied decisions and erasure of
+AUTH unavailability into 404. Typed boundary errors now preserve both distinctions;
+all six public operations prove retained denial evidence with unchanged product
+state and authorized controls. Real audit INSERT failures on allowed and denied
+requests prove 503/retryable, rollback, and same-actor/key recovery. Application
+adapter tests distinguish invalid prepared failures from actual denials.
+`test_scope_denial_targets_requested_project` proves all four mutations record
+only the requested project (including nonexistent targets), never substituted
+policy custody; the original project remains unchanged.
+`test_scope_denial_rejects_substituted_or_invented_facts` rejects mismatched
+actions/projects, fabricated policy identifiers and inappropriate caller input.
+Scope denials remain outside the general final-resource union and are admitted
+only by the existing denial path. The extracted prepare-denial classifier retains
+all previous action/context pairs. Existing AUTH scope tests retain their
+no-capability assertion and now require policy scope refusals to be evidenced;
+invalid/service callers and binding-only behavior remain unchanged. An ephemeral
+removal probe bypassed `deny_unsupported`; the retained-denial regression then
+failed specifically because its audit query found no decision. No probe patch
+or test-only production switch is retained.
+Documentation review reconciled four stale current exposure claims in the
+publication proof map, roadmap, CON overview and authorization-custody guide.
+The public request documentation also makes existing aggregate-name retention
+explicit. No AUTH permission or policy lifecycle is changed by these repairs.

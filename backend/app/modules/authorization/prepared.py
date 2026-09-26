@@ -40,6 +40,7 @@ from app.modules.authorization.domain.prepared_submission_policy import parse_su
 from app.modules.authorization.domain.prepared_compilation import prepared_compilation_matches
 from app.modules.authorization.domain.contribution_policies import (
     CONTRIBUTION_POLICY_MUTATION_ACTIONS, ContributionPolicyMutationResourceContext,
+    ContributionPolicyMutationScopeDenialResourceContext,
 )
 from app.modules.authorization.domain.prepared_contribution_policies import (
     parse_prepared_contribution_policy, prepared_contribution_policy_matches,
@@ -653,11 +654,21 @@ class PreparedAuthorizationService:
     async def deny_unsupported(
         self,
         action_id: ActionId,
-        caller_input: PreparedAuthorizationInput,
-        final_resource_context: AuthorizationResourceContext,
+        caller_input: PreparedAuthorizationInput | None,
+        final_resource_context: AuthorizationResourceContext | ContributionPolicyMutationScopeDenialResourceContext,
         denial: PreparedAuthorizationUnsupported,
     ) -> NoReturn:
         """Evidence an exact prepare-time denial without issuing a handle."""
+        if type(final_resource_context) is ContributionPolicyMutationScopeDenialResourceContext:
+            self._root_transaction()
+            if caller_input is not None or action_id != final_resource_context.requested_action:
+                raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+            await self._authorization._complete_prepared_denial(
+                self._consumer_token, action_id, final_resource_context, denial.denial_code,
+            )
+            raise RuntimeError("denied prepared authorization unexpectedly returned")
+        if caller_input is None:
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         scope = (
             PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
             if isinstance(final_resource_context, ProjectCreateResourceContext)
