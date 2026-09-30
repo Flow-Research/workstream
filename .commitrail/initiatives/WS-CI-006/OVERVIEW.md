@@ -39,6 +39,11 @@ must still run the full suite.
   tests. Changes to its callers, shared test support, schemas/migrations,
   dependencies, or CI-selection machinery select the complete suite. No other
   application-source path is selective initially.
+- Keep `.commitrail/**` in the exact change manifest, but exclude it only when
+  classifying backend source impact: every bounded product PR carries a durable
+  change record. Metadata-only PRs still run Markdown/stale-doc gates and a
+  non-empty authorization/static preflight; other documentation paths remain
+  full-suite unless separately reviewed.
 - Bind selection to the exact PR base, head, synthetic merge execution SHA/tree,
   merge-base, changed-path digest, impact-map digest, test-inventory digest,
   and selected test/job manifest. A mismatch, missing Git object, stale
