@@ -41,7 +41,9 @@ must still run the full suite.
   application-source path is selective initially.
 - Keep `.commitrail/**` in the exact change manifest, but exclude it only when
   classifying backend source impact: every bounded product PR carries a durable
-  change record. Metadata-only PRs still run Markdown/stale-doc gates and a
+  change record. Every PR that changes Commitrail metadata also runs the
+  backend policy-semantics module that reads specific planning files. A
+  metadata-only PR still runs that module, Markdown/stale-doc gates, and the
   non-empty authorization/static preflight; other documentation paths remain
   full-suite unless separately reviewed.
 - Bind selection to the exact PR base, head, synthetic merge execution SHA/tree,
