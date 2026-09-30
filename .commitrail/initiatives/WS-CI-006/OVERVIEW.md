@@ -33,15 +33,26 @@ must still run the full suite.
 - Use a deterministic repository-owned changed-source-to-test ownership map;
   do not add an external test-impact service or trust mutable historical
   selector state.
-- Bind selection to the exact PR base/head and a machine-validated manifest.
-  Changed tests always run. A path with no reviewed mapping, shared fixtures,
-  schema/migration/dependency changes, or CI-selection changes conservatively
-  selects the complete suite.
+- Start with one narrow reviewed mapping only: changes confined to
+  `backend/app/core/s3_validation.py` select its direct configuration contract
+  tests, provider-neutral namespace-conformance tests, and real S3/MinIO adapter
+  tests. Changes to its callers, shared test support, schemas/migrations,
+  dependencies, or CI-selection machinery select the complete suite. No other
+  application-source path is selective initially.
+- Bind selection to the exact PR base, head, synthetic merge execution SHA/tree,
+  merge-base, changed-path digest, impact-map digest, test-inventory digest,
+  and selected test/job manifest. A mismatch, missing Git object, stale
+  candidate, changed test support, or unreviewed path selects the complete
+  suite. Changes within mapped test modules run the complete mapped closure;
+  new or unmapped tests and shared test fixtures select the full suite.
 - Keep the required Backend workflow and final check present on every PR. Do
   not use GitHub workflow path filters to suppress a required status.
 - Make the selected impact set the PR gate. Keep full-suite execution available
-  for broad changes, manual runs, and a scheduled main-branch audit. Never
-  describe the scheduled full-suite result as proof for a different PR head.
+  for broad changes and manual runs, and run the complete suite nightly on
+  `main`. A failed nightly audit remains failed and requires diagnosis of the
+  map or product/test defect; it does not silently green PR checks or substitute
+  for exact-PR evidence. Never describe a scheduled result as proof for another
+  PR head.
 - Preserve real PostgreSQL, S3-protocol, concurrency, migration, and public API
   checks whenever their owner paths are selected. The five-minute target is
   for routine narrow changes, not broad/security/schema changes or runner
@@ -51,13 +62,15 @@ must still run the full suite.
 
 ## Proposed boundary
 
-1. **WS-CI-006-01:** implement the exact-base impact manifest, conservative
-   fallback, selected-node evidence validation, and CI integration; change the
-   contributor policy in the same PR; prove selection decisions with adversarial
-   tests and the required full suite on the candidate.
-2. Add source/test ownership mappings incrementally only when their consumer
-   coverage and shared-fixture edges are demonstrated. Unmapped code remains
-   full-suite. Do not create follow-on PRs solely to satisfy this overview.
+1. **WS-CI-006-01:** implement the exact-target impact manifest, the initial
+   S3-validation mapping, conservative full-suite fallback, selected-node/job
+   evidence validation, and CI integration; change `AGENTS.md` and
+   `CONTRIBUTING.md` in the same PR; prove the selector adversarially and run
+   the complete suite on the candidate.
+2. Add further source/test ownership mappings only when their complete
+   consumer-test closure and shared-fixture/infrastructure dependencies are
+   demonstrated. Unmapped application code remains full-suite. Do not add a
+   mapping just to claim a broader speedup.
 
 ## Risks and controls
 
@@ -65,9 +78,13 @@ must still run the full suite.
   for unknown or cross-cutting paths, mapping mutation probes, plus scheduled
   full-suite audits.
 - **Stale or mismatched evidence:** exact base/head, tree and manifest digests;
-  no cached result may attest to a different source tree.
+  execution tree must be the exact GitHub PR merge candidate whose parents are
+  the event base and head; no cached result may attest to another source tree.
 - **Broken branch protection:** workflow and final required status always run;
-  no path-filtered required workflow and no empty-selection success.
+  preserve the existing required `test` context, distinguish expected
+  unselected jobs from missing selected jobs using the digest-bound
+  manifest, and reject an empty test selection. No path-filtered required
+  workflow.
 - **Misleading performance claim:** report selected test count and hosted wall
   time separately; retain full execution for risky changes and report measured
   results rather than claiming every PR is under five minutes.
