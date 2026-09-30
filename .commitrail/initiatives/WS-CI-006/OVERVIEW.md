@@ -47,6 +47,11 @@ must still run the full suite.
   new or unmapped tests and shared test fixtures select the full suite.
 - Keep the required Backend workflow and final check present on every PR. Do
   not use GitHub workflow path filters to suppress a required status.
+- Run shared lint/docstring and authorization-boundary checks once, not once per
+  test lane. Keep full public-API E2E and service startup in full mode unless a
+  reviewed impact mapping specifically requires it. Reuse the pinned MinIO
+  build by exact source-input digest, not commit SHA; verify cache contents
+  before tests.
 - Make the selected impact set the PR gate. Keep full-suite execution available
   for broad changes and manual runs, and run the complete suite nightly on
   `main`. A failed nightly audit remains failed and requires diagnosis of the
@@ -86,8 +91,10 @@ must still run the full suite.
   manifest, and reject an empty test selection. No path-filtered required
   workflow.
 - **Misleading performance claim:** report selected test count and hosted wall
-  time separately; retain full execution for risky changes and report measured
-  results rather than claiming every PR is under five minutes.
+  time separately; the selector-changing PR itself full-fallbacks. Wait for the
+  first later naturally eligible mapped PR before reporting narrow-mode hosted
+  timing; retain full execution for risky changes and do not claim every PR is
+  under five minutes.
 
 ## Non-goals
 
