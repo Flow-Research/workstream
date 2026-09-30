@@ -183,8 +183,14 @@ definition or ownership boundary of Workstream.
   one, identify its behavior and retained proof, or explain why the requirement
   is obsolete. Remove duplicated assertions and implementation-only tests only
   when no distinct contract or failure mode is lost. Do not replace the suite
-  with end-to-end-only tests, skip failures, or set a deletion quota. Full-suite
-  completeness and real integration checks remain blocking.
+  with end-to-end-only tests, skip failures, or set a deletion quota. Backend
+  CI uses a trusted-base, reviewed source-to-test map: an eligible mapped change
+  must run its complete enumerated consumer closure with its required real
+  infrastructure; every unmapped, broad, uncertain, or CI-selection change
+  runs the complete suite. Full-suite and real integration proof remain
+  blocking for fallback PRs and scheduled/manual audits. Nightly results never
+  substitute for exact-PR evidence. See the current CI boundary in
+  `.commitrail/initiatives/WS-CI-006/OVERVIEW.md`.
 
 ## Done Criteria
 

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "commitrail_test_modules": [
+    "tests/projects/review_policy/test_semantics.py"
+  ],
+  "owners": [
+    {
+      "source_paths": [
+        "backend/app/core/s3_validation.py"
+      ],
+      "test_paths": [
+        "backend/tests/test_config.py",
+        "backend/tests/test_artifact_store_conformance.py",
+        "backend/tests/test_s3_artifact_store.py"
+      ],
+      "test_modules": [
+        "tests/test_config.py",
+        "tests/test_artifact_store_conformance.py",
+        "tests/test_s3_artifact_store.py"
+      ],
+      "infrastructure": "minio"
+    }
+  ]
+}

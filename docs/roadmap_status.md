@@ -189,17 +189,23 @@ cannot be reused as post-submission review-gate evidence. See the
 - Cross-module behavior is moving through explicit public ports under the
   modular-monolith boundary. New private edges are prohibited and touched debt
   is reduced incrementally.
-- GitHub CI distributes the backend suite across semantic lanes, rejects
-  skipped/deselected tests and requires behavior, boundary and real API proof.
-  Coverage is diagnostic only, with no percentage gate or test-count target.
-  Redundant coverage-only reruns are removed; their tests remain in full-suite lanes.
-  Its nine-lane allocation uses three project lanes, three task lanes, two
-  shared-foundation lanes and one schema lane. Database resets batch trigger
-  commands within the existing transaction while retaining full schema checks;
-  authorization preflight runs alongside lanes and remains mandatory at fan-in.
-  Ordinary CI databases use bounded private RAM-backed storage with write
-  settings verified; schema-contract and aggregate databases stay disk-backed.
-  Hosted runtime remains measured rather than guaranteed.
+- GitHub CI keeps the required Backend `test` check on every PR and uses a
+  trusted-base, reviewed source-to-test map. The only initial application
+  mapping is `backend/app/core/s3_validation.py` to its complete configuration,
+  provider-neutral namespace-conformance and real MinIO adapter test closure;
+  Commitrail changes also run the backend policy-semantics test that reads its
+  planning inputs. The exact candidate manifest binds base, head, merge tree,
+  changed paths, map, test inventory, selected nodes and expected jobs. Unknown,
+  broad, or CI-selection changes run the full suite. Full mode retains all nine
+  semantic lanes, real PostgreSQL and API integration proof; it also runs on
+  scheduled and manual audits, which never attest a different PR. Selected
+  tests reject skips, deselections and incomplete evidence. Coverage is
+  diagnostic only, with no percentage or test-count gate. Redundant
+  coverage-only reruns are removed without deleting their behavior tests.
+  Lint/docstring and authorization-boundary preflight run once and remain
+  mandatory at fan-in. Ordinary CI databases use bounded private RAM-backed
+  storage with write settings verified; schema-contract storage remains
+  disk-backed. Hosted runtime is measured, not guaranteed.
 
 ### Identity and authorization
 
@@ -516,7 +522,8 @@ the remaining service-actor, profile/link and other AUTH families or the full
 suite audit. Remaining work includes those AUTH families and the TASK, CHECKER,
 ART, CON, REV, and tooling audit. The audit requires behavioral proof, not only
 file splitting or coverage percentages. Real PostgreSQL, concurrency, storage,
-and full hosted behavior/integration checks remain required. Product
+and complete fallback/nightly hosted behavior checks remain required; a mapped
+PR must pass its entire exact-hosted owner closure instead. Product
 implementation is already progressing alongside this audit with separate file
 ownership.
 
