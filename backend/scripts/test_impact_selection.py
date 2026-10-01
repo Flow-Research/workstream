@@ -7,13 +7,14 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-import subprocess
 import sys
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT))
+sys.path.insert(1, str(ROOT / "backend"))
 
+from scripts.git_delta import resolve_commit, resolve_merge_base, run_checked, run_checked_bytes  # noqa: E402
 from scripts.test_lane_catalogue import LANES  # noqa: E402
 
 MAP_PATH = ROOT / ".ci/test-impact/impact_map.json"
@@ -32,37 +33,14 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _git(*args: str) -> str:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
-def _read_map() -> dict[str, Any]:
-    raw = MAP_PATH.read_bytes()
-    value = json.loads(raw)
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise SelectionError("impact map has an unsupported schema")
-    return value
-
-
 def _changed_paths(base: str, head: str) -> tuple[str, list[str]]:
     if len(base) != SHA_LENGTH or len(head) != SHA_LENGTH:
         raise SelectionError("PR base and head must be full commit SHAs")
-    merge_base = _git("merge-base", base, head)
-    raw = subprocess.run(
+    merge_base = resolve_merge_base(base, head, repository_root=ROOT)
+    raw = run_checked_bytes(
         ["git", "diff", "--name-only", "-z", f"{merge_base}...{head}"],
-        cwd=ROOT,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ).stdout
+        repository_root=ROOT,
+    )
     paths = [item.decode("utf-8", errors="strict") for item in raw.split(b"\0") if item]
     if not paths:
         raise SelectionError("target diff contains no changed paths")
@@ -85,10 +63,9 @@ def _test_path_owner(path: str) -> tuple[str, ...] | None:
 
 def classify(paths: list[str], impact_map: dict[str, Any]) -> tuple[list[str], dict[str, list[str]]]:
     """Return lane recommendations and auditable per-lane causes."""
-    groups = impact_map.get("lane_groups")
     source_paths = impact_map.get("source_paths")
     prefixes = impact_map.get("path_prefixes")
-    if not all(isinstance(item, dict) for item in (groups, source_paths, prefixes)):
+    if not all(isinstance(item, dict) for item in (source_paths, prefixes)):
         raise SelectionError("impact map has an invalid structure")
 
     selected: set[str] = set()
@@ -105,12 +82,20 @@ def classify(paths: list[str], impact_map: dict[str, Any]) -> tuple[list[str], d
                 mapping = prefixes[max(matching_prefixes, key=len)]
 
         if mapping is not None:
-            group_name = mapping.get("lane_group")
-            lanes = groups.get(group_name)
-            if not isinstance(lanes, list) or not lanes:
-                raise SelectionError(f"invalid lane group for {path}")
+            modules = mapping.get("test_modules")
+            if not isinstance(modules, list) or not modules:
+                raise SelectionError(f"invalid test-module mapping for {path}")
+            owners: set[str] = set()
+            for module in modules:
+                if not isinstance(module, str):
+                    raise SelectionError(f"invalid mapped test module for {path}")
+                module_owners = {lane.name for lane in LANES if module in lane.modules}
+                if not module_owners:
+                    raise SelectionError(f"mapped test module has no lane owner: {module}")
+                owners.update(module_owners)
+            lanes = [lane for lane in ALL_LANES if lane in owners]
             reason = f"{path}: {mapping.get('reason', 'explicit impact mapping')}"
-            selected.update(lanes)
+            selected.update(owners)
             for lane in lanes:
                 reasons[lane].append(reason)
             continue
@@ -136,50 +121,96 @@ def classify(paths: list[str], impact_map: dict[str, Any]) -> tuple[list[str], d
     return [lane for lane in ALL_LANES if lane in selected], reasons
 
 
+def _inline_code(value: object) -> str:
+    """Render untrusted values as one-line code without Markdown delimiters."""
+    visible: list[str] = []
+    for character in str(value):
+        codepoint = ord(character)
+        if character == "`":
+            visible.append(r"\x60")
+        elif character == "\n":
+            visible.append(r"\n")
+        elif character == "\r":
+            visible.append(r"\r")
+        elif codepoint < 32 or codepoint == 127:
+            visible.append(rf"\x{codepoint:02x}")
+        else:
+            visible.append(character)
+    return f"`{''.join(visible)}`"
+
+
 def _markdown(report: dict[str, Any]) -> str:
     lines = [
         "## Backend test-impact shadow report",
         "",
         "This is an advisory recommendation only. The complete required backend suite still runs.",
         "",
-        f"- PR base: `{report['base_sha']}`",
-        f"- PR head: `{report['head_sha']}`",
-        f"- Workflow execution SHA/tree: `{report['execution_sha']}` / `{report['execution_tree_sha']}`",
-        f"- Merge base: `{report['merge_base']}`",
-        f"- Selector version: `{report['selector_version']}`",
-        f"- Changed-path SHA-256: `{report['changed_paths_sha256']}`",
-        f"- Lane catalogue SHA-256: `{report['lane_catalogue_sha256']}`",
-        f"- Impact map SHA-256: `{report['impact_map_sha256']}`",
-        f"- Classification status: **{report['classification_status']}**",
+        f"- PR base: {_inline_code(report['base_sha'])}",
+        f"- PR head: {_inline_code(report['head_sha'])}",
+        "- Workflow execution SHA/tree: "
+        f"{_inline_code(report['execution_sha'])} / {_inline_code(report['execution_tree_sha'])}",
+        f"- Merge base: {_inline_code(report['merge_base'])}",
+        f"- Selector version: {_inline_code(report['selector_version'])}",
+        f"- Changed-path SHA-256: {_inline_code(report['changed_paths_sha256'])}",
+        f"- Lane catalogue SHA-256: {_inline_code(report['lane_catalogue_sha256'])}",
+        f"- Impact map SHA-256: {_inline_code(report['impact_map_sha256'])}",
+        f"- Classification status: {_inline_code(report['classification_status'])}",
         "",
         "### Recommended lanes",
         "",
     ]
     for lane in report["lanes"]:
         if lane["selected"]:
-            lines.append(f"- **{lane['name']}** — " + "; ".join(lane["reasons"]))
+            reason_text = "; ".join(_inline_code(reason) for reason in lane["reasons"])
+            lines.append(f"- {_inline_code(lane['name'])} — {reason_text}")
         else:
-            lines.append(f"- {lane['name']} — omitted: {lane['omission_reason']}")
+            lines.append(
+                f"- {_inline_code(lane['name'])} — omitted: "
+                f"{_inline_code(lane['omission_reason'])}"
+            )
     lines.extend(["", "### Changed paths", ""])
-    lines.extend(f"- `{path}`" for path in report["changed_paths"])
+    lines.extend(f"- {_inline_code(path)}" for path in report["changed_paths"])
     if report.get("classification_error"):
-        lines.extend(["", f"Fallback detail: `{report['classification_error']}`"])
+        lines.extend(["", f"Fallback detail: {_inline_code(report['classification_error'])}"])
     return "\n".join(lines) + "\n"
 
 
 def build_report(base: str, head: str, execution_sha: str) -> dict[str, Any]:
     """Bind the recommendation to exact Git targets and selector inputs."""
-    if _git("rev-parse", "HEAD") != execution_sha:
+    if resolve_commit("HEAD", repository_root=ROOT) != execution_sha:
         raise SelectionError("checked-out execution SHA does not match the workflow target")
-    tree_sha = _git("rev-parse", f"{execution_sha}^{{tree}}")
-    execution_parents = _git("show", "-s", "--format=%P", execution_sha).split()
+    tree_sha = run_checked(
+        ["git", "rev-parse", f"{execution_sha}^{{tree}}"], repository_root=ROOT
+    ).strip()
+    execution_parents = run_checked(
+        ["git", "show", "-s", "--format=%P", execution_sha], repository_root=ROOT
+    ).split()
     if execution_parents != [base, head]:
         raise SelectionError("workflow execution commit is not the exact PR base/head merge")
     merge_base, paths = _changed_paths(base, head)
-    if _git("rev-parse", f"{base}^{{commit}}") != base or _git("rev-parse", f"{head}^{{commit}}") != head:
+    if (
+        resolve_commit(base, repository_root=ROOT) != base
+        or resolve_commit(head, repository_root=ROOT) != head
+    ):
         raise SelectionError("base or head does not resolve to the requested commit")
-    impact_map = _read_map()
-    selected, reasons = classify(paths, impact_map)
+    map_digest: str | None = None
+    classification_error: str | None = None
+    try:
+        map_raw = MAP_PATH.read_bytes()
+        map_digest = _sha256(map_raw)
+        impact_map = json.loads(map_raw)
+        if not isinstance(impact_map, dict) or impact_map.get("schema_version") != 1:
+            raise SelectionError("impact map has an unsupported schema")
+        selected, reasons = classify(paths, impact_map)
+        classification_status = "classified"
+    except Exception as exc:  # noqa: BLE001 - any classifier fault recommends all lanes.
+        classification_error = f"{type(exc).__name__}: {exc}"
+        selected = list(ALL_LANES)
+        reasons = {
+            lane: ["classification failed after exact target resolution; recommend all lanes"]
+            for lane in ALL_LANES
+        }
+        classification_status = "fallback_all_lanes"
     lanes = []
     for name in ALL_LANES:
         is_selected = name in selected
@@ -194,7 +225,7 @@ def build_report(base: str, head: str, execution_sha: str) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "selector_version": SELECTOR_VERSION,
-        "classification_status": "classified",
+        "classification_status": classification_status,
         "base_sha": base,
         "head_sha": head,
         "execution_sha": execution_sha,
@@ -203,10 +234,11 @@ def build_report(base: str, head: str, execution_sha: str) -> dict[str, Any]:
         "changed_paths": paths,
         "changed_paths_sha256": _sha256("\0".join(paths).encode()),
         "selector_sha256": _sha256(SCRIPT_PATH.read_bytes()),
-        "impact_map_sha256": _sha256(MAP_PATH.read_bytes()),
+        "impact_map_sha256": map_digest,
         "lane_catalogue_sha256": _sha256(CATALOGUE_PATH.read_bytes()),
         "selected_lanes": selected,
         "lanes": lanes,
+        "classification_error": classification_error,
     }
 
 

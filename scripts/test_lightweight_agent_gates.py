@@ -139,12 +139,19 @@ class LightweightAgentGateTests(unittest.TestCase):
         )
         self.assertIn(
             "  test:\n    if: ${{ always() }}\n"
-            "    needs: [auth-boundary-preflight, lanes, minio-image, impact-report]", workflow
+            "    needs: [auth-boundary-preflight, lanes, minio-image]", workflow
         )
-        self.assertIn("Require preflight, impact report and every semantic lane", workflow)
+        self.assertIn("Require preflight and every semantic lane", workflow)
         lanes = workflow.split("\n  lanes:\n", 1)[1].split("\n  test:\n", 1)[0]
-        self.assertNotIn("needs: impact-report", lanes)
-        self.assertNotIn("selected_lanes", lanes)
+        aggregate = workflow.split("\n  test:\n", 1)[1]
+        self.assertNotIn("impact-report", lanes)
+        self.assertNotIn("impact-report", aggregate)
+        self.assertIn("API contract real API e2e", aggregate)
+        api_e2e = aggregate.split("      - name: API contract real API e2e\n", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        self.assertNotIn("\n        if:", api_e2e)
+        self.assertIn("scripts/run_isolated_tests.py", api_e2e)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
         self.assertIn(
@@ -217,44 +224,26 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertRegex(lanes, r"(?m)^    needs: minio-image$")
         self.assertNotIn("needs: auth-boundary-preflight", lanes)
         step = workflow.split(
-            "      - name: Require preflight, impact report and every semantic lane\n", 1
+            "      - name: Require preflight and every semantic lane\n", 1
         )[1].split("\n      - name:", 1)[0]
         self.assertIn("if: ${{ always() }}", step)
         self.assertIn("PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}", step)
         self.assertIn("LANES_RESULT: ${{ needs.lanes.result }}", step)
-        self.assertIn("IMPACT_REPORT_RESULT: ${{ needs.impact-report.result }}", step)
-        guard = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        guard = re.search(r"(?m)^        run: (.+)$", step)
+        self.assertIsNotNone(guard)
         for preflight in ("success", "failure", "cancelled", "skipped", "", "unknown"):
             for lanes_result in ("success", "failure", "cancelled", "skipped", "", "unknown"):
-                for event, impact in (
-                    ("pull_request", "success"),
-                    ("pull_request", "failure"),
-                    ("push", "skipped"),
-                    ("push", "success"),
-                ):
-                    with self.subTest(
-                        preflight=preflight,
-                        lanes=lanes_result,
-                        event=event,
-                        impact=impact,
-                    ):
-                        result = subprocess.run(
-                            ["bash", "-e", "-c", guard],
-                            env={
-                                "PREFLIGHT_RESULT": preflight,
-                                "LANES_RESULT": lanes_result,
-                                "IMPACT_REPORT_RESULT": impact,
-                                "EVENT_NAME": event,
-                            },
-                            capture_output=True,
-                            check=False,
-                        )
-                        expected = (
-                            preflight == lanes_result == "success"
-                            and (event == "pull_request" and impact == "success"
-                                 or event == "push" and impact == "skipped")
-                        )
-                        self.assertEqual(result.returncode == 0, expected)
+                with self.subTest(preflight=preflight, lanes=lanes_result):
+                    result = subprocess.run(
+                        ["bash", "-e", "-c", guard[1]],
+                        env={"PREFLIGHT_RESULT": preflight, "LANES_RESULT": lanes_result},
+                        capture_output=True,
+                        check=False,
+                    )
+                    self.assertEqual(
+                        result.returncode == 0,
+                        preflight == lanes_result == "success",
+                    )
 
     def test_postgres_storage_is_bounded_and_disk_contracts_remain(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

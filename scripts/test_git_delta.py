@@ -11,6 +11,7 @@ from scripts.git_delta import changed_files
 from scripts.git_delta import committed_changed_files
 from scripts.git_delta import diff_text
 from scripts.git_delta import numstat
+from scripts.git_delta import run_checked_bytes
 
 
 class GitDeltaTests(unittest.TestCase):
@@ -47,6 +48,27 @@ class GitDeltaTests(unittest.TestCase):
             )
             self.assertEqual(numstat(base, head, repository_root=root, include_local=False)[:2], (2, 0))
             self.assertIn("+++ b/a.txt", diff_text(base, head, repository_root=root, include_local=False))
+
+    def test_checked_byte_output_preserves_nul_delimited_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._git(root, "init")
+            self._git(root, "config", "user.email", "test@example.com")
+            self._git(root, "config", "user.name", "Test")
+            (root / "base.txt").write_text("base\n", encoding="utf-8")
+            self._git(root, "add", "base.txt")
+            self._git(root, "commit", "-m", "base")
+            unusual_path = "line\nbreak.txt"
+            (root / unusual_path).write_text("content\n", encoding="utf-8")
+            self._git(root, "add", unusual_path)
+            self._git(root, "commit", "-m", "add unusual path")
+
+            result = run_checked_bytes(
+                ["git", "diff", "--name-only", "-z", "HEAD^", "HEAD"],
+                repository_root=root,
+            )
+
+        self.assertEqual(result, b"line\nbreak.txt\0")
 
     @staticmethod
     def _git(root: Path, *arguments: str) -> str:

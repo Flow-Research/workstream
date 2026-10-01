@@ -359,7 +359,7 @@ jobs:
 
   test:
     if: ${{ always() }}
-    needs: [auth-boundary-preflight, lanes, minio-image, impact-report]
+    needs: [auth-boundary-preflight, lanes, minio-image]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -447,23 +447,12 @@ jobs:
           path: backend/.ci/download
           merge-multiple: false
 
-      - name: Require preflight, impact report and every semantic lane
+      - name: Require preflight and every semantic lane
         if: ${{ always() }}
         env:
           PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}
           LANES_RESULT: ${{ needs.lanes.result }}
-          IMPACT_REPORT_RESULT: ${{ needs.impact-report.result }}
-          EVENT_NAME: ${{ github.event_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${PREFLIGHT_RESULT}" = success
-          test "${LANES_RESULT}" = success
-          if [[ "${EVENT_NAME}" == pull_request ]]; then
-            test "${IMPACT_REPORT_RESULT}" = success
-          else
-            test "${IMPACT_REPORT_RESULT}" = skipped
-          fi
+        run: test "${PREFLIGHT_RESULT}" = success && test "${LANES_RESULT}" = success
 
       - name: Merge and independently validate exact lane custody
         working-directory: backend
