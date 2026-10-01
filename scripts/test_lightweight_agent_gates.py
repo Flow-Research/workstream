@@ -115,6 +115,9 @@ class LightweightAgentGateTests(unittest.TestCase):
     def test_backend_uses_distributed_semantic_lanes_and_stable_fan_in(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         agent_gates = Path(".github/workflows/agent-gates.yml").read_text(encoding="utf-8")
+        lightweight_gate_step = agent_gates.split(
+            "      - name: Lightweight gate regression tests\n", 1
+        )[1].split("\n      - name:", 1)[0]
         gate_requirements = Path(".github/requirements/agent-gates.txt").read_text(
             encoding="utf-8"
         )
@@ -182,7 +185,13 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("scripts.test_commitrail_contribution_paths", agent_gates)
         self.assertIn('WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}', agent_gates)
         self.assertNotIn("scripts.test_chunk_state_sync", agent_gates)
-        self.assertIn("scripts.test_backend_test_impact", agent_gates)
+        self.assertIn(
+            "        run: >-\n          python3 -m unittest -v\n", lightweight_gate_step
+        )
+        self.assertRegex(
+            lightweight_gate_step,
+            r"(?m)^          scripts\.test_backend_test_impact\s*$",
+        )
         self.assertIn("--require-hashes", agent_gates)
         self.assertIn("-r .github/requirements/agent-gates.txt", agent_gates)
         for package in (
