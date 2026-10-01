@@ -108,51 +108,35 @@ creation must use the real admission-backed command, not this fixture.
 
 If provisioning fails, confirm the local PostgreSQL provisioning credential can create/drop databases and roles, terminate owned sessions, and reach the named admin database. Diagnostics omit credentials.
 
-## Hosted Backend checks and complete-suite proof
+## Hosted semantic-lane full-suite proof
 
-The required GitHub check remains `Backend / test` on every pull request. The
-trusted-base selector in `backend/scripts/test_impact_selection.py` reads the
-reviewed map at `.ci/test-impact/impact_map.json` and binds the exact base, head,
-merge candidate/tree, changed paths, test inventory, selected modules/nodes and
-expected jobs. The map initially permits only
-`backend/app/core/s3_validation.py` and its complete configuration,
-provider-neutral namespace-conformance and real MinIO adapter test closure.
-Every Commitrail change also runs the complete backend policy-semantics module
-that reads Commitrail planning inputs. A Commitrail-only change runs that module
-plus the always-required authorization/static preflight.
+For pull requests, the workflow also publishes an exact-target test-impact
+shadow report in the Backend run summary and as a seven-day artifact. It records
+the PR base/head, merge base, checked-out execution SHA/tree, changed paths,
+selector/map/catalogue digests, and lane-level selection reasons. The initial
+map is deliberately narrow; changed test modules use the existing lane
+catalogue, while shared fixtures, migrations/schema, dependencies, workflow or
+catalogue changes and any unmapped path recommend all nine lanes. A
+classification error records an all-lanes fallback. The report is observational:
+all nine matrix lanes, authorization preflight, API/integration proof and
+evidence fan-in remain required and run independently of its recommendation.
+Do not use a shadow report as evidence that omitted lanes passed. A later
+change to CI selection policy requires representative same-head comparisons,
+trusted selection policy, and its own review. Because the report is generated
+from the PR candidate, a PR changing its selector, map, catalogue, or workflow
+does not validate that changed input.
 
-The initial rollout PR predates the trusted selector on its base revision, so
-that one candidate emits a fixed full-suite manifest and runs the complete
-required job set; it does not use its new selector for selective execution.
+The required GitHub check remains `Backend / test`. Nine matrix jobs each own a
+digest-pinned PostgreSQL service container, a pinned-source MinIO image,
+and exactly one dependency lane. A step-level curl health loop admits MinIO
+before collection. This is semantic fan-out, not arbitrary test-count sharding:
+lane ownership remains repository-defined and exact.
 
-Any unknown, broad, unclassified, stale, malformed or CI-selection change falls
-back to the complete suite. Changes to other documentation, fixtures, tests,
-schemas, dependencies or product modules are not implicitly ignored. The full
-mode uses all nine semantic lanes plus real PostgreSQL-backed API integration;
-it runs on every fallback PR and as a scheduled and manual audit. Nightly/manual
-evidence is tied to its own main head and never substitutes for exact-PR tests.
-No workflow path filters may hide the required check.
-
-Full-suite semantic lanes are defined in `backend/scripts/test_lane_catalogue.py`.
-Each lane owns its declared test inventory, a digest-pinned PostgreSQL service,
-and the shared pinned-source MinIO image. Selected impact jobs bypass PostgreSQL
-only for the explicitly mapped DB-free closure; S3 behavior still uses live
-MinIO. A service-free final `test` job validates the selector's exact expected
-job set and the complete node/job evidence. Missing, duplicate, skipped,
-deselected, mismatched or incomplete evidence fails closed.
-
-Authorization-boundary preflight runs in every mode and includes repository-wide
-lint, docstring and module/test-structure checks. The nine matrix jobs no longer
-repeat lint or docstring work. Full mode combines the nine lane artifacts once
-for diagnostic coverage and runs the real API integration separately with its
-own PostgreSQL, Redis and MinIO services. A full Backend run is not repeated on
-each protected `main` push: strict, up-to-date PR checks and a human approval
-protect merges, while the scheduled and manual runs audit the complete suite.
-
-The selector, workflow, map, evidence validator or test-catalogue tooling are
-not trusted to select themselves: changing any of them forces full mode. A new
-source-to-test relation may be mapped only after its complete consumers and
-required infrastructure are proven; otherwise it remains in the full fallback.
+The explicit inventory lives in `backend/scripts/test_lane_catalogue.py`.
+Authorization preflight runs alongside the nine lanes. The final `test` job
+requires both preflight and every lane to succeed before validating evidence and
+coverage; failed, cancelled or skipped prerequisites remain blocking. This saves
+serial waiting on valid changes at the cost of lane work when preflight fails.
 Assertion-map validation analyzes each exact historical revision/module once per
 invocation, then checks every referenced node and assertion against that analysis.
 It does not cache current source or reuse analysis across validation calls.
@@ -162,8 +146,7 @@ to reduce ephemeral reset I/O. A runtime guard verifies the mount, capacity,
 data directory and enabled `fsync`, `full_page_writes` and `synchronous_commit`
 before tests. Real SQL, transaction, lock, isolation, and full hosted behavior
 checks remain.
-The schema-contract lane retains disk-backed storage. The final evidence
-aggregator is service-free.
+The schema-contract lane and aggregate job retain disk-backed databases.
 This is not a production configuration or proof of host-power-loss durability:
 [Docker tmpfs data disappears when the container stops](https://docs.docker.com/engine/storage/tmpfs/).
 An exhausted mount fails the job; it does not silently change storage or skip tests.

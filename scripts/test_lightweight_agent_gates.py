@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import hashlib
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -124,21 +121,6 @@ class LightweightAgentGateTests(unittest.TestCase):
 
         self.assertNotIn("pull_request_review:", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
-        self.assertCountEqual(
-            re.findall(
-                r"(?m)^  ([a-z][a-z0-9-]*):\s*$", workflow.split("\njobs:\n", 1)[1]
-            ),
-            [
-                "impact-selection",
-                "minio-image",
-                "auth-boundary-preflight",
-                "lanes",
-                "full-api-e2e",
-                "impact-pure",
-                "impact-s3",
-                "test",
-            ],
-        )
         self.assertEqual(len(re.findall(r"(?m)^      matrix:$", workflow)), 1)
         matrix = re.search(r"(?m)^      matrix:\n((?: {8,}[^\n]*\n|\n)+)", workflow)
         self.assertIsNotNone(matrix)
@@ -155,8 +137,14 @@ class LightweightAgentGateTests(unittest.TestCase):
             "          - task_lifecycle_b\n"
             "          - task_lifecycle_c",
         )
-        self.assertIn("    needs: [impact-selection, auth-boundary-preflight, minio-image, lanes, full-api-e2e, impact-pure, impact-s3]", workflow)
-        self.assertIn("Validate the exact expected GitHub job inventory", workflow)
+        self.assertIn(
+            "  test:\n    if: ${{ always() }}\n"
+            "    needs: [auth-boundary-preflight, lanes, minio-image, impact-report]", workflow
+        )
+        self.assertIn("Require preflight, impact report and every semantic lane", workflow)
+        lanes = workflow.split("\n  lanes:\n", 1)[1].split("\n  test:\n", 1)[0]
+        self.assertNotIn("needs: impact-report", lanes)
+        self.assertNotIn("selected_lanes", lanes)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
         self.assertIn(
@@ -166,16 +154,6 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("include-hidden-files: true", workflow)
         self.assertIn("coverage report --precision=2", workflow)
         self.assertNotIn("fail-under", workflow)
-        self.assertIn("test_impact_selection.py", workflow)
-        self.assertIn("backend-impact-selection-", workflow)
-        self.assertIn("validate_workflow_jobs.py", workflow)
-        self.assertIn("Bootstrap this workflow change with a static full-suite manifest.", workflow)
-        self.assertIn('test "${EVENT_NAME}" = pull_request', workflow)
-        self.assertIn('"mode": "full"', workflow)
-        self.assertIn("full-api-e2e", workflow)
-        self.assertNotIn("push:\n    branches:\n      - main", workflow)
-        self.assertIn("schedule:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("pull_request_review:", agent_gates)
         self.assertNotIn("--require-pr-approval", agent_gates)
         self.assertNotIn("pull-requests:", agent_gates)
@@ -210,15 +188,13 @@ class LightweightAgentGateTests(unittest.TestCase):
     def test_minio_source_image_is_built_once_and_shared_without_bypassing_lanes(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         image_job = workflow.split("\n  minio-image:\n", 1)[1].split("\n  auth-boundary-preflight:\n", 1)[0]
-        self.assertEqual(workflow.count('docker build --tag "${MINIO_IMAGE}" docker/minio'), 2)
-        self.assertIn("if ! verify_provider; then", image_job)
+        self.assertEqual(workflow.count('docker build --tag "${MINIO_IMAGE}" docker/minio'), 1)
         self.assertNotIn("quay.io/minio", workflow)
         self.assertIn("hashFiles('docker/minio/**')", image_job)
         self.assertIn(
-            "key: minio-source-v2-${{ runner.os }}-${{ runner.arch }}-",
+            "key: minio-source-v1-${{ github.sha }}-${{ runner.os }}-${{ runner.arch }}-",
             image_job,
         )
-        self.assertNotIn("${{ github.sha }}", image_job.split("key:", 1)[1].splitlines()[0])
         self.assertNotIn("restore-keys:", image_job)
         self.assertIn("minio-source-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}", image_job)
         self.assertIn("artifact: ${{ steps.identity.outputs.artifact }}", image_job)
@@ -226,104 +202,70 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("/minio/health/live", image_job)
         self.assertIn("if-no-files-found: error", image_job)
         self.assertNotIn("continue-on-error", image_job)
-        for name, end in (("lanes", "full-api-e2e"), ("full-api-e2e", "impact-pure"), ("impact-s3", "test")):
+        for name, end in (("lanes", "test"), ("test", None)):
             job = workflow.split(f"\n  {name}:\n", 1)[1]
             if end:
                 job = job.split(f"\n  {end}:\n", 1)[0]
-            if name in {"lanes", "full-api-e2e", "impact-s3"}:
-                self.assertIn("name: ${{ needs.minio-image.outputs.artifact }}", job)
-                self.assertIn("sha256sum --check minio.tar.sha256", job)
-                self.assertIn('docker load --input "${RUNNER_TEMP}/minio-image/minio.tar"', job)
-                self.assertIn('"${MINIO_IMAGE}" server /data --address :9000', job)
+            self.assertIn("name: ${{ needs.minio-image.outputs.artifact }}", job)
+            self.assertIn("sha256sum --check minio.tar.sha256", job)
+            self.assertIn('docker load --input "${RUNNER_TEMP}/minio-image/minio.tar"', job)
+            self.assertIn('"${MINIO_IMAGE}" server /data --address :9000', job)
 
     def test_parallel_preflight_and_lanes_fail_closed_at_fan_in(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         lanes = workflow.split("\n  lanes:\n", 1)[1].split("\n  test:\n", 1)[0]
-        self.assertRegex(lanes, r"(?m)^    needs: \[impact-selection, minio-image\]$")
+        self.assertRegex(lanes, r"(?m)^    needs: minio-image$")
         self.assertNotIn("needs: auth-boundary-preflight", lanes)
-        self.assertIn("if: ${{ always() }}", workflow.split("\n  test:\n", 1)[1])
-        self.assertIn("needs.auth-boundary-preflight.result", workflow)
-        self.assertIn("needs.lanes.result", workflow)
-        self.assertIn("needs.impact-s3.result", workflow)
-        self.assertIn("needs.impact-pure.result", workflow)
-
-    def test_impact_job_inventory_validator_rejects_missing_or_unexpected_jobs(self) -> None:
-        validator = Path(".ci/test-impact/validate_workflow_jobs.py")
-        manifest = {
-            "schema_version": 1,
-            "mode": "impact",
-            "infrastructure_profile": "minio",
-            "expected_jobs": [
-                "impact-selection",
-                "auth-boundary-preflight",
-                "minio-image",
-                "impact-s3",
-            ],
-        }
-        statuses = {
-            "impact-selection": "success",
-            "auth-boundary-preflight": "success",
-            "minio-image": "success",
-            "lanes": "skipped",
-            "full-api-e2e": "skipped",
-            "impact-pure": "skipped",
-            "impact-s3": "success",
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            manifest_path = Path(directory) / "selection.json"
-            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-            results_json = json.dumps(statuses)
-            valid = subprocess.run(
-                [
-                    sys.executable,
-                    str(validator),
-                    "--manifest",
-                    str(manifest_path),
-                    "--manifest-sha256",
-                    digest,
-                    "--results-json",
-                    results_json,
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(valid.returncode, 0, valid.stderr)
-
-            for job, status in (("impact-s3", "skipped"), ("lanes", "success")):
-                invalid_statuses = {**statuses, job: status}
-                invalid = subprocess.run(
-                    [
-                        sys.executable,
-                        str(validator),
-                        "--manifest",
-                        str(manifest_path),
-                        "--manifest-sha256",
-                        digest,
-                        "--results-json",
-                        json.dumps(invalid_statuses),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                )
-                self.assertNotEqual(invalid.returncode, 0)
+        step = workflow.split(
+            "      - name: Require preflight, impact report and every semantic lane\n", 1
+        )[1].split("\n      - name:", 1)[0]
+        self.assertIn("if: ${{ always() }}", step)
+        self.assertIn("PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}", step)
+        self.assertIn("LANES_RESULT: ${{ needs.lanes.result }}", step)
+        self.assertIn("IMPACT_REPORT_RESULT: ${{ needs.impact-report.result }}", step)
+        guard = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        for preflight in ("success", "failure", "cancelled", "skipped", "", "unknown"):
+            for lanes_result in ("success", "failure", "cancelled", "skipped", "", "unknown"):
+                for event, impact in (
+                    ("pull_request", "success"),
+                    ("pull_request", "failure"),
+                    ("push", "skipped"),
+                    ("push", "success"),
+                ):
+                    with self.subTest(
+                        preflight=preflight,
+                        lanes=lanes_result,
+                        event=event,
+                        impact=impact,
+                    ):
+                        result = subprocess.run(
+                            ["bash", "-e", "-c", guard],
+                            env={
+                                "PREFLIGHT_RESULT": preflight,
+                                "LANES_RESULT": lanes_result,
+                                "IMPACT_REPORT_RESULT": impact,
+                                "EVENT_NAME": event,
+                            },
+                            capture_output=True,
+                            check=False,
+                        )
+                        expected = (
+                            preflight == lanes_result == "success"
+                            and (event == "pull_request" and impact == "success"
+                                 or event == "push" and impact == "skipped")
+                        )
+                        self.assertEqual(result.returncode == 0, expected)
 
     def test_postgres_storage_is_bounded_and_disk_contracts_remain(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         lane_service = workflow.split("\n  lanes:\n", 1)[1].split("\n    steps:", 1)[0]
         aggregate_service = workflow.split("\n  test:\n", 1)[1].split("\n    steps:", 1)[0]
-        api_service = workflow.split("\n  full-api-e2e:\n", 1)[1].split("\n    steps:", 1)[0]
         self.assertIn(
             "${{ matrix.lane != 'schema_contracts' && "
             "'--tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=2147483648' || '' }}",
             lane_service,
         )
         self.assertNotIn("--tmpfs", aggregate_service)
-        self.assertNotIn("services:", aggregate_service)
-        self.assertIn("postgres:", api_service)
-        self.assertIn("redis:", api_service)
         self.assertLess(
             workflow.index("- name: Verify PostgreSQL CI storage and write settings"),
             workflow.index("- name: Execute semantic lane"),

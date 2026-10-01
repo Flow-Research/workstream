@@ -2,9 +2,9 @@ name: Backend
 
 on:
   pull_request:
-  schedule:
-    - cron: "19 3 * * *"
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 concurrency:
   group: backend-${{ github.event.pull_request.number || github.ref }}
@@ -18,121 +18,7 @@ env:
   MINIO_IMAGE: workstream-minio:source
 
 jobs:
-  impact-selection:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      mode: ${{ steps.select.outputs.mode }}
-      profile: ${{ steps.select.outputs.profile }}
-      manifest_sha256: ${{ steps.select.outputs.manifest_sha256 }}
-      started_at: ${{ steps.timing.outputs.started_at }}
-    steps:
-      - id: timing
-        name: Start Backend workflow timing
-        run: echo "started_at=$(date +%s)" >> "${GITHUB_OUTPUT}"
-
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ github.sha }}
-          path: candidate
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          path: trusted
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Select exact tests using the trusted base map
-        id: select
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
-          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          EXECUTION_SHA: ${{ github.sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          manifest="${RUNNER_TEMP}/backend-impact/selection.json"
-          mkdir -p "$(dirname "${manifest}")"
-          args=(
-            --trusted-root "${GITHUB_WORKSPACE}/trusted"
-            --candidate-root "${GITHUB_WORKSPACE}/candidate"
-            --base-sha "${EVENT_BASE_SHA}"
-            --head-sha "${EVENT_HEAD_SHA}"
-            --execution-sha "${EXECUTION_SHA}"
-            --output "${manifest}"
-          )
-          if [[ "${EVENT_NAME}" != pull_request ]]; then
-            args+=(--force-full)
-          fi
-          if [[ -f trusted/backend/scripts/test_impact_selection.py \
-              && -f trusted/.ci/test-impact/impact_map.json \
-              && -f trusted/.ci/test-impact/run_selected_tests.py ]]; then
-            python3 trusted/backend/scripts/test_impact_selection.py "${args[@]}"
-          else
-            # Bootstrap this workflow change with a static full-suite manifest.
-            # The trusted base has no selector yet, so no selective mode is possible.
-            test "${EVENT_NAME}" = pull_request
-            test "$(git -C candidate rev-parse HEAD)" = "${EXECUTION_SHA}"
-            test -z "$(git -C candidate status --porcelain)"
-            python3 - "${manifest}" <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import subprocess
-          import sys
-
-          candidate = Path("candidate")
-          execution = os.environ["EXECUTION_SHA"]
-          tree = subprocess.check_output(
-              ["git", "-C", str(candidate), "rev-parse", f"{execution}^{{tree}}"],
-              text=True,
-          ).strip()
-          payload = {
-              "schema_version": 1,
-              "mode": "full",
-              "infrastructure_profile": "full",
-              "base_sha": os.environ["EVENT_BASE_SHA"],
-              "head_sha": os.environ["EVENT_HEAD_SHA"],
-              "execution_sha": execution,
-              "execution_tree": tree,
-              "selected_modules": [],
-              "expected_jobs": [
-                  "impact-selection",
-                  "auth-boundary-preflight",
-                  "minio-image",
-                  "lanes",
-                  "full-api-e2e",
-              ],
-          }
-          encoded = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
-          target = Path(sys.argv[1])
-          target.write_bytes(encoded)
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              output.write("mode=full\n")
-              output.write("profile=full\n")
-              output.write(f"manifest_sha256={hashlib.sha256(encoded).hexdigest()}\n")
-          PY
-          fi
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: backend-impact-selection-${{ github.sha }}-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/backend-impact/selection.json
-          if-no-files-found: error
-          retention-days: 7
-
   minio-image:
-    needs: impact-selection
-    if: >-
-      ${{
-        needs.impact-selection.outputs.mode == 'full' ||
-        (needs.impact-selection.outputs.mode == 'impact' && needs.impact-selection.outputs.profile == 'minio')
-      }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -154,8 +40,8 @@ jobs:
         id: cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          path: ${{ runner.temp }}/minio-image/
-          key: minio-source-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('docker/minio/**') }}
+          path: ${{ runner.temp }}/minio-image/minio.tar
+          key: minio-source-v1-${{ github.sha }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('docker/minio/**') }}
 
       - name: Build source-pinned MinIO once
         if: steps.cache.outputs.cache-hit != 'true'
@@ -167,42 +53,26 @@ jobs:
           docker save --output "${RUNNER_TEMP}/minio-image/minio.tar" "${MINIO_IMAGE}"
 
       - name: Verify the cached or freshly built provider
-        env:
-          MINIO_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
         shell: bash
         run: |
           set -euo pipefail
-          verify_provider() {
-            if [[ "${MINIO_CACHE_HIT}" == true ]]; then
-              (cd "${RUNNER_TEMP}/minio-image" && sha256sum --check minio.tar.sha256) || return 1
+          docker load --input "${RUNNER_TEMP}/minio-image/minio.tar"
+          docker run --rm "${MINIO_IMAGE}" --version
+          docker run --detach --rm --name minio-build-probe \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER=workstream-minio \
+            --env MINIO_ROOT_PASSWORD=workstream-minio-secret-key \
+            "${MINIO_IMAGE}" server /data --address :9000
+          trap 'docker logs minio-build-probe; docker stop minio-build-probe' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              cd "${RUNNER_TEMP}/minio-image"
+              sha256sum minio.tar > minio.tar.sha256
+              exit 0
             fi
-            docker load --input "${RUNNER_TEMP}/minio-image/minio.tar" || return 1
-            docker run --rm "${MINIO_IMAGE}" --version || return 1
-            docker run --detach --rm --name minio-build-probe \
-              --publish 127.0.0.1:9000:9000 \
-              --env MINIO_ROOT_USER=workstream-minio \
-              --env MINIO_ROOT_PASSWORD=workstream-minio-secret-key \
-              "${MINIO_IMAGE}" server /data --address :9000 || return 1
-            for attempt in $(seq 1 60); do
-              if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
-                docker stop minio-build-probe || return 1
-                return 0
-              fi
-              sleep 1
-            done
-            docker logs minio-build-probe
-            docker stop minio-build-probe
-            return 1
-          }
-          if ! verify_provider; then
-            rm -f "${RUNNER_TEMP}/minio-image/minio.tar" \
-              "${RUNNER_TEMP}/minio-image/minio.tar.sha256"
-            docker build --tag "${MINIO_IMAGE}" docker/minio
-            docker save --output "${RUNNER_TEMP}/minio-image/minio.tar" "${MINIO_IMAGE}"
-            verify_provider
-          fi
-          cd "${RUNNER_TEMP}/minio-image"
-          sha256sum minio.tar > minio.tar.sha256
+            sleep 1
+          done
+          exit 1
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -248,10 +118,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ruff check app tests scripts
-          docstr-coverage --config .docstr.yaml
+          ruff check \
+            app/modules/authorization/api \
+            scripts/authorization_boundary.py \
+            scripts/module_boundaries.py \
+            scripts/test_structure_boundary.py \
+            tests/architecture/test_authorization_boundary.py \
+            tests/architecture/test_module_boundaries.py \
+            tests/architecture/test_test_structure_boundary.py
           python -m scripts.module_boundaries validate \
-            --protected-base "${{ github.event.pull_request.base.sha || github.sha }}"
+            --protected-base "${{ github.event.pull_request.base.sha || github.event.before }}"
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q \
             -p pytest_asyncio.plugin \
             tests/architecture/test_module_boundaries.py \
@@ -263,9 +139,50 @@ jobs:
             --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
 
+  impact-report:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Bind and classify the exact pull request target
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python backend/scripts/test_impact_selection.py
+          --json .ci/test-impact/report.json
+          --markdown .ci/test-impact/report.md
+
+      - name: Upload exact-target impact report
+        id: report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-test-impact-${{ github.sha }}
+          path: |
+            .ci/test-impact/report.json
+            .ci/test-impact/report.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Link report artifact in run summary
+        env:
+          REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          printf '\n[Download exact-head test-impact report](%s)\n' "${REPORT_URL}" >> "${GITHUB_STEP_SUMMARY}"
+
   lanes:
-    needs: [impact-selection, minio-image]
-    if: ${{ needs.impact-selection.outputs.mode == 'full' }}
+    needs: minio-image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -338,6 +255,14 @@ jobs:
           python -m pip install -e ".[dev,agents]"
           python -m pip install ruff==0.15.22
           test "$(ruff --version)" = "ruff 0.15.22"
+
+      - name: Lint
+        working-directory: backend
+        run: ruff check app tests scripts
+
+      - name: Docstring coverage
+        working-directory: backend
+        run: docstr-coverage --config .docstr.yaml
 
       - name: Download source-pinned MinIO image
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -432,9 +357,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  full-api-e2e:
-    needs: [impact-selection, minio-image]
-    if: ${{ needs.impact-selection.outputs.mode == 'full' }}
+  test:
+    if: ${{ always() }}
+    needs: [auth-boundary-preflight, lanes, minio-image, impact-report]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -472,13 +397,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Bind exact API-test candidate
+      - id: identity
+        name: Bind exact checked-out tree
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          job_start_epoch="$(date +%s)"
+          tree_sha="$(git rev-parse HEAD)"
+          test "${tree_sha}" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain)"
-          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "${GITHUB_SHA}^{tree}")"
+          echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
+          echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Install backend
         working-directory: backend
@@ -510,215 +439,33 @@ jobs:
           docker logs workstream-minio
           exit 1
 
-      - name: API contract real API e2e
-        working-directory: backend
-        env:
-          WORKSTREAM_TEST_BROKER_URL: redis://localhost:6380/0
-          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
-          WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
-        run: >-
-          python scripts/run_isolated_tests.py
-          --metadata-json "${RUNNER_TEMP}/api-database.json"
-          --timeout-seconds 1500
-          -- python scripts/api_contract_e2e.py
-
-  impact-pure:
-    needs: impact-selection
-    if: ${{ needs.impact-selection.outputs.mode == 'pure' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.12"
-
-      - name: Install backend
-        working-directory: backend
-        run: python -m pip install -e ".[dev,agents]"
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: backend-impact-selection-${{ github.sha }}-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/backend-impact
-
-      - name: Run selected policy tests with exact custody
-        env:
-          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: >-
-          python3 .ci/test-impact/run_selected_tests.py
-          --manifest "${RUNNER_TEMP}/backend-impact/selection.json"
-          --output "${RUNNER_TEMP}/backend-impact/evidence"
-          --expected-job impact-pure
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: ${{ always() }}
-        with:
-          name: backend-impact-evidence-${{ github.sha }}-impact-pure-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/backend-impact/evidence/
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 7
-
-  impact-s3:
-    needs: [impact-selection, minio-image]
-    if: ${{ needs.impact-selection.outputs.mode == 'impact' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.12"
-
-      - name: Bind exact S3-impact candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain)"
-          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "${GITHUB_SHA}^{tree}")"
-
-      - name: Install backend
-        working-directory: backend
-        run: python -m pip install -e ".[dev,agents]"
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: backend-impact-selection-${{ github.sha }}-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/backend-impact
-
-      - name: Download source-pinned MinIO image
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: ${{ needs.minio-image.outputs.artifact }}
-          path: ${{ runner.temp }}/minio-image
-
-      - name: Start real MinIO adapter provider
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd "${RUNNER_TEMP}/minio-image" && sha256sum --check minio.tar.sha256)
-          docker load --input "${RUNNER_TEMP}/minio-image/minio.tar"
-          docker run --detach --rm --name workstream-minio \
-            --publish 127.0.0.1:9000:9000 \
-            --env MINIO_ROOT_USER=workstream-minio \
-            --env MINIO_ROOT_PASSWORD=workstream-minio-secret-key \
-            "${MINIO_IMAGE}" server /data --address :9000
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs workstream-minio
-          exit 1
-
-      - name: Run selected S3 and Commitrail tests with exact custody
-        working-directory: backend
-        env:
-          GITHUB_EVENT_PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_EVENT_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
-        run: >-
-          python3 ../.ci/test-impact/run_selected_tests.py
-          --manifest "${RUNNER_TEMP}/backend-impact/selection.json"
-          --output "${RUNNER_TEMP}/backend-impact/evidence"
-          --expected-job impact-s3
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: ${{ always() }}
-        with:
-          name: backend-impact-evidence-${{ github.sha }}-impact-s3-attempt-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/backend-impact/evidence/
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 7
-
-  test:
-    if: ${{ always() }}
-    needs: [impact-selection, auth-boundary-preflight, minio-image, lanes, full-api-e2e, impact-pure, impact-s3]
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.12"
-
-      - id: identity
-        name: Bind exact checked-out tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          job_start_epoch="$(date +%s)"
-          tree_sha="$(git rev-parse HEAD)"
-          test "${tree_sha}" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain)"
-          echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
-          echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: backend-impact-selection-${{ github.sha }}-attempt-${{ github.run_attempt }}
-          path: .ci/impact-selection
-
-      - name: Validate the exact expected GitHub job inventory
-        env:
-          SELECTION_SHA256: ${{ needs.impact-selection.outputs.manifest_sha256 }}
-          IMPACT_SELECTION_RESULT: ${{ needs.impact-selection.result }}
-          AUTH_BOUNDARY_PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}
-          MINIO_IMAGE_RESULT: ${{ needs.minio-image.result }}
-          LANES_RESULT: ${{ needs.lanes.result }}
-          FULL_API_E2E_RESULT: ${{ needs.full-api-e2e.result }}
-          IMPACT_PURE_RESULT: ${{ needs.impact-pure.result }}
-          IMPACT_S3_RESULT: ${{ needs.impact-s3.result }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          results="$(python3 - <<'PY'
-          import json
-          import os
-          print(json.dumps({
-              "impact-selection": os.environ["IMPACT_SELECTION_RESULT"],
-              "auth-boundary-preflight": os.environ["AUTH_BOUNDARY_PREFLIGHT_RESULT"],
-              "minio-image": os.environ["MINIO_IMAGE_RESULT"],
-              "lanes": os.environ["LANES_RESULT"],
-              "full-api-e2e": os.environ["FULL_API_E2E_RESULT"],
-              "impact-pure": os.environ["IMPACT_PURE_RESULT"],
-              "impact-s3": os.environ["IMPACT_S3_RESULT"],
-          }))
-          PY
-          )"
-          python3 .ci/test-impact/validate_workflow_jobs.py \
-            --manifest .ci/impact-selection/selection.json \
-            --manifest-sha256 "${SELECTION_SHA256}" \
-            --results-json "${results}"
-
       - name: Download separate lane attempts from this run
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
+        if: ${{ always() }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           pattern: backend-lane-${{ github.sha }}-*-attempt-*
           path: backend/.ci/download
           merge-multiple: false
 
+      - name: Require preflight, impact report and every semantic lane
+        if: ${{ always() }}
+        env:
+          PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}
+          LANES_RESULT: ${{ needs.lanes.result }}
+          IMPACT_REPORT_RESULT: ${{ needs.impact-report.result }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${PREFLIGHT_RESULT}" = success
+          test "${LANES_RESULT}" = success
+          if [[ "${EVENT_NAME}" == pull_request ]]; then
+            test "${IMPACT_REPORT_RESULT}" = success
+          else
+            test "${IMPACT_REPORT_RESULT}" = skipped
+          fi
+
       - name: Merge and independently validate exact lane custody
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
         working-directory: backend
         shell: bash
         run: |
@@ -735,7 +482,6 @@ jobs:
             --summary-json .ci/test-lanes/run-summary.json
 
       - name: Combine semantic-lane coverage exactly once
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
         working-directory: backend
         shell: bash
         run: |
@@ -754,22 +500,26 @@ jobs:
           done
           coverage combine
 
-      - name: Install coverage tooling for the complete suite
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
+      - name: API contract real API e2e
         working-directory: backend
-        run: python -m pip install -e ".[dev,agents]"
+        env:
+          WORKSTREAM_TEST_BROKER_URL: redis://localhost:6380/0
+          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+          WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
+        run: >-
+          python scripts/run_isolated_tests.py
+          --metadata-json "${RUNNER_TEMP}/api-database.json"
+          --timeout-seconds 1500
+          -- python scripts/api_contract_e2e.py
 
       - name: Backend coverage diagnostics (no percentage gate)
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
         working-directory: backend
         run: coverage report --precision=2
 
       - name: Record hosted timing, complete execution and diagnostic coverage
-        if: ${{ needs.impact-selection.outputs.mode == 'full' }}
         working-directory: backend
         env:
           EXPECTED_HEAD_SHA: ${{ steps.identity.outputs.tree_sha }}
-          BACKEND_STARTED_AT: ${{ needs.impact-selection.outputs.started_at }}
         shell: bash
         run: |
           set -euo pipefail
@@ -896,13 +646,10 @@ jobs:
               if not timing_value.isdigit():
                   raise SystemExit("invalid lane start timing")
               start_epochs.append(int(timing_value))
-          backend_started_at = int(os.environ["BACKEND_STARTED_AT"])
-          first_lane_start_delay = min(start_epochs) - backend_started_at
-          total_wall = time.time() - backend_started_at
+          start_epoch = min(start_epochs)
+          total_wall = time.time() - start_epoch
           if not math.isfinite(total_wall) or total_wall < 0:
               raise SystemExit("invalid Backend hosted wall time")
-          if first_lane_start_delay < 0:
-              raise SystemExit("invalid first lane start timing")
           totals = coverage.get("totals")
           percent = totals.get("percent_covered") if isinstance(totals, dict) else None
           if (
@@ -921,7 +668,6 @@ jobs:
               "global_coverage_percent": float(percent),
               "global_coverage_sha256": digest(coverage_path),
               "head_sha": expected_head,
-              "first_lane_start_delay_seconds": first_lane_start_delay,
               "run_summary_sha256": digest(summary_path),
               "slowest_lane_seconds": float(slowest),
               "timing_target_met": total_wall <= 480,
@@ -929,74 +675,6 @@ jobs:
           }
           output_path.write_text(
               json.dumps(hosted, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-          )
-          PY
-
-      - name: Download exact impact evidence
-        if: ${{ needs.impact-selection.outputs.mode == 'pure' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: backend-impact-evidence-${{ github.sha }}-impact-pure-attempt-${{ github.run_attempt }}
-          path: .ci/impact-evidence
-
-      - name: Validate pure impact evidence
-        if: ${{ needs.impact-selection.outputs.mode == 'pure' }}
-        env:
-          SELECTION_SHA256: ${{ needs.impact-selection.outputs.manifest_sha256 }}
-        run: >-
-          python3 .ci/test-impact/run_selected_tests.py
-          --validate-only
-          --manifest .ci/impact-selection/selection.json
-          --evidence .ci/impact-evidence/evidence.json
-          --expected-job impact-pure
-          --expected-manifest-sha256 "${SELECTION_SHA256}"
-
-      - name: Download exact S3 impact evidence
-        if: ${{ needs.impact-selection.outputs.mode == 'impact' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: backend-impact-evidence-${{ github.sha }}-impact-s3-attempt-${{ github.run_attempt }}
-          path: .ci/impact-evidence
-
-      - name: Validate S3 impact evidence
-        if: ${{ needs.impact-selection.outputs.mode == 'impact' }}
-        env:
-          SELECTION_SHA256: ${{ needs.impact-selection.outputs.manifest_sha256 }}
-        run: >-
-          python3 .ci/test-impact/run_selected_tests.py
-          --validate-only
-          --manifest .ci/impact-selection/selection.json
-          --evidence .ci/impact-evidence/evidence.json
-          --expected-job impact-s3
-          --expected-manifest-sha256 "${SELECTION_SHA256}"
-
-      - name: Record selective workflow wall time
-        if: ${{ needs.impact-selection.outputs.mode != 'full' }}
-        env:
-          BACKEND_STARTED_AT: ${{ needs.impact-selection.outputs.started_at }}
-          IMPACT_MODE: ${{ needs.impact-selection.outputs.mode }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          import time
-
-          evidence_path = Path(".ci/impact-evidence/evidence.json")
-          evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-          elapsed = time.time() - int(os.environ["BACKEND_STARTED_AT"])
-          if elapsed < 0:
-              raise SystemExit("invalid Backend workflow timing")
-          output = {
-              "head_sha": evidence["execution_sha"],
-              "mode": os.environ["IMPACT_MODE"],
-              "selected_node_count": len(evidence["selected_nodes"]),
-              "timing_target_met": elapsed <= 300,
-              "total_backend_wall_seconds": round(elapsed, 3),
-          }
-          evidence_path.with_name("hosted-evidence.json").write_text(
-              json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
           PY
 
@@ -1016,8 +694,6 @@ jobs:
           path: |
             backend/.ci/download/**
             backend/.ci/test-lanes/**
-            .ci/impact-selection/**
-            .ci/impact-evidence/**
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7

@@ -1,24 +1,21 @@
 {
   "schema_version": 1,
-  "commitrail_test_modules": [
-    "tests/projects/review_policy/test_semantics.py"
-  ],
-  "owners": [
-    {
-      "source_paths": [
-        "backend/app/core/s3_validation.py"
-      ],
-      "test_paths": [
-        "backend/tests/test_config.py",
-        "backend/tests/test_artifact_store_conformance.py",
-        "backend/tests/test_s3_artifact_store.py"
-      ],
-      "test_modules": [
-        "tests/test_config.py",
-        "tests/test_artifact_store_conformance.py",
-        "tests/test_s3_artifact_store.py"
-      ],
-      "infrastructure": "minio"
+  "lane_groups": {
+    "shared_foundations": [
+      "shared_foundations_a",
+      "shared_foundations_b"
+    ]
+  },
+  "source_paths": {
+    "backend/app/core/s3_validation.py": {
+      "lane_group": "shared_foundations",
+      "reason": "S3 configuration validation is exercised in the shared-foundation partition."
     }
-  ]
+  },
+  "path_prefixes": {
+    ".commitrail/": {
+      "lane_group": "shared_foundations",
+      "reason": "Commitrail policy semantics are tested in the shared-foundation partition."
+    }
+  }
 }

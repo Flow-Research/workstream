@@ -97,14 +97,8 @@ active queue or approval gate.
 
 - Explain the goal, scope, non-goals, and important design decisions.
 - Keep the change small enough to review.
-- Run the relevant behavior tests, lint and type checks. The required hosted
-  Backend check uses a reviewed source-to-test map: mapped changes run the
-  complete named consumer closure with its required real services; every
-  unmapped, broad, uncertain, or CI-selection change falls back to all nine
-  semantic lanes and the real API integration job. The complete suite also
-  runs on its scheduled audit and manual dispatch. A scheduled result never
-  substitutes for checks on your exact PR candidate. Coverage is diagnostic,
-  not a merge threshold.
+- Run the relevant behavior tests, lint and type checks; full hosted suites and
+  real API drills remain required. Coverage is diagnostic, not a merge threshold.
 - Preserve security defaults and meaningful negative-path proof. Do not add tests
   to meet a percentage or count. For test removals/consolidations, name the
   retained behavioral proof or the retired requirement. Keep real database,

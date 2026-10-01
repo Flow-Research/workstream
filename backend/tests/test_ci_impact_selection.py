@@ -1,299 +1,217 @@
-"""Fail-closed tests for the reviewed backend impact classifier."""
+"""Regressions for the observational backend impact recommendation."""
 
 from __future__ import annotations
 
 import json
-import importlib.util
-import hashlib
-import subprocess
 from pathlib import Path
+import subprocess
+import sys
+from unittest.mock import patch
 
-import pytest
-
-from scripts.test_impact_selection import (
-    MAP_RELATIVE_PATH,
-    SelectionError,
-    build_manifest,
-    classify_paths,
-)
-
+import scripts.test_impact_selection as selector
+from scripts.test_impact_selection import ALL_LANES, classify
+from scripts.test_lane_catalogue import LANES, PARTITIONED_SHARED_LANES
 
 ROOT = Path(__file__).resolve().parents[2]
-RUN_SELECTED_PATH = ROOT / ".ci/test-impact/run_selected_tests.py"
-IMPACT_MAP = json.loads((ROOT / MAP_RELATIVE_PATH).read_text(encoding="utf-8"))
-S3_TEST_PATHS = [
-    "backend/tests/test_config.py",
-    "backend/tests/test_artifact_store_conformance.py",
-    "backend/tests/test_s3_artifact_store.py",
-]
-S3_TEST_MODULES = [path.removeprefix("backend/") for path in S3_TEST_PATHS]
-POLICY_PATHS = [
-    ".commitrail/initiatives/WS-ARCH-001/planning/chunks/WS-ARCH-001-CP07-project-guide-policy-binding.md",
-    ".commitrail/initiatives/WS-AUTH-001/planning/chunks/WS-AUTH-001-12H-guide-activation.md",
-]
-POLICY_MODULE = "tests/projects/review_policy/test_semantics.py"
+IMPACT_MAP = json.loads((ROOT / ".ci/test-impact/impact_map.json").read_text())
 
 
-_RUN_SELECTED_SPEC = importlib.util.spec_from_file_location(
-    "ci_run_selected_tests", RUN_SELECTED_PATH
-)
-assert _RUN_SELECTED_SPEC is not None and _RUN_SELECTED_SPEC.loader is not None
-_RUN_SELECTED = importlib.util.module_from_spec(_RUN_SELECTED_SPEC)
-_RUN_SELECTED_SPEC.loader.exec_module(_RUN_SELECTED)
+def test_exact_s3_owner_recommends_both_shared_partitions() -> None:
+    selected, _ = classify(["backend/app/core/s3_validation.py"], IMPACT_MAP)
+
+    assert selected == list(PARTITIONED_SHARED_LANES)
 
 
-@pytest.mark.parametrize("path", POLICY_PATHS)
-def test_committrail_policy_inputs_select_the_exact_backend_consumer(path: str) -> None:
-    mode, modules, jobs, profile = classify_paths([path], IMPACT_MAP)
+def test_committrail_only_recommends_shared_semantics_partitions() -> None:
+    selected, _ = classify([".commitrail/changes/ci-example.md"], IMPACT_MAP)
 
-    assert mode == "pure"
-    assert modules == [POLICY_MODULE]
-    assert jobs == ["impact-selection", "auth-boundary-preflight", "impact-pure"]
-    assert profile == "none"
+    assert selected == list(PARTITIONED_SHARED_LANES)
 
 
-def test_unrelated_committrail_metadata_is_still_nonempty() -> None:
-    mode, modules, jobs, profile = classify_paths(
-        [".commitrail/changes/some-new-record.md"], IMPACT_MAP
-    )
-
-    assert (mode, modules, jobs, profile) == (
-        "pure",
-        [POLICY_MODULE],
-        ["impact-selection", "auth-boundary-preflight", "impact-pure"],
-        "none",
-    )
-
-
-def test_committrail_policy_test_is_unioned_with_mapped_s3_closure() -> None:
-    mode, modules, jobs, profile = classify_paths(
-        ["backend/app/core/s3_validation.py", ".commitrail/changes/change.md"],
+def test_mapped_source_and_test_changes_union_their_lane_closures() -> None:
+    selected, _ = classify(
+        [
+            "backend/app/core/s3_validation.py",
+            "backend/tests/test_projects.py",
+        ],
         IMPACT_MAP,
     )
 
-    assert mode == "impact"
-    assert modules == sorted([*S3_TEST_MODULES, POLICY_MODULE])
-    assert jobs == ["impact-selection", "auth-boundary-preflight", "minio-image", "impact-s3"]
-    assert profile == "minio"
+    assert set(PARTITIONED_SHARED_LANES) <= set(selected)
+    assert {"project_lifecycle_a", "project_lifecycle_b", "project_lifecycle_c"} <= set(selected)
 
 
-def test_s3_owner_or_mapped_test_edits_select_the_whole_owner_closure() -> None:
-    for path in ["backend/app/core/s3_validation.py", *S3_TEST_PATHS]:
-        mode, modules, jobs, profile = classify_paths([path], IMPACT_MAP)
-        assert mode == "impact"
-        assert modules == sorted(S3_TEST_MODULES)
-        assert jobs == ["impact-selection", "auth-boundary-preflight", "minio-image", "impact-s3"]
-        assert profile == "minio"
-
-
-def test_incomplete_owner_test_closure_falls_back_to_full() -> None:
-    incomplete_map = json.loads(json.dumps(IMPACT_MAP))
-    incomplete_map["owners"][0]["test_modules"] = incomplete_map["owners"][0][
-        "test_modules"
-    ][:-1]
-
-    assert classify_paths(["backend/app/core/s3_validation.py"], incomplete_map) == (
-        "full",
-        [],
-        ["impact-selection", "auth-boundary-preflight", "minio-image", "lanes", "full-api-e2e"],
-        "full",
+def test_changed_test_module_selects_every_partition_that_owns_it() -> None:
+    owners = tuple(
+        lane.name for lane in LANES if "tests/test_s3_artifact_store.py" in lane.modules
     )
 
+    selected, _ = classify(["backend/tests/test_s3_artifact_store.py"], IMPACT_MAP)
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "backend/app/core/config.py",
+    assert owners == PARTITIONED_SHARED_LANES
+    assert selected == list(owners)
+
+
+def test_unknown_source_fixture_and_unmapped_test_fail_safe_to_all_lanes() -> None:
+    for path in (
+        "backend/app/modules/tasks/service.py",
         "backend/tests/conftest.py",
-        "backend/tests/test_unmapped.py",
-        "backend/scripts/test_lane_catalogue.py",
-        "backend/scripts/test_impact_selection.py",
+        "backend/tests/test_not_in_catalogue.py",
+        "docs/operations_backend_testing.md",
         ".ci/test-impact/impact_map.json",
-        ".ci/test-impact/run_selected_tests.py",
+        "backend/scripts/test_impact_selection.py",
+        "backend/scripts/test_lane_catalogue.py",
         ".github/workflows/backend.yml",
-        "docs/roadmap_status.md",
-        "AGENTS.md",
-    ],
-)
-def test_unmapped_or_shared_changes_fail_closed_to_full_suite(path: str) -> None:
-    assert classify_paths(["backend/app/core/s3_validation.py", path], IMPACT_MAP) == (
-        "full",
-        [],
-        ["impact-selection", "auth-boundary-preflight", "minio-image", "lanes", "full-api-e2e"],
-        "full",
+    ):
+        selected, _ = classify([path], IMPACT_MAP)
+        assert selected == list(ALL_LANES), path
+
+
+def test_mixed_known_and_unknown_paths_fail_safe_to_all_lanes() -> None:
+    selected, reasons = classify(
+        ["backend/app/core/s3_validation.py", "backend/requirements.lock"], IMPACT_MAP
     )
 
-
-@pytest.mark.parametrize("paths", [[], ["../escape"], ["/absolute"], ["a\\b"]])
-def test_empty_or_malformed_changes_never_produce_empty_green_selection(
-    paths: list[str],
-) -> None:
-    mode, modules, jobs, profile = classify_paths(paths, IMPACT_MAP)
-    assert (mode, modules, jobs, profile) == (
-        "full",
-        [],
-        ["impact-selection", "auth-boundary-preflight", "minio-image", "lanes", "full-api-e2e"],
-        "full",
-    )
+    assert selected == list(ALL_LANES)
+    assert all("no reviewed impact mapping" in ";".join(reasons[lane]) for lane in ALL_LANES)
 
 
-def test_impact_fan_in_requires_predeclared_exact_nodes_and_completion(tmp_path: Path) -> None:
-    manifest = {
-        "execution_sha": "a" * 40,
-        "execution_tree": "b" * 40,
-        "selected_modules": ["tests/test_config.py"],
-        "test_inventory_sha256": "c" * 64,
-    }
-    nodes = ["tests/test_config.py::test_one"]
+def test_empty_path_list_recommends_every_lane() -> None:
+    selected, _ = classify([], IMPACT_MAP)
 
-    def canonical(value: object) -> bytes:
-        return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
-
-    selection_path = tmp_path / "selection.json"
-    selection_bytes = canonical(manifest)
-    selection_path.write_bytes(selection_bytes)
-    payload = {
-        "execution_sha": manifest["execution_sha"],
-        "execution_tree": manifest["execution_tree"],
-        "selected_modules": manifest["selected_modules"],
-        "selected_nodes": nodes,
-        "selected_nodes_sha256": hashlib.sha256(canonical(nodes)).hexdigest(),
-        "selection_manifest_sha256": hashlib.sha256(selection_bytes).hexdigest(),
-    }
-    evidence = {
-        "job": "impact-pure",
-        "execution_sha": manifest["execution_sha"],
-        "execution_tree": manifest["execution_tree"],
-        "test_inventory_sha256": manifest["test_inventory_sha256"],
-        "selection_manifest_sha256": hashlib.sha256(selection_bytes).hexdigest(),
-        "exit_code": 0,
-        "selected_nodes": nodes,
-        "completed_nodes": nodes,
-        "observed_collected_nodes": nodes,
-        "skipped_nodes": [],
-        "deselected_nodes": [],
-        "selected_modules": manifest["selected_modules"],
-        "expected_nodes_sha256": hashlib.sha256(canonical(nodes)).hexdigest(),
-        "completed_nodes_sha256": hashlib.sha256(canonical(nodes)).hexdigest(),
-        "elapsed_seconds": 1.0,
-        "expected_payload_sha256": hashlib.sha256(canonical(payload)).hexdigest(),
-    }
-    expected_path = tmp_path / "expected.json"
-    expected_path.write_bytes(canonical(payload))
-    evidence_path = tmp_path / "evidence.json"
-    evidence_path.write_bytes(canonical(evidence))
-    manifest_digest = hashlib.sha256(selection_bytes).hexdigest()
-
-    _RUN_SELECTED.validate_evidence(
-        selection_path,
-        evidence_path,
-        expected_job="impact-pure",
-        expected_manifest_sha256=manifest_digest,
-    )
-
-    evidence_path.write_bytes(canonical({**evidence, "completed_nodes": []}))
-    with pytest.raises(SelectionError, match="impact_evidence_incomplete"):
-        _RUN_SELECTED.validate_evidence(
-            selection_path,
-            evidence_path,
-            expected_job="impact-pure",
-            expected_manifest_sha256=manifest_digest,
-        )
+    assert selected == list(ALL_LANES)
 
 
-def test_execution_candidate_must_be_the_event_merge_commit(tmp_path: Path) -> None:
-    repository = tmp_path / "candidate"
-    repository.mkdir()
-    _git(repository, "init", "-q", "-b", "main")
-    _git(repository, "config", "user.email", "ci@example.invalid")
-    _git(repository, "config", "user.name", "CI test")
-    paths = [
-        "backend/app/core/s3_validation.py",
-        *S3_TEST_PATHS,
-        "backend/tests/projects/review_policy/test_semantics.py",
-    ]
-    for path in paths:
-        target = repository / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("# inventory fixture\n", encoding="utf-8")
-    _git(repository, "add", "backend")
-    _git(repository, "commit", "-q", "-m", "base")
-    base = _git(repository, "rev-parse", "HEAD")
-    source = repository / "backend/app/core/s3_validation.py"
-    source.write_text("# changed source\n", encoding="utf-8")
-    _git(repository, "add", "backend/app/core/s3_validation.py")
-    _git(repository, "commit", "-q", "-m", "change")
-    head = _git(repository, "rev-parse", "HEAD")
-    tree = _git(repository, "rev-parse", "HEAD^{tree}")
-    execution = subprocess.run(
-        ["git", "commit-tree", tree, "-p", base, "-p", head],
-        cwd=repository,
-        check=True,
+def test_report_binds_execution_tree_and_exact_pr_merge_parents() -> None:
+    base = "a" * 40
+    head = "b" * 40
+    execution = "c" * 40
+    tree = "d" * 40
+
+    def git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return execution
+        if args == ("rev-parse", f"{execution}^{{tree}}"):
+            return tree
+        if args == ("show", "-s", "--format=%P", execution):
+            return f"{base} {head}"
+        if args == ("rev-parse", f"{base}^{{commit}}"):
+            return base
+        if args == ("rev-parse", f"{head}^{{commit}}"):
+            return head
+        raise AssertionError(args)
+
+    with (
+        patch.object(selector, "_git", side_effect=git),
+        patch.object(selector, "_changed_paths", return_value=(base, [".commitrail/change.md"])),
+    ):
+        report = selector.build_report(base, head, execution)
+
+    assert report["base_sha"] == base
+    assert report["head_sha"] == head
+    assert report["execution_sha"] == execution
+    assert report["execution_tree_sha"] == tree
+    assert report["merge_base"] == base
+
+
+def test_report_rejects_execution_commit_with_stale_pr_parents() -> None:
+    base = "a" * 40
+    head = "b" * 40
+    execution = "c" * 40
+
+    def git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return execution
+        if args == ("rev-parse", f"{execution}^{{tree}}"):
+            return "d" * 40
+        if args == ("show", "-s", "--format=%P", execution):
+            return f"{base} {'e' * 40}"
+        raise AssertionError(args)
+
+    with patch.object(selector, "_git", side_effect=git):
+        try:
+            selector.build_report(base, head, execution)
+        except selector.SelectionError as exc:
+            assert "not the exact PR base/head merge" in str(exc)
+        else:
+            raise AssertionError("stale target accepted")
+
+
+def test_duplicate_or_unsafe_git_paths_fail_classification() -> None:
+    with (
+        patch.object(selector, "_git", return_value="a" * 40),
+        patch.object(
+            selector.subprocess,
+            "run",
+            return_value=type("Result", (), {"stdout": b"backend/app.py\0backend/app.py\0"})(),
+        ),
+    ):
+        try:
+            selector._changed_paths("a" * 40, "b" * 40)
+        except selector.SelectionError as exc:
+            assert "duplicate paths" in str(exc)
+        else:
+            raise AssertionError("duplicate Git paths accepted")
+
+    with (
+        patch.object(selector, "_git", return_value="a" * 40),
+        patch.object(
+            selector.subprocess,
+            "run",
+            return_value=type("Result", (), {"stdout": b"../outside\0"})(),
+        ),
+    ):
+        try:
+            selector._changed_paths("a" * 40, "b" * 40)
+        except selector.SelectionError as exc:
+            assert "unsafe changed path" in str(exc)
+        else:
+            raise AssertionError("unsafe Git path accepted")
+
+
+def test_cli_reports_all_lane_fallback_when_target_evidence_is_unavailable(tmp_path: Path) -> None:
+    report_path = tmp_path / "report.json"
+    markdown_path = tmp_path / "report.md"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "backend/scripts/test_impact_selection.py"),
+            "--base",
+            "a" * 40,
+            "--head",
+            "b" * 40,
+            "--execution-sha",
+            "c" * 40,
+            "--json",
+            str(report_path),
+            "--markdown",
+            str(markdown_path),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
         text=True,
-        stdout=subprocess.PIPE,
-    ).stdout.strip()
-    _git(repository, "reset", "--hard", execution)
-
-    manifest = build_manifest(
-        ROOT,
-        repository,
-        base_sha=base,
-        head_sha=head,
-        execution_sha=execution,
     )
-    assert manifest["merge_base_sha"] == base
-    assert manifest["execution_sha"] == execution
-    assert manifest["selected_modules"] == sorted(S3_TEST_MODULES)
-    assert manifest["expected_jobs"] == [
-        "impact-selection",
-        "auth-boundary-preflight",
-        "minio-image",
-        "impact-s3",
-    ]
-    forced_full = build_manifest(
-        ROOT,
-        repository,
-        base_sha=execution,
-        head_sha=execution,
-        execution_sha=execution,
-        force_full=True,
-    )
-    assert forced_full["mode"] == "full"
-    assert forced_full["selected_modules"] == []
-    assert set(forced_full["expected_jobs"]) == {
-        "impact-selection",
-        "auth-boundary-preflight",
-        "minio-image",
-        "lanes",
-        "full-api-e2e",
-    }
-    _git(repository, "reset", "--hard", head)
-    with pytest.raises(SelectionError, match="candidate_checkout_mismatch"):
-        build_manifest(
-            ROOT,
-            repository,
-            base_sha=base,
-            head_sha=head,
-            execution_sha=execution,
-        )
-    _git(repository, "reset", "--hard", head)
-    with pytest.raises(SelectionError, match="execution_parent_mismatch"):
-        build_manifest(
-            ROOT,
-            repository,
-            base_sha=base,
-            head_sha=head,
-            execution_sha=head,
-        )
-    _git(repository, "reset", "--hard", execution)
+
+    assert result.returncode == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["classification_status"] == "fallback_all_lanes"
+    assert report["selected_lanes"] == list(ALL_LANES)
+    assert "selection evidence unavailable" in markdown_path.read_text(encoding="utf-8")
 
 
-def _git(repository: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args],
-        cwd=repository,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ).stdout.strip()
+def test_backend_workflow_keeps_report_out_of_lane_execution_control() -> None:
+    workflow = (ROOT / ".github/workflows/backend.yml").read_text(encoding="utf-8")
+    impact_job = workflow.split("\n  impact-report:\n", 1)[1].split("\n  lanes:\n", 1)[0]
+    lane_job = workflow.split("\n  lanes:\n", 1)[1].split("\n  test:\n", 1)[0]
+    aggregate_job = workflow.split("\n  test:\n", 1)[1]
+
+    lane_header = lane_job.split("    services:", 1)[0]
+    assert "\n    if:" not in lane_header
+    assert "needs: impact-report" not in lane_header
+    assert "selected_lanes" not in lane_job
+    assert "if: ${{ github.event_name == 'pull_request' }}" in impact_job
+    assert "backend-test-impact-${{ github.sha }}" in impact_job
+    assert "needs: [auth-boundary-preflight, lanes, minio-image, impact-report]" in aggregate_job
+    assert "IMPACT_REPORT_RESULT" in aggregate_job
+    assert "Require preflight, impact report and every semantic lane" in aggregate_job

@@ -28,15 +28,14 @@ requires network access and Go compilation resources; do not launch it on an
 already memory-constrained workstation.
 Subsequent builds reuse Docker layers.
 
-Backend CI builds or restores one image cache keyed by the complete
-`docker/minio/` source-input digest and runner platform, independent of Git
-commit. Unchanged pinned source can therefore be reused by later commits. CI
-verifies the archive checksum, server version and live health before supplying
-a checksummed image artifact to the full-suite or selected S3 test job. An
-invalid cache is rebuilt from pinned source and verified again. Jobs never
-substitute a mock storage provider. A missing build, artifact or health check
-fails verification. The source-image artifact is independent of test evidence
-and cannot make a failed test pass.
+Backend CI builds or restores one image cache keyed by the exact Git commit,
+this directory's contents and runner platform. Older PR commits cannot supply a
+cached executable to a new commit; retries of the same commit can reuse its
+image. CI verifies server startup, then supplies a checksummed image
+artifact to the existing lanes and aggregate job. Jobs never substitute a mock
+storage provider. A missing build, artifact or health check fails verification.
+The source-image artifact is independent of test/coverage evidence and cannot
+make a failed test lane pass.
 
 When updating upstream source, update the commit, archive checksum, provenance
 and relevant build pins together. Require a fresh image build, health check and

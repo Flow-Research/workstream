@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Build a trusted, exact-target backend test-impact selection manifest."""
+"""Produce a conservative, observational test-impact recommendation."""
 
 from __future__ import annotations
 
@@ -7,302 +6,257 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
-import re
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 from typing import Any
 
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-MAP_RELATIVE_PATH = ".ci/test-impact/impact_map.json"
-RUNNER_RELATIVE_PATH = ".ci/test-impact/run_selected_tests.py"
-FULL_LANES = [
-    "shared_foundations_a",
-    "shared_foundations_b",
-    "schema_contracts",
-    "project_lifecycle_a",
-    "project_lifecycle_b",
-    "project_lifecycle_c",
-    "task_lifecycle_a",
-    "task_lifecycle_b",
-    "task_lifecycle_c",
-]
-POLICY_MODULE = "tests/projects/review_policy/test_semantics.py"
-FULL_JOBS = ["impact-selection", "auth-boundary-preflight", "minio-image", "lanes", "full-api-e2e"]
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "backend"))
 
+from scripts.test_lane_catalogue import LANES  # noqa: E402
 
-def _full() -> tuple[str, list[str], list[str], str]:
-    return "full", [], list(FULL_JOBS), "full"
+MAP_PATH = ROOT / ".ci/test-impact/impact_map.json"
+CATALOGUE_PATH = ROOT / "backend/scripts/test_lane_catalogue.py"
+SCRIPT_PATH = Path(__file__).resolve()
+ALL_LANES = tuple(lane.name for lane in LANES)
+SELECTOR_VERSION = 1
+SHA_LENGTH = 40
 
 
 class SelectionError(RuntimeError):
-    """The candidate cannot be safely classified for selective test execution."""
+    """Raised when exact-target evidence cannot be established."""
 
 
-def _canonical(value: Any) -> bytes:
-    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
-
-
-def _git(repository: Path, *args: str) -> bytes:
-    try:
-        return subprocess.run(
-            ["git", *args],
-            cwd=repository,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        ).stdout
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise SelectionError("git_object_or_command_unavailable") from exc
-
-
-def classify_paths(
-    changed_paths: list[str],
-    impact_map: dict[str, Any],
-) -> tuple[str, list[str], list[str], str]:
-    """Return mode, exact modules, expected jobs, and infrastructure profile."""
-    if not changed_paths or len(set(changed_paths)) != len(changed_paths):
-        return _full()
-    if any(
-        not path
-        or path.startswith("/")
-        or "\\" in path
-        or any(part in {"", ".", ".."} for part in path.split("/"))
-        for path in changed_paths
-    ):
-        return _full()
-
-    commitrail_paths = [path for path in changed_paths if path.startswith(".commitrail/")]
-    source_paths = [path for path in changed_paths if path not in commitrail_paths]
-    commitrail_modules = impact_map.get("commitrail_test_modules")
-    if (
-        not isinstance(commitrail_modules, list)
-        or not commitrail_modules
-        or any(not isinstance(module, str) for module in commitrail_modules)
-    ):
-        return _full()
-
-    if not source_paths:
-        if not commitrail_paths:
-            return _full()
-        return (
-            "pure",
-            sorted(set(commitrail_modules)),
-            ["impact-selection", "auth-boundary-preflight", "impact-pure"],
-            "none",
-        )
-
-    owners = impact_map.get("owners")
-    if not isinstance(owners, list):
-        return _full()
-    for owner in owners:
-        if not isinstance(owner, dict):
-            continue
-        sources = owner.get("source_paths")
-        tests = owner.get("test_paths")
-        modules = owner.get("test_modules")
-        infrastructure = owner.get("infrastructure")
-        if (
-            not isinstance(sources, list)
-            or not isinstance(tests, list)
-            or not isinstance(modules, list)
-            or not sources
-            or not modules
-            or any(not isinstance(path, str) for path in (*sources, *tests))
-            or any(not isinstance(module, str) for module in modules)
-            or infrastructure not in {"minio", "none"}
-            or len(set(sources)) != len(sources)
-            or len(set(tests)) != len(tests)
-            or len(set(modules)) != len(modules)
-            or any(not path.startswith("backend/tests/") for path in tests)
-            or sorted(modules)
-            != sorted(path.removeprefix("backend/") for path in tests)
-        ):
-            continue
-        permitted_paths = set(sources) | set(tests)
-        if set(source_paths) <= permitted_paths and set(source_paths) & permitted_paths:
-            selected_modules = set(modules)
-            if commitrail_paths:
-                selected_modules.update(commitrail_modules)
-            profile = "minio" if infrastructure == "minio" else "none"
-            job = "impact-s3" if profile == "minio" else "impact-pure"
-            jobs = ["impact-selection", "auth-boundary-preflight"]
-            if profile == "minio":
-                jobs.append("minio-image")
-            jobs.append(job)
-            return "impact", sorted(selected_modules), jobs, profile
-    return _full()
-
-
-def _inventory(repository: Path, execution_sha: str) -> tuple[list[dict[str, str]], str]:
-    raw = _git(repository, "ls-tree", "-r", "-z", execution_sha, "--", "backend/tests")
-    inventory: list[dict[str, str]] = []
-    for entry in raw.split(b"\0"):
-        if not entry:
-            continue
-        try:
-            metadata, raw_path = entry.split(b"\t", 1)
-            mode, kind, blob = metadata.decode("ascii").split(" ")
-            path = raw_path.decode("utf-8", errors="strict")
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise SelectionError("invalid_test_inventory") from exc
-        name = path.rsplit("/", 1)[-1]
-        if kind == "blob" and name.startswith("test_") and name.endswith(".py"):
-            inventory.append({"blob": blob, "path": path})
-    inventory.sort(key=lambda row: row["path"])
-    if not inventory:
-        raise SelectionError("empty_test_inventory")
-    return inventory, _sha256(_canonical(inventory))
-
-
-def build_manifest(
-    trusted_root: Path,
-    candidate_root: Path,
-    *,
-    base_sha: str,
-    head_sha: str,
-    execution_sha: str,
-    force_full: bool = False,
-) -> dict[str, Any]:
-    """Bind selection to event commits, merge candidate, trusted map and tests."""
-    if any(SHA_RE.fullmatch(value) is None for value in (base_sha, head_sha, execution_sha)):
-        raise SelectionError("invalid_event_sha")
-    candidate_head = _git(candidate_root, "rev-parse", "HEAD").decode().strip()
-    candidate_tree = _git(candidate_root, "rev-parse", "HEAD^{tree}").decode().strip()
-    candidate_status = _git(candidate_root, "status", "--porcelain").decode()
-    if candidate_head != execution_sha or candidate_status:
-        raise SelectionError("candidate_checkout_mismatch")
-    for value in (base_sha, head_sha, execution_sha):
-        _git(candidate_root, "cat-file", "-e", f"{value}^{{commit}}")
-    execution_tree = _git(candidate_root, "rev-parse", f"{execution_sha}^{{tree}}").decode().strip()
-    if candidate_tree != execution_tree:
-        raise SelectionError("candidate_tree_mismatch")
-    if force_full:
-        if not base_sha == head_sha == execution_sha:
-            raise SelectionError("invalid_forced_full_target")
-        merge_base = execution_sha
-        changed_raw = b""
-    else:
-        parents = (
-            _git(candidate_root, "show", "-s", "--format=%P", execution_sha)
-            .decode()
-            .strip()
-            .split()
-        )
-        if parents != [base_sha, head_sha]:
-            raise SelectionError("execution_parent_mismatch")
-        merge_base = _git(candidate_root, "merge-base", base_sha, head_sha).decode().strip()
-        if SHA_RE.fullmatch(merge_base) is None:
-            raise SelectionError("invalid_merge_base")
-        changed_raw = _git(
-            candidate_root,
-            "diff",
-            "--name-only",
-            "-z",
-            "--no-renames",
-            merge_base,
-            head_sha,
-            "--",
-        )
-    try:
-        changed_paths = sorted(
-            path.decode("utf-8", errors="strict")
-            for path in changed_raw.split(b"\0")
-            if path
-        )
-    except UnicodeDecodeError as exc:
-        raise SelectionError("invalid_changed_path_encoding") from exc
-
-    map_path = trusted_root / MAP_RELATIVE_PATH
-    if map_path.is_symlink() or not map_path.is_file():
-        raise SelectionError("missing_trusted_impact_map")
-    map_bytes = map_path.read_bytes()
-    try:
-        impact_map = json.loads(map_bytes)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise SelectionError("invalid_trusted_impact_map") from exc
-    if not isinstance(impact_map, dict) or impact_map.get("schema_version") != 1:
-        raise SelectionError("invalid_trusted_impact_map")
-
-    mode, modules, jobs, profile = (
-        _full() if force_full else classify_paths(changed_paths, impact_map)
+def _git(*args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
-    inventory, inventory_digest = _inventory(candidate_root, execution_sha)
-    known_modules = {f"{Path(row['path']).relative_to('backend')}" for row in inventory}
-    expected_paths: set[str] = set()
-    for owner in impact_map.get("owners", []):
-        if isinstance(owner, dict):
-            expected_paths.update(owner.get("test_modules", []))
-    expected_paths.update(impact_map.get("commitrail_test_modules", []))
-    if any(module not in known_modules for module in modules):
-        mode, modules, jobs, profile = _full()
-    if mode != "full" and any(module not in expected_paths for module in modules):
-        mode, modules, jobs, profile = _full()
+    return result.stdout.strip()
 
-    trusted_script = trusted_root / "backend/scripts/test_impact_selection.py"
-    if trusted_script.is_symlink() or not trusted_script.is_file():
-        raise SelectionError("missing_trusted_selector")
-    runner_path = trusted_root / RUNNER_RELATIVE_PATH
-    if runner_path.is_symlink() or not runner_path.is_file():
-        raise SelectionError("missing_trusted_runner")
+
+def _read_map() -> dict[str, Any]:
+    raw = MAP_PATH.read_bytes()
+    value = json.loads(raw)
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise SelectionError("impact map has an unsupported schema")
+    return value
+
+
+def _changed_paths(base: str, head: str) -> tuple[str, list[str]]:
+    if len(base) != SHA_LENGTH or len(head) != SHA_LENGTH:
+        raise SelectionError("PR base and head must be full commit SHAs")
+    merge_base = _git("merge-base", base, head)
+    raw = subprocess.run(
+        ["git", "diff", "--name-only", "-z", f"{merge_base}...{head}"],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+    paths = [item.decode("utf-8", errors="strict") for item in raw.split(b"\0") if item]
+    if not paths:
+        raise SelectionError("target diff contains no changed paths")
+    if len(paths) != len(set(paths)):
+        raise SelectionError("target diff contains duplicate paths")
+    for path in paths:
+        parsed = PurePosixPath(path)
+        if parsed.is_absolute() or ".." in parsed.parts or "\\" in path:
+            raise SelectionError(f"unsafe changed path: {path!r}")
+    return merge_base, sorted(paths)
+
+
+def _test_path_owner(path: str) -> tuple[str, ...] | None:
+    if not path.startswith("backend/tests/") or not path.endswith(".py"):
+        return None
+    module_path = path.removeprefix("backend/")
+    owners = tuple(lane.name for lane in LANES if module_path in lane.modules)
+    return owners or None
+
+
+def classify(paths: list[str], impact_map: dict[str, Any]) -> tuple[list[str], dict[str, list[str]]]:
+    """Return lane recommendations and auditable per-lane causes."""
+    groups = impact_map.get("lane_groups")
+    source_paths = impact_map.get("source_paths")
+    prefixes = impact_map.get("path_prefixes")
+    if not all(isinstance(item, dict) for item in (groups, source_paths, prefixes)):
+        raise SelectionError("impact map has an invalid structure")
+
+    selected: set[str] = set()
+    reasons: dict[str, list[str]] = {lane: [] for lane in ALL_LANES}
+    full_run_reasons: list[str] = []
+
+    for path in paths:
+        mapping: dict[str, Any] | None = None
+        if path in source_paths:
+            mapping = source_paths[path]
+        else:
+            matching_prefixes = [prefix for prefix in prefixes if path.startswith(prefix)]
+            if matching_prefixes:
+                mapping = prefixes[max(matching_prefixes, key=len)]
+
+        if mapping is not None:
+            group_name = mapping.get("lane_group")
+            lanes = groups.get(group_name)
+            if not isinstance(lanes, list) or not lanes:
+                raise SelectionError(f"invalid lane group for {path}")
+            reason = f"{path}: {mapping.get('reason', 'explicit impact mapping')}"
+            selected.update(lanes)
+            for lane in lanes:
+                reasons[lane].append(reason)
+            continue
+
+        test_owners = _test_path_owner(path)
+        if test_owners is not None:
+            selected.update(test_owners)
+            for lane in test_owners:
+                reasons[lane].append(f"{path}: changed test module belongs to this semantic lane")
+            continue
+
+        full_run_reasons.append(f"{path}: no reviewed impact mapping; recommend all lanes")
+
+    if full_run_reasons:
+        selected = set(ALL_LANES)
+        for lane in ALL_LANES:
+            reasons[lane].extend(full_run_reasons)
+    elif not selected:
+        selected = set(ALL_LANES)
+        for lane in ALL_LANES:
+            reasons[lane].append("no safely classifiable changed path; recommend all lanes")
+
+    return [lane for lane in ALL_LANES if lane in selected], reasons
+
+
+def _markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "## Backend test-impact shadow report",
+        "",
+        "This is an advisory recommendation only. The complete required backend suite still runs.",
+        "",
+        f"- PR base: `{report['base_sha']}`",
+        f"- PR head: `{report['head_sha']}`",
+        f"- Workflow execution SHA/tree: `{report['execution_sha']}` / `{report['execution_tree_sha']}`",
+        f"- Merge base: `{report['merge_base']}`",
+        f"- Selector version: `{report['selector_version']}`",
+        f"- Changed-path SHA-256: `{report['changed_paths_sha256']}`",
+        f"- Lane catalogue SHA-256: `{report['lane_catalogue_sha256']}`",
+        f"- Impact map SHA-256: `{report['impact_map_sha256']}`",
+        f"- Classification status: **{report['classification_status']}**",
+        "",
+        "### Recommended lanes",
+        "",
+    ]
+    for lane in report["lanes"]:
+        if lane["selected"]:
+            lines.append(f"- **{lane['name']}** — " + "; ".join(lane["reasons"]))
+        else:
+            lines.append(f"- {lane['name']} — omitted: {lane['omission_reason']}")
+    lines.extend(["", "### Changed paths", ""])
+    lines.extend(f"- `{path}`" for path in report["changed_paths"])
+    if report.get("classification_error"):
+        lines.extend(["", f"Fallback detail: `{report['classification_error']}`"])
+    return "\n".join(lines) + "\n"
+
+
+def build_report(base: str, head: str, execution_sha: str) -> dict[str, Any]:
+    """Bind the recommendation to exact Git targets and selector inputs."""
+    if _git("rev-parse", "HEAD") != execution_sha:
+        raise SelectionError("checked-out execution SHA does not match the workflow target")
+    tree_sha = _git("rev-parse", f"{execution_sha}^{{tree}}")
+    execution_parents = _git("show", "-s", "--format=%P", execution_sha).split()
+    if execution_parents != [base, head]:
+        raise SelectionError("workflow execution commit is not the exact PR base/head merge")
+    merge_base, paths = _changed_paths(base, head)
+    if _git("rev-parse", f"{base}^{{commit}}") != base or _git("rev-parse", f"{head}^{{commit}}") != head:
+        raise SelectionError("base or head does not resolve to the requested commit")
+    impact_map = _read_map()
+    selected, reasons = classify(paths, impact_map)
+    lanes = []
+    for name in ALL_LANES:
+        is_selected = name in selected
+        lanes.append(
+            {
+                "name": name,
+                "selected": is_selected,
+                "reasons": reasons[name] if is_selected else [],
+                "omission_reason": "all changed paths have reviewed owners outside this lane" if not is_selected else None,
+            }
+        )
     return {
-        "base_sha": base_sha,
-        "changed_paths": changed_paths,
-        "changed_paths_sha256": _sha256(_canonical(changed_paths)),
-        "execution_sha": execution_sha,
-        "execution_tree": execution_tree,
-        "expected_jobs": jobs,
-        "head_sha": head_sha,
-        "impact_map_sha256": _sha256(map_bytes),
-        "infrastructure_profile": profile,
-        "merge_base_sha": merge_base,
-        "mode": mode,
         "schema_version": 1,
-        "selected_modules": modules,
-        "selector_sha256": _sha256(trusted_script.read_bytes()),
-        "impact_runner_sha256": _sha256(runner_path.read_bytes()),
-        "test_inventory": inventory,
-        "test_inventory_sha256": inventory_digest,
+        "selector_version": SELECTOR_VERSION,
+        "classification_status": "classified",
+        "base_sha": base,
+        "head_sha": head,
+        "execution_sha": execution_sha,
+        "execution_tree_sha": tree_sha,
+        "merge_base": merge_base,
+        "changed_paths": paths,
+        "changed_paths_sha256": _sha256("\0".join(paths).encode()),
+        "selector_sha256": _sha256(SCRIPT_PATH.read_bytes()),
+        "impact_map_sha256": _sha256(MAP_PATH.read_bytes()),
+        "lane_catalogue_sha256": _sha256(CATALOGUE_PATH.read_bytes()),
+        "selected_lanes": selected,
+        "lanes": lanes,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--trusted-root", required=True, type=Path)
-    parser.add_argument("--candidate-root", required=True, type=Path)
-    parser.add_argument("--base-sha", required=True)
-    parser.add_argument("--head-sha", required=True)
-    parser.add_argument("--execution-sha", required=True)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--force-full", action="store_true")
+    parser.add_argument("--base", default=os.environ.get("PR_BASE_SHA", ""))
+    parser.add_argument("--head", default=os.environ.get("PR_HEAD_SHA", ""))
+    parser.add_argument("--execution-sha", default=os.environ.get("GITHUB_SHA", ""))
+    parser.add_argument("--json", type=Path, required=True)
+    parser.add_argument("--markdown", type=Path, required=True)
     args = parser.parse_args()
+
+    error: str | None = None
     try:
-        manifest = build_manifest(
-            args.trusted_root.resolve(strict=True),
-            args.candidate_root.resolve(strict=True),
-            base_sha=args.base_sha,
-            head_sha=args.head_sha,
-            execution_sha=args.execution_sha,
-            force_full=args.force_full,
-        )
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        manifest_bytes = _canonical(manifest)
-        args.output.write_bytes(manifest_bytes)
-        github_output = os.environ.get("GITHUB_OUTPUT")
-        if github_output:
-            with Path(github_output).open("a", encoding="utf-8") as output:
-                output.write(f"mode={manifest['mode']}\n")
-                output.write(f"profile={manifest['infrastructure_profile']}\n")
-                output.write(f"manifest_sha256={_sha256(manifest_bytes)}\n")
-        print(json.dumps({key: manifest[key] for key in ("mode", "expected_jobs", "infrastructure_profile")}))
-        return 0
-    except (OSError, SelectionError, subprocess.SubprocessError) as exc:
-        print(f"impact selection failed closed: {exc}", file=sys.stderr)
-        return 2
+        report = build_report(args.base, args.head, args.execution_sha)
+    except Exception as exc:  # noqa: BLE001 - any classifier fault falls back to all lanes.
+        error = f"{type(exc).__name__}: {exc}"
+        report = {
+            "schema_version": 1,
+            "selector_version": SELECTOR_VERSION,
+            "classification_status": "fallback_all_lanes",
+            "base_sha": args.base,
+            "head_sha": args.head,
+            "execution_sha": args.execution_sha,
+            "execution_tree_sha": None,
+            "merge_base": None,
+            "changed_paths": [],
+            "changed_paths_sha256": None,
+            "selector_sha256": _sha256(SCRIPT_PATH.read_bytes()),
+            "impact_map_sha256": _sha256(MAP_PATH.read_bytes()) if MAP_PATH.is_file() else None,
+            "lane_catalogue_sha256": _sha256(CATALOGUE_PATH.read_bytes()),
+            "selected_lanes": list(ALL_LANES),
+            "lanes": [
+                {"name": lane, "selected": True, "reasons": ["selection evidence unavailable; fail safe to all lanes"], "omission_reason": None}
+                for lane in ALL_LANES
+            ],
+            "classification_error": error,
+        }
+    args.json.parent.mkdir(parents=True, exist_ok=True)
+    args.markdown.parent.mkdir(parents=True, exist_ok=True)
+    args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.markdown.write_text(_markdown(report), encoding="utf-8")
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with Path(summary_path).open("a", encoding="utf-8") as summary:
+            summary.write(args.markdown.read_text(encoding="utf-8"))
+    print(f"Impact report: {args.json}")
+    if error:
+        print(f"Impact classification fell back safely to all lanes: {error}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":

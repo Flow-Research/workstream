@@ -17,7 +17,7 @@ for current product capability.
 | [WS-REV-001](initiatives/WS-REV-001/OVERVIEW.md) | Planned | Shared acceptance/source and existing fence foundations; human hidden review work remains independently dependency-gated |
 | [WS-QUAL-002](initiatives/WS-QUAL-002/OVERVIEW.md) | Planned | Populate subsystem ownership before changed-line mutation work |
 | [WS-QUAL-003](initiatives/WS-QUAL-003/OVERVIEW.md) | Planned | Audit and prune test proof, add missing safety cases, decompose oversized test modules |
-| [WS-CI-006](initiatives/WS-CI-006/OVERVIEW.md) | Planned | Deterministic change-impact test selection with full-suite fallback and periodic complete verification |
+| [WS-CI-006](initiatives/WS-CI-006/OVERVIEW.md) | Planned | Shadow-mode semantic-lane impact report beside the unchanged full required suite; gate changes require later evidence and review |
 | [WS-XINT-002](initiatives/WS-XINT-002/OVERVIEW.md) | Planned | Remaining ART/AUTH activation edges only |
 | [WS-XINT-003](initiatives/WS-XINT-003/OVERVIEW.md) | Planned | Resume activation only against exact merged REV behavior |
 | WS-POL-002 | Superseded | Future guide inference belongs to WS-POL-003; reframe remaining executor work against current specifications |
