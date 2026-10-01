@@ -146,8 +146,12 @@ class CheckerRun(Base):
     worker_lease_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     worker_lease_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     worker_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    execute_evidence_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
-    finalize_evidence_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    execute_evidence_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("audit_events.id", name="fk_checker_runs_execute_evidence", deferrable=True, initially="DEFERRED"),
+    )
+    finalize_evidence_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("audit_events.id", name="fk_checker_runs_finalize_evidence", deferrable=True, initially="DEFERRED"),
+    )
     result_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, unique=True)
     result_json: Mapped[str | None] = mapped_column(Text)
     result_digest: Mapped[str | None] = mapped_column(String(71))

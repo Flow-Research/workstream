@@ -105,9 +105,9 @@ guide using canonical owner ports. ARCH-04B adds hidden verified Submission inpu
 with scoped async access. ARCH-04B2 adds hidden typed checker-output storage,
 byte-free recovery and flush-only verified binding over generic ART
 put/verification. ARCH-04C supplies hidden durable evaluation, immutable ordered
-results, database-timed execution leases and atomic completion events. Production
-authority remains deny-only pending ARCH-04D, including its required canonical
-ART lineage enforcement at durable finalization; public intake remains deferred to
+results, database-timed execution leases and atomic completion events. ARCH-04D2 supplies exact fixed-service input, execute and finalize authority
+and database-bound receipts; output-file authority remains unavailable. ARCH-04D1 enforces canonical
+ART material lineage for all terminal results retaining material; public intake remains deferred to
 the later cutover prerequisites. Required success
 then branches on the locked ReviewPolicy: true routes to human `allow_review`;
 false invokes shared authorized acceptance without a human Review. Both routing
@@ -162,7 +162,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission; hidden final handoff validates the exact activated historical guide through owner ports | Complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden with approved-guide lineage** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, blocking feedback before Submission creation, and one internal phase command covering execution/replay with the JSON precheck removed; ARCH-03D connects approved-guide lineage through the final durable handoff | Complete the canonical public cutover after evaluation/remediation prerequisites; passing intake must never substitute for post-submit evaluation |
 | Immutable Submission creation | **Hidden foundation; public packet creation retired** | Contributor preparation authority; durable pre-submit reservation and exact completed-evidence recovery without rerunning checks; atomic admission consumption; TASK-owned admission-backed creation with exact assignment ContributionPolicyVersion and locked policy lineage; fixed-service artifact binding; replay/concurrency/rollback proof | Finish downstream evaluation and the canonical public integration. The retained submission-list GET is not a usable creation POST |
-| Post-submission evaluation and `allow_review` | **Planned; immediate integration milestone** | One canonical CHECKER post-submit catalogue/compiler used by existing consumers, internal phase service with deny-only production post-submit authority, hidden value contracts and structural-handler conformance; ARCH-04B hidden exact verified Submission materialization; ARCH-04B2 hidden typed output store/recovery and verified binding; ARCH-04C hidden durable execution, exact current-result custody, zero-output support and atomic completion events | Enforce canonical ART material lineage at durable finalization before ARCH-04D activates exact fixed services; automatically dispatch it and publish the canonical `allow_review` manifest |
+| Post-submission evaluation and `allow_review` | **Planned; immediate integration milestone** | One canonical CHECKER post-submit catalogue/compiler used by existing consumers, internal phase service with exact fixed-service post-submit authority, hidden value contracts and structural-handler conformance; ARCH-04B hidden exact verified Submission materialization; ARCH-04B2 hidden typed output store/recovery and verified binding; ARCH-04C hidden durable execution, exact current-result custody, zero-output support and atomic completion events; ARCH-04D1 canonical ART material custody; ARCH-04D2 exact materialization/execute/finalize authority and durable receipt custody | ARCH-04E1A supplies routing-source facts; ARCH-04E dispatches evaluation and publishes the canonical `allow_review` manifest |
 | Review queue and lease | **Hidden persistence foundation** | Queue/admission idempotency and ReviewLease/preference persistence; complete unavailable REV action/principal catalogue and typed AUTH contracts | Packet-membership contract and manifest; Review schema; canonical admission from `allow_review`; claim/lease/packet authority; lease copies the Submission-stamped policy version with no CON lookup |
 | Review decision and revision | **Planned** | Review/revision policy identities and mutation authority; approved same-task revision-rebase semantics | Immutable findings and decisions; `accept`, `needs_revision`, and `reject`; complete-context revision preparation; finding responses; replacement contributor rules; replay and recovery |
 | Contribution and compensation truth | **Schema foundations plus public policy administration** | ContributionPolicyVersion persistence; lifecycle-audit participant; adapter bindings; public Finance policy administration | Persist ContributionRecord/CompensationAward and one shared FinalAcceptance/submitter operation for human accept or authorized false/pass routing. Only actual Reviews create reviewer records. Evaluate frozen actor rules into zero, one or two awards |
@@ -430,7 +430,7 @@ their evidence is linked under [completed work](#what-has-been-completed).
 The [dependency and ownership plan](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#current-dependency-contract)
 owns implementation sequencing. The existing checker phase service supports
 hidden pre-submit execution/replay and hidden durable post-submit execution.
-Production post-submit authority and automatic routing remain unavailable. Live setup does not wait for downstream task/checker execution.
+Exact post-submit service authority is implemented; automatic dispatch and routing remain unavailable. Live setup does not wait for downstream task/checker execution.
 
 The next dependency-safe product sequence is:
 
@@ -455,11 +455,12 @@ The next dependency-safe product sequence is:
    hidden exact input materialization and ARCH-04B2's hidden output custody are
    delivered. ARCH-04C executes the locked structural plan internally, supports its
    empty output set and persists one current result with its completion event.
-   ARCH-04D must first enforce the canonical ART admission/replica/manifest tuple
-   at durable finalization and prove independent substitution rejection and rollback;
-   04C's normal-path custody proof does not establish that database guarantee.
-   Then activate exact fixed services and automatically publish an exact
-   human `allow_review` manifest on true when no blocking failure exists.
+   ARCH-04D1 enforces canonical ART material lineage for every terminal result
+   retaining material, with database rejection, rollback and safe-upgrade proof.
+   ARCH-04D2 supplies exact input/execute/finalize service authority and durable
+   receipt custody. Next, ARCH-04E1A supplies routing-source facts; ARCH-04E then dispatches evaluation
+   and publishes an exact human `allow_review` manifest on true when no blocking
+   failure exists.
    CHECKERS owns durable execution/currentness; the shared facade does not
    create a second result store. Work evaluation may be deterministic or use
    an explicitly implemented model judge. A structural presence check cannot
@@ -535,19 +536,19 @@ contributor and Project Manager projections. The obsolete token-role dependency,
 compatibility identity writer, manual checker execution, finalize repair and
 fabricated-actor Celery gate are removed. Retained records are preserved;
 ARCH-04C supplies hidden durable execution and unfinished-attempt recovery;
-live authority and automatic routing remain pending ARCH-04D/04E.
+ARCH-04D2 supplies exact service authority; automatic routing remains ARCH-04E work.
 
 ARCH-04B adds hidden exact Submission materialization through TASK's immutable
 read port and ART's consumed admission. Local/MinIO input is independently reread,
-verified and projected through canonical bounded scratch. Production access remains
-deny-only; it does not activate durable checker execution or public intake.
+verified and projected through canonical bounded scratch. ARCH-04D2 supplies exact leased input authority before and after I/O.
+Public intake and automatic checker dispatch remain unavailable.
 
 ARCH-04B2 adds hidden typed checker-output `store` and byte-free
 `recover(selector)` operations, per-slot preparation caps, generic put and
 verification reuse, and flush-only immutable verified binding. Controlled
 nonempty slots prove ART mechanics only; the current structural catalogue has
-zero slots. ARCH-04C supplies CHECKERS reservation/currentness; live output and
-execution authority remain deny-only. Public intake is not activated.
+zero slots. ARCH-04C supplies CHECKERS reservation/currentness; ARCH-04D2 supplies
+execute/finalize authority. Output write/bind authority remains unavailable. Public intake is not activated.
 
 ## Critical Dependency Map
 
@@ -558,7 +559,7 @@ Delivered foundations (not a claim of full public integration)
   public manager activation context + exact guide activation/binding
   task/assignment/Submission lineage + hidden intake/creation
   ARCH-03D exact approved historical guide through durable intake handoff
-  ARCH-04B hidden verified Submission input (production authority deny-only)
+  ARCH-04B hidden verified Submission input
   ARCH-04B2 hidden checker output store/recovery/binding (authority deny-only)
   ARCH-04C hidden durable execution/current results + atomic completion event
   shared dispatcher + exact-authorized hidden assignment invalidation
@@ -568,11 +569,12 @@ Delivered foundations (not a claim of full public integration)
   ARCH-03C6 distinct exact-authorized locked-context reads
   ARCH-03C7 bounded exact-authorized Audit Authority task history
   canonical contributor/manager Submission and checker history; obsolete gate removed
+  ARCH-04D1 canonical ART material custody at terminal CHECKERS commit
+  ARCH-04D2 exact input/execute/finalize authority + durable receipts
     |
     v
 Remaining integration
-  canonical ART lineage enforcement at durable finalization (ARCH-04D prerequisite)
-  -> live evaluation authority + automatic routing + remediation
+  routing-source facts (ARCH-04E1A) -> automatic dispatch/routing + remediation
   -> public intake and immutable admitted Submission cutover
   -> automatically consume the durable current result + required checks pass
        |
@@ -685,8 +687,9 @@ remaining trace sequence is:
   [ARCH-04B input materialization](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04B.md)
   and [ARCH-04B2 output custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04B2.md)
   and [ARCH-04C durable execution](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04C.md)
-  lead to `04D -> 04E` for live authority and routing. The mandatory
-  [04D canonical lineage prerequisite](../.commitrail/initiatives/WS-ARCH-001/planning/chunks/WS-ARCH-001-04D-auth-post-submit-activation.md#canonical-art-lineage-activation-prerequisite)
+  and [ARCH-04D2 exact service authority](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04D2.md)
+  lead to `04E1A -> 04E1B -> 04E2 -> 04E3` for dispatch and routing. The mandatory
+  [04D1 canonical material custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04D1.md)
   closes the three-field ART database guarantee before authority activation.
   ARCH-04C accepts the exact empty output set from the current structural
   catalogue; nonempty 04B2 test slots do not claim a live evaluator capability.

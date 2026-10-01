@@ -10,8 +10,11 @@ and the [capability ledger](../../../docs/roadmap_status.md).
   consumption, and binding dependencies are merged through ARCH-02H.
 - Completed boundary: ARCH-04B hidden input materialization and hidden
   [ARCH-04B2 checker-output custody](../WS-ARCH-001/WS-ARCH-001-04B2.md).
-  The CHECKERS zero-slot reservation reader is implemented; production authority remains deny-only.
-- Next usable boundary: ARCH-04D exact service authority after delivered ARCH-04C hidden durable execution.
+  The CHECKERS zero-slot reservation reader is implemented; checker-output
+  write/bind authority remains deny-only.
+- Next usable boundary: ARCH-04E1A routing-source facts after delivered
+  [ARCH-04D2](../WS-ARCH-001/WS-ARCH-001-04D2.md) exact input, execute and finalize authority.
+  Output-file authority remains unavailable for the zero-output catalogue.
 - Governing sources: artifact specifications, `ArtifactStore`,
   `ArtifactScratchManager`, code, migrations, and artifact tests.
 - Preserve: SHA-256/byte-count identity, reread verification, isolation,

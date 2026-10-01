@@ -29,7 +29,7 @@ post-task requirement. Historical split parents 05/06 are not extra PRs.
 | `WS-AUTH-001-12G` | Activate exact fixed-service projection plus PM approval/correction authority for the hidden 06A manifest. | 06A |
 | `WS-POL-003-06B` | Live deterministic post-submit projection/approval cutover with zero additional inference. | 06A + AUTH-12G |
 | `WS-POL-003-07` | One typed facade over existing ART pre and CHECKER post contracts; no post-result persistence. | 06B + ARCH-04A registered capability proof + merged ART-04B1-04B3 |
-| `WS-AUTH-001-12H` / [AUTH-18](../../WS-AUTH-001/WS-AUTH-001-18.md) | Complete: exact guide activation authority and public manager activation/context over the approved unified chain. CP08 lineage and ARCH-03 task authority/projections are delivered; ARCH-03D hidden intake, ARCH-04B input and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D is next and public intake remains ARCH-02I. CP09 remains later. | POL-07 + corrected AUTH-12B2 + CP05 active ContributionPolicy behavior + CP06 validation + CP07 ProjectGuide binding |
+| `WS-AUTH-001-12H` / [AUTH-18](../../WS-AUTH-001/WS-AUTH-001-18.md) | Complete: exact guide activation authority and public manager activation/context over the approved unified chain. CP08 lineage and ARCH-03 task authority/projections are delivered; ARCH-03D hidden intake, ARCH-04B input and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 authority is delivered; ARCH-04E1A routing-source facts are next and public intake remains ARCH-02I. CP09 remains later. | POL-07 + corrected AUTH-12B2 + CP05 active ContributionPolicy behavior + CP06 validation + CP07 ProjectGuide binding |
 | `WS-POL-003-08` | Supplementary visibility; separate remaining cleanup is parked and handled within each affected module. Essential review/correction belongs to 05A/05B and 06A/06B. | Planned after 07 + AUTH-12H + canonical WS-ARCH-001-04E manifest; any separately authorized retained-data change requires CP09's inventory, mapping and readability/recoverability proof for affected facts; no cleanup prerequisite for 04B |
 
 The 04E manifest proves canonical routing, not legacy-history preservation.
@@ -53,8 +53,9 @@ mixed-generation chains deny through the existing locked-lineage checks.
 ## Post-submit execution gate
 
 ARCH-04A contracts/capability conformance precede POL-07 and guide activation.
-ARCH-04B delivers hidden exact ART post-submit input with deny-only production
+ARCH-04B delivers hidden exact ART post-submit input with exact ARCH-04D2 service
 authority. ARCH-04B2 hidden output custody and ARCH-04C hidden durable CHECKER
 execution/results with exact empty-output support are delivered.
-WS-ARCH-001-04D is the next replacement authority activation gate. Historical
+WS-ARCH-001-04D2 delivers exact input/execute/finalize authority; ARCH-04E1A
+routing-source facts are next. Output-file authority remains unavailable. Historical
 XINT-06B and AUTH-14 contracts are superseded/non-executable.

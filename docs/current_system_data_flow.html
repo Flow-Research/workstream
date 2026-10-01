@@ -412,7 +412,7 @@
       <p class="intro">
         This is a static walkthrough of the product flow with the adopted authorization target: external Flow authentication,
         project guides, locked policy context, task queue, submission packets, evidence,
-        retained checker history and authorization evidence. Hidden durable post-submit execution/recovery is implemented; live authority and automatic routing remain unavailable.
+        retained checker history and authorization evidence. Hidden durable post-submit execution/recovery and exact service authority are implemented; automatic dispatch and routing remain unavailable.
       </p>
       <div class="legend" aria-label="Legend">
         <span class="api">API boundary</span>
@@ -559,7 +559,7 @@
             <article class="step">
               <span class="num">10</span>
               <h3>Hidden execution; live routing remains unavailable</h3>
-              <p>Stored routing recommendations are historical evidence. The removed execution and gate-repair paths do not run, route work or retry. ARCH-04C implements exact request/lease custody, durable results and completion events. Production execution still denies until ARCH-04D adds service authority; ARCH-04E connects automatic routing.</p>
+              <p>Stored routing recommendations are historical evidence. The removed execution and gate-repair paths do not run, route work or retry. ARCH-04C implements exact request/lease custody, durable results and completion events. ARCH-04D2 supplies exact input, execute and finalize service authority with durable receipts; automatic dispatch and routing remain ARCH-04E work.</p>
               <div class="data">
                 <code>review_pending</code>
                 <code>needs_revision</code>
@@ -641,13 +641,13 @@
         </ul>
 
         <div class="mini-flow">
-          <div><strong>Delivered foundations:</strong> guide/task policy lineage, hidden verified intake and immutable submission creation, authorized retained history, hidden durable checker execution and current-result custody.</div>
-          <div><strong>Unavailable integration:</strong> live post-submit authority and automatic routing.</div>
+          <div><strong>Delivered foundations:</strong> guide/task policy lineage, hidden verified intake and immutable submission creation, authorized retained history, hidden durable checker execution, exact service authority and current-result custody.</div>
+          <div><strong>Unavailable integration:</strong> automatic post-submit dispatch and routing.</div>
           <div><strong>Unavailable recovery:</strong> authorized terminal checker retry and gate repair; hidden unfinished-attempt recovery is implemented.</div>
         </div>
 
         <p class="footer-note">
-          This file distinguishes delivered history and hidden evaluation custody from planned live authority and routing. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
+          This file distinguishes delivered history, hidden evaluation custody and exact service authority from planned automatic dispatch and routing. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
         </p>
       </aside>
     </div>

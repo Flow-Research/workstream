@@ -101,7 +101,7 @@ Async policy:
 - Long-running setup and checker work must not block request/response paths.
 - Project setup automation runs through Celery. Canonical durable post-submit
   checker execution has hidden request/lease/result custody through ARCH-04C.
-  Production authority remains deny-only; ARCH-04D activates exact services and
+  ARCH-04D2 supplies exact input/execute/finalize service authority;
   ARCH-04E connects delivery through the existing shared outbox delivery process.
 - FastAPI background tasks are not used for Workstream product lifecycle jobs.
 - A different durable queue can replace Celery later only with an ADR-level reason.

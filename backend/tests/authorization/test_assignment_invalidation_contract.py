@@ -104,13 +104,13 @@ def test_fixed_service_bindings_preserve_both_exact_contracts():
     assignment = prepared_fixed_service_bindings(
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, resource.model_dump(mode="json"), ValueError,
     )
-    assert assignment == {"assignment_invalidation_context": resource, "outbox_dispatch_digest": None}
+    assert assignment == {"assignment_invalidation_context": resource, "outbox_dispatch_digest": None, "post_submit_prepare_context": None}
     digest = "sha256:" + "a" * 64
     assert prepared_fixed_service_bindings(ActionId.OUTBOX_DISPATCH, {"outbox_dispatch_digest": digest}, ValueError) == {
-        "assignment_invalidation_context": None, "outbox_dispatch_digest": digest,
+        "assignment_invalidation_context": None, "outbox_dispatch_digest": digest, "post_submit_prepare_context": None,
     }
     assert prepared_fixed_service_bindings(ActionId.ACTOR_PROFILE_READ_SELF, {}, ValueError) == {
-        "assignment_invalidation_context": None, "outbox_dispatch_digest": None,
+        "assignment_invalidation_context": None, "outbox_dispatch_digest": None, "post_submit_prepare_context": None,
     }
     for action, message in (
         (ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, "invalid assignment reconciliation authority"),

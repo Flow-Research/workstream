@@ -2204,7 +2204,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 25
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 27
     assert FUTURE_INTENT_REQUIRED_ACTIONS == {
         ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
         ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
@@ -2277,6 +2277,9 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionAvailability.ACTIVE,
     )
     active_internal = {
+        ActionId.CHECKER_POST_SUBMIT_EXECUTE,
+        ActionId.CHECKER_POST_SUBMIT_FINALIZE,
+        ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -6056,10 +6059,8 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
 
     async with authorization_factory() as cleanup:
         await cleanup.execute(text("alter table audit_events disable trigger user"))
-        await cleanup.execute(
-            text("delete from audit_events where id=:id"),
-            {"id": str(decision.decision_id)},
-        )
+        await cleanup.execute(text("delete from audit_events where id=:id"), {"id": str(decision.decision_id)})
+        await cleanup.execute(text("set constraints all immediate"))
         await cleanup.execute(text("alter table audit_events enable trigger user"))
         await cleanup.execute(text("alter table actor_identity_links disable trigger user"))
         await cleanup.execute(text("alter table actor_profiles disable trigger user"))
@@ -6348,10 +6349,9 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             ),
             {"target": actor_ids[0], "mutator": actor_ids[1]},
         )
+        await cleanup.execute(text("set constraints all immediate"))
         await cleanup.execute(text("alter table audit_events enable trigger user"))
-        await cleanup.execute(
-            text("alter table authority_idempotency_records disable trigger user")
-        )
+        await cleanup.execute(text("alter table authority_idempotency_records disable trigger user"))
         await cleanup.execute(
             text(
                 "delete from authority_idempotency_records where actor_ref in (:target, :mutator)"
@@ -9141,13 +9141,9 @@ async def authorization_factory(authorization_database_env: str):
                 text("lock table authority_idempotency_records in access exclusive mode")
             )
             await connection.execute(text("lock table audit_events in access exclusive mode"))
+            await connection.execute(text("alter table audit_events disable trigger audit_events_reject_update_delete"))
             await connection.execute(
-                text("alter table audit_events disable trigger audit_events_reject_update_delete")
-            )
-            await connection.execute(
-                text(
-                    "alter table authority_idempotency_records disable trigger authority_idempotency_guard"
-                )
+                text("alter table authority_idempotency_records disable trigger authority_idempotency_guard")
             )
             await connection.execute(
                 text(
@@ -9155,14 +9151,11 @@ async def authorization_factory(authorization_database_env: str):
                 )
             )
             await connection.execute(text("delete from authority_idempotency_records"))
+            await connection.execute(text("set constraints all immediate"))
             await connection.execute(
-                text(
-                    "alter table authority_idempotency_records enable trigger authority_idempotency_guard"
-                )
+                text("alter table authority_idempotency_records enable trigger authority_idempotency_guard")
             )
-            await connection.execute(
-                text("alter table audit_events enable trigger audit_events_reject_update_delete")
-            )
+            await connection.execute(text("alter table audit_events enable trigger audit_events_reject_update_delete"))
         await engine.dispose()
 
 

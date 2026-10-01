@@ -117,6 +117,8 @@ from app.modules.authorization.submission_preparation import (
 from app.modules.authorization.domain.task_authority import (
     TASK_ACTIONS, TaskAuthorityResourceContext, parse_task_authority_binding,
 )
+from app.modules.authorization.domain.post_submit import POST_SUBMIT_ACTIONS, PostSubmitResourceContext, post_submit_prepare_matches
+from app.modules.authorization.prepared_post_submit_replay import validate_post_submit_replay
 from app.modules.authorization.pre_submit_materialization import (
     parse_prepared_artifact_bindings,
     parse_project_create_binding,
@@ -183,6 +185,7 @@ class _PreparedAuthorizationBinding:
     request_digest: str
     assignment_invalidation_context: AssignmentInvalidationResourceContext | None = None
     outbox_dispatch_digest: str | None = None
+    post_submit_prepare_context: dict | None = None
     task_authority_context: TaskAuthorityResourceContext | None = None
     project_create_operation_id: UUID | None = None
     project_create_project_id: UUID | None = None
@@ -531,6 +534,10 @@ class PreparedAuthorizationService:
             or issuance.binding.assignment_invalidation_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid assignment reconciliation authority")
+        if expected_action_id in POST_SUBMIT_ACTIONS and not post_submit_prepare_matches(
+            expected_action_id, issuance.binding.post_submit_prepare_context, final_resource_context,
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared post-submit authority")
         if expected_action_id is ActionId.OUTBOX_DISPATCH and (
             type(final_resource_context) is not OutboxDispatchResourceContext
             or issuance.binding.outbox_dispatch_digest != authorization_resource_digest(final_resource_context)
@@ -639,7 +646,7 @@ class PreparedAuthorizationService:
         issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
-            replay = validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
+            replay = validate_post_submit_replay if expected_action_id in POST_SUBMIT_ACTIONS else validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
             await replay(
                 self,
                 issuance,
@@ -915,7 +922,7 @@ class PreparedAuthorizationService:
                 artifact_resource_type=artifact_resource[0],
                 artifact_resource_id=resource.resource_id,
             )
-        if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext)):
+        if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext, PostSubmitResourceContext)):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,

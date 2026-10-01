@@ -12,7 +12,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import coverage_policy as policy  # noqa: E402
 
-HEAD = "0008_checker_execution"
+HEAD = "0010_post_submit_authority"
 SHA = "a" * 40
 PEP695_INVALID = sys.version_info < (3, 12)
 

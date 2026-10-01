@@ -326,7 +326,9 @@ possible without rewriting the historical verified ancestry. Its migration
 refuses retained checker attempts or bindings
 whose missing evaluation digest or verified ancestry cannot be proven; it does
 not invent or delete retained data. ARCH-04C implements hidden durable execution/results;
-production access remains deny-only until ARCH-04D. The superseded CheckerRun
+ARCH-04D2 supplies exact input, execute and finalize service authority. Migration 0009 validates
+all terminal non-null material custody against ART's immutable consumed admission,
+binding, content and verified-replica lineage; current replica health is separate. The superseded CheckerRun
 payment column is removed; retained nullable Submission payment columns require
 no invented economic configuration.
 CP09 owns physical economic-schema removal after its remaining consumers change.
@@ -1660,9 +1662,11 @@ false. No human Review is invented for that branch.
 
 Migration 0008 refuses nonempty checker history before DDL. It does not invent
 requests or erase retained evidence. Such an environment requires an explicit
-preservation design. Production execute/finalize and ART access remain deny-only
-until ARCH-04D installs real action-specific authority; opaque controlled test
-receipts are not AUTH audit evidence.
+preservation design. Migration 0010 (ARCH-04D2) adds deferred receipt foreign keys
+and exact phase-specific audit validation for execute/finalize. Receipts bind the
+request, run, lease, result, material and original execution receipt. Unprovable
+retained receipts cause an atomic upgrade refusal; queued work is preserved.
+Production uses real action-specific AUTH/PREP with fresh live identity checks.
 
 ## CheckerResult
 

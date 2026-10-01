@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.checker_output_admission_helpers import seed_checker_output_relationships
+
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -184,11 +186,12 @@ async def _exhausted_job(session, settings, tmp_path, context):
         total_deadline_seconds=180,
         reservation_ttl_seconds=240,
     )
+    relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
     async with minted_source(
         tmp_path / "checker-output", b"recover checker output", limits=limits,
     ) as source:
         project_id, task_id, _checker_run_id, admission = await _admit_checker_output(
-            session, settings, namespace, source, policy_bundle=policy_bundle)
+            session, settings, namespace, source, relationships=relationships)
         await _seed_recovery_actor(session, context)
         await session.commit()
         orchestrator = ArtifactStorageOrchestrator(
@@ -263,6 +266,7 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
                 _orchestrator,
                 bootstrap,
             ) = await _exhausted_job(session, settings, tmp_path, context)
+            source_put_attempt_id = source.originating_put_attempt_id
             service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
             request = _request(context, project_id, task_id, source, submission_id=submission_id)
             first = await service.retry_verification(request)
@@ -270,7 +274,14 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
             assert first.retry_verification_job_id == replay.retry_verification_job_id
             assert replay.replayed is True
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
-            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
+            assert (
+                await session.scalar(
+                    select(func.count(ArtifactVerificationJob.id)).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == source_put_attempt_id
+                    )
+                )
+                == 2
+            )
             assert (
                 await session.scalar(
                     select(func.count(AuditEvent.id)).where(
@@ -297,13 +308,21 @@ async def test_checker_recovery_denial_has_no_effects_and_replay_requires_author
             project_id, task_id, submission_id, source, _orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
+            source_put_attempt_id = source.originating_put_attempt_id
             request = _request(context, project_id, task_id, source, submission_id=submission_id)
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(
                     session, settings, DenyArtifactRecoveryAuthority()
                 ).retry_verification(request)
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
-            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 1
+            assert (
+                await session.scalar(
+                    select(func.count(ArtifactVerificationJob.id)).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == source_put_attempt_id
+                    )
+                )
+                == 1
+            )
             await session.rollback()
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
@@ -313,7 +332,14 @@ async def test_checker_recovery_denial_has_no_effects_and_replay_requires_author
                     session, settings, DenyArtifactRecoveryAuthority()
                 ).retry_verification(request)
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
-            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
+            assert (
+                await session.scalar(
+                    select(func.count(ArtifactVerificationJob.id)).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == source_put_attempt_id
+                    )
+                )
+                == 2
+            )
             assert (
                 await session.scalar(
                     select(func.count(AuditEvent.id)).where(
@@ -420,6 +446,7 @@ async def test_terminal_recovery_authority_change_rolls_back_all_facts(
                 _orchestrator,
                 bootstrap,
             ) = await _exhausted_job(session, settings, tmp_path, context)
+            source_put_attempt_id = source.originating_put_attempt_id
             authority = _AllowThenDenyRecoveryAuthority()
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await ArtifactRecoveryService(session, settings, authority).retry_verification(
@@ -433,7 +460,14 @@ async def test_terminal_recovery_authority_change_rolls_back_all_facts(
                 )
             assert authority.calls == 2
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
-            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 1
+            assert (
+                await session.scalar(
+                    select(func.count(ArtifactVerificationJob.id)).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == source_put_attempt_id
+                    )
+                )
+                == 1
+            )
             assert (
                 await session.scalar(
                     select(func.count(AuditEvent.id)).where(
@@ -617,6 +651,7 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
                 _orchestrator,
                 bootstrap,
             ) = await _exhausted_job(setup, settings, tmp_path, context)
+            source_put_attempt_id = source.originating_put_attempt_id
             request = _request(context, project_id, task_id, source, submission_id=submission_id)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
@@ -631,7 +666,14 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
             assert first.retry_verification_job_id == second.retry_verification_job_id
         async with factory() as proof:
             assert await proof.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
-            assert await proof.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
+            assert (
+                await proof.scalar(
+                    select(func.count(ArtifactVerificationJob.id)).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == source_put_attempt_id
+                    )
+                )
+                == 2
+            )
     finally:
         if bootstrap is not None:
             bootstrap.close()

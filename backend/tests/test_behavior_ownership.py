@@ -2168,3 +2168,23 @@ def test_checker_output_partition_additions_are_exact():
             _partition(sorted([retained, *targets, "backend/app/modules/artifacts/arbitrary_output.py"])), trusted)
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)
+
+
+def test_post_submit_authority_partition_replacement_is_exact() -> None:
+    """Retire the unavailable participant and register only the three AUTH owners."""
+    retained = "backend/app/core/config.py"
+    old = "backend/app/modules/checkers/execution_authority.py"
+    additions = {
+        "backend/app/modules/authorization/domain/post_submit.py",
+        "backend/app/modules/authorization/post_submit_authorization.py",
+        "backend/app/modules/authorization/prepared_post_submit_replay.py",
+    }
+    trusted = _partition(sorted({retained, old}))
+    current = _partition(sorted({retained, *additions}))
+    ownership._validate_additive_partition_transition(current, trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted({retained, *additions, "backend/app/modules/authorization/extra.py"})), trusted,
+        )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted(additions)), trusted)

@@ -22,15 +22,15 @@ the earlier overbroad execution claims in this planning chunk.
   Do not open a transaction at this handoff. ART's existing operation obtains
   fresh authority, executes the locked plan when warranted, and returns its
   canonical evidence unchanged. Replay invokes no members or new upload capability.
-- `evaluate_post_submission` validates and delegates CHECKER's closed value
-  contract. Production explicitly remains unavailable. Exact request, policy,
-  catalogue, generation and member correspondence is value-consistency proof,
-  not authority, durable ownership, attempt recovery or currentness proof.
-- ARCH-04B delivers hidden post-submit input with deny-only production authority.
-  ARCH-04B2 output custody, ARCH-04C persistence, ARCH-04D authority and ARCH-04E
-  event invocation/routing remain separate. Their eventual event handler invokes the facade;
-  its injected executor must not call the facade recursively. Existing post
-  callers remain until that cutover, not as a second implementation of this port.
+- `evaluate_post_submission` validates and delegates CHECKERS' closed value
+  contract. ARCH-04C supplies the hidden durable executor and currentness;
+  ARCH-04D2 supplies exact input, execute and finalize service authority.
+  The facade's request/result correspondence remains value-consistency proof;
+  those owner operations enforce authorization and durable execution custody.
+- ARCH-04B supplies verified input and ARCH-04B2 supplies hidden output custody.
+  Output write/bind authority remains unavailable for the zero-output catalogue.
+  ARCH-04E event invocation/routing remains separate. Its event handler invokes
+  the facade; the injected executor must not call the facade recursively.
 - Remove the standalone draft JSON precheck, its exclusive code, schemas and
   tests together. Preserve shared helpers used by current post-submit consumers.
   Broader public Submission cutover remains WS-ARCH-001-02I.

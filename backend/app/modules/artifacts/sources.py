@@ -9,7 +9,7 @@ from typing import BinaryIO, Protocol, TypeVar, final
 from uuid import UUID
 from app.core.identifiers import new_record_id
 
-from app.core.cancellation import await_completion_preserving_cancellation
+from app.core.cancellation import await_cancellation_resistant
 
 
 _COMMITTED_SOURCE_SEAL = object()
@@ -212,10 +212,12 @@ class PreparedArtifact:
             return
         cleanup = asyncio.create_task(self._owner.release_prepared_artifact(self._binding))
         try:
-            await await_completion_preserving_cancellation(cleanup)
+            await asyncio.shield(cleanup)
         except asyncio.CancelledError:
-            if cleanup.done() and not cleanup.cancelled() and cleanup.exception() is None:
-                self._closed = True
+            # Failed cleanup must remain observable; cancellation is not proof
+            # that scratch ownership was released.
+            await await_cancellation_resistant(cleanup)
+            self._closed = True
             raise
         else:
             self._closed = True

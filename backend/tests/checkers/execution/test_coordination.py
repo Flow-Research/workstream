@@ -9,7 +9,7 @@ from app.modules.checkers.execution_coordination import EvaluationCoordinator
 from app.modules.checkers.models import CheckerRun, CheckerSubmissionFence
 from tests.checkers.post_submit.support import change_request
 from tests.post_submit_materialization_helpers import material_fixture
-from .support import reserve, controlled_executor
+from .support import reserve, live_executor
 
 
 async def test_reservation_replay_rejects_changed_envelope(tmp_path, isolated_database_env):
@@ -52,7 +52,7 @@ async def test_reservation_rollback_and_exact_successor(tmp_path, isolated_datab
         # Replaying old reservation does not restore it as current.
         assert await reserve(h) == first
         with pytest.raises(CheckerExecutionUnavailable, match="current_request"):
-            await controlled_executor(h).evaluate_post_submission(h.request)
+            await live_executor(h).evaluate_post_submission(h.request)
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ async def test_reservation_rollback_and_exact_successor(tmp_path, isolated_datab
 async def test_current_result_conceals_foreign_lineage(tmp_path, isolated_database_env, field):
     async with material_fixture(tmp_path / "first", isolated_database_env) as first:
         await reserve(first)
-        await controlled_executor(first).evaluate_post_submission(first.request)
+        await live_executor(first).evaluate_post_submission(first.request)
         async with material_fixture(
             tmp_path / "foreign",
             isolated_database_env,
@@ -69,7 +69,7 @@ async def test_current_result_conceals_foreign_lineage(tmp_path, isolated_databa
             storage_settings=first.settings,
         ) as foreign:
             await reserve(foreign)
-            await controlled_executor(foreign).evaluate_post_submission(foreign.request)
+            await live_executor(foreign).evaluate_post_submission(foreign.request)
             if field == "project_id":
                 # A project substitution must carry a matching valid policy/context,
                 # so validation succeeds and the repository owns the isolation proof.

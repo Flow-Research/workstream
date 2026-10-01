@@ -155,8 +155,7 @@ checked by the owning services. Structural consistency grants no authorization.
 The canonical `policy_hash` binds ordered entries, configuration and exact
 catalogue/implementation identities. Domain project policy versions record
 changes to project rules; they do not select obsolete software implementations.
-ARCH-04C implements hidden phase execution; production authority remains deny-only
-until ARCH-04D. No public execution route or dispatcher is activated.
+ARCH-04C implements hidden phase execution; ARCH-04D2 supplies exact service authority. No public execution route or dispatcher is activated.
 POL-04B connects unified guide setup; POL-05B and POL-06B expose separate
 pre-submit and post-submit policy approvals.
 
@@ -177,7 +176,11 @@ recovery retains the attempt; terminal infrastructure failures never restart or
 publish a routable result. No generated outputs or provider inference are enabled.
 The current-result port checks the exact request inside the caller transaction.
 
-Production composition denies execute/finalize and material access until ARCH-04D.
+ARCH-04D2 composes real fixed-service materialization, execution and finalization
+authority. Each phase obtains fresh AUTH/PREP before feature locks. Materialization
+checks the exact current execution lease and revalidates its original receipt after
+I/O. Execute/finalize receipts are bound to the persisted phase facts by PostgreSQL;
+terminal replay validates both original receipts without appending new evidence.
 No new Celery task, delivery handler or public execution endpoint exists. ARCH-04E
 must recheck currentness when consuming a completion event and apply the locked
 ReviewPolicy; CHECKERS never accepts a contribution or mutates TASK state.
@@ -352,18 +355,18 @@ prepared authorization and opens no transaction before ART's existing executor
 obtains fresh authority. Replay returns ART's canonical result unchanged.
 
 The post command validates and delegates CHECKER's closed value contract.
-Production composes the canonical executor with separate deny-only execute and
-finalize authorities. ARCH-04C reserves the exact request, fences execution attempts and
+Production composes the canonical executor with separate exact execute and
+finalize authority through AUTH/PREP. ARCH-04C reserves the exact request, fences execution attempts and
 atomically persists complete closed member results and a completion event; it
-does not activate material reads or automatic dispatch. ARCH-04B supplies the hidden ART input port: exact consumed
+does not activate automatic dispatch. ARCH-04B supplies the hidden ART input port: exact consumed
 Submission bytes, rebuilt manifest, async scoped file access and cleanup, followed
-by a fresh material-selection check. Production composition denies materialization.
+by a fresh material-selection check. ARCH-04D2 supplies fresh fixed-service materialization authority before and after I/O.
 ARCH-04B2 now supplies hidden typed output storage, byte-free recovery and
 flush-only verified binding. The CHECKERS reservation reader now verifies the
 exact current request/run/lease and returns zero slots; ART authority remains
 deny-only. Controlled nonempty slots prove ART mechanics only. ARCH-04C supports
-that exact empty output set and owns durable execution, followed by ARCH-04D authority and
-ARCH-04E routing. A returned evaluation value is not a stored
+that exact empty output set and owns durable execution. ARCH-04D2 supplies input,
+execute and finalize authority; ARCH-04E routing remains pending. A returned evaluation value is not a stored
 current result or acceptance.
 Retained run and submission history now use canonical AUTH and separate fixed
 contributor/manager projections. The alternate execution service and Celery worker are
@@ -550,15 +553,15 @@ severities.
 
 The following is the intended end-to-end lifecycle. Pre-submit intake and
 retained-history reads are implemented. Hidden durable post-submit execution is
-implemented; live execution and result routing remain unavailable pending
-ARCH-04D/04E. Known missing or corrupt input after ART authorization records a
+implemented with ARCH-04D2 exact service authority; automatic dispatch and result
+routing remain unavailable pending ARCH-04E. Known missing or corrupt input after ART authorization records a
 terminal infrastructure failure only after cleanup and fresh finalization
 authorization; it does not route the task. Exact replay does not reread storage.
 Denied material access and unexpected failures remain nonterminal. ARCH-04F adds
 contributor-correctable remediation and gates public intake and enabling the
 false-policy acceptance path; the true `allow_review` route may ship before
 ARCH-04F. ARCH-04B hidden input and ARCH-04B2 hidden output custody are delivered
-with deny-only/unavailable production composition. The flow below is not a claim
+with output-file authority unavailable; exact input authority is implemented. The flow below is not a claim
 that those jobs or transitions are live.
 
 ```text
@@ -596,8 +599,8 @@ ARCH-04C owns CHECKERS result/currentness and its completion event, not TASK
 mutations. ARCH-04E owns the current `allow_review` manifest and TASK transition;
 ARCH-04F owns contributor-readable non-allow remediation before public cutover.
 The direct CHECKERS-to-TASK mutation, fabricated system actor and alternate
-Celery gate are removed. Hidden durable execution is implemented; live authority
-and routing remain unavailable until ARCH-04D/04E.
+Celery gate are removed. Hidden durable execution and exact service authority are implemented; automatic
+routing remains unavailable until ARCH-04E.
 
 `review_pending` marks readiness for the separately owned WS-REV lifecycle.
 WS-REV alone creates `ReviewPacketManifest`, review queues, reviewer leases,
@@ -641,18 +644,21 @@ The checker run records:
 - completion timestamp
 
 ARCH-04B input, ARCH-04B2 output custody and ARCH-04C result custody are
-delivered. Reviewers will receive readiness proof after ARCH-04D activation and
-ARCH-04E routing integration. That proof must identify the same immutable binding
+delivered, together with ARCH-04D2 exact service authority. Reviewers will receive
+readiness proof after ARCH-04E routing integration. That proof must identify the same immutable binding
 and manifest that passed automated checks; caller-owned manifest fields are not
 authority.
 
-ARCH-04C persists material facts from ART's authorized selection. Its database
-guard does not independently compare `admission_id`, `replica_id` or
-`semantic_manifest_sha256` with canonical ART records. Production remains
-deny-only until the mandatory
-[ARCH-04D canonical lineage prerequisite](../.commitrail/initiatives/WS-ARCH-001/planning/chunks/WS-ARCH-001-04D-auth-post-submit-activation.md#canonical-art-lineage-activation-prerequisite)
-enforces that exact tuple at durable finalization and proves rejection of false
-lineage. The normal-path Local/MinIO custody assertion is not that negative proof.
+[ARCH-04D1](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04D1.md)
+adds canonical database custody through ART's scalar lineage contract. Every
+terminal run retaining material must match the exact consumed admission,
+Submission binding/content, verified replica and semantic manifest, including
+infrastructure failures after materialization. Migration 0009 preserves valid
+retained history and refuses unprovable rows without rewriting or deleting them.
+Current replica health is separate from immutable evidence identity. ARCH-04D2
+supplies exact service authority; migration 0010 binds execute/finalize receipts to
+the exact run, request, lease, result and retained material. It refuses unprovable
+retained receipts without rewriting or deleting evidence.
 
 A separate `ReadinessCertificate` record may be added later if reviewer routing needs a dedicated signed handoff object. v0.1 does not require that extra record.
 

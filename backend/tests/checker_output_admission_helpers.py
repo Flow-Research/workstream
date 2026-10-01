@@ -221,3 +221,48 @@ class ControlledCheckerOutputAdmissionAuthority:
             raise ArtifactAuthorityDeniedError(
                 "checker output service identity is unavailable"
             )
+
+
+async def seed_checker_output_relationships(session, namespace, *, policy_bundle=None) -> tuple[str, str, str]:
+    """Prepare canonical input before callers mint bounded output scratch."""
+    from tests.test_artifact_admission import _seed_human_actor, _context
+    from tests.projects.unified_policy_fixtures import create_standalone_unified_policy
+
+    if policy_bundle is None:
+        assert not session.in_transaction(), "Arrange canonical setup before staging artifact rows"
+        policy_bundle = await create_standalone_unified_policy(
+            async_sessionmaker(session.bind, expire_on_commit=False), namespace,
+        )
+    values, effective, _pre = policy_bundle
+    project_id = str(values["project"])
+    task_id = str(new_record_id())
+    contributor_id = str(new_record_id())
+    contributor_link_id = str(new_record_id())
+    await _seed_human_actor(
+        session,
+        _context(
+            actor_profile_id=UUID(contributor_id),
+            identity_link_id=UUID(contributor_link_id),
+        ),
+    )
+    from tests.tasks.lineage_fixtures import seed_started_task_for_artifact_test
+    from tests.submission_preparation_auth_helpers import install_submitter_grant
+    from tests.submission_fixtures import seed_retained_submission
+    from tests.test_tasks import complete_submission_payload
+
+    assignment_id = str(new_record_id())
+    params = {"task": task_id, "assignment": assignment_id, "project": project_id,
+              "actor": contributor_id}
+    connection = await session.connection()
+    await seed_started_task_for_artifact_test(connection, params)
+    await install_submitter_grant(connection, params)
+    await session.commit()
+    payload = complete_submission_payload()
+    payload["worker_attestation"] += " " + " ".join(
+        effective["effective_policy"]["attestation_terms"]
+    )
+    submission_id = await seed_retained_submission(task_id, payload)
+    from tests.checkers.execution.storage_fixture import seed_storage_run
+    checker_run_id = await seed_storage_run(async_sessionmaker(session.bind, expire_on_commit=False),
+                                            submission_id, state="queued")
+    return project_id, task_id, checker_run_id

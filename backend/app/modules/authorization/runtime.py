@@ -32,6 +32,7 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
 from app.modules.authorization.domain.assignment_invalidation import AssignmentInvalidationResourceContext
 from app.modules.authorization.domain.outbox_dispatch import OutboxDispatchResourceContext
+from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
 from app.modules.authorization.domain.guide_activation import ProjectGuideActivationResourceContext
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionResourceContext
 from app.modules.authorization.catalogue import ActionId
@@ -138,6 +139,9 @@ class PreparedAuthorityScope(BaseModel):
     @model_validator(mode="after")
     def validate_selector(self):
         """Require exactly the identifier owned by the selected scope kind."""
+        artifact_selected = self.artifact_resource_type is not None or self.artifact_resource_id is not None
+        if self.kind is not PreparedAuthorityScopeKind.ARTIFACT_INTERNAL and artifact_selected:
+            raise ValueError("invalid prepared authority scope")
         valid = (
             (
                 self.kind is PreparedAuthorityScopeKind.ACTOR_SELF
@@ -146,8 +150,6 @@ class PreparedAuthorityScope(BaseModel):
                 and self.target_actor_profile_id is None
                 and self.role is None
                 and self.grant_id is None
-                and self.artifact_resource_type is None
-                and self.artifact_resource_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.SYSTEM
@@ -156,8 +158,6 @@ class PreparedAuthorityScope(BaseModel):
                 and self.target_actor_profile_id is None
                 and self.role is None
                 and self.grant_id is None
-                and self.artifact_resource_type is None
-                and self.artifact_resource_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.PROJECT
@@ -165,8 +165,6 @@ class PreparedAuthorityScope(BaseModel):
                 and self.project_id is not None
                 and not (self.target_actor_profile_id is not None and self.grant_id is not None)
                 and ((self.target_actor_profile_id is None) == (self.role is None))
-                and self.artifact_resource_type is None
-                and self.artifact_resource_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.ARTIFACT_INTERNAL
@@ -1207,6 +1205,7 @@ AuthorizationResourceContext = (
     | PostPolicyResourceContext
     | AssignmentInvalidationResourceContext
     | OutboxDispatchResourceContext
+    | PostSubmitResourceContext
     | ProjectSetupRunMutationResourceContext
     | ProjectGuideActivationResourceContext
     | ProjectGuideCompilationRequestResourceContext

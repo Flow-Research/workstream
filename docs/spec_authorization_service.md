@@ -537,9 +537,9 @@ runtime `ActionOwner` values or the current implementation boundaries.
 In particular, the XINT-06B grouping corresponds to runtime
 `WS-AUTH-001-ART-06A` for post-submit materialization and
 `WS-AUTH-001-ART-06B` for checker-output write/binding. The current replacement
-activation contract is ARCH-04D. ARCH-04B hidden input and ARCH-04B2 output
-custody and ARCH-04C hidden durable execution/results are delivered;
-ARCH-04D activation is next. This does not reopen XINT-06B as a parallel implementation lane. Likewise ARCH-02G/02H
+activation contract is ARCH-04D2. Exact post-submit input, execute and finalize
+authority is delivered; checker-output write/bind remains planned because the
+current catalogue produces no output files. ARCH-04E1A routing-source facts are next. This does not reopen XINT-06B as a parallel implementation lane. Likewise ARCH-02G/02H
 are replacement implementation boundaries, not automatic registry renames.
 Read exact runtime ownership from the typed catalogue. No planning-only
 change may promote or reassign an action.
@@ -688,8 +688,8 @@ a planning document does not grant a service permission.
 |---|---|---|---|
 | `outbox.dispatch` | `workstream.outbox.dispatcher` | Event/claim generation/lease and exact phase; fresh authority for claim, invoke and finalize; no feature authority | AUTH-OUTBOX-02 authority/phase custody and Celery composition complete; feature handlers remain separate |
 | `task.assignment.authority_reconcile` | `workstream.task.assignment_reconciler` | Committed exact AUTH invalidation event, project/actor/grant-or-link, active pre-submit assignment; no wrong-role or submitted-history mutation | ARCH-03B9 hidden handler/fence and ARCH-03C1 real feature authority/decision receipts complete; ARCH-03C2 atomic producer wiring and registration |
-| `checker.post_submit.execute` | `workstream.checker.post_submit` | Immutable Submission/request/generation, locked compiled policy, attempt and admitted service; exact pre-I/O authority | ARCH-04C hidden behavior, ARCH-04D activation |
-| `checker.post_submit.finalize` | `workstream.checker.post_submit` | Exact execution request/fence, accepted result digest and required verified output bindings; fresh post-I/O authority and atomic evidence | ARCH-04C hidden behavior, ARCH-04D activation |
+| `checker.post_submit.execute` | `workstream.checker.post_submit` | Immutable Submission/request/generation, locked compiled policy, attempt and admitted service; exact pre-I/O authority | Implemented by ARCH-04C/04D2; no dispatcher registration |
+| `checker.post_submit.finalize` | `workstream.checker.post_submit` | Exact execution request/fence, accepted result digest, retained material and original execute receipt; fresh post-I/O authority and atomic evidence; current outputs are empty | Implemented by ARCH-04C/04D2; no dispatcher registration |
 | `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits admission, false/pass permits the shared acceptance consequence after its proof; never a human review decision or generic CON write | ARCH-04E1B hidden handler plus shared REV/CON proof for false, ARCH-04E2 activation, ARCH-04E3 live composition |
 
 Each action maps to the identically named permission in this table and only

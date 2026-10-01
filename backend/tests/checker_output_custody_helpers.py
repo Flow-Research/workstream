@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.checker_output_admission_helpers import seed_checker_output_relationships
+
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -58,7 +60,6 @@ from tests.projects.unified_policy_fixtures import create_standalone_unified_pol
 from tests.test_artifact_admission import (
     _AllowArtifactAuthority,
     _add_checker_output_actor,
-    _seed_checker_output_relationships,
     _settings,
 )
 
@@ -295,7 +296,7 @@ class OutputCustodyHarness:
                 )
 
     async def binding_rows(self) -> list[tuple[str, str, str, str, str]]:
-        """Snapshot exact immutable binding identities for denial-side-effect proof."""
+        """Snapshot checker-output bindings across both denial-test lineages."""
         async with self.factory() as session:
             rows = await session.execute(
                 select(
@@ -304,7 +305,7 @@ class OutputCustodyHarness:
                     ArtifactBinding.resource_id,
                     ArtifactBinding.put_attempt_id,
                     ArtifactBinding.verification_receipt_id,
-                ).order_by(ArtifactBinding.id)
+                ).where(ArtifactBinding.resource_type == "checker_run").order_by(ArtifactBinding.id)
             )
             return [tuple(row) for row in rows]
 
@@ -315,7 +316,7 @@ class OutputCustodyHarness:
     ) -> CheckerOutputReservation:
         """Create a second coherent lineage without changing the active test reservation."""
         async with self.factory() as session:
-            _, _, checker_run_id = await _seed_checker_output_relationships(
+            _, _, checker_run_id = await seed_checker_output_relationships(
                 session,
                 self.namespace,
                 policy_bundle=self.policy_bundle,
@@ -370,7 +371,7 @@ async def output_custody_harness(
     try:
         policy_bundle = await create_standalone_unified_policy(factory, namespace)
         async with factory() as session:
-            _, _, checker_run_id = await _seed_checker_output_relationships(
+            _, _, checker_run_id = await seed_checker_output_relationships(
                 session,
                 namespace,
                 policy_bundle=policy_bundle,

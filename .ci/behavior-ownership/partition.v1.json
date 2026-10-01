@@ -538,6 +538,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/post_submit.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/prepared_adapter_bindings.py"
     },
     {
@@ -642,11 +646,19 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/post_submit_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/pre_submit_materialization.py"
     },
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_post_submit_replay.py"
     },
     {
       "group": "auth",
@@ -779,10 +791,6 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/execution.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/checkers/execution_authority.py"
     },
     {
       "group": "artifacts",
@@ -1513,7 +1521,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "62d3e0889b562d645958338bd0b5cafefadbefaf288d77163076114d768b96d2",
+  "authority_digest": "941150a6b283032aefd8f41e1be6d5aaf1113d90349e943a0d2c8d9efe177fb2",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

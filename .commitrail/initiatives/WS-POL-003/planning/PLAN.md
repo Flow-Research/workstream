@@ -57,7 +57,7 @@ approval authority. AUTH-12H supplies exact guide activation authority;
 AUTH-18 exposes manager activation and selection discovery publicly.
 ARCH-03D completes hidden approved-guide intake integration. ARCH-04B hidden exact
 post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C
-hidden execution is delivered; ARCH-04D live authority is next; public intake remains deferred to ARCH-02I.
+hidden execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 exact input/execution/finalization authority is delivered; ARCH-04E1A routing-source facts are next; public intake remains deferred to ARCH-02I.
 
 The sequence through POL-04B is complete; POL-04B1 supplies automatic request
 custody for the delivered live cutover:
@@ -160,9 +160,10 @@ submission. Read-only checker-run visibility also remains bounded and separate.
 [POL-07B](../WS-POL-003-07B.md) completes facade composition over the CHECKER contract supplied by the
 independent ARCH-04A boundary. ARCH-04A does not depend on POL-07, guide
 activation or task readiness. ARCH-04C alone implements durable post-submit
-attempt/result/currentness storage and worker recovery; 07 cannot claim that
-future repository proof or make it a prerequisite for guide activation. Production post composition explicitly injects the unavailable executor; later
-artifact-flow integration supplies verified stored material and durable custody. The reviewed [POL-07A prerequisite](../WS-POL-003-07A.md)
+attempt/result/currentness storage and worker recovery. ARCH-04D2 supplies real
+fixed-service authority and exact materialization in production composition.
+Automatic dispatch/routing remains ARCH-04E work; none of these runtime steps
+becomes a prerequisite for guide setup or policy approval. The reviewed [POL-07A prerequisite](../WS-POL-003-07A.md)
 repairs ART-owned pre-submit invocation custody before the facade: a committed
 reservation fences execution, and completed recovery reads canonical evidence.
 This bounded exception does not move ART persistence into CHECKER or add

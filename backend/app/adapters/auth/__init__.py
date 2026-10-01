@@ -234,3 +234,15 @@ def history_read_authorization(kernel):
     """Compose current AUTH decisions for owner-selected immutable history."""
     from app.modules.authorization.history_authorization import HistoryReadAuthorization
     return HistoryReadAuthorization(kernel)
+
+
+def post_submit_execution_authority(session):
+    """Compose fixed checker execute/finalize authority over shared PREP."""
+    from app.modules.authorization.post_submit_authorization import PostSubmitExecutionAuthorization
+    return PostSubmitExecutionAuthorization(session)
+
+
+def post_submit_materialization_authority(session):
+    """Compose the separate fixed ART materializer principal."""
+    from app.modules.authorization.post_submit_authorization import PostSubmitMaterializationAuthorization
+    return PostSubmitMaterializationAuthorization(session)

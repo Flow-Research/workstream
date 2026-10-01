@@ -28,9 +28,10 @@ decision an attributable Review and reviewer contribution, and every accepted
 task an immutable FinalAcceptance before the submitter contribution.
 
 The diagrams depict target architecture, not a fully connected live lifecycle.
-Canonical retained submission/checker history is delivered. Post-submit execution,
-routing and recovery are unavailable; their removed execution and repair paths are
-not alternatives. The lifecycle sequence depicts the planned human-review branch. The versioned `human_review_required` defaults true in the existing locked
+Canonical retained submission/checker history and hidden durable post-submit
+execution with unfinished-attempt recovery are delivered. Exact service authority
+is implemented; automatic dispatch/routing and authorized terminal repair remain
+unavailable. Removed execution and repair paths are not alternatives. The lifecycle sequence depicts the planned human-review branch. The versioned `human_review_required` defaults true in the existing locked
 ReviewPolicy; false uses an authorized automated acceptance source and shared
 CON participant without a reviewer contribution. That runtime remains pending,
 not enabled by checker success alone. The [product-builder handoff](../../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next)
@@ -127,7 +128,7 @@ checker/job boundary.
 | React + Vite operations UI | Planned internal operations dashboard for project, task, submission, review, and compensation fulfillment workflows. Reputation UI remains deferred. |
 | FastAPI backend | API contracts, workflow rules, auth dependency, lifecycle guards, module orchestration, and audit writes. |
 | Celery worker boundary | Durable project setup and registered background jobs; checker execution is a target boundary. FastAPI background tasks are not the Workstream product-job boundary. |
-| CHECKERS | Delivered retained-history reads and hidden durable post-submit execution/recovery; live authority and automatic routing remain unavailable. |
+| CHECKERS | Delivered retained-history reads and hidden durable post-submit execution/recovery; exact service authority is delivered; automatic dispatch and routing remain unavailable. |
 | Storage interface | Keeps file/evidence semantics stable while local storage and the hosted AWS S3 profile implement the same provider-neutral port. |
 | Postgres | Durable record database for the full Workstream lifecycle. |
 
@@ -158,9 +159,9 @@ The backend component view zooms into the FastAPI container. It shows how the mo
 ## Lifecycle Sequence
 
 The sequence below shows the target v0.1 loop. Public manager guide activation is
-delivered, as is hidden durable post-submit execution/recovery. Live authority
-and automatic routing remain pending. Retained history does not execute
-checkers or authorize acceptance.
+delivered, as is hidden durable post-submit execution/recovery with exact
+input, execute and finalize service authority. Automatic dispatch and routing
+remain pending. Retained history does not execute checkers or authorize acceptance.
 
 <div class="diagram sequence">
   <img src="images/task_lifecycle_sequence.png" alt="Workstream task lifecycle sequence diagram" />

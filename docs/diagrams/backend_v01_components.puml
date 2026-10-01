@@ -5,7 +5,8 @@ legend top left
   Target architecture, not current runtime inventory.
   Canonical history reads are delivered.
   Hidden durable checker execution/currentness is delivered.
-  Live authority and automatic routing remain unavailable.
+  Exact input/execute/finalize service authority is delivered.
+  Automatic dispatch and routing remain unavailable.
 endlegend
 
 left to right direction

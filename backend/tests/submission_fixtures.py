@@ -1,10 +1,16 @@
 """Stored upstream prerequisites for checker/review-owner tests.
 
-These fixtures do not prove Submission creation or ART admission, return an
-HTTP response, or make a hidden endpoint public. They seed a stored Submission
-with valid locked lineage; they never execute a checker or enqueue work.
+These fixtures use ART preparation, verification and consumption owners with
+a scripted provider, then seed retained Submission projections with locked
+lineage. They do not expose public intake or claim live post-submit authority.
 """
 
+from uuid import UUID
+from tests.retained_material_fixtures import retained_admission, RetainedBindingAuthority
+from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
+from app.modules.artifacts.api import SubmissionAdmissionConsumptionRequest
+from app.modules.tasks.api import TaskSubmissionContextRequest
+from app.modules.tasks.repository import TaskRepository
 from app.core.config import get_settings
 
 from app.adapters.tasks import task_service
@@ -42,14 +48,24 @@ async def seed_retained_submission(
             ActorIdentityLink.actor_profile_id == task.assigned_to,
         ))
         assert link is not None and link.status == "active"
+        session.expunge_all()
+        await session.rollback()
+        # Detached selectors remain fixture inputs; real preparation rechecks them.
+        admission_id = await retained_admission(
+            db_session.get_session_factory(), task, assignment, link, packet, predecessor_id,
+        )
+        task = await session.get(WorkstreamTask, task_id)
+        context = await TaskRepository(session).lock_submission_context(TaskSubmissionContextRequest(
+            UUID(task_id), UUID(assignment.id), UUID(task.assigned_to),
+            UUID(predecessor_id) if predecessor_id else None,
+        ))
         service = task_service(session, settings=get_settings())
         await service._load_locked_task_context(task)
         submission = build_submission(
             submission_id=submission_id, task=task, contributor_id=task.assigned_to,
             task_assignment_id=assignment.id,
             contribution_policy_version_id=assignment.submitter_contribution_policy_version_id,
-            # Storage-only CHECKERS/REV prerequisite. Exact TASK assignment
-            # custody is required; this does not prove canonical ART intake.
+            # Retained packet projection; ART supplies the canonical byte references.
             version=predecessor.version + 1 if predecessor else 1, summary=packet.summary,
             worker_attestation=packet.worker_attestation,
             package_uri=packet.package_uri, package_hash=packet.package_hash,
@@ -61,12 +77,17 @@ async def seed_retained_submission(
                 size_bytes=item.size_bytes, metadata_json=item.metadata,
             ) for item in packet.evidence_items],
         )
-        # Controlled storage references only; history/review tests do not claim
-        # verified ART admission. Real byte custody has its own integration tests.
-        submission.submission_bundle_admission_id = str(new_record_id())
-        submission.artifact_binding_id = str(new_record_id())
-        submission.artifact_content_id = str(new_record_id())
         session.add(submission)
+        await session.flush()
+        consumed = await SubmissionAdmissionConsumptionService(
+            session, RetainedBindingAuthority(),
+        ).consume(SubmissionAdmissionConsumptionRequest(
+            UUID(admission_id), UUID(submission_id), submission.version, context,
+        ))
+        assert consumed.status == "consumed"
+        submission.submission_bundle_admission_id = admission_id
+        submission.artifact_binding_id = str(consumed.binding_id)
+        submission.artifact_content_id = str(consumed.content_id)
         task.status = "submitted"
         await session.flush()
         locked_at = datetime.now(UTC)

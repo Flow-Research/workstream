@@ -4,7 +4,7 @@ Use the [current dependency contract](PLAN.md#current-dependency-contract).
 The [preserved map](../pre-cutover/CHUNK_MAP.md) retains the complete original
 work accounting. Foundations through 02H and CP04B are complete; none restart.
 AUTH-18 public manager activation/context and ARCH-03D hidden approved-guide intake are delivered.
-ARCH-04B hidden exact post-submit input and ARCH-04B2 output custody are delivered. ARCH-04C hidden durable execution is delivered; ARCH-04D live authority is next;
+ARCH-04B hidden exact post-submit input and ARCH-04B2 output custody are delivered. ARCH-04C hidden durable execution is delivered; ARCH-04D1 canonical material custody is delivered; ARCH-04D2 exact input/execution/finalization authority is delivered; ARCH-04E1A routing-source facts are next;
 public intake remains deferred to ARCH-02I.
 
 | Boundary | Owner outcome | Risk | Current dependency |
@@ -32,15 +32,16 @@ public intake remains deferred to ARCH-02I.
 | [WS-ARCH-001-03C4](../WS-ARCH-001-03C4.md) | Exact-authorized public task queues | L1 | Complete; contributor, manager and operational projections with signed pagination |
 | [WS-ARCH-001-03C5](../WS-ARCH-001-03C5.md) | Exact-authorized Contributor and Manager detail and requirements | L1 | Complete; canonical projections, historical policy custody and atomic read evidence |
 | [WS-ARCH-001-03C6](../WS-ARCH-001-03C6.md) | Distinct exact-authorized locked-context reads | L1 | Complete; bounded Audit Authority history access delivered by 03C7 |
-| [WS-ARCH-001-03C7](../WS-ARCH-001-03C7.md) | Exact-authorized bounded task history | L1 | Complete; AUTH-18 public guide activation, ARCH-03D hidden approved-guide intake, hidden exact post-submit materialization and ARCH-04B2 output custody delivered; ARCH-04C hidden execution delivered; ARCH-04D next |
+| [WS-ARCH-001-03C7](../WS-ARCH-001-03C7.md) | Exact-authorized bounded task history | L1 | Complete; AUTH-18 public guide activation, ARCH-03D hidden approved-guide intake, hidden exact post-submit materialization and ARCH-04B2 output custody delivered; ARCH-04C hidden execution delivered; ARCH-04D1 canonical custody delivered; ARCH-04D2 authority delivered; ARCH-04E1A next |
 | [WS-ARCH-001-03C](chunks/WS-ARCH-001-03C-auth-task-readiness.md) | Exact task/assignment public activation and integrated readiness proof | L1 | Complete through 03C7 audit history, 03C4 queues, 03C5 detail/requirements and 03C6 locked-context reads; AUTH-18 public guide activation delivered; ARCH-03D hidden intake delivered; public intake cutover remains separate |
 | [WS-ARCH-001-04A](../WS-ARCH-001-04A.md) | CHECKER post-submit contract and registered evaluator conformance | L1 | Complete canonical catalogue, phase facts and structural conformance; consumed by delivered POL-04B and POL-07B |
-| [WS-ARCH-001-04B](../WS-ARCH-001-04B.md) | ART exact verified Submission materialization | L1 | Complete hidden verified input with async scoped reads; production authority remains deny-only until 04D |
+| [WS-ARCH-001-04B](../WS-ARCH-001-04B.md) | ART exact verified Submission materialization | L1 | Complete hidden verified input with async scoped reads; exact input authority delivered by 04D2 |
 | [WS-ARCH-001-04B2](../WS-ARCH-001-04B2.md) | ART checker-output custody and verified binding | L1 | Complete hidden typed store, byte-free recovery and flush-only binding; production authority deny-only |
-| [WS-ARCH-001-04C](chunks/WS-ARCH-001-04C-checker-current-result.md) | CHECKER hidden durable current output and supersession behavior | L1 | Complete hidden request/lease/result custody with exact empty-output support and atomic completion; production remains deny-only |
-| [WS-ARCH-001-04D](chunks/WS-ARCH-001-04D-auth-post-submit-activation.md) | AUTH exact fixed-service post-submit activation (replaces XINT-06B) | L1 | Planned after 04B/04C evidence |
-| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Source 04E1A -> hidden handlers 04E1B -> AUTH 04E2 -> live 04E3, plus 04D/OUTBOX-02; false consumes shared REV/CON/fence proof and activation also requires 04F remediation |
-| [WS-ARCH-001-03D](../WS-ARCH-001-03D.md) | Exact activated historical guide through hidden durable intake; obsolete lookup removed | L1 | Complete; hidden exact post-submit materialization and ARCH-04B2 output custody delivered; ARCH-04C hidden execution delivered; ARCH-04D next, public cutover remains deferred |
+| [WS-ARCH-001-04C](chunks/WS-ARCH-001-04C-checker-current-result.md) | CHECKER hidden durable current output and supersession behavior | L1 | Complete hidden request/lease/result custody with exact empty-output support and atomic completion; exact service authority delivered by 04D2 |
+| [WS-ARCH-001-04D1](../WS-ARCH-001-04D1.md) | Canonical terminal ART material custody | L1 | Complete; valid retained history preserved; invalid upgrades refused |
+| [WS-ARCH-001-04D2](../WS-ARCH-001-04D2.md) | AUTH exact fixed-service post-submit activation (replaces XINT-06B) | L1 | Complete: exact input, execute and finalize authority; output write/bind remains unavailable |
+| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Source 04E1A -> hidden handlers 04E1B -> AUTH 04E2 -> live 04E3, plus 04D2/OUTBOX-02; false consumes shared REV/CON/fence proof and activation also requires 04F remediation |
+| [WS-ARCH-001-03D](../WS-ARCH-001-03D.md) | Exact activated historical guide through hidden durable intake; obsolete lookup removed | L1 | Complete; hidden exact post-submit materialization and ARCH-04B2 output custody delivered; ARCH-04C hidden execution delivered; ARCH-04D1 canonical custody delivered; ARCH-04D2 authority delivered; ARCH-04E1A next, public cutover remains deferred |
 | [WS-ARCH-001-04F](chunks/WS-ARCH-001-04F-checker-remediation.md) | Contributor-correctable checker failures and same-lineage admission-backed replacement Submission | L1 | Planned after 04E; replaces XINT-05C, required before public 02I, not before REV begins from `allow_review` |
 
 CP09, 04E and 04F are coordination parents, not permission for multi-owner PRs.

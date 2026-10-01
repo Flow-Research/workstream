@@ -1,6 +1,7 @@
 """Canonical exact-resource digests shared by kernel decisions and prepared bindings."""
 
 from pydantic import BaseModel
+from app.modules.authorization.domain.post_submit import PostSubmitResourceContext, post_submit_digest
 from app.modules.authorization.domain.assignment_invalidation import AssignmentInvalidationResourceContext
 from app.modules.tasks.api.assignment_invalidation import assignment_invalidation_resource_digest
 from app.modules.authorization.domain.outbox_dispatch import OutboxDispatchResourceContext
@@ -23,6 +24,9 @@ from app.core.hashing import canonical_json_hash
 
 def authorization_resource_digest(resource: BaseModel) -> str:
     """Preserve purpose-specific public digest parity and canonical fallback custody."""
+    if type(resource) is PostSubmitResourceContext:
+        resource.validate_identity()
+        return post_submit_digest(resource.facts)
     if type(resource) is AssignmentInvalidationResourceContext:
         resource.validate_identity()
         return assignment_invalidation_resource_digest(resource.facts)

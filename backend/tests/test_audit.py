@@ -74,10 +74,9 @@ async def audit_factory(audit_database_env: str):
                     )
                 )
                 await connection.execute(delete(AuditEvent).where(AuditEvent.id.in_(created)))
+                await connection.execute(text("set constraints all immediate"))
                 await connection.execute(
-                    text(
-                        "alter table audit_events enable trigger audit_events_reject_update_delete"
-                    )
+                    text("alter table audit_events enable trigger audit_events_reject_update_delete")
                 )
         await engine.dispose()
 

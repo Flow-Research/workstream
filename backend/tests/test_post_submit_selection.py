@@ -10,6 +10,8 @@ from app.core.identifiers import new_record_id
 from app.modules.checkers.api.materialization import PostSubmissionMaterializationUnavailable
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleRequest, SubmittedBundleUnavailable
 from tests.checkers.post_submit.support import change_request
+from tests.checkers.execution.support import material_execution
+from app.modules.artifacts.post_submit_selection import select_post_submission_material
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_post_submit_materialization import Consumer
 
@@ -62,9 +64,8 @@ async def test_task_projection_is_owner_qualified_and_exact(tmp_path, isolated_d
         }
 
 
-async def test_frozen_context_substitution_and_authority_denial_precede_io(tmp_path, isolated_database_env):
+async def test_frozen_context_substitution_rejected_by_art_selection(tmp_path, isolated_database_env):
     async with material_fixture(tmp_path, isolated_database_env) as h:
-        consumer = Consumer(h.files)
         for name in ("source_id", "effective_policy_id", "pre_policy_id", "post_policy_id", "review_policy_id", "revision_policy_id", "review_generation", "revision_hash"):
             value = (2 if name == "review_generation" else "sha256:" + "0" * 64 if name == "revision_hash" else new_record_id())
             expected = h.request.expected_context.model_copy(update={name: value})
@@ -72,19 +73,10 @@ async def test_frozen_context_substitution_and_authority_denial_precede_io(tmp_p
                 "observed_context": h.request.structural_input.observed_context.model_copy(update={name: value}),
             })
             with pytest.raises(PostSubmissionMaterializationUnavailable, match="identity_mismatch"):
-                await h.service.materialize(change_request(h.request, expected_context=expected, structural_input=packet), consumer)
-        assert not h.store.opens and consumer.calls == 0
-        # Explicit hidden seam denial, not a claim of live AUTH replay storage.
-        class RejectSelection:
-            async def preflight(self, request):
-                pass
-            async def authorize(self, request, selection):
-                assert selection.submission.admission_id == h.created.admission_id
-                raise PostSubmissionMaterializationUnavailable("controlled_generation_denied")
-        h.service._authority = RejectSelection()
-        with pytest.raises(PostSubmissionMaterializationUnavailable, match="controlled_generation_denied"):
-            await h.service.materialize(h.request, consumer)
+                await select_material(h, change_request(h.request, expected_context=expected, structural_input=packet))
         assert not h.store.opens and not h.preparation._active
+        selected = await select_material(h, h.request)
+        assert selected.submission.admission_id == h.created.admission_id
 
 
 async def test_valid_foreign_lineage_mixes_deny_before_material_access(tmp_path, isolated_database_env, monkeypatch):
@@ -100,14 +92,11 @@ async def test_valid_foreign_lineage_mixes_deny_before_material_access(tmp_path,
             assert first.created.admission_id != second.created.admission_id
             # Each untouched stored lineage must pass through real materialization.
             for own in (first, second):
-                value = await own.service.materialize(own.request, Consumer(own.files))
+                value = await own.service.materialize(await material_execution(own), Consumer(own.files))
                 assert value.submission_id == own.created.submission_id
                 own.store.opens.clear()
-                own.authority.selections.clear()
             def forbidden(*args, **kwargs):
                 pytest.fail("foreign lineage reached provider, scratch, or consumer")
-            class ForbiddenConsumer:
-                evaluate = staticmethod(forbidden)
             for own, foreign in ((first, second), (second, first)):
                 with monkeypatch.context() as patch:
                     patch.setattr(own.store, "open", forbidden)
@@ -125,8 +114,17 @@ async def test_valid_foreign_lineage_mixes_deny_before_material_access(tmp_path,
                                        expected_context=foreign.request.expected_context,
                                        structural_input=foreign.request.structural_input)
                         mixed = change_request(own.request, **mix)
-                        with pytest.raises(PostSubmissionMaterializationUnavailable):
-                            await own.service.materialize(mixed, ForbiddenConsumer())
-                assert not own.authority.selections
+                        with pytest.raises((PostSubmissionMaterializationUnavailable, SubmittedBundleUnavailable)):
+                            await select_material(own, mixed)
+                assert not own.store.opens
                 assert not own.preparation._active
                 assert list((own.scratch / "workspaces").iterdir()) == []
+
+
+async def select_material(h, request):
+    """Exercise ART selection itself, independently of earlier CHECKERS lease guards."""
+    async with h.factory() as session:
+        return await select_post_submission_material(
+            session, tasks=submitted_bundle_port(session), request=request,
+            namespace=h.namespace, store=h.store,
+        )

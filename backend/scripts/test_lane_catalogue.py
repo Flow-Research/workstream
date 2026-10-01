@@ -23,6 +23,14 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/authorization/post_submit/test_atomicity.py",
+    "tests/authorization/post_submit/test_concurrency.py",
+    "tests/authorization/post_submit/test_live_authority.py",
+    "tests/authorization/post_submit/test_migration.py",
+    "tests/authorization/post_submit/test_receipt_custody.py",
+    "tests/authorization/post_submit/test_principals.py",
+    "tests/authorization/post_submit/test_timeout.py",
+
     "tests/authorization/project_roles/test_cancellation_postgresql.py",
     "tests/authorization/project_roles/test_constraint_postgresql.py",
     "tests/authorization/project_roles/test_lifecycle_postgresql.py",
@@ -412,6 +420,8 @@ TASK_MODULES = (
     "tests/checkers/execution/test_concurrency.py",
     "tests/checkers/execution/test_storage.py",
     "tests/checkers/execution/test_migration.py",
+    "tests/checkers/execution/test_material_lineage.py",
+    "tests/checkers/execution/test_material_migration.py",
     "tests/checkers/post_submit/test_catalogue.py",
     "tests/checkers/post_submit/test_compiled_policy.py",
     "tests/checkers/post_submit/test_configuration.py",

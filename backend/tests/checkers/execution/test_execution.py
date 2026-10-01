@@ -7,9 +7,9 @@ from app.modules.checkers.api.execution import CheckerExecutionUnavailable, COMP
 from app.modules.checkers.execution_coordination import EvaluationCoordinator
 from app.modules.checkers.models import CheckerRun, CheckerResult
 from app.modules.outbox.models import OutboxEvent
-from tests.checkers.post_submit.support import request
 from tests.post_submit_materialization_helpers import material_fixture
-from .support import controlled_executor, denied_executor, reserve
+from .support import live_executor, reserve, service_link_state
+from app.modules.actors.api import ServiceIdentity
 
 
 @pytest.fixture
@@ -29,9 +29,12 @@ def autoflush_clock(monkeypatch):
     monkeypatch.setattr(ExecutionRepository, "now", read_clock)
 
 
-async def test_production_denies_before_access():
-    with pytest.raises(CheckerExecutionUnavailable, match="post_submit_execution_unavailable"):
-        await denied_executor().evaluate_post_submission(request())
+async def test_missing_checker_principal_denies_before_access(tmp_path, isolated_database_env):
+    async with material_fixture(tmp_path, isolated_database_env, provision_checker=False) as h:
+        await reserve(h)
+        with pytest.raises(CheckerExecutionUnavailable, match="authority_unavailable"):
+            await live_executor(h).evaluate_post_submission(h.request)
+        assert h.store.opens == [] and not h.preparation._active
 
 
 @pytest.mark.parametrize("provider", ["local", "minio"])
@@ -44,7 +47,7 @@ async def test_verified_material_execution_and_replay(
         await provision_minio_bucket.__wrapped__()
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         reservation = await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         result = await executor.evaluate_post_submission(h.request)
         assert result.outcome == "completed"
         assert (
@@ -59,20 +62,17 @@ async def test_verified_material_execution_and_replay(
         async with h.factory() as session, session.begin():
             current = await EvaluationCoordinator(session).read_current_result(h.request)
             assert current.result == result
-            assert len(h.authority.selections) == 1
-            authorized_request, selected = h.authority.selections[0]
-            assert authorized_request == h.request
             run = await session.get(CheckerRun, str(result.attempt_id))
             assert run.material_custody == {
-                "submission_id": str(selected.submission.submission_id),
-                "submission_version": selected.submission.submission_version,
-                "admission_id": str(selected.submission.admission_id),
-                "binding_id": str(selected.submission.binding_id),
-                "content_id": str(selected.submission.content_id),
-                "replica_id": str(selected.replica_id),
-                "content_sha256": selected.sha256,
-                "byte_count": selected.byte_count,
-                "semantic_manifest_sha256": selected.semantic_manifest_sha256,
+                "submission_id": str(h.created.submission_id),
+                "submission_version": h.created.submission_version,
+                "admission_id": str(h.created.admission_id),
+                "binding_id": str(h.created.artifact_binding_id),
+                "content_id": str(h.created.artifact_content_id),
+                "replica_id": str(h.replica_id),
+                "content_sha256": h.request.content_sha256,
+                "byte_count": len(h.data),
+                "semantic_manifest_sha256": h.manifest.sha256,
             }
             assert current.routing_recommendation in {"allow_review", "needs_revision"}
             rows = list(
@@ -101,7 +101,7 @@ async def test_infrastructure_failure_is_terminal(tmp_path, isolated_database_en
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h, registry=CheckerRegistry())
+        executor = live_executor(h, registry=CheckerRegistry())
         failed = await executor.evaluate_post_submission(h.request)
         assert failed.outcome == "infrastructure_failed"
         assert failed.infrastructure_failure_code == "implementation_unavailable"
@@ -127,7 +127,7 @@ async def test_action_authority_is_not_interchangeable(
     tmp_path, isolated_database_env, substitution
 ):
     from contextlib import asynccontextmanager
-    from app.core.hashing import canonical_json_hash
+    from app.modules.checkers.api.execution import execution_authority_digest
     from app.core.identifiers import new_record_id
     from app.modules.checkers.api.execution import (
         PreparedExecution,
@@ -136,11 +136,11 @@ async def test_action_authority_is_not_interchangeable(
         FinalizeEvidence,
     )
     from .test_concurrency import final_facts
-    from .support import ControlledFinalizeAuthority
+    from app.modules.authorization.post_submit_authorization import PostSubmitExecutionAuthorization
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
 
@@ -148,19 +148,23 @@ async def test_action_authority_is_not_interchangeable(
         class WrongPrepared(
             PreparedExecution if substitution == "prepared" else PreparedFinalization
         ):
+            async def validate_replay(self, facts, evidence_id):
+                pytest.fail("wrong-phase receipt reached replay")
+
             async def consume(self, value):
                 receipt = FinalizeEvidence if substitution == "prepared" else ExecuteEvidence
                 return receipt(
                     evidence_id=new_record_id(),
-                    facts_digest=canonical_json_hash(value.model_dump(mode="json")),
+                    facts_digest=execution_authority_digest(value),
                 )
 
-        class WrongAuthority(ControlledFinalizeAuthority):
+        class WrongAuthority(PostSubmitExecutionAuthorization):
             @asynccontextmanager
             async def prepare_finalization(self, request):
                 yield WrongPrepared()
 
-        executor._finalize_authority = lambda session: WrongAuthority()
+        original_authority = executor._finalize_authority
+        executor._finalize_authority = WrongAuthority
         with pytest.raises(
             CheckerExecutionUnavailable, match="authority_unavailable|action_evidence_unavailable"
         ):
@@ -169,7 +173,7 @@ async def test_action_authority_is_not_interchangeable(
             run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
             assert run.status == "running" and run.result_json is None
             assert await session.scalar(select(func.count()).select_from(CheckerResult)) == 0
-        executor._finalize_authority = lambda session: ControlledFinalizeAuthority()
+        executor._finalize_authority = original_authority
         assert await executor.finalize(facts) == facts.result
 
 
@@ -185,7 +189,7 @@ async def test_zero_output_finalization(tmp_path, isolated_database_env):
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         selector = CheckerOutputSelector(
             evaluation=h.request,
@@ -226,9 +230,12 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
+        from tests.authorization.post_submit.test_receipt_custody import snapshot
+        from app.modules.tasks.models import AuditEvent
+        before = await snapshot(h)
         async with h.factory() as session, session.begin():
             await session.execute(
                 text("""create function test_checker_outbox_failure() returns trigger language plpgsql as $$
@@ -259,6 +266,11 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
                 assert await self.session.scalar(
                     select(func.count()).select_from(CheckerResult)
                 ) == len(h.request.policy.entries)
+                assert await self.session.scalar(select(func.count()).select_from(AuditEvent)) == before[1] + 1
+                assert await self.session.scalar(select(AuditEvent.action_id).where(
+                    AuditEvent.action_id == "checker.post_submit.finalize",
+                    AuditEvent.resource_id == str(lease.reservation.attempt_id),
+                )) == "checker.post_submit.finalize"
                 return await outbox_append(self.session).append(value)
 
         executor._outbox = ObservingAppend
@@ -266,6 +278,7 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
             with pytest.raises(OutboxPersistenceError):
                 await executor.finalize(facts)
             assert observations == [True]
+            assert await snapshot(h) == before
             async with h.factory() as session:
                 run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
                 assert (
@@ -297,8 +310,6 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
 async def test_unreadable_stored_bytes_terminalize_and_replay(
     tmp_path, isolated_database_env, monkeypatch, damage
 ):
-    from app.modules.checkers.execution_authority import DenyFinalizationAuthority
-    from .support import ControlledFinalizeAuthority
     from tests.test_local_artifact_store import object_path
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
@@ -312,29 +323,30 @@ async def test_unreadable_stored_bytes_terminalize_and_replay(
             path.chmod(0o600)
             path.write_bytes(bytes([h.data[0] ^ 1]) + h.data[1:])
             path.chmod(0o400)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
 
         async def forbidden_checker(*args, **kwargs):
             pytest.fail("unverified stored bytes reached a checker")
 
         monkeypatch.setattr(executor._registry, "run", forbidden_checker)
         # The byte failure cannot bypass the separate finalization authority.
-        executor._finalize_authority = lambda session: DenyFinalizationAuthority()
         pending = []
         finalize = executor.finalize
 
         async def retain_finalization(facts):
             pending.append(facts)
+            await service_link_state(h.factory, ServiceIdentity.CHECKER_POST_SUBMIT, active=False)
             return await finalize(facts)
 
         monkeypatch.setattr(executor, "finalize", retain_finalization)
-        with pytest.raises(CheckerExecutionUnavailable, match="finalization_unavailable"):
+        with pytest.raises(CheckerExecutionUnavailable, match="authority_unavailable"):
             await executor.evaluate_post_submission(h.request)
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(reservation.attempt_id))
             assert run.status == "running" and run.result_json is None
             assert run.finalize_evidence_id is None and run.completion_event_id is None
-        executor._finalize_authority = lambda session: ControlledFinalizeAuthority()
+        await service_link_state(h.factory, ServiceIdentity.CHECKER_POST_SUBMIT, active=True)
+        monkeypatch.setattr(executor, "finalize", finalize)
         assert len(pending) == 1
         result = await finalize(pending[0])
         assert result.outcome == "infrastructure_failed"
@@ -363,7 +375,6 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
     tmp_path, isolated_database_env, monkeypatch, failure
 ):
     import asyncio
-    from app.modules.artifacts.post_submit_materialization import DenyPostSubmissionMaterializationAuthority
     from app.modules.artifacts.preparation import ArtifactScratchIntegrityError
     from app.modules.checkers.api.materialization import (
         PostSubmissionMaterializationUnavailable, PostSubmissionMaterializationFailure,
@@ -377,9 +388,9 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
                 update={"manifest": ()},
             ))
         reservation = await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         if failure == "authority":
-            h.service._authority = DenyPostSubmissionMaterializationAuthority()
+            await service_link_state(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER, active=False)
             expected = PostSubmissionMaterializationUnavailable
         elif failure == "cleanup":
             import sys

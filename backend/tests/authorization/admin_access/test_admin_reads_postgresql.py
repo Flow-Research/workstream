@@ -183,7 +183,7 @@ async def test_missing_admin_target_has_concealed_response_and_no_success_effect
     assert await authority_snapshot() == before
 
 
-@pytest.mark.parametrize("surface,total", [("permissions", 75), ("admin-role-definitions", 5)])
+@pytest.mark.parametrize("surface,total", [("permissions", 77), ("admin-role-definitions", 5)])
 async def test_admin_catalogue_read_returns_public_definitions(
     admin_access: AdminAccess,
     surface: str,

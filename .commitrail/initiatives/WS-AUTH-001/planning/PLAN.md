@@ -25,15 +25,15 @@ AUTH-13/14 cutovers are not additional implementation work.
   public TASK activation is complete through ARCH-03C7.
 - [AUTH-18](../WS-AUTH-001-18.md) delivers public manager activation and exact
   selection discovery over CP07/AUTH-12H. ARCH-03D completes hidden approved-guide
-  intake; ARCH-04B hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D live authority is next.
+  intake; ARCH-04B hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 exact input/execution/finalization authority is delivered; ARCH-04E1A routing-source facts are next.
 - CP05 owns exact ContributionPolicy-action activation after merged CP04B.
 - CP08 delivered the minimal lineage writers. ARCH-03B8 hidden task audit
   evidence and 03B9 hidden assignment invalidation are complete. ARCH-03C delivered
   public TASK activation through 03C7, after 03C1 exact feature authority and
   03C2 originating-transaction event production/registration.
   [AUTH-13 is superseded](chunks/WS-AUTH-001-13-task-assignment-cutover.md).
-- ARCH-04D alone activates post-submit materialization/output and CHECKERS
-  execution/finalization after ARCH-04B/04B2/04C; historical AUTH-14 and XINT-06B
+- ARCH-04D2 activates exact post-submit materialization and CHECKERS
+  execution/finalization after ARCH-04B/04B2/04C/04D1; output write/bind remains unavailable; historical AUTH-14 and XINT-06B
   cannot start in parallel. ARCH-03B/03C explicitly own task queue/read and
   pre-submit invalidation; downstream REV queue/reconciliation remains separate.
 
@@ -53,7 +53,7 @@ and public JSON-packet Submission creation. Admission-backed creation stays hidd
 ARCH-03B/03C reuse these exact actions and command owners; public TASK access
 and authority are delivered through 03C7, with invalidation wiring in 03C2.
 CP08 delivered ContributionPolicyVersion lineage. ARCH-03D completes hidden approved-guide intake. ARCH-04B hidden exact post-submit
-input and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D live authority is next; public intake remains deferred to ARCH-02I. Do not restore eligibility
+input and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 exact input/execution/finalization authority is delivered; ARCH-04E1A routing-source facts are next; public intake remains deferred to ARCH-02I. Do not restore eligibility
 or register replacement aliases.
 
 ## WS-AUTH-001-OUTBOX-01 — unavailable dispatcher contract

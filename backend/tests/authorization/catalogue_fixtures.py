@@ -19,6 +19,7 @@ FIXED_SERVICE_ACTION_EXPECTATIONS = {
         "artifact.post_submit.checker_input.materialize",
         "artifact.review_packet.materialize",
     },
+    ServiceIdentity.CHECKER_POST_SUBMIT: {"checker.post_submit.execute", "checker.post_submit.finalize"},
     ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: {"artifact.checker_output.write"},
     ServiceIdentity.PROJECT_SETUP: {
         "project.guide_compilation.request_automatic",
@@ -119,7 +120,7 @@ ART_CUSTODY_EXPECTATIONS = {
     "artifact.post_submit.checker_input.materialize": (
         "artifact.checker_input.materialize",
         "WS-AUTH-001-ART-06A",
-        "planned",
+        "active",
     ),
     "artifact.checker_output.write": (
         "artifact.checker_output.write",
@@ -250,7 +251,8 @@ historical_permissions = frozenset("""actor.profile.read_self actor.profile.upda
     audit.read audit.export""".split())
 
 new_permissions = frozenset(
-    """task.assignment.authority_reconcile outbox.dispatch project.setup_diagnostic.read project.effective_policy.read
+    """
+    checker.post_submit.execute checker.post_submit.finalize task.assignment.authority_reconcile outbox.dispatch project.setup_diagnostic.read project.effective_policy.read
     operations.task.start_override operations.submission_gate.repair
     operations.checker.retry artifact.binding.read artifact.replica.read
     artifact.receipt.read artifact.verification_job.read
@@ -263,6 +265,8 @@ new_permissions = frozenset(
 )
 
 expected = {
+    "checker.post_submit.execute": ("checker.post_submit.execute", "WS-ARCH-001-04D2"),
+    "checker.post_submit.finalize": ("checker.post_submit.finalize", "WS-ARCH-001-04D2"),
     "task.submission.list": ("submission.read_own", "task-checker-auth-cleanup"),
     "submission.read": ("submission.read_own", "task-checker-auth-cleanup"),
     "submission.checker_run.list": ("submission.read_own", "task-checker-auth-cleanup"),
@@ -432,6 +436,9 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "checker.post_submit.execute",
+    "checker.post_submit.finalize",
+    "artifact.post_submit.checker_input.materialize",
     "task.submission.list",
     "submission.read",
     "submission.checker_run.list",

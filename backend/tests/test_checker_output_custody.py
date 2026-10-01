@@ -385,7 +385,12 @@ async def test_binding_rollback_and_concurrent_replay_are_atomic(
         assert first.binding_id == second.binding_id
         assert sorted((first.replayed, second.replayed)) == [False, True]
         async with harness.factory() as session:
-            count = await session.scalar(select(func.count()).select_from(ArtifactBinding))
+            count = await session.scalar(
+                select(func.count()).select_from(ArtifactBinding).where(
+                    ArtifactBinding.resource_type == "checker_run",
+                    ArtifactBinding.resource_id == str(harness.selector.checker_run_id),
+                )
+            )
             assert count == 1
 
 
@@ -492,8 +497,16 @@ async def test_authority_revocation_during_put_prevents_return_and_binding(
             await operation
 
         async with harness.factory() as session:
-            attempt = await session.scalar(select(ArtifactPutAttempt))
-            receipt = await session.scalar(select(ArtifactVerificationReceipt))
+            attempt = (await session.scalars(
+                select(ArtifactPutAttempt).where(
+                    ArtifactPutAttempt.checker_run_id == str(harness.selector.checker_run_id)
+                )
+            )).one()
+            receipt = (await session.scalars(
+                select(ArtifactVerificationReceipt).join(ArtifactVerificationJob).where(
+                    ArtifactVerificationJob.originating_put_attempt_id == attempt.id
+                )
+            )).one()
             assert attempt is not None and receipt is not None
             attempt_id, receipt_id = UUID(attempt.id), UUID(receipt.id)
             await session.rollback()
@@ -506,7 +519,12 @@ async def test_authority_revocation_during_put_prevents_return_and_binding(
                             receipt_id,
                         )
                     )
-            binding_count = await session.scalar(select(func.count()).select_from(ArtifactBinding))
+            binding_count = await session.scalar(
+                select(func.count()).select_from(ArtifactBinding).where(
+                    ArtifactBinding.resource_type == "checker_run",
+                    ArtifactBinding.resource_id == str(harness.selector.checker_run_id),
+                )
+            )
             assert binding_count == 0
 
 

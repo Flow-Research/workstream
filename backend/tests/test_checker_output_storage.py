@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.checker_output_admission_helpers import seed_checker_output_relationships
+
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -32,7 +34,6 @@ from tests.test_artifact_admission import (
     _admit_checker_output,
     _local_store,
     _namespace,
-    _seed_checker_output_relationships,
     _settings,
 )
 
@@ -54,6 +55,7 @@ async def _store_verified_output(
             reservation_ttl_seconds=360,
             total_deadline_seconds=300,
         )
+        relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
         async with minted_source(
             source_path,
             payload,
@@ -65,7 +67,7 @@ async def _store_verified_output(
                 settings,
                 namespace,
                 source,
-                policy_bundle=policy_bundle,
+                relationships=relationships,
             )
             orchestrator = ArtifactStorageOrchestrator(
                 session,
@@ -945,7 +947,7 @@ async def test_migration_refuses_unprovable_or_inconsistent_retained_checker_att
     """The old schema lacks evaluation/slot custody, so retained attempts fail closed."""
     async with _verified_output(isolated_database_env, tmp_path / "retained") as case:
         async with case.factory() as seed_session:
-            _, other_task_id, _ = await _seed_checker_output_relationships(
+            _, other_task_id, _ = await seed_checker_output_relationships(
                 seed_session,
                 case.namespace,
                 policy_bundle=case.policy_bundle,

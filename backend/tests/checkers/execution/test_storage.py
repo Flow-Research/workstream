@@ -11,7 +11,7 @@ from app.modules.checkers.models import CheckerRun, CheckerResult
 from app.modules.checkers.execution_repository import request_text
 from tests.checkers.post_submit.support import change_request
 from tests.post_submit_materialization_helpers import material_fixture
-from .support import reserve, controlled_executor
+from .support import reserve, live_executor
 from .test_concurrency import final_facts
 
 
@@ -61,7 +61,7 @@ async def test_terminal_member_and_routing_custody(tmp_path, isolated_database_e
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
         members = list(facts.result.member_results)
@@ -124,7 +124,7 @@ async def test_execution_custody_rejects_mutation(tmp_path, isolated_database_en
 async def test_unfinished_members_cannot_commit(tmp_path, isolated_database_env):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        lease, _ = await controlled_executor(h)._claim(h.request)
+        lease, _ = await live_executor(h)._claim(h.request)
         async with h.factory() as session:
             from app.modules.checkers.execution_repository import ExecutionRepository
 
@@ -145,7 +145,7 @@ async def test_member_shape_and_complete_set_enforced_in_database(
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
         first = facts.result.member_results[0]
@@ -211,11 +211,12 @@ async def test_consistently_short_result_cannot_omit_selected_policy_member(
     from app.modules.outbox.models import OutboxEvent
     from app.modules.checkers.api.execution import COMPLETION_EVENT
     from sqlalchemy import func
-    import app.modules.checkers.execution as execution
+    from sqlalchemy import text
+    from . import material_storage_helpers
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         valid = final_facts(h, lease)
         assert len(valid.result.member_results) > 1
@@ -227,15 +228,20 @@ async def test_consistently_short_result_cannot_omit_selected_policy_member(
         # Simulate a faulty validator/compiler accepting a self-consistent short
         # result. Persisted members, counts, result digest and event all agree;
         # only comparison with the locked policy's selected set can reject it.
-        canonical = execution.classify_result
+        canonical = material_storage_helpers.classify_result
 
         def faulty_classifier(request, result):
             assert request == h.request and result == short
             return ResultClassification("allow_review", len(short.member_results), 0, 0, 0)
 
-        monkeypatch.setattr(execution, "classify_result", faulty_classifier)
-        with pytest.raises(IntegrityError, match="checker completed custody or routing invalid"):
-            await executor.finalize(facts)
+        monkeypatch.setattr(material_storage_helpers, "classify_result", faulty_classifier)
+        async with h.factory() as session:
+            await material_storage_helpers.write_terminal(
+                session, facts, facts.material.model_dump(mode="json"), authorized_facts=valid,
+            )
+            with pytest.raises(IntegrityError, match="checker completed custody or routing invalid"):
+                await session.execute(text("SET CONSTRAINTS public.checker_terminal_custody IMMEDIATE"))
+            await session.rollback()
         async with h.factory() as session:
             assert (
                 await session.get(CheckerRun, str(lease.reservation.attempt_id))
@@ -249,19 +255,19 @@ async def test_consistently_short_result_cannot_omit_selected_policy_member(
                 )
                 == 0
             )
-        monkeypatch.setattr(execution, "classify_result", canonical)
+        monkeypatch.setattr(material_storage_helpers, "classify_result", canonical)
         assert await executor.finalize(valid) == valid.result
 
 
 async def test_infrastructure_failure_code_is_closed_in_database(tmp_path, isolated_database_env):
     import json
-    from sqlalchemy import update, func
+    from sqlalchemy import update, func, text
     from app.core.hashing import canonical_json_hash
     from app.modules.checkers.post_submit_contracts import make_post_submit_result
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        lease, _ = await controlled_executor(h)._claim(h.request)
+        lease, _ = await live_executor(h)._claim(h.request)
         result = make_post_submit_result(
             request_id=h.request.evaluation_request_id, request_digest=h.request.request_sha256,
             attempt_id=lease.reservation.attempt_id, result_id=lease.reservation.result_id,
@@ -272,8 +278,9 @@ async def test_infrastructure_failure_code_is_closed_in_database(tmp_path, isola
         async with h.factory() as session:
             for code, custody in (
                 ("invented_failure", None),
-                ("material_unavailable", {"fabricated": True}),
-                ("material_unavailable", None),
+                # Valid ART lineage isolates the terminal-shape guard: material
+                # must be absent when the declared failure is material_unavailable.
+                ("material_unavailable", final_facts(h, lease).material.model_dump(mode="json")),
             ):
                 candidate = body | {"infrastructure_failure_code": code}
                 statement = update(CheckerRun).where(CheckerRun.id == str(result.attempt_id)).values(
@@ -283,16 +290,14 @@ async def test_infrastructure_failure_code_is_closed_in_database(tmp_path, isola
                     finalize_evidence_id=str(new_record_id()), completed_at=func.clock_timestamp(),
                     outcome_source="auto_checker", routing_recommendation="not_evaluated",
                 )
-                if code == "invented_failure" or custody is not None:
-                    with pytest.raises(IntegrityError, match="infrastructure terminal shape invalid"):
-                        await session.execute(statement)
-                        await session.commit()
-                    await session.rollback()
-                    run = await session.get(CheckerRun, str(result.attempt_id))
-                    assert run.status == "running" and run.result_json is None
-                else:
+                with pytest.raises(IntegrityError, match="infrastructure terminal shape invalid"):
                     await session.execute(statement)
-                    await session.commit()
+                    await session.execute(text("SET CONSTRAINTS public.checker_terminal_custody IMMEDIATE"))
+                await session.rollback()
+                run = await session.get(CheckerRun, str(result.attempt_id))
+                assert run.status == "running" and run.result_json is None
+        valid = final_facts(h, lease).model_copy(update={"result": result, "material": None})
+        assert await live_executor(h).finalize(valid) == result
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))
             assert run.failure_code == "material_unavailable" and run.status == "infrastructure_failed"

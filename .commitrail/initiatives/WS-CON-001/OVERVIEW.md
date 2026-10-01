@@ -11,8 +11,9 @@ and the [capability ledger](../../../docs/roadmap_status.md).
   immutable ContributionRecords and optional
   project-policy-driven compensation awards without coupling lifecycle truth to
   an economic provider.
-- Next usable boundary: ARCH-04D exact service authority after delivered ARCH-04C hidden evaluation and
-  hidden ARCH-04B input materialization and [ARCH-04B2 checker-output custody](../WS-ARCH-001/WS-ARCH-001-04B2.md), then live authority. [AUTH-18](../WS-AUTH-001/WS-AUTH-001-18.md) delivers
+- Next usable boundary: ARCH-04E1A routing-source facts after delivered
+  [ARCH-04D2](../WS-ARCH-001/WS-ARCH-001-04D2.md) exact input, execute and finalize authority.
+  Output-file authority remains unavailable for the zero-output catalogue. [AUTH-18](../WS-AUTH-001/WS-AUTH-001-18.md) delivers
   public manager activation context and exact guide activation.
   [CP05A](../WS-ARCH-001/WS-ARCH-001-CP05A.md) delivers public Finance
   ContributionPolicy administration and recovery of a draft selector, a published

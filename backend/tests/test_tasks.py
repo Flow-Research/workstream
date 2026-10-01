@@ -406,6 +406,7 @@ async def delete_audit_fixture_as_owner(session: AsyncSession, event_id: str) ->
         text("delete from audit_events where id = :event_id"),
         {"event_id": event_id},
     )
+    await session.execute(text("set constraints all immediate"))
     await session.execute(
         text("alter table audit_events enable trigger audit_events_reject_update_delete")
     )
@@ -654,10 +655,12 @@ def complete_submission_payload(package_hash: str = "sha256:package-v1") -> dict
             }
         ],
         "worker_attestation": (
-            "I attest this is original work with task test originality and contains no confidential client data, "
+            "I attest this is original work with task_test_originality and contains no confidential client data, "
             "credentials, secrets, tokens, passwords, API keys, private source material, "
             "source code, copied platform artifacts, or copied platform content. I confirm credentials "
-            "and secret exclusion and accept human accountability for agent assisted work."
+            "and secret exclusion and accept human accountability for agent assisted work. "
+            "original_work confidential_data_exclusion credentials_and_secret_exclusion "
+            "human_accountability_for_agent_assisted_work"
         ),
         "evidence_items": [
             {

@@ -1,13 +1,13 @@
 """One async post-submit execution path over reserved CHECKERS custody."""
 
 import asyncio
+import json
 from dataclasses import asdict
 from datetime import timedelta
 from uuid import UUID
 from collections.abc import Callable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.execution import (
     COMPLETION_EVENT,
@@ -20,6 +20,8 @@ from app.modules.checkers.api.execution import (
     ExecutionLease,
     FinalizeEvidence,
     FinalizeFacts,
+    FinalizeAuthorityFacts,
+    execution_authority_digest,
     PreparedExecution,
     PreparedFinalization,
     VerifiedMaterialFacts,
@@ -64,9 +66,7 @@ def _lease(run):
 
 def _evidence(value, expected_type, facts):
     """Reject a wrong-phase receipt or a digest not bound to these facts."""
-    if type(value) is not expected_type or value.facts_digest != canonical_json_hash(
-        facts.model_dump(mode="json")
-    ):
+    if type(value) is not expected_type or value.facts_digest != execution_authority_digest(facts):
         raise CheckerExecutionUnavailable("checker_action_evidence_unavailable")
     return value.evidence_id
 
@@ -159,8 +159,13 @@ class PostSubmissionExecutor:
                 run = await repo.lock_current(request)
                 if run.status in {"completed", "infrastructure_failed"}:
                     facts = ExecuteFacts(request=request, lease=_lease(run))
-                    _evidence(await prepared.consume(facts), ExecuteEvidence, facts)
-                    return None, stored_result(run)
+                    await prepared.validate_replay(facts, UUID(run.execute_evidence_id))
+                    return None, FinalizeFacts(
+                        request=request, lease=facts.lease, result=stored_result(run),
+                        material=VerifiedMaterialFacts.model_validate_json(json.dumps(run.material_custody))
+                        if run.material_custody is not None else None,
+                        output_binding_ids=(),
+                    )
                 now = await repo.now()
                 if run.status == "running" and run.worker_lease_expires_at > now:
                     raise CheckerExecutionUnavailable("checker_execution_lease_unavailable")
@@ -188,12 +193,12 @@ class PostSubmissionExecutor:
         request = PostSubmissionEvaluationRequest.model_validate(request)
         lease, replay = await self._claim(request)
         if replay is not None:
-            return replay
+            return await self.finalize(replay)
         material = None
         try:
             async with asyncio.timeout(EXECUTION_TIMEOUT_SECONDS):
                 materialized = await self._materialization.materialize(
-                    request, _StructuralConsumer(self._registry, lease)
+                    ExecuteFacts(request=request, lease=lease), _StructuralConsumer(self._registry, lease)
                 )
             material = VerifiedMaterialFacts(
                 **{k: v for k, v in asdict(materialized).items() if k != "evaluation"}
@@ -258,6 +263,11 @@ class PostSubmissionExecutor:
                     raise CheckerExecutionUnavailable("checker_finalization_authority_unavailable")
                 repo = ExecutionRepository(session)
                 run = await repo.lock_current(request)
+                if run.execute_evidence_id is None:
+                    raise CheckerExecutionUnavailable("checker_execution_evidence_unavailable")
+                authority_facts = FinalizeAuthorityFacts(
+                    **facts.model_dump(), execute_evidence_id=UUID(run.execute_evidence_id),
+                )
                 if run.status in {"completed", "infrastructure_failed"}:
                     if (
                         stored_result(run) != result
@@ -266,10 +276,10 @@ class PostSubmissionExecutor:
                         != (facts.material.model_dump(mode="json") if facts.material else None)
                     ):
                         raise CheckerExecutionUnavailable("checker_finalization_replay_conflict")
-                    _evidence(await prepared.consume(facts), FinalizeEvidence, facts)
+                    await prepared.validate_replay(authority_facts, UUID(run.finalize_evidence_id))
                     return stored_result(run)
                 run = await repo.require_lease(request, facts.lease)
-                evidence_id = _evidence(await prepared.consume(facts), FinalizeEvidence, facts)
+                evidence_id = _evidence(await prepared.consume(authority_facts), FinalizeEvidence, authority_facts)
                 completed_at = await repo.now()
                 await repo.write_members(run, result)
                 if result.outcome == "completed":

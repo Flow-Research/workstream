@@ -162,8 +162,8 @@ Implemented foundations on `main` include external Flow-token verification,
 canonical local actors and authorization, project guides and task records,
 submission packets, immutable artifact storage, pre-submit intake checks,
 and authorized retained submission/checker history. ARCH-04C implements hidden
-durable post-submit execution and unfinished-attempt recovery. Live authority
-and automatic routing remain unavailable. Project-guide ingestion stores original documents,
+durable post-submit execution and unfinished-attempt recovery. ARCH-04D2 supplies exact service authority;
+automatic dispatch and routing remain unavailable. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
 unified setup agent. Guide metadata in PostgreSQL also holds at least one required
 task example; the agent assesses the examples with the uploaded guide documents.
@@ -553,7 +553,7 @@ Derivation, reads, approval and correction creation do not invoke inference or
 post-submit evaluators. A periodic scan recovers publication failures from
 committed approvals; duplicate delivery retains one policy and receipt.
 Hidden post-submission execution and completion custody are implemented; live
-service authority and automatic routing remain pending ARCH-04D/04E.
+ARCH-04D2 supplies exact service authority; automatic routing remains ARCH-04E work.
 The local Celery command above includes Beat; start it before creating guide sources.
 
 The Beat scheduler must run alongside the Celery execution processes so
@@ -568,8 +568,8 @@ checker phase service and removes the standalone JSON precheck. Both fresh
 pre-submit execution and completed replay use that service, with ART retaining
 canonical evidence ownership. The obsolete checker worker, manual execution and
 submission-finalize repair routes are removed. `evaluate_post_submission` now
-uses hidden durable execution with deny-only production authority; live service
-authority and automatic routing remain ARCH-04D/04E work.
+uses hidden durable execution with exact ARCH-04D2 service authority; automatic
+dispatch and routing remain ARCH-04E work.
 Submission and checker history use live exact-project Submitter authority for the
 original contributor. Separate `/projects/{project_id}` reads require a covering
 Project Manager grant and expose fixed management fields. Token roles confer no
@@ -658,8 +658,11 @@ input with scoped async file access and cleanup. ARCH-04B2 adds hidden typed
 checker-output storage, byte-free recovery and flush-only verified binding over
 the generic ART put/verification path. ARCH-04C supplies hidden durable execution,
 exact request/execution-lease custody, immutable member results and atomic completion events.
-The structural catalogue produces no output files. Production authority remains
-deny-only; ARCH-04D activates exact services before ARCH-04E automatic routing.
+The structural catalogue produces no output files, so output write/bind authority
+remains unavailable. ARCH-04D1 validates retained terminal material against canonical
+ART lineage. ARCH-04D2 supplies fixed-service input, execute and finalize authority,
+with PostgreSQL enforcement of exact execution/finalization receipts. Automatic
+dispatch and routing remain ARCH-04E work.
 
 ## v0.1 Success Standard
 

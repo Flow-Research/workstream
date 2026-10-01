@@ -28,7 +28,7 @@ async def test_migration_refuses_retained_history(tmp_path, isolated_database_en
         finally:
             await conn.close()
         await asyncio.to_thread(command.upgrade, _config(), "0007_checker_output_custody")
-        async with material_fixture(tmp_path, isolated_database_env) as h:
+        async with material_fixture(tmp_path, isolated_database_env, provision_checker=False) as h:
             async with h.factory() as session, session.begin():
                 source = await session.scalar(
                     text("select to_jsonb(s) from submissions s where id=:id"),
@@ -144,7 +144,7 @@ async def test_empty_database_installs_execution_custody(isolated_database_env, 
         try:
             assert (
                 await conn.fetchval("select version_num from alembic_version")
-                == "0008_checker_execution"
+                == "0010_post_submit_authority"
             )
             assert await conn.fetchval("select count(*) from checker_submission_fences") == 0
             columns = set(

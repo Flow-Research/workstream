@@ -2447,11 +2447,11 @@ async def test_cancelled_close_finishes_cleanup_and_closes_handle(
 
 
 @pytest.mark.asyncio
-async def test_cancelled_close_preserves_cancellation_when_cleanup_fails(
+async def test_cancelled_close_propagates_cleanup_failure_for_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Keep retryable ownership while cancellation remains the caller result."""
+    """Keep retryable ownership and expose the cleanup failure despite cancellation."""
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
     service = ArtifactPreparationService(manager)
     prepared = await service.prepare(byte_stream(b"data"), media_type="text/plain")
@@ -2471,7 +2471,7 @@ async def test_cancelled_close_preserves_cancellation_when_cleanup_fails(
     await asyncio.sleep(0)
     close_task.cancel()
     finish_release.set()
-    with pytest.raises(asyncio.CancelledError):
+    with pytest.raises(OSError, match="injected release failure"):
         await close_task
 
     assert not prepared._closed
@@ -2489,14 +2489,15 @@ async def test_cancelled_close_preserves_cancellation_when_cleanup_fails(
 async def test_second_pass_deadline_is_enforced(tmp_path: Path) -> None:
     """Keep the provider-consumption deadline shorter than reservation TTL."""
     limits = preparation_limits(
-        reservation_ttl_seconds=1.0,
-        total_deadline_seconds=0.5,
-        cleanup_margin_seconds=0.1,
+        reservation_ttl_seconds=30.0,
+        total_deadline_seconds=20.0,
+        cleanup_margin_seconds=5.0,
     )
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=limits)
     service = ArtifactPreparationService(manager)
     prepared = await service.prepare(byte_stream(b"data"), media_type="text/plain")
-    await asyncio.sleep(0.55)
+    # Expire only the second-pass window after the first pass has succeeded.
+    service._active[prepared._binding].deadline = asyncio.get_running_loop().time() - 1
     async with prepared as source:
         with pytest.raises(ArtifactPreparationDeadlineError):
             _ = [chunk async for chunk in source.stream()]
@@ -2547,3 +2548,52 @@ async def test_client_commitment_shape_is_rejected_before_reservation(
         await service.prepare(byte_stream(b"data"), **kwargs)
     assert (await manager.usage()).reservation_count == 0
     manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancellation", ["caller", "deadline"])
+async def test_submission_processing_preserves_cancellation_over_aborted_callback_error(tmp_path, monkeypatch, cancellation):
+    """The shared pre/post owner distinguishes callback errors from its cleanup."""
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
+    service = ArtifactPreparationService(manager)
+    prepared = await service.prepare(byte_stream(b"data"), media_type="text/plain")
+    entered, aborted = asyncio.Event(), asyncio.Event()
+    class Processor:
+        async def process(self, reader, workspace):
+            entered.set()
+            await aborted.wait()
+            raise RuntimeError("processor error after abort")
+        def abort(self):
+            aborted.set()
+    deadlines, original_timeout = [], asyncio.timeout
+    def controlled_timeout_at(deadline):
+        timer = original_timeout(None)
+        deadlines.append(timer)
+        return timer
+    monkeypatch.setattr(asyncio, "timeout_at", controlled_timeout_at)
+    task = asyncio.create_task(service._process_prepared_submission(
+        prepared, Processor(), reserved_bytes=1, maximum_entries=1,
+    ))
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        if cancellation == "caller":
+            task.cancel()
+            expected = asyncio.CancelledError
+        else:
+            assert len(deadlines) == 1
+            deadlines[0].reschedule(asyncio.get_running_loop().time())
+            expected = ArtifactPreparationDeadlineError
+        with pytest.raises(expected):
+            await asyncio.wait_for(task, 1)
+        assert aborted.is_set()
+        assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+        assert not manager._pending_workspaces
+        assert len(service._active) == 1
+    finally:
+        aborted.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await prepared.close()
+        assert (await manager.usage()).reservation_count == 0
+        manager.close()

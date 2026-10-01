@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.adapters.artifacts import CheckerPhaseService
-from tests.checkers.execution.support import denied_executor
+from tests.checkers.execution.support import forbidden_post_submission
 from sqlalchemy import select
 
 from app.modules.artifacts.authorization import PreparedPreSubmitMaterializationAuthorization
@@ -71,7 +71,7 @@ async def test_completed_replay_authorizes_retry_custody_and_stored_original_gen
             )
             workflow._materialization._authorization = authority
             phases = CheckerPhaseService(
-                pre_submission=workflow, post_submission=denied_executor(),
+                pre_submission=workflow, post_submission=forbidden_post_submission(),
             )
             try:
                 reservation = await _reserve_with_real_materializer(

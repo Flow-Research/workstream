@@ -581,6 +581,7 @@ def test_checker_materialization_contract_has_one_canonical_consumer_owner() -> 
         node.name: node for node in tree.body if isinstance(node, ast.ClassDef)
     }
     assert set(classes) == {
+        "MaterializationFacts", "PreparedMaterialization", "MaterializationAuthorityPort",
         "PostSubmissionMaterializationUnavailable",
         "PostSubmissionMaterializationFailure",
         "SubmissionMaterialEntry",
@@ -611,6 +612,8 @@ def test_checker_custody_ports_have_exact_owner_and_art_consumers() -> None:
             "app/modules/checkers/execution_coordination.py",
         },
         "app.modules.checkers.api.materialization": {
+            "app/modules/authorization/domain/post_submit.py",
+            "app/modules/authorization/post_submit_authorization.py",
             "app/adapters/artifacts/__init__.py",
             "app/modules/artifacts/post_submit_materialization.py",
             "app/modules/artifacts/post_submit_selection.py",

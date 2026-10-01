@@ -508,15 +508,16 @@ async def guide_document_access_runtime(session_factory, attempt_id, manifest, c
 
 
 def post_submission_materialization(*, sessions, store, namespace, preparation, inspector) -> PostSubmissionMaterializationPort:
-    """Compose hidden verified input; production authority remains explicitly unavailable."""
+    """Compose exact input with fresh materializer authority and CHECKERS lease custody."""
     from app.adapters.tasks import submitted_bundle_port
-    from app.modules.artifacts.post_submit_materialization import (
-        DenyPostSubmissionMaterializationAuthority, PostSubmissionMaterializer,
-    )
+    from app.modules.artifacts.post_submit_materialization import PostSubmissionMaterializer
+    from app.adapters.auth import post_submit_materialization_authority
+    from app.adapters.checkers import current_post_submit_execution
     return PostSubmissionMaterializer(
         sessions=sessions, tasks=submitted_bundle_port, store=store, namespace=namespace,
         preparation=preparation, inspector=inspector,
-        authority=DenyPostSubmissionMaterializationAuthority(),
+        authority=post_submit_materialization_authority,
+        current_execution=current_post_submit_execution,
     )
 
 

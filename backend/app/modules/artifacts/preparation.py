@@ -17,7 +17,7 @@ import re
 import stat as stat_module
 import threading
 import time
-from typing import Any, BinaryIO, Protocol, TypeVar
+from typing import Any, BinaryIO, Protocol, TypeVar, cast
 from app.core.identifiers import new_record_id
 
 from app.interfaces.artifacts import (
@@ -1698,26 +1698,45 @@ class ArtifactPreparationService:
         if active is None or not active.handle_issued or active.stream_claimed:
             raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
 
-        async def process_and_cleanup() -> _InspectionResult:
-            with self._manager.extraction_workspace(
-                reserved_bytes=reserved_bytes,
-                maximum_entries=maximum_entries,
-            ) as workspace:
-                active.reader.seek(0)
-                try:
-                    return await processor.process(active.reader, workspace)
-                finally:
+        async def process_and_cleanup() -> tuple[_InspectionResult | None, BaseException | None]:
+            workspace_entered = False
+            try:
+                with self._manager.extraction_workspace(
+                    reserved_bytes=reserved_bytes,
+                    maximum_entries=maximum_entries,
+                ) as workspace:
+                    workspace_entered = True
                     active.reader.seek(0)
+                    try:
+                        # Keep callback failure distinct from the owner's cleanup.
+                        # A cancelled caller drains cleanup, not the aborted result.
+                        try:
+                            return await processor.process(active.reader, workspace), None
+                        except ArtifactScratchIntegrityError:
+                            raise
+                        except BaseException as error:
+                            return None, error
+                    finally:
+                        active.reader.seek(0)
+            except ArtifactScratchIntegrityError:
+                raise
+            except Exception:
+                if not workspace_entered:
+                    raise
+                raise ArtifactScratchIntegrityError("submission_workspace_cleanup_unconfirmed") from None
 
         operation = asyncio.create_task(process_and_cleanup())
         try:
             async with asyncio.timeout_at(active.deadline):
-                return await asyncio.shield(operation)
+                result, error = await asyncio.shield(operation)
+                if error is not None:
+                    raise error
+                return cast(_InspectionResult, result)
         except TimeoutError:
             processor.abort()
             try:
                 await await_cancellation_resistant(operation)
-            except BaseException:
+            except asyncio.CancelledError:
                 pass
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"
@@ -1726,7 +1745,7 @@ class ArtifactPreparationService:
             processor.abort()
             try:
                 await await_cancellation_resistant(operation)
-            except BaseException:
+            except asyncio.CancelledError:
                 pass
             raise cancellation from None
 

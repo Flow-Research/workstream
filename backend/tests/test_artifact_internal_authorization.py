@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.checker_output_admission_helpers import seed_checker_output_relationships
+
 
 from dataclasses import replace
 from types import SimpleNamespace
@@ -905,9 +907,10 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
         async with factory() as session:
             session.add_all((*resolver, *verifier))
             await session.commit()
+            relationships = await seed_checker_output_relationships(session, namespace)
             async with minted_source(tmp_path / "atomic-verify", b"verified") as source:
                 _, _, _, admission = await _admit_checker_output(
-                    session, settings, namespace, source)
+                    session, settings, namespace, source, relationships=relationships)
                 assert (
                     await ArtifactStorageOrchestrator(
                         session,
@@ -922,8 +925,8 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
                     == "stored_pending_verification"
                 )
 
-            job = await session.scalar(select(ArtifactVerificationJob))
-            assert job is not None
+            job = (await session.scalars(select(ArtifactVerificationJob).where(
+                ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)))).one()
             job_id = UUID(job.id)
             await session.rollback()
             claim = ArtifactStorageOrchestrator(
@@ -975,9 +978,8 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
             await session.refresh(job)
             assert job.status == "running"
             assert job.executor_id is not None and job.execution_generation == 1
-            assert await session.scalar(
-                select(ArtifactVerificationReceipt)
-            ) is None
+            assert await session.scalar(select(ArtifactVerificationReceipt).where(
+                ArtifactVerificationReceipt.verification_job_id == str(job_id))) is None
             events = list(
                 await session.scalars(
                     select(AuditEvent).where(
@@ -1009,9 +1011,8 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
             )
             await session.refresh(job)
             assert job.status == "verified"
-            assert await session.scalar(
-                select(ArtifactVerificationReceipt)
-            ) is not None
+            assert await session.scalar(select(ArtifactVerificationReceipt).where(
+                ArtifactVerificationReceipt.verification_job_id == str(job_id))) is not None
             events = list(
                 await session.scalars(
                     select(AuditEvent)

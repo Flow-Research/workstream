@@ -2,7 +2,7 @@
 
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable
 
-from tests.checkers.execution.support import denied_executor
+from tests.checkers.execution.support import forbidden_post_submission
 
 import inspect
 from types import SimpleNamespace
@@ -21,7 +21,7 @@ from tests.checkers.post_submit.test_result_contract import result
 def phases(pre=None, post=None):
     return CheckerPhaseService(
         pre_submission=pre if pre is not None else SimpleNamespace(execute_reserved=AsyncMock()),
-        post_submission=post if post is not None else denied_executor(),
+        post_submission=post if post is not None else forbidden_post_submission(),
     )
 
 
@@ -66,10 +66,15 @@ async def test_pre_phase_rejects_authorization_handle_and_propagates_owner_failu
 
 
 @pytest.mark.asyncio
-async def test_valid_post_phase_stays_unavailable_without_invoking_pre_owner():
+async def test_post_phase_propagates_owner_denial_without_invoking_pre_owner():
     owner = SimpleNamespace(execute_reserved=AsyncMock())
+    executor = SimpleNamespace(evaluate_post_submission=AsyncMock(
+        side_effect=CheckerExecutionUnavailable("post_submit_execution_unavailable"),
+    ))
+    source = request()
     with pytest.raises(CheckerExecutionUnavailable, match="^post_submit_execution_unavailable$"):
-        await phases(pre=owner).evaluate_post_submission(request())
+        await phases(pre=owner, post=executor).evaluate_post_submission(source)
+    executor.evaluate_post_submission.assert_awaited_once_with(source)
     owner.execute_reserved.assert_not_awaited()
 
 

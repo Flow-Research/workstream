@@ -92,7 +92,7 @@ async def test_system_auditor_has_exact_read_surface(
     assert response.status_code == 200, response.text
     body = response.json()
     if surface in {"permissions", "definitions"}:
-        assert body["total"] == len(body["items"]) == (75 if surface == "permissions" else 5)
+        assert body["total"] == len(body["items"]) == (77 if surface == "permissions" else 5)
     elif surface in {"list", "history"}:
         expected = {grant_id, access.bootstrap_grant_id} if surface == "list" else {grant_id}
         assert body["total"] == len(expected)

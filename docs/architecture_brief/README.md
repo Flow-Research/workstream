@@ -9,7 +9,8 @@ This folder contains the shareable Workstream architecture brief.
 The brief uses the C4-PlantUML diagrams from `docs/diagrams/` and packages them into a single PDF for team review.
 
 The source, PDF and images distinguish delivered canonical history reads from
-unavailable post-submit execution, routing and recovery. Lifecycle diagrams are
+exact-authorized hidden post-submit execution from unavailable automatic dispatch,
+routing and public recovery. Lifecycle diagrams are
 target views; the [roadmap](../roadmap_status.md) owns capability status.
 
 ## Render

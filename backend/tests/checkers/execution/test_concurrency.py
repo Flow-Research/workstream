@@ -17,7 +17,7 @@ from app.modules.checkers.models import CheckerRun
 from tests.checkers.post_submit.support import change_request
 from tests.checkers.post_submit.test_result_contract import result
 from tests.post_submit_materialization_helpers import material_fixture
-from .support import reserve, controlled_executor
+from .support import reserve, live_executor
 
 
 def final_facts(h, lease):
@@ -36,7 +36,7 @@ def final_facts(h, lease):
             admission_id=h.created.admission_id,
             binding_id=h.request.binding_id,
             content_id=h.request.content_id,
-            replica_id=new_record_id(),
+            replica_id=h.replica_id,
             content_sha256=h.request.content_sha256,
             byte_count=h.request.byte_count,
             semantic_manifest_sha256=h.manifest.sha256,
@@ -81,7 +81,7 @@ async def test_stale_worker_cannot_finalize_after_takeover(
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         monkeypatch.setattr(execution, "LEASE_SECONDS", 1)
         old, _ = await executor._claim(h.request)
         old_facts = final_facts(h, old)
@@ -111,7 +111,7 @@ async def test_generation_advance_and_finalize_serialize(
 ):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
         successor = change_request(
@@ -177,19 +177,20 @@ async def test_evaluation_releases_transaction_before_materialization(
     tmp_path, isolated_database_env, monkeypatch
 ):
     from contextlib import asynccontextmanager
-    from .support import ControlledExecution, ControlledExecuteAuthority
+    from app.modules.authorization.post_submit_authorization import PostSubmitExecutionAuthorization
     import app.modules.checkers.execution as execution
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         receipt = await reserve(h)
         active_preparation = []
 
-        class TrackingAuthority(ControlledExecuteAuthority):
+        class TrackingAuthority(PostSubmitExecutionAuthorization):
             @asynccontextmanager
             async def prepare_execution(self, request):
                 active_preparation.append(request.evaluation_request_id)
                 try:
-                    yield ControlledExecution(request)
+                    async with super().prepare_execution(request) as prepared:
+                        yield prepared
                 finally:
                     active_preparation.clear()
 
@@ -227,8 +228,8 @@ async def test_evaluation_releases_transaction_before_materialization(
             return await original(consumer, request, material)
 
         monkeypatch.setattr(execution._StructuralConsumer, "evaluate", evaluate)
-        executor = controlled_executor(h)
-        executor._execute_authority = lambda session: TrackingAuthority()
+        executor = live_executor(h)
+        executor._execute_authority = TrackingAuthority
         executor._materialization = MaterializationProbe()
         assert (await executor.evaluate_post_submission(h.request)).outcome == "completed"
         assert observed == ["before_bytes", "inside_consumer"]
@@ -245,7 +246,7 @@ async def test_member_insertion_waits_for_terminal_parent(
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
-        executor = controlled_executor(h)
+        executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
         facts = final_facts(h, lease)
         entered, release = asyncio.Event(), asyncio.Event()

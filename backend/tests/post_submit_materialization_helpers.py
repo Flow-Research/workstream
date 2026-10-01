@@ -4,19 +4,20 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from io import BytesIO
 from types import SimpleNamespace
+from uuid import UUID
 import zipfile
 import json
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.adapters.artifacts import create_artifact_store_bootstrap
+from app.adapters.artifacts import create_artifact_store_bootstrap, post_submission_materialization
 from app.adapters.tasks import submitted_bundle_port
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
 from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
-from app.modules.artifacts.post_submit_materialization import PostSubmissionMaterializer
+from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
 from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector, SubmissionArchiveLimits
@@ -39,20 +40,6 @@ from tests.tasks.submission_lineage_support import _seed_services, _verified_adm
 from tests.test_artifact_admission import _settings, _context, _seed_human_actor
 from tests.test_checker_materialization import _limits
 from tests.test_default_pre_submit_execution import _archive, _bytes
-
-
-class ControlledAuthority:
-    """Test-only seam, not a production service admission or generation store."""
-
-    def __init__(self):
-        self.requests = []
-        self.selections = []
-
-    async def preflight(self, request):
-        self.requests.append(request)
-
-    async def authorize(self, request, selection):
-        self.selections.append((request, selection))
 
 
 class CountedStore:
@@ -81,9 +68,18 @@ def archive_with_modes(evidence_path, project_id):
     return archive_bytes.getvalue()
 
 
+async def provision_material_services(factory, *, artifacts, checker):
+    """Provision only the fixed identities present in the schema under test."""
+    from tests.checkers.execution.support import provision_checker_service
+    if artifacts:
+        await _seed_services(factory)
+    if checker:
+        await provision_checker_service(factory)
+
+
 @asynccontextmanager
 async def material_fixture(tmp_path, database_url, *, provider="local", scratch_limits=None,
-                           storage_settings=None, provision_services=True):
+                           storage_settings=None, provision_services=True, provision_checker=True):
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     if storage_settings is not None:
@@ -106,8 +102,7 @@ async def material_fixture(tmp_path, database_url, *, provider="local", scratch_
     try:
         plan, policy = await approved_pre_submit_fixture(factory, namespace, guide_version="v1")
         context = _context()
-        if provision_services:
-            await _seed_services(factory)
+        await provision_material_services(factory, artifacts=provision_services, checker=provision_checker)
         task_id, assignment_id = new_record_id(), new_record_id()
         async with factory.begin() as session:
             await _seed_human_actor(session, context)
@@ -140,6 +135,8 @@ async def material_fixture(tmp_path, database_url, *, provider="local", scratch_
                 plan.lineage.project_id, task_id, created.submission_id,
             ))
             submission = await session.scalar(select(Submission).where(Submission.id == str(created.submission_id)))
+            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
+            replica_id = UUID(admission.verified_replica_id)
             compiled = CompiledPostSubmitPolicy.model_validate_json(json.dumps(submission.locked_post_submit_checker_policy_body))
         inspector = SubmissionArchiveInspector(SubmissionArchiveLimits())
         manifest = build_submission_manifest(inspector.inspect(BytesIO(data)))
@@ -163,17 +160,17 @@ async def material_fixture(tmp_path, database_url, *, provider="local", scratch_
                 observed_context=ObservedPostSubmitContext(**asdict(facts.context)),
             ),
         )
-        authority, counted = ControlledAuthority(), CountedStore(store)
+        counted = CountedStore(store)
         preparation = ArtifactPreparationService(manager)
-        service = PostSubmissionMaterializer(
-            sessions=factory, tasks=submitted_bundle_port, store=counted, namespace=namespace,
-            preparation=preparation, inspector=inspector, authority=authority,
+        service = post_submission_materialization(
+            sessions=factory, store=counted, namespace=namespace,
+            preparation=preparation, inspector=inspector,
         )
-        yield SimpleNamespace(service=service, factory=factory, engine=engine, request=request,
+        yield SimpleNamespace(replica_id=replica_id, service=service, factory=factory, engine=engine, request=request,
                               created=created, facts=facts, files=files, data=data, manifest=manifest,
                               settings=settings,
                               store=counted, namespace=namespace, preparation=preparation,
-                              manager=manager, inspector=inspector, authority=authority,
+                              manager=manager, inspector=inspector,
                               scratch=tmp_path / "post-scratch")
     finally:
         manager.close()

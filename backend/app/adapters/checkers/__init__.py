@@ -116,14 +116,14 @@ def checker_history_repository(session) -> CheckerHistoryReadPort:
 
 
 def post_submission_executor(*, sessions, materialization):
-    """Compose the sole executor with action-specific production denial."""
+    """Compose the sole executor with exact fixed-service AUTH at both phases."""
     from app.adapters.outbox import outbox_append
     from app.modules.checkers.execution import PostSubmissionExecutor
-    from app.modules.checkers.execution_authority import DenyExecutionAuthority, DenyFinalizationAuthority
+    from app.adapters.auth import post_submit_execution_authority
     from app.modules.checkers.runner import default_checker_registry
     return PostSubmissionExecutor(sessions=sessions, materialization=materialization,
-        execute_authority=lambda session: DenyExecutionAuthority(),
-        finalize_authority=lambda session: DenyFinalizationAuthority(),
+        execute_authority=post_submit_execution_authority,
+        finalize_authority=post_submit_execution_authority,
         registry=default_checker_registry(), outbox=outbox_append)
 
 
@@ -131,3 +131,9 @@ def checker_output_reservations(session):
     """Resolve exact active run/lease custody; current catalogue has zero slots."""
     from app.modules.checkers.execution_coordination import CheckerOutputReservations
     return CheckerOutputReservations(session)
+
+
+def current_post_submit_execution(session):
+    """Keep ART currentness checks behind the CHECKERS owner port."""
+    from app.modules.checkers.execution_coordination import CurrentExecution
+    return CurrentExecution(session)

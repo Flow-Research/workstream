@@ -1,8 +1,7 @@
 """Identity consistency, complete valid denial control, and absence of owner authority."""
 
-from app.modules.checkers.api.execution import CheckerExecutionUnavailable
-
-from tests.checkers.execution.support import denied_executor
+from app.adapters.checkers import post_submission_executor
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.identifiers import new_record_id
 
@@ -55,22 +54,6 @@ def test_coherent_foreign_facts_are_not_an_authorization_proof():
     assert not hasattr(other, "is_current")
 
 
-async def test_post_port_unavailable(monkeypatch):
-    source = request()
-    # A complete valid request reaches the precise unavailable guard.
-    from app.modules.checkers import post_submit_implementations
-
-    monkeypatch.setattr(
-        post_submit_implementations,
-        "evaluate_registered_structural_member",
-        lambda *args: pytest.fail("unavailable phase executed a member"),
-    )
-    with pytest.raises(
-        CheckerExecutionUnavailable, match="^post_submit_execution_unavailable$"
-    ):
-        await denied_executor().evaluate_post_submission(source)
-
-
 def test_fact_hashes_are_derived_and_nested_values_are_immutable():
     source = request()
     with pytest.raises(ValueError, match="derived"):
@@ -91,8 +74,8 @@ def test_strict_request_numbers(field, invalid):
         change_request(request(), **{field: invalid})
 
 
-async def test_unavailable_port_revalidates_unsafe_constructed_instances():
+async def test_executor_revalidates_unsafe_constructed_instances():
     source = request()
     forged = source.model_copy(update={"project_id": new_record_id()})
     with pytest.raises(ValidationError, match="project mismatch"):
-        await denied_executor().evaluate_post_submission(forged)
+        await post_submission_executor(sessions=async_sessionmaker(), materialization=None).evaluate_post_submission(forged)

@@ -221,6 +221,8 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/checkers/execution/test_concurrency.py",
             "tests/checkers/execution/test_storage.py",
             "tests/checkers/execution/test_migration.py",
+            "tests/checkers/execution/test_material_lineage.py",
+            "tests/checkers/execution/test_material_migration.py",
             "tests/checkers/post_submit/test_catalogue.py",
             "tests/checkers/post_submit/test_compiled_policy.py",
             "tests/checkers/post_submit/test_configuration.py",
@@ -257,6 +259,13 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     shared_b = modules_by_lane[catalogue.PARTITIONED_SHARED_LANES[1]]
     assert shared_a == shared_b == set(catalogue.SHARED_FOUNDATION_MODULES)
     assert {
+        "tests/authorization/post_submit/test_atomicity.py",
+        "tests/authorization/post_submit/test_concurrency.py",
+        "tests/authorization/post_submit/test_live_authority.py",
+        "tests/authorization/post_submit/test_migration.py",
+        "tests/authorization/post_submit/test_receipt_custody.py",
+        "tests/authorization/post_submit/test_principals.py",
+        "tests/authorization/post_submit/test_timeout.py",
         "tests/authorization/post_policy/test_concurrency.py",
         "tests/authorization/post_policy/test_context.py",
         "tests/authorization/post_policy/test_prepared.py",

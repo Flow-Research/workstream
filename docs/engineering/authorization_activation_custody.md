@@ -57,14 +57,14 @@ mappings, and availability must remain identical.
 The table retains historical planning-custody labels, not a literal mapping
 of every typed runtime `ActionOwner`. XINT-06B groups runtime
 `WS-AUTH-001-ART-06A` post-submit materialization and
-`WS-AUTH-001-ART-06B` output write/binding. ARCH-04D is their current replacement
-activation boundary. ARCH-04B hidden input and ARCH-04B2 hidden output custody
-and ARCH-04C hidden durable execution/results are delivered; ARCH-04D is next. ARCH-04B2 owns
+`WS-AUTH-001-ART-06B` output write/binding. ARCH-04D2 replaces that grouping for exact input/execute/finalize authority;
+output write/bind remains unavailable for the current zero-output catalogue. ARCH-04B hidden input and ARCH-04B2 hidden output custody
+and ARCH-04C hidden durable execution/results are delivered; ARCH-04D1 canonical terminal material custody is delivered; ARCH-04D2 exact service authority is delivered; ARCH-04E1A routing-source facts are next. ARCH-04B2 owns
 fresh authority participants internally for each store, recovery and binding
 phase; public requests carry selectors and byte sources, never PREP handles.
-The CHECKERS zero-slot reservation reader is implemented. Output authority remains deny-only, and
-production materialization remains deny-only. The typed catalogue is unchanged
-by this reconciliation. Do not implement an additional XINT-06B lane.
+The CHECKERS zero-slot reservation reader is implemented. Output authority remains deny-only. Production materialization requires real
+fixed-service AUTH/PREP and an exact current execution lease. Execute/finalize
+use the fixed `workstream.checker.post_submit` identity and phase-specific receipts. Do not implement an additional XINT-06B lane.
 
 Runtime owner `WS-XINT-002-07` retains catalogue custody. The only approved
 v0.1 availability transition is 07A packet materialization. Evidence binding

@@ -129,6 +129,9 @@ def test_exact_active_action_inventory():
         for definition in ACTION_DEFINITIONS
         if definition.availability is ActionAvailability.ACTIVE
     } == {
+        ActionId.CHECKER_POST_SUBMIT_EXECUTE,
+        ActionId.CHECKER_POST_SUBMIT_FINALIZE,
+        ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.TASK_SUBMISSION_LIST,
         ActionId.SUBMISSION_READ,
         ActionId.SUBMISSION_CHECKER_RUN_LIST,

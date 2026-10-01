@@ -152,6 +152,22 @@ class EvaluationCoordinator:
         )
 
 
+class CurrentExecution:
+    """Expose only CHECKERS' current committed lease verification to materialization."""
+
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    async def require_current_execution(self, facts):
+        """Keep the caller's AUTH-first transaction and exact fence/run lock order."""
+        from app.modules.checkers.api.execution import ExecuteFacts, execution_authority_digest
+
+        if type(facts) is not ExecuteFacts:
+            raise CheckerExecutionUnavailable("checker_current_execution_unavailable")
+        execution_authority_digest(facts)
+        await ExecutionRepository(self._session).require_lease(facts.request, facts.lease)
+
+
 class CheckerOutputReservations:
     """Current structural handlers have exactly zero output slots."""
 
