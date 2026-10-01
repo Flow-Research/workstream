@@ -33,13 +33,13 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _changed_paths(base: str, head: str) -> tuple[str, list[str]]:
+def _changed_paths(base: str, head: str, *, repository_root: Path = ROOT) -> tuple[str, list[str]]:
     if len(base) != SHA_LENGTH or len(head) != SHA_LENGTH:
         raise SelectionError("PR base and head must be full commit SHAs")
-    merge_base = resolve_merge_base(base, head, repository_root=ROOT)
+    merge_base = resolve_merge_base(base, head, repository_root=repository_root)
     raw = run_checked_bytes(
-        ["git", "diff", "--name-only", "-z", f"{merge_base}...{head}"],
-        repository_root=ROOT,
+        ["git", "diff", "--no-renames", "--name-only", "-z", f"{merge_base}...{head}"],
+        repository_root=repository_root,
     )
     paths = [item.decode("utf-8", errors="strict") for item in raw.split(b"\0") if item]
     if not paths:

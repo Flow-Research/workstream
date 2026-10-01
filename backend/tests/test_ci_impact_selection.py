@@ -67,6 +67,34 @@ def test_unknown_source_fixture_and_unmapped_test_fail_safe_to_all_lanes() -> No
         assert selected == list(ALL_LANES), path
 
 
+def test_rename_from_unmapped_source_keeps_deleted_path_and_fails_safe(tmp_path: Path) -> None:
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    _git(tmp_path, "config", "user.name", "Test")
+    old_path = tmp_path / "backend/app/unknown.py"
+    old_path.parent.mkdir(parents=True)
+    old_path.write_text("same content\n", encoding="utf-8")
+    _git(tmp_path, "add", "backend/app/unknown.py")
+    _git(tmp_path, "commit", "-m", "add unmapped source")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+
+    mapped_path = tmp_path / "backend/app/core/s3_validation.py"
+    mapped_path.parent.mkdir(parents=True)
+    old_path.rename(mapped_path)
+    _git(tmp_path, "add", "--all")
+    _git(tmp_path, "commit", "-m", "rename into mapped source")
+    head = _git(tmp_path, "rev-parse", "HEAD")
+
+    _, paths = selector._changed_paths(base, head, repository_root=tmp_path)
+    selected, _ = classify(paths, IMPACT_MAP)
+
+    assert paths == [
+        "backend/app/core/s3_validation.py",
+        "backend/app/unknown.py",
+    ]
+    assert selected == list(ALL_LANES)
+
+
 def test_mixed_known_and_unknown_paths_fail_safe_to_all_lanes() -> None:
     selected, reasons = classify(
         ["backend/app/core/s3_validation.py", "backend/requirements.lock"], IMPACT_MAP
@@ -290,11 +318,22 @@ def test_cli_reports_all_lane_fallback_when_target_evidence_is_unavailable(tmp_p
     assert result.returncode == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["classification_status"] == "fallback_all_lanes"
+    assert report["base_sha"] == "a" * 40
+    assert report["head_sha"] == "b" * 40
+    assert report["execution_sha"] == "c" * 40
     assert report["selected_lanes"] == list(ALL_LANES)
     assert report["execution_tree_sha"] is None
     assert report["merge_base"] is None
     assert report["changed_paths"] == []
     assert report["changed_paths_sha256"] is None
+    assert report["selector_sha256"] == selector._sha256(selector.SCRIPT_PATH.read_bytes())
+    assert report["impact_map_sha256"] == selector._sha256(selector.MAP_PATH.read_bytes())
+    assert report["lane_catalogue_sha256"] == selector._sha256(
+        selector.CATALOGUE_PATH.read_bytes()
+    )
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert f"`{'a' * 40}`" in markdown
+    assert f"`{'b' * 40}`" in markdown
     assert "selection evidence unavailable" in markdown_path.read_text(encoding="utf-8")
 
 
@@ -309,7 +348,7 @@ def test_backend_workflow_keeps_report_out_of_lane_execution_control() -> None:
     assert "impact-report" not in lane_job
     assert "selected_lanes" not in lane_job
     assert "if: ${{ github.event_name == 'pull_request' }}" in impact_job
-    assert "backend-test-impact-${{ github.sha }}" in impact_job
+    assert "backend-test-impact-${{ github.sha }}-${{ github.run_attempt }}" in impact_job
     assert "needs: [auth-boundary-preflight, lanes, minio-image]" in aggregate_job
     assert "impact-report" not in aggregate_job
     assert "Require preflight and every semantic lane" in aggregate_job
@@ -319,3 +358,9 @@ def test_backend_workflow_keeps_report_out_of_lane_execution_control() -> None:
     )[0]
     assert "\n        if:" not in api_step
     assert "scripts/run_isolated_tests.py" in api_step
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    return subprocess.check_output(
+        ["git", *arguments], cwd=repository, text=True, stderr=subprocess.STDOUT
+    ).strip()

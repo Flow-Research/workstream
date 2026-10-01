@@ -168,7 +168,7 @@ jobs:
         id: report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: backend-test-impact-${{ github.sha }}
+          name: backend-test-impact-${{ github.sha }}-${{ github.run_attempt }}
           path: |
             .ci/test-impact/report.json
             .ci/test-impact/report.md
