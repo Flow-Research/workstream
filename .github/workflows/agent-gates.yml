@@ -73,4 +73,5 @@ jobs:
           scripts.test_commitrail_contribution_paths
           scripts.test_commitrail_archive_batch
           scripts.test_commitrail_markdown_structure
+          scripts.test_backend_test_impact
           scripts.test_lightweight_agent_gates

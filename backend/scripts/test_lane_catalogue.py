@@ -76,7 +76,6 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_aws_credential_isolation.py",
     "tests/test_ci_test_lanes.py",
     "tests/test_ci_lane_catalogue.py",
-    "tests/test_ci_impact_selection.py",
     "tests/test_config.py",
     "tests/test_compensation.py",
     "tests/compensation/test_adapter_binding_api.py",

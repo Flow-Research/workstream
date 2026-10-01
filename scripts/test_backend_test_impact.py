@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
+import tempfile
+import unittest
 from unittest.mock import patch
 
 import scripts.backend_test_impact as selector
 from scripts.backend_test_impact import ALL_LANES, classify
 from scripts.test_lane_catalogue import LANES, PARTITIONED_SHARED_LANES
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 IMPACT_MAP = json.loads((ROOT / ".ci/test-impact/impact_map.json").read_text())
 
 
@@ -344,10 +347,15 @@ def test_backend_workflow_keeps_report_out_of_lane_execution_control() -> None:
     aggregate_job = workflow.split("\n  test:\n", 1)[1]
 
     lane_header = lane_job.split("    services:", 1)[0]
-    assert "\n    if:" not in lane_header
+    assert not re.search(r"(?m)^\s*if\s*:", lane_header)
     assert "impact-report" not in lane_job
     assert "selected_lanes" not in lane_job
     assert "if: ${{ github.event_name == 'pull_request' }}" in impact_job
+    assert "python scripts/backend_test_impact.py" in impact_job
+    impact_step = impact_job.split(
+        "      - name: Bind and classify the exact pull request target\n", 1
+    )[1]
+    assert "run: >-\n          python scripts/backend_test_impact.py" in impact_step
     assert "backend-test-impact-${{ github.sha }}-${{ github.run_attempt }}" in impact_job
     assert "needs: [auth-boundary-preflight, lanes, minio-image]" in aggregate_job
     assert "impact-report" not in aggregate_job
@@ -356,7 +364,7 @@ def test_backend_workflow_keeps_report_out_of_lane_execution_control() -> None:
     api_step = aggregate_job.split("      - name: API contract real API e2e\n", 1)[1].split(
         "\n      - name:", 1
     )[0]
-    assert "\n        if:" not in api_step
+    assert not re.search(r"(?m)^\s*if\s*:", api_step)
     assert "scripts/run_isolated_tests.py" in api_step
 
 
@@ -364,3 +372,58 @@ def _git(repository: Path, *arguments: str) -> str:
     return subprocess.check_output(
         ["git", *arguments], cwd=repository, text=True, stderr=subprocess.STDOUT
     ).strip()
+
+
+class BackendTestImpactTests(unittest.TestCase):
+    """Run repository CI selector checks in the lightweight standard suite."""
+
+    def test_exact_s3_owner(self) -> None:
+        test_exact_s3_owner_recommends_both_shared_partitions()
+
+    def test_committrail_only(self) -> None:
+        test_committrail_only_recommends_shared_semantics_partitions()
+
+    def test_mapped_source_and_test_union(self) -> None:
+        test_mapped_source_and_test_changes_union_their_lane_closures()
+
+    def test_changed_test_partition_owners(self) -> None:
+        test_changed_test_module_selects_every_partition_that_owns_it()
+
+    def test_unknown_source_and_test_fallback(self) -> None:
+        test_unknown_source_fixture_and_unmapped_test_fail_safe_to_all_lanes()
+
+    def test_rename_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            test_rename_from_unmapped_source_keeps_deleted_path_and_fails_safe(
+                Path(temporary)
+            )
+
+    def test_mixed_unknown_fallback(self) -> None:
+        test_mixed_known_and_unknown_paths_fail_safe_to_all_lanes()
+
+    def test_empty_path_fallback(self) -> None:
+        test_empty_path_list_recommends_every_lane()
+
+    def test_exact_report_binding(self) -> None:
+        test_report_binds_execution_tree_and_exact_pr_merge_parents()
+
+    def test_stale_execution_parent_rejected(self) -> None:
+        test_report_rejects_execution_commit_with_stale_pr_parents()
+
+    def test_classification_failure_keeps_target_evidence(self) -> None:
+        test_classifier_failure_preserves_exact_target_and_changed_path_evidence()
+
+    def test_markdown_values_are_escaped(self) -> None:
+        test_markdown_report_escapes_untrusted_paths_and_reasons()
+
+    def test_duplicate_and_unsafe_paths_rejected(self) -> None:
+        test_duplicate_or_unsafe_git_paths_fail_classification()
+
+    def test_unavailable_target_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            test_cli_reports_all_lane_fallback_when_target_evidence_is_unavailable(
+                Path(temporary)
+            )
+
+    def test_workflow_keeps_report_advisory(self) -> None:
+        test_backend_workflow_keeps_report_out_of_lane_execution_control()

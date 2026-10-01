@@ -150,7 +150,13 @@ class LightweightAgentGateTests(unittest.TestCase):
         api_e2e = aggregate.split("      - name: API contract real API e2e\n", 1)[1].split(
             "\n      - name:", 1
         )[0]
-        self.assertNotIn("\n        if:", api_e2e)
+        lane_header = lanes.split("    services:", 1)[0]
+        self.assertNotRegex(lane_header, r"(?m)^\s*if\s*:")
+        self.assertNotRegex(api_e2e, r"(?m)^\s*if\s*:")
+        immediate_lane_guard = "  lanes:\n    if: ${{ false }}\n    runs-on: ubuntu-latest\n"
+        immediate_api_guard = "      - name: API contract real API e2e\n        if: ${{ false }}\n"
+        self.assertRegex(immediate_lane_guard, r"(?m)^\s*if\s*:")
+        self.assertRegex(immediate_api_guard, r"(?m)^\s*if\s*:")
         self.assertIn("scripts/run_isolated_tests.py", api_e2e)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
