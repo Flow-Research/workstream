@@ -8,8 +8,8 @@ import subprocess
 import sys
 from unittest.mock import patch
 
-import scripts.test_impact_selection as selector
-from scripts.test_impact_selection import ALL_LANES, classify
+import scripts.backend_test_impact as selector
+from scripts.backend_test_impact import ALL_LANES, classify
 from scripts.test_lane_catalogue import LANES, PARTITIONED_SHARED_LANES
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,7 +59,7 @@ def test_unknown_source_fixture_and_unmapped_test_fail_safe_to_all_lanes() -> No
         "backend/tests/test_not_in_catalogue.py",
         "docs/operations_backend_testing.md",
         ".ci/test-impact/impact_map.json",
-        "backend/scripts/test_impact_selection.py",
+        "scripts/backend_test_impact.py",
         "backend/scripts/test_lane_catalogue.py",
         ".github/workflows/backend.yml",
     ):
@@ -297,7 +297,7 @@ def test_cli_reports_all_lane_fallback_when_target_evidence_is_unavailable(tmp_p
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "backend/scripts/test_impact_selection.py"),
+            str(ROOT / "scripts/backend_test_impact.py"),
             "--base",
             "a" * 40,
             "--head",

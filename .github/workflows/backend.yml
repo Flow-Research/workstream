@@ -160,7 +160,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: >-
-          python backend/scripts/test_impact_selection.py
+          python scripts/backend_test_impact.py
           --json .ci/test-impact/report.json
           --markdown .ci/test-impact/report.md
 

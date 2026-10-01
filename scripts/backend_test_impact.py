@@ -1,4 +1,4 @@
-"""Produce a conservative, observational test-impact recommendation."""
+"""Produce a conservative, observational backend test-impact recommendation."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 import sys
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(1, str(ROOT / "backend"))
 
