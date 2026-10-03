@@ -169,7 +169,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     assert (
         modules_by_lane["task_lifecycle_a"]
         == modules_by_lane["task_lifecycle_b"]
-        == modules_by_lane["task_lifecycle_c"] - set(catalogue.TASK_ROUTING_REQUEST_MODULES)
+        == modules_by_lane["task_lifecycle_c"]
         == {
             "tests/authorization/submission_history/test_reads.py",
             "tests/authorization/submission_history/test_privacy.py",
@@ -318,7 +318,9 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/contributions/records/test_storage.py",
         "tests/contributions/records/test_migration.py",
         runner.ADMIN_RUNNER_MODULE,
-    } | static_contracts == modules_by_lane["schema_contracts"]
+    } | static_contracts | set(catalogue.OBSERVABILITY_MODULES) | set(catalogue.TASK_ROUTING_REQUEST_MODULES) == modules_by_lane[
+        "schema_contracts"
+    ]
     assert {
         "tests/authorization/admin_access/test_bootstrap_cli.py",
         "tests/authorization/admin_access/test_api_journey.py",
@@ -697,6 +699,30 @@ def test_catalogue_partition_addition_is_bounded(addition: str, allowed: bool) -
             ownership._validate_additive_partition_transition(current, trusted)
 
 
+@pytest.mark.parametrize(
+    "addition",
+    (
+        "backend/app/core/celery_observability.py",
+        "backend/app/core/diagnostic_logging.py",
+        "backend/app/core/observability.py",
+    ),
+)
+def test_observability_partition_additions_are_exact(addition: str) -> None:
+    from scripts import behavior_ownership as ownership
+
+    authority = {
+        "schema": ownership.PARTITION_SCHEMA,
+        "protected_base_commit": "a" * 40,
+        "assignments": [{"group": "shared", "target": "backend/app/core/config.py"}],
+    }
+    trusted = {**authority, "authority_digest": ownership._digest(authority)}
+    current = {
+        **trusted,
+        "assignments": [*authority["assignments"], {"group": "shared", "target": addition}],
+    }
+    ownership._validate_additive_partition_transition(current, trusted)
+
+
 def test_finalization_tests_are_all_in_project_lanes():
     from scripts.test_lane_catalogue import PROJECT_MODULES
 
@@ -709,7 +735,7 @@ def test_finalization_tests_are_all_in_project_lanes():
     assert expected <= set(PROJECT_MODULES)
 
 
-def test_routing_request_proofs_use_task_lane_with_measured_headroom():
+def test_routing_request_proofs_use_schema_lane_with_measured_headroom():
     expected = {
         "tests/tasks/post_submit_routing/test_request_contracts.py",
         "tests/tasks/post_submit_routing/test_requests.py",
@@ -717,5 +743,13 @@ def test_routing_request_proofs_use_task_lane_with_measured_headroom():
     }
     assert set(catalogue.TASK_ROUTING_REQUEST_MODULES) == expected
     for lane in LANES:
-        assert set(lane.modules) & expected == (expected if lane.name == "task_lifecycle_c" else set())
+        assert set(lane.modules) & expected == (expected if lane.name == "schema_contracts" else set())
+    assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)
+
+
+def test_observability_proofs_use_schema_lane_with_measured_headroom():
+    expected = {"tests/test_observability.py", "tests/test_celery_observability.py"}
+    assert set(catalogue.OBSERVABILITY_MODULES) == expected
+    for lane in LANES:
+        assert set(lane.modules) & expected == (expected if lane.name == "schema_contracts" else set())
     assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)

@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.hashing import canonical_json_hash
+from app.core.observability import annotate_current_span
 from app.modules.authorization.api.decisions import AuthorizationDecision, DecisionOutcome
 from app.modules.authorization.api.errors import AuthorizationBoundaryError
 from app.modules.authorization.api.outbox_dispatch import (
@@ -306,6 +307,7 @@ class OutboxDelivery:
         envelope = await self._begin_invocation(claim)
         if envelope is None:
             return None
+        annotate_current_span(outbox_correlation_id=envelope.correlation_id)
         handler = self._registry.get(envelope.event_type, envelope.event_version)
         cause = FinalizationCause.UNKNOWN
         task = None

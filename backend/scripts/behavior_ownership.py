@@ -157,6 +157,13 @@ REV_04B_ACCEPTANCE_TARGETS = frozenset({"backend/app/modules/reviews/acceptance/
 REV_04A_SOURCE_TARGETS = frozenset({"backend/app/modules/reviews/decision/models.py", "backend/app/modules/reviews/decision/schemas.py"})
 REV_03B_PACKET_TARGETS = frozenset({'backend/app/modules/reviews/packet/models.py', 'backend/app/modules/reviews/packet/repository.py', 'backend/app/modules/reviews/packet/schemas.py'})
 ARCH_04E1BA_REQUEST_TARGETS = frozenset({"backend/app/modules/tasks/post_submit_routing/requests.py"})
+OBSERVABILITY_FOUNDATION_TARGETS = frozenset(
+    {
+        "backend/app/core/celery_observability.py",
+        "backend/app/core/diagnostic_logging.py",
+        "backend/app/core/observability.py",
+    }
+)
 ARCH_04E1A_SOURCE_TARGETS = frozenset({
     "backend/app/modules/tasks/api/accepted_effects.py",
     "backend/app/modules/tasks/api/post_submit_routing.py",
@@ -754,7 +761,8 @@ def _validate_additive_partition_transition(
         | REV_04B_ACCEPTANCE_TARGETS
         | REV_04A_SOURCE_TARGETS
         | REV_03B_PACKET_TARGETS
-        | ARCH_04E1BA_REQUEST_TARGETS
+            | ARCH_04E1BA_REQUEST_TARGETS
+            | OBSERVABILITY_FOUNDATION_TARGETS
         | ARCH_04E1A_SOURCE_TARGETS
         | ARCH_04D2_AUTHORITY_TARGETS
         | ARCH_04C_EXECUTION_TARGETS

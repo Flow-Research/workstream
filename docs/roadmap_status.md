@@ -127,6 +127,10 @@ compensation effects, operations and release proof complete v0.1.
 The [independent MCP package](../mcp_server/README.md) implements one profile
 tool. It is not a deployed service or the complete proposed tool catalogue.
 
+Privacy-bounded API and prefork Celery diagnostics are implemented: structured
+logs, sampled traces and bounded metrics. Collector deployment and an operational
+end-to-end drill remain release work; diagnostics do not establish lifecycle truth.
+
 ## Pre-Submission And Post-Submission Checking
 
 Both stages enforce quality, but answer different questions and produce
@@ -177,6 +181,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Review decision and revision | **Hidden source storage; runtime planned** | Review/revision policy identities and mutation authority; REV-04A immutable Review, findings, resolutions and completed request storage; REV-04B shared FinalAcceptance storage without authority or runtime consumers; approved same-task revision-rebase semantics | Authorized atomic decision composition; `accept`, `needs_revision`, and `reject`; complete-context revision preparation; finding responses; replacement contributor rules; replay and recovery |
 | Contribution and compensation truth | **Schema foundations plus public policy administration** | ContributionPolicyVersion persistence; lifecycle-audit participant; adapter bindings; public Finance policy administration; REV-04B shared acceptance source storage; CON-03C immutable ContributionRecord/CompensationAward storage | Compose one shared FinalAcceptance/submitter operation for human accept or authorized false/pass routing. Only actual Reviews create reviewer records. Evaluate frozen actor rules into zero, one or two awards |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
+| Runtime diagnostics | **Implemented foundation** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional OTLP export | Configure and secure the collector, validate retention/access and prove diagnostics during the release drill; no deployed monitoring claim |
 | Frontend and pilot | **Planned after stable backend contracts** | React + Vite + TypeScript stack decision | Implement only stable backed surfaces, run the real internal pilot, repair findings, and complete release drills |
 
 ## What Has Been Completed
@@ -185,6 +190,12 @@ cannot be reused as post-submission review-gate evidence. See the
 
 - FastAPI, SQLAlchemy 2.x async, PostgreSQL, Alembic, Celery, and Redis form the
   locked backend execution stack.
+- [Runtime diagnostics](engineering/observability.md) provide closed structured
+  logging, sampled API/prefork Celery traces and bounded metrics through optional
+  OTLP export. Public propagation cannot control sampling; sensitive payloads,
+  credentials and exception text are excluded. Collector failures do not change
+  product outcomes. Durable outbox recovery starts a new trace and retains only
+  its existing diagnostic correlation, without new persisted trace fields.
 - The schema has one fresh `0001_uuid7_v01` Alembic baseline. Generated record
   identities use UUIDv7 and native PostgreSQL UUID relationships; meaningful
   natural keys and external request tokens retain their semantics. Old stamped
@@ -578,6 +589,7 @@ execute/finalize authority. Output write/bind authority remains unavailable. Pub
 
 ```text
 Delivered foundations (not a claim of full public integration)
+  privacy-bounded API/Celery diagnostics (collector deployment still required)
   automatic unified setup + separate manager pre/post approvals
   public Finance ContributionPolicy administration + exact selected-version validation
   public manager activation context + exact guide activation/binding
@@ -681,11 +693,18 @@ v0.1 is not ready until all of the following are true:
   controlling Workstream lifecycle truth.
 - Fulfillment and recovery are idempotent, observable, reconcilable, and safe
   under durable-job, provider, transaction, and unknown-commit failures.
+- Configure secured diagnostic collection with bounded retention and access,
+  and prove API/Celery correlation, privacy and collector-outage behavior in
+  the release drill. Implemented instrumentation alone is not deployed monitoring.
 - Public APIs and frontend surfaces expose only the canonical paths, obsolete
   authority and legacy routes are removed, and the full security/operations
   drill plus internal pilot passes without weakening safeguards.
 
 ## Trace References
+
+The [observability foundation record](../.commitrail/changes/observability-foundation.md)
+and [operator guide](engineering/observability.md) define diagnostic scope and
+remaining deployment responsibilities.
 
 Internal chunk identifiers are useful for implementation traceability, but a
 reader does not need internal engineering records to understand the roadmap

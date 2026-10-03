@@ -11,9 +11,10 @@ from collections.abc import Callable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import dotenv_values
-from pydantic import Field, PrivateAttr, SecretStr, model_validator
+from pydantic import Field, PrivateAttr, SecretStr, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
@@ -37,12 +38,15 @@ _ARTIFACT_S3_SECRET_FIELDS = frozenset(
     }
 )
 _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS = _ARTIFACT_S3_SECRET_FIELDS | {"artifact_s3_endpoint_url"}
+_OBSERVABILITY_SENSITIVE_INPUT_FIELDS = frozenset({"observability_otlp_endpoint"})
 _EMPTY_ARTIFACT_S3_SECRETS: tuple[SecretStr | None, SecretStr | None, SecretStr | None] = (
     None,
     None,
     None,
 )
 _MISSING_SECRET = object()
+_INVALID_OBSERVABILITY_ENDPOINT = object()
+PRODUCTION_LIKE_ENVIRONMENTS = frozenset({"staging", "preview", "prod", "production"})
 _ALTERNATE_VALIDATION_RESTORES_SECRETS: ContextVar[bool] = ContextVar(
     "alternate_validation_restores_secrets",
     default=False,
@@ -121,7 +125,9 @@ class Settings(BaseSettings):
     project_agent_circuit_cooldown_seconds: int = Field(default=60, ge=1, le=600)
     project_agent_max_manifest_bytes: int = Field(default=256_000, ge=1024, le=1_000_000)
     project_agent_max_documents: int = Field(default=100, ge=1, le=100)
-    project_agent_max_document_bytes: int = Field(default=64 * 1024 * 1024, ge=1, le=512 * 1024 * 1024)
+    project_agent_max_document_bytes: int = Field(
+        default=64 * 1024 * 1024, ge=1, le=512 * 1024 * 1024
+    )
     project_agent_max_total_document_bytes: int = Field(default=512 * 1024 * 1024, ge=1)
     project_agent_max_turns: int = Field(default=40, ge=3, le=100)
     project_agent_max_hosted_tool_calls: int = Field(default=80, ge=3, le=200)
@@ -132,6 +138,11 @@ class Settings(BaseSettings):
     celery_broker_url: str | None = None
     celery_result_backend_url: str | None = None
     celery_task_always_eager: bool = False
+    observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    observability_otlp_endpoint: str | None = None
+    observability_trace_sample_ratio: float = Field(default=0.1, ge=0.0, le=1.0)
+    observability_export_timeout_seconds: float = Field(default=2.0, ge=0.1, le=10.0)
+    observability_shutdown_timeout_seconds: float = Field(default=3.0, ge=0.1, le=10.0)
     actor_registry_refresh_interval_seconds: int = Field(default=300, ge=0, le=86_400)
     api_first_access_rate_limit: int = Field(default=10, ge=1, le=10_000)
     api_first_access_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
@@ -254,17 +265,30 @@ class Settings(BaseSettings):
     _artifact_s3_secret_access_key: SecretStr | None = PrivateAttr(default=None)
     _artifact_s3_session_token: SecretStr | None = PrivateAttr(default=None)
 
+    @field_validator("observability_otlp_endpoint")
+    @classmethod
+    def validate_observability_otlp_endpoint(cls, value: str | None) -> str | None:
+        """Accept only a credential-free collector origin."""
+        canonical = _canonical_observability_endpoint(value)
+        value = None
+        if canonical is _INVALID_OBSERVABILITY_ENDPOINT:
+            _raise_invalid_observability_endpoint()
+        assert canonical is None or isinstance(canonical, str)
+        return canonical
+
     def __init__(self, **values: object) -> None:
         """Remove rate-control secret material before structured validation."""
         secret: SecretStr | None = None
         cursor_secret: SecretStr | None = None
         s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
         try:
+            _normalize_observability_endpoint_input(values)
             _normalize_artifact_s3_endpoint_input(values)
             secret = _extract_api_rate_limit_key_secret(values)
             cursor_secret = _extract_pagination_cursor_hmac_secret(values)
             s3_secrets = _extract_artifact_s3_static_secrets(values)
             super().__init__(**values)
+            self._validate_observability_endpoint_security()
             self._api_rate_limit_key_secret = secret
             self._pagination_cursor_hmac_secret = cursor_secret
             self._set_artifact_s3_static_secrets(s3_secrets)
@@ -278,6 +302,15 @@ class Settings(BaseSettings):
             s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
             raise
 
+    def _validate_observability_endpoint_security(self) -> None:
+        """Require transport security for every production-like collector."""
+        if (
+            self.environment in PRODUCTION_LIKE_ENVIRONMENTS
+            and self.observability_otlp_endpoint is not None
+            and not self.observability_otlp_endpoint.startswith("https://")
+        ):
+            raise ValueError("production observability OTLP endpoint requires HTTPS")
+
     @classmethod
     def model_validate(cls, obj: object, **kwargs: object) -> Self:
         """Sanitize secret-bearing mappings before Pydantic retains input."""
@@ -285,6 +318,7 @@ class Settings(BaseSettings):
             "api_rate_limit_key_secret" in obj
             or "pagination_cursor_hmac_secret" in obj
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(obj)
+            or _OBSERVABILITY_SENSITIVE_INPUT_FIELDS.intersection(obj)
         ):
             sanitized = dict(obj)
             obj = None
@@ -319,6 +353,7 @@ class Settings(BaseSettings):
             "api_rate_limit_key_secret" in parsed
             or "pagination_cursor_hmac_secret" in parsed
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(parsed)
+            or _OBSERVABILITY_SENSITIVE_INPUT_FIELDS.intersection(parsed)
         ):
             try:
                 return cls.model_validate(parsed, **kwargs)
@@ -340,6 +375,7 @@ class Settings(BaseSettings):
             "api_rate_limit_key_secret" in obj
             or "pagination_cursor_hmac_secret" in obj
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(obj)
+            or _OBSERVABILITY_SENSITIVE_INPUT_FIELDS.intersection(obj)
         ):
             sanitized = dict(obj)
             obj = None
@@ -364,6 +400,7 @@ class Settings(BaseSettings):
         s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
         settings: Settings | None = None
         try:
+            _normalize_observability_endpoint_input(sanitized)
             _normalize_artifact_s3_endpoint_input(sanitized)
             secret = (
                 _extract_api_rate_limit_key_secret(sanitized)
@@ -611,6 +648,7 @@ def _clear_settings_private_secrets(settings: object) -> None:
     settings_values = getattr(settings, "__dict__", None)
     if isinstance(settings_values, dict):
         settings_values["artifact_s3_endpoint_url"] = None
+        settings_values["observability_otlp_endpoint"] = None
     private_values = getattr(settings, "__pydantic_private__", None)
     if not isinstance(private_values, dict):
         return
@@ -619,6 +657,67 @@ def _clear_settings_private_secrets(settings: object) -> None:
     private_values["_artifact_s3_access_key_id"] = None
     private_values["_artifact_s3_secret_access_key"] = None
     private_values["_artifact_s3_session_token"] = None
+
+
+def _canonical_observability_endpoint(value: object) -> str | None | object:
+    """Return a credential-free origin or an input-free invalid sentinel."""
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        return _INVALID_OBSERVABILITY_ENDPOINT
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return _INVALID_OBSERVABILITY_ENDPOINT
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        return _INVALID_OBSERVABILITY_ENDPOINT
+    host = parsed.hostname
+    if ":" in host:
+        host = f"[{host}]"
+    authority = host if port is None else f"{host}:{port}"
+    return urlunsplit((parsed.scheme, authority, "", "", ""))
+
+
+def _raise_invalid_observability_endpoint() -> None:
+    """Raise the fixed endpoint error outside every raw-input stack frame."""
+    raise ValueError("invalid observability OTLP endpoint")
+
+
+def _normalize_observability_endpoint_input(values: dict[str, object]) -> None:
+    """Canonicalize the endpoint before structured validation can retain raw input."""
+    raw_value = values.pop("observability_otlp_endpoint", _MISSING_SECRET)
+    if raw_value is _MISSING_SECRET:
+        raw_value = os.environ.get(
+            "WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT",
+            _MISSING_SECRET,
+        )
+    if raw_value is _MISSING_SECRET:
+        env_file = values.get("_env_file", ".env")
+        if env_file is not None:
+            env_encoding = values.get("_env_file_encoding", "utf-8")
+            env_files = (env_file,) if isinstance(env_file, (str, os.PathLike)) else tuple(env_file)
+            for path in env_files:
+                raw_value = dotenv_values(path, encoding=env_encoding).get(
+                    "WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT",
+                    raw_value,
+                )
+    if raw_value is _MISSING_SECRET:
+        return
+    canonical = _canonical_observability_endpoint(raw_value)
+    raw_value = None
+    if canonical is _INVALID_OBSERVABILITY_ENDPOINT:
+        canonical = None
+        _raise_invalid_observability_endpoint()
+    values["observability_otlp_endpoint"] = canonical
 
 
 def _normalize_artifact_s3_endpoint_input(values: dict[str, object]) -> None:

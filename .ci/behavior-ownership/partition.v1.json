@@ -138,7 +138,15 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/core/celery_observability.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/core/config.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/core/diagnostic_logging.py"
     },
     {
       "group": "shared",
@@ -151,6 +159,10 @@
     {
       "group": "shared",
       "target": "backend/app/core/identifiers.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/core/observability.py"
     },
     {
       "group": "lifecycle",
@@ -1601,7 +1613,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "6f3a700c22a1cc2316e8cf5390d5949968c30a1507f13a33584ad323be9bb824",
+  "authority_digest": "2ce3ec7b5cdb38761dde95d65b93fe2a8430905ad3f59094d3286749e3512153",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

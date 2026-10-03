@@ -1,7 +1,7 @@
 """Real PostgreSQL races using canonical fixed-service phase authorization."""
 
 import asyncio
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import timedelta
 from app.core.identifiers import new_record_id
 
@@ -11,6 +11,8 @@ from sqlalchemy import event as sqlalchemy_event, select, text
 from app.adapters.auth import outbox_dispatch_authorization
 from app.modules.authorization.api.outbox_dispatch import OutboxDispatchFacts, OutboxDispatchPhase
 from app.modules.outbox.api import DeliveryUnavailable, FinalizationCause, HandlerOutcome
+from app.modules.outbox.api import OutboxEventEnvelope
+from app.modules.outbox import delivery as delivery_module
 from app.modules.outbox.delivery_repository import DeliveryRepository, database_time
 from app.modules.outbox.models import OutboxDeliveryAttempt, OutboxEvent
 from app.modules.outbox.registry import HandlerRegistry
@@ -177,6 +179,64 @@ async def test_invoke_releases_locks_and_runs_generation_once(delivery_harness):
     assert sum(result is not None for result in results) == 1
     assert len(h.handled) == 1
     assert [f.phase for f in h.consumed] == list(OutboxDispatchPhase)
+
+
+async def test_diagnostic_annotation_follows_committed_invocation_envelope(
+    delivery_harness, monkeypatch
+):
+    h = delivery_harness
+    event = await h.append()
+    claim = await h.delivery.claim(event.event_id, h.project, "worker")
+    assert claim is not None
+    async with h.factory() as session:
+        before = await session.get(OutboxEvent, event.event_id)
+        immutable_before = (
+            before.payload,
+            before.payload_digest,
+            before.correlation_id,
+            before.event_type,
+            before.event_version,
+        )
+    annotated: list[str] = []
+    authorization_at_annotation: list[tuple[tuple[object, ...], ...]] = []
+
+    def authorization_snapshot() -> tuple[tuple[object, ...], ...]:
+        return tuple(
+            tuple(getattr(facts, field.name) for field in fields(facts))
+            for facts in h.consumed
+        )
+
+    def annotate(*, outbox_correlation_id):
+        annotated.append(str(outbox_correlation_id))
+        authorization_at_annotation.append(authorization_snapshot())
+
+    monkeypatch.setattr(delivery_module, "annotate_current_span", annotate)
+
+    async def observe_committed(_envelope):
+        assert annotated == [event.correlation_id]
+        assert authorization_at_annotation == [authorization_snapshot()]
+        async with h.factory() as session:
+            attempt = await DeliveryRepository(session).attempt(claim)
+            assert attempt is not None and attempt.stage == "invoked"
+
+    h.handler_hook = observe_committed
+    receipt = await h.delivery.invoke(claim)
+    assert receipt is not None
+    async with h.factory() as session:
+        after = await session.get(OutboxEvent, event.event_id)
+        assert (
+            after.payload,
+            after.payload_digest,
+            after.correlation_id,
+            after.event_type,
+            after.event_version,
+        ) == immutable_before
+    assert not any("trace" in column.name or "span" in column.name for column in OutboxEvent.__table__.columns)
+    assert not any("trace" in field or "span" in field for field in OutboxEventEnvelope.model_fields)
+    assert all(
+        not any("trace" in field.name or "span" in field.name for field in fields(facts))
+        for facts in h.consumed
+    )
 
 
 @pytest.mark.parametrize("phase", list(OutboxDispatchPhase))

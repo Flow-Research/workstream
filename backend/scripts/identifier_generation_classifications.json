@@ -25,6 +25,7 @@
     "app/core/api_controls.py|request_ids|Assign:338317bb71eae860|0": "uuid4:call:transport_token",
     "app/core/api_controls.py|_resolve_request_ids|Assign:055343e0234192a3|0": "uuid4:call:transport_token",
     "app/core/api_controls.py|RequestContextMiddleware.__call__|Assign:ac0851b0e2c6257f|0": "uuid4:call:transport_token",
+    "app/core/celery_observability.py|_task_prerun|Assign:88407f6b1931d9af|0": "uuid4:call:transport_token",
     "app/modules/actors/legacy_classification.py|_expected_actor_id|Return:dd984f00544f3859|0": "uuid5:call:external_identity_locator",
     "app/modules/artifacts/guide_document_access.py|ScopedGuideDocumentGrant.open|Assign:7e2866b7f96cc72a|0": "uuid4:call:transport_token",
     "app/modules/artifacts/pre_submit_attempts.py|PreSubmitAttemptStore.reserve|Assign:dab8af3d0ea944db|0": "uuid4:call:lease_nonce",

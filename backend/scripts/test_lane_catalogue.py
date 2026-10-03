@@ -463,11 +463,18 @@ TASK_MODULES = (
 )
 
 
-# New request proofs stay on the measured TASK lane with available headroom.
+# Routing-request custody proofs use schema capacity after task C exhausted its cap.
 TASK_ROUTING_REQUEST_MODULES = (
     "tests/tasks/post_submit_routing/test_request_contracts.py",
     "tests/tasks/post_submit_routing/test_requests.py",
     "tests/tasks/post_submit_routing/test_request_storage.py",
+)
+
+# Core diagnostics stay on the schema/architecture lane with measured hosted
+# headroom; the shared and task lanes are already closest to the hard cap.
+OBSERVABILITY_MODULES = (
+    "tests/test_observability.py",
+    "tests/test_celery_observability.py",
 )
 
 PARTITION_GROUPS = (
@@ -507,10 +514,11 @@ LANES = (
             "tests/test_ci_test_lanes.py",
             "tests/test_test_lane_evidence.py",
             "tests/test_merge_test_lane_evidence.py",
+            *TASK_ROUTING_REQUEST_MODULES,
+            *OBSERVABILITY_MODULES,
             ADMIN_RUNNER_MODULE,
         ),
     ),
     *(TestLane(name, PROJECT_MODULES) for name in PARTITIONED_PROJECT_LANES),
-    *(TestLane(name, TASK_MODULES + (TASK_ROUTING_REQUEST_MODULES if name == "task_lifecycle_c" else ()))
-      for name in PARTITIONED_TASK_LANES),
+    *(TestLane(name, TASK_MODULES) for name in PARTITIONED_TASK_LANES),
 )

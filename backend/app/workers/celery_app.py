@@ -13,6 +13,12 @@ from app.adapters.artifacts.internal_workers import (
     shutdown_artifact_internal_runtime,
 )
 from app.core.config import get_settings
+from app.core.celery_observability import (
+    configure_celery_observability,
+    initialize_worker_observability,
+    shutdown_celery_parent_observability,
+    shutdown_worker_observability,
+)
 from app.workers.async_runner import run_async_task
 from app.workers.errors import CeleryConfigurationError
 
@@ -25,6 +31,22 @@ ARTIFACT_PENDING_WORK_SCAN_SCHEDULE = "artifact-pending-work-scan"
 GUIDE_SETUP_CONTINUATION_TASK = "workstream.artifacts.continue_guide_setup"
 GUIDE_SETUP_CONTINUATION_SCAN_TASK = "workstream.artifacts.scan_guide_setup_continuations"
 GUIDE_SETUP_CONTINUATION_SCAN_SCHEDULE = "guide-setup-continuation-scan"
+OBSERVED_TASK_NAMES = frozenset(
+    {
+        OUTBOX_DELIVERY_TASK,
+        "workstream.outbox.scan_pending",
+        "workstream.project_setup.derive_post_policy",
+        "workstream.project_setup.scan_post_policy_approvals",
+        "workstream.project_setup.compile_project_guide",
+        "workstream.project_setup.cleanup_runtime_resources",
+        ARTIFACT_SCRATCH_CLEANUP_TASK,
+        ARTIFACT_PUT_RESOLUTION_TASK,
+        ARTIFACT_VERIFICATION_TASK,
+        ARTIFACT_PENDING_WORK_SCAN_TASK,
+        GUIDE_SETUP_CONTINUATION_TASK,
+        GUIDE_SETUP_CONTINUATION_SCAN_TASK,
+    }
+)
 
 
 @worker_process_init.connect
@@ -33,11 +55,30 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     run_async_task(initialize_artifact_internal_runtime)
 
 
+@worker_process_init.connect
+def initialize_observability_for_process(**_kwargs: object) -> None:
+    """Create diagnostic providers only in the prefork child."""
+    initialize_worker_observability()
+
+
 @worker_process_shutdown.connect
 @worker_shutdown.connect
 def shutdown_artifact_runtime_for_process(**_kwargs: object) -> None:
     """Close the artifact provider after any Celery execution pool drains."""
     shutdown_artifact_internal_runtime()
+
+
+@worker_process_shutdown.connect
+def shutdown_observability_for_process(**_kwargs: object) -> None:
+    """Bound flushing and close child-owned diagnostic providers."""
+    shutdown_worker_observability()
+
+
+@worker_shutdown.connect
+def shutdown_observability_for_parent(**_kwargs: object) -> None:
+    """Close any non-prefork runtime and release the broker-parent log lease."""
+    shutdown_worker_observability()
+    shutdown_celery_parent_observability()
 
 
 def create_celery_app() -> Celery:
@@ -103,6 +144,7 @@ def create_celery_app() -> Celery:
             },
         },
     )
+    configure_celery_observability(settings, OBSERVED_TASK_NAMES)
     return celery_app
 
 

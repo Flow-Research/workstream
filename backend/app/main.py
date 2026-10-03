@@ -27,17 +27,18 @@ from app.core.api_controls import (
 )
 from app.core.auth import build_auth_verifier, cache_auth_verifier, prepare_auth_verifier
 from app.core.config import (
+    PRODUCTION_LIKE_ENVIRONMENTS,
     Settings,
     decode_pagination_cursor_hmac_secret,
     get_settings,
 )
+from app.core.observability import ObservabilityMiddleware, ObservabilityRuntime
 from app.interfaces.artifacts import ArtifactStoreBootstrap, ArtifactStoreNamespaceClaim
 from app.modules.checkers.catalogue import (
     build_pre_submission_checker_catalogue,
     parse_disabled_pre_submission_checker_ids,
 )
 
-PRODUCTION_LIKE_ENVIRONMENTS = {"staging", "preview", "prod", "production"}
 MAX_VALIDATION_ERRORS = 20
 MAX_VALIDATION_LOCATION_PARTS = 8
 MAX_VALIDATION_CODE_LENGTH = 64
@@ -64,35 +65,60 @@ DEFAULT_ERROR_RESPONSES = {
 }
 
 
+def _registered_route_paths(routes: list[object]) -> frozenset[str]:
+    """Collect immutable owner route templates without matching request paths."""
+    paths: set[str] = set()
+    visited: set[int] = set()
+
+    def collect(candidates: list[object]) -> None:
+        for route in candidates:
+            path = getattr(route, "path", None)
+            if isinstance(path, str):
+                paths.add(path)
+            original_router = getattr(route, "original_router", None)
+            if original_router is None or id(original_router) in visited:
+                continue
+            visited.add(id(original_router))
+            collect(list(original_router.routes))
+
+    collect(routes)
+    return frozenset(paths)
+
+
 @asynccontextmanager
 async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Reject invalid production authentication configuration before serving."""
     settings: Settings = app.state.settings
-    app.state.pre_submission_checker_catalogue = build_pre_submission_checker_catalogue(
-        disabled_entry_ids=parse_disabled_pre_submission_checker_ids(
-            settings.artifact_pre_submission_checker_disabled_ids
-        )
-    )
-    if settings.pagination_cursor_hmac_secret is None:
-        raise RuntimeError("pagination cursor HMAC secret is required")
-    decode_pagination_cursor_hmac_secret(settings.pagination_cursor_hmac_secret)
-    if (
-        settings.environment in PRODUCTION_LIKE_ENVIRONMENTS
-        and not app.state.auth_configuration_valid
-    ):
-        build_auth_verifier(settings)
-    if settings.artifact_store_backend != "disabled":
-        bootstrap = create_artifact_store_bootstrap(settings)
-        try:
-            claim = await _validate_artifact_storage_namespace_at_startup(
-                settings,
-                bootstrap,
+    runtime: ObservabilityRuntime = app.state.observability_runtime
+    runtime.start()
+    try:
+        app.state.pre_submission_checker_catalogue = build_pre_submission_checker_catalogue(
+            disabled_entry_ids=parse_disabled_pre_submission_checker_ids(
+                settings.artifact_pre_submission_checker_disabled_ids
             )
-            bootstrap.initialize_after_namespace_claim(claim)
-            await cleanup_stale_artifact_scratch(settings)
-        finally:
-            bootstrap.close()
-    yield
+        )
+        if settings.pagination_cursor_hmac_secret is None:
+            raise RuntimeError("pagination cursor HMAC secret is required")
+        decode_pagination_cursor_hmac_secret(settings.pagination_cursor_hmac_secret)
+        if (
+            settings.environment in PRODUCTION_LIKE_ENVIRONMENTS
+            and not app.state.auth_configuration_valid
+        ):
+            build_auth_verifier(settings)
+        if settings.artifact_store_backend != "disabled":
+            bootstrap = create_artifact_store_bootstrap(settings)
+            try:
+                claim = await _validate_artifact_storage_namespace_at_startup(
+                    settings,
+                    bootstrap,
+                )
+                bootstrap.initialize_after_namespace_claim(claim)
+                await cleanup_stale_artifact_scratch(settings)
+            finally:
+                bootstrap.close()
+        yield
+    finally:
+        runtime.shutdown()
 
 
 async def _validate_artifact_storage_namespace_at_startup(
@@ -264,9 +290,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
-    app.add_middleware(RequestContextMiddleware)
     app.include_router(api_router)
     install_api_control_openapi(app)
+    route_templates = _registered_route_paths(list(app.routes))
+    runtime = ObservabilityRuntime(
+        settings,
+        service_name="workstream-api",
+        route_templates=route_templates,
+    )
+    app.state.observability_runtime = runtime
+    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(ObservabilityMiddleware, runtime=runtime)
     return app
 
 
