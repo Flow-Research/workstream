@@ -196,8 +196,10 @@ cannot be reused as post-submission review-gate evidence. See the
 - Cross-module behavior is moving through explicit public ports under the
   modular-monolith boundary. New private edges are prohibited and touched debt
   is reduced incrementally.
-- GitHub CI distributes the backend suite across semantic lanes, rejects
-  skipped/deselected tests and requires behavior, boundary and real API proof.
+- GitHub CI distributes the backend suite across semantic lanes and reports a
+  PR-only shadow impact recommendation; all nine full-suite lanes remain
+  required. It rejects skipped/deselected tests and requires behavior, boundary
+  and real API proof.
   Coverage is diagnostic only, with no percentage gate or test-count target.
   Redundant coverage-only reruns are removed; their tests remain in full-suite lanes.
   Its nine-lane allocation uses three project lanes, three task lanes, two

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source_paths": {
+    "backend/app/core/s3_validation.py": {
+      "test_modules": [
+        "tests/test_config.py",
+        "tests/test_artifact_store_conformance.py",
+        "tests/test_s3_artifact_store.py"
+      ],
+      "reason": "S3 configuration validation is exercised in the shared-foundation partition."
+    }
+  },
+  "path_prefixes": {
+    ".commitrail/": {
+      "test_modules": [
+        "tests/projects/review_policy/test_semantics.py"
+      ],
+      "reason": "Commitrail policy semantics are tested in the shared-foundation partition."
+    }
+  }
+}

@@ -41,6 +41,31 @@ def run_checked(
     return result.stdout
 
 
+def run_checked_bytes(
+    command: list[str],
+    *,
+    repository_root: Path | None = None,
+    timeout_seconds: float = 10,
+) -> bytes:
+    """Return byte-exact stdout for Git, preserving NUL-delimited path data."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=repository_root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        code = "GIT_TIMEOUT" if isinstance(exc, subprocess.TimeoutExpired) else "GIT_EXEC_ERROR"
+        raise GitCommandError(code, command, str(exc)) from exc
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise GitCommandError("GIT_COMMAND_FAILED", command, detail)
+    return result.stdout
+
+
 def resolve_commit(ref: str, *, repository_root: Path | None = None) -> str:
     """Resolve a ref to one full commit SHA or fail closed."""
     command = ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"]

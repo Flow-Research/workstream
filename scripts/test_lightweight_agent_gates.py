@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 import textwrap
@@ -17,6 +18,20 @@ from scripts.check_stale_artifact_contracts import scan_text as scan_artifact_te
 from scripts.check_stale_authorization_docs import scan_text as scan_authorization_text
 from scripts.check_stale_workstream_wording import FORBIDDEN_PATTERNS
 from scripts.check_stale_workstream_wording import forbidden_path_failures
+
+
+def _run_command_tokens(step: str) -> list[str]:
+    """Read active argv from one GitHub Actions folded run block."""
+    run_block = re.search(r"(?ms)^        run: >-\n((?: {10,}[^\n]*\n)+)", step)
+    if run_block is None:
+        return []
+    folded_command = " ".join(
+        line[10:].strip() for line in run_block[1].splitlines() if line.strip()
+    )
+    shell = shlex.shlex(folded_command, posix=True)
+    shell.whitespace_split = True
+    shell.commenters = "#"
+    return list(shell)
 
 
 class LightweightAgentGateTests(unittest.TestCase):
@@ -115,6 +130,9 @@ class LightweightAgentGateTests(unittest.TestCase):
     def test_backend_uses_distributed_semantic_lanes_and_stable_fan_in(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
         agent_gates = Path(".github/workflows/agent-gates.yml").read_text(encoding="utf-8")
+        lightweight_gate_step = agent_gates.split(
+            "      - name: Lightweight gate regression tests\n", 1
+        )[1].split("\n      - name:", 1)[0]
         gate_requirements = Path(".github/requirements/agent-gates.txt").read_text(
             encoding="utf-8"
         )
@@ -142,6 +160,22 @@ class LightweightAgentGateTests(unittest.TestCase):
             "    needs: [auth-boundary-preflight, lanes, minio-image]", workflow
         )
         self.assertIn("Require preflight and every semantic lane", workflow)
+        lanes = workflow.split("\n  lanes:\n", 1)[1].split("\n  test:\n", 1)[0]
+        aggregate = workflow.split("\n  test:\n", 1)[1]
+        self.assertNotIn("impact-report", lanes)
+        self.assertNotIn("impact-report", aggregate)
+        self.assertIn("API contract real API e2e", aggregate)
+        api_e2e = aggregate.split("      - name: API contract real API e2e\n", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        lane_header = lanes.split("    services:", 1)[0]
+        self.assertNotRegex(lane_header, r"(?m)^\s*if\s*:")
+        self.assertNotRegex(api_e2e, r"(?m)^\s*if\s*:")
+        immediate_lane_guard = "  lanes:\n    if: ${{ false }}\n    runs-on: ubuntu-latest\n"
+        immediate_api_guard = "      - name: API contract real API e2e\n        if: ${{ false }}\n"
+        self.assertRegex(immediate_lane_guard, r"(?m)^\s*if\s*:")
+        self.assertRegex(immediate_api_guard, r"(?m)^\s*if\s*:")
+        self.assertIn("scripts/run_isolated_tests.py", api_e2e)
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
         self.assertIn(
@@ -166,6 +200,20 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertIn("scripts.test_commitrail_contribution_paths", agent_gates)
         self.assertIn('WORKSTREAM_BASE_SHA: ${{ github.event.pull_request.base.sha }}', agent_gates)
         self.assertNotIn("scripts.test_chunk_state_sync", agent_gates)
+        command = _run_command_tokens(lightweight_gate_step)
+        self.assertEqual(command[:4], ["python3", "-m", "unittest", "-v"])
+        modules = command[4:]
+        self.assertTrue(modules)
+        self.assertTrue(all(re.fullmatch(r"scripts\.[a-z][a-z0-9_]*", item) for item in modules))
+        self.assertIn("scripts.test_backend_test_impact", modules)
+        commented_selector = lightweight_gate_step.replace(
+            "          scripts.test_backend_test_impact\n",
+            "          # remaining text is intentionally shell-commented\n"
+            "          scripts.test_backend_test_impact\n",
+        )
+        self.assertNotIn(
+            "scripts.test_backend_test_impact", _run_command_tokens(commented_selector)
+        )
         self.assertIn("--require-hashes", agent_gates)
         self.assertIn("-r .github/requirements/agent-gates.txt", agent_gates)
         for package in (

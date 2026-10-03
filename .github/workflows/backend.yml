@@ -139,6 +139,48 @@ jobs:
             --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
 
+  impact-report:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Bind and classify the exact pull request target
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          python scripts/backend_test_impact.py
+          --json .ci/test-impact/report.json
+          --markdown .ci/test-impact/report.md
+
+      - name: Upload exact-target impact report
+        id: report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-test-impact-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .ci/test-impact/report.json
+            .ci/test-impact/report.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Link report artifact in run summary
+        env:
+          REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          printf '\n[Download exact-head test-impact report](%s)\n' "${REPORT_URL}" >> "${GITHUB_STEP_SUMMARY}"
+
   lanes:
     needs: minio-image
     runs-on: ubuntu-latest

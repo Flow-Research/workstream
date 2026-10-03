@@ -110,6 +110,28 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 
 ## Hosted semantic-lane full-suite proof
 
+For pull requests, the workflow also publishes a test-impact shadow report in
+the Backend run summary and as a seven-day artifact. When exact Git target and
+changed-path evidence resolves, it records the PR base/head, merge base,
+checked-out execution SHA/tree, changed paths, selector/map/catalogue digests,
+and lane-level selection reasons. If that evidence cannot be established, it
+marks unavailable fields and recommends all lanes rather than presenting an
+unverified exact-target classification. The initial
+map is deliberately narrow; changed test modules use the existing lane
+catalogue, while shared fixtures, migrations/schema, dependencies, workflow or
+catalogue changes and any unmapped path recommend all nine lanes. A
+classification error records an all-lanes fallback. The report is observational:
+all nine matrix lanes, authorization preflight, API/integration proof and
+evidence fan-in remain required and run independently of its recommendation.
+The report job is not a dependency of the required aggregate, lane fan-in or API
+end-to-end proof; report failure cannot suppress those checks. Branch protection
+remains the authority over which standalone job statuses are merge requirements.
+Do not use a shadow report as evidence that omitted lanes passed. A later
+change to CI selection policy requires representative same-head comparisons,
+trusted selection policy, and its own review. Because the report is generated
+from the PR candidate, a PR changing its selector, map, catalogue, or workflow
+does not validate that changed input.
+
 The required GitHub check remains `Backend / test`. Nine matrix jobs each own a
 digest-pinned PostgreSQL service container, a pinned-source MinIO image,
 and exactly one dependency lane. A step-level curl health loop admits MinIO
