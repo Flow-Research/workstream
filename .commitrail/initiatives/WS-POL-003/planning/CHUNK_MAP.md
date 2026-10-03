@@ -2,15 +2,17 @@
 
 [AUTH-19A](../../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
 planned router identity. ARCH-04E1B-A delivers caller-owned routing-request and
-future source-identity reservation. Next is hidden AUTH preparation (ARCH-04E2-A), before
-CON-07/shared acceptance. Mandatory durable custody and its genuine positive
+future source-identity reservation. ARCH-04E2-A delivers strict hidden
+resource/preparation matching and a nominal fixed-router adapter through canonical
+PREP while the action remains planned/unavailable. CON-07/shared acceptance
+prerequisites are next for the selected automated path. Mandatory durable custody and its genuine positive
 proof belong to consequence activation (04E2-B), before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
 then live 04E3; true admission does not depend on CON/shared acceptance.
 
 The delivered [ART-07A1 metadata contract](../../WS-ART-001/WS-ART-001-07A1.md)
-and REV-03B normalized packet persistence are delivered. REV-04A Review source storage is also delivered; REV-04B shared acceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation precedes CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. These are storage prerequisites;
+and REV-03B normalized packet persistence are delivered. REV-04A Review source storage is also delivered; REV-04B shared acceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation is delivered before CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. These are storage prerequisites;
 no live human-review queue or endpoint is required for automated acceptance.
 
 All chunks are L1 and one PR each. Product behavior is built hidden before AUTH

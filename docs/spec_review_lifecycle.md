@@ -274,6 +274,13 @@ replace CHECKERS truth or grant review authority. REV validates the current
 TASK handoff through its public port before recording admission. A retry, supersession, or
 different Submission cannot silently replace that anchor.
 
+ARCH-04E2-A's true-branch preparation binds only TASK's future manifest and
+`evaluation_pending -> review_pending` transition. It does not create a REV queue
+entry or make REV admission a prerequisite of the TASK transition. Its false
+branch instead binds the exact `TaskAcceptedEffectsRequest` for the future shared
+FinalAcceptance operation, with no Review, ReviewLease or reviewer contribution.
+The routing action remains planned/unavailable and neither branch is executable.
+
 Checker routing is not human judgment. A final needs-remediation CHECKER result
 is consumed by the TASK-owned ARCH-04F handler, which moves the Task to
 contributor-readable `needs_revision` in its own authorized transaction while
@@ -631,7 +638,7 @@ Extract foundations from existing owner work, not a new initiative:
    delivered. REV-04A immutable Review-source storage and REV-04B shared FinalAcceptance
    storage and CON-03C contribution/award persistence are delivered. Do not create
    an incomplete Review solely as an FK target. REV-12A1 supplies the disabled
-   controller and transaction fence. Exact hidden AUTH preparation precedes CON-07; mandatory persisted receipt
+   controller and transaction fence. Exact hidden AUTH preparation is delivered before CON-07; mandatory persisted receipt
    custody precedes production composition or consumption. These foundations require no live human claim or
    decision endpoint. Hidden composition proof precedes exact AUTH
    activation; unavailable authority must not be replaced with fabricated allow evidence.
@@ -639,9 +646,10 @@ Extract foundations from existing owner work, not a new initiative:
    delivers disabled generation-zero controller storage and the caller-root
    transaction fence. AUTH-19A supplies inert exact source/request and detached receipt contracts.
    ARCH-04E1B-A delivers distinct routing-request and future source-ID reservation.
-   Next implement the hidden
-   task.post_submit.route preparation/receipt-staging interface in 04E2-A using
-   workstream.task.post_submit_router. The action remains planned/unavailable.
+   ARCH-04E2-A delivers the hidden `task.post_submit.route` strict resource and
+   preparation matcher plus nominal `workstream.task.post_submit_router` adapter
+   through canonical PREP. The action remains planned/unavailable and denial occurs
+   before handle issuance; no allow, receipt, source publication or effect exists.
    CON-07 follows as a flush-only participant; isolated storage controls prove
    economic behavior without claiming acceptance authority or fabricating allows.
    Actual CON fulfillment roots own immutable ordinal allocation; no award or
@@ -650,7 +658,7 @@ Extract foundations from existing owner work, not a new initiative:
    of live human queues or decisions.
 4. The shared operation consumes those foundations for acceptance. ARCH-04E1B-B's
    hidden routing handler invokes it for false/pass. True routing does not
-   require CON-07/shared acceptance; it uses the same preparation phases, hidden 04E1B-B, exact
+   require CON-07/shared acceptance; it uses the delivered preparation, hidden 04E1B-B, exact
    AUTH 04E2-B and live 04E3 after its own prerequisites. The existing lifecycle-control command receives
    scoped AUTH activation for the proven shared manifest as specified below;
    ARCH-04E2-B installs mandatory same-table receipt custody and activates the

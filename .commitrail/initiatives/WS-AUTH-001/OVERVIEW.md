@@ -2,8 +2,11 @@
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
 planned router identity. ARCH-04E1B-A delivers caller-owned routing-request and
-future source-identity reservation. Next is hidden AUTH preparation (ARCH-04E2-A), before
-CON-07/shared acceptance. Mandatory durable custody and its genuine positive
+future source-identity reservation. ARCH-04E2-A now delivers strict hidden
+resource/preparation matching and a nominal fixed-router adapter through canonical
+PREP. The action remains planned and unavailable, so it issues no handle, allow or
+receipt and writes no source or effect. The selected automated path proceeds to
+CON-07/shared acceptance prerequisites. Mandatory durable custody and its genuine positive
 proof belong to consequence activation (04E2-B), before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -20,7 +23,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 
 - Disposition: Planned
 - Delivered prerequisite: [ART-07A1](../WS-ART-001/WS-ART-001-07A1.md) supplies
-  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation precedes CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
+  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation is delivered before CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
 
 - Intent: provide deny-default, project-scoped authority with canonical human
   and service identities and attributable audit evidence.
@@ -57,10 +60,14 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
   and minimal writers and ARCH-03A internal guide context. POL-07B internal phase composition is delivered.
   The dispatcher registers only exact assignment invalidation. Future checker
   routing still requires its separate exact authority and handler.
+- Delivered routing preparation: [ARCH-04E2-A](../WS-ARCH-001/WS-ARCH-001-04E2A.md)
+  adds the strict exact routing resource, request matcher, digest dispatch and
+  fixed-router adapter through canonical PREP. Planned-action denial occurs before
+  handle issuance; no allow, receipt, source write or product effect is reachable.
 - Delivered storage: [REV-03B](../WS-REV-001/WS-REV-001-03B.md) freezes exact
   lease packets with normalized live guide ingests; no resolver or byte authority.
   [REV-04A](../WS-REV-001/WS-REV-001-04A.md) adds complete immutable Review, findings, resolutions and completed request storage; no decision runtime.
-- Next usable boundary: for the selected automated-acceptance delivery sequence, ARCH-04E2-A AUTH preparation after delivered TASK request reservation, then CON-07 using the delivered REV-12A1 disabled fence, before shared acceptance composition and hidden ARCH-04E1B;
+- Next usable boundary: for the selected automated-acceptance delivery sequence, CON-07 using the delivered REV-12A1 disabled fence, before shared acceptance composition and hidden ARCH-04E1B-B;
   ARCH-04E2 then owns exact routing activation before 04E3 live composition.
 - Governing source: `docs/spec_authorization_service.md`, authorization code,
   migrations, and tests.
@@ -73,7 +80,7 @@ generation-zero controller storage and transaction locking. Acceptance-source AU
 CON participation and authorized activation remain separate required work.
 
 This is delivery priority, not a prerequisite of true human admission. Both
-routing branches have request reservation 04E1B-A → AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
+routing branches have delivered request reservation 04E1B-A → delivered AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
 can proceed after its own prerequisites without CON-07/shared acceptance or
 scoped lifecycle activation. False routing adds those requirements. Human final
 acceptance later uses the same authorized shared acceptance/CON operation.
@@ -108,5 +115,5 @@ manager proposal review, pre-submit approval and manual correction dispatch.
    AUTH-OUTBOX-01/02 bracket hidden CON-02B dispatch; ARCH-04E2 activates only
    the proven TASK routing handler before ARCH-04E3 live composition.
    TASK queue/read exposure is complete through ARCH-03C7. AUTH-18 public
-   manager guide activation/context is delivered; ARCH-03D hidden intake, hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D1 canonical material custody is delivered; ARCH-04D2 exact input/execution/finalization authority and ARCH-04E1A source-only facts/types are delivered. Both branches have request reservation 04E1B-A and require AUTH preparation 04E2-A before hidden handlers 04E1B-B, activation 04E2-B and live 04E3. Shared acceptance foundations additionally gate false routing, not true admission.
+   manager guide activation/context is delivered; ARCH-03D hidden intake, hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D1 canonical material custody is delivered; ARCH-04D2 exact input/execution/finalization authority, ARCH-04E1A source-only facts/types and ARCH-04E2-A hidden strict preparation are delivered. Hidden handlers 04E1B-B, activation 04E2-B and live 04E3 remain. Shared acceptance foundations additionally gate false routing, not true admission.
    Remaining work must use its exact owner, not the superseded broad designs.

@@ -32,6 +32,7 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
 from app.modules.authorization.domain.assignment_invalidation import AssignmentInvalidationResourceContext
 from app.modules.authorization.domain.outbox_dispatch import OutboxDispatchResourceContext
+from app.modules.authorization.domain.post_submit_routing import PostSubmitRoutingResourceContext
 from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
 from app.modules.authorization.domain.guide_activation import ProjectGuideActivationResourceContext
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionResourceContext
@@ -73,33 +74,29 @@ class IdentityLinkStatus(StrEnum):
     REVOKED = "revoked"
 
 
-class HumanAuthorizationContext(BaseModel):
+class _PrincipalContext(BaseModel):
+    """The same immutable identity and request custody for either principal kind."""
+
+    model_config = _STRICT_FROZEN
+    actor_profile_id: UUID
+    actor_status: ActorStatus
+    identity_link_id: UUID
+    identity_link_status: IdentityLinkStatus
+    request_id: UUID
+    correlation_id: UUID
+
+
+class HumanAuthorizationContext(_PrincipalContext):
     """Bounded canonical human identity state for one request only."""
 
-    model_config = _STRICT_FROZEN
-
-    actor_profile_id: UUID
     actor_kind: Literal[ActorKind.HUMAN]
-    actor_status: ActorStatus
-    identity_link_id: UUID
-    identity_link_status: IdentityLinkStatus
-    request_id: UUID
-    correlation_id: UUID
 
 
-class ServiceAuthorizationContext(BaseModel):
+class ServiceAuthorizationContext(_PrincipalContext):
     """Bounded canonical fixed-service identity state for one request only."""
 
-    model_config = _STRICT_FROZEN
-
-    actor_profile_id: UUID
     actor_kind: Literal[ActorKind.SERVICE]
-    actor_status: ActorStatus
-    identity_link_id: UUID
-    identity_link_status: IdentityLinkStatus
     service_identity: ServiceIdentity
-    request_id: UUID
-    correlation_id: UUID
 
 
 AuthorizationContext = HumanAuthorizationContext | ServiceAuthorizationContext
@@ -1206,6 +1203,7 @@ AuthorizationResourceContext = (
     | AssignmentInvalidationResourceContext
     | OutboxDispatchResourceContext
     | PostSubmitResourceContext
+    | PostSubmitRoutingResourceContext
     | ProjectSetupRunMutationResourceContext
     | ProjectGuideActivationResourceContext
     | ProjectGuideCompilationRequestResourceContext

@@ -26,11 +26,11 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "533fe94de5901976c7bbce4684ee403eef8afb1c36a4dfaf7b384fdb2eabe172",
-      "end_line": 1245,
+      "content_sha256": "2f9f25aad00519e3715ac3a12144aff6d1d08da1ab1ff7f6da20700286adca02",
+      "end_line": 1243,
       "hard_limit": 1200,
       "kind": "production_file",
-      "observed_lines": 1245,
+      "observed_lines": 1243,
       "path": "backend/app/modules/authorization/runtime.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -62,15 +62,15 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "81b4eb9fbfc6b45699d95329d20429d2d47910fa0255a4d50cd21cc80521845e",
-      "end_line": 911,
+      "content_sha256": "e70030fa8e350cfb2d5a98205612cc4c7364e13e2fc3ac5fbb3c065550249fd7",
+      "end_line": 937,
       "hard_limit": 100,
       "kind": "production_function",
-      "observed_lines": 166,
+      "observed_lines": 118,
       "path": "backend/app/modules/authorization/prepared.py",
       "qualified_symbol": "PreparedAuthorizationService._binding",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 746
+      "start_line": 820
     },
     {
       "capability": "oversized_authorization_structure",
@@ -134,11 +134,11 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "9bbcff4a2a6c5d0bf2245fd0c9d75fa37987456a70372dd147937549d035ea79",
-      "end_line": 10994,
+      "content_sha256": "390577ea4e0df5eb566f6a98c1792293fdb706586a4dc6e36f29a821310f7859",
+      "end_line": 10992,
       "hard_limit": 1200,
       "kind": "test_file",
-      "observed_lines": 10994,
+      "observed_lines": 10992,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -291,134 +291,134 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "10003810b90ad8ea86434aaae1a38e650c5df4bebd09bb0577ac3ebb7a522351",
-      "end_line": 2892,
+      "end_line": 2893,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 121,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_identity_link_lifecycle_route_preserves_outcome_transaction_contract",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 2772
+      "start_line": 2773
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "b4d58c998c9b8b2efedcdd67d1beb2e804c7f6dfca61b4818d6e95d8268c6f08",
-      "end_line": 7126,
+      "end_line": 7124,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 122,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_identity_link_lifecycle_service_applies_success_and_guards_conflicts",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 7005
+      "start_line": 7003
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "0858a7b107e68244cd719c9521856944411f88442818ae491ebb58a45ef4f417",
-      "end_line": 6005,
+      "end_line": 6003,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 126,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_prepared_actor_authority_crossed_mutations_complete_in_both_orders",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 5880
+      "start_line": 5878
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "56e6f85cc1b712b6410bee986d54e59e4dbad4c3f73c0599f12fe284587577a7",
-      "end_line": 6322,
+      "end_line": 6320,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 312,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_prepared_crosses_real_lifecycle_service_transactions",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 6011
+      "start_line": 6009
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "5cbc72df2c822f2f57db164c0ea4aa2f2d76d591313f69d6496fc26b127b581e",
-      "end_line": 3990,
+      "end_line": 3991,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 149,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_11c2_reads_require_exact_admin_context_and_role_allowlist",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 3842
+      "start_line": 3843
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "478d47861e68cfa6571199b0f69785c8f3f5a3483774cee0929b6a13dba6a648",
-      "end_line": 2158,
+      "end_line": 2159,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 302,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_mutation_resources_and_prepared_scopes_are_closed",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1857
+      "start_line": 1858
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "3d2a9843510cdb61b34500aa79a8ed3572df72723ab401f0245300e10c70044e",
-      "end_line": 9271,
+      "end_line": 9269,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 174,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_read_permissions_have_postgresql_role_scope_matrix",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 9098
+      "start_line": 9096
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "0da4e29b29ebd44bd9049145ee4148531320bce53859ad5341e5f57261e5a884",
-      "end_line": 10707,
+      "end_line": 10705,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 227,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_and_all_operation_mappings_commit_one_linked_pair",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 10481
+      "start_line": 10479
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "8deb42b92c936b62417f3bfe307b4a886612b8e217af8e5abc14a5ae3222452a",
-      "end_line": 1541,
+      "end_line": 1542,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 195,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_mutation_routes_conceal_denials_and_preserve_self_guards_atomically",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1347
+      "start_line": 1348
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "19e0d2a736a60fcd30e5c8e18f0641c6b66ed3a669e2d18dd5784195990d1752",
-      "end_line": 1777,
+      "end_line": 1778,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 218,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_mutation_routes_enforce_project_lifecycle_without_disclosure",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1560
+      "start_line": 1561
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "217ea21f4a2cbd31a4428ba1f01a9fcd90e73ee95fedb2587100a847e8921926",
-      "end_line": 10236,
+      "end_line": 10234,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 154,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_service_actor_replay_fails_closed_on_committed_state_drift",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 10083
+      "start_line": 10081
     },
     {
       "capability": "oversized_authorization_structure",
@@ -471,14 +471,14 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "32083a125798736fa17533aaa767c0236ae3042de4f7d8debdce5f15e0a801fe",
-      "end_line": 9553,
+      "end_line": 9551,
       "hard_limit": 100,
       "kind": "test_helper",
       "observed_lines": 130,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "_operation_success",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 9424
+      "start_line": 9422
     }
   ],
   "exceptions": [],

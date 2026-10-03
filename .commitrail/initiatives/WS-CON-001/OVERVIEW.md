@@ -2,8 +2,10 @@
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
 planned router identity. TASK request and future source-ID reservation
-(ARCH-04E1B-A) is delivered. Hidden AUTH preparation (ARCH-04E2-A) is next, before
-CON-07/shared acceptance. Mandatory durable custody and its genuine positive
+(ARCH-04E1B-A) and strict hidden AUTH preparation (ARCH-04E2-A) are delivered.
+The nominal fixed-router adapter still cannot obtain a handle, allow or receipt,
+and writes no source or effect while the action remains planned/unavailable.
+CON-07/shared acceptance prerequisites are next. Mandatory durable custody and its genuine positive
 proof belong to consequence activation (04E2-B), before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -14,7 +16,7 @@ and the [capability ledger](../../../docs/roadmap_status.md).
 
 - Disposition: Planned
 - Delivered prerequisite: [ART-07A1](../WS-ART-001/WS-ART-001-07A1.md) supplies
-  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation precedes CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
+  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation is delivered before CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
 
 - Completed boundary: public Finance ContributionPolicy administration, exact
   Finance Authority, CP06 selected-policy validation and CP07 internal guide
@@ -50,7 +52,7 @@ and the [capability ledger](../../../docs/roadmap_status.md).
   [REV-04B](../WS-REV-001/WS-REV-001-04B.md) adds shared FinalAcceptance source
   storage, without AUTH receipt custody or runtime consumers.
   [CON-03C](WS-CON-001-03C.md) adds exact contribution sources and fixed awards; no recognition or fulfillment operation is live.
-- Next usable boundary: for the selected automated-acceptance delivery sequence, ARCH-04E2-A AUTH preparation after delivered TASK request reservation, then CON-07 using the delivered REV-12A1 disabled fence,
+- Next usable boundary: for the selected automated-acceptance delivery sequence, CON-07 using the delivered REV-12A1 disabled fence,
   plus mandatory same-table acceptance authority hardening before one shared
   acceptance operation serves both human and automatic triggers.
 - Governing sources: `docs/spec_contribution_compensation.md`,
@@ -64,7 +66,7 @@ generation-zero controller storage and transaction locking. Acceptance-source AU
 CON participation and authorized activation remain separate required work.
 
 This is delivery priority, not a prerequisite of true human admission. Both
-routing branches have request reservation 04E1B-A → AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
+routing branches have delivered request reservation 04E1B-A → delivered AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
 can proceed after its own prerequisites without CON-07/shared acceptance or
 scoped lifecycle activation. False routing adds those requirements. Human final
 acceptance later uses the same authorized shared acceptance/CON operation.
@@ -101,8 +103,8 @@ the internal policy operations; CP05A exposes their public Finance routes.
    CP09 removes the replaced legacy
    economic path only after all consumers are replaced, including CHECKERS and
    public Submission cutover; it does not block canonical `allow_review`.
-2. [CON-03C](WS-CON-001-03C.md) delivers immutable ContributionRecord/CompensationAward storage after REV-04B. The disabled REV-12A1 fence is delivered; hidden AUTH preparation
-   precedes the CON-07 flush-only submitter participant. Mandatory persisted custody
+2. [CON-03C](WS-CON-001-03C.md) delivers immutable ContributionRecord/CompensationAward storage after REV-04B. The disabled REV-12A1 fence and hidden AUTH preparation
+   are delivered before the CON-07 flush-only submitter participant. Mandatory persisted custody
    accompanies the first authorized atomic consequence at 04E2-B. These shared pieces do not require live human
    decision/queue/lease behavior. The locked ReviewPolicy boolean
    `human_review_required` defaults true; false permits authorized automated

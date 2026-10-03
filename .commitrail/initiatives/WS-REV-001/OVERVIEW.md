@@ -2,8 +2,10 @@
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
 planned router identity. TASK request and future source-ID reservation
-(ARCH-04E1B-A) is delivered. Hidden AUTH preparation (ARCH-04E2-A) is next, before
-CON-07/shared acceptance. Mandatory durable custody and its genuine positive
+(ARCH-04E1B-A) and strict hidden AUTH preparation (ARCH-04E2-A) are delivered.
+The nominal fixed-router adapter still cannot obtain a handle, allow or receipt,
+and writes no source or effect while the action remains planned/unavailable.
+CON-07/shared acceptance prerequisites are next. Mandatory durable custody and its genuine positive
 proof belong to consequence activation (04E2-B), before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -15,7 +17,7 @@ of review/revision behavior. The downstream owner contracts remain separate.
 
 - Disposition: Planned
 - Delivered prerequisite: [ART-07A1](../WS-ART-001/WS-ART-001-07A1.md) supplies
-  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation precedes CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
+  metadata-only packet types. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation is delivered before CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B. No packet resolver or human runtime is live.
 
 - Completed boundary: queue admission and ReviewLease persistence through 03A2,
   plus normalized immutable packets through 03B, Review sources through 04A
@@ -29,7 +31,7 @@ of review/revision behavior. The downstream owner contracts remain separate.
 - Delivered storage: [REV-03B](../WS-REV-001/WS-REV-001-03B.md) freezes exact
   lease packets with normalized live guide ingests; no resolver or byte authority.
   [REV-04A](../WS-REV-001/WS-REV-001-04A.md) adds complete immutable Review, findings, resolutions and completed request storage; no decision runtime.
-- Next usable boundary: for the selected automated-acceptance delivery sequence, ARCH-04E2-A AUTH preparation after delivered TASK request reservation, then CON-07 using the delivered
+- Next usable boundary: for the selected automated-acceptance delivery sequence, CON-07 using the delivered
   REV-12A1 disabled controller/fence under the canonical order; human hidden behavior may continue independently behind exact AUTH,
   ART and CON prerequisites.
 - Governing sources: `docs/spec_review_lifecycle.md`,
@@ -43,7 +45,7 @@ generation-zero controller storage and transaction locking. Acceptance-source AU
 CON participation and authorized activation remain separate required work.
 
 This is delivery priority, not a prerequisite of true human admission. Both
-routing branches have request reservation 04E1B-A → AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
+routing branches have delivered request reservation 04E1B-A → delivered AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
 can proceed after its own prerequisites without CON-07/shared acceptance or
 scoped lifecycle activation. False routing adds those requirements. Human final
 acceptance later uses the same authorized shared acceptance/CON operation.
@@ -95,7 +97,7 @@ proof. No adjudication setting or behavior is included.
 2. Continue hidden claim/revision behavior against canonical `allow_review`,
    copying the Submission policy version without a current-policy lookup.
 3. TASK's early 04E1A source schema/detached facts and source-neutral accepted-
-   effects types are delivered. After delivered REV-03B and REV-04A storage, REV-04B shared FinalAcceptance storage is also delivered. After delivered REV-12A1 disabled fencing, prepare exact source AUTH before CON-07 hidden participation; enforce mandatory receipt custody with the first genuinely authorized atomic composition before production consumption. This foundation
+   effects types are delivered. After delivered REV-03B and REV-04A storage, REV-04B shared FinalAcceptance storage is also delivered. REV-12A1 disabled fencing and ARCH-04E2-A exact source preparation are delivered before CON-07 hidden participation; enforce mandatory receipt custody with the first genuinely authorized atomic composition before production consumption. This foundation
    can precede human runtime: ARCH-04E uses it for false/pass acceptance without
    live queues, leases or decisions. The delivered REV-12A1 disabled fence serves both triggers; actual root ordinal
    custody and authorized drain/operator work extend the same controller before

@@ -117,6 +117,10 @@ from app.modules.authorization.submission_preparation import (
 from app.modules.authorization.domain.task_authority import (
     TASK_ACTIONS, TaskAuthorityResourceContext, parse_task_authority_binding,
 )
+from app.modules.authorization.domain.post_submit_routing import (
+    ROUTE, PostSubmitRoutingResourceContext, post_submit_routing_prepare_matches,
+)
+from app.modules.tasks.api.post_submit_routing import TaskRoutingRequestFacts
 from app.modules.authorization.domain.post_submit import POST_SUBMIT_ACTIONS, PostSubmitResourceContext, post_submit_prepare_matches
 from app.modules.authorization.prepared_post_submit_replay import validate_post_submit_replay
 from app.modules.authorization.pre_submit_materialization import (
@@ -186,6 +190,7 @@ class _PreparedAuthorizationBinding:
     assignment_invalidation_context: AssignmentInvalidationResourceContext | None = None
     outbox_dispatch_digest: str | None = None
     post_submit_prepare_context: dict | None = None
+    routing_request: TaskRoutingRequestFacts | None = None
     task_authority_context: TaskAuthorityResourceContext | None = None
     project_create_operation_id: UUID | None = None
     project_create_project_id: UUID | None = None
@@ -404,6 +409,71 @@ def _submission_preparation_binding_matches(
 _CONSUMED = _Consumed()
 
 
+def _sufficiency_prepare_binding(action_id, caller_input, setup_bindings):
+    """Parse existing sufficiency custody separately from capability binding."""
+    sufficiency: dict[str, object] = {}
+    if not setup_bindings.get("guide_projection_prepare_context") and action_id in {
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+    }:
+        try:
+            raw_report_id = caller_input.request_value["report_id"]
+            raw_custody = caller_input.request_value["setup_service_custody"]
+            custody = None
+            if raw_custody:
+                custody_value = dict(raw_custody)
+                for field in (
+                    "setup_run_id",
+                    "scope_project_id",
+                    "guide_id",
+                    "source_snapshot_id",
+                    "task_id",
+                    "correlation_id",
+                ):
+                    custody_value[field] = UUID(str(custody_value[field]))
+                custody = ProjectSetupServiceCustodyContext.model_validate(custody_value)
+            sufficiency = {
+                "project_id": UUID(str(caller_input.request_value["project_id"])),
+                "guide_id": UUID(str(caller_input.request_value["guide_id"])),
+                "guide_version": str(caller_input.request_value["guide_version"]),
+                "snapshot_id": UUID(str(caller_input.request_value["source_snapshot_id"])),
+                "snapshot_hash": str(caller_input.request_value["source_snapshot_hash"]),
+                "report_id": UUID(str(raw_report_id)) if raw_report_id else None,
+                "operation_id": UUID(str(caller_input.request_value["operation_id"])),
+                "request_digest": str(caller_input.request_value["request_digest"]),
+                "target_kind": str(caller_input.request_value["target_kind"]),
+                "execution_kind": str(caller_input.request_value["execution_kind"]),
+                "setup_generation": int(caller_input.request_value["setup_generation"]),
+                "stale_output_digest": caller_input.request_value["stale_output_digest"],
+                "material_digest": caller_input.request_value["material_digest"],
+                "setup_service_custody": custody,
+            }
+            ProjectGuideSufficiencyMutationResourceContext(
+                resource_type="project_guide_sufficiency_mutation",
+                resource_id=sufficiency["report_id"] or sufficiency["snapshot_id"],
+                scope_project_id=sufficiency["project_id"],
+                guide_id=sufficiency["guide_id"],
+                guide_version=sufficiency["guide_version"],
+                source_snapshot_id=sufficiency["snapshot_id"],
+                source_snapshot_hash=sufficiency["snapshot_hash"],
+                sufficiency_report_id=sufficiency["report_id"],
+                operation_id=sufficiency["operation_id"],
+                request_digest=sufficiency["request_digest"],
+                target_kind=sufficiency["target_kind"],
+                execution_kind=sufficiency["execution_kind"],
+                setup_generation=sufficiency["setup_generation"],
+                stale_output_digest=sufficiency["stale_output_digest"],
+                material_digest=sufficiency["material_digest"],
+                setup_service_custody=sufficiency["setup_service_custody"],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise PreparedAuthorizationHandleInvalid(
+                "invalid prepared authorization handle"
+            ) from exc
+    return sufficiency
+
+
 class PreparedAuthorizationService:
     """Issue and consume AUTH-owned capabilities inside one caller transaction."""
 
@@ -534,6 +604,10 @@ class PreparedAuthorizationService:
             or issuance.binding.assignment_invalidation_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid assignment reconciliation authority")
+        if expected_action_id is ROUTE and not post_submit_routing_prepare_matches(
+            issuance.binding.routing_request, final_resource_context,
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared routing authority")
         if expected_action_id in POST_SUBMIT_ACTIONS and not post_submit_prepare_matches(
             expected_action_id, issuance.binding.post_submit_prepare_context, final_resource_context,
         ):
@@ -749,11 +823,21 @@ class PreparedAuthorizationService:
         caller_input: PreparedAuthorizationInput,
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
+        service_bindings = prepared_fixed_service_bindings(
+            action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
+        )
+        if action_id is ROUTE:
+            request = service_bindings["routing_request"]
+            if not (
+                scope.kind is PreparedAuthorityScopeKind.PROJECT and scope.project_id == request.project_id
+                and caller_input.idempotency_key == self._context.request_id
+                == self._context.correlation_id == request.route_operation_id
+            ):
+                raise PreparedAuthorizationHandleInvalid("invalid prepared routing request")
         operation_id = project_id = operation_generation = None
         policy_mutation_project_id = policy_mutation_guide_id = policy_mutation_policy_id = policy_mutation_operation_id = None
         policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
         policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
-        sufficiency: dict[str, object] = {}
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
         if action_id is ActionId.PROJECT_CREATE:
             operation_id, project_id, operation_generation = parse_project_create_binding(
@@ -762,65 +846,7 @@ class PreparedAuthorizationService:
         submission_policy_context, submission_policy_resource_digest = parse_submission_policy_prepare(
             action_id, caller_input.request_value, setup_bindings.get("guide_projection_prepare_context"),
         )
-        if not setup_bindings.get("guide_projection_prepare_context") and action_id in {
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
-        }:
-            try:
-                raw_report_id = caller_input.request_value["report_id"]
-                raw_custody = caller_input.request_value["setup_service_custody"]
-                custody = None
-                if raw_custody:
-                    custody_value = dict(raw_custody)
-                    for field in (
-                        "setup_run_id",
-                        "scope_project_id",
-                        "guide_id",
-                        "source_snapshot_id",
-                        "task_id",
-                        "correlation_id",
-                    ):
-                        custody_value[field] = UUID(str(custody_value[field]))
-                    custody = ProjectSetupServiceCustodyContext.model_validate(custody_value)
-                sufficiency = {
-                    "project_id": UUID(str(caller_input.request_value["project_id"])),
-                    "guide_id": UUID(str(caller_input.request_value["guide_id"])),
-                    "guide_version": str(caller_input.request_value["guide_version"]),
-                    "snapshot_id": UUID(str(caller_input.request_value["source_snapshot_id"])),
-                    "snapshot_hash": str(caller_input.request_value["source_snapshot_hash"]),
-                    "report_id": UUID(str(raw_report_id)) if raw_report_id else None,
-                    "operation_id": UUID(str(caller_input.request_value["operation_id"])),
-                    "request_digest": str(caller_input.request_value["request_digest"]),
-                    "target_kind": str(caller_input.request_value["target_kind"]),
-                    "execution_kind": str(caller_input.request_value["execution_kind"]),
-                    "setup_generation": int(caller_input.request_value["setup_generation"]),
-                    "stale_output_digest": caller_input.request_value["stale_output_digest"],
-                    "material_digest": caller_input.request_value["material_digest"],
-                    "setup_service_custody": custody,
-                }
-                ProjectGuideSufficiencyMutationResourceContext(
-                    resource_type="project_guide_sufficiency_mutation",
-                    resource_id=sufficiency["report_id"] or sufficiency["snapshot_id"],
-                    scope_project_id=sufficiency["project_id"],
-                    guide_id=sufficiency["guide_id"],
-                    guide_version=sufficiency["guide_version"],
-                    source_snapshot_id=sufficiency["snapshot_id"],
-                    source_snapshot_hash=sufficiency["snapshot_hash"],
-                    sufficiency_report_id=sufficiency["report_id"],
-                    operation_id=sufficiency["operation_id"],
-                    request_digest=sufficiency["request_digest"],
-                    target_kind=sufficiency["target_kind"],
-                    execution_kind=sufficiency["execution_kind"],
-                    setup_generation=sufficiency["setup_generation"],
-                    stale_output_digest=sufficiency["stale_output_digest"],
-                    material_digest=sufficiency["material_digest"],
-                    setup_service_custody=sufficiency["setup_service_custody"],
-                )
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
+        sufficiency = _sufficiency_prepare_binding(action_id, caller_input, setup_bindings)
         if action_id in {
             ActionId.PROJECT_REVIEW_POLICY_UPDATE,
             ActionId.PROJECT_REVISION_POLICY_UPDATE,
@@ -861,7 +887,7 @@ class PreparedAuthorizationService:
             scope=scope,
             idempotency_key=caller_input.idempotency_key,
             request_digest=prepared_request_digest(caller_input.request_value),
-            **prepared_fixed_service_bindings(action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid),
+            **service_bindings,
             project_create_operation_id=operation_id,
             project_create_project_id=project_id,
             project_create_generation=operation_generation,
@@ -922,7 +948,7 @@ class PreparedAuthorizationService:
                 artifact_resource_type=artifact_resource[0],
                 artifact_resource_id=resource.resource_id,
             )
-        if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext, PostSubmitResourceContext)):
+        if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext, PostSubmitResourceContext, PostSubmitRoutingResourceContext)):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,

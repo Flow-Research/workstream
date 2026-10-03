@@ -167,7 +167,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         }
     )
     assert (
-        modules_by_lane["task_lifecycle_a"]
+        modules_by_lane["task_lifecycle_a"] - set(catalogue.ROUTING_AUTH_PREPARATION_MODULES)
         == modules_by_lane["task_lifecycle_b"]
         == modules_by_lane["task_lifecycle_c"] - set(catalogue.TASK_ROUTING_REQUEST_MODULES)
         == {
@@ -718,4 +718,15 @@ def test_routing_request_proofs_use_task_lane_with_measured_headroom():
     assert set(catalogue.TASK_ROUTING_REQUEST_MODULES) == expected
     for lane in LANES:
         assert set(lane.modules) & expected == (expected if lane.name == "task_lifecycle_c" else set())
+    assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)
+
+
+def test_routing_authorization_proofs_run_once_on_task_a():
+    expected = {
+        "tests/authorization/post_submit_routing/test_contracts.py",
+        "tests/authorization/post_submit_routing/test_prepared.py",
+    }
+    assert set(catalogue.ROUTING_AUTH_PREPARATION_MODULES) == expected
+    for lane in LANES:
+        assert set(lane.modules) & expected == (expected if lane.name == "task_lifecycle_a" else set())
     assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)

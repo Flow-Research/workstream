@@ -308,7 +308,8 @@ immutable disabled generation-zero storage and caller-root transaction locking.
 It does not activate `review.lifecycle.activation.manage` or an acceptance writer.
 AUTH's scalar activation contract binds its inherited phase to current_phase;
 generation zero requires disabled. Those facts do not prove adjacency or grant
-authority. Hidden AUTH preparation and caller-session receipt staging precede CON-07
+authority. Hidden AUTH preparation and nominal caller-session receipt projection
+are delivered before CON-07
 flush-only participant proof. Mandatory persisted source/FinalAcceptance custody
 accompanies the first genuine allowed consequence at 04E2-B, before production
 composition or consumption; no standalone allow is committed. Authorized
@@ -318,6 +319,8 @@ shared acceptance, without requiring live human-review queues first.
 ARCH-04E1B-A adds immutable TASK routing-request and future source-ID reservation,
 with caller-owned rollback and current-completion replay checks. It does not
 construct acceptance-source commitments or consume receipt-shaped values as
-AUTH evidence. ARCH-04E2-A preparation remains next; complete source projection,
-actual immutable AUTH-event/service-actor verification and atomic publication
-remain required before consequence activation.
+AUTH evidence. ARCH-04E2-A strict preparation and nominal fixed-router adapter are
+delivered through canonical PREP, but the planned action denies before a handle
+or receipt exists. Persisted source projection, actual immutable
+AUTH-event/service-actor verification and atomic publication remain required
+before consequence activation.

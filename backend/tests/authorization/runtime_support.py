@@ -3,12 +3,18 @@
 from __future__ import annotations
 from types import SimpleNamespace
 from uuid import uuid4
+from app.core.identifiers import new_record_id
+from tests.authorization.post_submit_routing.support import detached_request_and_source
+from app.modules.authorization.domain.post_submit_routing import post_submit_routing_prepare_values
 from app.modules.actors.api import ServiceIdentity
 from app.modules.audit.schemas import AuthorityAuditEventInput
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
+    PreparedAuthorizationInput,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
     ActorKind,
     ActorStatus,
     IdentityLinkStatus,
@@ -172,3 +178,25 @@ def _guide_mutation_resources(project_id, guide_id, operation_id, digest):
             operation_generation=1,
         ),
     }
+
+
+def _planned_service_matrix_inputs(context, action_id, derive_inputs):
+    """Give each planned action valid input so the matrix reaches AUTH denial."""
+    caller_input = PreparedAuthorizationInput(idempotency_key=new_record_id(), request_value={})
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
+        caller_input, scope = derive_inputs()
+    elif action_id is ActionId.TASK_POST_SUBMIT_ROUTE:
+        request, _source = detached_request_and_source()
+        context = context.model_copy(update={
+            "request_id": request.route_operation_id,
+            "correlation_id": request.route_operation_id,
+        })
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=request.route_operation_id,
+            request_value=post_submit_routing_prepare_values(request),
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=request.project_id,
+        )
+    return context, caller_input, scope

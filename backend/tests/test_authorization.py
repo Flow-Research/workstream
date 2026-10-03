@@ -22,6 +22,7 @@ from tests.authorization.postgresql_support import restore_actor_lifecycle_trigg
 
 from tests.authorization.runtime_support import (
     _runtime_context,
+    _planned_service_matrix_inputs,
     _DecisionEvidence,
     _runtime_service,
     _PreparedTestSession,
@@ -5691,6 +5692,9 @@ async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions
                 ),
             )
 
+    context, caller_input, scope = _planned_service_matrix_inputs(
+        context, action_id, _submission_policy_derive_prepare_inputs
+    )
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
     facts = LockedFacts()
@@ -5701,10 +5705,6 @@ async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions
         authorization,
         facts,  # type: ignore[arg-type]
     )
-    caller_input = PreparedAuthorizationInput(idempotency_key=new_record_id(), request_value={})
-    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
-    if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
-        caller_input, scope = _submission_policy_derive_prepare_inputs()
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(
             action_id,
@@ -5738,6 +5738,9 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
         actor_kind=ActorKind.SERVICE,
         service_identity=wrong_identity,
     )
+    context, caller_input, scope = _planned_service_matrix_inputs(
+        context, action_id, _submission_policy_derive_prepare_inputs
+    )
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
     facts = _PreparedAdminFacts(context)
@@ -5748,11 +5751,6 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
         authorization,
         facts,
     )
-
-    caller_input = PreparedAuthorizationInput(idempotency_key=new_record_id(), request_value={})
-    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
-    if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
-        caller_input, scope = _submission_policy_derive_prepare_inputs()
 
     with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
         await prepared.prepare(

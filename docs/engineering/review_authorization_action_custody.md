@@ -141,7 +141,8 @@ immutable disabled generation-zero storage and caller-root transaction locking.
 It does not activate `review.lifecycle.activation.manage` or an acceptance writer.
 AUTH's scalar activation contract binds its inherited phase to current_phase;
 generation zero requires disabled. Those facts do not prove adjacency or grant
-authority. Hidden AUTH preparation and caller-session receipt staging precede CON-07
+authority. Hidden AUTH preparation and nominal caller-session receipt projection
+are delivered before CON-07
 flush-only participant proof. Mandatory persisted source/FinalAcceptance custody
 accompanies the first genuine allowed consequence at 04E2-B, before production
 composition or consumption; no standalone allow is committed. Authorized

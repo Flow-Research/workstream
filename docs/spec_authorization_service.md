@@ -692,7 +692,7 @@ a planning document does not grant a service permission.
 | `task.assignment.authority_reconcile` | `workstream.task.assignment_reconciler` | Committed exact AUTH invalidation event, project/actor/grant-or-link, active pre-submit assignment; no wrong-role or submitted-history mutation | ARCH-03B9 hidden handler/fence and ARCH-03C1 real feature authority/decision receipts complete; ARCH-03C2 atomic producer wiring and registration |
 | `checker.post_submit.execute` | `workstream.checker.post_submit` | Immutable Submission/request/generation, locked compiled policy, attempt and admitted service; exact pre-I/O authority | Implemented by ARCH-04C/04D2; no dispatcher registration |
 | `checker.post_submit.finalize` | `workstream.checker.post_submit` | Exact execution request/fence, accepted result digest, retained material and original execute receipt; fresh post-I/O authority and atomic evidence; current outputs are empty | Implemented by ARCH-04C/04D2; no dispatcher registration |
-| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits admission, false/pass permits the shared acceptance consequence after its proof; never a human review decision or generic CON write | AUTH-19A inert source/request commitments and planned identity delivered; 04E1B-A stages request facts, 04E2-A supplies hidden AUTH preparation before CON-07; 04E1B-B handlers use shared REV/CON for false. 04E2-B enforces receipt custody and activates the first genuine atomic consequence; 04E3 wires live composition |
+| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits only the TASK manifest transition to `review_pending`, false/pass binds exact accepted TASK effects for the future shared FinalAcceptance consequence; never a human review decision or generic CON write | AUTH-19A inert source/request commitments and planned identity, 04E1B-A request facts and 04E2-A strict hidden preparation are delivered. The nominal adapter uses canonical PREP, but planned denial prevents a handle, allow or receipt. CON-07/shared acceptance precedes the false handler; 04E1B-B supplies handlers, 04E2-B enforces receipt custody and activates the first genuine atomic consequence, and 04E3 wires live composition |
 
 Each action maps to the identically named permission in this table and only
 its singleton fixed-service row. Humans, dispatchers and unrelated services
@@ -1637,6 +1637,11 @@ PostgreSQL-owned created_at. Private AUTH projects those public facts into the
 routing source commitment, adding a distinct route_operation_id and
 route_request_digest. These never reuse checker evaluation authority. Both locked
 ReviewPolicy branches remain representable; construction does not enable either.
+ARCH-04E2-A binds the exact reserved request, source and outbox claim to one
+closed branch consequence. True contains only the TASK
+`evaluation_pending -> review_pending` transition and no REV queue fields. False
+contains the exact `TaskAcceptedEffectsRequest`, including its allocated
+FinalAcceptance identity, for later shared acceptance without a fabricated Review.
 
 Human receipt request/correlation identify its operation; idempotency_reference
 identifies its ReviewDecisionRequest, separately from the committed caller key.
@@ -1652,8 +1657,12 @@ Domains workstream.task_post_submit_source.v0.1 and
 workstream.authorization.acceptance_source.v0.1 separate retained source facts
 from the opaque full runtime resource digest. Current audit events do not yet
 persist this new source commitment. ARCH-04E1B-A stages routing request facts;
-04E2-A provides hidden AUTH preparation and caller-session receipt staging before
-CON-07. Mandatory persisted source/FinalAcceptance custody follows at 04E2-B,
+04E2-A provides strict hidden AUTH resource/preparation matching and the nominal
+fixed-router adapter through canonical PREP. The action remains planned and the
+kernel rejects before handle issuance, so the adapter cannot return an allow or
+receipt and performs no source, publication or product write. CON-07/shared
+acceptance prerequisites follow for the selected automated path. Mandatory
+persisted source/FinalAcceptance custody follows at 04E2-B,
 with the first genuine allow and all governed effects in the same transaction,
 before production composition or consumption. No early standalone allow exists. The actor-vocabulary migration provisions
 nothing, and existing closed audit constraints still reject a route allow.

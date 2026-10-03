@@ -175,7 +175,7 @@ Findings and policy proposals retain document-access evidence.
 metadata-only reviewer packet types, not a resolver or byte-access capability.
 REV-03B persists immutable normalized packets using live guide ingest identities.
 REV-04A Review and REV-04B shared FinalAcceptance storage foundations are delivered; CON-03C contribution/award storage and REV-12A1's disabled controller/transaction
-fence are delivered. Exact AUTH preparation precedes hidden participation; durable source custody accompanies the first atomic governed consequence. Acceptance storage has no production writer or AUTH receipt; mandatory exact
+fence are delivered. Exact hidden AUTH preparation is delivered before hidden participation; durable source custody accompanies the first atomic governed consequence. Acceptance storage has no production writer or AUTH receipt; mandatory exact
 authority hardening precedes any runtime consumer. These prerequisites do not require live
 human review before the first automated acceptance path.
 
@@ -680,8 +680,16 @@ Review/routing source commitments and registers the router as planned. It does n
 issue or persist source authorization receipts. ARCH-04E1B-A reserves the TASK
 routing operation and future source identity under caller-owned transactions,
 with exact current-completion verification and replay. It publishes no source or
-outcome. Hidden AUTH preparation is next; actual receipt custody must commit with
-the governed consequence before shared acceptance and contribution creation run.
+outcome. ARCH-04E2-A adds strict hidden request/source/consequence matching and a
+nominal fixed-router adapter through canonical PREP. Because
+`task.post_submit.route` remains planned and unavailable, no executable handle,
+allow, receipt, source write, publication or effect is reachable. The true branch
+binds only the future TASK `evaluation_pending -> review_pending` manifest effect,
+without creating a REV queue dependency. The false branch binds exact
+`TaskAcceptedEffectsRequest` values for the future shared FinalAcceptance path,
+without fabricating a Review. CON-07/shared acceptance prerequisites are next;
+actual receipt custody must commit with the governed consequence before shared
+acceptance and contribution creation run.
 
 ## v0.1 Success Standard
 

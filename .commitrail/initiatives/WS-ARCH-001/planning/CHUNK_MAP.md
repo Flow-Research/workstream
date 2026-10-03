@@ -2,8 +2,10 @@
 
 [AUTH-19A](../../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
 planned router identity. ARCH-04E1B-A delivers caller-owned routing-request and
-future source-identity reservation. Next is hidden AUTH preparation (ARCH-04E2-A), before
-CON-07/shared acceptance. Mandatory durable custody and its genuine positive
+future source-identity reservation. ARCH-04E2-A delivers strict hidden
+resource/preparation matching and a nominal fixed-router adapter through canonical
+PREP while the action remains planned/unavailable. CON-07/shared acceptance
+prerequisites are next for the selected automated path. Mandatory durable custody and its genuine positive
 proof belong to consequence activation (04E2-B), before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -50,7 +52,7 @@ public intake remains deferred to ARCH-02I.
 | [WS-ARCH-001-04D1](../WS-ARCH-001-04D1.md) | Canonical terminal ART material custody | L1 | Complete; valid retained history preserved; invalid upgrades refused |
 | [WS-ARCH-001-04D2](../WS-ARCH-001-04D2.md) | AUTH exact fixed-service post-submit activation (replaces XINT-06B) | L1 | Complete: exact input, execute and finalize authority; output write/bind remains unavailable |
 | [WS-ARCH-001-04E1A](../WS-ARCH-001-04E1A.md) | Route-neutral immutable source schema and shared accepted-effects types | L1 | Complete; no runtime writer/reader, routing authority, current pointer or effects implementation; false proof is scalar transport only |
-| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Both branches: 04E1A/04D2/OUTBOX-02 -> delivered request reservation 04E1B-A -> AUTH preparation 04E2-A -> hidden handlers 04E1B-B -> activation 04E2-B -> live 04E3. False additionally needs mandatory hidden AUTH preparation -> CON-07/shared acceptance; mandatory persisted custody at activation, actual obligation custody and scoped lifecycle activation; false guide activation also requires 04F remediation |
+| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Both branches: 04E1A/04D2/OUTBOX-02 -> delivered request reservation 04E1B-A -> delivered AUTH preparation 04E2-A -> hidden handlers 04E1B-B -> activation 04E2-B -> live 04E3. False additionally needs CON-07/shared acceptance, mandatory persisted custody at activation, actual obligation custody and scoped lifecycle activation; true does not. False guide activation also requires 04F remediation |
 | [WS-ARCH-001-03D](../WS-ARCH-001-03D.md) | Exact activated historical guide through hidden durable intake; obsolete lookup removed | L1 | Complete; hidden exact post-submit materialization, ARCH-04B2 output custody, ARCH-04C execution, ARCH-04D1/04D2 custody/authority and ARCH-04E1A source-only facts/types delivered; public cutover remains deferred |
 | [WS-ARCH-001-04F](chunks/WS-ARCH-001-04F-checker-remediation.md) | Contributor-correctable checker failures and same-lineage admission-backed replacement Submission | L1 | Planned after 04E; replaces XINT-05C, required before public 02I, not before REV begins from `allow_review` |
 
