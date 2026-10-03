@@ -1,0 +1,397 @@
+{
+  "canonical_sha256": "610114e15ba7a4204cd3df81ea15455e1060e82d49d70ff491e344b518c61be3",
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "PermissionDefinitionResponse": {
+        "additionalProperties": false,
+        "description": "One registered permission identifier.",
+        "properties": {
+          "permission_id": {
+            "$ref": "#/components/schemas/PermissionId"
+          }
+        },
+        "required": [
+          "permission_id"
+        ],
+        "title": "PermissionDefinitionResponse",
+        "type": "object"
+      },
+      "PermissionDefinitionsResponse": {
+        "additionalProperties": false,
+        "description": "Complete immutable permission catalogue.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionDefinitionResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "const": 78,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PermissionDefinitionsResponse",
+        "type": "object"
+      },
+      "PermissionId": {
+        "description": "Closed product permission identifiers.",
+        "enum": [
+          "actor.profile.read_self",
+          "actor.profile.update_self",
+          "actor.profile.read_any",
+          "actor.profile.suspend",
+          "actor.profile.reactivate",
+          "actor.profile.deactivate",
+          "actor.identity_link.read",
+          "actor.identity_link.revoke",
+          "actor.identity_link.reactivate",
+          "task.assignment.authority_reconcile",
+          "task.post_submit.route",
+          "checker.post_submit.execute",
+          "checker.post_submit.finalize",
+          "outbox.dispatch",
+          "actor.service.provision",
+          "admin_role.read",
+          "admin_role.grant",
+          "admin_role.revoke",
+          "project.create",
+          "project.read",
+          "project.setup_diagnostic.read",
+          "project.effective_policy.read",
+          "project.update",
+          "project.archive",
+          "project.guide.manage",
+          "project.effective_policy.manage",
+          "project.task.manage",
+          "project.review_policy.manage",
+          "project.role_grant.read",
+          "project.role_grant.manage",
+          "project.guide_compilation.request",
+          "project.guide_compilation.execute",
+          "task.queue.read",
+          "task.claim",
+          "submission.create",
+          "submission.read_own",
+          "submission.read_for_review",
+          "review.queue.read",
+          "review.queue.inspect",
+          "review.claim",
+          "review.release",
+          "review.decline_preference",
+          "review.decision",
+          "review.lease.force_release",
+          "review.chain.read",
+          "review.queue.override",
+          "contribution.read_self",
+          "contribution.read_project",
+          "compensation.policy.manage",
+          "compensation.adapter_binding.manage",
+          "compensation.award.read",
+          "compensation.delivery.reconcile",
+          "operations.status.read",
+          "operations.timer.run",
+          "operations.reconcile.run",
+          "operations.outbox.retry",
+          "operations.projection.rebuild",
+          "operations.task.start_override",
+          "operations.submission_gate.repair",
+          "operations.checker.retry",
+          "artifact.binding.read",
+          "artifact.replica.read",
+          "artifact.receipt.read",
+          "artifact.verification_job.read",
+          "artifact.verification_job.retry",
+          "artifact.recovery_attempt.read",
+          "artifact.audit.read",
+          "artifact.guide_source.ingest",
+          "artifact.binding.create",
+          "artifact.verification.execute",
+          "artifact.pending_work.scan",
+          "artifact.put_attempt.resolve",
+          "artifact.guide_source.read",
+          "artifact.checker_input.materialize",
+          "artifact.checker_output.write",
+          "artifact.review_packet.materialize",
+          "audit.read",
+          "audit.export"
+        ],
+        "title": "PermissionId",
+        "type": "string"
+      }
+    }
+  },
+  "operation": {
+    "operationId": "read_permission_definitions_api_v1_authorization_permissions_get",
+    "parameters": [
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PermissionDefinitionsResponse"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Identity verification unavailable.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Read Permission Definitions",
+    "tags": [
+      "authorization"
+    ],
+    "x-workstream-action-id": "authorization.permission_catalogue.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "action_id": "authorization.permission_catalogue.read",
+    "backend_git_sha": "2134c7be05d10c381649872d423e957f9c18caff",
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/authorization/permissions"
+  }
+}

@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 from uuid import uuid4
 
 import httpx2 as httpx
@@ -13,6 +14,7 @@ from jsonschema import Draft202012Validator, ValidationError  # type: ignore[imp
 from workstream_mcp.config import Settings
 from workstream_mcp.errors import SafeFailure
 from workstream_mcp.schemas import (
+    access_read_output_validator,
     authorization_context_output_validator,
     profile_output_validator,
     profile_update_output_validator,
@@ -27,6 +29,7 @@ _PUBLIC_ERROR_CODES = frozenset(
     {
         "actor_deactivated",
         "actor_suspended",
+        "actor_resource_not_found",
         "identity_link_revoked",
         "identity_verification_unavailable",
         "internal_error",
@@ -36,11 +39,21 @@ _PUBLIC_ERROR_CODES = frozenset(
         "permission_not_granted",
         "project_authorization_resource_not_found",
         "rate_limit_exceeded",
+        "scope_not_authorized",
         "service_unavailable",
         "unsupported_subject_kind",
         "validation_error",
     }
 )
+
+ACCESS_READ_PATHS = {
+    "permissions_list": "/api/v1/authorization/permissions",
+    "admin_roles_list": "/api/v1/authorization/admin-role-definitions",
+    "admin_grants_list": "/api/v1/admin-role-grants",
+    "actor_admin_grants_list": "/api/v1/actors/{actor_profile_id}/admin-role-grants",
+    "actor_get": "/api/v1/actors/{actor_profile_id}",
+    "actor_identity_link_get": "/api/v1/actors/{actor_profile_id}/identity-links",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +110,23 @@ class WorkstreamGateway:
             authorization_context_output_validator(),
             correlation_id,
             params={"project_id": project_id},
+        )
+
+    async def access_read(
+        self,
+        name: str,
+        bearer: str,
+        arguments: dict[str, Any],
+        correlation_id: str | None = None,
+    ) -> GatewayResult:
+        """Dispatch a registered read; callers cannot supply an HTTP route."""
+        path = ACCESS_READ_PATHS[name]
+        if "{actor_profile_id}" in path:
+            path = path.format(actor_profile_id=quote(arguments["actor_profile_id"], safe=""))
+        params = {key: str(value) for key, value in arguments.items() if key != "actor_profile_id"}
+        return await self._request(
+            "GET", path, bearer, access_read_output_validator(name), correlation_id,
+            params=params or None,
         )
 
     async def _request(

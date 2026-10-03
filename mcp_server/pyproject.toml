@@ -35,6 +35,12 @@ packages = ["workstream_mcp"]
 "contracts/profile_get.json" = "workstream_mcp/contracts/profile_get.json"
 "contracts/profile_update.json" = "workstream_mcp/contracts/profile_update.json"
 "contracts/authorization_context_get.json" = "workstream_mcp/contracts/authorization_context_get.json"
+"contracts/permissions_list.json" = "workstream_mcp/contracts/permissions_list.json"
+"contracts/admin_roles_list.json" = "workstream_mcp/contracts/admin_roles_list.json"
+"contracts/admin_grants_list.json" = "workstream_mcp/contracts/admin_grants_list.json"
+"contracts/actor_admin_grants_list.json" = "workstream_mcp/contracts/actor_admin_grants_list.json"
+"contracts/actor_get.json" = "workstream_mcp/contracts/actor_get.json"
+"contracts/actor_identity_link_get.json" = "workstream_mcp/contracts/actor_identity_link_get.json"
 
 [tool.hatch.build.targets.sdist]
 include = [

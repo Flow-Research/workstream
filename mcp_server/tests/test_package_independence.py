@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_installed_wheel_cannot_import_backend_source(tmp_path: Path) -> None:
+def test_installed_wheel_starts_without_backend_source(tmp_path: Path) -> None:
     adapter_python = os.environ.get("WORKSTREAM_MCP_WHEEL_PYTHON")
     if adapter_python is None:
         pytest.skip("set WORKSTREAM_MCP_WHEEL_PYTHON to run the clean-wheel proof")
@@ -22,7 +22,10 @@ def test_installed_wheel_cannot_import_backend_source(tmp_path: Path) -> None:
                 "import importlib.util; import pathlib; import workstream_mcp; "
                 "assert importlib.util.find_spec('app') is None; "
                 "assert not pathlib.Path(workstream_mcp.__file__).resolve().is_relative_to("
-                f"pathlib.Path({str(ROOT / 'mcp_server')!r}).resolve())"
+                f"pathlib.Path({str(ROOT / 'mcp_server')!r}).resolve()); "
+                "from workstream_mcp.config import Settings; "
+                "from workstream_mcp.server import create_app; "
+                "create_app(Settings(api_url='http://127.0.0.1:8000'))"
             ),
         ],
         cwd=tmp_path,

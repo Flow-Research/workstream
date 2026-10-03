@@ -3,23 +3,25 @@
 - Disposition: Planned
 - Prepared by: OxVictor
 - Purpose: Contributor implementation guide with confirmed caller-token design
-- Repository baseline reconciled: `2a3a392fe014583a0675c0a3e1f5612daba0fda4`
+- Repository baseline reconciled: `2134c7be0`
 - Pinned API handoff baseline: `6feef39834737eed106773fdaed6003561fd021a`
 - Delivered foundation: [One-tool profile foundation](WS-MCP-002-01.md), merged in PR #418.
-- Current change: [Own profile editing and project authorization context](WS-MCP-002-02.md).
-- Next usable boundary: WS-MCP-002-03 administrative reads after this change is
+- Self-service: [Own profile editing and project authorization context](WS-MCP-002-02.md), merged in PR #438.
+- Current change: [Administrative read projections](WS-MCP-002-03.md).
+- Next usable boundary: WS-MCP-002-04 administrative grant mutations after this change is
   reviewed and merged; no later tool starts automatically.
 
 ## Current implementation
 
 [`mcp_server/`](../../../mcp_server/README.md) is an independently packaged
-Streamable HTTP adapter with three self-service tools: profile read, profile
-update and exact-project authorization context. It includes a container,
+Streamable HTTP adapter with nine tools: three self-service tools for profile read,
+profile update and exact-project authorization context, plus six administrative
+reads for permission/role definitions, grants and actor/identity projections. It includes a container,
 selected response-schema validation and additive CI. Its integration tests
 exercise the installed adapter against the real Workstream API. Workstream
 still owns token verification and authorization. This is delivered packaging,
 not proof of a deployed public gateway, production Flow integration or the
-remaining 24 tools. The initiative remains Planned because that larger scope
+remaining 18 tools. The initiative remains Planned because that larger scope
 is unfinished. Historical hashes below describe their stated design/proof;
 each implemented binding records its current source baseline separately.
 
@@ -388,12 +390,13 @@ The maintainer's [clarification](https://github.com/Flow-Research/workstream/pul
 
 The caller-token decision is settled. WS-MCP-002-01 delivered the independent
 profile-read foundation in PR #418. WS-MCP-002-02 delivers profile editing and
-exact-project authorization context, bringing the catalogue to three tools.
+exact-project authorization context. WS-MCP-002-03 adds six administrative reads,
+bringing the catalogue to nine tools.
 Reconcile each later binding with its public API when that chunk starts; do not
 reopen credential architecture or require all 27 implementations at once.
 
-The following stable IDs replace the four broad headings. Rows 01 and 02 are
-implemented; rows 03–10 remain planned, with proposed ownership under `mcp_server/`, not
+The following stable IDs replace the four broad headings. Rows 01 through 03 are
+implemented; rows 04–10 remain planned, with proposed ownership under `mcp_server/`, not
 claims that later tools exist. Each row is one bounded outcome. Tool names omit
 only the common `workstream_` prefix; all 27 names in section 6 appear exactly
 once. Each row also owns its change record and affected tests/docs, not backend
@@ -435,16 +438,18 @@ Review will follow the repository's risk routing, including security and archite
 
 PR #418 delivered [WS-MCP-002-01](WS-MCP-002-01.md), and
 [WS-MCP-002-02](WS-MCP-002-02.md) adds the two remaining self-service tools.
-The resulting catalogue has three of the proposed 27 tools: profile read,
-profile update and exact-project authorization context. The package remains an
+The self-service catalogue has three tools: profile read,
+profile update and exact-project authorization context. [WS-MCP-002-03](WS-MCP-002-03.md)
+adds six administrative reads, bringing the catalogue to nine of the proposed 27 tools.
+The package remains an
 independently deployed custom bearer-header adapter, not a public deployment.
 
-The next usable boundary is WS-MCP-002-03: authorization definitions and
-administrative read projections. Start it only after this chunk is reviewed and
+The next usable boundary is WS-MCP-002-04: administrative grant mutations.
+Start it only after this chunk is reviewed and
 merged, recapture each selected operation from then-current backend OpenAPI, and
 preserve the existing fixed-route, caller-token and no-private-import boundaries.
 
-Keep the remaining 24-tool inventory and later mutation boundaries. Guide uploads/setup
+Keep the remaining 18-tool inventory and later mutation boundaries. Guide uploads/setup
 completion and missing policy-selector recovery remain outside that inventory;
 do not silently add tools to repair those workflow limits. GitHub permissions
 govern contribution; these technical prerequisites are not another approval system.

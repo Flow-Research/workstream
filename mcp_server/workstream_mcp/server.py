@@ -25,6 +25,7 @@ from workstream_mcp.schemas import (
     profile_output_schema,
     profile_update_output_schema,
 )
+from workstream_mcp.tools import access_reads
 from workstream_mcp.tools.context import (
     TOOL_NAME as AUTHORIZATION_CONTEXT_TOOL_NAME,
 )
@@ -103,13 +104,14 @@ def create_app(settings: Settings) -> Starlette:
     profile_output_schema()
     profile_update_output_schema()
     authorization_context_output_schema()
+    access_definitions = access_reads.definitions()
     gateway: WorkstreamGateway | None = None
 
     async def list_tools(
         request: ServerRequestContext[Any], params: PaginatedRequestParams | None
     ) -> ListToolsResult:
         return ListToolsResult(
-            tools=[get_definition(), update_definition(), context_definition()]
+            tools=[get_definition(), update_definition(), context_definition(), *access_definitions]
         )
 
     async def call_tool(
@@ -119,6 +121,7 @@ def create_app(settings: Settings) -> Starlette:
             PROFILE_GET_TOOL_NAME,
             PROFILE_UPDATE_TOOL_NAME,
             AUTHORIZATION_CONTEXT_TOOL_NAME,
+            *access_reads.TOOL_NAMES,
         }:
             return adapter_failure("unknown_tool", status=404)
         arguments = params.arguments if params.arguments is not None else {}
@@ -140,6 +143,10 @@ def create_app(settings: Settings) -> Starlette:
             return await invoke_get(gateway, bearer, correlation_id)
         if params.name == PROFILE_UPDATE_TOOL_NAME:
             return await invoke_update(gateway, bearer, correlation_id, arguments)
+        if params.name in access_reads.TOOL_NAMES:
+            return await access_reads.invoke(
+                gateway, params.name, bearer, correlation_id, arguments
+            )
         return await invoke_context(gateway, bearer, correlation_id, arguments)
 
     server: Server[Any] = Server(

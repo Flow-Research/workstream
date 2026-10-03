@@ -36,6 +36,39 @@ AUTHORIZATION_CONTEXT_INPUT_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+_UUID_INPUT = {"type": "string", "format": "uuid", "minLength": 36, "maxLength": 36}
+_ACTOR_INPUT = {
+    "type": "object",
+    "properties": {"actor_profile_id": _UUID_INPUT},
+    "required": ["actor_profile_id"],
+    "additionalProperties": False,
+}
+_GRANT_PROPERTIES = {
+    "scope_type": {"type": "string", "enum": ["system", "project"]},
+    "scope_project_id": _UUID_INPUT,
+    "status": {"type": "string", "enum": ["active", "revoked", "all"]},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+    "cursor": {"type": "string", "maxLength": 512},
+}
+ACCESS_READ_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "permissions_list": EMPTY_INPUT_SCHEMA,
+    "admin_roles_list": EMPTY_INPUT_SCHEMA,
+    "admin_grants_list": {
+        "type": "object",
+        "properties": _GRANT_PROPERTIES,
+        "required": ["scope_type"],
+        "additionalProperties": False,
+    },
+    "actor_admin_grants_list": {
+        "type": "object",
+        "properties": {"actor_profile_id": _UUID_INPUT, **_GRANT_PROPERTIES},
+        "required": ["actor_profile_id", "scope_type"],
+        "additionalProperties": False,
+    },
+    "actor_get": _ACTOR_INPUT,
+    "actor_identity_link_get": _ACTOR_INPUT,
+}
+
 
 class ContractError(RuntimeError):
     """The reviewed packaged contract is absent or invalid."""
@@ -85,7 +118,7 @@ def _selected_schema(document: dict[str, Any]) -> dict[str, Any]:
     raise ContractError("contract does not contain an output schema")
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=9)
 def _contract_output_schema(name: str) -> dict[str, Any]:
     filename = f"{name}.json"
     resource = files("workstream_mcp").joinpath(f"contracts/{filename}")
@@ -121,7 +154,7 @@ def authorization_context_output_schema() -> dict[str, Any]:
     return _contract_output_schema("authorization_context_get")
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=9)
 def _contract_output_validator(name: str) -> Draft202012Validator:
     return Draft202012Validator(
         _contract_output_schema(name),
@@ -139,3 +172,16 @@ def profile_update_output_validator() -> Draft202012Validator:
 
 def authorization_context_output_validator() -> Draft202012Validator:
     return _contract_output_validator("authorization_context_get")
+
+
+def access_read_output_schema(name: str) -> dict[str, Any]:
+    """Load one of the six reviewed administrative read projections."""
+    if name not in ACCESS_READ_INPUT_SCHEMAS:
+        raise ContractError("unknown administrative read contract")
+    return _contract_output_schema(name)
+
+
+def access_read_output_validator(name: str) -> Draft202012Validator:
+    """Validate a bounded administrative projection, including formats."""
+    access_read_output_schema(name)
+    return _contract_output_validator(name)

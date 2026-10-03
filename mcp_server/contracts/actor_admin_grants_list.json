@@ -1,0 +1,631 @@
+{
+  "canonical_sha256": "9bae7b950ead557b14ee4844494a31b0eea510afceaa70c10dbb2e8ab409b055",
+  "components": {
+    "schemas": {
+      "AdminRole": {
+        "description": "Closed administrative role tokens.",
+        "enum": [
+          "access_administrator",
+          "operator",
+          "project_manager",
+          "finance_authority",
+          "audit_authority"
+        ],
+        "title": "AdminRole",
+        "type": "string"
+      },
+      "AdminRoleGrantCollectionResponse": {
+        "additionalProperties": false,
+        "description": "Scope-filtered grant collection page.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminRoleGrantResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "next_cursor"
+        ],
+        "title": "AdminRoleGrantCollectionResponse",
+        "type": "object"
+      },
+      "AdminRoleGrantResponse": {
+        "additionalProperties": false,
+        "description": "Privacy-bounded immutable administrative grant history.",
+        "properties": {
+          "grant_id": {
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "grant_reason": {
+            "title": "Grant Reason",
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "title": "Granted At",
+            "type": "string"
+          },
+          "granted_by_admin_role_grant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granted By Admin Role Grant Id"
+          },
+          "granted_by_ref": {
+            "title": "Granted By Ref",
+            "type": "string"
+          },
+          "granted_by_ref_kind": {
+            "enum": [
+              "actor_profile",
+              "system_principal"
+            ],
+            "title": "Granted By Ref Kind",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by_actor_profile_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By Actor Profile Id"
+          },
+          "revoked_by_admin_role_grant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By Admin Role Grant Id"
+          },
+          "revoked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked Reason"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AdminRole"
+          },
+          "scope_project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Project Id"
+          },
+          "scope_type": {
+            "$ref": "#/components/schemas/AdminScope"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target_actor_profile_id": {
+            "format": "uuid",
+            "title": "Target Actor Profile Id",
+            "type": "string"
+          },
+          "version": {
+            "enum": [
+              1,
+              2
+            ],
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "grant_id",
+          "target_actor_profile_id",
+          "role",
+          "scope_type",
+          "scope_project_id",
+          "status",
+          "version",
+          "granted_by_ref_kind",
+          "granted_by_ref",
+          "granted_by_admin_role_grant_id",
+          "grant_reason",
+          "granted_at",
+          "revoked_by_actor_profile_id",
+          "revoked_by_admin_role_grant_id",
+          "revoked_reason",
+          "revoked_at"
+        ],
+        "title": "AdminRoleGrantResponse",
+        "type": "object"
+      },
+      "AdminScope": {
+        "description": "Administrative grant scope tokens.",
+        "enum": [
+          "system",
+          "project"
+        ],
+        "title": "AdminScope",
+        "type": "string"
+      },
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "detail",
+          "error"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "operationId": "read_actor_admin_role_grants_api_v1_actors__actor_profile_id__admin_role_grants_get",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "actor_profile_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Actor Profile Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "query",
+        "name": "scope_type",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/AdminScope"
+        }
+      },
+      {
+        "in": "query",
+        "name": "scope_project_id",
+        "required": false,
+        "schema": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Scope Project Id"
+        }
+      },
+      {
+        "in": "query",
+        "name": "status",
+        "required": false,
+        "schema": {
+          "default": "active",
+          "enum": [
+            "active",
+            "revoked",
+            "all"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      {
+        "in": "query",
+        "name": "limit",
+        "required": false,
+        "schema": {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      {
+        "in": "query",
+        "name": "cursor",
+        "required": false,
+        "schema": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cursor"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AdminRoleGrantCollectionResponse"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Resource not found.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Identity verification unavailable.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Read Actor Admin Role Grants",
+    "tags": [
+      "authorization"
+    ],
+    "x-workstream-action-id": "actor.admin_role_grant_history.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "action_id": "actor.admin_role_grant_history.read",
+    "backend_git_sha": "7f8acfaf29bfc7de613485481f81b8ef1557abd7",
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/actors/{actor_profile_id}/admin-role-grants"
+  }
+}

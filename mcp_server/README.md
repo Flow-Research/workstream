@@ -1,14 +1,22 @@
-# Workstream MCP Self-Service Adapter
+# Workstream MCP Adapter
 
-An independently installed adapter exposing three caller-owned tools:
+An independently installed adapter exposing nine tools under the caller's authority:
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
 - `workstream_authorization_context_get` calls
   `GET /api/v1/actors/me/authorization-context` for one supplied project.
+- `workstream_permissions_list` calls `GET /api/v1/authorization/permissions`.
+- `workstream_admin_roles_list` calls `GET /api/v1/authorization/admin-role-definitions`.
+- `workstream_admin_grants_list` calls `GET /api/v1/admin-role-grants`.
+- `workstream_actor_admin_grants_list` calls
+  `GET /api/v1/actors/{actor_profile_id}/admin-role-grants`.
+- `workstream_actor_get` calls `GET /api/v1/actors/{actor_profile_id}`.
+- `workstream_actor_identity_link_get` calls
+  `GET /api/v1/actors/{actor_profile_id}/identity-links`.
 
 Each call forwards the caller's bearer to its fixed public Workstream operation.
-There are no MCP resources, prompts or administrative tools in this package.
+There are no MCP resources, prompts or administrative mutation tools in this package.
 
 ## Authentication Boundary
 
@@ -53,6 +61,18 @@ timestamps, but does not grant roles. Lifecycle and access denials follow
 Workstream. Errors are MCP tool failures with safe status/code information, not
 fabricated results.
 
+Definition tools take `{}` and return definitions, not the caller's effective
+permissions. Actor reads require a UUID `actor_profile_id`. Grant lists require
+`scope_type` (`system` or `project`), with `scope_project_id` for project scope;
+the actor-history tool also requires `actor_profile_id`. Optional `status`
+(`active`, `revoked`, `all`), `limit` (1-100) and `cursor` (up to 512 characters)
+are forwarded only when supplied. Omission uses backend defaults; null is not a
+query value. Cursors are opaque: retain and return them unchanged with the same
+scope and filters. Workstream validates cursor syntax and current authority on
+every call; these grant cursors are not cryptographically bound to query scope.
+Administrative projections exclude contact details and
+external identity subjects; read calls may still update admission/audit state.
+
 ## Deployment Boundary
 
 Build from this directory only:
@@ -75,7 +95,7 @@ retries. A profile-update transport failure, upstream 5xx response, or unexpecte
 success/redirect response is reported as non-retryable uncertain execution;
 the adapter does not retry the unkeyed mutation. Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the three selected public contracts in `contracts/`; upstream drift
+pinned to the nine selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 
@@ -92,10 +112,10 @@ Real API tests require the repository's isolated PostgreSQL runner, controlled
 fixture identities and a separate installed adapter process. Never supply a
 production database or real user token to a test. Integration and container
 commands are recorded in the additive MCP workflow and the
-[current chunk record](../.commitrail/initiatives/WS-MCP-002/WS-MCP-002-02.md).
+[current chunk record](../.commitrail/initiatives/WS-MCP-002/WS-MCP-002-03.md).
 Selected schemas are compared with the running backend OpenAPI operations;
 custom admission, lifecycle and exact-project semantics are exercised separately.
 
 Local fixture evidence does not certify the deployed Flow provider, a public
-gateway or all MCP clients. The remaining 24 mapped tools belong to later
+gateway or all MCP clients. The remaining 18 mapped tools belong to later
 bounded changes in the [initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md).

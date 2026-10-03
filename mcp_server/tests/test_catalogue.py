@@ -5,6 +5,7 @@ from typing import Any
 from starlette.testclient import TestClient
 
 from workstream_mcp.schemas import (
+    ACCESS_READ_INPUT_SCHEMAS,
     AUTHORIZATION_CONTEXT_INPUT_SCHEMA,
     EMPTY_INPUT_SCHEMA,
     PROFILE_UPDATE_INPUT_SCHEMA,
@@ -58,11 +59,18 @@ def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
         PROFILE_GET_TOOL_NAME,
         PROFILE_UPDATE_TOOL_NAME,
         CONTEXT_TOOL_NAME,
+        "workstream_permissions_list",
+        "workstream_admin_roles_list",
+        "workstream_admin_grants_list",
+        "workstream_actor_admin_grants_list",
+        "workstream_actor_get",
+        "workstream_actor_identity_link_get",
     ]
     assert [item["inputSchema"] for item in listed] == [
         EMPTY_INPUT_SCHEMA,
         PROFILE_UPDATE_INPUT_SCHEMA,
         AUTHORIZATION_CONTEXT_INPUT_SCHEMA,
+        *ACCESS_READ_INPUT_SCHEMAS.values(),
     ]
 
 

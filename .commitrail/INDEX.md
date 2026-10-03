@@ -7,7 +7,7 @@ for current product capability.
 | Initiative | Durable disposition | Next usable boundary |
 |---|---|---|
 | [WS-DB-002](initiatives/WS-DB-002/OVERVIEW.md) | Complete | Shared UUIDv7 record generation, native-UUID relationships and fresh v0.1 baseline; natural-owner retry custody and aligned CI/local setup |
-| [WS-MCP-002](initiatives/WS-MCP-002/OVERVIEW.md) | Planned | Three self-service tools delivered through WS-MCP-002-02; 24 tools remain and WS-MCP-002-03 administrative reads are next |
+| [WS-MCP-002](initiatives/WS-MCP-002/OVERVIEW.md) | Planned | Nine tools through WS-MCP-002-03: self-service and administrative reads; 18 tools remain and WS-MCP-002-04 administrative grant mutations are next |
 | [WS-ARCH-001](initiatives/WS-ARCH-001/OVERVIEW.md) | Planned | Source storage and inert AUTH contracts are delivered; originating receipt custody, shared acceptance and routing integration remain. True admission and automated acceptance retain separate prerequisites. |
 | [WS-ART-001](initiatives/WS-ART-001/OVERVIEW.md) | Planned | Exact checker input/output custody and packet foundations are delivered; routing integration, remediation and public intake remain. |
 | [WS-AUTH-001](initiatives/WS-AUTH-001/OVERVIEW.md) | Planned | AUTH-19A inert source commitments are delivered; originating AUTH preparation, atomic receipt custody and scoped routing activation remain. |

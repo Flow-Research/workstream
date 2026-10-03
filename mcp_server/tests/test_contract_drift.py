@@ -18,6 +18,12 @@ OPERATIONS = {
     "profile_get": ("/api/v1/actors/me", "get"),
     "profile_update": ("/api/v1/actors/me", "patch"),
     "authorization_context_get": ("/api/v1/actors/me/authorization-context", "get"),
+    "permissions_list": ("/api/v1/authorization/permissions", "get"),
+    "admin_roles_list": ("/api/v1/authorization/admin-role-definitions", "get"),
+    "admin_grants_list": ("/api/v1/admin-role-grants", "get"),
+    "actor_admin_grants_list": ("/api/v1/actors/{actor_profile_id}/admin-role-grants", "get"),
+    "actor_get": ("/api/v1/actors/{actor_profile_id}", "get"),
+    "actor_identity_link_get": ("/api/v1/actors/{actor_profile_id}/identity-links", "get"),
 }
 
 
