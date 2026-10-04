@@ -293,6 +293,14 @@ and compensation specification control contribution recognition, award
 eligibility, and fulfillment boundaries. Older chunk specifications remain
 implementation history until their owning migrations replace the runtime.
 
+## Terminal Client
+
+The independent [Go CLI](cli/README.md) provides `workstream whoami` and
+`workstream project access PROJECT_ID` through the currently public REST API.
+Both support human-readable and JSON output, using the caller's Flow token.
+The first source package is buildable; further workflow commands and published
+binaries remain planned.
+
 ## Repository-Native Human-Agent SDLC
 
 Workstream uses a Repository-Native Human-Agent SDLC. Plans, tests, review, and

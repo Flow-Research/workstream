@@ -315,9 +315,12 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  cli-public-contract:
+    uses: ./.github/workflows/cli.yml
+
   test:
     if: ${{ always() }}
-    needs: [auth-boundary-preflight, lanes, minio-image]
+    needs: [auth-boundary-preflight, lanes, minio-image, cli-public-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -405,12 +408,13 @@ jobs:
           path: backend/.ci/download
           merge-multiple: false
 
-      - name: Require preflight and every semantic lane
+      - name: Require preflight, every semantic lane and CLI public contract
         if: ${{ always() }}
         env:
           PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}
           LANES_RESULT: ${{ needs.lanes.result }}
-        run: test "${PREFLIGHT_RESULT}" = success && test "${LANES_RESULT}" = success
+          CLI_RESULT: ${{ needs.cli-public-contract.result }}
+        run: test "${PREFLIGHT_RESULT}" = success && test "${LANES_RESULT}" = success && test "${CLI_RESULT}" = success
 
       - name: Merge and independently validate exact lane custody
         working-directory: backend

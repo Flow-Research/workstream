@@ -139,9 +139,12 @@ class LightweightAgentGateTests(unittest.TestCase):
         )
         self.assertIn(
             "  test:\n    if: ${{ always() }}\n"
-            "    needs: [auth-boundary-preflight, lanes, minio-image]", workflow
+            "    needs: [auth-boundary-preflight, lanes, minio-image, cli-public-contract]", workflow
         )
-        self.assertIn("Require preflight and every semantic lane", workflow)
+        self.assertIn("Require preflight, every semantic lane and CLI public contract", workflow)
+        self.assertIn(
+            "  cli-public-contract:\n    uses: ./.github/workflows/cli.yml", workflow
+        )
         self.assertIn("python -m scripts.merge_test_lane_evidence", workflow)
         self.assertIn("scripts/validate_test_lane_evidence.py", workflow)
         self.assertIn(
@@ -214,11 +217,12 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertRegex(lanes, r"(?m)^    needs: minio-image$")
         self.assertNotIn("needs: auth-boundary-preflight", lanes)
         step = workflow.split(
-            "      - name: Require preflight and every semantic lane\n", 1
+            "      - name: Require preflight, every semantic lane and CLI public contract\n", 1
         )[1].split("\n      - name:", 1)[0]
         self.assertIn("if: ${{ always() }}", step)
         self.assertIn("PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}", step)
         self.assertIn("LANES_RESULT: ${{ needs.lanes.result }}", step)
+        self.assertIn("CLI_RESULT: ${{ needs.cli-public-contract.result }}", step)
         guard = re.search(r"(?m)^        run: (.+)$", step)
         self.assertIsNotNone(guard)
         for preflight in ("success", "failure", "cancelled", "skipped", "", "unknown"):
@@ -226,7 +230,7 @@ class LightweightAgentGateTests(unittest.TestCase):
                 with self.subTest(preflight=preflight, lanes=lanes_result):
                     result = subprocess.run(
                         ["bash", "-e", "-c", guard[1]],
-                        env={"PREFLIGHT_RESULT": preflight, "LANES_RESULT": lanes_result},
+                        env={"PREFLIGHT_RESULT": preflight, "LANES_RESULT": lanes_result, "CLI_RESULT": "success"},
                         capture_output=True,
                         check=False,
                     )
@@ -234,6 +238,15 @@ class LightweightAgentGateTests(unittest.TestCase):
                         result.returncode == 0,
                         preflight == lanes_result == "success",
                     )
+        for cli_result in ("failure", "cancelled", "skipped", "", "unknown"):
+            with self.subTest(cli=cli_result):
+                result = subprocess.run(
+                    ["bash", "-e", "-c", guard[1]],
+                    env={"PREFLIGHT_RESULT": "success", "LANES_RESULT": "success", "CLI_RESULT": cli_result},
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
 
     def test_postgres_storage_is_bounded_and_disk_contracts_remain(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

@@ -8,6 +8,7 @@ for current product capability.
 |---|---|---|
 | [WS-DB-002](initiatives/WS-DB-002/OVERVIEW.md) | Complete | Shared UUIDv7 record generation, native-UUID relationships and fresh v0.1 baseline; natural-owner retry custody and aligned CI/local setup |
 | [WS-MCP-002](initiatives/WS-MCP-002/OVERVIEW.md) | Planned | Nine tools through WS-MCP-002-03: self-service and administrative reads; 18 tools remain and WS-MCP-002-04 administrative grant mutations are next |
+| [WS-CLI-001](initiatives/WS-CLI-001/OVERVIEW.md) | Planned | Two public Go CLI reads delivered through WS-CLI-001-01; profile editing and later public workflows remain |
 | [WS-ARCH-001](initiatives/WS-ARCH-001/OVERVIEW.md) | Planned | Source storage, inert AUTH contracts, TASK request reservation and hidden exact AUTH preparation are delivered; CON-07/shared acceptance prerequisites are next for the selected automated path, followed by hidden handlers and atomic routing activation. True admission does not depend on CON/shared acceptance. |
 | [WS-ART-001](initiatives/WS-ART-001/OVERVIEW.md) | Planned | Exact checker input/output custody and packet foundations are delivered; routing integration, remediation and public intake remain. |
 | [WS-AUTH-001](initiatives/WS-AUTH-001/OVERVIEW.md) | Planned | AUTH-19A commitments, TASK request reservation and ARCH-04E2-A hidden strict PREP matching are delivered; the action remains unavailable, with CON-07/shared acceptance, atomic receipt custody and scoped activation still required for the automated path. |
