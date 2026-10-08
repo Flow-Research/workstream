@@ -36,6 +36,9 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
 3. Use existing AUTH PREP with live system Operator authority before the REV
    advisory/controller lock. Bind the exact singleton, operation, expected
    generation, source/target phases, request, manifest and server observations.
+   For this action only, AUTH locks the actor profile FOR NO KEY UPDATE, retaining
+   link/grant FOR UPDATE: actor foreign-key reads may complete under a prior REV
+   writer, while actor status changes/revocation still serialize.
    AUTH consumes after locked validation; history and controller change commit
    with its immutable decision in the caller's root transaction. Commit-time
    closure requires exactly one N/P -> N+1/Q update, history row and matching
@@ -75,7 +78,9 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
 - Existing TASK accepted-effects and CON participation owner modules and their
   consumer-owned typed fence ports; no private cross-owner SQL/imports.
 - AUTH `review_contracts.py`, `catalogue.py`, `kernel.py`, `prepared.py`, runtime
-  resource/digest/audit contracts, and focused lifecycle resource/PREP adapter
+  `repository.py` for lifecycle-only actor NO KEY UPDATE custody,
+  resource/digest/audit contracts, `backend/app/modules/audit/schemas.py` for the
+  exact UUID lifecycle target kind, and focused lifecycle resource/PREP adapter
   modules. Existing composition roots only for explicit controller construction.
 - One successor Alembic migration, model registration, exact schema inventory;
   focused REV lifecycle and AUTH tests plus affected acceptance/participation
@@ -84,7 +89,7 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
 - Exact behavior ownership and lane inventory files/tests; no CI gate changes.
 - This record; REV/AUTH/CON/ARCH/POL current overviews, ARCH/AUTH/POL current
   plans/maps, Commitrail index; canonical review/compensation specifications,
-  relevant authorization custody docs, README and roadmap. Local roadmap exports
+  relevant authorization custody docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
   only if present. Historical completed records remain historical.
 
 ## Prohibited

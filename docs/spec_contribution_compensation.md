@@ -284,9 +284,10 @@ accepted/completed effects in one caller-owned transaction for either source.
 No production recognition route, authorized acceptance operation, reviewer
 participant or fulfillment consumer is registered. Before activation,
 originating Review/FinalAcceptance authority, mandatory source receipts and
-fulfillment-root ordinal custody must be installed; retained pre-authority
+complete atomic consequences must be installed; retained pre-authority
 sources and dependent contribution/award rows must cause refusal unchanged,
-never receipt backfill or deletion.
+never receipt backfill or deletion. REV-12A4A supplies scoped lifecycle control;
+fulfillment-root ordinal custody is required only before fulfillment activation.
 
 Canonical fields:
 
@@ -1057,8 +1058,8 @@ hidden FinalAcceptance/TASK/CON composition, while
 mandatory persisted receipt custody remains required before production
 composition or consumption. Actual CON root
 storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. Later REV-12A drain/operator
-work extends this same controller; it is not a prerequisite on live human
+fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
 Every creation, requeue, successor, retry-root, and repair path that can admit a

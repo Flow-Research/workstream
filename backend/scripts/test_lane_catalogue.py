@@ -23,6 +23,8 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/reviews/lifecycle/test_transitions.py",
+    "tests/reviews/lifecycle/test_authority_binding.py",
     "tests/artifacts/test_review_packet_contract.py",
     "tests/authorization/post_submit/test_atomicity.py",
     "tests/authorization/post_submit/test_concurrency.py",
@@ -396,6 +398,7 @@ PROJECT_MODULES = (
 )
 
 TASK_MODULES = (
+    "tests/reviews/lifecycle/test_participant_control.py",
     "tests/reviews/decision/test_contracts.py",
     "tests/reviews/decision/test_storage.py",
     "tests/reviews/decision/test_migration.py",
@@ -536,6 +539,7 @@ LANES = (
             "tests/reviews/packet/test_storage.py",
             "tests/reviews/lifecycle/test_contracts.py",
             "tests/reviews/lifecycle/test_storage.py",
+            "tests/reviews/lifecycle/test_transition_storage.py",
             "tests/reviews/lifecycle/test_fence.py",
             "tests/reviews/lifecycle/test_migration.py",
             "tests/reviews/acceptance/test_contracts.py",

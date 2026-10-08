@@ -32,6 +32,7 @@ from app.modules.authorization.domain.action_groups import (
 )
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.audit_targets import project_authority_audit_target
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.prepared_service import (
     fixed_service_scope_project, fixed_service_resource_matches,
 )
@@ -120,6 +121,7 @@ ServiceContextRevalidator = Callable[
 
 _ADMIN_ACTIONS = frozenset(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ,
         ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ,
         ActionId.ADMIN_ROLE_GRANT_LIST,
@@ -166,6 +168,7 @@ _SERIALIZED_ADMIN_READS = frozenset(
 ) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
 _ADMIN_MUTATIONS = frozenset(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ACTOR_SERVICE_PROVISION,
@@ -205,6 +208,7 @@ _ARTIFACT_INTERNAL_RESOURCES = {
 
 _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE: ReviewLifecycleActivationContract,
         ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ: PermissionCatalogueResourceContext,
         ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ: AdminRoleDefinitionsResourceContext,
         ActionId.ADMIN_ROLE_GRANT_LIST: AdminRoleGrantCollectionResourceContext,
@@ -445,7 +449,8 @@ class AuthorizationService:
                 )
             else:
                 locked = await self._admin.lock_request_actor(
-                    context.identity_link_id, context.actor_profile_id
+                    context.identity_link_id, context.actor_profile_id,
+                    preserve_foreign_key_reads=(action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE),
                 )
             context = self._locked_human_context(locked, context)
             if action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE and scope.grant_id is None:
@@ -458,6 +463,7 @@ class AuthorizationService:
                 scope_project_id=scope.project_id,
                 system_scope_only=scope.project_id is None,
                 for_update=True,
+                **({"allowed_roles": (AdminRole.OPERATOR,)} if action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE else {}),
                 **adapter_bindings.finance_authority_grant_filters(action_id),
                 **contribution_policies.policy_finance_grant_filters(action_id),
             )

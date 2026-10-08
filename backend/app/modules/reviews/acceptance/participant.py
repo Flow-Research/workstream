@@ -39,9 +39,9 @@ class FinalAcceptanceParticipant:
             checked = FinalAcceptanceRequest.model_validate(request)
         except (TypeError, ValueError, ValidationError) as exc:
             raise FinalAcceptanceConflict("final_acceptance_conflict") from exc
-        await self._fence.acquire(checked.expected_generation)
+        lifecycle = await self._fence.acquire(checked.expected_generation)
         try:
-            return await self._participate(checked)
+            return await self._participate(checked, lifecycle)
         except (
             TaskAcceptedEffectsUnavailable, ContributionParticipationConflict,
             ContributionParticipationUnavailable,
@@ -49,13 +49,15 @@ class FinalAcceptanceParticipant:
         ) as exc:
             raise FinalAcceptanceConflict("final_acceptance_conflict") from exc
 
-    async def _participate(self, request: FinalAcceptanceRequest) -> FinalAcceptanceResult:
+    async def _participate(self, request: FinalAcceptanceRequest, lifecycle) -> FinalAcceptanceResult:
         source, task = request.acceptance, request.task_effects
         prepared = TaskAcceptedPreparation.model_validate(
             await self._tasks.lock_accepted_effects(
                 task, expected_generation=request.expected_generation,
             )
         )
+        if prepared.disposition == "new" and (lifecycle.phase != "live" or lifecycle.generation <= 0):
+            raise FinalAcceptanceConflict("lifecycle is not live")
         if prepared.locked_review_policy_id != source.policy_context_ref:
             raise FinalAcceptanceConflict("final_acceptance_conflict")
         if source.acceptance_source == "human_review":

@@ -1,6 +1,7 @@
 """Caller transaction, rollback, and canonical fence proof."""
 
 import pytest
+
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
@@ -11,6 +12,8 @@ from tests.contributions.records.support import contribution_source, rows
 from tests.reviews.acceptance.support import insert_acceptance
 
 from .support import participant, request_for
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 async def test_later_sql_failure_rolls_back_acceptance_contribution_and_awards(
@@ -23,7 +26,7 @@ async def test_later_sql_failure_rolls_back_acceptance_contribution_and_awards(
         async with h.factory() as session:
             with pytest.raises(DBAPIError, match="division by zero"):
                 async with session.begin():
-                    await PostgresJointLifecycleMutationFence(session).acquire(0)
+                    await PostgresJointLifecycleMutationFence(session).acquire(2)
                     await insert_acceptance(session, h.acceptance)
                     result = await participant(session).participate_submitter(request)
                     assert len(result.awards) == 2

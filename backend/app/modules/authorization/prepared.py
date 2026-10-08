@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
+from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
+from app.modules.authorization.prepared_lifecycle_replay import validate_lifecycle_replay
+from app.modules.reviews.api.lifecycle import LifecycleTransitionCommand
 
 from copy import Error as CopyError
 from contextlib import asynccontextmanager
@@ -193,6 +196,7 @@ class _PreparedAuthorizationBinding:
     post_submit_prepare_context: dict | None = None
     routing_request: TaskRoutingRequestFacts | None = None
     task_authority_context: TaskAuthorityResourceContext | None = None
+    lifecycle_command: LifecycleTransitionCommand | None = None
     project_create_operation_id: UUID | None = None
     project_create_project_id: UUID | None = None
     project_create_generation: int | None = None
@@ -605,6 +609,8 @@ class PreparedAuthorizationService:
             or issuance.binding.assignment_invalidation_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid assignment reconciliation authority")
+        if not lifecycle_matches(issuance.binding.lifecycle_command, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid lifecycle authority")
         if expected_action_id is ROUTE and not post_submit_routing_prepare_matches(
             issuance.binding.routing_request, final_resource_context,
         ):
@@ -721,7 +727,7 @@ class PreparedAuthorizationService:
         issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
-            replay = validate_submission_replay if expected_action_id in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE} else validate_post_submit_replay if expected_action_id in POST_SUBMIT_ACTIONS else validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
+            replay = validate_lifecycle_replay if expected_action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE else validate_submission_replay if expected_action_id in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE} else validate_post_submit_replay if expected_action_id in POST_SUBMIT_ACTIONS else validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
             await replay(
                 self,
                 issuance,
@@ -924,6 +930,7 @@ class PreparedAuthorizationService:
             ),
             submission_policy_context=submission_policy_context,
             submission_policy_resource_digest=submission_policy_resource_digest,
+            lifecycle_command=parse_lifecycle_prepare(action_id, caller_input, scope, self._context),
             task_authority_context=parse_task_authority_binding(
                 action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
                 caller_input.idempotency_key,

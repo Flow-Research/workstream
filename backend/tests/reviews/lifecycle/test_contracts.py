@@ -47,5 +47,5 @@ def test_phase_projection_agrees():
     )
     assert (
         ACTION_BY_ID[ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE].availability
-        is ActionAvailability.PLANNED
+        is ActionAvailability.ACTIVE
     )

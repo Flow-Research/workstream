@@ -20,10 +20,22 @@ class ContributionParticipationConflict(RuntimeError):
     """A replay differs from the immutable contribution or award facts."""
 
 
+class ParticipationLifecycleFacts(Protocol):
+    """Read-only scalar phase facts from the externally owned canonical fence."""
+
+    @property
+    def phase(self) -> str:
+        ...
+
+    @property
+    def generation(self) -> int:
+        ...
+
+
 class ParticipationLifecycleFence(Protocol):
     """Acquire only the canonical lifecycle fence owned by external composition."""
 
-    async def acquire(self, expected_generation: int) -> object:
+    async def acquire(self, expected_generation: int) -> ParticipationLifecycleFacts:
         """Hold the expected generation through the caller's root transaction."""
         ...
 

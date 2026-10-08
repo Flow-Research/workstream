@@ -35,6 +35,7 @@ from app.modules.authorization.domain.outbox_dispatch import OutboxDispatchResou
 from app.modules.authorization.domain.post_submit_routing import PostSubmitRoutingResourceContext
 from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
 from app.modules.authorization.domain.guide_activation import ProjectGuideActivationResourceContext
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionResourceContext
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
@@ -1187,6 +1188,7 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
 
 
 AuthorizationResourceContext = (
+    ReviewLifecycleActivationContract |
     submission_history.HistoryReadResourceContext | task_queues.QueueReadResourceContext | task_authority.TaskAuthorityResourceContext | ActorSelfResourceContext
     | ProjectReadResourceContext | ProjectDiagnosticReadResourceContext
     | ProjectPolicyReadResourceContext

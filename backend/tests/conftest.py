@@ -23,14 +23,15 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 DDL_LOCK_DIRECTORY = Path("/tmp")
 # Match the PostgreSQL 16 engine used by Backend CI. Catalog identity rendering
 # differs across major versions; regenerate only after comparing actual objects.
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "27ba211f2e2daded2c41e661163a73ed173f53612ee03a8d922a6845a81d0be8"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "3bb7c5924fc8061b49f8f1c131e7be842ae02831e943e72b8e56fb73a7483c2d"
 PROTECTED_TEST_TABLES = (
-    "joint_lifecycle_release_control",
     "actor_profile_migration_state",
     "alembic_version",
     "iso_4217_currency_codes",
 )
 RESETTABLE_TEST_TABLES = (
+    "joint_lifecycle_release_control",
+    "joint_lifecycle_transitions",
     "actor_identity_links",
     "actor_profiles",
     "admin_role_grants",
@@ -133,6 +134,8 @@ RESETTABLE_TEST_TABLES = (
     "workstream_tasks",
 )
 TRUNCATE_GUARDED_TABLES = (
+    "joint_lifecycle_release_control",
+    "joint_lifecycle_transitions",
     "artifact_bindings",
     "artifact_put_attempts",
     "checker_runs",
@@ -411,16 +414,27 @@ async def _reset_test_database_state(
                 f"alter table {tables[name]} disable trigger user"
                 for name in TRUNCATE_GUARDED_TABLES
             ))
+            lifecycle_genesis = await connection.fetchrow(
+                "select id,created_at from public.joint_lifecycle_release_control"
+            )
             if after_disable is not None:
                 await after_disable()
             await connection.execute(
                 f"truncate table {', '.join(tables.values())} restart identity cascade"
+            )
+            if lifecycle_genesis is None:
+                raise AssertionError("isolated lifecycle singleton missing")
+            await connection.execute(
+                "insert into public.joint_lifecycle_release_control"
+                "(id,singleton,phase,generation,created_at) values($1,true,'disabled',0,$2)",
+                lifecycle_genesis["id"], lifecycle_genesis["created_at"],
             )
             await connection.execute(
                 "insert into authority_control"
                 "(id, bootstrap_completed, bootstrap_grant_id, version) "
                 "values (1, false, null, 0)"
             )
+            await connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
             await connection.execute("; ".join(
                 f"alter table {tables[name]} enable trigger user"
                 for name in TRUNCATE_GUARDED_TABLES

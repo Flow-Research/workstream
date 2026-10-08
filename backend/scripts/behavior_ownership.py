@@ -170,6 +170,12 @@ AUTH_19A_SOURCE_CONTRACT_TARGETS = frozenset({
     "backend/app/modules/authorization/api/acceptance_source.py",
     "backend/app/modules/authorization/acceptance_source_contracts.py",
 })
+REV_12A4A_CONTROL_TARGETS = frozenset({
+    "backend/app/modules/authorization/domain/lifecycle.py",
+    "backend/app/modules/authorization/lifecycle_authorization.py",
+    "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+    "backend/app/modules/reviews/lifecycle/service.py",
+})
 REV_12A1_FENCE_TARGETS = frozenset({"backend/app/modules/reviews/api/lifecycle.py", "backend/app/modules/reviews/lifecycle/models.py", "backend/app/modules/reviews/lifecycle/fence.py"})
 REV_04C_REMOVED_TARGETS = frozenset({"backend/app/modules/reviews/acceptance/schemas.py"})
 REV_04C_PARTICIPATION_TARGETS = frozenset({
@@ -807,6 +813,7 @@ def _validate_additive_partition_transition(
         | CON_07_PARTICIPATION_TARGETS
         | AUTH_19A_SOURCE_CONTRACT_TARGETS
         | ARCH_04E2A_ROUTING_AUTH_TARGETS
+        | REV_12A4A_CONTROL_TARGETS
         | REV_12A1_FENCE_TARGETS
         | REV_04C_PARTICIPATION_TARGETS
         | REV_04B_ACCEPTANCE_TARGETS

@@ -105,3 +105,40 @@ async def test_lifecycle_upgrade_preserves_sources(tmp_path, isolated_database_e
                 )
             finally:
                 await connection.close()
+
+
+async def test_transition_upgrade_preserves_genesis_and_retained_sources(
+    tmp_path, isolated_database_env, migration_lock,
+):
+    with migration_lock():
+        await db_session.dispose_engine()
+        url = isolated_database_env.replace("+asyncpg", "")
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
+        finally:
+            await connection.close()
+        await asyncio.to_thread(command.upgrade, _config(), "0026_task_guide_read")
+        async with contribution_source(
+            tmp_path, isolated_database_env, paid=True, material_source=historical_material_fixture,
+        ):
+            connection = await asyncpg.connect(url)
+            try:
+                before = await snapshot(connection)
+                genesis = dict(await connection.fetchrow(
+                    "SELECT * FROM public.joint_lifecycle_release_control"
+                ))
+                await asyncio.to_thread(command.upgrade, _config(), "0027_lifecycle_transitions")
+                assert await snapshot(connection) == before
+                assert dict(await connection.fetchrow(
+                    "SELECT * FROM public.joint_lifecycle_release_control"
+                )) == genesis | {"transition_id": None}
+                assert await connection.fetchval(
+                    "SELECT count(*) FROM public.joint_lifecycle_transitions"
+                ) == 0
+                with pytest.raises(asyncpg.CheckViolationError, match="transition custody invalid"):
+                    await connection.execute(
+                        "UPDATE public.joint_lifecycle_release_control SET phase='live',generation=1"
+                    )
+            finally:
+                await connection.close()

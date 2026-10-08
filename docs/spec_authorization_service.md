@@ -438,6 +438,15 @@ evaluator. Reads continue through request-scoped authorization. Mutations and
 service commands later use the existing opaque, process-local, transaction-
 bound `PreparedAuthorizationHandle`; REV locks and composes canonical facts,
 while the exact activation wave installs the corresponding AUTH evaluator.
+
+REV-12A4A now activates the internal `review.lifecycle.activation.manage` slice
+with a strict nested command/observations resource owned by AUTH's lifecycle
+contract. It replaces the earlier inert scalar shape. Live system Operator
+PREP precedes the REV root fence; consumption binds the singleton, operation,
+actor/link, generation, phases, deadline, manifest and observations. Controller,
+immutable history and exact AUTH evidence commit together. Same-command replay
+requires fresh same-actor authority and writes nothing. Other review actions
+remain unavailable; this action grants neither acceptance nor payment authority.
 XINT-002 packet, evidence-binding, and revision-submission actions are external
 handoff references only and are not redefined by this manifest.
 

@@ -708,8 +708,8 @@ Extract foundations from existing owner work, not a new initiative:
    accepted/completed effects for either source. These isolated controls prove
    mechanical transaction behavior without claiming acceptance authority or
    fabricating allows.
-   Authorized scoped transition/drain composition extends this fence before
-   the first contribution path. Applicable award facts remain atomic. Actual
+   REV-12A4A supplies authorized transitions and atomic writer/stop composition
+   on this fence before the first contribution path. Applicable award facts remain atomic. Actual
    CON fulfillment roots own immutable ordinal allocation before fulfillment
    admission is enabled; no award or outbox row substitutes for a root. Payment
    obligation storage and its root/cutoff proof are not prerequisites of a
@@ -1136,14 +1136,15 @@ as product data; PostgreSQL holds the temporary snapshot (including xmin) until
 transaction end. Callers keep transactions short, retain commit/rollback ownership
 and roll back after acquisition failure. PostgreSQL two-phase prepare is unsupported.
 Savepoints established after acquisition cannot release the earlier root locks. Its
-public scalar facts are not authority. AUTH retains an independent scalar phase
-projection; lifecycle_phase must equal current_phase, and generation zero must
-be disabled. The four phases are disabled, shadow, live and draining. Detailed
+public scalar facts are not authority. The current AUTH activation resource
+binds a strict transition command and observations; generation zero must be
+disabled. Other inert REV resources retain their own phase projections. The four phases are disabled, shadow, live and draining. Detailed
 shutdown stages in historical plans are not additional current persisted phases.
 
-No transition, history, ordinal, cutoff, consumer or usable generation is
-implemented by this foundation. The later authorized transition operation owns
-legal adjacency and extends the same controller. Actual CON root storage and
+REV-12A1 alone implemented no transition or usable generation. REV-12A4A now
+extends it with Operator-authorized legal adjacency, immutable history, exact
+AUTH/controller closure and current-generation read-only replay. It does not
+activate an acceptance consumer or fulfillment. Actual CON root storage and
 real authorized writer-versus-cutoff proof are required before a successor
 manifest activates fulfillment admission, dispatch or callbacks. They do not
 block the first contribution manifest with fulfillment disabled. Lock mechanics
