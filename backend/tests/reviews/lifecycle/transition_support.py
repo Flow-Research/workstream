@@ -88,7 +88,7 @@ def history_row(command, receipt, *, facts=None, digest=None):
         generation=command.expected_generation + 1, previous_phase=command.current_phase.value,
         phase=command.target_phase.value, facts_json=(facts or facts_for(command)).model_dump(mode="json"),
         resource_context_digest=digest or receipt.resource_context_digest,
-        authorization_decision_event_id=receipt.decision_event_id,
+        authorization_decision_event_id=str(receipt.decision_event_id),
     )
 
 

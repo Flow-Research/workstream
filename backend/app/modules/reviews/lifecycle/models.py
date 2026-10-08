@@ -53,6 +53,10 @@ class JointLifecycleTransition(Base):
 
     __tablename__ = "joint_lifecycle_transitions"
     __table_args__ = (
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         UniqueConstraint("operation_id"),
         UniqueConstraint("singleton_id", "generation"),
         UniqueConstraint("authorization_decision_event_id"),
@@ -69,8 +73,8 @@ class JointLifecycleTransition(Base):
     phase: Mapped[str] = mapped_column(String(16), nullable=False)
     facts_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
     resource_context_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    authorization_decision_event_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("audit_events.id"), nullable=False,
+    authorization_decision_event_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("audit_events.id"), nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()"),

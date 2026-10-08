@@ -743,6 +743,7 @@ Delivered foundations (not a claim of full public integration)
   ARCH-04E1B-B2 exact source proposal + B3 ZIP metadata + B4 checked packet custody + B5 bounded evaluation content
   ARCH-04E1B-B6 atomic Submission/dispatch + exact AUTH receipts + replay (no delivery/publication authority)
   ARCH-04E1B-B7 hidden request delivery (unregistered)
+  REV-12A4A scoped Operator transitions + immutable AUTH/history custody + current-generation gates
 
 Remaining integration
   both branches: hidden completion routing 04E1B-B
@@ -954,3 +955,5 @@ ARCH-04E1B-B3 proof: [verified ZIP metadata custody](../.commitrail/initiatives/
 ARCH-04E1B-B6 proof: [atomic Submission, exact receipts and initial request custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E1BB6.md).
 
 ARCH-04E1B-B7 proof: [hidden request delivery and invocation custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E1BB7.md). Production registration, completion routing and public intake remain unavailable.
+
+REV-12A4A proof: [scoped lifecycle control and payment-delivery deferral](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md). Exact production source receipts and acceptance activation remain required.

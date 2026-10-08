@@ -1,6 +1,7 @@
 """Authorized transitions for the existing atomic-participant lifecycle scope."""
 
 import json
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,7 +53,7 @@ class JointLifecycleController:
                 )
                 if retained.command != checked or current.singleton_id != history.singleton_id:
                     raise JointLifecycleUnavailable("lifecycle operation conflicts")
-                await authority.validate_replay(retained, history.authorization_decision_event_id)
+                await authority.validate_replay(retained, UUID(history.authorization_decision_event_id))
                 return _receipt(history)
 
             now = await self._session.scalar(select(func.clock_timestamp()))
@@ -88,7 +89,7 @@ class JointLifecycleController:
                 previous_phase=current.phase.value, phase=checked.target_phase.value,
                 facts_json=facts.model_dump(mode="json"),
                 resource_context_digest=receipt.resource_context_digest,
-                authorization_decision_event_id=receipt.decision_event_id,
+                authorization_decision_event_id=str(receipt.decision_event_id),
             )
             self._session.add(row)
             await self._session.flush()
@@ -102,6 +103,6 @@ def _receipt(row: JointLifecycleTransition) -> LifecycleTransitionReceipt:
     return LifecycleTransitionReceipt(
         operation_id=row.operation_id, singleton_id=row.singleton_id,
         generation=row.generation, phase=JointLifecyclePhase(row.phase),
-        authorization_decision_event_id=row.authorization_decision_event_id,
+        authorization_decision_event_id=UUID(row.authorization_decision_event_id),
         created_at=row.created_at,
     )

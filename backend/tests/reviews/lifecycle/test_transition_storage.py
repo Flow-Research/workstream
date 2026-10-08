@@ -85,3 +85,72 @@ async def test_shadow_audit_table_cannot_substitute_a_real_receipt(admin_access)
             await publish_history(session, history_row(substituted, receipt, facts=facts, digest=digest))
             await session.commit()
     assert await snapshot() == before
+
+
+@pytest.mark.parametrize("principal", ["actor", "link", "grant"])
+async def test_closure_rejects_independently_inactive_authority(admin_access, principal):
+    grant = await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    command = await command_for(admin_access.target.id, "shadow")
+    before = await snapshot()
+    statements = {
+        "actor": ("actor_profiles", command.actor_profile_id,
+            "status='suspended',suspended_by='storage-proof',suspended_at=clock_timestamp(),suspension_reason='Suspended'"),
+        "link": ("actor_identity_links", command.identity_link_id,
+            "status='revoked',revoked_by='storage-proof',revoked_at=clock_timestamp(),revoked_reason='Revoked'"),
+        "grant": ("admin_role_grants", grant,
+            "status='revoked',version=2,revoked_by_actor_profile_id=:admin,revoked_by_admin_role_grant_id=:admin_grant,revoked_reason='Revoked',revoked_at=clock_timestamp()"),
+    }
+    table, identifier, update = statements[principal]
+    async with get_session_factory()() as session:
+        await session.begin()
+        receipt = await issue_authority(session, command)
+        await publish_history(session, history_row(command, receipt))
+        await session.execute(text(f"UPDATE public.{table} SET {update} WHERE id=:id"), {
+            "id": identifier, "admin": admin_access.admin.id,
+            "admin_grant": admin_access.bootstrap_grant_id,
+        })
+        assert await session.scalar(text(f"SELECT status FROM public.{table} WHERE id=:id"), {
+            "id": identifier,
+        }) != "active"
+        # Valid audit facts, digests, identities and history have already been
+        # written. Only the independently changed principal state can deny now.
+        with pytest.raises(DBAPIError, match="joint lifecycle authority closure invalid"):
+            await session.commit()
+    assert await snapshot() == before
+    assert (await transition(command)).generation == 1
+
+
+async def test_committed_authority_receipt_cannot_be_changed_or_manufactured(admin_access):
+    from app.core.identifiers import new_record_id
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    command = await command_for(admin_access.target.id, "shadow")
+    receipt = await transition(command)
+    before = await snapshot()
+    for field, value in (("request_id", new_record_id()),
+                         ("matched_grant_id", admin_access.bootstrap_grant_id)):
+        async with get_session_factory()() as session:
+            with pytest.raises(DBAPIError, match="audit events are append-only"):
+                await session.execute(text(f"UPDATE public.audit_events SET {field}=:value WHERE id=:id"), {
+                    "value": value, "id": receipt.authorization_decision_event_id,
+                })
+                await session.commit()
+        assert await snapshot() == before
+    # Turning a different retained allow into this exact lifecycle shape must
+    # also reject; an INSERT-only closure cannot see such an UPDATE.
+    async with get_session_factory()() as session:
+        target = await session.scalar(text(
+            "SELECT id FROM public.audit_events WHERE event_type='SensitiveAuthorizationAllowed' "
+            "AND action_id <> 'review.lifecycle.activation.manage' ORDER BY id LIMIT 1"
+        ))
+        assert target is not None
+        fields = list((await session.execute(text("SELECT * FROM public.audit_events LIMIT 1"))).keys())
+        columns = ",".join('"' + key + '"' for key in fields if key != "id")
+        with pytest.raises(DBAPIError, match="audit events are append-only"):
+            await session.execute(text(f"UPDATE public.audit_events SET ({columns})="
+                f"(SELECT {columns} FROM public.audit_events WHERE id=:source) WHERE id=:target"), {
+                "source": receipt.authorization_decision_event_id, "target": target,
+            })
+            await session.commit()
+    assert await snapshot() == before
+    assert await transition(command) == receipt

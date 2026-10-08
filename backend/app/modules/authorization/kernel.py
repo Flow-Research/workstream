@@ -450,7 +450,8 @@ class AuthorizationService:
             else:
                 locked = await self._admin.lock_request_actor(
                     context.identity_link_id, context.actor_profile_id,
-                    preserve_foreign_key_reads=(action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE),
+                    **({"preserve_foreign_key_reads": True}
+                       if action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE else {}),
                 )
             context = self._locked_human_context(locked, context)
             if action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE and scope.grant_id is None:

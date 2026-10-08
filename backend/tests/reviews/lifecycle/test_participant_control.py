@@ -191,3 +191,58 @@ async def test_generation_zero_cannot_create_acceptance(tmp_path, isolated_datab
                 await participant(session).participate(request)
         async with h.factory() as session:
             assert await stored_effects(session, h.acceptance.task_id) == before
+
+
+@pytest.mark.parametrize("sequence", ["genesis", "stopped"])
+async def test_each_owner_independently_rejects_new_effects(
+    tmp_path, isolated_database_env, admin_access, sequence,
+):
+    from unittest.mock import AsyncMock
+
+    from app.modules.contributions.api import ContributionParticipationUnavailable
+    from app.modules.reviews.acceptance.participant import FinalAcceptanceParticipant
+    from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
+    from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
+    from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsUnavailable, TaskAcceptedPreparation
+    from tests.contributions.participation.support import participant as contribution_participant
+    from tests.contributions.participation.support import request_for as contribution_request
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    generation = 0
+    if sequence == "stopped":
+        await transition(await command_for(admin_access.target.id, "shadow"))
+        await transition(await command_for(admin_access.target.id, "live"))
+    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
+        await prepare_review_pending(h)
+        phases = ("disabled", "shadow") if sequence == "genesis" else ("draining", "disabled", "shadow")
+        for phase in phases:
+            if not (sequence == "genesis" and phase == "disabled"):
+                generation = (await transition(await command_for(admin_access.target.id, phase))).generation
+            request = await request_for(h, expected_generation=generation)
+            async with h.factory() as session:
+                before = await stored_effects(session, h.acceptance.task_id)
+            async with h.factory() as session, session.begin():
+                task = TaskAcceptedEffectsParticipant(session, fence=PostgresJointLifecycleMutationFence(session))
+                with pytest.raises(TaskAcceptedEffectsUnavailable, match="lifecycle is not live"):
+                    await task.lock_accepted_effects(request.task_effects, expected_generation=generation)
+            async with h.factory() as session, session.begin():
+                with pytest.raises(ContributionParticipationUnavailable, match="lifecycle is not live"):
+                    await contribution_participant(session).participate_submitter(contribution_request(
+                        h, acceptance_disposition="new", expected_generation=generation,
+                    ))
+            async with h.factory() as session, session.begin():
+                # Isolate REV's own check: TASK supplies a correctly shaped new
+                # preparation; neither TASK nor CON can mask a missing REV gate.
+                tasks = SimpleNamespace(lock_accepted_effects=AsyncMock(return_value=TaskAcceptedPreparation(
+                    disposition="new", locked_review_policy_id=request.acceptance.policy_context_ref,
+                )))
+                owner = FinalAcceptanceParticipant(
+                    session, fence=PostgresJointLifecycleMutationFence(session),
+                    tasks=tasks, contributions=AsyncMock(),
+                )
+                owner._repository.persist = AsyncMock(side_effect=AssertionError("REV reached persistence"))
+                with pytest.raises(FinalAcceptanceConflict, match="lifecycle is not live"):
+                    await owner.participate(request)
+                owner._repository.persist.assert_not_awaited()
+            async with h.factory() as session:
+                assert await stored_effects(session, h.acceptance.task_id) == before

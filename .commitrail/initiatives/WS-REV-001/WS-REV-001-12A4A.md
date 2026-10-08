@@ -1,7 +1,7 @@
 # REV-12A4A — Scoped first-contribution lifecycle control
 
 - Initiative: `WS-REV-001`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Risk: L1 — Operator authority, lifecycle concurrency and immutable evidence.
 - Intended merge outcome: the existing lifecycle controller has an authorized,
   generation-bound transition operation for the first contribution path. This
@@ -24,7 +24,7 @@ availability switch, bootstrap SQL, provider, generic drain framework or
 compatibility path. Exact routing AUTH receipts and complete atomic consequences
 remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
 
-## Plan
+## Bounded change
 
 1. Reconcile canonical lifecycle/compensation specifications and the current
    first-layer sequence with the selected scope. Preserve the four phases and
@@ -82,14 +82,14 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
   resource/digest/audit contracts, `backend/app/modules/audit/schemas.py` for the
   exact UUID lifecycle target kind, and focused lifecycle resource/PREP adapter
   modules. Existing composition roots only for explicit controller construction.
-- One successor Alembic migration, model registration, exact schema inventory;
+- One successor Alembic migration, current-head preflight and graph inventory, model registration, exact schema inventory;
   focused REV lifecycle and AUTH tests plus affected acceptance/participation
   tests and shared fixtures. Existing production inventory tests prove absent
   surfaces; do not create a parallel registry.
-- Exact behavior ownership and lane inventory files/tests; no CI gate changes.
+- Exact behavior ownership and lane inventory files/tests; refresh existing structural-debt fingerprints without adding debt or relaxing limits. No CI gate changes.
 - This record; REV/AUTH/CON/ARCH/POL current overviews, ARCH/AUTH/POL current
   plans/maps, Commitrail index; canonical review/compensation specifications,
-  relevant authorization custody docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
+  relevant authorization custody and roles/permissions docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
   only if present. Historical completed records remain historical.
 
 ## Prohibited
@@ -100,7 +100,7 @@ human queue/decision/revision runtime; new role/action/controller; invented Revi
 retained-data deletion or rewriting; default permissive generation; generic
 service locator; timeout/completeness/boundary weakening; unrelated cleanup.
 
-## Acceptance and verification
+## Acceptance criteria
 
 - Real PostgreSQL and real AUTH prove the allowed edges, exact grant provenance,
   revocation, wrong actor/scope, stale generation, expired deadline, request and
@@ -125,7 +125,7 @@ service locator; timeout/completeness/boundary weakening; unrelated cleanup.
 - Run focused PostgreSQL suites, lint, module boundaries, ownership/inventory,
   links, stale wording, Commitrail and diff checks, then exact-head hosted CI.
 
-## Review and human focus
+## Risk and review routing
 
 Plan review before implementation; architecture/reuse, security, QA/test delta,
 documentation/product operations and CI integrity review the clean candidate.
@@ -134,7 +134,7 @@ facts atomic, and cannot enable payment or human runtime. Controller permission
 is not routing or acceptance authority. Scope and phase history must be verifiable
 without relying on receipt-shaped caller values or misleading drain counts.
 
-## Scope and retained proof
+## Evidence
 
 This L1 change exceeds the preferred 500-line guideline because the same
 transition must bind AUTH, REV storage and all three existing participant gates
@@ -150,3 +150,10 @@ retains worker inventory coverage. Existing review catalogue tests now allow
 only the scoped controller action and keep other review actions planned. These
 composition checks are not represented as runtime drain observations. Full-suite
 execution remains required; partial local batches are not completeness evidence.
+
+Review repairs retain the canonical append-only audit guard: direct PostgreSQL
+receipt-edit and unrelated-event transformation tests reject through that owner,
+so no duplicate immutability trigger is added. New transition closure independently
+checks active actor, exact link and Operator grant. Owner-specific phase probes
+avoid sibling guards masking each other. Reset proof begins at authorized LIVE
+and preserves singleton identity/time while restoring only the isolated test DB.

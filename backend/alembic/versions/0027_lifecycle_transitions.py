@@ -25,6 +25,10 @@ def upgrade():
         sa.Column("resource_context_digest", sa.String(71), nullable=False),
         sa.Column("authorization_decision_event_id", sa.Uuid(), sa.ForeignKey("public.audit_events.id"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("clock_timestamp()"), nullable=False),
+        sa.CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         sa.UniqueConstraint("operation_id"),
         sa.UniqueConstraint("singleton_id", "generation"),
         sa.UniqueConstraint("authorization_decision_event_id"),
@@ -140,10 +144,10 @@ RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,public,pg_temp AS
     JOIN public.actor_identity_links l ON l.actor_profile_id=p.id
     WHERE a.id=t.authorization_decision_event_id
       AND a.event_domain='authority' AND a.event_type='SensitiveAuthorizationAllowed'
-      AND a.actor_ref_kind='actor_profile' AND p.actor_kind='human'
+      AND a.actor_ref_kind='actor_profile' AND p.actor_kind='human' AND p.status='active'
       AND p.id::text=t.facts_json->'command'->>'actor_profile_id'
-      AND l.id::text=t.facts_json->'command'->>'identity_link_id'
-      AND g.target_actor_profile_id=p.id AND g.role='operator'
+      AND l.id::text=t.facts_json->'command'->>'identity_link_id' AND l.status='active'
+      AND g.target_actor_profile_id=p.id AND g.role='operator' AND g.status='active'
       AND g.scope_type='system' AND g.scope_project_id IS NULL
       AND a.action_id='review.lifecycle.activation.manage' AND a.permission_id='operations.reconcile.run'
       AND a.request_id IS NOT NULL AND a.correlation_id=t.operation_id

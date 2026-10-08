@@ -120,7 +120,7 @@ async def test_transition_upgrade_preserves_genesis_and_retained_sources(
             await connection.close()
         await asyncio.to_thread(command.upgrade, _config(), "0026_task_guide_read")
         async with contribution_source(
-            tmp_path, isolated_database_env, paid=True, material_source=historical_material_fixture,
+            tmp_path, isolated_database_env, paid=True,
         ):
             connection = await asyncpg.connect(url)
             try:

@@ -107,6 +107,12 @@ async def test_no_operator_revoked_operator_and_operation_collision(admin_access
     with pytest.raises(PreparedAuthorizationUnsupported):
         await transition(command)
     assert await snapshot() == before
+    replacement = await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    assert replacement != grant
+    # Fresh authority permits replay; the original revoked grant remains part
+    # of the immutable historical receipt, not rewritten to today's grant.
+    assert await transition(command) == receipt
+    assert await snapshot() == before
 
 
 async def test_transition_replay_does_not_issue_sql_writes(admin_access):
@@ -134,3 +140,30 @@ async def test_transition_replay_does_not_issue_sql_writes(admin_access):
     finally:
         event.remove(engine, "before_cursor_execute", observe)
     assert writes == []
+
+
+async def test_shared_reset_restores_activated_controller(admin_access, isolated_database_env):
+    from conftest import _reset_test_database_state
+
+    before = (await snapshot())["control"][0]
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    await transition(await command_for(admin_access.target.id, "shadow"))
+    await transition(await command_for(admin_access.target.id, "live"))
+    activated = await snapshot()
+    assert len(activated["history"]) == 2
+    for _ in range(2):
+        await _reset_test_database_state(isolated_database_env)
+        after = await snapshot()
+        assert after["control"] == [before]
+        assert after["history"] == after["events"] == []
+        async with get_session_factory()() as session:
+            assert await session.scalar(text("""
+                SELECT count(*) FROM pg_catalog.pg_trigger
+                WHERE tgrelid IN ('public.joint_lifecycle_release_control'::regclass,
+                    'public.joint_lifecycle_transitions'::regclass, 'public.audit_events'::regclass)
+                  AND tgenabled <> 'O'
+            """)) == 0
+            with pytest.raises(DBAPIError, match="transition custody invalid"):
+                await session.execute(text(
+                    "UPDATE public.joint_lifecycle_release_control SET phase='live',generation=1"
+                ))

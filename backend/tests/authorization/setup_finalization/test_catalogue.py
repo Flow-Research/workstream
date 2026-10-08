@@ -157,6 +157,7 @@ def test_exact_active_action_inventory():
         ActionId.ACTOR_IDENTITY_LINK_READ,
         ActionId.ACTOR_SERVICE_PROVISION,
         ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.ACTOR_PROFILE_REACTIVATE,
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,

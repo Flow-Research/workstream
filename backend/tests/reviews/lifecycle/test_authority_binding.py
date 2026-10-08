@@ -1,5 +1,7 @@
 """Actual PREP consumption rejects independent changes to the selected command."""
 
+from datetime import timedelta
+
 import pytest
 
 from app.core.identifiers import new_record_id
@@ -12,13 +14,17 @@ from tests.reviews.lifecycle.transition_support import command_for, controller, 
 
 @pytest.mark.parametrize("field", [
     "operation_id", "singleton_id", "actor_profile_id", "identity_link_id",
-    "expected_generation", "target_phase", "reviewed_manifest_digest", "reason",
+    "expected_generation", "current_phase", "target_phase", "deadline", "reviewed_manifest_digest", "reason",
 ])
 async def test_prepared_command_substitution_rejects_before_allow(admin_access, field):
     await admin_access.signed.grant(admin_access.admin, admin_access.target)
-    command = await command_for(admin_access.target.id, "shadow")
+    if field == "current_phase":
+        await transition(await command_for(admin_access.target.id, "shadow"))
+    command = await command_for(admin_access.target.id, "live" if field == "current_phase" else "shadow")
     value = {
         "expected_generation": 1,
+        "current_phase": JointLifecyclePhase.DISABLED,
+        "deadline": command.deadline + timedelta(seconds=1),
         "target_phase": JointLifecyclePhase.LIVE,
         "reviewed_manifest_digest": "sha256:" + "1" * 64,
         "reason": "different selected operation",
@@ -37,4 +43,4 @@ async def test_prepared_command_substitution_rejects_before_allow(admin_access, 
                 await prepared.consume_new(facts)
         await session.rollback()
     assert await snapshot() == before
-    assert (await transition(command)).generation == 1
+    assert (await transition(command)).generation == command.expected_generation + 1
