@@ -842,9 +842,6 @@ class PreparedAuthorizationService:
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared routing request")
         operation_id = project_id = operation_generation = None
-        policy_mutation_project_id = policy_mutation_guide_id = policy_mutation_policy_id = policy_mutation_operation_id = None
-        policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
-        policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
         if action_id is ActionId.PROJECT_CREATE:
             operation_id, project_id, operation_generation = parse_project_create_binding(
@@ -854,39 +851,6 @@ class PreparedAuthorizationService:
             action_id, caller_input.request_value, setup_bindings.get("guide_projection_prepare_context"),
         )
         sufficiency = _sufficiency_prepare_binding(action_id, caller_input, setup_bindings)
-        if action_id in {
-            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-            ActionId.PROJECT_REVISION_POLICY_UPDATE,
-        }:
-            try:
-                policy_mutation_project_id = UUID(str(caller_input.request_value["project_id"]))
-                policy_mutation_guide_id = UUID(str(caller_input.request_value["guide_id"]))
-                policy_mutation_policy_id = UUID(str(caller_input.request_value["policy_id"]))
-                policy_mutation_operation_id = UUID(str(caller_input.request_value["operation_id"]))
-                policy_mutation_request_digest = str(caller_input.request_value["request_digest"])
-                policy_mutation_policy_digest = str(caller_input.request_value["policy_digest"])
-                policy_mutation_generation = int(caller_input.request_value["policy_generation"])
-                raw_predecessor_id = caller_input.request_value["predecessor_policy_id"]
-                policy_mutation_predecessor_id = (
-                    UUID(str(raw_predecessor_id)) if raw_predecessor_id is not None else None
-                )
-                raw_predecessor_generation = caller_input.request_value[
-                    "predecessor_policy_generation"
-                ]
-                policy_mutation_predecessor_generation = (
-                    int(raw_predecessor_generation)
-                    if raw_predecessor_generation is not None
-                    else None
-                )
-                raw_predecessor_digest = caller_input.request_value["predecessor_policy_digest"]
-                policy_mutation_predecessor_digest = (
-                    str(raw_predecessor_digest) if raw_predecessor_digest is not None else None
-                )
-                policy_mutation_guide_status = str(caller_input.request_value["guide_status"])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
         return _PreparedAuthorizationBinding(
             action_id=action_id,
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
@@ -899,17 +863,6 @@ class PreparedAuthorizationService:
             project_create_project_id=project_id,
             project_create_generation=operation_generation,
             **parse_prepared_guide_mutation(action_id, caller_input.request_value),
-            policy_mutation_project_id=policy_mutation_project_id,
-            policy_mutation_guide_id=policy_mutation_guide_id,
-            policy_mutation_policy_id=policy_mutation_policy_id,
-            policy_mutation_operation_id=policy_mutation_operation_id,
-            policy_mutation_request_digest=policy_mutation_request_digest,
-            policy_mutation_policy_digest=policy_mutation_policy_digest,
-            policy_mutation_generation=policy_mutation_generation,
-            policy_mutation_predecessor_id=policy_mutation_predecessor_id,
-            policy_mutation_predecessor_generation=(policy_mutation_predecessor_generation),
-            policy_mutation_predecessor_digest=policy_mutation_predecessor_digest,
-            policy_mutation_guide_status=policy_mutation_guide_status,
             sufficiency_project_id=sufficiency.get("project_id"),
             sufficiency_guide_id=sufficiency.get("guide_id"),
             sufficiency_guide_version=sufficiency.get("guide_version"),

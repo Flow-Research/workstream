@@ -46,6 +46,11 @@ def upgrade():
     op.execute("DROP FUNCTION public.guard_joint_lifecycle_genesis()")
     _functions()
     op.execute("""
+CREATE TRIGGER joint_lifecycle_history_time BEFORE INSERT
+ON public.joint_lifecycle_transitions FOR EACH ROW
+EXECUTE FUNCTION public.stamp_joint_lifecycle_history_time()
+""")
+    op.execute("""
 CREATE TRIGGER joint_lifecycle_control_change BEFORE INSERT OR UPDATE OR DELETE
 ON public.joint_lifecycle_release_control FOR EACH ROW
 EXECUTE FUNCTION public.guard_joint_lifecycle_control_change()
@@ -109,6 +114,15 @@ def _replace(name, definition):
 
 
 def _functions():
+    op.execute("""
+CREATE FUNCTION public.stamp_joint_lifecycle_history_time() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ NEW.created_at := pg_catalog.clock_timestamp();
+ RETURN NEW;
+END;
+$$
+""")
     op.execute("""
 CREATE FUNCTION public.deny_joint_lifecycle_mutation() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$

@@ -81,12 +81,14 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
   `repository.py` for lifecycle-only actor NO KEY UPDATE custody,
   resource/digest/audit contracts, `backend/app/modules/audit/schemas.py` for the
   exact UUID lifecycle target kind, and focused lifecycle resource/PREP adapter
-  modules. Existing composition roots only for explicit controller construction.
+  modules, including `prepared_admin_authority.py` for existing admin lock orchestration
+  and existing `domain/{guide_mutations,prepared_guide_mutations}.py` for shared
+  review/revision lineage validation and binding. Existing composition roots only for explicit controller construction.
 - One successor Alembic migration, current-head preflight and graph inventory, model registration, exact schema inventory;
   focused REV lifecycle and AUTH tests plus affected acceptance/participation
   tests and shared fixtures. Existing production inventory tests prove absent
   surfaces; do not create a parallel registry.
-- Exact behavior ownership and lane inventory files/tests; refresh existing structural-debt fingerprints without adding debt or relaxing limits. No CI gate changes.
+- Exact behavior ownership and lane inventory files/tests; shrink affected frozen AUTH structural debt through cohesive owner extraction, then refresh fingerprints without adding debt or relaxing limits. No CI gate changes.
 - This record; REV/AUTH/CON/ARCH/POL current overviews, ARCH/AUTH/POL current
   plans/maps, Commitrail index; canonical review/compensation specifications,
   relevant authorization custody and roles/permissions docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
@@ -157,3 +159,7 @@ so no duplicate immutability trigger is added. New transition closure independen
 checks active actor, exact link and Operator grant. Owner-specific phase probes
 avoid sibling guards masking each other. Reset proof begins at authorized LIVE
 and preserves singleton identity/time while restoring only the isolated test DB.
+
+PostgreSQL stamps transition history time independently of caller input; an expired
+command with an explicitly backdated timestamp rejects and rolls back all three
+owners. This closes deadline custody without trusting application timestamps.

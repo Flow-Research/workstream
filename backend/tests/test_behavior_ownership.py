@@ -2439,6 +2439,7 @@ def test_scoped_lifecycle_controller_has_exact_ownership() -> None:
         "backend/app/modules/authorization/domain/lifecycle.py",
         "backend/app/modules/authorization/lifecycle_authorization.py",
         "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+        "backend/app/modules/authorization/prepared_admin_authority.py",
         "backend/app/modules/reviews/lifecycle/service.py",
     }
     assert ownership.REV_12A4A_CONTROL_TARGETS == expected

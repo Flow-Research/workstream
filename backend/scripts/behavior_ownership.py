@@ -174,6 +174,7 @@ REV_12A4A_CONTROL_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/lifecycle.py",
     "backend/app/modules/authorization/lifecycle_authorization.py",
     "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+    "backend/app/modules/authorization/prepared_admin_authority.py",
     "backend/app/modules/reviews/lifecycle/service.py",
 })
 REV_12A1_FENCE_TARGETS = frozenset({"backend/app/modules/reviews/api/lifecycle.py", "backend/app/modules/reviews/lifecycle/models.py", "backend/app/modules/reviews/lifecycle/fence.py"})

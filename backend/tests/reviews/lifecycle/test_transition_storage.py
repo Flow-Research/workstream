@@ -154,3 +154,25 @@ async def test_committed_authority_receipt_cannot_be_changed_or_manufactured(adm
             await session.commit()
     assert await snapshot() == before
     assert await transition(command) == receipt
+
+
+async def test_backdated_history_cannot_evade_database_deadline(admin_access):
+    from datetime import timedelta
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    async with get_session_factory()() as session:
+        deadline = await session.scalar(text("SELECT pg_catalog.clock_timestamp() - interval '1 second'"))
+    command = await command_for(admin_access.target.id, "shadow", deadline=deadline)
+    before = await snapshot()
+    async with get_session_factory()() as session:
+        with pytest.raises(DBAPIError, match="joint lifecycle transition custody invalid"):
+            await session.begin()
+            receipt = await issue_authority(session, command)
+            row = history_row(command, receipt)
+            row.created_at = deadline - timedelta(seconds=1)
+            # All command, audit and digest facts agree. A caller-controlled
+            # history timestamp must not make this expired transition valid.
+            await publish_history(session, row)
+            await session.commit()
+    assert await snapshot() == before
+    assert (await transition(await command_for(admin_access.target.id, "shadow"))).generation == 1
