@@ -233,7 +233,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Contribution and compensation truth | **Hidden shared participant plus public policy administration** | ContributionPolicyVersion persistence; lifecycle-audit participant; adapter bindings; public Finance policy administration; REV-04B shared acceptance source storage; CON-03C immutable ContributionRecord/CompensationAward storage; obsolete guide-keyed payment storage and task-local payment fields removed; CON-07 source-neutral submitter participant and complete award sets; REV-04C composes it with FinalAcceptance/TASK effects in the caller transaction | Add authority/evidence and complete-set database closure before production consumption. Only actual Reviews create reviewer records. REV-12A4A adds scoped lifecycle control; add audit/outbox and exact acceptance authority before production consumption. Obligation/root/ordinal custody remains deferred until fulfillment activation; no public recognition or fulfillment route is live |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
 | Runtime diagnostics | **Implemented foundation** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional typed OTLP export | Restrict broker publishers; configure and secure collector/log access, egress, encryption and finite deletion; prove diagnostics during the release drill; no deployed monitoring claim |
-| Frontend and pilot | **Local runtime foundation; product pilot planned** | Checkout-isolated Docker Compose API, prefork Celery process, beat, PostgreSQL, Redis and MinIO stack with local Flow-HMAC identities, existing authority bootstrap/grants, configurable loopback ports and project-scoped state; React + Vite + TypeScript stack decision | Complete provider-backed guide compilation and activated-guide scoped task-denial proof on the base stack, implement only stable backed frontend surfaces, run the real internal pilot, repair findings, and complete release drills; Docker Desktop/macOS runtime proof remains |
+| Frontend and pilot | **Local runtime foundation; product pilot planned** | Checkout-isolated Docker Compose API, prefork Celery process, beat, PostgreSQL, Redis and MinIO stack with local Flow-HMAC identities, existing authority bootstrap/grants, configurable loopback ports and project-scoped state; a pinned offline sample image build and separate oracle were proved under gVisor; React + Vite + TypeScript stack decision | Implement the external launcher/checker images and benchmark a representative task before choosing production limits; complete provider-backed guide compilation and activated-guide scoped task-denial proof on the base stack, implement only stable backed frontend surfaces, run the real internal pilot, repair findings, and complete release drills; Docker Desktop/macOS runtime proof remains |
 
 ## What Has Been Completed
 
@@ -844,6 +844,12 @@ The [local pilot stack record](../.commitrail/changes/pilot-local-stack.md) and
 [runbook](engineering/local-pilot.md) define the checkout-isolated runtime,
 authority bootstrap, retained-data boundary and remaining platform/journey
 proof.
+
+The [offline gVisor build spike](engineering/pilot00-gvisor-offline-build-spike.md)
+selects a sealed-cache Kaniko builder plus a separate gVisor oracle sandbox for
+PILOT-04/PILOT-06. It proves only the included small Linux fixture; the external
+launcher, representative task sizing, hosted hardening and macOS fallback
+evidence remain.
 
 Internal chunk identifiers are useful for implementation traceability, but a
 reader does not need internal engineering records to understand the roadmap
