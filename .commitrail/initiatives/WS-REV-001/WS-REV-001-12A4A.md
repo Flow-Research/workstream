@@ -163,3 +163,13 @@ and preserves singleton identity/time while restoring only the isolated test DB.
 PostgreSQL stamps transition history time independently of caller input; an expired
 command with an explicitly backdated timestamp rejects and rolls back all three
 owners. This closes deadline custody without trusting application timestamps.
+
+The stopped-new-effect integration proof shares one source across sequential
+`draining`, `disabled` and `shadow` transitions. Each denial uses a fresh caller
+transaction and must preserve the original effect snapshot. This removes two
+redundant graph setups while retaining all phase assertions and the separate
+owner-isolation proofs. Hosted evidence also exposed inadequate TASK-lane
+capacity. The whole lifecycle-participant module therefore runs beside the
+existing acceptance and contribution participant modules in the three project
+partitions, which have measured headroom. Exact node ownership/completeness is
+retained; no execution limit is relaxed.

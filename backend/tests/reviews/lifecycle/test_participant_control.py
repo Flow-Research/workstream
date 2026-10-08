@@ -61,25 +61,23 @@ async def test_stopped_terminal_replay_is_select_only(
             assert facts["awards"] == len(instruments)
 
 
-@pytest.mark.parametrize("phase", ["draining", "disabled", "shadow"])
 async def test_current_generation_cannot_admit_new_effects_when_stopped(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle, phase,
+    tmp_path, isolated_database_env, live_acceptance_lifecycle,
 ):
     access = live_acceptance_lifecycle
     async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
         await prepare_review_pending(h)
-        for target in {"draining": ("draining",), "disabled": ("draining", "disabled"),
-                       "shadow": ("draining", "disabled", "shadow")}[phase]:
-            receipt = await transition(await command_for(access.target.id, target))
-        request = await request_for(h, expected_generation=receipt.generation)
         async with h.factory() as session:
             before = await stored_effects(session, h.acceptance.task_id)
-        async with h.factory() as session:
-            with pytest.raises(FinalAcceptanceConflict):
-                async with session.begin():
-                    await participant(session).participate(request)
-        async with h.factory() as session:
-            assert await stored_effects(session, h.acceptance.task_id) == before
+        for phase in ("draining", "disabled", "shadow"):
+            receipt = await transition(await command_for(access.target.id, phase))
+            request = await request_for(h, expected_generation=receipt.generation)
+            async with h.factory() as session:
+                with pytest.raises(FinalAcceptanceConflict):
+                    async with session.begin():
+                        await participant(session).participate(request)
+            async with h.factory() as session:
+                assert await stored_effects(session, h.acceptance.task_id) == before, phase
 
 
 async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(

@@ -269,6 +269,7 @@ PROJECT_MODULES = (
     "tests/reviews/acceptance/test_participant_contracts.py",
     "tests/reviews/acceptance/test_participation.py",
     "tests/reviews/acceptance/test_participation_transactions.py",
+    "tests/reviews/lifecycle/test_participant_control.py",
     "tests/tasks/post_submit_routing/test_evaluation_guard.py",
     "tests/tasks/post_submit_routing/test_evaluation_currentness.py",
     "tests/tasks/post_submit_routing/test_review_admission_currentness.py",
@@ -398,7 +399,6 @@ PROJECT_MODULES = (
 )
 
 TASK_MODULES = (
-    "tests/reviews/lifecycle/test_participant_control.py",
     "tests/reviews/decision/test_contracts.py",
     "tests/reviews/decision/test_storage.py",
     "tests/reviews/decision/test_migration.py",
