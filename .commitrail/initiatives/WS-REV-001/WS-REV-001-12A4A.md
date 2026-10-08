@@ -7,7 +7,7 @@
   generation-bound transition operation for the first contribution path. This
   does not enable production routing, human review or payment delivery.
 
-## Intent and human decision
+## Intent
 
 The first contributor milestone needs one usable lifecycle generation before
 false-policy acceptance can be composed. The canonical lifecycle specification
@@ -133,3 +133,20 @@ Review whether this stays the same controller/action, keeps contribution/award
 facts atomic, and cannot enable payment or human runtime. Controller permission
 is not routing or acceptance authority. Scope and phase history must be verifiable
 without relying on receipt-shaped caller values or misleading drain counts.
+
+## Scope and retained proof
+
+This L1 change exceeds the preferred 500-line guideline because the same
+transition must bind AUTH, REV storage and all three existing participant gates
+atomically. Splitting those gates would temporarily preserve permissive
+acceptance writers. Most additional paths are existing consumer fixtures,
+required ownership/lane inventories and current documentation; no independent
+product feature is included.
+
+The existing `test_production_registry_claims_only_registered_invalidation`
+(`tests/outbox/test_worker_postgresql.py`) remains the exact production-registry
+proof; `test_observed_task_inventory_matches_every_registered_workstream_task`
+retains worker inventory coverage. Existing review catalogue tests now allow
+only the scoped controller action and keep other review actions planned. These
+composition checks are not represented as runtime drain observations. Full-suite
+execution remains required; partial local batches are not completeness evidence.
