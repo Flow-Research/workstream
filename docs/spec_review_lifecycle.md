@@ -1173,7 +1173,7 @@ is a prerequisite of this bounded manifest.
 
 The initial controller implementation is
 [REV-12A4A](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md).
-It remains planned. It extends the same Operator action, singleton and fence;
+It extends the same Operator action, singleton and fence;
 it does not grant routing or acceptance authority. Every enabled writer must
 appear in its reviewed manifest. Server-derived observations are checked under
 the canonical lock. Unsupported surfaces and unlisted writers deny. Human
