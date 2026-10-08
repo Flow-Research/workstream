@@ -709,7 +709,7 @@
       "target": "backend/app/modules/authorization/prepared.py"
     },
     {
-      "group": "shared",
+      "group": "auth",
       "target": "backend/app/modules/authorization/prepared_admin_authority.py"
     },
     {
@@ -1733,7 +1733,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "6f884f95fbfd8e0d3613218ee629db963224f63bd856c0befc55f449d9c5a525",
+  "authority_digest": "eeba7e6c4053f1f0aa9e2fb5aaae44537b4dc44b4bbbbce01225aac39c4b9eb1",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
