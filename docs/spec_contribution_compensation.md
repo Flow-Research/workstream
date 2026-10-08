@@ -1192,11 +1192,16 @@ decision-event receipt mandatory on the same strict input with no
 optional/default path; add database-enforced FinalAcceptance/TASK/CON
 complete-set closure, shared audit/outbox and exact activation to prove the first genuine allow
 with source, FinalAcceptance, TASK effects, CON rows and audit/outbox in one
-transaction. No standalone allow or fabricated authority fixture is permitted. Actual root ordinal custody and authorized lifecycle
-transition/drain proof precede live AUTH routing composition.
+transaction. No standalone allow or fabricated authority fixture is permitted.
+Authorized scoped lifecycle transition/drain proof precedes live AUTH routing
+composition. Conditional award facts remain atomic for paid and unpaid policies.
+The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
+unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
+successor manifest enables fulfillment, not before this contribution path.
 False guide activation follows joint proof. A stable Review FK target is
-not live ReviewLease/queue/decision behavior. The shared lifecycle/obligation
-fence is required for either trigger; human runtime and fulfillment endpoints
+not live ReviewLease/queue/decision behavior. The shared lifecycle
+fence is required for either acceptance trigger; obligation writers join that same
+fence before fulfillment admission is enabled. Human runtime and fulfillment endpoints
 are not prerequisites for accepting without a reviewer. The older interleaving
 below describes the human branch, not a second acceptance implementation.
 

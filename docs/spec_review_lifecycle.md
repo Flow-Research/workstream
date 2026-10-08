@@ -708,10 +708,12 @@ Extract foundations from existing owner work, not a new initiative:
    accepted/completed effects for either source. These isolated controls prove
    mechanical transaction behavior without claiming acceptance authority or
    fabricating allows.
-   Actual CON fulfillment roots own immutable ordinal allocation; no award or
-   outbox row substitutes for a root. Authorized transition/drain composition
-   and real root/cutoff proof extend this fence before activation, independently
-   of live human queues or decisions.
+   Authorized scoped transition/drain composition extends this fence before
+   the first contribution path. Applicable award facts remain atomic. Actual
+   CON fulfillment roots own immutable ordinal allocation before fulfillment
+   admission is enabled; no award or outbox row substitutes for a root. Payment
+   obligation storage and its root/cutoff proof are not prerequisites of a
+   manifest that keeps fulfillment admission, dispatch and callbacks unavailable.
 4. ARCH-04E1B-B's hidden routing handler is next and invokes the delivered
    participant for false/pass. It owns TASK-before-CHECKERS currentness and both
    successor-generation race orders. True routing does not
@@ -1142,8 +1144,10 @@ shutdown stages in historical plans are not additional current persisted phases.
 No transition, history, ordinal, cutoff, consumer or usable generation is
 implemented by this foundation. The later authorized transition operation owns
 legal adjacency and extends the same controller. Actual CON root storage and
-real authorized writer-versus-cutoff proof are required before activation; lock
-mechanics alone do not prove drain correctness. Both acceptance callers require
+real authorized writer-versus-cutoff proof are required before a successor
+manifest activates fulfillment admission, dispatch or callbacks. They do not
+block the first contribution manifest with fulfillment disabled. Lock mechanics
+alone do not prove asynchronous drain correctness. Both acceptance callers require
 a valid authorized lifecycle generation, without a bootstrap bypass or second
 availability flag.
 
@@ -1158,27 +1162,43 @@ The resource still binds singleton, expected generation, phases, operation,
 reviewed manifest and observation digests, deadline and reason. No SQL bootstrap,
 new action, permissive default generation or second availability flag is allowed.
 
-This scoped manifest covers every enabled TASK admission/routing and shared
-acceptance/CON obligation writer, including legacy-reachability removal. Its
-real observation ports, ordinal fencing, crash recovery and safe drain/stop
-proof must pass before it can admit work. Unlisted writers, fabricated zero
-counts and unsupported transitions deny. Human queues/leases/decisions and
-unreleased CON product/fulfillment surfaces must be proven unreachable; their
-absence is a checked fact, not a fake observation adapter. Required shared
-storage/history observations still run even when a surface is unavailable.
+The first-contribution manifest covers its enabled TASK admission/routing and
+shared acceptance/CON contribution and conditional award writers. Payment
+obligation admission, dispatch and callbacks remain unavailable; their absence
+must be checked against actual composition, not represented by fake zero drain
+counts. Paid and unpaid contribution policies retain their full atomic award
+semantics. Neither payment delivery nor its obligation/root/ordinal substrate
+is a prerequisite of this bounded manifest.
 
-The same authorized Operator command is exposed as shared infrastructure for
-this bounded manifest, not as a reviewer endpoint. Later human/fulfillment
-release adds its observation/custody proofs and a successor manifest/evaluator
-under the same controller and action. This is product deployment control,
-not a new contributor approval step or permission to activate human review.
+The initial controller implementation is
+[REV-12A4A](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md).
+It remains planned. It extends the same Operator action, singleton and fence;
+it does not grant routing or acceptance authority. Every enabled writer must
+appear in its reviewed manifest. Server-derived observations are checked under
+the canonical lock. Unsupported surfaces and unlisted writers deny. Human
+queues/leases/decisions and fulfillment remain unavailable. Retained mechanical
+acceptance facts cannot establish missing originating AUTH receipts.
 
-Activation and shutdown are generation-bound and crash resumable. Shutdown
-fences new admission, drains admitted commands and leases, captures the
-immutable fulfillment-obligation cutoff after prior writers drain, permits only
-same-generation pre-cutoff completion work, then disables. Timeout leaves the
-phase unchanged for forward retry. No background job replays human Operator
-authority or advances a phase. Reactivation requires a newly reviewed manifest.
+For atomic participants, the shared transaction fence waits for earlier writers;
+a phase change prevents later new effects. Exact terminal replay compares retained
+facts without new writes, using the current generation as the fence precondition.
+When asynchronous routing is enabled, its successor manifest must prove actual
+admitted-work drain and crash recovery before activation. No generic drain system
+or fabricated observation is required for absent asynchronous participants.
+
+The same authorized Operator command is shared infrastructure, not a reviewer
+endpoint or contributor approval step. Later human/fulfillment release adds its
+actual observation/custody proofs under the same controller and action.
+Before fulfillment admission is enabled, CON must own real immutable roots and
+ordinals. Shutdown then drains prior writers and captures the server-derived
+cutoff, permits only same-generation pre-cutoff completion, and disables only
+after the governed drain. None of those future operations is implied by storing
+an award fact.
+
+Activation and shutdown are generation-bound and crash resumable. Timeout leaves
+the phase unchanged for forward retry. No background job replays human Operator
+authority or advances a phase. Reactivation verifies the reviewed manifest and
+current observations; an expanded scope requires a reviewed successor manifest.
 
 This controller is product release state, not AUTH action availability. The
 full human 12A1 through 12A4 implementation expands the shared foundation;
