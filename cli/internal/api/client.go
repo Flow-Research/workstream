@@ -118,7 +118,7 @@ func New(origin, token string) (*Client, error) {
 			return http.ErrUseLastResponse
 		},
 	}
-	// Binary reads include server-side whole-original verification and transfers
+	// Binary guide transfers include server-side whole-original verification
 	// up to 512 MiB. Keep them bounded without applying the JSON deadline.
 	guideTransport := transport.Clone()
 	guideTransport.ResponseHeaderTimeout = 2 * time.Minute
@@ -339,14 +339,20 @@ func (c *Client) requestWithResponseLimit(ctx context.Context, method, path, que
 }
 
 func (c *Client) openRequest(ctx context.Context, requestClient *http.Client, method, path, query string, body []byte, key, accept string) (*http.Response, error) {
+	var reader io.Reader
+	contentType := ""
+	if body != nil {
+		reader = bytes.NewReader(body)
+		contentType = "application/json"
+	}
+	return c.openBodyRequest(ctx, requestClient, method, path, query, reader, int64(len(body)), key, accept, contentType)
+}
+
+func (c *Client) openBodyRequest(ctx context.Context, requestClient *http.Client, method, path, query string, reader io.Reader, length int64, key, accept, contentType string) (*http.Response, error) {
 	mutation := method == http.MethodPatch || method == http.MethodPost
 	target := c.origin + path
 	if query != "" {
 		target += "?" + query
-	}
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, target, reader)
 	if err != nil {
@@ -364,8 +370,9 @@ func (c *Client) openRequest(ctx context.Context, requestClient *http.Client, me
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if reader != nil {
+		req.ContentLength = length
+		req.Header.Set("Content-Type", contentType)
 	}
 	response, err := requestClient.Do(req)
 	if err != nil {

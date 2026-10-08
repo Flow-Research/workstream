@@ -1,6 +1,7 @@
-"""Built CLI download through real FastAPI, AUTH, PostgreSQL and ArtifactStore."""
+"""Built CLI original upload/download through real API, AUTH, PostgreSQL and ART."""
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -9,6 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 import uvicorn
+from sqlalchemy import select
 
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
 sys.path.insert(0, str(BACKEND / "tests"))
@@ -17,6 +19,10 @@ sys.path.insert(0, str(BACKEND / "scripts"))
 from api_contract_e2e import find_free_port  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
+from app.core.identifiers import new_record_id  # noqa: E402
+from app.db import session as db_session  # noqa: E402
+from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactReplica  # noqa: E402
+from tests.test_guide_document_intake import _open_store  # noqa: E402
 from tests.conftest import (  # noqa: E402
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
@@ -62,6 +68,138 @@ async def guide_world(task_client, monkeypatch):
     return await _guide_world.__wrapped__(task_client, monkeypatch)
 
 
+async def exercise_original_upload(cli, origin, world, tmp_path, monkeypatch):
+    """Public creation/upload plus independent stored-original parity; no fake ART."""
+    set_dev_actor(
+        monkeypatch, roles="project_manager", subject="project-manager-subject"
+    )
+    declaration = tmp_path / "guide.json"
+    declaration.write_text(
+        json.dumps(
+            {
+                "version": "cli-original-upload",
+                "task_examples": [
+                    {"content": "Evaluate the evidence against the guide."}
+                ],
+                "documents": [
+                    {"label": "Instructions.pdf", "media_type": "application/pdf"}
+                ],
+            }
+        )
+    )
+    created = await asyncio.to_thread(
+        cli,
+        origin,
+        "task-token",
+        "project",
+        "guide",
+        "create",
+        world.project["id"],
+        "--input",
+        str(declaration),
+        "--idempotency-key",
+        str(new_record_id()),
+        "-o",
+        "json",
+    )
+    assert created.returncode == 0, created.stderr
+    guide = json.loads(created.stdout)
+    assert (
+        guide["status"] == "draft" and guide["setup"]["status"] == "awaiting_documents"
+    )
+    document = guide["documents"][0]["document_id"]
+    original = world.originals[0]
+    path = tmp_path / "original.pdf"
+    path.write_bytes(original)
+    key = str(new_record_id())
+
+    async def upload(*, selectors=None, media="application/pdf"):
+        return await asyncio.to_thread(
+            cli,
+            origin,
+            "task-token",
+            "project",
+            "guide",
+            "upload",
+            *(selectors or (world.project["id"], guide["id"], document)),
+            "--file",
+            str(path),
+            "--media-type",
+            media,
+            "--idempotency-key",
+            key,
+            "-o",
+            "json",
+        )
+
+    # Alternate supported UUID spelling reaches the real router unchanged.
+    selectors = tuple(
+        value.replace("-", "") for value in (world.project["id"], guide["id"], document)
+    )
+    stored = await upload(selectors=selectors)
+    assert stored.returncode == 0, stored.stderr
+    receipt = json.loads(stored.stdout)
+    assert receipt == {
+        "document_id": document,
+        "sha256": "sha256:" + hashlib.sha256(original).hexdigest(),
+        "byte_count": len(original),
+        "status": "document_stored",
+        "replayed": False,
+    }
+    async with db_session.get_session_factory()() as session:
+        put = (
+            await session.scalars(
+                select(ArtifactPutAttempt).where(
+                    ArtifactPutAttempt.guide_source_item_id == document,
+                )
+            )
+        ).one()
+        replica = await session.get(ArtifactReplica, put.replica_id)
+        assert put.status == "object_confirmed"
+        assert (put.sha256, put.byte_count) == (
+            receipt["sha256"],
+            receipt["byte_count"],
+        )
+        object_ref = replica.provider_object_ref
+        attempt_id = put.id
+    bootstrap, store = _open_store(get_settings())
+    try:
+        assert b"".join([block async for block in store.open(object_ref)]) == original
+    finally:
+        store.close()
+        bootstrap.close()
+    replay = await upload()
+    assert replay.returncode == 0, replay.stderr
+    assert json.loads(replay.stdout) == receipt | {
+        "status": "object_confirmed",
+        "replayed": True,
+    }
+    path.write_bytes(original + b"changed")
+    conflict = await upload()
+    assert conflict.returncode == 1 and conflict.stdout == ""
+    assert json.loads(conflict.stderr)["error"]["status"] == 409
+    path.write_bytes(original)
+    wrong = await upload(selectors=(world.project["id"], world.guide["id"], document))
+    assert wrong.returncode == 1 and json.loads(wrong.stderr)["error"]["status"] == 404
+    set_dev_actor(monkeypatch, roles="viewer", subject="pilot13-alice")
+    denied = await upload()
+    assert denied.returncode == 1 and denied.stdout == ""
+    assert json.loads(denied.stderr)["error"]["status"] == 404
+    async with db_session.get_session_factory()() as session:
+        current = (
+            await session.scalars(
+                select(ArtifactPutAttempt).where(
+                    ArtifactPutAttempt.guide_source_item_id == document,
+                )
+            )
+        ).one()
+        assert current.id == attempt_id and current.replica_id == replica.id
+        assert (current.sha256, current.byte_count) == (
+            receipt["sha256"],
+            len(original),
+        )
+
+
 @pytest.mark.asyncio
 async def test_installed_cli_reads_and_downloads_real_assigned_originals(
     cli, guide_world, task_client, tmp_path, monkeypatch
@@ -92,6 +230,7 @@ async def test_installed_cli_reads_and_downloads_real_assigned_originals(
                 await asyncio.sleep(0.1)
             else:
                 raise AssertionError("API readiness timeout")
+        await exercise_original_upload(cli, origin, guide_world, tmp_path, monkeypatch)
         directory = tmp_path / "downloaded"
         directory.mkdir()
         result = await asyncio.to_thread(

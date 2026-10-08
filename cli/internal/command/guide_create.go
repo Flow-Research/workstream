@@ -35,6 +35,7 @@ func addGuideCreate(project *cobra.Command, client func() (*api.Client, error), 
 	create.Flags().StringVar(&input, "input", "", "Required regular UTF-8 JSON file containing the public guide declaration (at most 1MiB)")
 	create.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; retain with unchanged input for manual replay")
 	guide.AddCommand(create)
+	addGuideUpload(guide, client, output, stdout)
 	project.AddCommand(guide)
 }
 

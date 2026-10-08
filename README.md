@@ -348,6 +348,10 @@ replay and uncertain-outcome handling; it does not approve or activate a guide.
 `workstream project guide create PROJECT_ID --input FILE --idempotency-key UUID`
 declares a draft guide, task examples and document upload targets. It does not
 upload documents or approve the guide; returned setup waits for those documents.
+`workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE
+--media-type MIME --idempotency-key UUID` uploads a declared original. The CLI
+streams its bytes and validates the storage receipt against their hash and size.
+An upload receipt is not setup completion, policy approval or guide activation.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.

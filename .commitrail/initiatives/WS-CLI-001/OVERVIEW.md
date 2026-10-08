@@ -13,7 +13,9 @@
   [WS-CLI-001-06](WS-CLI-001-06.md), public contributor claim/start with explicit retry keys;
   [WS-CLI-001-07](WS-CLI-001-07.md), contributor governing context and locked intake requirements;
   [WS-CLI-001-08](WS-CLI-001-08.md), draft project shell creation with explicit caller-owned replay;
-  [WS-CLI-001-09](WS-CLI-001-09.md), guide declaration, illustrative tasks and document upload selectors.
+  [WS-CLI-001-09](WS-CLI-001-09.md), guide declaration, illustrative tasks and document upload selectors;
+  [WS-CLI-001-10](WS-CLI-001-10.md), declared-original upload with hash/size-bound storage receipts;
+  [PILOT-13](../../changes/pilot13-assigned-task-guide-documents.md), assigned-task locked-guide listing/download.
 
 ## Current boundary
 
@@ -44,6 +46,13 @@ and committed recovery; guide upload, approval and activation are not added.
 a draft guide, task examples and document targets; setup awaits document upload.
 This is a stored creation receipt, not live readiness. The API reauthorizes
 guide creation replay, unlike project-shell committed recovery.
+`project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type
+MIME --idempotency-key UUID` streams one declared original through the public
+binary POST and rechecks the open original's size, modification time and full hash
+before success. Its exact-byte receipt establishes storage only, not setup readiness,
+approval or activation; unconfirmed outcomes require deliberate unchanged-input
+replay. `task guide TASK_ID [--download DIR]` lists or downloads the assigned
+task's locked originals with verified byte identity; setup examples stay private.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.
@@ -99,12 +108,15 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
    outcomes. Reuse project inspection parsing/output; no guide activation.
 9. **WS-CLI-001-09:** Declare a guide, required illustrative tasks and source
    document targets through public POST using an exact bounded JSON file.
-   Actual document upload, setup inspection, approval and activation remain.
-10. **Later governed-work commands:** Add further project setup, submission,
+   Setup awaits actual original upload.
+10. **WS-CLI-001-10:** Upload one declared PDF/DOCX/PPTX original through public
+   binary POST; validate storage receipt against local bytes and preserve manual
+   replay custody. Setup inspection, approval and activation remain.
+11. **Later governed-work commands:** Add further project setup, submission,
    review, revision, and contribution reads/writes only as their actual public
    contracts and authority boundaries become available. Split by user journey,
    not one PR per endpoint or one giant catalogue PR.
-11. **Optional TUI:** Add a focused public queue/evidence view after its API
+12. **Optional TUI:** Add a focused public queue/evidence view after its API
    workflow is complete. Never require a TUI for agents or scripts.
 
 ## Risks and proof

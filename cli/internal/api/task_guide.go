@@ -62,7 +62,7 @@ func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, 
 		d := documents[index]
 		if _, err := contextObject(entry, &d, []string{"document_id", "order", "label", "media_type", "byte_count", "sha256", "read_reference"}, nil); err != nil ||
 			!validUUID(d.DocumentID) || seen[canonicalUUID(d.DocumentID)] || d.Order <= previous ||
-			strings.TrimSpace(d.Label) == "" || d.Extension() == "" || d.ByteCount <= 0 || d.ByteCount > 512*1024*1024 ||
+			strings.TrimSpace(d.Label) == "" || d.Extension() == "" || d.ByteCount <= 0 || d.ByteCount > MaxGuideDocumentBytes ||
 			!contextPolicyDigest.MatchString(d.SHA256) || d.ReadReference != guideDocumentPath(taskID, d.DocumentID) {
 			return errors.New("invalid guide document")
 		}
@@ -76,7 +76,7 @@ func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, 
 // caller writes privately and publishes only after this verifies all bytes.
 func (c *Client) DownloadGuideDocument(ctx context.Context, taskID string, document TaskGuideDocument, target io.Writer) error {
 	if !validUUID(taskID) || !validUUID(document.DocumentID) || document.Extension() == "" ||
-		document.ByteCount <= 0 || document.ByteCount > 512*1024*1024 || !contextPolicyDigest.MatchString(document.SHA256) ||
+		document.ByteCount <= 0 || document.ByteCount > MaxGuideDocumentBytes || !contextPolicyDigest.MatchString(document.SHA256) ||
 		document.ReadReference != guideDocumentPath(taskID, document.DocumentID) {
 		return &Failure{Code: "invalid_api_response"}
 	}

@@ -2,7 +2,7 @@
 
 An independent Go client for Workstream's public REST API, for humans and
 agents using the terminal. It provides human self-profile reads and editing,
-plus draft project/guide declaration, exact-project inspection, authority reads, manager task browsing and
+plus draft project/guide declaration and original upload, exact-project inspection, authority reads, manager task browsing and
 contributor work discovery, claim/start, locked guide documents and governing
 context/intake requirements:
 
@@ -14,6 +14,7 @@ context/intake requirements:
 | `workstream project show PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID` |
 | `workstream project create --name TEXT --slug TEXT --idempotency-key UUID` | `POST /api/v1/projects` |
 | `workstream project guide create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides` |
+| `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -76,7 +77,7 @@ for invalid arguments or configuration. JSON requests time out after 12 seconds;
 JSON responses default to a 64 KiB bound (guide declaration and document-bearing
 work context use 2 MiB wire bounds). Original downloads stream to private files,
 bounded by the advertised byte count and ART's 512 MiB hard ceiling. Downloads
-allow up to two minutes for verified-response headers and ten minutes overall,
+and original uploads allow up to two minutes for response headers and ten minutes overall,
 including transfer; connection/TLS timeouts and redirect/proxy refusal remain.
 Interrupted transfers are not reported as a digest mismatch or published. Requests
 are not automatically retried by the CLI.
@@ -151,6 +152,40 @@ Changed input conflicts. Lost, malformed, redirected or unexpected replies
 report an unknown outcome, not rollback; manually replay only the unchanged
 input and key. A complete canonical 4xx is a known denial. Local file errors
 never echo file paths, contents or OS error details.
+
+## Upload a declared guide original
+
+```sh
+workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file Guide.pdf --media-type application/pdf --idempotency-key UPLOAD_UUID --output json
+```
+
+Use the guide and document IDs returned by `project guide create`. Supply the
+document's declared media type explicitly: PDF, DOCX or PPTX as listed in
+OpenAPI. The CLI sends raw original bytes, not extracted text, JSON or multipart.
+It requires a nonempty regular file up to ART's 512MiB hard ceiling; Workstream
+can enforce smaller configured document or aggregate limits. Files are hashed
+and streamed through the same open descriptor without whole-file buffering.
+Before confirming storage, the CLI rechecks that descriptor's size,
+modification time and full hash. An observed change fails with
+`guide_document_upload_source_changed`, `outcome_unknown: true` and no success
+output, because the server may have stored the original bytes already. This is
+not a filesystem lock or an immutable local snapshot.
+Keep the file unchanged during the operation and any later manual replay.
+
+The API owns current exact-project authority, declared-document membership,
+immutable original storage and asynchronous setup continuation. Exact HTTP 202
+with a complete five-field receipt matching the selected document and file
+SHA-256/byte count establishes stored-original success only for `document_stored`
+or `object_confirmed`. JSON preserves that receipt; text renders it safely.
+Neither proves setup completion, policy approval or guide activation.
+
+No preflight, redirect, proxy, generated key or automatic transport retry is
+performed. Preserve the same project/guide/document selectors, original bytes,
+media type and caller-owned key for deliberate replay. A complete canonical 4xx
+is a known denial; dropped, malformed, mismatching or unexpected responses are
+unknown outcomes. An otherwise valid unconfirmed-storage status also exits 1,
+sets `outcome_unknown` and leaves stdout empty rather than reporting success.
+Diagnostics never include file paths, contents or raw provider/transport errors.
 
 ## Create a draft project shell
 
@@ -317,7 +352,8 @@ labels as paths. The destination must already exist and must not be a symlink.
 Downloads use private bounded temporary files and atomic no-overwrite publication;
 existing targets/symlinks are refused and failed unpublished files are removed.
 Documents completed before a later document fails remain valid local files.
-The CLI does not expose examples, upload originals or execute document content.
+The `task guide` command does not expose examples, upload originals or execute
+document content. Manager uploads use the separate `project guide upload` command.
 
 JSON preserves the exact public response. Human output labels every root field
 and uses compact, terminal-safe JSON for complete nested rules and facts;
