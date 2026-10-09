@@ -76,7 +76,8 @@ REV-04B now references that schema after its source prerequisites:
 [ART-07A1 packet types](../../../WS-ART-001/WS-ART-001-07A1.md) are delivered;
 REV-03B normalized packets and REV-04A immutable Review source storage are delivered; REV-04B shared FinalAcceptance storage is delivered; CON-03C contribution/award storage and REV-12A1 disabled controller/fence are delivered; hidden AUTH preparation is delivered before CON-07; mandatory persisted custody accompanies the first authorized atomic consequence at 04E2-B.
 CON-07/REV-04C shared acceptance prerequisites, using the delivered exact AUTH preparation and
-REV-12A1 disabled controller/fence, are hard dependencies of false handler composition, not of this
+REV-12A4A scoped controller/generation (retaining REV-12A1 fence mechanics),
+are hard dependencies of the false authorized outcome consumed by completion delivery, not of this
 early schema or true admission. Both branches use the delivered preparation phase
 above; complete authorized outcomes 04E2-B precede remaining completion
 delivery 04E1B-B and live 04E3. True proceeds with its own prerequisites;
@@ -315,11 +316,13 @@ checker results without creating Review, ReviewFinding, or
 RevisionContextPreparation records.
 
 This is a coordination contract. Each remaining child record, beginning with
-delivered request reservation 04E1B-A, supplies its current-main
+the complete authorized outcome operation at 04E2-B, supplies its current-main
 exact files, commands, migration head and reviewers before implementation.
 Shared acceptance foundations additionally gate false composition; they do not
-gate true admission. Both branches retain the preparation, issuer, handler, activation and live
-composition phases above; only false handlers add shared acceptance.
+gate true admission. Both branches use delivered preparation, then the complete
+authorized outcome operation, completion delivery and live composition. Only
+false authorized outcomes add shared acceptance; the completion handler consumes
+the operation and acknowledges its committed outcome.
 
 ## Merge state
 
