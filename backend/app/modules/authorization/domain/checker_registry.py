@@ -33,4 +33,3 @@ def checker_registry_grant_filters(action_id: ActionId) -> dict[str, object]:
     if action_id not in CHECKER_REGISTRY_ACTIONS:
         return {}
     return {"allowed_roles": frozenset({AdminRole.OPERATOR})}
-
