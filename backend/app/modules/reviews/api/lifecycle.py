@@ -114,7 +114,7 @@ class LifecycleAuthorityReceipt(BaseModel):
 
 
 class PreparedLifecycleTransition(Protocol):
-    """AUTH-owned live Operator custody held before acquiring REV locks."""
+    """AUTH-owned live Operator custody acquired under the REV controller fence."""
 
     async def consume_new(self, facts: LifecycleTransitionFacts) -> LifecycleAuthorityReceipt:
         """Append exact authorization evidence in the caller's transaction."""

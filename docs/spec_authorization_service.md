@@ -442,7 +442,9 @@ while the exact activation wave installs the corresponding AUTH evaluator.
 REV-12A4A now activates the internal `review.lifecycle.activation.manage` slice
 with a strict nested command/observations resource owned by AUTH's lifecycle
 contract. It replaces the earlier inert scalar shape. Live system Operator
-PREP precedes the REV root fence; consumption binds the singleton, operation,
+PREP follows the REV root fence, so a transition cannot retain actor custody
+while waiting for an acceptance writer that needs TASK. The fence grants no
+authority; consumption still precedes effects and binds the singleton, operation,
 actor/link, generation, phases, deadline, manifest and observations. Controller,
 immutable history and exact AUTH evidence commit together. Same-command replay
 requires fresh same-actor authority and writes nothing. Other review actions

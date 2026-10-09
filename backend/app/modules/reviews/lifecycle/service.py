@@ -32,7 +32,7 @@ _EDGES = frozenset({
 
 
 class JointLifecycleController:
-    """Flush-only REV owner; AUTH locks precede the shared REV mutation fence."""
+    """Flush-only REV owner; the shared fence precedes AUTH principal custody."""
 
     def __init__(self, session: AsyncSession, *, authorization: LifecycleTransitionAuthorization):
         self._session = session
@@ -42,8 +42,8 @@ class JointLifecycleController:
     async def transition(self, command: LifecycleTransitionCommand) -> LifecycleTransitionReceipt:
         """Commit control, history and exact AUTH together, or let the caller roll back."""
         checked = LifecycleTransitionCommand.model_validate(command)
+        current = await self._fence.lock_controller()
         async with self._authorization.lock_scope(checked) as authority:
-            current = await self._fence.lock_controller()
             history = await self._session.scalar(select(JointLifecycleTransition).where(
                 JointLifecycleTransition.operation_id == checked.operation_id,
             ))
@@ -93,7 +93,9 @@ class JointLifecycleController:
             )
             self._session.add(row)
             await self._session.flush()
-            control = await self._session.get(JointLifecycleReleaseControl, current.singleton_id)
+            control = await self._session.get(
+                JointLifecycleReleaseControl, current.singleton_id, populate_existing=True,
+            )
             control.phase, control.generation, control.transition_id = row.phase, row.generation, row.id
             await self._session.flush()
             return _receipt(row)

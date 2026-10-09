@@ -75,8 +75,8 @@ def facts_for(command):
 async def issue_authority(session, command):
     """Real PREP and root locking; caller must attach the atomic transition."""
     owner = controller(session, command)
+    await owner._fence.lock_controller()
     async with owner._authorization.lock_scope(command) as prepared:
-        await owner._fence.lock_controller()
         return await prepared.consume_new(facts_for(command))
 
 

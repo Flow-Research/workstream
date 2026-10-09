@@ -167,3 +167,28 @@ async def test_shared_reset_restores_activated_controller(admin_access, isolated
                 await session.execute(text(
                     "UPDATE public.joint_lifecycle_release_control SET phase='live',generation=1"
                 ))
+
+
+async def test_transition_refreshes_controller_cached_before_another_commit(admin_access):
+    from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    async with get_session_factory()() as session:
+        cached = await session.scalar(select(JointLifecycleReleaseControl))
+        assert (cached.phase, cached.generation) == ("disabled", 0)
+        await session.commit()
+        advanced = await transition(await command_for(admin_access.target.id, "shadow"))
+        assert advanced.generation == 1
+        command = await command_for(admin_access.target.id, "disabled")
+        assert (cached.phase, cached.generation) == ("disabled", 0)
+        async with session.begin():
+            receipt = await controller(session, command).transition(command)
+        assert (cached.phase, cached.generation) == ("disabled", 2)
+    async with get_session_factory()() as session:
+        stored = await session.get(JointLifecycleReleaseControl, command.singleton_id)
+        history = await session.scalar(select(JointLifecycleTransition).where(
+            JointLifecycleTransition.operation_id == command.operation_id,
+        ))
+        assert (stored.phase, stored.generation, stored.transition_id) == ("disabled", 2, history.id)
+        assert (history.previous_phase, history.phase) == ("shadow", "disabled")
+        assert history.authorization_decision_event_id == str(receipt.authorization_decision_event_id)

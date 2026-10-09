@@ -1143,7 +1143,10 @@ shutdown stages in historical plans are not additional current persisted phases.
 
 REV-12A1 alone implemented no transition or usable generation. REV-12A4A now
 extends it with Operator-authorized legal adjacency, immutable history, exact
-AUTH/controller closure and current-generation read-only replay. It does not
+AUTH/controller closure and current-generation read-only replay. Transitions take
+the REV fence before AUTH control and principal locks; acceptance takes REV
+before TASK, and task reads take TASK before AUTH. Controller mutation refreshes
+any cached ORM state from the already locked database row. It does not
 activate an acceptance consumer or fulfillment. Actual CON root storage and
 real authorized writer-versus-cutoff proof are required before a successor
 manifest activates fulfillment admission, dispatch or callbacks. They do not

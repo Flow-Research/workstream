@@ -33,12 +33,16 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
    replay. REV owns legal edges: disabled -> shadow -> live -> draining ->
    disabled, plus shadow -> disabled. Each successful transition increments the
    generation. Database time governs deadlines. No transition seeds an allow.
-3. Use existing AUTH PREP with live system Operator authority before the REV
-   advisory/controller lock. Bind the exact singleton, operation, expected
+3. Acquire the REV advisory/controller fence before existing AUTH PREP obtains
+   live system Operator authority. This respects acceptance REV -> TASK and
+   task-read TASK -> AUTH custody; transitions never retain AUTH while waiting
+   for REV. The fence is mechanical serialization, not permission to change state. Bind the exact singleton, operation, expected
    generation, source/target phases, request, manifest and server observations.
    For this action only, AUTH locks the actor profile FOR NO KEY UPDATE, retaining
    link/grant FOR UPDATE: actor foreign-key reads may complete under a prior REV
    writer, while actor status changes/revocation still serialize.
+   Refresh the ORM controller from locked database state before assigning the
+   successor, even when the caller previously cached it.
    AUTH consumes after locked validation; history and controller change commit
    with its immutable decision in the caller's root transaction. Commit-time
    closure requires exactly one N/P -> N+1/Q update, history row and matching
@@ -114,6 +118,9 @@ service locator; timeout/completeness/boundary weakening; unrelated cleanup.
   existing records survive.
 - Independent sessions prove writer-first and transition-first ordering through
   actual participant writes; rollback removes state/history/AUTH effects together.
+  A three-session read/acceptance/transition regression must observe acceptance
+  waiting on TASK and transition waiting on REV before resuming the reader.
+  A cached controller must accept a valid command after another transaction advances it.
   Managed and raw savepoints remain rejected by the canonical root fence.
 - New participant effects fail in disabled/shadow/draining and at generation zero.
   Mechanically composed live paid and unpaid controls preserve exact contribution and complete award
@@ -173,3 +180,11 @@ capacity. The whole lifecycle-participant module therefore runs beside the
 existing acceptance and contribution participant modules in the three project
 partitions, which have measured headroom. Exact node ownership/completeness is
 retained; no execution limit is relaxed.
+
+External review reproduced a three-transaction cycle through actual task detail,
+acceptance and transition owners, plus an ORM update that omitted the phase after
+another session committed a transition. The repair orders the controller fence
+before authority custody and refreshes the locked controller before mutation.
+The regressions fail against the prior ordering and cached update at their actual
+PostgreSQL boundaries; the prior two-session proof remains required. No runtime
+activation or capability scope changes follow from these repairs.

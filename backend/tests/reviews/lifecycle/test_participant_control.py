@@ -244,3 +244,92 @@ async def test_each_owner_independently_rejects_new_effects(
                 owner._repository.persist.assert_not_awaited()
             async with h.factory() as session:
                 assert await stored_effects(session, h.acceptance.task_id) == before
+
+
+async def test_task_read_acceptance_and_transition_intermediate_waits(
+    tmp_path, isolated_database_env, live_acceptance_lifecycle, monkeypatch,
+):
+    from app.adapters.audit import task_transition_audit
+    from app.adapters.tasks import task_commands
+    from app.core.config import get_settings
+    from app.modules.authorization.task_authorization import PreparedTaskAuthorization
+    from tests.authorization.task_authority.test_concurrency import actor_context
+
+    access = live_acceptance_lifecycle
+    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
+        await prepare_review_pending(h)
+        actor_id = h.acceptance.accepted_submitter_id
+        await access.signed.grant(access.admin, SimpleNamespace(id=actor_id))
+        actor = await actor_context(str(actor_id))
+        command = await command_for(actor_id, "draining")
+        request = await request_for(h)
+        task_locked, proceed = asyncio.Event(), asyncio.Event()
+        original = PreparedTaskAuthorization.prepare
+
+        async def pause_after_task(owner, facts):
+            task_locked.set()
+            await proceed.wait()
+            return await original(owner, facts)
+
+        monkeypatch.setattr(PreparedTaskAuthorization, "prepare", pause_after_task)
+        pids = {}
+
+        async def identify(session, name):
+            pids[name] = await session.scalar(text("SELECT pg_catalog.pg_backend_pid()"))
+
+        async def read():
+            async with h.factory() as session:
+                await identify(session, "read")
+                await session.commit()
+                owner = task_commands(
+                    session, settings=get_settings(), authorization=PreparedTaskAuthorization(session, actor),
+                    audit=task_transition_audit(session), actor_profile_id=actor_id,
+                )
+                return await owner.management_detail(h.acceptance.project_id, h.acceptance.task_id)
+
+        async def accept():
+            async with h.factory() as session, session.begin():
+                await identify(session, "accept")
+                return await participant(session).participate(request)
+
+        async def stop():
+            async with h.factory() as session, session.begin():
+                await identify(session, "stop")
+                return await controller(session, command).transition(command)
+
+        async def wait_for_blocker(waiter, blocker, pending):
+            async with h.factory() as observer, asyncio.timeout(10):
+                while True:
+                    if pending.done():
+                        await pending
+                        raise AssertionError("expected intermediate database wait")
+                    if waiter in pids and await observer.scalar(text(
+                        "SELECT :blocker = ANY(pg_catalog.pg_blocking_pids(:waiter))"
+                    ), {"blocker": pids[blocker], "waiter": pids[waiter]}):
+                        return
+                    await asyncio.sleep(0.01)
+
+        jobs = [asyncio.create_task(read())]
+        try:
+            await asyncio.wait_for(task_locked.wait(), 10)
+            jobs.append(asyncio.create_task(accept()))
+            # Acceptance retains REV while the real task read retains TASK.
+            await wait_for_blocker("accept", "read", jobs[1])
+            jobs.append(asyncio.create_task(stop()))
+            # Transition must wait for REV without retaining the reader's actor.
+            await wait_for_blocker("stop", "accept", jobs[2])
+            proceed.set()
+            detail, accepted, stopped = await asyncio.wait_for(asyncio.gather(*jobs), 20)
+            assert detail.task_id == h.acceptance.task_id
+            assert accepted.acceptance.id == h.acceptance.id
+            assert stopped.phase == "draining" and stopped.generation == 3
+        finally:
+            proceed.set()
+            for job in jobs:
+                if not job.done():
+                    job.cancel()
+            await asyncio.gather(*jobs, return_exceptions=True)
+        async with h.factory() as session:
+            facts = await stored_effects(session, h.acceptance.task_id)
+            assert facts["task_status"] == "accepted"
+            assert facts["acceptances"] == facts["contributions"] == 1
