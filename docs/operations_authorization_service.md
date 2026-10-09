@@ -623,8 +623,11 @@ hidden human `submission.create`, and fixed-service
 Project Manager `project.guide_compilation.review_package.read`,
 `project.submission_artifact_policy.approve`, and
 `project.guide_compilation.correction.request`; POL-05B exposes these with
-exact Project Manager authority and manual correction dispatch. Checker, review, generic artifact-read, and
-the public Submission cutover remain planned. Callers begin and own one root
+exact Project Manager authority and manual correction dispatch. REV-12A4A also
+supports the internal `review.lifecycle.activation.manage` action as the sole
+active review exception. Human review and generic artifact-read remain planned,
+as does the public Submission cutover. The controller activates no public
+review route, routing, acceptance or payment delivery. Callers begin and own one root
 transaction and follow their owner's lock contract for participant rows and
 `prepare`; REV-fenced operations acquire REV and any required TASK custody
 before preparation. They compose final locked facts and call `consume` with the

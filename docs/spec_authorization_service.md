@@ -873,8 +873,11 @@ ART foundation service actions, Project Manager
 `artifact.guide_source.read`
 action, contributor `artifact.submission_bundle.prepare`, hidden human
 `submission.create`, and fixed-service `artifact.submission.binding.create`.
-Checker, review, generic artifact-read, and the public Submission cutover remain
-planned and issue no handle.
+REV-12A4A additionally issues PREP for internal
+`review.lifecycle.activation.manage`, the sole active review exception. Human
+review, generic artifact-read and the public Submission cutover remain planned
+and issue no handle. The controller activates no public review route, routing,
+acceptance or payment delivery.
 ARCH-04E1B-B6 retains the exact creation and binding decision IDs in their owner
 receipts. Fresh PREP authority validates those immutable events on replay,
 including exact actor/service, action, permission, project, resource and canonical
