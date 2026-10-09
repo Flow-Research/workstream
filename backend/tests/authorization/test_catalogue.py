@@ -25,7 +25,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 144
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 145
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -104,7 +104,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 106,
+        ActionAvailability.ACTIVE: 107,
         ActionAvailability.PLANNED: 38,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF

@@ -28,6 +28,9 @@ def project_authority_audit_target(
         AdapterBindingReadResourceContext,
         AdapterBindingMutationResourceContext,
     )
+    from app.modules.authorization.domain.checker_registry import (
+        ExternalCheckerRegistryResourceContext,
+    )
     from app.modules.authorization.domain.guide_compilation import (
         ProjectGuideCompilationRequestResourceContext,
         ProjectGuideCompilationExecuteResourceContext,
@@ -62,6 +65,15 @@ def project_authority_audit_target(
         return (
             None, "project_create_operation", str(resource.resource_id),
             "project", str(resource.requested_project_id),
+        )
+    if isinstance(resource, ExternalCheckerRegistryResourceContext):
+        entry_id = str(resource.resource_id)
+        return (
+            None,
+            resource.resource_type,
+            entry_id,
+            resource.resource_type,
+            entry_id,
         )
     if action_id in SUBMISSION_POLICY_MUTATIONS and isinstance(
         resource, ProjectSubmissionArtifactPolicyMutationResourceContext,

@@ -41,7 +41,7 @@ _RESOURCE_TYPES = frozenset(
     project_guide_compilation_attempt project_guide_sufficiency_projection
     project_submission_artifact_policy_projection project_guide_setup_finalization
     project_guide_compilation_review_package project_guide_compilation_correction
-    project_post_submit_checker_policy_mutation""".split()
+    project_post_submit_checker_policy_mutation external_checker_registry_entry""".split()
 )
 _UUID_TARGET_KINDS = frozenset(
     {
@@ -50,6 +50,7 @@ _UUID_TARGET_KINDS = frozenset(
         "admin_role_grant",
         "qualification_snapshot",
         "project_role_grant",
+        "external_checker_registry_entry",
     }
 )
 _TARGET_REF_KINDS = _UUID_TARGET_KINDS | {"project"}

@@ -22,6 +22,7 @@ from app.modules.authorization.domain.audit import (
 )
 from app.modules.authorization.domain.contribution_policies import ContributionPolicyReadResourceContext, ContributionPolicyMutationResourceContext
 from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
+from app.modules.authorization.domain.checker_registry import ExternalCheckerRegistryResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain import task_authority, task_queues, submission_history
 from app.modules.authorization.domain.guide_mutations import (
@@ -1240,4 +1241,5 @@ AuthorizationResourceContext = (
     | SubmissionBundlePreparationResourceContext
     | AdapterBindingReadResourceContext | AdapterBindingMutationResourceContext
     | ContributionPolicyReadResourceContext | ContributionPolicyMutationResourceContext
+    | ExternalCheckerRegistryResourceContext
 )

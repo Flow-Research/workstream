@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import Uuid
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -18,10 +19,120 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import text
 
 from app.db.base import Base
+
+
+class ExternalCheckerRegistryEntryRecord(Base):
+    """Immutable authorized external-image registry publication."""
+
+    __tablename__ = "external_checker_registry_entries"
+    __table_args__ = (
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and "
+            "(get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
+        UniqueConstraint(
+            "registration_operation_id",
+            name="registry_operation",
+        ),
+        UniqueConstraint(
+            "capability_id", "capability_version", "phase",
+            name="registry_identity",
+        ),
+        UniqueConstraint("entry_digest", name="registry_digest"),
+        UniqueConstraint(
+            "authorization_decision_event_id", name="registry_authority"
+        ),
+        CheckConstraint(
+            "capability_id ~ '^[a-z][a-z0-9_.-]{0,99}$' and "
+            "capability_version ~ '^[a-z0-9][a-z0-9_.-]{0,49}$'",
+            name="identifiers",
+        ),
+        CheckConstraint("phase in ('pre_submit','post_submit')", name="phase"),
+        CheckConstraint(
+            "image_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "configuration_schema_sha256 ~ '^sha256:[0-9a-f]{64}$' and "
+            "input_schema_sha256 ~ '^sha256:[0-9a-f]{64}$' and "
+            "output_schema_sha256 ~ '^sha256:[0-9a-f]{64}$' and "
+            "entry_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "request_digest ~ '^sha256:[0-9a-f]{64}$'",
+            name="sha256_shapes",
+        ),
+        CheckConstraint(
+            "configuration_schema_id ~ '^[a-z][a-z0-9_.-]{0,99}$' and "
+            "configuration_schema_version ~ '^[a-z0-9][a-z0-9_.-]{0,49}$' and "
+            "input_schema_version ~ '^[a-z0-9][a-z0-9_.-]{0,49}$' and "
+            "output_schema_version ~ '^[a-z0-9][a-z0-9_.-]{0,49}$'",
+            name="schema_identifiers",
+        ),
+        CheckConstraint(
+            "(phase='pre_submit' and input_schema_id='external_checker_pre_submit_input') or "
+            "(phase='post_submit' and input_schema_id='external_checker_post_submit_input')",
+            name="input_schema_phase",
+        ),
+        CheckConstraint(
+            "output_schema_id='external_checker_result'",
+            name="output_schema",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(configuration_schema_document)='object' and "
+            "jsonb_typeof(input_schema_document)='object' and "
+            "jsonb_typeof(output_schema_document)='object' and "
+            "octet_length(configuration_schema_document::text)<=65536 and "
+            "octet_length(input_schema_document::text)<=65536 and "
+            "octet_length(output_schema_document::text)<=65536",
+            name="schema_documents",
+        ),
+        CheckConstraint(
+            "cpu_millis between 100 and 64000 and "
+            "memory_bytes between 16777216 and 68719476736 and "
+            "deadline_ms between 100 and 3600000 and "
+            "maximum_output_bytes between 256 and 65536",
+            name="resource_limits",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    registration_operation_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    capability_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    capability_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    phase: Mapped[str] = mapped_column(String(16), nullable=False)
+    image_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    configuration_schema_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    configuration_schema_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    configuration_schema_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    configuration_schema_document: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    input_schema_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    input_schema_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    input_schema_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    input_schema_document: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    output_schema_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    output_schema_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    output_schema_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    output_schema_document: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    cpu_millis: Mapped[int] = mapped_column(Integer, nullable=False)
+    memory_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    deadline_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    maximum_output_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    entry_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    registered_by_actor_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("actor_profiles.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"),
+        nullable=False,
+    )
+    authorization_decision_event_id: Mapped[UUID] = mapped_column(
+        Uuid(), ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
+    )
 
 
 class CheckerRun(Base):

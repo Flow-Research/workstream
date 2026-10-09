@@ -24,7 +24,12 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.authorization.domain.guide_manager_resources import guide_manager_resource_denial
-from app.modules.authorization.domain import adapter_bindings, contribution_policies, guide_compilation as compilation
+from app.modules.authorization.domain import (
+    adapter_bindings,
+    checker_registry,
+    contribution_policies,
+    guide_compilation as compilation,
+)
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
     PROJECT_SCOPED_ADMIN_MUTATIONS, CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
@@ -149,7 +154,7 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 _SERIALIZED_ADMIN_READS = frozenset(
     {
         ActionId.ACTOR_PROFILE_READ,
@@ -177,7 +182,7 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
-) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 
 _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
@@ -238,6 +243,7 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
         **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
+        **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
         **GUIDE_PROPOSAL_RESOURCE_BY_ACTION,
     }
@@ -460,6 +466,7 @@ class AuthorizationService:
                 for_update=True,
                 **adapter_bindings.finance_authority_grant_filters(action_id),
                 **contribution_policies.policy_finance_grant_filters(action_id),
+                **checker_registry.checker_registry_grant_filters(action_id),
             )
             if grant is None:
                 raise PreparedAuthorizationUnsupported(
@@ -1036,6 +1043,7 @@ class AuthorizationService:
                 adapter_bindings.finance_authority_grant_filters(action.action_id)
             )
         grant_filters.update(contribution_policies.policy_finance_grant_filters(action.action_id))
+        grant_filters.update(checker_registry.checker_registry_grant_filters(action.action_id))
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
