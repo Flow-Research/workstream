@@ -1231,8 +1231,9 @@ payout/economic, or contribution-record configuration fields. Guide create
 requires the complete document declarations and task examples stored as
 immutable PostgreSQL metadata. AUTH receives the request digest, example hash and count; the guide
 and exact replay response are committed together. Document/upload snapshots
-bind that commitment and receive original PDF/DOCX/PPTX files through ART.
-Inline Markdown and URL/repository ingestion are unavailable. Only bounded
+bind that commitment and receive original PDF/DOCX/PPTX or UTF-8 Markdown
+(`.md`) files through ART. Embedded Markdown bodies and URL/repository ingestion
+are unavailable. Only bounded
 metadata such as `change_summary` remains editable while the guide is draft.
 For guide creation and document upload, exact committed retries return the
 recorded response without another mutation, setup run, or dispatch. Changed, concurrent-pending, cross-project,

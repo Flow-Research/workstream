@@ -105,8 +105,11 @@ No handle, allow, receipt, routing outcome or acceptance is published.
 Exact assignment-invalidation authority, atomic originating publication and
 production delivery with enforced prefork topology are implemented. Manager task
 create/screen/release now use exact project authority, atomic evidence and durable
-replay. ARCH-03C4 adds the three exact-authorized public task queues. ARCH-03C5
-adds exact-authorized Contributor/Manager detail and requirements. ARCH-03C6 adds
+replay. ARCH-03C4 adds the three exact-authorized public task queues. PILOT-14 adds locked
+ContributionPolicyVersion compensation to ready rows and Contributor detail for
+active exact-project Submitters or Reviewers, without Finance internals or claim
+authority. ARCH-03C5 adds exact-authorized Contributor/Manager
+detail and requirements. ARCH-03C6 adds
 separate exact-authorized locked-context reads. ARCH-03C7 adds bounded public
 Audit Authority history access. ARCH-03D connects hidden intake through durable intent to the activated historical
 guide using canonical owner ports. ARCH-04B adds hidden verified Submission input
@@ -220,7 +223,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; exact run-scoped setup reads and assigned-task locked-original reads; S3-backed originals and isolated agent document inspection; exact document generation through separate manager approvals and public exact-authorized CP07 activation | Public activation-to-intake drill after evaluation/remediation prerequisites; prove each enabled document reader |
 | Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody | Public intake cutover after evaluation/remediation prerequisites |
 | Contribution policy administration | **Public Finance policy workflow; binding administration internal** | Internal Finance Authority adapter-binding lifecycle; public ContributionPolicy discovery/read/create/update/publish/retire with exact Finance Authority and recoverable draft selectors; immutable operation and event history; internal exact selected-version validation; CP07 binding with live exact-project manager authority of the selected published version to the active guide generation | Public intake cutover after evaluation/remediation prerequisites |
-| Task readiness and claim | **Foundation with grant-backed manager and contributor commands** | Task records, assignments and locked work context; guide-bound ContributionPolicyVersion locked before `READY` and copied to TaskAssignment; detached project/guide display; public project-scoped ready, management and operational queues with distinct current grant authority and signed bounded live pagination; public contributor/management detail with exact project and assignment authority; separate current live work-context projections with exact receipt-selected review/revision/ContributionPolicy identities and no obsolete economic fields; explicit management/operational/audit locked-context projections using one historical resolver, with separate public manager, system-Operator and Audit Authority access; immutable contributor/management requirements using one historical translator, with public exact Contributor and Manager authority; bounded public Audit Authority lifecycle evidence with atomic project/task scoping and exact transition references; public manager create/screen/release use exact covered Project Manager authority, atomic audit and replay; claim/start/contributor context use exact-project Submitter grants; assigned context lists documents only and distinct task.guide.read verifies locked originals before delivery; separate manager context and system-Operator start; durable claim/start retry receipts with fresh authority and exact assignment checks; hidden exact-assignment invalidation with committed cause verification, delivery fencing, exact fixed-service authority and decision-bound immutable release evidence; atomic authority-loss publication and registered prefork delivery | Public intake cutover after evaluation/remediation prerequisites |
+| Task readiness and claim | **Foundation with grant-backed manager and contributor commands** | Task records, assignments and locked work context; guide-bound ContributionPolicyVersion locked before `READY` and copied to TaskAssignment; detached project/guide display; public project-scoped ready, management and operational queues with distinct current grant authority and signed bounded live pagination; public contributor/management detail with exact project and assignment authority; separate current live work-context projections with exact receipt-selected review/revision/ContributionPolicy identities and no obsolete economic fields; explicit management/operational/audit locked-context projections using one historical resolver, with separate public manager, system-Operator and Audit Authority access; immutable contributor/management requirements using one historical translator, with public exact Contributor and Manager authority; bounded public Audit Authority lifecycle evidence with atomic project/task scoping and exact transition references; public manager create/screen/release use exact covered Project Manager authority, atomic audit and replay; claim/start/contributor context use exact-project Submitter grants; assigned context lists documents only and distinct `task.guide.read` verifies locked originals before delivery; separate manager context and system-Operator start; durable claim/start retry receipts with fresh authority and exact assignment checks; hidden exact-assignment invalidation with committed cause verification, delivery fencing, exact fixed-service authority and decision-bound immutable release evidence; atomic authority-loss publication and registered prefork delivery; PILOT-14 exposes both locked contribution types in ready rows and Contributor detail for exact-project Submitters or Reviewers as unpaid or exact instrument/unit/quantity awards, without Finance binding facts | Public intake cutover follows evaluation/remediation prerequisites |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; shared evaluation-content capacity and exact locked-policy checks before attempts or durable intent; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission; hidden final handoff validates the exact activated historical guide through owner ports | Complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden with approved-guide lineage** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, blocking feedback before Submission creation, and one internal phase command covering execution/replay with the JSON precheck removed; ARCH-03D connects approved-guide lineage through the final durable handoff | Complete the canonical public cutover after evaluation/remediation prerequisites; passing intake must never substitute for post-submit evaluation |
 | Immutable Submission creation | **Hidden foundation; public packet creation retired** | Contributor preparation authority; durable pre-submit reservation and exact completed-evidence recovery without rerunning checks; atomic admission consumption; TASK-owned admission-backed creation with exact assignment ContributionPolicyVersion, locked policy lineage and service/database checked-packet custody; fixed-service artifact binding; replay/concurrency/rollback proof | Finish downstream evaluation and the canonical public integration. The retained submission-list GET is not a usable creation POST |
@@ -334,7 +337,10 @@ cannot be reused as post-submission review-gate evidence. See the
   reads, with server-owned live authority and opaque continuation.
   [CLI contributor discovery](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-05.md)
   adds ready-task pages and contributor instructions through public reads,
-  preserving Submitter scope and assignment visibility without claiming work.
+  preserving exact-project contributor scope and assignment visibility without
+  claiming work. PILOT-14 displays the task-locked ContributionPolicyVersion UUID and both unpaid or
+  exact award terms in ready rows and task detail to a Submitter or Reviewer,
+  while claim/start remain Submitter-only.
   [CLI contributor claim/start](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-06.md)
   adds the existing public writes with explicit retry keys, server-owned
   assignment/lineage, fresh-authority replay and uncertain-outcome handling.
@@ -444,9 +450,10 @@ cannot be reused as post-submission review-gate evidence. See the
   response supplies document IDs for the public binary upload route; no separate
   source-snapshot creation call remains. A starting idea is sufficient and optional
   example fields do not repeat requirements from the guide. Each snapshot/run
-  binds the exact version's examples. Upload admission checks bounded format, digest and size.
+  binds the exact version's examples. Upload admission accepts PDF, DOCX and PPTX
+  and checks bounded format, digest and size.
   Committed originals do not bypass the separate verification required for
-  submission ZIPs. Inline markdown setup and extractors are removed.
+  submission ZIPs. Embedded document bodies and extractors are removed.
 - Committed original-document readiness automatically runs one unified compilation
   through Celery. It persists sufficiency findings and separate pre-submit and
   post-submit proposals, then projects the sufficiency and artifact-policy
@@ -548,6 +555,12 @@ cannot be reused as post-submission review-gate evidence. See the
 Only open pull requests describe transient work. Use the repository's
 [open pull-request view](https://github.com/Flow-Research/workstream/pulls) to
 see whether any item below is already under review.
+
+[PILOT-15 / PR #514](https://github.com/Flow-Research/workstream/pull/514)
+proposes byte-preserved UTF-8 Markdown (`.md`) guide admission, setup-agent reads
+and task-locked contributor REST/CLI reads. This remains open work until its
+code, migration, tests and review evidence are merged; current `main` supports
+PDF, DOCX and PPTX originals.
 
 Delivered capabilities are summarized in the [scoreboard](#end-to-end-lifecycle-scoreboard);
 their evidence is linked under [completed work](#what-has-been-completed).
@@ -892,8 +905,10 @@ remaining trace sequence is:
   Shared dispatch authority is delivered by AUTH-OUTBOX-02. Live assignment
   invalidation has atomic producer fan-out and registered delivery in ARCH-03C2.
   Manager readiness commands are public with exact authority in ARCH-03C3;
-  ARCH-03C4 exposes ready, management and Operator-status queues;
-  ARCH-03C5 exposes task detail and requirements; ARCH-03C6 exposes distinct
+  ARCH-03C4 exposes ready, management and Operator-status queues. PILOT-14 adds contributor-safe
+  locked compensation to ready/detail without restoring removed task payment
+  fields or exposing Finance bindings. ARCH-03C5 exposes task detail and
+  requirements; ARCH-03C6 exposes distinct
   locked-context reads; ARCH-03C7 exposes bounded Audit Authority history. Current authority is checked
   on every request.
 - Hidden intake: [ARCH-03D](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-03D.md)

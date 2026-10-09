@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.modules.contributions.api import ContributionPolicyProjectSelection
+from app.modules.contributions.api import (
+    ContributionPolicyProjectSelection,
+    LockedCompensationAward,
+    LockedCompensationTerms,
+)
+from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api.published_selection import PublishedContributionPolicySelection
 
 from app.modules.contributions.models import (
@@ -92,6 +97,96 @@ class ContributionPolicyRepository:
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         project, policy, version = rows[0]
         return PublishedContributionPolicySelection(UUID(project), policy, version)
+
+    async def read_locked_compensation_terms(
+        self, project_id: UUID, contribution_policy_version_ids: tuple[UUID, ...]
+    ) -> tuple[LockedCompensationTerms, ...]:
+        """Project complete terms for exact published or retired version selectors."""
+        if (
+            not isinstance(project_id, UUID)
+            or type(contribution_policy_version_ids) is not tuple
+            or not 1 <= len(contribution_policy_version_ids) <= 100
+            or any(not isinstance(value, UUID) for value in contribution_policy_version_ids)
+            or len(set(contribution_policy_version_ids)) != len(contribution_policy_version_ids)
+        ):
+            raise ValueError("locked compensation selectors are invalid")
+        version, rule, definition = (
+            ContributionPolicyVersion,
+            ContributionRule,
+            ContributionAwardDefinition,
+        )
+        rows = (
+            await self._session.execute(
+                select(
+                    version.id.label("version_id"),
+                    rule.id.label("rule_id"),
+                    rule.contribution_type,
+                    rule.compensation_mode,
+                    definition.instrument_type,
+                    definition.unit_code,
+                    definition.quantity,
+                )
+                .join(
+                    rule,
+                    and_(
+                        rule.contribution_policy_version_id == version.id,
+                        rule.project_id == version.project_id,
+                    ),
+                )
+                .outerjoin(
+                    definition,
+                    and_(
+                        definition.contribution_rule_id == rule.id,
+                        definition.contribution_policy_version_id == version.id,
+                        definition.project_id == version.project_id,
+                        definition.contribution_type == rule.contribution_type,
+                    ),
+                )
+                .where(
+                    version.project_id == str(project_id),
+                    version.id.in_(contribution_policy_version_ids),
+                    version.status.in_(("published", "retired")),
+                )
+                .order_by(version.id, rule.contribution_type, definition.instrument_type)
+            )
+        ).all()
+        grouped: dict[UUID, dict[str, tuple[str, list[LockedCompensationAward]]]] = {}
+        for row in rows:
+            rules = grouped.setdefault(row.version_id, {})
+            current = rules.setdefault(row.contribution_type, (row.compensation_mode, []))
+            if current[0] != row.compensation_mode:
+                raise ValueError("locked compensation graph is invalid")
+            if row.instrument_type is not None:
+                current[1].append(
+                    LockedCompensationAward(
+                        instrument=CompensationInstrumentType(row.instrument_type),
+                        unit=row.unit_code,
+                        quantity=format(row.quantity, "f"),
+                    )
+                )
+
+        result: list[LockedCompensationTerms] = []
+        for version_id in contribution_policy_version_ids:
+            rules = grouped.get(version_id)
+            if rules is None or set(rules) != {"accepted_submission", "completed_review"}:
+                continue
+
+            def exposed(contribution_type: str):
+                mode, awards = rules[contribution_type]
+                if mode == "unpaid" and not awards:
+                    return "unpaid"
+                if mode == "compensated" and 1 <= len(awards) <= 2:
+                    return tuple(awards)
+                raise ValueError("locked compensation graph is invalid")
+
+            result.append(
+                LockedCompensationTerms(
+                    contribution_policy_version_id=version_id,
+                    accepted_submission=exposed("accepted_submission"),
+                    completed_review=exposed("completed_review"),
+                )
+            )
+        return tuple(result)
 
     async def lock_operation(self, operation_id: UUID) -> None:
         """Serialize requests sharing one immutable operation identifier."""

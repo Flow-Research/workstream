@@ -10,6 +10,7 @@ from app.modules.contributions.api import (
     ContributionPolicyMutationAuthorizationPort,
     ContributionPolicyReadAuthorizationPort,
     ContributionPolicyValidationPort,
+    LockedCompensationTermsPort,
 )
 from app.modules.contributions.service import ContributionPolicyService
 from app.modules.contributions.selected_policy_validation import (
@@ -46,5 +47,11 @@ def contribution_policy_validation_port(
 
 def published_contribution_policy_port(session: AsyncSession) -> PublishedContributionPolicyPort:
     """Compose the bounded internal selector read; callers own disclosure authority."""
+    from app.modules.contributions.repository import ContributionPolicyRepository
+    return ContributionPolicyRepository(session)
+
+
+def locked_compensation_terms_port(session: AsyncSession) -> LockedCompensationTermsPort:
+    """Compose the contributor-safe locked-version projection at the CON owner."""
     from app.modules.contributions.repository import ContributionPolicyRepository
     return ContributionPolicyRepository(session)

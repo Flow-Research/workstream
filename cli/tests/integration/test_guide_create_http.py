@@ -126,6 +126,21 @@ def test_guide_create_preserves_body_selectors_defaults_and_safe_text(cli, tmp_p
         assert len(requests) == 36
 
 
+def test_guide_create_accepts_markdown_document_declaration(cli, tmp_path):
+    body = deepcopy(DECLARATION)
+    body["documents"] = [{"label": "Guide.md", "media_type": "text/markdown"}]
+    path = write_input(tmp_path, body)
+    with http_fixture() as (origin, response, requests):
+        response.update(status=201, body=json.dumps(receipt(body)).encode())
+
+        result = invoke(cli, origin, path)
+
+        assert result.returncode == 0 and result.stderr == ""
+        assert json.loads(result.stdout)["documents"] == receipt(body)["documents"]
+        assert response["commands"] == [("application/json", [KEY], body)]
+        assert len(requests) == 1
+
+
 def test_guide_create_input_bounds_and_large_valid_response(cli, tmp_path):
     body = deepcopy(DECLARATION)
     body["task_examples"] = [{"content": "é" * 32768}]

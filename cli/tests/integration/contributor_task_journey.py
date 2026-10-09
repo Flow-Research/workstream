@@ -184,8 +184,12 @@ async def exercise_contributor_task_reads(
         first_grant = await grant(project, actor_id)
         await grant(project, peer_profiles["cli-task-peer"])
         await grant(project, peer_profiles["cli-task-reviewer"], role="reviewer")
-        for command in (("ready", project), ("show", ready_ids[0])):
-            read(command, peer_tokens["cli-task-reviewer"], status=404)
+        reviewer_ready = read(("ready", project), peer_tokens["cli-task-reviewer"])
+        reviewer_detail = read(("show", ready_ids[0]), peer_tokens["cli-task-reviewer"])
+        assert (
+            reviewer_ready["items"][0]["compensation"]
+            == reviewer_detail["compensation"]
+        )
         await context_reads(ready_ids[0], peer_tokens["cli-task-reviewer"], denied=True)
         for action in ("claim", "start"):
             await mutate(
@@ -219,6 +223,7 @@ async def exercise_contributor_task_reads(
                 "skill_tags",
                 "estimated_time_minutes",
                 "created_at",
+                "compensation",
             }
             observed.append(page["items"][0]["task_id"])
             cursor = page["next_cursor"]

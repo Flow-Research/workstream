@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.contributions.api import LockedCompensationTermsPort
 from app.core.hashing import canonical_json_hash
 from app.db.errors import integrity_constraint_name
 from app.modules.tasks.api.authorization import (
@@ -66,12 +67,13 @@ class AuthorizedTaskCommands:
         actor_profile_id: UUID,
         contexts: TaskService,
         guide_documents: TaskGuideDocumentsPort,
+        compensation_terms: LockedCompensationTermsPort | None = None,
     ) -> None:
         self._session = session
         self._authorization = authorization
         self._audit = audit
         self._actor_id = actor_profile_id
-        self._repo = TaskRepository(session)
+        self._repo = TaskRepository(session, compensation_terms=compensation_terms)
         self._contexts = contexts
         self._guide_documents = guide_documents
         self._replay = TaskCommandReplay(session)

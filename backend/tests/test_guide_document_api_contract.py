@@ -26,8 +26,8 @@ def test_current_guide_response_excludes_retained_body():
 
 @pytest.mark.parametrize("patch", [
     {"source_kind": "url_doc"}, {"source_kind": "rubric"},
-    {"ingestion_adapter": "manual_import"}, {"media_type": "text/markdown"},
-    {"media_type": "text/plain"}, {"media_type": "image/png"},
+    {"ingestion_adapter": "manual_import"},
+    {"media_type": "text/plain"}, {"media_type": "text/html"}, {"media_type": "image/png"},
     {"media_type": "audio/wav"}, {"media_type": "application/vnd.ms-powerpoint"},
 ])
 def test_source_metadata_rejects_superseded_or_unsupported_ingress(patch):
@@ -35,6 +35,14 @@ def test_source_metadata_rejects_superseded_or_unsupported_ingress(patch):
         ProjectGuideDocumentInput.model_validate({
             "label": "guide.pdf", "media_type": "application/pdf", **patch,
         })
+
+
+def test_source_metadata_accepts_markdown_as_an_original_document():
+    document = ProjectGuideDocumentInput.model_validate(
+        {"label": "guide.md", "media_type": "text/markdown"}
+    )
+
+    assert document.media_type == "text/markdown"
 
 
 @pytest.mark.parametrize("method,suffix", [
@@ -147,6 +155,7 @@ def test_document_upload_openapi_binary_body_and_bounded_responses():
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/markdown",
     }
     assert all(value["schema"] == {"type": "string", "format": "binary"} for value in body["content"].values())
     responses = operation["responses"]
@@ -158,3 +167,25 @@ def test_document_upload_openapi_binary_body_and_bounded_responses():
         assert responses[code]["description"]
         assert responses[code]["content"]["application/json"]["schema"] == {
             "$ref": "#/components/schemas/ApiErrorResponse"}
+
+
+def test_task_guide_download_openapi_lists_exact_supported_original_media_types():
+    from app.core.config import Settings
+    from app.main import create_app
+
+    document = create_app(Settings(environment="test")).openapi()
+    operation = document["paths"][
+        "/api/v1/tasks/{task_id}/guide/documents/{document_id}/content"
+    ]["get"]
+    content = operation["responses"]["200"]["content"]
+
+    assert set(content) == {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/markdown",
+    }
+    assert all(
+        value["schema"] == {"type": "string", "format": "binary"}
+        for value in content.values()
+    )

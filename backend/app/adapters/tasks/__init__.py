@@ -93,11 +93,19 @@ def task_commands(
 ) -> AuthorizedTaskCommands:
     """Compose TASK commands without exposing private product imports to delivery."""
     from app.adapters.artifacts import task_guide_documents_port
+    from app.adapters.contributions import locked_compensation_terms_port
     return AuthorizedTaskCommands(
         session, authorization=authorization, audit=audit, actor_profile_id=actor_profile_id,
         contexts=task_service(session, settings=settings),
         guide_documents=task_guide_documents_port(session, settings),
+        compensation_terms=locked_compensation_terms_port(session),
     )
+
+
+def contributor_task_repository(session: AsyncSession) -> TaskRepository:
+    """Compose contributor reads with CON's bounded locked-terms public port."""
+    from app.adapters.contributions import locked_compensation_terms_port
+    return TaskRepository(session, compensation_terms=locked_compensation_terms_port(session))
 
 
 def task_submission_context_port(session: AsyncSession) -> TaskSubmissionContextPort:

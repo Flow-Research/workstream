@@ -464,6 +464,7 @@ async def verified_task_guide(
         "application/pdf": {"schema": {"type": "string", "format": "binary"}},
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {"schema": {"type": "string", "format": "binary"}},
         "application/vnd.openxmlformats-officedocument.presentationml.presentation": {"schema": {"type": "string", "format": "binary"}},
+        "text/markdown": {"schema": {"type": "string", "format": "binary"}},
     }}},
 )
 async def get_task_guide_document(read: Annotated[VerifiedTaskGuideRead, Depends(verified_task_guide)]) -> StreamingResponse:

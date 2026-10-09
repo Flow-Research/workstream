@@ -35,7 +35,7 @@ activation flow below describes the target lifecycle.
 2. Project owner provides open-ended guide material and business terms.
 3. An authorized covered Project Manager adds guide metadata with at least one
    ordinary-text task example in PostgreSQL and uploads the assigned
-   PDF/DOCX/PPTX guide originals to ArtifactStore/S3.
+   PDF/DOCX/PPTX or UTF-8 Markdown (`.md`) guide originals to ArtifactStore/S3.
 4. Once ART commits every assigned original guide document,
    Workstream automatically queues its authorized unified compilation in Celery.
 5. One unified compilation assesses sufficiency and proposes artifact,

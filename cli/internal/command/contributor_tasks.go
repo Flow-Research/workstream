@@ -13,7 +13,7 @@ func addContributorTasks(root *cobra.Command, client func() (*api.Client, error)
 	var limit int
 	var cursor string
 	ready := &cobra.Command{
-		Use: "ready PROJECT_ID", Short: "List one page of ready work under your Submitter grant", Args: cobra.ExactArgs(1),
+		Use: "ready PROJECT_ID", Short: "List ready work under your Submitter or Reviewer grant", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var continuation *string
 			if cmd.Flags().Changed("cursor") {
@@ -44,6 +44,9 @@ func addContributorTasks(root *cobra.Command, client func() (*api.Client, error)
 					list(t.SkillTags), minutes, safeText(t.CreatedAt)); err != nil {
 					return err
 				}
+				if err := writeCompensation(stdout, t.Compensation); err != nil {
+					return err
+				}
 			}
 			_, err = fmt.Fprintf(stdout, "Next cursor: %s\n", optional(result.Value.NextCursor))
 			return err
@@ -70,6 +73,9 @@ func addContributorTasks(root *cobra.Command, client func() (*api.Client, error)
 			if err := writeTaskSummary(stdout, t.TaskSummary); err != nil {
 				return err
 			}
+			if err := writeCompensation(stdout, t.Compensation); err != nil {
+				return err
+			}
 			_, err = fmt.Fprintf(stdout, "Description: %s\nAcceptance criteria: %s\nRejection criteria: %s\n",
 				safeText(t.Description), optional(t.AcceptanceCriteria), optional(t.RejectionCriteria))
 			return err
@@ -78,4 +84,32 @@ func addContributorTasks(root *cobra.Command, client func() (*api.Client, error)
 	addContributorTaskWrites(task, client, output, stdout)
 	addTaskContextReads(task, client, output, stdout)
 	root.AddCommand(task)
+}
+
+func writeCompensation(w io.Writer, terms api.CompensationTerms) error {
+	if _, err := fmt.Fprintf(w, "Contribution policy version: %s\n", safeText(terms.ContributionPolicyVersionID)); err != nil {
+		return err
+	}
+	for _, rule := range []struct {
+		label string
+		raw   []byte
+	}{{"Accepted submission", terms.AcceptedSubmission}, {"Completed review", terms.CompletedReview}} {
+		awards, valid := api.CompensationAwards(rule.raw)
+		if !valid {
+			return fmt.Errorf("invalid compensation terms")
+		}
+		if awards == nil {
+			if _, err := fmt.Fprintf(w, "%s compensation: unpaid\n", rule.label); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, award := range awards {
+			if _, err := fmt.Fprintf(w, "%s compensation: %s %s %s\n", rule.label,
+				safeText(award.Instrument), safeText(award.Unit), safeText(award.Quantity)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -238,10 +238,16 @@ Both immutable detail values contain title, description, type, difficulty, tags,
 estimate, status, acceptance/rejection criteria, deadline and timestamps, with
 task/project identity. Manager detail additionally contains source type/ref/hash,
 import/external IDs and creator/assignee display facts. Contributor SELECTs never
-load those private columns. Neither projection loads policy bodies, locked
-hashes, artifacts or retired payment fields. SQL filters project/task/visibility
-before returning a result; missing and invisible tasks both yield no result in
-one query. Reads do not flush, commit, roll back or lock the caller's work.
+load those private columns. The ready summary and Contributor detail also expose
+one contributor-safe compensation block resolved from the task's exact
+`locked_contribution_policy_version_id`. Each accepted-submission and
+completed-review value is either `unpaid` or a list of instrument/unit/exact
+decimal-string quantity awards. No adapter binding, route key, binding status,
+policy lifecycle status, policy body, locked hash, artifact or retired payment
+field crosses the response. SQL filters project/task/visibility before returning
+a result; missing and invisible tasks both yield no result from TASK.
+CONTRIBUTIONS supplies the bounded detached terms through its public locked-version
+port. Reads do not flush, commit, roll back or lock the caller's work.
 
 ARCH-03B5 reuses these ports in authorized work-context responses below.
 ARCH-03C5 also exposes their exact standalone Contributor and Manager reads,
@@ -514,6 +520,13 @@ not authorize claim or submission, and no old role/creator wrapper remains for
 them. Retained submission reads now use the canonical history owner below;
 the obsolete TASK submission get/list/evidence-lock helpers are removed. The
 separate internal audit evidence reader remains for its recovery consumers.
+
+The ready queue and standalone Contributor detail accept either active
+exact-project Submitter or Reviewer grant so both roles see both contribution
+types before work is claimed. Reviewer authority does not authorize claim,
+start, contributor work context, intake requirements or another contributor's
+claimed task. Revoked, missing and foreign-project grants retain the same
+concealed response.
 
 
 ## Retained submission and checker history

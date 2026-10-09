@@ -35,7 +35,7 @@ async def assert_queue_authority(access, project, kind, role):
         grant_id = await grant_queue_role(access, project, role)
     response = await access.signed.client.get(PATHS[kind].format(project=project), headers=actor.headers)
     allowed = role in {
-        "ready": {"submitter"}, "management": {"project_manager", "system_manager"},
+        "ready": {"submitter", "reviewer"}, "management": {"project_manager", "system_manager"},
         "operational": {"operator"},
     }[kind]
     assert response.status_code == (200 if allowed else 404), response.text

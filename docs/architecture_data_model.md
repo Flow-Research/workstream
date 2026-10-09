@@ -208,9 +208,10 @@ Status:
 
 ## ProjectGuide
 
-Current guide content is the versioned PDF/DOCX/PPTX original-document manifest
-and private ArtifactStore objects. Guide metadata writes do not accept inline
-Markdown; PostgreSQL stores no newly extracted document bodies.
+Current guide content is the versioned PDF/DOCX/PPTX or UTF-8 Markdown (`.md`)
+original-document manifest and private ArtifactStore objects. Guide metadata
+writes do not accept embedded document bodies; PostgreSQL stores no newly
+extracted document bodies.
 
 Fields:
 
@@ -246,8 +247,8 @@ Fields:
 - `selected_revision_policy_generation`
 - `selected_revision_policy_hash`
 
-The guide is versioned and human-facing. Uploaded PDF/DOCX/PPTX originals live
-in private ArtifactStore/S3 objects; PostgreSQL stores their metadata and the
+The guide is versioned and human-facing. Uploaded PDF/DOCX/PPTX or UTF-8 Markdown
+(`.md`) originals live in private ArtifactStore/S3 objects; PostgreSQL stores their metadata and the
 ordinary task-example text. The examples are representative inference inputs,
 not selected assignments, and do not create Workstream Tasks. One project-level
 policy proposal covers the project task set.

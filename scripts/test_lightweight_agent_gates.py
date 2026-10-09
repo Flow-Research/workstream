@@ -228,12 +228,39 @@ class LightweightAgentGateTests(unittest.TestCase):
         image_job = workflow.split("\n  minio-image:\n", 1)[1].split("\n  auth-boundary-preflight:\n", 1)[0]
         self.assertEqual(workflow.count('docker build --tag "${MINIO_IMAGE}" docker/minio'), 1)
         self.assertNotIn("quay.io/minio", workflow)
-        self.assertIn("hashFiles('docker/minio/**')", image_job)
+        self.assertEqual(
+            image_job.count("hashFiles('docker/minio/**', '.github/workflows/backend.yml')"),
+            2,
+        )
         self.assertIn(
-            "key: minio-source-v1-${{ github.sha }}-${{ runner.os }}-${{ runner.arch }}-",
+            "key: minio-source-v2-${{ runner.os }}-${{ runner.arch }}-",
             image_job,
         )
+        cache_step = image_job.split(
+            "      - name: Restore exact source image from trusted cache\n", 1
+        )[1].split("\n      - name:", 1)[0]
+        self.assertIn(
+            "uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+            cache_step,
+        )
+        self.assertNotIn("github.sha", cache_step)
         self.assertNotIn("restore-keys:", image_job)
+        save_step = image_job.split(
+            "      - name: Save verified source image to trusted cache\n", 1
+        )[1].split("\n      - uses:", 1)[0]
+        self.assertIn(
+            "if: github.event_name == 'push' && github.ref == 'refs/heads/main' "
+            "&& steps.cache.outputs.cache-hit != 'true'",
+            save_step,
+        )
+        self.assertIn(
+            "uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+            save_step,
+        )
+        self.assertLess(
+            image_job.index("      - name: Verify the cached or freshly built provider"),
+            image_job.index("      - name: Save verified source image to trusted cache"),
+        )
         self.assertIn("minio-source-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}", image_job)
         self.assertIn("artifact: ${{ steps.identity.outputs.artifact }}", image_job)
         self.assertIn("sha256sum minio.tar > minio.tar.sha256", image_job)
@@ -248,6 +275,60 @@ class LightweightAgentGateTests(unittest.TestCase):
             self.assertIn("sha256sum --check minio.tar.sha256", job)
             self.assertIn('docker load --input "${RUNNER_TEMP}/minio-image/minio.tar"', job)
             self.assertIn('"${MINIO_IMAGE}" server /data --address :9000', job)
+
+    def test_backend_python_cache_keeps_fresh_installs_and_exact_inputs(self) -> None:
+        workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
+
+        key = (
+            "backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-"
+            "${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}"
+        )
+        self.assertEqual(workflow.count("Restore exact backend pip downloads from trusted cache"), 3)
+        self.assertEqual(workflow.count(f"key: {key}"), 4)
+        self.assertEqual(
+            workflow.count(
+                "uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830"
+            ),
+            4,
+        )
+        self.assertEqual(
+            workflow.count("uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830"),
+            2,
+        )
+        install = 'python -m pip install -e ".[dev,agents]"'
+        cache_env = 'echo "PIP_CACHE_DIR=${RUNNER_TEMP}/backend-pip-cache" >> "${GITHUB_ENV}"'
+        job_blocks = (
+            workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split("\n  lanes:\n", 1)[0],
+            workflow.split("\n  lanes:\n", 1)[1].split("\n  cli-public-contract:\n", 1)[0],
+            workflow.split("\n  test:\n", 1)[1],
+        )
+        for job in job_blocks:
+            self.assertEqual(job.count("Restore exact backend pip downloads from trusted cache"), 1)
+            self.assertEqual(job.count(install), 1)
+            self.assertEqual(job.count(cache_env), 1)
+            self.assertLess(job.index("Restore exact backend pip downloads"), job.index(cache_env))
+            self.assertLess(job.index(cache_env), job.index(install))
+        self.assertEqual(workflow.count(install), 3)
+        self.assertEqual(workflow.count(cache_env), 3)
+        root_env = workflow.split("\nenv:\n", 1)[1].split("\njobs:\n", 1)[0]
+        self.assertNotIn("runner.", root_env)
+        pip_save = workflow.split(
+            "      - name: Save verified backend pip downloads to trusted cache\n", 1
+        )[1].split("\n  lanes:\n", 1)[0]
+        self.assertIn(
+            "if: github.event_name == 'push' && github.ref == 'refs/heads/main' "
+            "&& steps.pip-cache.outputs.cache-hit != 'true'",
+            pip_save,
+        )
+        preflight = workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split(
+            "\n  lanes:\n", 1
+        )[0]
+        self.assertLess(
+            preflight.index("      - name: Validate module, AUTH, and test boundaries"),
+            preflight.index("      - name: Save verified backend pip downloads to trusted cache"),
+        )
+        self.assertNotIn("restore-keys:", workflow)
+        self.assertNotIn(".venv", workflow)
 
     def test_parallel_preflight_and_lanes_fail_closed_at_fan_in(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

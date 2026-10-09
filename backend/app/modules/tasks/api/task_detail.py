@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.modules.tasks.api.ready_queue import _aware
+from app.modules.tasks.api.ready_queue import TaskCompensationTerms, _aware
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +69,14 @@ class _TaskDetailFields:
 
 @dataclass(frozen=True, slots=True)
 class ContributorTaskDetail(_TaskDetailFields):
-    """Work instructions with no source, actor, policy or payment fields."""
+    """Work instructions plus contributor-safe locked compensation terms."""
+
+    compensation: TaskCompensationTerms
+
+    def __post_init__(self) -> None:
+        _TaskDetailFields.__post_init__(self)
+        if not isinstance(self.compensation, TaskCompensationTerms):
+            raise ValueError("task detail facts are invalid")
 
 
 @dataclass(frozen=True, slots=True)

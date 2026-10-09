@@ -11,8 +11,9 @@ import pytest
 from sqlalchemy import select
 
 from app.db import session as db_session
+from app.adapters.contributions import locked_compensation_terms_port
 from app.modules.tasks.api import (
-    TaskQueueCursor, ReadyTaskPage, TaskQueueRequest, ReadyTaskSummary,
+    TaskCompensationTerms, TaskQueueCursor, ReadyTaskPage, TaskQueueRequest, ReadyTaskSummary,
 )
 from app.modules.tasks.models import TaskAssignment, WorkstreamTask
 from app.modules.tasks.repository import TaskRepository
@@ -22,6 +23,10 @@ from tests.test_tasks import (
     create_active_project, create_draft_task, create_ready_task,
     admit_and_grant_project_submitter, auth_headers,
 )
+
+
+def task_reads(session):
+    return TaskRepository(session, compensation_terms=locked_compensation_terms_port(session))
 
 
 @pytest.mark.parametrize("value", [0, 101, True, False, 1.5, "5", None])
@@ -92,7 +97,7 @@ async def test_ready_queue_filters_before_pagination(task_client):
         assert foreign_row.assigned_to is None
         request = TaskQueueRequest(UUID(project["id"]), limit=1)
         expected = sorted((UUID(first["id"]), UUID(second["id"])))
-        owner = TaskRepository(session)
+        owner = task_reads(session)
         page = await owner.read_ready_tasks(request)
         assert [item.task_id for item in page.items] == expected[:1]
         assert page.next_cursor == TaskQueueCursor(request.project_id, instant + timedelta(seconds=3), expected[0])
@@ -109,7 +114,7 @@ async def test_ready_queue_filters_before_pagination(task_client):
     missing_cursor = TaskQueueCursor(request.project_id, instant + timedelta(seconds=4), new_record_id())
     async with factory() as session:
         assert await session.get(WorkstreamTask, str(missing_cursor.task_id)) is None
-        continued = await TaskRepository(session).read_ready_tasks(replace(request, after=missing_cursor))
+        continued = await task_reads(session).read_ready_tasks(replace(request, after=missing_cursor))
         assert continued.items == () and continued.next_cursor is None
 
 
@@ -121,7 +126,7 @@ async def test_ready_queue_continues_after_claim(task_client, monkeypatch):
     factory = db_session.get_session_factory()
     request = TaskQueueRequest(UUID(project["id"]), limit=1)
     async with factory() as session:
-        page = await TaskRepository(session).read_ready_tasks(request)
+        page = await task_reads(session).read_ready_tasks(request)
         assert [item.task_id for item in page.items] == [UUID(first["id"])]
         assert page.next_cursor is not None
     await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "queue-contributor")
@@ -131,7 +136,7 @@ async def test_ready_queue_continues_after_claim(task_client, monkeypatch):
     assert claimed.status_code == 200, claimed.text
     async with factory() as session:
         assert (await session.get(WorkstreamTask, first["id"])).status == "claimed"
-        owner = TaskRepository(session)
+        owner = task_reads(session)
         for query in (request, replace(request, after=page.next_cursor)):
             current = await owner.read_ready_tasks(query)
             assert [item.task_id for item in current.items] == [UUID(second["id"])]
@@ -147,7 +152,7 @@ async def test_ready_queue_assignment_visibility(task_client):
         assignment = _assignment(row, status="released")
         session.add(assignment)
     async with factory() as session:
-        page = await TaskRepository(session).read_ready_tasks(TaskQueueRequest(UUID(project["id"])))
+        page = await task_reads(session).read_ready_tasks(TaskQueueRequest(UUID(project["id"])))
         assert [item.task_id for item in page.items] == [UUID(task["id"])]
         assert page.next_cursor is None
 
@@ -157,15 +162,16 @@ async def test_ready_queue_detached_projection(task_client):
     task = await create_ready_task(task_client, project["id"])
     async with db_session.get_session_factory()() as session:
         row = await session.get(WorkstreamTask, task["id"])
-        page = await TaskRepository(session).read_ready_tasks(TaskQueueRequest(UUID(project["id"])))
+        page = await task_reads(session).read_ready_tasks(TaskQueueRequest(UUID(project["id"])))
         expected = ReadyTaskSummary(
             UUID(row.id), UUID(row.project_id), row.title, row.task_type, row.difficulty,
             tuple(row.skill_tags), row.estimated_time_minutes, row.created_at,
+            TaskCompensationTerms(row.locked_contribution_policy_version_id, "unpaid", "unpaid"),
         )
         assert page.items == (expected,) and page.next_cursor is None
         assert set(asdict(page.items[0])) == {
             "task_id", "project_id", "title", "task_type", "difficulty", "skill_tags",
-            "estimated_time_minutes", "created_at",
+            "estimated_time_minutes", "created_at", "compensation",
         }
         row.skill_tags.append("private mutation")
         assert page.items[0].skill_tags == ("stem", "proofs")
@@ -190,10 +196,10 @@ async def test_ready_queue_preserves_transaction(task_client):
     request = TaskQueueRequest(UUID(project["id"]))
     async with factory() as session:
         assert not session.in_transaction()
-        assert len((await TaskRepository(session).read_ready_tasks(request)).items) == 1
+        assert len((await task_reads(session).read_ready_tasks(request)).items) == 1
         pending = WorkstreamTask(id=str(new_record_id()), project_id=project["id"])
         session.add(pending)  # Missing required fields: any implicit flush fails.
-        assert len((await TaskRepository(session).read_ready_tasks(request)).items) == 1
+        assert len((await task_reads(session).read_ready_tasks(request)).items) == 1
         assert pending in session.new
         await session.rollback()
     # Separate control: prove no commit without an invalid pending row masking it.
@@ -201,7 +207,7 @@ async def test_ready_queue_preserves_transaction(task_client):
         row = await session.get(WorkstreamTask, task["id"])
         row.title = "Uncommitted marker"
         await session.flush()
-        page = await TaskRepository(session).read_ready_tasks(request)
+        page = await task_reads(session).read_ready_tasks(request)
         assert page.items[0].title == "Uncommitted marker" and session.in_transaction()
         await session.rollback()
     async with factory() as observer:
@@ -217,7 +223,7 @@ async def test_ready_queue_does_not_wait_for_task_lock(task_client):
         await writer.scalar(select(WorkstreamTask).where(WorkstreamTask.id == task["id"]).with_for_update())
         async with factory() as reader:
             page = await asyncio.wait_for(
-                TaskRepository(reader).read_ready_tasks(TaskQueueRequest(UUID(project["id"]))),
+                task_reads(reader).read_ready_tasks(TaskQueueRequest(UUID(project["id"]))),
                 timeout=5,
             )
             assert [item.task_id for item in page.items] == [UUID(task["id"])]

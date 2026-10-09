@@ -6,6 +6,20 @@ from urllib.parse import parse_qs, urlsplit
 from test_http_boundary import ACTOR, PROJECT, TOKEN, assert_failure, http_fixture
 from test_task_http_boundary import DETAIL, SUMMARY, SUMMARY_TEXT, TASK
 
+POLICY = "22222222-2222-4222-8222-222222222222"
+COMPENSATION = {
+    "contribution_policy_version_id": POLICY,
+    "accepted_submission": [
+        {
+            "instrument": "money",
+            "unit": "USD",
+            "quantity": "2.125000000000000001",
+        },
+        {"instrument": "project_points", "unit": "PTS", "quantity": "7"},
+    ],
+    "completed_review": "unpaid",
+}
+
 READY = {
     key: SUMMARY[key]
     for key in (
@@ -18,7 +32,7 @@ READY = {
         "estimated_time_minutes",
         "created_at",
     )
-}
+} | {"compensation": COMPENSATION}
 CONTRIBUTOR = {
     key: value
     for key, value in DETAIL.items()
@@ -32,13 +46,21 @@ CONTRIBUTOR = {
         "created_by",
         "assigned_to",
     }
-} | {"status": "ready"}
+} | {"status": "ready", "compensation": COMPENSATION}
 READY_TEXT = (
     f"Task: {TASK}\nProject: {PROJECT}\nTitle: Work é\\u000A\\u001B[31m\n"
     "Type: evaluation\nDifficulty: medium\nSkills: analysis, tag\\u000A\n"
     "Estimated minutes: 17\nCreated: 2026-10-01T00:00:00Z\n"
+    f"Contribution policy version: {POLICY}\n"
+    "Accepted submission compensation: money USD 2.125000000000000001\n"
+    "Accepted submission compensation: project_points PTS 7\n"
+    "Completed review compensation: unpaid\n"
 )
 DETAIL_TEXT = SUMMARY_TEXT.replace("Status: draft", "Status: ready") + (
+    f"Contribution policy version: {POLICY}\n"
+    "Accepted submission compensation: money USD 2.125000000000000001\n"
+    "Accepted submission compensation: project_points PTS 7\n"
+    "Completed review compensation: unpaid\n"
     "Description: Instructions\\u000A\\u001B[32m\n"
     "Acceptance criteria: Accurate\nRejection criteria: Missing\n"
 )
@@ -197,6 +219,39 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
             READY | {"task_id": "bad"},
             READY | {"created_at": "2026-10-01"},
             READY | {"skill_tags": [None]},
+            READY | {"compensation": None},
+            READY | {"compensation": COMPENSATION | {"route_key": "private"}},
+            READY
+            | {
+                "compensation": COMPENSATION | {"contribution_policy_version_id": "bad"}
+            },
+            READY | {"compensation": COMPENSATION | {"accepted_submission": 2.125}},
+            READY | {"compensation": COMPENSATION | {"accepted_submission": []}},
+            READY
+            | {
+                "compensation": COMPENSATION
+                | {
+                    "accepted_submission": [
+                        {"instrument": "money", "unit": "USD", "quantity": "0"}
+                    ]
+                }
+            },
+            READY
+            | {"compensation": COMPENSATION | {"accepted_submission": "compensated"}},
+            READY
+            | {
+                "compensation": COMPENSATION
+                | {
+                    "accepted_submission": [
+                        {
+                            "instrument": "money",
+                            "unit": "USD",
+                            "quantity": "2.125",
+                            "adapter_binding_id": ACTOR,
+                        }
+                    ]
+                }
+            },
         ]
         bad_items.extend(
             {key: value for key, value in READY.items() if key != missing}
@@ -251,6 +306,7 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
             CONTRIBUTOR | {"project_id": "bad"},
             CONTRIBUTOR | {"deadline_at": "bad"},
             CONTRIBUTOR | {"skill_tags": [None]},
+            CONTRIBUTOR | {"compensation": COMPENSATION | {"binding_status": "active"}},
         ]
         required = (
             "task_id",

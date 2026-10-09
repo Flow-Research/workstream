@@ -135,6 +135,42 @@ def test_assigned_guide_list_and_verified_private_download(cli, tmp_path):
         assert len(requests) == before + 1  # No second download attempt or overwrite.
 
 
+def test_markdown_guide_download_uses_canonical_md_name_and_exact_bytes(cli, tmp_path):
+    markdown = "# Locked guide\n\nRead this exact original. 雪\n".encode()
+    with guide_http() as (origin, state, requests):
+        document = state["context"]["guide_documents"][0]
+        document.update(
+            label="../../untrusted-name.html",
+            media_type="text/markdown",
+            byte_count=len(markdown),
+            sha256="sha256:" + hashlib.sha256(markdown).hexdigest(),
+        )
+        state["bytes"] = markdown
+        state["headers"] = {"Content-Type": "text/markdown; charset=utf-8"}
+        destination = tmp_path / "markdown"
+        destination.mkdir()
+
+        downloaded = cli(
+            origin,
+            TOKEN,
+            "task",
+            "guide",
+            TASK,
+            "--download",
+            str(destination),
+            "-o",
+            "json",
+        )
+
+        assert downloaded.returncode == 0, downloaded.stderr
+        target = destination / f"{ACTOR}.md"
+        assert (
+            target.read_bytes() == markdown and target.stat().st_mode & 0o777 == 0o600
+        )
+        assert list(destination.iterdir()) == [target]
+        assert requests[-1] == (document["read_reference"], "Bearer " + TOKEN)
+
+
 @pytest.mark.parametrize("phase", ("headers", "body", "context"))
 def test_guide_download_has_its_own_deadline_but_json_keeps_twelve_seconds(
     cli,

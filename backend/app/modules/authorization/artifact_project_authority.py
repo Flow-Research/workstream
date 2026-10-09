@@ -7,7 +7,8 @@ from uuid import UUID
 from app.modules.authorization.catalogue import ActionAvailability, ActionId
 from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.domain.task_authority import (
-    TASK_ACTIONS, TASK_SUBMITTER_ACTIONS, evaluate_task_authority,
+    TASK_ACTIONS, TASK_PROJECT_ROLE_READ_ACTIONS, TASK_SUBMITTER_ACTIONS,
+    evaluate_task_authority,
 )
 from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
@@ -30,6 +31,8 @@ PROJECT_AUTHORITY_ACTIONS = TASK_ACTIONS | PROJECT_SUBMITTER_ACTIONS | {
 
 async def lock_project_authority(repository, context, scope, action, locked_context):
     """Dispatch the closed project-action set to its existing authority owner."""
+    if action.action_id in TASK_PROJECT_ROLE_READ_ACTIONS:
+        return await lock_contributor_authority(repository, context, scope, locked_context)
     if action.action_id in PROJECT_SUBMITTER_ACTIONS:
         return await lock_submitter_authority(repository, context, scope, locked_context)
     if action.action_id not in PROJECT_AUTHORITY_ACTIONS:
@@ -123,6 +126,26 @@ async def lock_submitter_authority(repository, context, scope, locked_context):
         project_id=scope.project_id,
         actor_profile_id=context.actor_profile_id,
         role="submitter",
+        for_update=True,
+    )
+    if grant is None:
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
+    return context, grant
+
+
+async def lock_contributor_authority(repository, context, scope, locked_context):
+    """Lock one deterministic active Submitter or Reviewer grant on the exact project."""
+    if (
+        not isinstance(context, HumanAuthorizationContext)
+        or scope.kind is not PreparedAuthorityScopeKind.PROJECT
+        or scope.project_id is None
+    ):
+        raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
+    locked = await repository.lock_request_actor(context.identity_link_id, context.actor_profile_id)
+    context = locked_context(locked, context)
+    grant = await repository.find_active_project_role_any(
+        project_id=scope.project_id,
+        actor_profile_id=context.actor_profile_id,
         for_update=True,
     )
     if grant is None:

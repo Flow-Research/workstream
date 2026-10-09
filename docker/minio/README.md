@@ -28,14 +28,19 @@ requires network access and Go compilation resources; do not launch it on an
 already memory-constrained workstation.
 Subsequent builds reuse Docker layers.
 
-Backend CI builds or restores one image cache keyed by the exact Git commit,
-this directory's contents and runner platform. Older PR commits cannot supply a
-cached executable to a new commit; retries of the same commit can reuse its
-image. CI verifies server startup, then supplies a checksummed image
-artifact to the existing lanes and aggregate job. Jobs never substitute a mock
-storage provider. A missing build, artifact or health check fails verification.
-The source-image artifact is independent of test/coverage evidence and cannot
-make a failed test lane pass.
+Backend CI builds or restores one image tar cache keyed by a cache version, the
+runner OS/architecture, this directory's contents and the Backend workflow that
+owns the build command. Pull requests restore only. A trusted `main` push saves
+a miss after the image passes its version command and live health probe. The
+same exact cache identity can therefore be reused across commits; a Docker
+context, workflow or platform change misses it.
+
+Every run still loads and probes the image, then supplies a newly checksummed,
+Git-SHA-and-attempt-named artifact to the existing lanes and aggregate job.
+Those consumers verify the checksum before loading it. Jobs never substitute a
+mock storage provider. A missing build, artifact or health check fails
+verification. The source-image artifact is independent of test/coverage
+evidence and cannot make a failed test lane pass.
 
 When updating upstream source, update the commit, archive checksum, provenance
 and relevant build pins together. Require a fresh image build, health check and

@@ -81,6 +81,7 @@ async def test_task_read_lock_order_and_refresh(admin_access, auth_database_env,
                               (TaskRepository,"get_active_assignment","assignment"),
                               (AdminAuthorizationRepository,"lock_request_actor","actor"),
                               (AdminAuthorizationRepository,"find_active_project_role","grant"),
+                              (AdminAuthorizationRepository,"find_active_project_role_any","grant"),
                               (AdminAuthorizationRepository,"find_effective_grant","grant")):
         original = getattr(owner,method)
         async def trace(self,*args,_original=original,_label=label,**kwargs):

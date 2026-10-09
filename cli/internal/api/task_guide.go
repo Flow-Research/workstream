@@ -46,6 +46,8 @@ func (d TaskGuideDocument) Extension() string {
 		return ".docx"
 	case "application/vnd.openxmlformats-officedocument.presentationml.presentation":
 		return ".pptx"
+	case "text/markdown":
+		return ".md"
 	default:
 		return ""
 	}

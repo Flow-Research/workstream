@@ -193,6 +193,29 @@ async def _stored_put_state(project_id):
         ).where(ArtifactPutAttempt.project_id == project_id).order_by(ArtifactPutAttempt.id))).all()
 
 
+async def _stored_originals(project_id):
+    from app.core.config import get_settings
+    from app.modules.artifacts.models import ArtifactReplica, ArtifactPutAttempt
+
+    async with db_session.get_session_factory()() as session:
+        attempts = (
+            await session.scalars(
+                select(ArtifactPutAttempt).where(ArtifactPutAttempt.project_id == project_id)
+            )
+        ).all()
+        replicas = (await session.scalars(select(ArtifactReplica))).all()
+    bootstrap, store = _open_store(get_settings())
+    try:
+        stored = [
+            b"".join([chunk async for chunk in store.open(row.provider_object_ref)])
+            for row in replicas
+        ]
+    finally:
+        store.close()
+        bootstrap.close()
+    return attempts, replicas, stored
+
+
 async def _assert_inactive_resolver_replay_denied(
     client, project_id, resolver_id, path, headers, original, provider_calls, deliveries,
 ):
@@ -227,7 +250,6 @@ async def test_all_documents_stored_dispatches_once_through_minio(
 ):
     from app.core.config import get_settings
     from app.modules.actors.api import ServiceIdentity
-    from app.modules.artifacts.models import ArtifactReplica, ArtifactPutAttempt
     from app.workers.project_setup import run_project_guide_compilation
     from app.adapters.artifacts import internal_workers
 
@@ -257,17 +279,24 @@ async def test_all_documents_stored_dispatches_once_through_minio(
             "version": "initial",
             "task_examples": [{"content": "Review a claim."}],
             "documents": [
-                {"label": name, "media_type": "application/pdf"}
-                for name in ("guide.pdf", "appendix.pdf")
+                {"label": "guide.md", "media_type": "text/markdown"},
+                {"label": "appendix.pdf", "media_type": "application/pdf"},
             ],
         },
     )
     assert created.status_code == 201, created.text
     guide = created.json()
-    originals = [b"%PDF-1.7\nGuide fixture\n%%EOF", b"%PDF-1.7\nAppendix fixture\n%%EOF"]
+    originals = [
+        "# Guide fixture\n\nFollow the locked instructions exactly. 雪\n".encode(),
+        b"%PDF-1.7\nAppendix fixture\n%%EOF",
+    ]
     for index, (document, original) in enumerate(zip(guide["documents"], originals, strict=True)):
         path = f"/api/v1/projects/{project['id']}/guides/{guide['id']}/documents/{document['document_id']}/content"
-        headers = auth_headers() | {"Content-Type": ("Application/PDF", "application/pdf; name=appendix.pdf")[index]}
+        headers = auth_headers() | {
+            "Content-Type": ("Text/Markdown; charset=utf-8", "application/pdf; name=appendix.pdf")[
+                index
+            ]
+        }
         real_callback = internal_workers.continue_guide_setup_after_stored_document
         if index == 1 and recover_callback:
 
@@ -310,7 +339,7 @@ async def test_all_documents_stored_dispatches_once_through_minio(
         changed = await project_client.post(path, headers=headers, content=original + b"changed")
         assert changed.status_code == 409, changed.text
         another_key = await project_client.post(
-            path, headers=auth_headers() | {"Content-Type": "application/pdf"}, content=original,
+            path, headers=auth_headers() | {"Content-Type": headers["Content-Type"]}, content=original,
         )
         assert another_key.status_code == 409, another_key.text
         assert await _stored_keys(get_settings()) == before_keys
@@ -318,24 +347,10 @@ async def test_all_documents_stored_dispatches_once_through_minio(
         async with db_session.get_session_factory()() as session:
             run = await session.get(ProjectSetupRun, guide["setup"]["id"])
             assert run.status == ("awaiting_documents" if index == 0 else "queued")
-    async with db_session.get_session_factory()() as session:
-        attempts = (
-            await session.scalars(
-                select(ArtifactPutAttempt).where(ArtifactPutAttempt.project_id == project["id"])
-            )
-        ).all()
-        replicas = (await session.scalars(select(ArtifactReplica))).all()
-        assert len(attempts) == len(replicas) == 2
-    bootstrap, store = _open_store(get_settings())
-    try:
-        stored = [
-            b"".join([chunk async for chunk in store.open(row.provider_object_ref)])
-            for row in replicas
-        ]
-        assert set(stored) == set(originals)
-    finally:
-        store.close()
-        bootstrap.close()
+    attempts, replicas, stored = await _stored_originals(project["id"])
+    assert len(attempts) == len(replicas) == 2
+    assert {row.media_type for row in attempts} == {"text/markdown", "application/pdf"}
+    assert set(stored) == set(originals)
 
     # Even a completed put requires the fixed resolver's current authority.
     await _assert_inactive_resolver_replay_denied(

@@ -121,7 +121,7 @@ guide document's contents or a storage URL. For example:
     {"content": "Evaluate the supplied experiment's evidence.", "title": "Evidence evaluation", "labels": ["research"]}
   ],
   "documents": [
-    {"label": "Guide.pdf", "media_type": "application/pdf"}
+    {"label": "Guide.md", "media_type": "text/markdown"}
   ]
 }
 ```
@@ -130,8 +130,9 @@ guide document's contents or a storage URL. For example:
 example `title` may be omitted or null; example `labels` defaults to an empty
 array. Unknown/duplicate members, malformed JSON and null required fields or
 array members are rejected. The file is sent unchanged; the API owns semantic
-limits and validation. PDF, DOCX and PPTX declarations use the media types in
-OpenAPI. The API normalizes document-label whitespace; example text is preserved.
+limits and validation. PDF, DOCX, PPTX and UTF-8 Markdown (`.md`) declarations
+use the media types in OpenAPI. The API normalizes document-label whitespace;
+example text is preserved.
 
 The CLI bounds this input to 1MiB and this response to 2MiB because declarations
 include example text and document selectors. These are client wire envelopes,
@@ -161,7 +162,7 @@ workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file Guide.pdf
 ```
 
 Use the guide and document IDs returned by `project guide create`. Supply the
-document's declared media type explicitly: PDF, DOCX or PPTX as listed in
+document's declared media type explicitly: PDF, DOCX, PPTX or UTF-8 Markdown as listed in
 OpenAPI. The CLI sends raw original bytes, not extracted text, JSON or multipart.
 It requires a nonempty regular file up to ART's 512MiB hard ceiling; Workstream
 can enforce smaller configured document or aggregate limits. Files are hashed
@@ -295,10 +296,10 @@ workstream task show TASK_ID --output json
 ```
 
 These are contributor routes, not aliases for manager browsing. The ready queue
-requires an active project and its exact active Submitter grant; Manager or
-Reviewer authority alone does not permit it. It lists only unassigned ready
-tasks. Contributor detail shows unassigned ready work or the caller's own active
-assignment under current Submitter authority. It does not expose management
+requires an active project and an exact active Submitter or Reviewer grant;
+Manager authority alone does not permit it. It lists only unassigned ready
+tasks. Contributor detail shows unassigned ready work to either contributor role,
+or the caller's own active assignment under current Submitter authority. It does not expose management
 source/actor/assignment metadata, and a different same-project Submitter cannot
 read your claimed task. Workstream makes these decisions on every request.
 
@@ -307,13 +308,19 @@ validation and safe text/raw-JSON output apply. Ready summaries contain task and
 project IDs, title, nullable type/difficulty/estimated minutes, skills and creation
 time. Detail adds instructions, criteria, status, deadline and update time;
 nullable detail fields may be omitted by the API and display as `—`.
+Both responses include compensation from the task's locked
+ContributionPolicyVersion: the exact version UUID and, for accepted submissions
+and completed reviews, either `unpaid` or award rows containing only instrument,
+unit and exact decimal-string quantity. The CLI rejects binding IDs, route keys,
+binding status and other unknown Finance fields.
 `task show` takes only a task selector; Workstream resolves its project and
 authorizes that resource. No project preflight or locally inferred permission
 is added. Management-only fields in a contributor reply are rejected rather
 than silently displayed or ignored.
 
 Discovery is live, not a reservation or a claimability guarantee. A later claim
-must revalidate current authority and state. Cursors are action/project/limit
+still requires a Submitter grant and must revalidate current authority and state.
+Cursors are action/project/limit
 bound and cannot be reused as manager cursors; the CLI never decodes them or
 automatically fetches another page. These reads do not claim/start tasks,
 upload submissions or complete unfinished acceptance integration.
@@ -370,8 +377,8 @@ responding. Missing, corrupt or wrong-namespace originals fail with
 are private/no-store; setup-agent run-scoped access remains unchanged.
 
 The CLI reconstructs fixed same-origin paths and verifies size/SHA-256 again.
-Files use canonical document UUID names with `.pdf`, `.docx` or `.pptx`, never
-labels as paths. The destination must already exist and must not be a symlink.
+Files use canonical document UUID names with `.pdf`, `.docx`, `.pptx` or `.md`,
+never labels as paths. The destination must already exist and must not be a symlink.
 Downloads use private bounded temporary files and atomic no-overwrite publication;
 existing targets/symlinks are refused and failed unpublished files are removed.
 Documents completed before a later document fails remain valid local files.

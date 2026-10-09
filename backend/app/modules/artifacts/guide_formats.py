@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import PurePosixPath
@@ -104,7 +105,25 @@ class GuideFormatDetector:
             return self._classified("pdf")
         if header.startswith(b"PK\x03\x04") or header.startswith(b"PK\x05\x06"):
             return self._inspect_zip(reader)
+        if declared_media_type == "text/markdown":
+            return self._inspect_markdown(reader)
         return GuideFormatResult("opaque", "unsupported", {})
+
+    @staticmethod
+    def _inspect_markdown(reader: BinaryIO) -> GuideFormatResult:
+        """Validate bounded text syntax without parsing or rewriting the original."""
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+        try:
+            while chunk := reader.read(_SAMPLE_BYTES):
+                if "\x00" in decoder.decode(chunk):
+                    return GuideFormatResult("markdown", "malformed", {})
+            if "\x00" in decoder.decode(b"", final=True):
+                return GuideFormatResult("markdown", "malformed", {})
+        except UnicodeDecodeError:
+            return GuideFormatResult("markdown", "malformed", {})
+        finally:
+            reader.seek(0)
+        return GuideFormatResult("md", "classified", {})
 
     def _inspect_zip(self, reader: BinaryIO) -> GuideFormatResult:
         state = {"entries": 0, "decompressed": 0, "compressed": 0, "depth": 0}

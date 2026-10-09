@@ -36,12 +36,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           echo "artifact=minio-source-${GITHUB_SHA}-${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
 
-      - name: Cache exact source image
+      - name: Restore exact source image from trusted cache
         id: cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: ${{ runner.temp }}/minio-image/minio.tar
-          key: minio-source-v1-${{ github.sha }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('docker/minio/**') }}
+          key: minio-source-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('docker/minio/**', '.github/workflows/backend.yml') }}
 
       - name: Build source-pinned MinIO once
         if: steps.cache.outputs.cache-hit != 'true'
@@ -74,6 +74,13 @@ jobs:
           done
           exit 1
 
+      - name: Save verified source image to trusted cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/minio-image/minio.tar
+          key: minio-source-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('docker/minio/**', '.github/workflows/backend.yml') }}
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ${{ steps.identity.outputs.artifact }}
@@ -96,6 +103,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore exact backend pip downloads from trusted cache
+        id: pip-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/backend-pip-cache
+          key: backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}
+
       - name: Bind exact checked-out tree
         shell: bash
         run: |
@@ -103,6 +117,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain)"
           test "$(git rev-parse "${GITHUB_SHA}^{tree}")" = "$(git rev-parse HEAD^{tree})"
+          echo "PIP_CACHE_DIR=${RUNNER_TEMP}/backend-pip-cache" >> "${GITHUB_ENV}"
 
       - name: Install backend architecture dependencies
         working-directory: backend
@@ -138,6 +153,13 @@ jobs:
             --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md \
             --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           python -m scripts.behavior_ownership validate
+
+      - name: Save verified backend pip downloads to trusted cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.pip-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/backend-pip-cache
+          key: backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}
 
   lanes:
     needs: minio-image
@@ -192,6 +214,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore exact backend pip downloads from trusted cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/backend-pip-cache
+          key: backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}
+
       - id: identity
         name: Bind exact checked-out tree
         shell: bash
@@ -204,6 +232,7 @@ jobs:
           test "$(git rev-parse "${tree_sha}^{tree}")" = "$(git rev-parse HEAD^{tree})"
           echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
           echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
+          echo "PIP_CACHE_DIR=${RUNNER_TEMP}/backend-pip-cache" >> "${GITHUB_ENV}"
 
       - name: Install backend and exact Ruff
         working-directory: backend
@@ -358,6 +387,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore exact backend pip downloads from trusted cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/backend-pip-cache
+          key: backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}
+
       - id: identity
         name: Bind exact checked-out tree
         shell: bash
@@ -369,6 +404,7 @@ jobs:
           test -z "$(git status --porcelain)"
           echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
           echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
+          echo "PIP_CACHE_DIR=${RUNNER_TEMP}/backend-pip-cache" >> "${GITHUB_ENV}"
 
       - name: Install backend
         working-directory: backend

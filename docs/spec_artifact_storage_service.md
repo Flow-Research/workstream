@@ -835,8 +835,10 @@ one; then seal the computed commitment and
 second-pass stream together as `CommittedArtifactSource`.
 
 Guide ingest never permits a caller digest or size commitment. The raw upload
-must match the snapshot item's server-bound declared PDF/DOCX/PPTX media type;
-format inspection validates the actual file instead of trusting a header alone.
+must match the snapshot item's server-bound declared PDF/DOCX/PPTX or
+`text/markdown` media type; format inspection validates the actual file instead
+of trusting a header alone. Markdown admission requires byte-preserved UTF-8
+without NUL and does not parse, render or rewrite the original.
 Preparation computes the content digest and byte count. Durable admission locks
 the exact project/guide/snapshot/item, requires a draft guide, and revalidates
 `artifact.guide_source.ingest`. A committed `document_stored` receipt, or exact
@@ -1461,10 +1463,11 @@ provider internals.
 Guide-source ingestion stores immutable original documents through ArtifactStore.
 PostgreSQL records the source manifest, versions, exact content identity, upload
 receipts and run custody. It does not store extracted guide bodies. Current
-uploads accept PDF, DOCX and PPTX. Task examples are required ordinary PostgreSQL
-text inputs alongside the guide metadata; they do not create Workstream Tasks.
-Markdown-only setup, separate extraction jobs and the three-agent setup APIs
-are removed. Submission ZIP verification remains a separate workflow.
+uploads accept PDF, DOCX, PPTX and UTF-8 Markdown (`.md`). Task examples are
+required ordinary PostgreSQL text inputs alongside the guide metadata; they do
+not create Workstream Tasks. Embedded Markdown bodies, separate extraction jobs
+and the three-agent setup APIs are removed. Submission ZIP verification remains
+a separate workflow.
 
 Upload admission inspects the bounded declared file format and computes size
 and SHA-256. A committed `document_stored` receipt establishes guide readiness;

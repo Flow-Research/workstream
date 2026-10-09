@@ -12,6 +12,8 @@ from uuid import UUID
 from sqlalchemy import Row, Select, and_, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.contributions.api import LockedCompensationTermsPort
+
 from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.api import (
     AuditTaskEvidence, AuditTaskEvidencePage, AuditTaskEvidenceRequest,
@@ -26,6 +28,10 @@ from app.modules.tasks.api import (
     ReadyTaskPage,
     TaskQueueRequest,
     ReadyTaskSummary,
+    LockedTaskCompensationUnavailable,
+    TaskCompensationAward,
+    TaskCompensationTerms,
+    TaskContributionTerms,
     SubmissionPredecessorFacts,
     TaskLockedProjectContextReferences,
     TaskSubmissionContextFacts,
@@ -68,7 +74,12 @@ def _task_detail_columns():
 class TaskRepository:
     """Wraps SQLAlchemy persistence for task queue operations."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        compensation_terms: LockedCompensationTermsPort | None = None,
+    ) -> None:
         """Create a repository bound to one database session.
 
         Args:
@@ -76,6 +87,44 @@ class TaskRepository:
         """
         self._session = session
         self._audit_repository = AuditRepository(session)
+        self._compensation_terms = compensation_terms
+
+    async def _locked_compensation(
+        self, project_id: UUID, version_ids: tuple[UUID, ...]
+    ) -> dict[UUID, TaskCompensationTerms]:
+        """Resolve every TASK-owned lock through CON's contributor-safe public port."""
+        unique = tuple(dict.fromkeys(version_ids))
+        if not unique:
+            return {}
+        if self._compensation_terms is None:
+            raise LockedTaskCompensationUnavailable("locked task compensation unavailable")
+        try:
+            with self._session.no_autoflush:
+                terms = await self._compensation_terms.read_locked_compensation_terms(
+                    project_id, unique
+                )
+        except (TypeError, ValueError) as exc:
+            raise LockedTaskCompensationUnavailable("locked task compensation unavailable") from exc
+
+        def response_terms(value) -> TaskContributionTerms:
+            if value == "unpaid":
+                return "unpaid"
+            return tuple(
+                TaskCompensationAward(item.instrument.value, item.unit, item.quantity)
+                for item in value
+            )
+
+        mapped = {
+            item.contribution_policy_version_id: TaskCompensationTerms(
+                item.contribution_policy_version_id,
+                response_terms(item.accepted_submission),
+                response_terms(item.completed_review),
+            )
+            for item in terms
+        }
+        if len(mapped) != len(unique) or set(mapped) != set(unique):
+            raise LockedTaskCompensationUnavailable("locked task compensation unavailable")
+        return mapped
 
     async def read_assignment_invalidation_targets_page(
         self, request: AssignmentInvalidationTargetsRequest,
@@ -118,14 +167,20 @@ class TaskRepository:
         statement = select(
             task.id, task.project_id, task.title, task.task_type, task.difficulty,
             task.skill_tags, task.estimated_time_minutes, task.created_at,
+            task.locked_contribution_policy_version_id,
         ).where(_unassigned_ready_task())
         rows, continuation = await self._read_task_queue_rows(request, statement)
+        compensation = await self._locked_compensation(
+            request.project_id,
+            tuple(row.locked_contribution_policy_version_id for row in rows),
+        )
         items = tuple(
             ReadyTaskSummary(
                 task_id=UUID(row.id), project_id=UUID(row.project_id), title=row.title,
                 task_type=row.task_type, difficulty=row.difficulty,
                 skill_tags=tuple(row.skill_tags), estimated_time_minutes=row.estimated_time_minutes,
                 created_at=row.created_at,
+                compensation=compensation[row.locked_contribution_policy_version_id],
             )
             for row in rows
         )
@@ -201,8 +256,34 @@ class TaskRepository:
             _unassigned_ready_task(),
             and_(task.assigned_to == str(request.contributor_id), own_assignment),
         ))
+        statement = statement.add_columns(task.locked_contribution_policy_version_id)
         values = await self._read_task_detail_values(request, statement)
-        return ContributorTaskDetail(**values) if values is not None else None
+        if values is None:
+            return None
+        version_id = values.pop("locked_contribution_policy_version_id")
+        compensation = await self._locked_compensation(request.project_id, (version_id,))
+        return ContributorTaskDetail(**values, compensation=compensation[version_id])
+
+    async def contributor_task_visible(self, request: ContributorTaskDetailRequest) -> bool:
+        """Check existing contributor visibility without projecting compensation."""
+        if type(request) is not ContributorTaskDetailRequest:
+            raise ValueError("task detail request is invalid")
+        task, assignment = WorkstreamTask, TaskAssignment
+        own_assignment = select(assignment.id).where(
+            assignment.task_id == task.id,
+            assignment.project_id == task.project_id,
+            assignment.status == "active",
+            assignment.contributor_id == str(request.contributor_id),
+        ).exists()
+        statement = select(task.id).where(or_(
+            _unassigned_ready_task(),
+            and_(task.assigned_to == str(request.contributor_id), own_assignment),
+        ))
+        statement = statement.where(
+            task.project_id == str(request.project_id), task.id == str(request.task_id),
+        )
+        with self._session.no_autoflush:
+            return await self._session.scalar(statement) is not None
 
     async def read_management_task_detail(self, request: ManagementTaskDetailRequest) -> ManagementTaskDetail | None:
         """Read exact-project management facts without broad ORM loading."""

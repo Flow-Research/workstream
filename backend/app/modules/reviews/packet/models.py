@@ -133,7 +133,7 @@ class ReviewPacketGuideItem(Base):
         CheckConstraint("item_order >= 0", name="order_nonnegative"),
         CheckConstraint("logical_role='guide_source_original'", name="original_guide"),
         CheckConstraint(
-            "media_type in ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.presentationml.presentation')",
+            "media_type in ('application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/markdown')",
             name="guide_media",
         ),
     )

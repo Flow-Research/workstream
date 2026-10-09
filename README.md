@@ -173,8 +173,10 @@ storage, detached source facts and accepted-effects contracts. B6 commits each
 new hidden Submission with its initial checker reservation and outbox request;
 automatic request delivery, routing and acceptance remain unavailable. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
-unified setup agent. Guide metadata in PostgreSQL also holds at least one required
-task example; the agent assesses the examples with the uploaded guide documents.
+unified setup agent. Accepted originals are PDF, DOCX, PPTX and byte-preserved
+UTF-8 Markdown (`.md`); HTML and documentation sites are not guide inputs. Guide
+metadata in PostgreSQL also holds at least one required task example; the agent
+assesses the examples with the uploaded guide documents.
 Findings and policy proposals retain document-access evidence.
 
 [ART-07A1](.commitrail/initiatives/WS-ART-001/WS-ART-001-07A1.md) provides strict
@@ -764,7 +766,11 @@ the create/screen/release role-only path with exact Project Manager authority,
 atomic audit evidence and durable replay. ARCH-03C4 exposes separate contributor-ready,
 manager-planning and Operator-status queues with current scoped grants and signed
 pagination. ARCH-03C5 exposes separate Contributor/Manager detail and requirements,
-removing their old role/creator wrappers. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
+removing their old role/creator wrappers. PILOT-14 adds the task-locked
+ContributionPolicyVersion compensation block to ready summaries and Contributor
+detail for active exact-project Submitters or Reviewers. It exposes only unpaid
+or instrument/unit/exact-quantity terms, never Finance binding or route facts;
+claim/start authority remains Submitter-only. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
 locked-context reads with exact current grants. ARCH-03C7 exposes bounded task
 history only to covered Audit Authority and removes the old payload-bearing
 task-only audit route. AUTH-18 delivers public manager guide activation;

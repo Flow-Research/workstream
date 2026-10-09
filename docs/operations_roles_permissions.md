@@ -62,8 +62,8 @@ mutation action.
 
 | Grant | Scope | Purpose |
 |---|---|---|
-| Submitter | exact project | Minimal project read, queue/claim/start under task guards, own submission creation/read. |
-| Reviewer | exact project | Minimal project read and the planned server-selected current-work/claim/release/decision capabilities under exact review guards. |
+| Submitter | exact project | Minimal project read, ready/detail discovery with locked compensation, claim/start under task guards, own submission creation/read. |
+| Reviewer | exact project | Minimal project read, ready/detail discovery with both locked contribution types, and the planned server-selected current-work/claim/release/decision capabilities under exact review guards. |
 
 Contributor is the umbrella human product term. A contributor may hold
 independent exact-project Submitter and Reviewer grants. Celery,
@@ -86,7 +86,8 @@ or the exact project; own means record-level ownership still applies.
 | Contribution policy and compensation-adapter binding | no | no | no | covered | no | no | no |
 | Project contributor grants | no | no | covered | no | read covered | no | no |
 | Task management | no | explicit recovery only | covered | no | read covered | no | no |
-| Task queue/claim | no | operational projection only | management projection only | no | read covered | exact project under guards | no |
+| Ready task queue/detail | no | no | no | no | no | exact project under guards | exact project under guards |
+| Task claim/start | no | explicit recovery only | no | no | no | exact project under guards | no |
 | Submission create/read | no | operational projection only | management projection only | no | read covered | own assignment | read-for-review only |
 | Human review decision | no | no | no without reviewer grant | no | no | no | exact project under review guards |
 | Adjudication action | no | no | no | no | no | no | no |

@@ -264,22 +264,22 @@ async def test_requirement_waits_for_task_before_projects(task_client):
         await writer.flush()
         service = task_service(reader, settings=get_settings())
         order = MagicMock()
-        with patch.object(service._repo, "read_contributor_task_detail", wraps=service._repo.read_contributor_task_detail) as detail, patch.object(service._project_contexts, "lock_locked_policy_context", wraps=service._project_contexts.lock_locked_policy_context) as resolve:
-            order.attach_mock(detail, "detail")
+        with patch.object(service._repo, "contributor_task_visible", wraps=service._repo.contributor_task_visible) as visibility, patch.object(service._project_contexts, "lock_locked_policy_context", wraps=service._project_contexts.lock_locked_policy_context) as resolve:
+            order.attach_mock(visibility, "visibility")
             order.attach_mock(resolve, "projects")
             pending = asyncio.create_task(service.read_contributor_task_submission_requirements(UUID(project["id"]), UUID(task["id"]), new_record_id()))
             try:
                 await asyncio.wait_for(wait_for_named_database_lock(get_settings().database_url, name,
                     expected_waiter_pid=reader_pid, expected_blocker_pid=writer_pid), timeout=10)
-                detail.assert_not_awaited()
+                visibility.assert_not_awaited()
                 resolve.assert_not_awaited()
                 assert not pending.done() and stored.locked_post_submit_checker_policy_body == original_body
                 await writer.commit()
                 with pytest.raises(TaskLockedContextInvalid, match="custody is invalid"):
                     await asyncio.wait_for(pending, timeout=10)
-                detail.assert_awaited_once()
+                visibility.assert_awaited_once()
                 resolve.assert_awaited_once()
-                assert [call[0] for call in order.mock_calls] == ["detail", "projects"]
+                assert [call[0] for call in order.mock_calls] == ["visibility", "projects"]
                 assert stored.locked_post_submit_checker_policy_body["blocking_severities"] == []
             finally:
                 if not pending.done():
