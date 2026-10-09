@@ -17,6 +17,7 @@
   [WS-CLI-001-10](WS-CLI-001-10.md), declared-original upload with hash/size-bound storage receipts;
   [WS-CLI-001-11](WS-CLI-001-11.md), latest exact-guide setup diagnostics and compilation lineage;
   [WS-CLI-001-12](WS-CLI-001-12.md), exact finalized-proposal findings and policy inspection;
+  [WS-CLI-001-13](WS-CLI-001-13.md), deliberate exact pre-submission approval and manual replay;
   [PILOT-13](../../changes/pilot13-assigned-task-guide-documents.md), assigned-task locked-guide listing/download.
 
 ## Current boundary
@@ -61,6 +62,11 @@ approve policies or activate the guide; successful reading is not readiness.
 `project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` reads the explicit
 finalized proposal, complete findings, requirements and intake/evaluation
 bindings, without selecting latest, approving, correcting or activating it.
+`project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE
+--idempotency-key UUID` commits the separately prepared intake decision. It
+never acknowledges warnings automatically or refetches latest. Backend authority
+and currentness apply on replay; an immutable receipt does not establish
+post-policy approval, worker delivery or guide activation.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.
@@ -126,11 +132,14 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 12. **WS-CLI-001-12:** Inspect an explicitly selected finalized proposal through
     its public GET, retaining complete display findings and distinct intake and
     evaluation proposals without making a decision or substituting latest.
-13. **Later governed-work commands:** Add further project setup, submission,
+13. **WS-CLI-001-13:** Approve an explicitly selected intake proposal through the
+    public POST with caller-prepared target/warning/prior selectors and exact
+    manual replay custody. No post-policy decision or guide activation.
+14. **Later governed-work commands:** Add further project setup, submission,
    review, revision, and contribution reads/writes only as their actual public
    contracts and authority boundaries become available. Split by user journey,
    not one PR per endpoint or one giant catalogue PR.
-14. **Optional TUI:** Add a focused public queue/evidence view after its API
+15. **Optional TUI:** Add a focused public queue/evidence view after its API
    workflow is complete. Never require a TUI for agents or scripts.
 
 ## Risks and proof

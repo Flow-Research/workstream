@@ -159,7 +159,10 @@ caller-owned retry keys, with
 text/JSON output, plus latest guide-setup diagnostic inspection without polling
 or local readiness decisions, and exact finalized-proposal inspection without
 approval or implicit latest selection. Project inspection preserves
-server-selected full/minimal fields; no public project-list route is invented.
+server-selected full/minimal fields. Exact pre-submission proposal approval uses
+deliberate caller-prepared input and retry keys; its receipt does not establish
+post-policy approval, worker delivery or guide activation. No public project-list
+route is invented.
 CLI write uncertainty is explicit and never automatically
 retried. These source packages do not claim
 hosted deployment, published CLI binaries or the complete proposed workflow catalogue.
@@ -378,7 +381,12 @@ cannot be reused as post-submission review-gate evidence. See the
   [CLI proposal inspection](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-12.md)
   reads one explicitly selected finalized proposal with its complete findings,
   inventory and intake/evaluation proposals. Blocked/historical results are
-  observations; policy approval, correction and activation are not CLI commands.
+  observations, not automatic decisions.
+  [CLI intake approval](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-13.md)
+  submits the exact public pre-submission decision with explicit warning
+  acknowledgments and caller retry custody. Its immutable receipt is not
+  post-policy approval or worker delivery. Correction, post-policy approval and
+  activation remain future CLI commands; backend owners retain all authority.
   [PILOT-13 assigned-guide access](../.commitrail/changes/pilot13-assigned-task-guide-documents.md)
   lists exact locked originals in assigned contributor context and streams
   authorized, fully verified ART bytes. `task guide` lists or safely downloads
