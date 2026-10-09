@@ -463,3 +463,40 @@ def test_proposal_response_bound_and_existing_safe_failures(cli):
             selectors[index] = "../other"
             assert_failure(invoke(cli, origin, selectors), "invalid_arguments", 2)
         assert len(requests) == count
+
+
+def test_proposal_intake_integer_field_boundaries(cli):
+    from app.modules.projects.api.guide_proposal_package import (
+        GuideProposalReviewPackage,
+    )
+
+    ceiling = 10 * 1024**3
+    fields = (
+        "maximum_file_size_bytes",
+        "maximum_package_size_bytes",
+        "maximum_archive_size_bytes",
+        "maximum_archive_entries",
+    )
+    with http_fixture() as (origin, response, _):
+        for field in fields:
+            upper = ceiling if field in fields[:2] else 9223372036854775808
+            for boundary in (1, upper):
+                value = proposal()
+                policy = value["result"]["submission_artifact_policy"]
+                # Keep cross-field policy coherence in valid controls; this
+                # client check covers only the four declared field ranges.
+                policy["maximum_file_size_bytes"] = 1
+                policy["maximum_package_size_bytes"] = ceiling
+                policy[field] = boundary
+                GuideProposalReviewPackage.model_validate(value)
+                response["body"] = json.dumps(value).encode()
+                result = invoke(cli, origin)
+                assert result.returncode == 0 and json.loads(result.stdout) == value, (
+                    result.stderr
+                )
+            invalid = (-1, 0, ceiling + 1) if field in fields[:2] else (-1, 0)
+            for boundary in invalid:
+                value = proposal()
+                value["result"]["submission_artifact_policy"][field] = boundary
+                response["body"] = json.dumps(value).encode()
+                assert_failure(invoke(cli, origin), "invalid_api_response")

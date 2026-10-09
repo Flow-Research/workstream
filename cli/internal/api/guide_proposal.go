@@ -272,6 +272,19 @@ func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
 		if err != nil {
 			return err
 		}
+		// These are the public wire field ranges, not client-side evaluation of
+		// the proposed policy. Optional archive limits retain arbitrary range.
+		ceiling := big.NewInt(10 * 1024 * 1024 * 1024)
+		for _, limit := range []*big.Int{value.SubmissionArtifactPolicy.MaximumFileSizeBytes, value.SubmissionArtifactPolicy.MaximumPackageSizeBytes} {
+			if limit.Sign() <= 0 || limit.Cmp(ceiling) > 0 {
+				return errors.New("invalid intake byte limit")
+			}
+		}
+		for _, limit := range []*big.Int{value.SubmissionArtifactPolicy.MaximumArchiveSizeBytes, value.SubmissionArtifactPolicy.MaximumArchiveEntries} {
+			if limit != nil && limit.Sign() <= 0 {
+				return errors.New("invalid optional intake limit")
+			}
+		}
 		if string(policyFields["packaging"]) == "null" {
 			return errors.New("null packaging")
 		}
