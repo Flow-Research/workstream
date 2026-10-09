@@ -785,8 +785,11 @@ CompensationAward inserts inside `review.decision` add no
 
 ### Prepared mutations
 
-For mutations, AUTH first locks and revalidates current human actor/link/exact
-grant rows or fixed-service actor/link rows. AUTH returns one opaque,
+Mutations follow their owning feature's lock contract. REV-fenced operations
+acquire REV and any required TASK custody before AUTH; TASK precedes required
+CHECKERS currentness custody. Other callers retain their owner-specific order.
+During preparation, AUTH locks and revalidates current human actor/link/exact
+grant rows or fixed-service actor/link rows and returns one opaque,
 non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 
 - caller session;
@@ -795,7 +798,8 @@ non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 - idempotency key;
 - canonical request digest.
 
-The owning feature then locks product rows and recomposes final typed facts.
+With all required product and authority locks retained, the owning feature
+recomposes final typed facts.
 AUTH consumes the handle, evaluates exactly once, and stages evidence. Reused,
 serialized, caller-constructed, cross-session/action/actor/request,
 binding-mismatched, or authority-lost handles fail before product mutation. A

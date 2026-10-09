@@ -591,8 +591,9 @@ ART-owned `artifact.verification_job.retry` action through
 REV ownership.
 
 Sensitive mutations use `WS-AUTH-001-PREP` within each feature owner's lock
-contract. REV-fenced review mutations acquire REV and TASK parent custody before
-AUTH preparation; TASK also precedes any required CHECKERS currentness custody.
+contract. REV-fenced review mutations acquire REV before AUTH preparation;
+when an operation touches TASK or CHECKERS, required TASK parent custody precedes
+AUTH and any required CHECKERS currentness custody.
 Human review runtime remains planned. Within AUTH custody, the protocol locks
 `AuthorityControl(id=1)` first when final-admin safety applies,
 orders multiple principals by ActorProfile ID, then locks each human profile,
@@ -624,8 +625,9 @@ Project Manager `project.guide_compilation.review_package.read`,
 `project.guide_compilation.correction.request`; POL-05B exposes these with
 exact Project Manager authority and manual correction dispatch. Checker, review, generic artifact-read, and
 the public Submission cutover remain planned. Callers begin and own one root
-transaction, call `prepare`,
-lock their participant rows, compose final typed facts, call `consume` with the
+transaction and follow their owner's lock contract for participant rows and
+`prepare`; REV-fenced operations acquire REV and any required TASK custody
+before preparation. They compose final locked facts and call `consume` with the
 independently expected ActionId and the same strict request/idempotency input,
 flush participant work, and commit once. AUTH never commits in dependency
 teardown. Roll back the caller transaction on denial, evidence/SQL failure,

@@ -204,12 +204,16 @@ it. Any activation requires a separate approved REV-owned intent.
 ## Completed prepared mutation prerequisite
 
 `WS-AUTH-001-PREP` delivered a session-bound, action-bound, opaque, single-use,
-nonserializable prepared authority handle:
+nonserializable prepared authority handle. Lock placement follows the feature
+owner's contract: REV-fenced operations take REV and required TASK custody before
+AUTH, with TASK before required CHECKERS currentness; other operations retain
+their owner-specific order. No human review runtime is enabled by this protocol:
 
 ```text
-AUTH locks canonical current authority
--> feature locks its records
--> feature recomposes final typed facts
+feature establishes prerequisite custody under its owner lock contract
+-> AUTH prepares canonical current authority
+-> feature completes required custody without reversing that contract
+   and recomposes final typed facts
 -> AUTH evaluates exactly once and stages decision evidence
 -> feature participants flush
 -> route or service command commits once

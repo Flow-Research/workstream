@@ -845,16 +845,22 @@ denies even when both actions share one `PermissionId`. An own-row action still
 denies while its availability is `planned`.
 
 Sensitive mutations use the prepared protocol instead of evaluating final
-authority against unlocked feature facts:
+authority against unlocked feature facts. Each action retains its owner-specific
+lock contract; REV-fenced operations acquire REV and any required TASK custody
+before AUTH preparation, with TASK before required CHECKERS currentness locks.
+The authority-row order below applies within AUTH custody, not ahead of required
+owner locks:
 
 ```text
-AUTH locks AuthorityControl first when final-admin safety applies
+feature establishes the prerequisite custody required by its owner contract
+-> AUTH locks AuthorityControl first within AUTH when final-admin safety applies
 -> AUTH orders principals by ActorProfile ID
 -> human: ActorProfile -> exact ActorIdentityLink -> exact matched grant
 -> service: ActorProfile -> exact ActorIdentityLink -> code-owned validations
 -> AUTH creates one internal non-Pydantic PreparedAuthorizationHandle bound to
    session, action, actor reference, idempotency key, and request digest
--> feature locks its canonical rows and recomposes final typed facts
+-> feature completes any remaining owner-ordered custody and recomposes final
+   typed facts, without reversing its lock contract
 -> AUTH consumes the handle, evaluates once, and stages decision evidence
 -> feature participants flush
 -> route or service command commits once
