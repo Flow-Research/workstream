@@ -2313,8 +2313,8 @@ exact transition reference. Each generation increment requires one immutable
 `joint_lifecycle_transitions` row and its exact Operator AUTH event in the same
 transaction. Database closure rejects missing or substituted custody; controller
 identity and creation time remain unchanged. The root fence takes its advisory
-lock before the controller row. The transition operation takes AUTH custody
-first; the fence itself grants no business authority. New participant effects
+lock before the controller row. The transition operation takes this REV fence
+before AUTH custody; the fence itself grants no business authority. New participant effects
 require live/nonzero, while terminal replay stays read-only under the current
 generation. Fulfillment roots, ordinals and cutoffs remain deferred until
 fulfillment activation; conditional awards are separate atomic facts.

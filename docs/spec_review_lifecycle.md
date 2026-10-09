@@ -1046,8 +1046,8 @@ revalidation.
 - Guards: one canonical singleton, exact generation/phase/digest, legal adjacent
   transition, required drain/cutoff readiness, exact replay or changed-replay
   conflict. Lease force release keeps its own action.
-- Transaction revalidation: prepared authority, shared/exclusive advisory fence,
-  row locks, final observations, one caller commit.
+- Transaction revalidation: root advisory fence and controller row, then AUTH
+  control and principal custody, final observations, one caller commit.
 - Hidden behavior dependency: `WS-REV-001-12A1` through `WS-REV-001-12A4`.
 
 ## Fixed Service Identity Manifests
