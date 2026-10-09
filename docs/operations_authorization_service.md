@@ -590,8 +590,11 @@ ART-owned `artifact.verification_job.retry` action through
 `ArtifactOperatorRecoveryPort`; shared outbox dispatch/retry remains outside
 REV ownership.
 
-Review and other sensitive mutations must wait for `WS-AUTH-001-PREP`. That
-protocol locks `AuthorityControl(id=1)` first when final-admin safety applies,
+Sensitive mutations use `WS-AUTH-001-PREP` within each feature owner's lock
+contract. REV-fenced review mutations acquire REV and TASK parent custody before
+AUTH preparation; TASK also precedes any required CHECKERS currentness custody.
+Human review runtime remains planned. Within AUTH custody, the protocol locks
+`AuthorityControl(id=1)` first when final-admin safety applies,
 orders multiple principals by ActorProfile ID, then locks each human profile,
 exact link, and exact matched grant or each service profile and exact link.
 Service identity, static matrix membership, and action availability are
@@ -599,8 +602,9 @@ code-owned validations, not database lock targets. Only then does AUTH create an
 internal, non-Pydantic `PreparedAuthorizationHandle` bound to the exact session,
 ActionId, actor reference kind, actor reference, idempotency key, and canonical
 request digest. It is never a route schema or caller input. Consumption matches
-every binding before the feature locks rows and recomposes final facts, then AUTH
-evaluates and stages evidence once before one route/service-command commit.
+every binding against the final facts recomposed from locked feature rows, then
+AUTH evaluates and stages evidence once before durable feature effects and one
+route/service-command commit.
 Crossed tests must cover link revoke, actor suspend/deactivate, exact grant
 revoke, final-admin mutation, and same-session/action cross-actor or
 cross-request substitution. Never serialize or reuse the handle, let dependency

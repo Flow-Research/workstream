@@ -95,7 +95,7 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
 - Exact behavior ownership and lane inventory files/tests; shrink affected frozen AUTH structural debt through cohesive owner extraction, then refresh fingerprints without adding debt or relaxing limits. No CI gate changes.
 - This record; REV/AUTH/CON/ARCH/POL current overviews, ARCH/AUTH/POL current
   plans/maps, Commitrail index; canonical review/compensation specifications,
-  relevant authorization custody and roles/permissions docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
+  relevant authorization custody, operations and roles/permissions docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
   only if present. Historical completed records remain historical.
 
 ## Prohibited
@@ -188,3 +188,9 @@ before authority custody and refreshes the locked controller before mutation.
 The regressions fail against the prior ordering and cached update at their actual
 PostgreSQL boundaries; the prior two-session proof remains required. No runtime
 activation or capability scope changes follow from these repairs.
+
+Current planned review claim/decision and compensation choreography also obeys
+REV-before-TASK-before-AUTH custody, with TASK before CHECKERS currentness. Their
+exact idempotency, queue, lease and dependent-row order still requires the owning
+runtime chunk's PostgreSQL proof before activation; this correction activates
+none of those surfaces. Historical pre-cutover records remain unchanged.

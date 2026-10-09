@@ -138,16 +138,16 @@ freshly verify the Flow token and resolve canonical ActorProfile.id
 -> create no ReviewLease, packet manifest, queue mutation, or policy freeze
 ```
 
-`POST /api/v1/reviews/claim` uses this exact AUTH-first order:
+`POST /api/v1/reviews/claim` must respect this planned cross-owner order:
 
 ```text
-freshly verify the Flow token
+freshly verify the Flow token and start the caller root transaction
+-> acquire the shared REV lifecycle fence
+-> lock and revalidate Task, TaskAssignment, and Submission
+-> acquire required CHECKERS currentness and claim-owned REV facts
+   in the owning chunk's proven order, always TASK before CHECKERS
 -> AUTH PREP review.claim with exact request bindings
--> lock claim idempotency
--> lock the review lifecycle fence
--> lock ReviewQueueEntry
--> lock Task, TaskAssignment, Submission, and CheckerRun facts
--> recompose canonical final facts
+-> recompose canonical final locked facts
 -> AUTH validates all prepared-handle bindings, consumes the handle once,
    evaluates exact current authority once, and stages bounded evidence
 -> verify canonical admission's Submission-stamped ContributionPolicyVersion, copy it
@@ -156,17 +156,23 @@ freshly verify the Flow token
 -> stage audit/outbox rows and commit once
 ```
 
+The owning claim chunk must define and prove the exact idempotency, queue and
+source-row order before activation. This partial order does not enable claim.
+
 Any denial or race before the append follows the prepared-protocol rollback path
 and creates no lease, manifest, policy freeze, audit, or product outbox effect.
 
 ## Prepared Mutation Protocol
 
-Every protected review/revision mutation uses the AUTH-owned prepared protocol:
+Protected review/revision mutations use the AUTH-owned prepared protocol under
+their owner's lock contract. REV-fenced operations must establish REV before
+TASK parent custody and TASK before any CHECKERS currentness locks; they must
+not retain AUTH principal custody while waiting for those earlier locks:
 
 ```text
-AUTH locks current authority and returns an opaque prepared handle
--> REV locks canonical feature rows
--> REV recomposes final typed facts
+feature owner establishes its required root fence and canonical feature custody
+-> AUTH locks current authority and returns an opaque prepared handle
+-> REV recomposes final typed facts from the locked rows
 -> AUTH validates bindings and current authority, consumes once, evaluates once,
    and stages bounded decision evidence
 -> REV, task, ART, CON, audit, and outbox participants flush
@@ -427,17 +433,16 @@ these contracts and storage tables do not supply authority.
 No canonical Review may commit without the mandatory WS-CON flush-only
 participant. No production or test no-op participant exists.
 
-Every valid decision follows this order:
+The planned decision operation must respect this cross-owner order:
 
 ```text
-freshly verify the Flow token
+freshly verify the Flow token and start the caller root transaction
+-> acquire the shared REV lifecycle fence
+-> lock Task, the exact Submission.task_assignment_id row, and Submission
+-> lock ReviewLease, ReviewQueueEntry, predecessor Review, finding/resolution
+   lineage and stabilized binding facts in the owning chunk's proven order
 -> AUTH PREP review.decision with exact request bindings
--> lock review idempotency
--> lock the review lifecycle fence
--> lock ReviewLease, ReviewQueueEntry, task, the exact
-   Submission.task_assignment_id row, Submission,
-   predecessor Review, finding/resolution lineage, and stabilized binding facts
--> recompose canonical final facts
+-> recompose canonical final locked facts
 -> AUTH validates all prepared-handle bindings, consumes the handle once,
    evaluates exact current authority once, and stages bounded evidence
 -> append immutable Review, submitted findings, and resolutions
@@ -449,6 +454,9 @@ freshly verify the Flow token
 -> stage shared audit and outbox rows
 -> request route or service command commits once
 ```
+
+The decision chunk must define and prove its exact idempotency, queue, lease
+and source-row order before activation; this sequence does not expose a route.
 
 The decision transaction performs no ART capability call, provider I/O, or
 contribution-evidence projection. It consumes the stabilized server-derived

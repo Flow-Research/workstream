@@ -591,13 +591,14 @@ shared acceptance operation must add shared audit/outbox staging. A combined
 request carrying nullable FinalAcceptance or both actors' source and policy
 facts is prohibited.
 
-Human decision order (false routing omits this reviewer operation):
+Planned human decision order (false routing omits this reviewer operation):
 
 ```text
-AUTH locks and revalidates exact reviewer authority
--> AUTH prepares review.decision for this session/action/actor/request
--> REV locks idempotency, release fence, queue, lease, task, assignment,
-   Submission, predecessor Review, findings, and resolutions
+REV acquires its root lifecycle fence, then task, assignment and Submission
+-> REV acquires queue, lease, predecessor Review, findings and resolutions
+   in the future decision chunk's proven deterministic order
+-> AUTH locks exact reviewer authority and prepares review.decision
+   for this session/action/actor/request
 -> REV recomposes final typed resource facts
 -> AUTH consumes the handle, evaluates once, and stages decision evidence
 -> REV appends immutable Review, findings, and resolutions
@@ -607,6 +608,10 @@ AUTH locks and revalidates exact reviewer authority
 -> REV stages shared audit and outbox rows from invoked CON results
 -> request route or service command commits once
 ```
+
+Exact idempotency and dependent-row ordering remains part of the decision
+chunk's required PostgreSQL concurrency proof before activation. AUTH custody
+must not precede the REV fence or TASK parent locks.
 
 ### Reviewer operation
 
