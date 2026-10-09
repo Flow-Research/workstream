@@ -196,6 +196,10 @@ only the contract and registry needed by that future journey.
 
 ## Evidence
 
+The earlier rows retain checkpoint-specific evidence and limitations. The final
+two rows record the reconciled implementation at `6d288fc206d9c08be32a0bcba9be1a31be5c4ba7`;
+full hosted CI remains required before merge readiness.
+
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Current owner and dependency map | Source inspection of CHECKERS pre/post APIs, ART pre-submit attempt custody, CHECKERS reservation/lease custody, AUTH actions and the PILOT-00 result | Complete; the product owner supplied the exact four-default cutover target | Runtime, policy binding, activation and catalogue cutover remain later chunks |
@@ -207,6 +211,8 @@ only the contract and registry needed by that future journey.
 | Review repair: canonical bytes and replay | Focused real PostgreSQL numeric-schema, exact 65,536-byte schema, oversized-schema refusal and same-operation four-field substitution tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-new2.json` | PASS: 2 tests in 29.15s; database and role cleanup true | Final exact-head replay remains required after the repair commit |
 | Review repair: result closure | Focused contract and registry service tests for result self-revalidation, both-outcome byte ceilings and changed-payload replay discrimination | PASS: 16 tests in 1.55s | Runtime consumption remains a later chunk |
 | Review repair: schema graph | Hostile-search-path registry upgrade, one-root/one-head graph, fixed baseline and repeated-head tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-schema.json` | PASS: 4 tests in 93.21s; database and role cleanup true | Hosted full migration matrix remains CI evidence |
+| Reconciled AUTH and database custody | Exact-head PostgreSQL 16 registry, migration and repeated-head batch; `/tmp/ws-pilot-checkers-491-reconcile-auth-final.log` and matching JSON metadata | PASS: 11 tests in 176.70s at `6d288fc`; migration `0029_external_checker_registry`, database and role cleanup complete | Full hosted CI and external runtime remain pending |
+| Reconciled contract and integration guards | Pure contract/catalogue batch, generated MCP/OpenAPI comparison, module/AUTH/ownership/structure/documentation checks | PASS: 54 pure tests and 10 generated-contract tests at `6d288fc`; focused guards passed | Independent final review and required hosted checks precede merge readiness |
 
 ## Review findings
 
@@ -218,7 +224,8 @@ only the contract and registry needed by that future journey.
   function and runtime facade with no exemption or limit change.
 - The fixed migration-0001 schema manifest rejected an attempted head-schema
   regeneration. That change was removed; the PostgreSQL 16 head fingerprint and
-  reset inventory alone carry the new 0028 objects.
+  reset inventory alone carry the registry objects, initially numbered 0028
+  and reconciled to revision 0029 after the lifecycle migration merged.
 - Independent review found that the first checker digest reused a historical SQL
   canonicalizer whose decimal-number representation differs from Python, and
   that the schema-size SQL constraint counted JSONB display whitespace. The
