@@ -129,6 +129,14 @@ AUTH_OUTBOX_02_TARGETS = frozenset({
 })
 CON_02B_DELIVERY_TARGETS = frozenset({'backend/app/modules/outbox/delivery_repository.py', 'backend/app/modules/outbox/api.py', 'backend/app/modules/outbox/delivery.py', 'backend/app/modules/outbox/registry.py'})
 CI_LANE_CATALOGUE_TARGETS = frozenset({"backend/scripts/test_lane_catalogue.py"})
+PILOT_04_REGISTRY_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/checker_registry_authorization.py",
+        "backend/app/modules/authorization/domain/checker_registry.py",
+        "backend/app/modules/checkers/api/external.py",
+        "backend/app/modules/checkers/external_registry.py",
+    }
+)
 LOCAL_PILOT_HELPER_TARGETS = frozenset(
     {
         "backend/scripts/ensure_local_minio_bucket.py",
@@ -772,6 +780,7 @@ def _validate_additive_partition_transition(
         | ARCH_03C4_TARGETS
         | ARCH_03B9_TARGETS
         | CI_LANE_CATALOGUE_TARGETS
+        | PILOT_04_REGISTRY_TARGETS
         | LOCAL_PILOT_HELPER_TARGETS
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS

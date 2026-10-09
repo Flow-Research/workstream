@@ -1,7 +1,7 @@
 # [PILOT-04] Publish The External Checker Contract And Registry
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Publish one normalized pre/post external-checker
   request/result contract and one immutable, hidden, authorized digest-pinned
   checker registry without enabling external execution or changing current
@@ -66,7 +66,7 @@ reproducible builds or implement a launcher.
 - `backend/app/modules/checkers/{models,external_registry}.py` for the append-only
   registry row and a hidden caller-transaction service/repository. Registration
   owns exact replay, current fresh authority and immutable publication only.
-- The minimum CHECKERS registry registration action, resource context, prepared
+- The minimum CHECKERS registry registration action, resource context, direct
   authority adapter, audit projection and exports under
   `backend/app/modules/authorization/**` and `backend/app/modules/audit/**`.
   Registration is a system-scoped human Operator action; metadata is never an
@@ -78,8 +78,12 @@ reproducible builds or implement a launcher.
   migration lands first, this branch must reconcile to the actual main head and
   rename the unpublished revision rather than creating a second head.
 - Focused contract, service, authorization, replay, concurrency and real
-  PostgreSQL direct-SQL append-only tests. Required boundary/lane catalogues may
-  change only for these new exact test modules after coordination.
+  PostgreSQL direct-SQL append-only tests. `backend/scripts/test_lane_catalogue.py`,
+  `backend/tests/test_ci_lane_catalogue.py`, `backend/scripts/behavior_ownership.py`
+  and `.ci/behavior-ownership/partition.v1.json` may register only the new
+  checker modules and tests under their existing owners. The AUTH structural
+  debt ledger may refresh only for the touched kernel/runtime structures with
+  no exemption or growth.
 - `docs/decision_0014_external_service_adapter_convention.md`,
   `docs/architecture_checker_framework.md` and the exact PILOT-04 current-status
   lines in `docs/roadmap_status.md` for the delivered registry/contract boundary
@@ -131,35 +135,35 @@ code, plugins or authority.
 
 ## Acceptance criteria
 
-- [ ] Strict pre-submit and post-submit external request variants accept only
+- [x] Strict pre-submit and post-submit external request variants accept only
   their real existing owner identities; pre-submit cannot carry a Submission,
   and post-submit cannot omit Submission/request/reservation/current-lease
   identity.
-- [ ] One normalized result validates the complete request/registry/config
+- [x] One normalized result validates the complete request/registry/config
   identity, separates completed findings from the existing closed
   infrastructure-failure family, and rejects extra, mismatched, oversized or
   phase-incompatible data.
-- [ ] An authorized system Operator can register one digest-pinned external
+- [x] An authorized system Operator can register one digest-pinned external
   checker in a caller-owned root transaction without a backend deploy; exact
   replay returns the same immutable entry and changed replay fails closed.
-- [ ] Registration stores capability/version/phase, OCI digest, exact schema
+- [x] Registration stores capability/version/phase, OCI digest, exact schema
   identities and hashes, CPU/memory/deadline/output limits and a recomputable
   entry digest. Unknown schema identities, mutable image tags and unbounded
   limits are rejected before persistence.
-- [ ] Registration metadata grants no policy selection, activation, execution,
+- [x] Registration metadata grants no policy selection, activation, execution,
   task routing or result currentness. No public route or runtime factory is
   enabled.
-- [ ] Real PostgreSQL proves direct INSERT without exact authority closure,
+- [x] Real PostgreSQL proves direct INSERT without exact authority closure,
   mismatched digest, duplicate identity, UPDATE, DELETE and TRUNCATE all fail;
   rollback and concurrent/replayed registration cannot create partial or
   duplicate rows.
-- [ ] Existing pre/post catalogue behavior and hashes remain unchanged; current
+- [x] Existing pre/post catalogue behavior and hashes remain unchanged; current
   schema graph remains one linear head and every schema fingerprint/inventory
   consumer recognizes the new append-only table and revision.
-- [ ] Current ADR/checker architecture/roadmap text distinguishes the delivered
+- [x] Current ADR/checker architecture/roadmap text distinguishes the delivered
   contract/registry from pending policy binding, default replacement, runtime,
   sandbox and catalogue cutover.
-- [ ] The future replacement map retains ART's safe-ZIP/platform-limit,
+- [x] The future replacement map retains ART's safe-ZIP/platform-limit,
   server-computed receipt/manifest, high-confidence secret and task-rule-aware
   unchanged-work proofs as exactly the four blocking defaults; summary and
   attestation stay warning-only and project rules stay external.
@@ -178,29 +182,38 @@ code, plugins or authority.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Current owner and dependency map | Source inspection of CHECKERS pre/post APIs, ART pre-submit attempt custody, CHECKERS reservation/lease custody, AUTH prepared actions and PILOT-00 result | Complete for planning; no implementation proof claimed | Final default-checker enumeration remains product-owner input |
-| Normalized external contract | Focused strict-schema, phase-substitution, identity-substitution, result-family and size-bound tests | Pending | Runtime transport and sandbox remain later chunks |
-| Authorized immutable registry | Real PostgreSQL service/replay/rollback/concurrency and direct-SQL mutation/refusal tests | Pending | No public registration route in this chunk |
-| Migration and schema custody | Predecessor-to-head upgrade, graph/current/fingerprint/reset/inventory checks on PostgreSQL 16 | Pending | Revision number must be reconciled if another migration lands first |
-| Existing behavior unchanged | Existing pre/post contract/catalogue hash and caller regression set | Pending | Catalogue replacement remains later PILOT-04 work |
+| Current owner and dependency map | Source inspection of CHECKERS pre/post APIs, ART pre-submit attempt custody, CHECKERS reservation/lease custody, AUTH actions and the PILOT-00 result | Complete; the product owner supplied the exact four-default cutover target | Runtime, policy binding, activation and catalogue cutover remain later chunks |
+| Normalized external contract | `pytest` over `tests/checkers/external/test_contracts.py`, registry service, catalogue and bounded audit/schema consumers | PASS: 25 tests on `002deda91b2d0a6ed5b6e72ab4bd325f1e76c881`; Ruff also passed | Runtime transport and sandbox remain later chunks |
+| Authorized immutable registry | Isolated PostgreSQL 16 `test_postgresql.py`, hostile-search-path migration and repeated-head test; metadata `/tmp/ws-pilot-checkers-491-final-head.json` | PASS: 7 tests in 141.60s at `002deda91`; database and role cleanup true | No public registration route in this chunk |
+| Migration and schema custody | PostgreSQL 16 predecessor/head upgrade, hostile `search_path`, graph, fixed-baseline manifest, repeated upgrade, current fingerprint/reset/inventory | PASS: focused schema batch 5 tests in 136.96s and exact-head migration coverage above | Open PR #516 must reconcile its unpublished conflicting revision before merge if this revision lands first |
+| Existing behavior unchanged | Exact current pre-submit catalogue identity/manifest and post-submit catalogue contract/hash tests | PASS: 19 tests in 11.22s; neither catalogue source nor hash changed | Catalogue replacement remains later PILOT-04 work |
+| CI and owner registration | Exact lane inventory, deterministic checker-delivery partition and behavior-ownership catalogue regressions | PASS: 199 tests in 5.22s; four new test modules are assigned once and four new production targets are additive | Hosted full-suite timing remains CI evidence |
 
 ## Review findings
 
 - Planning inspection found inconsistent historical default lists. The product
   owner supplied the superseding four-behavior list above; implementation and
   catalogue-removal proof remain later bounded PILOT-04 work.
+- The structural-debt validator rejected a first mechanical AUTH ledger refresh.
+  The final integration shrinks the touched oversized kernel, preparation
+  function and runtime facade with no exemption or limit change.
+- The fixed migration-0001 schema manifest rejected an attempted head-schema
+  regeneration. That change was removed; the PostgreSQL 16 head fingerprint and
+  reset inventory alone carry the new 0028 objects.
 
 ## Reconciliation
 
 - Current-source reconciliation: Started from merged main
-  `697a321b7691633ddb2b81cc173d6b3e193ed9f2`, whose linear migration head is
+  `baa7ae7c1bce9c3769453620f4aa0b22fe13fe3e`, whose linear migration head is
   `0027_markdown_guide_media`. Open PR #516 still carries a conflicting
-  predecessor-based `0027_lifecycle_transitions` and must reconcile its own
-  revision if it lands; this branch will recheck actual main before publishing.
+  unpublished `0028_lifecycle_transitions` and must reconcile its own revision
+  if this registry revision lands first. The registry branch is reconciled to
+  current main and retains one Alembic head.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product/ART behavior
   and has handed migration authorship to this lane. Its DDL remains a later
   separate linear revision after this registry migration lands; no PILOT-02
   application files or schema are included here.
 - Remaining risks: Default-checker implementation and replacement proof, policy
-  binding, F-020, external runtime, hosted gVisor hardening, representative resource limits, cleanup
-  after host loss and complete catalogue cutover remain future bounded work.
+  binding, F-020, external runtime, hosted gVisor hardening, representative
+  resource limits, cleanup after host loss and complete catalogue cutover
+  remain future bounded work.
