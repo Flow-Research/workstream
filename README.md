@@ -354,6 +354,9 @@ upload documents or approve the guide; returned setup waits for those documents.
 --media-type MIME --idempotency-key UUID` uploads a declared original. The CLI
 streams its bytes and validates the storage receipt against their hash and size.
 An upload receipt is not setup completion, policy approval or guide activation.
+`workstream project guide setup PROJECT_ID GUIDE_ID` reads the latest public
+setup status and compilation lineage. A successful diagnostic read is not
+approval or activation; there is no polling or setup execution in the CLI.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.
