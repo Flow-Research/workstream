@@ -64,7 +64,7 @@ checks must genuinely meet the selected project's requirements: structural check
 must not be advertised as substantive judges, and an unsupported required evaluator
 blocks that project rather than being silently omitted.
 
-[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
+[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
 
 [ARCH-04E1B-B4](../WS-ARCH-001-04E1BB4.md) binds Submission summary and attestation to the packet retained by intake, including database custody. B6 now commits the initial reservation and request event with exact receipts and fresh-authorized replay. B7 supplies hidden request delivery; complete authorized outcomes precede completion-handler wiring.
 
@@ -90,8 +90,8 @@ next, followed by completion-handler wiring at 04E1B-B. Mandatory exact same-inp
 TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
 before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
-governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
-then live 04E3; true admission does not depend on CON/shared acceptance.
+governed consequence. Complete authorized outcomes at 04E2-B precede completion delivery at
+04E1B-B, then live composition at 04E3; true admission does not depend on CON/shared acceptance.
 
 ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read guards
 and ordered review admission INSERTs,
@@ -212,9 +212,9 @@ and [CON-02B](../../WS-CON-001/OVERVIEW.md#con-02b-current-dispatcher-contract).
 REV-12A1 delivers disabled controller/fence mechanics, CON-07 delivers the
 hidden source-neutral submitter participant and complete frozen award-set owner,
 and REV-04C composes hidden FinalAcceptance/TASK/CON effects. The current
-false-branch priority follows the first-layer sequence: initial atomic Submission/dispatch before the remaining hidden routing handlers.
+false-branch priority follows the first-layer sequence: delivered atomic Submission/dispatch and request delivery, then complete authorized outcomes before completion delivery.
 Both branches have request reservation 04E1B-A and hidden AUTH preparation
-04E2-A delivered before handlers 04E1B-B, activation 04E2-B and live 04E3; true routing can proceed after its own prerequisites without CON or
+04E2-A delivered; complete authorized outcomes 04E2-B precede completion delivery 04E1B-B and live 04E3; true routing can proceed after its own prerequisites without CON or
 shared acceptance. False adds those participants and scoped lifecycle activation.
 See [ARCH-04E1B/04E2/04E3](chunks/WS-ARCH-001-04E-canonical-allow-review.md#current-bounded-sequence)
 and ARCH-04F. ARCH-04E1A is delivered as the source-only predecessor.

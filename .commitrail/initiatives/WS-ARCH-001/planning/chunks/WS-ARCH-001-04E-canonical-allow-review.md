@@ -48,8 +48,8 @@ Split preparation from consequences within the existing TASK and AUTH owners:
    required audit/outbox records. That phase also adds database-enforced
    FinalAcceptance/TASK/CON complete-set closure and refuses retained
    pre-authority sources before any production composition or consumer.
-4. **ARCH-04E1B-B / 04E2-B / 04E3** complete hidden handlers, exact consequence
-   activation and live composition as detailed below. True admission uses the
+4. **ARCH-04E2-B / remaining 04E1B-B / 04E3** complete the authorized
+   outcome operation, then completion delivery, then live composition as detailed below. True admission uses the
    same preparation/issuer phases but does not require CON/shared acceptance;
    its receipt commits with its own full admission consequence.
 
@@ -78,7 +78,8 @@ REV-03B normalized packets and REV-04A immutable Review source storage are deliv
 CON-07/REV-04C shared acceptance prerequisites, using the delivered exact AUTH preparation and
 REV-12A1 disabled controller/fence, are hard dependencies of false handler composition, not of this
 early schema or true admission. Both branches use the delivered preparation phase
-above before hidden 04E1B-B, canonical activation 04E2-B and live 04E3. True proceeds with its own prerequisites;
+above; complete authorized outcomes 04E2-B precede remaining completion
+delivery 04E1B-B and live 04E3. True proceeds with its own prerequisites;
 false additionally requires shared acceptance and scoped lifecycle activation,
 with 04F remediation before false guide activation. This breaks the source-FK dependency cycle.
 False guide activation stays unavailable until that path is proven. Avoid
@@ -117,20 +118,22 @@ creating human admission, acceptance or contribution effects.
    [04E1B-B7](../../WS-ARCH-001-04E1BB7.md) adds the unregistered request
    handler, recovering that exact request and fencing execute/finalize transactions
    against the committed outbox invocation. UNKNOWN does not renew execution.
-   Completion routing remains next; the full authorized
-   handler races remain required. False composition must take the REV lifecycle
+   The complete authorized outcome operation at 04E2-B comes next;
+   completion delivery must consume it and acknowledge only after commit.
+   Full authorized outcome/currentness and delivery races remain required. False composition must take the REV lifecycle
    fence before TASK and revalidate the policy after locking; source preparation
    does not acquire that fence or authorize later lock-order inversion. After 04E1B-A/04E2-A and
    CON-02B's handler/claim contract (plus delivered REV-04C acceptance foundations
-   for false), TASK retains the B7 unregistered request handler and next implements the
-   consumer of 04C's already-defined final-result notification, exact public facts, currentness protocol
+   for false), TASK retains the B7 unregistered request handler and, after the complete
+   04E2-B outcome operation, implements the consumer of 04C's already-defined final-result notification, exact public facts, currentness protocol
    and transaction proof described below. No live worker or action activation.
    Initial checker evaluation-request reservation is a bounded atomic consequence of the existing
    exact `submission.create` command, not an authority token sent to the worker.
-3. **ARCH-04E2-B — AUTH routing activation.** After 04E1B-B hidden proof, AUTH
-   also consumes scoped XINT-003-08B lifecycle-control activation for the false
-   consequence; true routing and the early source schema do not depend on it.
-   AUTH
+3. **ARCH-04E2-B — complete authorized outcome operation.** Reuse delivered
+   source preparation and B7 request custody; no completion handler is required
+   to implement or prove the callable operation. False consumes the delivered
+   REV-12A4A controller; true routing and the early source schema do not depend
+   on that controller. AUTH
    activates the already-registered fixed identity
    `workstream.task.post_submit_router` with sole action/permission
    `task.post_submit.route`. Its context binds committed completion event/claim,
@@ -141,14 +144,17 @@ creating human admission, acceptance or contribution effects.
    identity, actor, project, request/idempotency and transaction as well.
    False/pass includes the delivered hidden shared acceptance consequence; true
    permits only human admission. The same strict false input must first gain the
-   mandatory exact AUTH decision-event receipt, and 04E1B-B must prove the
-   TASK-before-CHECKERS currentness protocol and both acceptance/successor-
-   generation race orders. Allow only AUTH adapters/catalogue/parity/composition
-   and focused proof; no TASK state-machine implementation. It cannot execute
+   mandatory exact AUTH decision-event receipt. Prove complete database/audit/
+   outbox effects and the TASK-before-CHECKERS currentness protocol, including
+   both acceptance/successor-generation race orders, before the completion
+   handler consumes this operation. Reuse existing AUTH, TASK, REV and CON
+   owners through their typed ports; owner-sized implementation records must
+   bound changes and proof before coding, not create parallel state machines. It cannot execute
    checker, ART, dispatcher, human review or generic contribution actions.
    Derived submitter/award writes occur only through the shared participant,
    exactly as they do inside human `review.decision`.
-4. **ARCH-04E3 — live composition and end-to-end proof.** After 04E2-B, 04D and
+4. **ARCH-04E3 — live composition and end-to-end proof.** After 04E2-B and
+   its 04E1B-B completion-delivery consumer, plus 04D and
    AUTH-OUTBOX-02, wire the proven handlers and canonical Submission route to
    the existing shared dispatcher. TASK owns this narrow live integration and
    legacy-call reachability cutover, not another implementation of 04E1B.

@@ -1,6 +1,6 @@
 # WS-ARCH-001 — Current remaining change map
 
-[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
+[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
 
 Delivery priority: [first complete contributor milestone](PLAN.md#first-complete-contributor-milestone). Use its five remaining outcome groups and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
 
@@ -27,8 +27,8 @@ Next, 04E2-B completes the authorized outcome operation before 04E1B-B completio
 TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
 before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
-governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
-then live 04E3; true admission does not depend on CON/shared acceptance.
+governed consequence. Complete authorized outcomes at 04E2-B precede completion delivery at
+04E1B-B, then live composition at 04E3; true admission does not depend on CON/shared acceptance.
 
 Use the [current dependency contract](PLAN.md#current-dependency-contract).
 The [preserved map](../pre-cutover/CHUNK_MAP.md) retains the complete original
@@ -38,8 +38,8 @@ ARCH-04B hidden exact post-submit input and ARCH-04B2 output custody are deliver
 public intake remains deferred to ARCH-02I.
 
 ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read custody,
-ordered review admission INSERTs and terminal exact replay. The remaining hidden handlers and full authorized
-currentness proof stay within 04E1B-B, before activation and live composition.
+ordered review admission INSERTs and terminal exact replay. Complete authorized outcomes and currentness proof follow at 04E2-B;
+04E1B-B completion delivery then consumes that operation before live composition.
 
 | Boundary | Owner outcome | Risk | Current dependency |
 |---|---|---|---|
@@ -75,7 +75,7 @@ currentness proof stay within 04E1B-B, before activation and live composition.
 | [WS-ARCH-001-04D1](../WS-ARCH-001-04D1.md) | Canonical terminal ART material custody | L1 | Complete; valid retained history preserved; invalid upgrades refused |
 | [WS-ARCH-001-04D2](../WS-ARCH-001-04D2.md) | AUTH exact fixed-service post-submit activation (replaces XINT-06B) | L1 | Complete: exact input, execute and finalize authority; output write/bind remains unavailable |
 | [WS-ARCH-001-04E1A](../WS-ARCH-001-04E1A.md) | Route-neutral immutable source schema and shared accepted-effects types | L1 | Complete; REV-04C uses a bounded exact-source verifier, with no general routing publication writer/reader, routing authority or current pointer; its hidden effects participant does not make false routing available |
-| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Both branches: delivered 04E1A/04D2/OUTBOX-02, request reservation 04E1B-A and AUTH preparation 04E2-A; exact source preparation [04E1B-B2](../WS-ARCH-001-04E1BB2.md) -> verified ZIP metadata [04E1B-B3](../WS-ARCH-001-04E1BB3.md) -> checked packet custody [04E1B-B4](../WS-ARCH-001-04E1BB4.md) -> bounded evaluation content [04E1B-B5](../WS-ARCH-001-04E1BB5.md) -> atomic Submission/dispatch [04E1B-B6](../WS-ARCH-001-04E1BB6.md) -> hidden request delivery [04E1B-B7](../WS-ARCH-001-04E1BB7.md) -> completion/currentness proof 04E1B-B -> authority/evidence closure and activation 04E2-B -> live 04E3. False uses delivered REV-04C participation and additionally needs mandatory exact receipt/database/audit closure, the reviewed scoped lifecycle manifest; true does not depend on CON. False guide activation also requires 04F remediation |
+| [WS-ARCH-001-04E](chunks/WS-ARCH-001-04E-canonical-allow-review.md) | TASK current routing: true to canonical `allow_review`, false/pass to shared acceptance | L1 | Both branches: delivered 04E1A/04D2/OUTBOX-02, request reservation 04E1B-A and AUTH preparation 04E2-A; exact source preparation [04E1B-B2](../WS-ARCH-001-04E1BB2.md) -> verified ZIP metadata [04E1B-B3](../WS-ARCH-001-04E1BB3.md) -> checked packet custody [04E1B-B4](../WS-ARCH-001-04E1BB4.md) -> bounded evaluation content [04E1B-B5](../WS-ARCH-001-04E1BB5.md) -> atomic Submission/dispatch [04E1B-B6](../WS-ARCH-001-04E1BB6.md) -> hidden request delivery [04E1B-B7](../WS-ARCH-001-04E1BB7.md) -> complete authorized outcomes/currentness proof 04E2-B -> completion delivery 04E1B-B -> live 04E3. False uses delivered REV-04C participation and additionally needs mandatory exact receipt/database/audit closure, the reviewed scoped lifecycle manifest; true does not depend on CON. False guide activation also requires 04F remediation |
 | [WS-ARCH-001-03D](../WS-ARCH-001-03D.md) | Exact activated historical guide through hidden durable intake; obsolete lookup removed | L1 | Complete; hidden exact post-submit materialization, ARCH-04B2 output custody, ARCH-04C execution, ARCH-04D1/04D2 custody/authority and ARCH-04E1A source-only facts/types delivered; public cutover remains deferred |
 | [WS-ARCH-001-04F](chunks/WS-ARCH-001-04F-checker-remediation.md) | Contributor-correctable checker failures and same-lineage admission-backed replacement Submission | L1 | Planned from required hidden 04E result/handler contracts; before false-policy activation and public 02I, without requiring live human review |
 

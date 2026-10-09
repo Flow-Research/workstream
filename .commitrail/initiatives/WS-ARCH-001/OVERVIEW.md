@@ -2,7 +2,7 @@
 
 [REV-12A4A](../WS-REV-001/WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; source AUTH custody and production routing remain unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
 
-[ARCH-04E1B-B5](WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
+[ARCH-04E1B-B5](WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
 
 Delivery priority: [first complete contributor milestone](planning/PLAN.md#first-complete-contributor-milestone). Use its five remaining outcome groups and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
 
@@ -31,8 +31,8 @@ database complete-set enforcement, currentness race proof, shared audit/outbox,
 the reviewed scoped lifecycle manifest remain
 required before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
-governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
-then live 04E3; true admission does not depend on CON/shared acceptance.
+governed consequence. Complete authorized outcomes at 04E2-B precede completion delivery at
+04E1B-B, then live composition at 04E3; true admission does not depend on CON/shared acceptance.
 
 Current remaining design: [acyclic dependency and ownership contract through
 allow_review](planning/PLAN.md#current-dependency-contract).
@@ -114,7 +114,7 @@ AUTH custody, database closure, currentness proof and authorized activation rema
 separate work.
 
 This is delivery priority, not a prerequisite of true human admission. Both
-routing branches have delivered request reservation 04E1B-A → delivered AUTH preparation 04E2-A → hidden handlers 04E1B-B → activation 04E2-B → live 04E3; true routing
+routing branches have delivered request reservation 04E1B-A → delivered AUTH preparation 04E2-A → complete authorized outcomes 04E2-B → completion delivery 04E1B-B → live 04E3; true routing
 can proceed after its own prerequisites without CON/shared acceptance or
 scoped lifecycle activation. False routing adds those requirements. Human final
 acceptance later uses the same authorized shared acceptance/CON operation.
@@ -123,7 +123,8 @@ ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read custody
 and ordered review admission INSERTs, including intermediate admission waits,
 terminal read-only replay and both mechanical race controls. The
 next steps after ARCH-04E1B-B6 atomic Submission/dispatch are
-remaining 04E1B-B handlers and full authorized currentness proof;
+04E2-B complete authorized outcomes/currentness proof, then
+04E1B-B completion delivery;
 no handler or action is activated by this prerequisite.
 
 ## Delivered and remaining

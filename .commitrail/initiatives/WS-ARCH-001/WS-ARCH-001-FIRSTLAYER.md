@@ -6,7 +6,7 @@
   from the five remaining outcome groups and orders authorized consequences before
   completion-handler delivery.
 
-## Intent and current behavior
+## Intent
 
 The user reaffirmed the first usable contributor journey and asked whether the
 work had drifted. Existing B4/B5/B6/B7 and REV-12A4A records support the completed
@@ -23,7 +23,8 @@ that an internal implementation is live.
 ## Bounded change
 
 Allowed: this record; ARCH `planning/PLAN.md`, `planning/CHUNK_MAP.md`,
-`OVERVIEW.md`; `.commitrail/INDEX.md`; `docs/roadmap_status.md`; local roadmap
+`OVERVIEW.md`; the active `planning/chunks/WS-ARCH-001-04E-canonical-allow-review.md`
+coordination contract; `.commitrail/INDEX.md`; `docs/roadmap_status.md`; local roadmap
 XLSX/CSV exports only if present.
 
 Not allowed: product code, tests, schemas, permission changes, new prerequisites,
@@ -31,7 +32,7 @@ activation, historical completed-record rewrites, or a new parallel plan/status
 system. Keep the existing plan as the governing sequence. No standalone product
 feature or additional prerequisite is introduced.
 
-## Design and acceptance criteria
+## Acceptance criteria
 
 - Separate delivered checked-input, Submission/dispatch, request-handler and
   shared-participant/controller foundations from remaining implementation.
@@ -49,12 +50,14 @@ feature or additional prerequisite is introduced.
 - Do not equate five groups with five PRs or claim end-to-end readiness before the
   real PostgreSQL/storage/broker drill passes.
 
-## Risk and verification
+## Risk and review routing
 
 Risk: L1 sequencing of authorization/workflow work; documentation-only change.
 Required reviews: architecture/plan feasibility and documentation/product-ops.
 Human focus: does the order finish the agreed first contribution journey without
 adding deferred work? No new human scope decision is required.
+
+## Evidence
 
 Verify changed Markdown links, Commitrail records, diff whitespace and a targeted
 scan for stale next-step/nine-step instructions. Compare current claims with
@@ -67,3 +70,10 @@ Base: merged #516 and #517. Next implementation remains the existing ARCH-04E2-B
 complete authorized outcome operation, then ARCH-04E1B-B completion delivery.
 The first layer is still incomplete. This is a current-plan correction, not
 another product prerequisite. Exact review/check evidence belongs in the PR.
+
+## Review correction
+
+Architecture and documentation inspection found additional handler-first wording
+in current summaries and the linked pending 04E coordination contract. Reconcile
+those current instructions to the same authorized-operation-before-completion
+order; preserve historical completed records. No runtime capability is added.
