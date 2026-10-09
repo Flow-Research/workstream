@@ -249,6 +249,11 @@ full hosted CI remains required before merge readiness.
   kernel dispatch, resource and role-filter classifications. The complete
   registry classification is restored and one direct-kernel regression binds
   system scope, exact resource dispatch and the Operator-only grant filter.
+- Hosted identifier validation found that the registry's actor and authority
+  foreign keys used UUID-returning ORM adapters while their established target
+  columns use string-returning native UUID adapters. The registry mappings now
+  match both targets and convert UUIDs only at the strict public DTO boundary;
+  the physical PostgreSQL UUID columns and migration remain unchanged.
 
 ## Reconciliation
 

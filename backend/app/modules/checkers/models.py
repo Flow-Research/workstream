@@ -125,13 +125,13 @@ class ExternalCheckerRegistryEntryRecord(Base):
     deadline_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     maximum_output_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     entry_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    registered_by_actor_profile_id: Mapped[UUID] = mapped_column(
-        Uuid(),
+    registered_by_actor_profile_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
         ForeignKey("actor_profiles.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"),
         nullable=False,
     )
-    authorization_decision_event_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False
+    authorization_decision_event_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")

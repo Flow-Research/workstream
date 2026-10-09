@@ -35,8 +35,8 @@ def _row_entry(row: ExternalCheckerRegistryEntryRecord) -> ExternalCheckerRegist
     return ExternalCheckerRegistryEntry(
         registry_entry_id=row.id,
         registration_operation_id=row.registration_operation_id,
-        registered_by_actor_profile_id=row.registered_by_actor_profile_id,
-        authorization_decision_event_id=row.authorization_decision_event_id,
+        registered_by_actor_profile_id=UUID(row.registered_by_actor_profile_id),
+        authorization_decision_event_id=UUID(row.authorization_decision_event_id),
         created_at=row.created_at,
         capability_id=row.capability_id,
         capability_version=row.capability_version,
@@ -212,8 +212,10 @@ class ExternalCheckerRegistryService:
             **_schema_values("output", spec.output_schema),
             **spec.resources.model_dump(),
             "entry_digest": spec.spec_digest,
-            "registered_by_actor_profile_id": request.actor_profile_id,
-            "authorization_decision_event_id": authority.authorization_decision_event_id,
+            "registered_by_actor_profile_id": str(request.actor_profile_id),
+            "authorization_decision_event_id": str(
+                authority.authorization_decision_event_id
+            ),
         }
         row = ExternalCheckerRegistryEntryRecord(**values)
         await self._repository.add(row)
@@ -248,7 +250,7 @@ class ExternalCheckerRegistryService:
         return (
             row.id == request.registry_entry_id
             and row.request_digest == request.request_digest
-            and row.registered_by_actor_profile_id == request.actor_profile_id
+            and UUID(row.registered_by_actor_profile_id) == request.actor_profile_id
             and entry.entry_digest == request.spec.spec_digest
             and ExternalCheckerRegistryEntry.model_validate(entry).model_dump(
                 mode="json",
