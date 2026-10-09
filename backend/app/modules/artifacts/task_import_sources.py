@@ -32,6 +32,8 @@ from app.modules.tasks.api.task_import import parse_task_import, TASK_IMPORT_MAX
 
 
 class TaskImportSourceError(RuntimeError):
+    """A closed source outcome mapped to a concealed or explicit HTTP response."""
+
     def __init__(self, code: str, status_code: int):
         self.code, self.status_code = code, status_code
         super().__init__(code)
@@ -44,6 +46,8 @@ class _TaskImportInspector:
 
 @dataclass(frozen=True)
 class TaskImportSourceRuntime:
+    """Existing ART scratch, admission, put and verification owners for one operation."""
+
     store: ArtifactStore
     namespace: ArtifactStorageNamespaceSpec
     preparation: ArtifactPreparationService
@@ -95,6 +99,7 @@ class ArtifactTaskImportSourceCommands:
         )
 
     async def declare(self, project_id: UUID, payload: TaskImportSourceDeclare, key: UUID) -> TaskImportSourceResponse:
+        """Retain one immutable project/key declaration with exact fresh AUTH custody."""
         async with self._denial_boundary():
             async with self._session.begin():
                 # Serialize only this source replay namespace before source/AUTH
@@ -124,6 +129,7 @@ class ArtifactTaskImportSourceCommands:
                 return self._response(source, await self._status(source))
 
     async def status(self, project_id: UUID, source_id: UUID) -> TaskImportSourceResponse:
+        """Authorize exact source metadata and resolve its retained ART lifecycle state."""
         async with self._denial_boundary(concealed=True):
             async with self._session.begin():
                 source = await self._lock_source(project_id, source_id)
@@ -146,6 +152,7 @@ class ArtifactTaskImportSourceCommands:
         return job.status
 
     async def upload(self, project_id: UUID, source_id: UUID, byte_source: AsyncIterable[bytes]) -> TaskImportSourceResponse:
+        """Inspect sealed JSON before fresh-authority admission and existing ART recovery."""
         async with self._denial_boundary(concealed=True):
             # Check authority before reading bytes. Roll back preflight ALLOW:
             # final admission consumes fresh exact authority after scratch work.
@@ -227,6 +234,7 @@ class ArtifactTaskImportSourceCommands:
 
     @asynccontextmanager
     async def open(self, project_id: UUID, source_id: UUID) -> AsyncIterator[VerifiedTaskImportSourceRead]:
+        """Fence exact receipt ancestry and verify provider bytes before yielding content."""
         async with self._denial_boundary(concealed=True):
             async with self._runtime() as runtime:
                 prepared = stream = None

@@ -31,6 +31,7 @@ class TaskImportRow(BaseModel):
     @field_validator("*", mode="after")
     @classmethod
     def valid_text(cls, value):
+        """Reject text that cannot be retained faithfully as PostgreSQL UTF-8 content."""
         for item in value if isinstance(value, list) else [value]:
             if isinstance(item, str):
                 if "\x00" in item:
@@ -44,6 +45,7 @@ class TaskImportRow(BaseModel):
     @field_validator("external_task_id")
     @classmethod
     def exact_external_id(cls, value: str) -> str:
+        """Preserve case-sensitive IDs while excluding whitespace and control ambiguity."""
         if value != value.strip() or any(unicodedata.category(char) == "Cc" for char in value):
             raise ValueError("external_task_id must have no surrounding whitespace or control characters")
         return value
@@ -51,6 +53,7 @@ class TaskImportRow(BaseModel):
     @field_validator("title", "description")
     @classmethod
     def nonblank_instructions(cls, value: str) -> str:
+        """Require usable task instructions without trimming or rewriting their text."""
         if not value.strip():
             raise ValueError("task instructions must not be blank")
         return value
@@ -58,6 +61,7 @@ class TaskImportRow(BaseModel):
     @field_validator("skill_tags")
     @classmethod
     def bounded_tags(cls, values: list[str]) -> list[str]:
+        """Validate optional discovery tags without inferring skills or contributor authority."""
         if any(not value.strip() or len(value) > 200 for value in values):
             raise ValueError("skill_tags must contain nonblank strings of at most 200 characters")
         return values
@@ -90,6 +94,8 @@ class TaskImportDocument(BaseModel):
 
 @dataclass(frozen=True)
 class ParsedTaskImport:
+    """Validated task instructions with the commitment of the exact received bytes."""
+
     document: TaskImportDocument
     sha256: str
     byte_count: int
@@ -134,6 +140,7 @@ def parse_task_import(raw: bytes) -> ParsedTaskImport:
 
 
 def task_import_json_schema() -> dict:
+    """Publish the live upload shape and byte/identity rules that JSON Schema cannot encode."""
     schema = TaskImportDocument.model_json_schema()
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["description"] = (

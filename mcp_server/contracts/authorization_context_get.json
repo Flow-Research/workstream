@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "57b110d6bdc60ad7dee2847acac3534fedda9ad0532aa685054c795155c70175",
+  "canonical_sha256": "197c33a5fcfb44e7f4a7b19f83d2bb05909b889fca21716df9cf83fa99e983eb",
   "components": {
     "schemas": {
       "ActionId": {
@@ -128,6 +128,9 @@
           "artifact.audit.read",
           "operations.artifact_storage_admission.read",
           "artifact.guide_source.ingest",
+          "artifact.task_import_source.declare",
+          "artifact.task_import_source.upload",
+          "artifact.task_import_source.read",
           "artifact.guide_source.read",
           "artifact.submission_bundle.prepare",
           "artifact.submission.binding.create",
@@ -535,7 +538,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "f715fd2f2e8fc29227154a6afda68fdb9dffd483",
+    "backend_git_sha": "137e32d033828d801461383963b47ec21fcf2632",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"

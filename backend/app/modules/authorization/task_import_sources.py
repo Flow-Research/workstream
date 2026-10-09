@@ -26,6 +26,7 @@ class PreparedTaskImportSourceAuthorization:
         self._kernel = AuthorizationService(session, context, admin_repository=self._repository)
 
     async def authorize(self, action: TaskImportSourceAction, facts: TaskImportSourceAuthorityFacts) -> UUID:
+        """Prepare and consume the exact source action against current covered PM locks."""
         if type(facts) is not TaskImportSourceAuthorityFacts or facts.actor_profile_id != self._context.actor_profile_id:
             raise TaskImportSourceAuthorityDenied("task-import source authority denied")
         resource = TaskImportSourceResourceContext(
@@ -53,5 +54,6 @@ class PreparedTaskImportSourceAuthorization:
             prepared.close()
 
     async def restage_denial(self, error: TaskImportSourceAuthorityDenied) -> None:
+        """Restage the canonical denied decision after ART has rolled back its operation."""
         if isinstance(error.__cause__, AuthorizationDenied):
             await self._kernel.restage_denial(error.__cause__.decision)

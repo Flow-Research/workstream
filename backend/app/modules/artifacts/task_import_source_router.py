@@ -46,6 +46,7 @@ def _http_error(exc: Exception) -> StructuredHTTPException:
 
 
 def import_source_key(value: Annotated[str, Header(alias="Idempotency-Key")]) -> UUID:
+    """Require a UUID declaration replay key using the shared API parser."""
     return parse_idempotency_key(value)
 
 
@@ -56,6 +57,7 @@ async def declare_task_import_source(
     key: Annotated[UUID, Depends(import_source_key)],
     commands: Annotated[TaskImportSourceCommandPort, Depends(get_task_import_source_commands)],
 ) -> TaskImportSourceResponse:
+    """Declare immutable source bytes; exact same-key replay retains the original ID."""
     try:
         return await commands.declare(project_id, payload, key)
     except (TaskImportSourceError, ArtifactAdmissionError) as exc:
@@ -69,6 +71,7 @@ async def upload_task_import_source(
     request: Request, project_id: UUID, source_id: UUID,
     commands: Annotated[TaskImportSourceCommandPort, Depends(get_task_import_source_commands)],
 ) -> TaskImportSourceResponse:
+    """Admit raw JSON without HTTP parsing or reserialization changing its bytes."""
     if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
         raise StructuredHTTPException(status_code=415, detail="application/json is required",
                                        error_code="task_import_source_media_type_invalid", error_message="application/json is required")
@@ -86,6 +89,7 @@ async def get_task_import_source(
     project_id: UUID, source_id: UUID,
     commands: Annotated[TaskImportSourceCommandPort, Depends(get_task_import_source_commands)],
 ) -> TaskImportSourceResponse:
+    """Read original commitments and storage status with concealed selector denials."""
     try:
         return await commands.status(project_id, source_id)
     except TaskImportSourceError as exc:
@@ -107,6 +111,7 @@ async def verified_import_source(
             openapi_extra={"x-workstream-action-id": TaskImportSourceAction.READ.value},
             responses={200: {"content": {"application/json": {"schema": {"type": "object"}}}}})
 async def read_task_import_source(read: Annotated[object, Depends(verified_import_source)]):
+    """Deliver previously verified scratch bytes with private, non-cacheable headers."""
     return StreamingResponse(read.stream, media_type="application/json", headers={
         "Content-Length": str(read.source.byte_count), "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff", "Content-Disposition": f'attachment; filename="{read.source.source_id}.json"',

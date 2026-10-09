@@ -39,6 +39,9 @@ Neither a typed task-import source nor its PM read authority exists.
 - One migration authored solely by the coordinated backend migration owner;
   required schema fingerprint updates follow that migration.
 - Scoped current ART/TASK/AUTH specs, README, roadmap and boundary manifests.
+  `mcp_server/contracts/authorization_context_get.json` receives only the three
+  source-action enum additions, its selected-fragment digest and captured backend
+  source revision; existing MCP operations and unrelated schemas stay unchanged.
   `backend/scripts/behavior_ownership.py`, its exact source target partition,
   `backend/scripts/test_lane_catalogue.py` and the existing AUTH structure debt
   ledger receive only additive source coverage or debt-removal reconciliation.
@@ -104,13 +107,18 @@ when a client converts a CSV; it is never described as the original CSV.
 |---|---|---|---|
 | Existing owner reuse | ART admission/put/verification and TASK command tracing | Closed producer gap identified | New typed source extension requires verification |
 | Canonical JSON and closed action mapping | Focused TASK parser and AUTH catalogue tests | 36 passed; 200 rows, ambiguity, indexed errors, strict field bounds and published schema parity | Pure rules only |
+| Protected MCP contract coherence | Selected-fragment tamper checks and real backend OpenAPI comparison | Only the three additive source actions change the authorization-context enum; all nine selected operations and unrelated schemas remain identical | Regenerate the shared enum union after PILOT-04 merges |
 | Boundary and documentation coherence | Protected-base module/AUTH validation, structure and behavior-ownership validation, Ruff, changed Markdown links and stale AUTH/ART contract checks | Passed without new private-import debt; exact source metadata reconciled | Reconcile union after PILOT-04 merges |
 | Existing architecture and CI metadata invariants | Module/AUTH regressions and structure/ownership/lane regressions | 130 focused tests passed; metadata suite 227 passed with one stale exact lane expectation repaired and its focused replay passed | Full integration lanes await schema handoff |
 | Exact byte custody and rollback | 15 collected public API PostgreSQL/MinIO negative/concurrency/recovery cases | Not executed: ordered source migration pending | No live custody or deployment claim |
 
 ## Review findings
 
-No review findings yet.
+The selected MCP authorization-context snapshot initially omitted the new source
+actions. Its enum, selected-fragment digest and captured source revision are
+reconciled without changing existing operations. New source ports and public
+operations document their fresh-authority, retained-source and byte-verification
+contracts; no CI configuration or percentage threshold changes.
 
 ## Reconciliation
 

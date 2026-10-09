@@ -12,12 +12,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskImportSourceAction(StrEnum):
+    """Separate source admission and read actions under covered PM authority."""
+
     DECLARE = "artifact.task_import_source.declare"
     UPLOAD = "artifact.task_import_source.upload"
     READ = "artifact.task_import_source.read"
 
 
 class TaskImportSourceDeclare(BaseModel):
+    """Exact caller byte commitment retained before any upload is admitted."""
+
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -25,6 +29,8 @@ class TaskImportSourceDeclare(BaseModel):
 
 
 class TaskImportSourceResponse(BaseModel):
+    """Original source commitment and ART status, without a task/batch success claim."""
+
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     source_id: UUID
@@ -39,6 +45,8 @@ class TaskImportSourceResponse(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class TaskImportSourceAuthorityFacts:
+    """Exact source facts that AUTH binds to the current actor and identity link."""
+
     source_id: UUID
     project_id: UUID
     actor_profile_id: UUID
@@ -53,18 +61,40 @@ class TaskImportSourceAuthorityDenied(RuntimeError):
 
 
 class TaskImportSourceAuthorizationPort(Protocol):
-    async def authorize(self, action: TaskImportSourceAction, facts: TaskImportSourceAuthorityFacts) -> UUID: ...
-    async def restage_denial(self, error: TaskImportSourceAuthorityDenied) -> None: ...
+    """Consume fresh exact authority and preserve denial evidence after rollback."""
+
+    async def authorize(self, action: TaskImportSourceAction, facts: TaskImportSourceAuthorityFacts) -> UUID:
+        """Return the transaction-local ALLOW decision for the exact source action."""
+        ...
+
+    async def restage_denial(self, error: TaskImportSourceAuthorityDenied) -> None:
+        """Retain the original canonical denial in the caller's new transaction."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class VerifiedTaskImportSourceRead:
+    """Verified source metadata and bytes scoped to the owning read context."""
+
     source: TaskImportSourceResponse
     stream: AsyncIterator[bytes]
 
 
 class TaskImportSourceCommandPort(Protocol):
-    async def declare(self, project_id: UUID, payload: TaskImportSourceDeclare, key: UUID) -> TaskImportSourceResponse: ...
-    async def upload(self, project_id: UUID, source_id: UUID, byte_source: AsyncIterable[bytes]) -> TaskImportSourceResponse: ...
-    async def status(self, project_id: UUID, source_id: UUID) -> TaskImportSourceResponse: ...
-    def open(self, project_id: UUID, source_id: UUID) -> AbstractAsyncContextManager[VerifiedTaskImportSourceRead]: ...
+    """Manage source custody only; these operations never create or transition Tasks."""
+
+    async def declare(self, project_id: UUID, payload: TaskImportSourceDeclare, key: UUID) -> TaskImportSourceResponse:
+        """Create or freshly authorize exact replay of the retained project/key source."""
+        ...
+
+    async def upload(self, project_id: UUID, source_id: UUID, byte_source: AsyncIterable[bytes]) -> TaskImportSourceResponse:
+        """Validate exact declared JSON bytes before existing ART durable admission."""
+        ...
+
+    async def status(self, project_id: UUID, source_id: UUID) -> TaskImportSourceResponse:
+        """Return retained source/attempt state under current exact read authority."""
+        ...
+
+    def open(self, project_id: UUID, source_id: UUID) -> AbstractAsyncContextManager[VerifiedTaskImportSourceRead]:
+        """Verify every provider byte before yielding a bounded source read."""
+        ...
