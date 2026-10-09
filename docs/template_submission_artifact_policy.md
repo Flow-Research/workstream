@@ -44,7 +44,7 @@ Source snapshot items:
 
 | Item ID | Item Order | Source Kind | Source Label | Ingestion Adapter | Media Type |
 | --- | --- | --- | --- | --- | --- |
-| `<server UUID>` | `<server order>` | `document` | `<sanitized display label>` | `upload` | `<PDF/DOCX/PPTX media type>` |
+| `<server UUID>` | `<server order>` | `document` | `<sanitized display label>` | `upload` | `<PDF/DOCX/PPTX or text/markdown media type>` |
 
 Guide documents are uploaded originals in ArtifactStore/S3. Source labels must not
 store query strings, signed URLs, credentials, token-bearing refs, local

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 import asyncio
+import hashlib
 
 import httpx2
 from openai import NotFoundError
@@ -61,8 +62,9 @@ class Custody:
 
 
 class Grant:
-    def __init__(self, manifest):
+    def __init__(self, manifest, source_bytes=SOURCE_BYTES):
         self.manifest = manifest
+        self.source_bytes = source_bytes
         self.closed = False
         self.denied = False
         self.calls = 0
@@ -73,7 +75,7 @@ class Grant:
         if self.closed or self.denied:
             raise RuntimeError("grant unavailable")
         document = next(item for item in self.manifest.documents if self.manifest.handle_for(item) == handle)
-        with BytesIO(SOURCE_BYTES) as reader:
+        with BytesIO(self.source_bytes) as reader:
             yield OpenGuideDocument(document, reader)
 
     async def close(self):
@@ -117,6 +119,46 @@ async def test_duplicate_opens_revalidate_grant_but_stage_once(workspace):
     assert client.files.create.await_count == 1
     await instance.close()
     assert grant.closed and len(custody.deleted) == 3
+
+
+@pytest.mark.asyncio
+async def test_markdown_original_is_staged_byte_exact_in_isolated_workspace(workspace):
+    instance, client, grant, custody = workspace
+    markdown = "# Exact guide\n\nRead the retained original. 雪\n".encode()
+    current = instance.manifest.documents[0]
+    document = current.model_copy(
+        update={
+            "media_type": "text/markdown",
+            "sha256": "sha256:" + hashlib.sha256(markdown).hexdigest(),
+            "byte_count": len(markdown),
+        }
+    )
+    manifest = instance.manifest.model_copy(update={"documents": (document,)})
+    instance.manifest = manifest
+    grant.manifest = manifest
+    grant.source_bytes = markdown
+    staged = []
+
+    async def stage(*, file, **_kwargs):
+        filename, reader, media_type = file
+        staged.append((filename, reader.read(), media_type))
+        return SimpleNamespace(
+            id="file-owned",
+            created_at=1_800_000_000,
+            expires_at=1_800_000_000 + instance.configuration.file_expiry_seconds,
+        )
+
+    client.files.create.side_effect = stage
+    await instance.start()
+    handle = manifest.handle_for(document)
+    opened = await instance.open_document(handle)
+
+    assert staged == [(f"{document.source_item_id}.md", markdown, "text/markdown")]
+    assert opened["sha256"] == document.sha256
+    assert client.containers.create.call_args.kwargs["network_policy"] == {"type": "disabled"}
+    assert custody.opened == {handle}
+    await instance.close()
+    assert grant.closed and custody.deleted == set(custody.known)
 
 
 @pytest.mark.asyncio

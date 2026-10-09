@@ -17,11 +17,13 @@ GuideDocumentMediaType = Literal[
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/markdown",
 ]
 DOCUMENT_EXTENSIONS: dict[str, str] = {
     "application/pdf": "pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/markdown": "md",
 }
 
 

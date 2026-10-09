@@ -70,9 +70,9 @@ async def test_assigned_originals_are_ordered_and_verified(task_client, guide_wo
             "read_reference",
         }
         assert document["document_id"] == guide_world.guide["documents"][index]["document_id"]
-        assert (
-            document["order"] == index and document["label"] == ("guide.pdf", "rubric.pdf")[index]
-        )
+        assert document["order"] == index
+        assert document["label"] == ("guide.md", "rubric.pdf")[index]
+        assert document["media_type"] == ("text/markdown", "application/pdf")[index]
         assert (document["sha256"], document["byte_count"]) == (
             "sha256:" + hashlib.sha256(original).hexdigest(),
             len(original),
@@ -81,7 +81,10 @@ async def test_assigned_originals_are_ordered_and_verified(task_client, guide_wo
         assert read.status_code == 200, read.text
         assert read.content == original and read.headers["cache-control"] == "private, no-store"
         assert int(read.headers["content-length"]) == len(original)
-        assert read.headers["content-type"] == "application/pdf"
+        assert read.headers["content-type"].partition(";")[0] == (
+            "text/markdown",
+            "application/pdf",
+        )[index]
 
 
 async def test_unassigned_and_foreign_actors_are_concealed(task_client, guide_world, monkeypatch):
@@ -510,7 +513,7 @@ async def test_damaged_stored_original_never_serves_partial_bytes(task_client, g
         response = await task_client.get(content_path(world), headers=auth_headers())
         assert response.status_code == 503, response.text
         assert response.json()["error"]["code"] == "guide_document_integrity_unavailable"
-        assert b"%PDF" not in response.content and key not in response.text
+        assert world.originals[0] not in response.content and key not in response.text
     finally:
         store.close()
         bootstrap.close()

@@ -42,7 +42,7 @@ func addGuideUpload(guide *cobra.Command, client func() (*api.Client, error), ou
 		},
 	}
 	upload.Flags().StringVar(&path, "file", "", "Required regular original file; keep its bytes unchanged for manual replay")
-	upload.Flags().StringVar(&mediaType, "media-type", "", "Required exact declared PDF, DOCX or PPTX media type")
+	upload.Flags().StringVar(&mediaType, "media-type", "", "Required exact declared PDF, DOCX, PPTX or Markdown media type")
 	upload.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; no automatic retry")
 	guide.AddCommand(upload)
 }

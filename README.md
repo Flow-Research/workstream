@@ -173,8 +173,10 @@ storage, detached source facts and accepted-effects contracts. B6 commits each
 new hidden Submission with its initial checker reservation and outbox request;
 automatic request delivery, routing and acceptance remain unavailable. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
-unified setup agent. Guide metadata in PostgreSQL also holds at least one required
-task example; the agent assesses the examples with the uploaded guide documents.
+unified setup agent. Accepted originals are PDF, DOCX, PPTX and byte-preserved
+UTF-8 Markdown (`.md`); HTML and documentation sites are not guide inputs. Guide
+metadata in PostgreSQL also holds at least one required task example; the agent
+assesses the examples with the uploaded guide documents.
 Findings and policy proposals retain document-access evidence.
 
 [ART-07A1](.commitrail/initiatives/WS-ART-001/WS-ART-001-07A1.md) provides strict

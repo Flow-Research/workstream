@@ -193,7 +193,7 @@ func normalizedGuideLabel(label string) string {
 
 func guideMediaType(value string) bool {
 	return value == "application/pdf" || value == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-		value == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+		value == "application/vnd.openxmlformats-officedocument.presentationml.presentation" || value == "text/markdown"
 }
 
 func guideCreateFailure(err error) error {

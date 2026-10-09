@@ -194,3 +194,8 @@ REV-before-TASK-before-AUTH custody, with TASK before CHECKERS currentness. Thei
 exact idempotency, queue, lease and dependent-row order still requires the owning
 runtime chunk's PostgreSQL proof before activation; this correction activates
 none of those surfaces. Historical pre-cutover records remain unchanged.
+
+Main's Markdown guide-media migration owns revision 0027. This unmerged lifecycle
+migration follows it as 0028, preserving both invariants in one linear history.
+The schema fingerprint is measured from their combined PostgreSQL catalog, and
+the upgrade-preservation proof begins at the merged Markdown predecessor.

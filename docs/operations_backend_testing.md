@@ -2,9 +2,10 @@
 
 ## Guide document runtime
 
-Guide uploads preserve original files in ArtifactStore. Bounded PDF/OOXML
-format admission runs locally; the agent reads documents in its isolated
-provider workspace. There is no local guide extractor or Pillow/PDF
+Guide uploads preserve original files in ArtifactStore. Bounded PDF/OOXML and
+UTF-8 Markdown format admission runs locally; the agent reads documents in its
+isolated provider workspace. Markdown is not parsed, rendered or rewritten.
+There is no local guide extractor or Pillow/PDF
 parser dependency. Use the [Developer Quickstart](../README.md#developer-quickstart)
 for the supported backend environment. Scripted runtime tests prove contracts;
 real-provider document reading requires the explicit live probe and credentials

@@ -28,8 +28,9 @@ published contribution policy, and queue.
 
 The external or internal organization that provides open-ended project material
 and business terms, including rubrics, task instructions and compensation
-expectations. Current guide inputs are uploaded PDF/DOCX/PPTX originals, plus
-at least one ordinary-text task example stored with guide metadata in PostgreSQL.
+expectations. Current guide inputs are uploaded PDF/DOCX/PPTX or UTF-8 Markdown
+(`.md`) originals, plus at least one ordinary-text task example stored with guide
+metadata in PostgreSQL.
 The project owner
 does not author or approve Workstream's machine-readable internal policy schema.
 
@@ -178,8 +179,9 @@ A future external task source that can submit tasks into Workstream through an a
 
 ## Project Guide
 
-The human-facing operating guide for a project. Uploaded PDF, DOCX or supported
-PPTX files contain project instructions, quality requirements and review rules.
+The human-facing operating guide for a project. Uploaded PDF, DOCX, PPTX or
+UTF-8 Markdown (`.md`) files contain project instructions, quality requirements
+and review rules.
 ArtifactStore/S3 holds those originals; PostgreSQL holds their metadata and the
 guide version's required task-example list. At least one nonblank example is
 required. An example may be a starting idea or fuller description and need not

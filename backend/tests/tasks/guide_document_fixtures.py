@@ -86,18 +86,23 @@ async def activate_uploaded_guide(client, project_id, monkeypatch, *, version="v
             "version": version,
             "task_examples": [{"content": "PRIVATE SETUP EXAMPLE"}],
             "documents": [
-                {"label": label, "media_type": "application/pdf"}
-                for label in ("guide.pdf", "rubric.pdf")
+                {"label": "guide.md", "media_type": "text/markdown"},
+                {"label": "rubric.pdf", "media_type": "application/pdf"},
             ],
         },
     )
     assert created.status_code == 201, created.text
     guide = created.json()
-    originals = tuple(f"%PDF-1.7\n{version} original {index}\n%%EOF".encode() for index in range(2))
-    for document, original in zip(guide["documents"], originals, strict=True):
+    originals = (
+        f"# {version} guide\n\nFollow the locked original. 雪\n".encode(),
+        f"%PDF-1.7\n{version} rubric original\n%%EOF".encode(),
+    )
+    for document, original, media_type in zip(
+        guide["documents"], originals, ("text/markdown", "application/pdf"), strict=True
+    ):
         stored = await client.post(
             f"/api/v1/projects/{project_id}/guides/{guide['id']}/documents/{document['document_id']}/content",
-            headers=auth_headers() | {"Content-Type": "application/pdf"},
+            headers=auth_headers() | {"Content-Type": media_type},
             content=original,
         )
         assert stored.status_code == 202, stored.text
@@ -109,7 +114,9 @@ async def activate_uploaded_guide(client, project_id, monkeypatch, *, version="v
     )
     async with db_session.get_session_factory()() as session:
         assert (await session.get(ProjectGuide, guide["id"])).status == "active"
-        for document, original in zip(guide["documents"], originals, strict=True):
+        for document, original, media_type in zip(
+            guide["documents"], originals, ("text/markdown", "application/pdf"), strict=True
+        ):
             put = (
                 await session.scalars(
                     select(ArtifactPutAttempt).where(
@@ -124,9 +131,10 @@ async def activate_uploaded_guide(client, project_id, monkeypatch, *, version="v
                 receipt.replica_id == replica.id
                 and receipt.provider_object_ref == replica.provider_object_ref
             )
-            assert (put.sha256, put.byte_count) == (
+            assert (put.sha256, put.byte_count, put.media_type) == (
                 "sha256:" + hashlib.sha256(original).hexdigest(),
                 len(original),
+                media_type,
             )
             from tests.test_guide_document_intake import _open_store
 

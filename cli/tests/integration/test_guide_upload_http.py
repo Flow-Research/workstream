@@ -17,6 +17,7 @@ MEDIA = (
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/markdown",
 )
 
 
@@ -112,7 +113,7 @@ def test_guide_upload_exact_binary_selectors_receipt_and_safe_text(cli, tmp_path
         )
         assert text.stdout.count("\n") == 1 and "\x1b" not in text.stdout
         assert all(f'"{field}"' in text.stdout for field in receipt())
-        assert len(requests) == 13  # One body per invocation, no authority preflight.
+        assert len(requests) == 17  # One body per invocation, no authority preflight.
 
 
 def test_guide_upload_bad_local_files_and_selectors_send_nothing(cli, tmp_path):

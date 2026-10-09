@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -38,13 +39,35 @@ from tests.test_tasks import auth_headers, set_dev_actor  # noqa: E402
 
 @pytest.fixture
 def task_database_env(base_task_database_env, monkeypatch, tmp_path):
-    # Backend owner proof uses real MinIO; the independent CLI workflow already
-    # supplies PostgreSQL and can exercise the same public read with local ART.
-    (tmp_path / "originals").mkdir(mode=0o700)
-    values = {
-        "ARTIFACT_STORE_BACKEND": "local",
-        "ARTIFACT_LOCAL_ROOT": str(tmp_path / "originals"),
-        "ARTIFACT_SCRATCH_ROOT": str(tmp_path / "scratch"),
+    endpoint = os.environ.get("WORKSTREAM_TEST_MINIO_ENDPOINT")
+    if endpoint:
+        bucket = os.environ.get("WORKSTREAM_TEST_MINIO_BUCKET")
+        prefix = os.environ.get("WORKSTREAM_TEST_MINIO_PREFIX")
+        if not bucket or not prefix:
+            pytest.fail("MinIO CLI proof requires its owned bucket and prefix")
+        values = {
+            "ARTIFACT_STORE_BACKEND": "s3_compatible",
+            "ARTIFACT_S3_PROVIDER_PROFILE": "minio",
+            "ARTIFACT_S3_REGION": "us-east-1",
+            "ARTIFACT_S3_BUCKET": bucket,
+            "ARTIFACT_S3_ENDPOINT_URL": endpoint,
+            "ARTIFACT_S3_PRIVATE_PREFIX": f"{prefix}/cli-guide-upload",
+            "ARTIFACT_S3_ADDRESSING_STYLE": "path",
+            "ARTIFACT_S3_CREDENTIAL_MODE": "local_static",
+            "ARTIFACT_S3_ACCESS_KEY_ID": "workstream-minio",
+            "ARTIFACT_S3_SECRET_ACCESS_KEY": "workstream-minio-secret-key",
+            "ARTIFACT_SCRATCH_ROOT": str(tmp_path / "scratch"),
+        }
+    else:
+        # The independent hosted CLI workflow owns PostgreSQL and uses local ART;
+        # the backend lanes separately retain provider custody evidence.
+        (tmp_path / "originals").mkdir(mode=0o700)
+        values = {
+            "ARTIFACT_STORE_BACKEND": "local",
+            "ARTIFACT_LOCAL_ROOT": str(tmp_path / "originals"),
+            "ARTIFACT_SCRATCH_ROOT": str(tmp_path / "scratch"),
+        }
+    values |= {
         "CELERY_BROKER_URL": "memory://",
         "CELERY_TASK_ALWAYS_EAGER": "false",
     }
@@ -82,7 +105,7 @@ async def exercise_original_upload(cli, origin, world, tmp_path, monkeypatch):
                     {"content": "Evaluate the evidence against the guide."}
                 ],
                 "documents": [
-                    {"label": "Instructions.pdf", "media_type": "application/pdf"}
+                    {"label": "Instructions.md", "media_type": "text/markdown"}
                 ],
             }
         )
@@ -109,11 +132,11 @@ async def exercise_original_upload(cli, origin, world, tmp_path, monkeypatch):
     )
     document = guide["documents"][0]["document_id"]
     original = world.originals[0]
-    path = tmp_path / "original.pdf"
+    path = tmp_path / "original.md"
     path.write_bytes(original)
     key = str(new_record_id())
 
-    async def upload(*, selectors=None, media="application/pdf"):
+    async def upload(*, selectors=None, media="text/markdown", upload_key=key):
         return await asyncio.to_thread(
             cli,
             origin,
@@ -127,7 +150,7 @@ async def exercise_original_upload(cli, origin, world, tmp_path, monkeypatch):
             "--media-type",
             media,
             "--idempotency-key",
-            key,
+            upload_key,
             "-o",
             "json",
         )
@@ -136,6 +159,13 @@ async def exercise_original_upload(cli, origin, world, tmp_path, monkeypatch):
     selectors = tuple(
         value.replace("-", "") for value in (world.project["id"], guide["id"], document)
     )
+    wrong_media = await upload(
+        selectors=selectors,
+        media="application/pdf",
+        upload_key=str(new_record_id()),
+    )
+    assert wrong_media.returncode == 1 and wrong_media.stdout == ""
+    assert json.loads(wrong_media.stderr)["error"]["status"] == 422
     stored = await upload(selectors=selectors)
     assert stored.returncode == 0, stored.stderr
     receipt = json.loads(stored.stdout)
@@ -248,9 +278,11 @@ async def test_installed_cli_reads_and_downloads_real_assigned_originals(
         assert result.returncode == 0, result.stderr
         documents = json.loads(result.stdout)
         assert len(documents) == len(guide_world.originals) == 2
-        for document, original in zip(documents, guide_world.originals, strict=True):
+        for document, original, extension in zip(
+            documents, guide_world.originals, ("md", "pdf"), strict=True
+        ):
             assert (
-                directory / f"{document['document_id']}.pdf"
+                directory / f"{document['document_id']}.{extension}"
             ).read_bytes() == original
         assert (
             "task_examples" not in result.stdout

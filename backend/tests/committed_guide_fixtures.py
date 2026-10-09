@@ -52,10 +52,12 @@ async def create_committed_document_fixture(source_snapshot_id: str, *, sessions
             session.add(replica)
             await session.flush()
         for item in items:
-            assert (item.source_kind, item.ingestion_adapter, item.media_type) == ("document", "upload", "application/pdf")
+            assert (item.source_kind, item.ingestion_adapter) == ("document", "upload")
             existing = await session.scalar(select(GuideSourceArtifactIngest).where(GuideSourceArtifactIngest.source_item_id == item.id))
             if existing is not None:
+                assert existing.media_type == item.media_type
                 continue
+            assert item.media_type == "application/pdf"
             session.add(GuideSourceArtifactIngest(id=str(new_record_id()), source_item_id=item.id, actor_profile_id=actor.id, sha256=SOURCE_SHA256, byte_count=len(SOURCE_BYTES), media_type="application/pdf"))
             put = ArtifactPutAttempt(id=str(new_record_id()), producer_request_type="guide", producer_type="actor_profile", producer_ref=actor.id, project_id=snapshot.project_id, guide_source_item_id=item.id, sha256=SOURCE_SHA256, byte_count=len(SOURCE_BYTES), media_type="application/pdf", storage_namespace_id=namespace.id, namespace_fingerprint=namespace.namespace_fingerprint, canonical_target=f"sha256/{SOURCE_SHA256[7:9]}/{SOURCE_SHA256[9:]}", operation_identity=sha256_hash(item.id), request_digest=sha256_hash("request:" + item.id), status="object_confirmed", terminal_result_code="document_stored", replica_id=replica.id, terminal_at=datetime.now(timezone.utc))
             session.add(put)

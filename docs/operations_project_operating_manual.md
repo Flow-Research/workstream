@@ -29,7 +29,7 @@ remaining setup/activation work:
 
 - project name and slug exist
 - project guide metadata created with at least one ordinary-text task example and
-  the complete PDF/DOCX/PPTX document list
+  the complete PDF/DOCX/PPTX or UTF-8 Markdown (`.md`) document list
 - every declared original uploaded to ArtifactStore/S3 using its returned document ID
 - automatic setup starts after all declared documents have committed bytes
 - project owner setup material captured

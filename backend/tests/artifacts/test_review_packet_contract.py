@@ -147,6 +147,7 @@ def test_closed_roles_and_supported_media() -> None:
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/markdown",
     ):
         assert ReviewGuideMember.model_validate({**guide(0), "media_type": media}).media_type == media
 

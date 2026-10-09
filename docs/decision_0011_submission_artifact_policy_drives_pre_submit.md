@@ -8,9 +8,10 @@ Accepted
 
 Project guides are human-facing. They explain the project, task expectations,
 examples, reviewer rubric, and quality bar. Current v0.1 guide files are uploaded
-PDF/DOCX/PPTX originals stored through ArtifactStore/S3. PostgreSQL stores guide
-metadata and a required ordered list of ordinary-text task examples. Markdown
-bodies and URL/repository ingestion are not current input paths.
+PDF/DOCX/PPTX or UTF-8 Markdown (`.md`) originals stored through ArtifactStore/S3.
+PostgreSQL stores guide metadata and a required ordered list of ordinary-text
+task examples. Embedded document bodies and URL/repository ingestion are not
+current input paths.
 
 Submission intake needs a deterministic machine contract. If artifact requirements live only as guide prose, each project can drift into a different interpretation of what a valid submission packet must contain.
 

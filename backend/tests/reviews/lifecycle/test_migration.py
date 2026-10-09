@@ -118,7 +118,7 @@ async def test_transition_upgrade_preserves_genesis_and_retained_sources(
             await connection.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
         finally:
             await connection.close()
-        await asyncio.to_thread(command.upgrade, _config(), "0026_task_guide_read")
+        await asyncio.to_thread(command.upgrade, _config(), "0027_markdown_guide_media")
         async with contribution_source(
             tmp_path, isolated_database_env, paid=True,
         ):
@@ -128,7 +128,7 @@ async def test_transition_upgrade_preserves_genesis_and_retained_sources(
                 genesis = dict(await connection.fetchrow(
                     "SELECT * FROM public.joint_lifecycle_release_control"
                 ))
-                await asyncio.to_thread(command.upgrade, _config(), "0027_lifecycle_transitions")
+                await asyncio.to_thread(command.upgrade, _config(), "0028_lifecycle_transitions")
                 assert await snapshot(connection) == before
                 assert dict(await connection.fetchrow(
                     "SELECT * FROM public.joint_lifecycle_release_control"

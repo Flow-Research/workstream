@@ -31,6 +31,7 @@ class ContributorGuideDocument(BaseModel):
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/markdown",
     ]
     byte_count: int = Field(gt=0)
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")

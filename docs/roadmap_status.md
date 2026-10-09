@@ -452,9 +452,10 @@ cannot be reused as post-submission review-gate evidence. See the
   response supplies document IDs for the public binary upload route; no separate
   source-snapshot creation call remains. A starting idea is sufficient and optional
   example fields do not repeat requirements from the guide. Each snapshot/run
-  binds the exact version's examples. Upload admission checks bounded format, digest and size.
+  binds the exact version's examples. Upload admission accepts PDF, DOCX and PPTX
+  and checks bounded format, digest and size.
   Committed originals do not bypass the separate verification required for
-  submission ZIPs. Inline markdown setup and extractors are removed.
+  submission ZIPs. Embedded document bodies and extractors are removed.
 - Committed original-document readiness automatically runs one unified compilation
   through Celery. It persists sufficiency findings and separate pre-submit and
   post-submit proposals, then projects the sufficiency and artifact-policy
@@ -556,6 +557,12 @@ cannot be reused as post-submission review-gate evidence. See the
 Only open pull requests describe transient work. Use the repository's
 [open pull-request view](https://github.com/Flow-Research/workstream/pulls) to
 see whether any item below is already under review.
+
+[PILOT-15 / PR #514](https://github.com/Flow-Research/workstream/pull/514)
+delivers byte-preserved UTF-8 Markdown (`.md`) guide admission, setup-agent reads
+and task-locked contributor REST/CLI reads alongside PDF, DOCX and PPTX originals.
+This guide-format capability is complete; it adds no downstream intake or
+acceptance activation.
 
 Delivered capabilities are summarized in the [scoreboard](#end-to-end-lifecycle-scoreboard);
 their evidence is linked under [completed work](#what-has-been-completed).

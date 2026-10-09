@@ -236,8 +236,8 @@ def test_fixed_v01_limits_accept_exact_values_and_reject_one_over() -> None:
 @pytest.mark.parametrize("payload,media_type,adapter", [
     (b'{"answer":42}', "application/json", "json"),
     (b"a,b\n1,2\n", "text/csv", "csv"),
-    (b"# Guide", "text/markdown", "manual_import"),
     (b"Guide", "text/plain", "upload"),
+    (b"<html><body>Guide</body></html>", "text/html", "upload"),
     (b"\x89PNG\r\n\x1a\n", "image/png", "upload"),
     (b"ID3\x00", "audio/mpeg", "upload"),
     (b"\xff\xfe", "text/plain", "upload"),
@@ -245,6 +245,35 @@ def test_fixed_v01_limits_accept_exact_values_and_reject_one_over() -> None:
 def test_unsupported_formats_and_removed_adapters_never_activate_text_fallback(detector, payload, media_type, adapter):
     result = detector.detect(BytesIO(payload), declared_media_type=media_type, ingestion_adapter=adapter)
     assert (result.status, result.detected_format, result.facts) == ("unsupported", "opaque", {})
+
+
+def test_markdown_classification_streams_valid_utf8_without_rewriting(detector):
+    payload = b"a" * (64 * 1024 - 1) + "é\n# Guide\n".encode()
+    source = BytesIO(payload)
+
+    result = detector.detect(source, declared_media_type="text/markdown", ingestion_adapter="upload")
+
+    assert (result.status, result.detected_format, result.facts) == ("classified", "md", {})
+    assert source.read() == payload
+
+
+@pytest.mark.parametrize("payload", [b"guide\xff", b"guide\x00body"])
+def test_markdown_rejects_non_utf8_and_nul_bytes(detector, payload):
+    result = detector.detect(BytesIO(payload), declared_media_type="text/markdown")
+
+    assert (result.status, result.detected_format) == ("malformed", "markdown")
+
+
+@pytest.mark.parametrize(
+    ("payload", "detected"),
+    [(b"%PDF-1.7\n", "pdf"), (_zip({"document.txt": b"guide"}).getvalue(), "zip")],
+    ids=("pdf", "zip"),
+)
+def test_markdown_declaration_does_not_relabel_known_binary_formats(detector, payload, detected):
+    result = detector.detect(BytesIO(payload), declared_media_type="text/markdown")
+
+    assert result.detected_format == detected
+    assert result.detected_format != "md"
 
 
 def test_pdf_signature_is_classified_without_extracting_text(detector):
