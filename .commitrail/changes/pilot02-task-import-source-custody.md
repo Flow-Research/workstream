@@ -107,9 +107,11 @@ when a client converts a CSV; it is never described as the original CSV.
 |---|---|---|---|
 | Existing owner reuse | ART admission/put/verification and TASK command tracing | Closed producer gap identified | New typed source extension requires verification |
 | Canonical JSON and closed action mapping | Focused TASK parser and AUTH catalogue tests | 36 passed; 200 rows, ambiguity, indexed errors, strict field bounds and published schema parity | Pure rules only |
+| Merged lifecycle and source action union | Focused TASK parser, AUTH catalogue and setup-finalization catalogue replay against main `dfea06a33` | 63 passed; exact inventory retains the merged lifecycle action and the three source actions, with 110 active and 37 planned actions | Source storage still requires its ordered migration and live proof |
 | Protected MCP contract coherence | Selected-fragment tamper checks and real backend OpenAPI comparison | Only the three additive source actions change the authorization-context enum; all nine selected operations and unrelated schemas remain identical | Regenerate the shared enum union after PILOT-04 merges |
 | Boundary and documentation coherence | Protected-base module/AUTH validation, structure and behavior-ownership validation, Ruff, changed Markdown links and stale AUTH/ART contract checks | Passed without new private-import debt; exact source metadata reconciled | Reconcile union after PILOT-04 merges |
 | Existing architecture and CI metadata invariants | Module/AUTH regressions and structure/ownership/lane regressions | 130 focused tests passed; metadata suite 227 passed with one stale exact lane expectation repaired and its focused replay passed | Full integration lanes await schema handoff |
+| Current-main architecture and CI metadata reconciliation | Protected-base module/AUTH, structure and behavior validation; architecture/ownership/lane regressions against main `dfea06a33` | Validators passed; 323 architecture/metadata checks passed, alongside the 63 parser/catalogue replay checks; selected OpenAPI/tamper/transitive guard passed all 11 cases | These checks do not establish PostgreSQL/MinIO source custody |
 | Exact byte custody and rollback | 15 collected public API PostgreSQL/MinIO negative/concurrency/recovery cases | Not executed: ordered source migration pending | No live custody or deployment claim |
 
 ## Review findings
@@ -122,9 +124,12 @@ contracts; no CI configuration or percentage threshold changes.
 
 ## Reconciliation
 
-- Current-source reconciliation: baseline main `baa7ae7c1bce9c3769453620f4aa0b22fe13fe3e` includes PR 517 guide-setup CLI inspection; source REST documentation preserves that delivered capability. Open PRs 516 and 518 remain undelivered and require reconciliation before freezing.
+- Current-source reconciliation: main `dfea06a33acf4657c0a58291670233ff6f1b1a1b` includes PR 516 lifecycle transitions and PR 517 guide-setup CLI inspection. Source actions coexist with the merged lifecycle catalogue, preparation, runtime resources and administrative registration. Existing MCP operations remain unchanged; the selected authorization-context contract includes the additive source actions.
 - Next usable boundary: atomic DRAFT TASK import from verified source, then explicit batch screen/release and CLI conversion in separately authorized bounded changes.
 - Remaining risks: source retention has no deletion scheduler; full issue 489 remains open.
-- Schema handoff: PILOT-04 owns the next linear migration; the sole coordinated
-  migration author supplies this source migration only after that change merges
-  and current main is reconciled. No alternative DDL or schema bypass is used.
+- Schema handoff: merged main owns `0028_lifecycle_transitions`; PILOT-04 owns
+  `0029` as the next linear migration. The sole coordinated migration author
+  supplies the subsequent source migration only after PILOT-04 merges and this
+  branch is reconciled with that main. This change authors no migration and uses
+  no alternative DDL or schema bypass. All 15 public PostgreSQL/MinIO source
+  cases remain unexecuted until that schema handoff.

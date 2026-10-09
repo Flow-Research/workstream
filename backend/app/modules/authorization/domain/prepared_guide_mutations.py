@@ -9,6 +9,8 @@ from app.modules.authorization.runtime import PreparedAuthorizationHandleInvalid
 
 def parse_prepared_guide_mutation(action: ActionId, request: Mapping[str, object]) -> dict:
     """Bind existing guide selectors and require exact create-time example facts."""
+    if action in {ActionId.PROJECT_REVIEW_POLICY_UPDATE, ActionId.PROJECT_REVISION_POLICY_UPDATE}:
+        return _policy_mutation_binding(request)
     if action not in {
         ActionId.PROJECT_GUIDE_CREATE, ActionId.PROJECT_GUIDE_UPDATE,
         ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
@@ -36,5 +38,28 @@ def parse_prepared_guide_mutation(action: ActionId, request: Mapping[str, object
                 guide_create_task_examples_count=count,
             )
         return result
+    except (KeyError, TypeError, ValueError) as exc:
+        raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle") from exc
+
+
+def _policy_mutation_binding(request: Mapping[str, object]) -> dict:
+    """Bind the policy and optional predecessor selected by guide review/revision edits."""
+    try:
+        predecessor_id = request["predecessor_policy_id"]
+        predecessor_generation = request["predecessor_policy_generation"]
+        predecessor_digest = request["predecessor_policy_digest"]
+        return {
+            "policy_mutation_project_id": UUID(str(request["project_id"])),
+            "policy_mutation_guide_id": UUID(str(request["guide_id"])),
+            "policy_mutation_policy_id": UUID(str(request["policy_id"])),
+            "policy_mutation_operation_id": UUID(str(request["operation_id"])),
+            "policy_mutation_request_digest": str(request["request_digest"]),
+            "policy_mutation_policy_digest": str(request["policy_digest"]),
+            "policy_mutation_generation": int(request["policy_generation"]),
+            "policy_mutation_predecessor_id": UUID(str(predecessor_id)) if predecessor_id is not None else None,
+            "policy_mutation_predecessor_generation": int(predecessor_generation) if predecessor_generation is not None else None,
+            "policy_mutation_predecessor_digest": str(predecessor_digest) if predecessor_digest is not None else None,
+            "policy_mutation_guide_status": str(request["guide_status"]),
+        }
     except (KeyError, TypeError, ValueError) as exc:
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle") from exc

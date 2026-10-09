@@ -8,8 +8,7 @@ PREP while the action remains planned/unavailable. CON-07 hidden submitter
 participation and complete frozen award-set staging/replay are delivered. REV-04C
 adds the hidden FinalAcceptance/TASK/CON participant. Hidden handlers 04E1B-B are
 next. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
-TASK-before-CHECKERS race proof, shared audit/outbox, fulfillment-root ordinal
-custody and scoped lifecycle activation remain required
+TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
 before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,

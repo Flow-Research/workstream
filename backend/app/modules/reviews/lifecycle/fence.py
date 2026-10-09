@@ -31,13 +31,20 @@ class PostgresJointLifecycleMutationFence:
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Return current locked scalar facts only for the expected generation."""
+        if type(expected_generation) is not int or not 0 <= expected_generation <= 9_223_372_036_854_775_807:
+            raise JointLifecycleUnavailable("lifecycle requires an exact generation")
+        facts = await self.lock_controller()
+        if facts.generation != expected_generation:
+            raise JointLifecycleUnavailable("lifecycle controller missing or generation changed")
+        return facts
+
+    async def lock_controller(self) -> JointLifecycleControlFacts:
+        """Lock before transition history lookup; this never admits a mutation."""
         transaction = self._session.get_transaction()
         if (
             transaction is None
             or not transaction.is_active
             or self._session.in_nested_transaction()
-            or type(expected_generation) is not int
-            or not 0 <= expected_generation <= 9_223_372_036_854_775_807
         ):
             raise JointLifecycleUnavailable(
                 "lifecycle requires a root transaction and exact generation"
@@ -71,7 +78,7 @@ class PostgresJointLifecycleMutationFence:
                 .with_for_update()
             )
         ).one_or_none()
-        if row is None or row.generation != expected_generation:
+        if row is None:
             raise JointLifecycleUnavailable("lifecycle controller missing or generation changed")
         try:
             return JointLifecycleControlFacts(

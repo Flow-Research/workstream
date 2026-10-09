@@ -104,8 +104,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 109,
-        ActionAvailability.PLANNED: 38,
+        ActionAvailability.ACTIVE: 110,
+        ActionAvailability.PLANNED: 37,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):

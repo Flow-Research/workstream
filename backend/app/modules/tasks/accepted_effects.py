@@ -115,7 +115,7 @@ class TaskAcceptedEffectsParticipant:
         expected_generation: int,
     ):
         """Retain the canonical fence and Task -> Assignment -> Submission locks."""
-        await self._fence.acquire(expected_generation)
+        lifecycle = await self._fence.acquire(expected_generation)
         task = await self._repository.lock_project_task(
             request.project_id, request.task_id
         )
@@ -164,6 +164,8 @@ class TaskAcceptedEffectsParticipant:
             disposition = "replay"
         else:
             raise TaskAcceptedEffectsUnavailable("task_accepted_effects_unavailable")
+        if disposition == "new" and (lifecycle.phase != "live" or lifecycle.generation <= 0):
+            raise TaskAcceptedEffectsUnavailable("lifecycle is not live")
         try:
             preparation = TaskAcceptedPreparation(
                 disposition=disposition,

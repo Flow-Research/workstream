@@ -1,6 +1,7 @@
 """Real PostgreSQL TASK state, source, and lock-boundary proof."""
 
 import pytest
+
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
@@ -10,6 +11,8 @@ from app.modules.tasks.api import TaskAcceptedEffectsUnavailable
 from tests.tasks.post_submit_routing.support import insert_source
 
 from .support import accepted_effects_source, participant
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 @pytest.mark.parametrize("prestate", ("review_pending", "evaluation_pending"))
@@ -46,12 +49,12 @@ async def test_new_then_exact_replay_preserves_nonterminal_task_facts(
         async with h.factory() as session, session.begin():
             owner = participant(session)
             prepared = await owner.lock_accepted_effects(
-                h.effects_request, expected_generation=0
+                h.effects_request, expected_generation=2
             )
             assert prepared.disposition == "new"
             assert prepared.locked_review_policy_id == h.locked_review_policy_id
             result = await owner.apply_accepted_effects(
-                h.effects_request, disposition="new", expected_generation=0
+                h.effects_request, disposition="new", expected_generation=2
             )
             assert result.task_status == "accepted"
             assert result.assignment_status == "completed"
@@ -59,11 +62,11 @@ async def test_new_then_exact_replay_preserves_nonterminal_task_facts(
         async with h.factory() as session, session.begin():
             owner = participant(session)
             prepared = await owner.lock_accepted_effects(
-                h.effects_request, expected_generation=0
+                h.effects_request, expected_generation=2
             )
             assert prepared.disposition == "replay"
             assert await owner.apply_accepted_effects(
-                h.effects_request, disposition="replay", expected_generation=0
+                h.effects_request, disposition="replay", expected_generation=2
             ) == result
 
         async with h.factory() as session:
@@ -108,7 +111,7 @@ async def test_exact_lineage_gates_reject_without_mutation(
         async with h.factory() as session, session.begin():
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).lock_accepted_effects(
-                    changed, expected_generation=0
+                    changed, expected_generation=2
                 )
         async with h.factory() as session:
             states = (
@@ -144,7 +147,7 @@ async def test_mixed_terminal_states_are_neither_new_nor_replay(
         async with h.factory() as session, session.begin():
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).lock_accepted_effects(
-                    h.effects_request, expected_generation=0
+                    h.effects_request, expected_generation=2
                 )
 
 
@@ -168,7 +171,7 @@ async def test_assignment_timestamp_preconditions_are_required(
         async with h.factory() as session, session.begin():
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).lock_accepted_effects(
-                    h.effects_request, expected_generation=0
+                    h.effects_request, expected_generation=2
                 )
 
 
@@ -180,14 +183,14 @@ async def test_apply_rechecks_acceptance_disposition(
             owner = participant(session)
             assert (
                 await owner.lock_accepted_effects(
-                    h.effects_request, expected_generation=0
+                    h.effects_request, expected_generation=2
                 )
             ).disposition == "new"
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await owner.apply_accepted_effects(
                     h.effects_request,
                     disposition="replay",
-                    expected_generation=0,
+                    expected_generation=2,
                 )
 
 
@@ -200,7 +203,7 @@ async def test_foreign_project_is_rejected_before_the_actual_task_row_is_locked(
             await first.begin()
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(first).lock_accepted_effects(
-                    foreign, expected_generation=0
+                    foreign, expected_generation=2
                 )
             async with h.factory() as second, second.begin():
                 locked = await second.scalar(
@@ -229,7 +232,7 @@ async def test_preparation_retains_each_owner_lock_until_caller_rollback(
         async with h.factory() as first:
             await first.begin()
             await participant(first).lock_accepted_effects(
-                h.effects_request, expected_generation=0
+                h.effects_request, expected_generation=2
             )
             async with h.factory() as second:
                 await second.begin()
@@ -266,7 +269,7 @@ async def test_canonical_fence_rejects_missing_nested_and_stale_generation(
         async with h.factory() as session:
             with pytest.raises(JointLifecycleUnavailable, match="root transaction"):
                 await participant(session).lock_accepted_effects(
-                    h.effects_request, expected_generation=0
+                    h.effects_request, expected_generation=2
                 )
             assert not session.in_transaction()
 
@@ -274,7 +277,7 @@ async def test_canonical_fence_rejects_missing_nested_and_stale_generation(
             async with session.begin_nested():
                 with pytest.raises(JointLifecycleUnavailable, match="root transaction"):
                     await participant(session).lock_accepted_effects(
-                        h.effects_request, expected_generation=0
+                        h.effects_request, expected_generation=2
                     )
 
         async with h.factory() as session, session.begin():

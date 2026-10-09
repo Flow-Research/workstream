@@ -4,6 +4,7 @@ import asyncio
 from contextlib import suppress
 
 import pytest
+
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
@@ -27,6 +28,8 @@ from .participation_support import (
     stage_terminal_task,
     stored_effects,
 )
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 async def test_caller_rollback_and_late_sql_failure_discard_every_new_effect(

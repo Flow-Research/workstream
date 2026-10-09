@@ -260,12 +260,14 @@ class AdminAuthorizationRepository:
         self,
         identity_link_id: UUID,
         actor_profile_id: UUID,
+        *,
+        preserve_foreign_key_reads: bool = False,
     ) -> tuple[ActorIdentityLink, ActorProfile] | None:
         """Lock and validate the request actor profile before its exact link."""
         profile = await self._session.scalar(
             select(ActorProfile)
             .where(ActorProfile.id == str(actor_profile_id))
-            .with_for_update()
+            .with_for_update(key_share=preserve_foreign_key_reads)
             .execution_options(populate_existing=True)
         )
         if profile is None:

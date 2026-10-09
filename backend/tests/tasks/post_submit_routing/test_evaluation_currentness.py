@@ -91,10 +91,12 @@ async def _acceptance_wins(tmp_path, database_url):
             assert await _counts(session) == before
 
 
+@pytest.mark.usefixtures("live_acceptance_lifecycle")
 async def test_acceptance_blocks_successor_and_retains_exact_replay(tmp_path, isolated_database_env):
     await _acceptance_wins(tmp_path, isolated_database_env)
 
 
+@pytest.mark.usefixtures("live_acceptance_lifecycle")
 async def test_terminal_guard_removal_is_detected(tmp_path, isolated_database_env, monkeypatch):
     original = TaskEvaluationGuard.lock_evaluation_scope
 
