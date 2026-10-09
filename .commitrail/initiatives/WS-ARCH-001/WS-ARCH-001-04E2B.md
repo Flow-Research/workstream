@@ -49,6 +49,12 @@ canonical contracts before activating the exact operation.
 - REV `api/acceptance.py`, `acceptance/{models,repository,participant}.py`, and
   existing lifecycle service/manifest readiness only where mandatory source
   custody changes its retained-source validation. Existing fence is reused.
+- ART `post_submit_materialization.py` and CHECKERS `api/materialization.py`,
+  `api/execution.py`, execution/coordinator/models plus their focused material
+  custody tests, only to retain the actual input-materialization decision that
+  the current result discards. Reuse B6 creation/binding receipts; no reverse
+  audit search or borrowed phase receipt. Keep pre-consumption material facts
+  distinct from the post-consumption receipt, without a compatibility default.
 - Existing TASK/REV/CON typed participants and explicit `app/adapters/` roots;
   shared AUDIT/outbox append participants and bounded outcome event contracts.
 - One successor migration after 0028, model registration if necessary, Alembic
@@ -82,20 +88,33 @@ skips, coverage quotas or replacement of required proof with permissive mocks.
 - Prepare/consume AUTH over `TaskPostSubmitSourceProposal`; keep persisted
   `ManifestFacts` for stored reads. One canonical semantic digest excludes only
   database-created time. Never invent a timestamp or publish a receipt-less row.
-- Bind false lifecycle generation in the strict consequence and resource digest.
+- Bind the original authorized false lifecycle generation in the strict
+  consequence and resource digest. New acceptance requires that exact current
+  LIVE generation. Terminal replay separately acquires the current controller
+  generation, verifies the original receipt with its stored authorized generation,
+  and proves complete replay disposition before allowing those generations to
+  differ. Current generation never authorizes new effects with an old receipt.
   Reuse canonical fixed-router PREP and fresh-authority replay; only the existing
   `task.post_submit.route` action becomes executable internally.
 - Extend the existing manifest with mandatory actual immutable decision-event
   custody and the exact reconstructible authority context. Harden the same
   FinalAcceptance input/row with a mandatory same-source decision reference.
   Detached receipts remain untrusted until AUTH verifies the retained event.
+- Source publication binds distinct original Submission creation/binding,
+  input-materialization, execute/finalize and routing decisions from their
+  canonical retained owners. Propagate the materialization decision through
+  its existing result/finalization custody; a material-bearing terminal result
+  cannot support routing without it. No-material infrastructure outcomes do
+  not fabricate a materialization receipt.
 - Refuse upgrade with retained pre-authority manifests/acceptances unchanged.
   SQL independently verifies exact service/link/action/permission, project,
   request/source/claim/consequence and generation, using schema-qualified tables
   and safe function search paths. No NULL/default compatibility path.
 - Deferred database closure rejects a standalone routing allow, incomplete or
   crossed manifest/outcome, missing TASK/assignment/contribution/award members,
-  and missing shared audit/outbox consequence. Reuse existing award-set guard;
+  and missing shared audit/outbox consequence. A constructed, not-invoked,
+  expired, finalized or foreign outbox claim cannot produce an outcome;
+  the callable operation uses actual committed invocation custody. Reuse existing award-set guard;
   do not implement a second compensation evaluator.
 - Exact replay verifies the original complete tuple with fresh authority,
   returning its original IDs without new receipts/events/effects. Partial
