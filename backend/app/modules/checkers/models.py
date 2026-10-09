@@ -84,9 +84,12 @@ class ExternalCheckerRegistryEntryRecord(Base):
             "jsonb_typeof(configuration_schema_document)='object' and "
             "jsonb_typeof(input_schema_document)='object' and "
             "jsonb_typeof(output_schema_document)='object' and "
-            "octet_length(configuration_schema_document::text)<=65536 and "
-            "octet_length(input_schema_document::text)<=65536 and "
-            "octet_length(output_schema_document::text)<=65536",
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "configuration_schema_document),'UTF8'))<=65536 and "
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "input_schema_document),'UTF8'))<=65536 and "
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "output_schema_document),'UTF8'))<=65536",
             name="schema_documents",
         ),
         CheckConstraint(

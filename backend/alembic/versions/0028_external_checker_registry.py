@@ -14,6 +14,7 @@ def upgrade() -> None:
     op.execute("set local search_path = pg_catalog, public, pg_temp")
     op.execute("lock table public.audit_events in access exclusive mode")
     _extend_audit_constraints()
+    _create_registry_canonical_json_function()
     op.create_table(
         "external_checker_registry_entries",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -120,9 +121,12 @@ def upgrade() -> None:
             "jsonb_typeof(configuration_schema_document)='object' and "
             "jsonb_typeof(input_schema_document)='object' and "
             "jsonb_typeof(output_schema_document)='object' and "
-            "octet_length(configuration_schema_document::text)<=65536 and "
-            "octet_length(input_schema_document::text)<=65536 and "
-            "octet_length(output_schema_document::text)<=65536",
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "configuration_schema_document),'UTF8'))<=65536 and "
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "input_schema_document),'UTF8'))<=65536 and "
+            "octet_length(convert_to(public.external_checker_registry_canonical_json("
+            "output_schema_document),'UTF8'))<=65536",
             name="schema_documents",
         ),
         sa.CheckConstraint(
@@ -194,6 +198,35 @@ def _extend_audit_constraints() -> None:
     _replace_constraint(name, definition)
 
 
+def _create_registry_canonical_json_function() -> None:
+    op.execute("""
+create function public.external_checker_registry_canonical_json(value jsonb)
+returns text language plpgsql immutable strict
+set search_path=pg_catalog,public,pg_temp as $$
+declare encoded text;
+begin
+ case pg_catalog.jsonb_typeof(value)
+  when 'object' then
+   select '{' || coalesce(pg_catalog.string_agg(
+    pg_catalog.to_json(item_key)::text || ':' ||
+     public.external_checker_registry_canonical_json(item_value),
+    ',' order by item_key collate "C"), '') || '}' into encoded
+   from pg_catalog.jsonb_each(value) as items(item_key,item_value);
+   return encoded;
+  when 'array' then
+   select '[' || coalesce(pg_catalog.string_agg(
+    public.external_checker_registry_canonical_json(item_value),
+    ',' order by item_order), '') || ']' into encoded
+   from pg_catalog.jsonb_array_elements(value) with ordinality
+    as items(item_value,item_order);
+   return encoded;
+  else return value::text;
+ end case;
+end
+$$
+""")
+
+
 def _create_registry_functions() -> None:
     op.execute("""
 create function public.external_checker_registry_spec(
@@ -222,7 +255,7 @@ create function public.external_checker_registry_digest(value jsonb)
 returns varchar language sql immutable
 set search_path=pg_catalog,public,pg_temp as $$
  select 'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
-  public.project_guide_projection_canonical_json(value),'UTF8')),'hex')
+  public.external_checker_registry_canonical_json(value),'UTF8')),'hex')
 $$
 """)
     op.execute("""

@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.core.identifiers import new_record_id
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.checker_registry_authorization import (
     ExternalCheckerRegistryAuthorizationAdapter,
@@ -23,9 +24,10 @@ from app.modules.checkers.api.external import (
     ExternalCheckerRegistrationAuthorityReceipt,
     ExternalCheckerRegistryConflict,
     ExternalCheckerRegistryUnavailable,
+    make_external_checker_registration_request,
 )
 from app.modules.checkers.external_registry import ExternalCheckerRegistryService
-from tests.checkers.external.support import registration_request
+from tests.checkers.external.support import registration_request, schema
 
 
 class _Session:
@@ -122,6 +124,46 @@ async def test_register_rejects_operation_or_logical_identity_substitution() -> 
 
     assert len(repository.rows) == 1
     assert len(authority.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_same_operation_rejects_every_mutated_payload_and_preserves_row() -> None:
+    service, authority, repository = _service()
+    request = registration_request()
+    stored = await service.register(request)
+    spec = request.spec
+    changed_image = type(spec).model_validate(
+        spec.model_dump() | {"image_digest": "sha256:" + "b" * 64}
+    )
+    changed_schema = type(spec).model_validate(
+        spec.model_dump()
+        | {"configuration_schema": schema("acme.changed.configuration")}
+    )
+    changed_resources = type(spec).model_validate(
+        spec.model_dump()
+        | {"resources": spec.resources.model_dump() | {"cpu_millis": 600}}
+    )
+    mutations = (
+        make_external_checker_registration_request(
+            actor_profile_id=request.actor_profile_id,
+            operation_id=request.operation_id,
+            registry_entry_id=registry_entry_id,
+            spec=changed,
+        )
+        for registry_entry_id, changed in (
+            (new_record_id(), spec),
+            (request.registry_entry_id, changed_image),
+            (request.registry_entry_id, changed_schema),
+            (request.registry_entry_id, changed_resources),
+        )
+    )
+    for mutation in mutations:
+        with pytest.raises(ExternalCheckerRegistryConflict):
+            await service.register(mutation)
+
+    assert len(repository.rows) == 1
+    assert len(authority.calls) == 5
+    assert await service.read_exact(stored.registry_entry_id, stored.entry_digest) == stored
 
 
 @pytest.mark.asyncio

@@ -7,15 +7,16 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.external import (
+    MAX_SCHEMA_BYTES,
     PRE_SUBMIT_INPUT_SCHEMA_ID,
     RESULT_SCHEMA_ID,
     ExternalCheckerContractError,
     ExternalCheckerFinding,
     ExternalCheckerMaterial,
     ExternalCheckerSchema,
+    external_checker_json_hash,
     make_external_checker_execution_request,
     make_external_checker_execution_result,
     make_external_checker_registration_request,
@@ -31,7 +32,7 @@ from tests.checkers.external.support import (
 
 def test_registry_spec_is_digest_pinned_and_phase_specific() -> None:
     spec = registry_spec()
-    assert spec.spec_digest == canonical_json_hash(spec.model_dump(mode="json"))
+    assert spec.spec_digest == external_checker_json_hash(spec.model_dump(mode="json"))
     assert spec.input_schema.schema_id == PRE_SUBMIT_INPUT_SCHEMA_ID
     assert spec.output_schema.schema_id == RESULT_SCHEMA_ID
 
@@ -45,6 +46,32 @@ def test_registry_spec_is_digest_pinned_and_phase_specific() -> None:
         type(spec).model_validate(spec.model_dump() | {"image_digest": "latest"})
 
 
+def test_registry_canonical_hash_uses_database_numeric_encoding() -> None:
+    assert external_checker_json_hash({"minimum": 1e-6}) == (
+        "sha256:e084f70f19f83edfde8a2b57061cd7734340a5be2e7d127e3b73c090556478a7"
+    )
+
+
+def test_schema_size_uses_the_canonical_persisted_representation() -> None:
+    overhead = len('{"description":"","type":"object"}'.encode())
+    document = {"type": "object", "description": "x" * (MAX_SCHEMA_BYTES - overhead)}
+    accepted = ExternalCheckerSchema(
+        schema_id="acme.boundary",
+        schema_version="v1",
+        document=document,
+        schema_sha256=external_checker_json_hash(document),
+    )
+    assert accepted.document == document
+    oversized = document | {"description": document["description"] + "x"}
+    with pytest.raises(ValidationError, match="schema is too large"):
+        ExternalCheckerSchema(
+            schema_id="acme.boundary",
+            schema_version="v1",
+            document=oversized,
+            schema_sha256=external_checker_json_hash(oversized),
+        )
+
+
 @pytest.mark.parametrize("reference", ["https://example.invalid/schema", "other.json#/x"])
 def test_registry_schema_is_offline_and_self_contained(reference: str) -> None:
     document = {"type": "object", "$ref": reference}
@@ -53,7 +80,7 @@ def test_registry_schema_is_offline_and_self_contained(reference: str) -> None:
             schema_id="acme.configuration",
             schema_version="v1",
             document=document,
-            schema_sha256=canonical_json_hash(document),
+            schema_sha256=external_checker_json_hash(document),
         )
 
 
@@ -81,9 +108,9 @@ def test_execution_request_binds_existing_phase_lineage_and_materials(phase: str
         registry=entry,
         identity=execution_identity(phase),
         configuration={},
-        configuration_sha256=canonical_json_hash({}),
+        configuration_sha256=external_checker_json_hash({}),
         input={"task_version": "v3"},
-        input_sha256=canonical_json_hash({"task_version": "v3"}),
+        input_sha256=external_checker_json_hash({"task_version": "v3"}),
         materials=(
             ExternalCheckerMaterial(
                 role="submission_archive",
@@ -130,9 +157,9 @@ def test_execution_request_rejects_duplicate_material_roles() -> None:
             registry=registry_entry(),
             identity=execution_identity(),
             configuration={},
-            configuration_sha256=canonical_json_hash({}),
+            configuration_sha256=external_checker_json_hash({}),
             input={"task_version": "v3"},
-            input_sha256=canonical_json_hash({"task_version": "v3"}),
+            input_sha256=external_checker_json_hash({"task_version": "v3"}),
             materials=(material, material.model_copy(update={"content_id": uuid4()})),
         )
 
@@ -142,9 +169,9 @@ def test_completed_and_infrastructure_results_are_closed_and_request_bound() -> 
         registry=registry_entry(),
         identity=execution_identity(),
         configuration={},
-        configuration_sha256=canonical_json_hash({}),
+        configuration_sha256=external_checker_json_hash({}),
         input={"task_version": "v3"},
-        input_sha256=canonical_json_hash({"task_version": "v3"}),
+        input_sha256=external_checker_json_hash({"task_version": "v3"}),
         materials=(),
     )
     completed = make_external_checker_execution_result(
@@ -165,10 +192,16 @@ def test_completed_and_infrastructure_results_are_closed_and_request_bound() -> 
         infrastructure_failure_code=None,
     )
     completed.validate_request(request)
+    with pytest.raises(ValidationError, match="result digest mismatch"):
+        completed.model_copy(update={"result_digest": SHA}).validate_request(request)
+    with pytest.raises(ValidationError, match="verdict and findings disagree"):
+        completed.model_copy(update={"findings": ()}).validate_request(request)
+    substituted = make_external_checker_execution_result(
+        **completed.model_dump(exclude={"result_digest", "registry_entry_id"}),
+        registry_entry_id=uuid4(),
+    )
     with pytest.raises(ExternalCheckerContractError, match="request mismatch"):
-        completed.model_copy(update={"registry_entry_id": uuid4()}).validate_request(
-            request
-        )
+        substituted.validate_request(request)
     with pytest.raises(ValidationError, match="disagree"):
         make_external_checker_execution_result(
             request_digest=request.request_digest,
@@ -197,6 +230,28 @@ def test_completed_and_infrastructure_results_are_closed_and_request_bound() -> 
             **unavailable.model_dump(exclude={"result_digest", "infrastructure_failure_code"}),
             infrastructure_failure_code="network_error",
         )
+
+    bounded_request = make_external_checker_execution_request(
+        registry=registry_entry(maximum_output_bytes=256),
+        identity=execution_identity(),
+        configuration={},
+        configuration_sha256=external_checker_json_hash({}),
+        input={"task_version": "v3"},
+        input_sha256=external_checker_json_hash({"task_version": "v3"}),
+        materials=(),
+    )
+    oversized_infrastructure = make_external_checker_execution_result(
+        request_digest=bounded_request.request_digest,
+        registry_entry_id=bounded_request.registry.registry_entry_id,
+        registry_entry_digest=bounded_request.registry.entry_digest,
+        phase="pre_submit",
+        outcome="infrastructure_failed",
+        verdict=None,
+        findings=(),
+        infrastructure_failure_code="implementation_unavailable",
+    )
+    with pytest.raises(ExternalCheckerContractError, match="exceeds registry limit"):
+        oversized_infrastructure.validate_request(bounded_request)
 
     oversized_findings = tuple(
         ExternalCheckerFinding(

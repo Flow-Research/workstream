@@ -194,8 +194,9 @@ split attempts. Replay returns the original identity; it cannot restore an old
 request as current. Execution claims a PostgreSQL-timed execution lease and releases
 all locks and prepared authority before materialization or evaluator work.
 
-The existing registry evaluates exactly the compiled structural entries against
-ART-verified material. Finalization consumes separate action-specific authority,
+The existing in-process post-submit structural-handler registry evaluates exactly
+the compiled entries against ART-verified material; it is distinct from the new
+external-image metadata registry. Finalization consumes separate action-specific authority,
 checks the current fence and unexpired lease, and commits complete ordered closed
 members, terminal result and shared-outbox completion together. Expired-lease
 recovery retains the attempt; terminal infrastructure failures never restart or

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.external import (
     POST_SUBMIT_INPUT_SCHEMA_ID,
@@ -17,6 +16,7 @@ from app.modules.checkers.api.external import (
     ExternalCheckerSchema,
     PostSubmitExternalCheckerIdentity,
     PreSubmitExternalCheckerIdentity,
+    external_checker_json_hash,
     make_external_checker_registration_request,
 )
 
@@ -35,11 +35,13 @@ def schema(schema_id: str, *, required: tuple[str, ...] = ()) -> ExternalChecker
         schema_id=schema_id,
         schema_version="v1",
         document=document,
-        schema_sha256=canonical_json_hash(document),
+        schema_sha256=external_checker_json_hash(document),
     )
 
 
-def registry_spec(phase: str = "pre_submit") -> ExternalCheckerRegistrySpec:
+def registry_spec(
+    phase: str = "pre_submit", *, maximum_output_bytes: int = 32_768
+) -> ExternalCheckerRegistrySpec:
     return ExternalCheckerRegistrySpec(
         capability_id="acme.safe_archive",
         capability_version="v1.2.3",
@@ -57,13 +59,15 @@ def registry_spec(phase: str = "pre_submit") -> ExternalCheckerRegistrySpec:
             cpu_millis=500,
             memory_bytes=128 * 1024 * 1024,
             deadline_ms=30_000,
-            maximum_output_bytes=32_768,
+            maximum_output_bytes=maximum_output_bytes,
         ),
     )
 
 
-def registry_entry(phase: str = "pre_submit") -> ExternalCheckerRegistryEntry:
-    spec = registry_spec(phase)
+def registry_entry(
+    phase: str = "pre_submit", *, maximum_output_bytes: int = 32_768
+) -> ExternalCheckerRegistryEntry:
+    spec = registry_spec(phase, maximum_output_bytes=maximum_output_bytes)
     return ExternalCheckerRegistryEntry(
         **spec.model_dump(),
         registry_entry_id=new_record_id(),

@@ -71,6 +71,9 @@ reproducible builds or implement a launcher.
   `backend/app/modules/authorization/**` and `backend/app/modules/audit/**`.
   Registration is a system-scoped human Operator action; metadata is never an
   execution grant.
+- `mcp_server/contracts/authorization_context_get.json` for the generated
+  authorization-context ActionId enum/hash change caused solely by the new
+  registration action.
 - One next-linear migration, currently reserved as
   `0028_external_checker_registry` after merged
   `0027_markdown_guide_media`, plus Alembic environment/current-head, schema
@@ -188,6 +191,9 @@ code, plugins or authority.
 | Migration and schema custody | PostgreSQL 16 predecessor/head upgrade, hostile `search_path`, graph, fixed-baseline manifest, repeated upgrade, current fingerprint/reset/inventory | PASS: focused schema batch 5 tests in 136.96s and exact-head migration coverage above | Open PR #516 must reconcile its unpublished conflicting revision before merge if this revision lands first |
 | Existing behavior unchanged | Exact current pre-submit catalogue identity/manifest and post-submit catalogue contract/hash tests | PASS: 19 tests in 11.22s; neither catalogue source nor hash changed | Catalogue replacement remains later PILOT-04 work |
 | CI and owner registration | Exact lane inventory, deterministic checker-delivery partition and behavior-ownership catalogue regressions | PASS: 199 tests in 5.22s; four new test modules are assigned once and four new production targets are additive | Hosted full-suite timing remains CI evidence |
+| Review repair: canonical bytes and replay | Focused real PostgreSQL numeric-schema, exact 65,536-byte schema, oversized-schema refusal and same-operation four-field substitution tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-new2.json` | PASS: 2 tests in 29.15s; database and role cleanup true | Final exact-head replay remains required after the repair commit |
+| Review repair: result closure | Focused contract and registry service tests for result self-revalidation, both-outcome byte ceilings and changed-payload replay discrimination | PASS: 16 tests in 1.55s | Runtime consumption remains a later chunk |
+| Review repair: schema graph | Hostile-search-path registry upgrade, one-root/one-head graph, fixed baseline and repeated-head tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-schema.json` | PASS: 4 tests in 93.21s; database and role cleanup true | Hosted full migration matrix remains CI evidence |
 
 ## Review findings
 
@@ -200,6 +206,20 @@ code, plugins or authority.
 - The fixed migration-0001 schema manifest rejected an attempted head-schema
   regeneration. That change was removed; the PostgreSQL 16 head fingerprint and
   reset inventory alone carry the new 0028 objects.
+- Independent review found that the first checker digest reused a historical SQL
+  canonicalizer whose decimal-number representation differs from Python, and
+  that the schema-size SQL constraint counted JSONB display whitespace. The
+  registry now owns one Python/SQL canonical representation for its schemas,
+  specifications, requests, results, authority resources and size limits without
+  changing historical policy hashes.
+- Independent review also found that result/request binding trusted
+  `model_copy` values and applied the registry output ceiling only to completed
+  results. Binding now revalidates the result itself and applies the exact byte
+  ceiling to both completed and infrastructure outcomes.
+- Replay coverage did not discriminate a same-operation changed payload from an
+  unconditional match. Focused service and PostgreSQL regressions now vary the
+  registry ID, image, schema and resources with valid derived request digests and
+  prove conflict, audit rollback and unchanged stored facts.
 
 ## Reconciliation
 

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections.abc import Mapping
+from decimal import Decimal
+from math import isfinite
 from typing import Annotated, Literal, Protocol, Self
 from uuid import RFC_4122, UUID
 
@@ -21,8 +24,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-
-from app.core.hashing import canonical_json_hash
 
 Sha256 = Annotated[StrictStr, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 Identifier = Annotated[
@@ -62,19 +63,45 @@ class ExternalCheckerValue(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
 
+def _canonical_json(value: object) -> str:
+    """Match PostgreSQL JSONB canonical scalars without changing shared hashes."""
+    if isinstance(value, Mapping):
+        if any(type(key) is not str for key in value):
+            raise ExternalCheckerContractError(
+                "external checker value is not canonical JSON"
+            )
+        return "{" + ",".join(
+            f"{json.dumps(key, ensure_ascii=False)}:{_canonical_json(item)}"
+            for key, item in sorted(value.items())
+        ) + "}"
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_canonical_json(item) for item in value) + "]"
+    if value is None:
+        return "null"
+    if type(value) is bool:
+        return "true" if value else "false"
+    if type(value) is int:
+        return str(value)
+    if type(value) is float:
+        if not isfinite(value):
+            raise ExternalCheckerContractError(
+                "external checker value is not canonical JSON"
+            )
+        if value == 0.0:
+            return "0.0"
+        return format(Decimal(str(value)), "f")
+    if type(value) is str:
+        return json.dumps(value, ensure_ascii=False)
+    raise ExternalCheckerContractError("external checker value is not canonical JSON")
+
+
 def _canonical_bytes(value: object) -> bytes:
-    try:
-        return json.dumps(
-            value,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise ExternalCheckerContractError(
-            "external checker value is not canonical JSON"
-        ) from exc
+    return _canonical_json(value).encode("utf-8")
+
+
+def external_checker_json_hash(value: object) -> str:
+    """Hash the checker-only canonical representation shared with PostgreSQL."""
+    return f"sha256:{hashlib.sha256(_canonical_bytes(value)).hexdigest()}"
 
 
 def _reject_remote_references(value: object) -> None:
@@ -110,7 +137,7 @@ class ExternalCheckerSchema(ExternalCheckerValue):
             Draft202012Validator.check_schema(self.document)
         except SchemaError as exc:
             raise ExternalCheckerContractError("external checker schema is invalid") from exc
-        if self.schema_sha256 != canonical_json_hash(self.document):
+        if self.schema_sha256 != external_checker_json_hash(self.document):
             raise ExternalCheckerContractError("external checker schema digest mismatch")
         return self
 
@@ -163,7 +190,7 @@ class ExternalCheckerRegistrySpec(ExternalCheckerValue):
     @property
     def spec_digest(self) -> str:
         """Commit to every immutable registry field without a second representation."""
-        return canonical_json_hash(self.model_dump(mode="json"))
+        return external_checker_json_hash(self.model_dump(mode="json"))
 
 
 class ExternalCheckerRegistryEntry(ExternalCheckerRegistrySpec):
@@ -226,7 +253,7 @@ class ExternalCheckerRegistrationRequest(ExternalCheckerValue):
     @model_validator(mode="after")
     def validate_request_digest(self) -> Self:
         body = self.model_dump(mode="json", exclude={"request_digest"})
-        if self.request_digest != canonical_json_hash(body):
+        if self.request_digest != external_checker_json_hash(body):
             raise ExternalCheckerContractError(
                 "external checker registration request digest mismatch"
             )
@@ -343,11 +370,11 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
             raise ExternalCheckerContractError("external checker request phase mismatch")
         if len({item.role for item in self.materials}) != len(self.materials):
             raise ExternalCheckerContractError("external checker material role is duplicated")
-        if self.configuration_sha256 != canonical_json_hash(self.configuration):
+        if self.configuration_sha256 != external_checker_json_hash(self.configuration):
             raise ExternalCheckerContractError(
                 "external checker configuration digest mismatch"
             )
-        if self.input_sha256 != canonical_json_hash(self.input):
+        if self.input_sha256 != external_checker_json_hash(self.input):
             raise ExternalCheckerContractError("external checker input digest mismatch")
         if len(_canonical_bytes(self.configuration)) > MAX_CONFIGURATION_BYTES:
             raise ExternalCheckerContractError("external checker configuration is too large")
@@ -356,7 +383,7 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
         self.registry.configuration_schema.validate_instance(self.configuration)
         self.registry.input_schema.validate_instance(self.input)
         body = self.model_dump(mode="json", exclude={"request_digest"})
-        if self.request_digest != canonical_json_hash(body):
+        if self.request_digest != external_checker_json_hash(body):
             raise ExternalCheckerContractError("external checker request digest mismatch")
         return self
 
@@ -415,18 +442,19 @@ class ExternalCheckerExecutionResult(ExternalCheckerValue):
         body = self.model_dump(mode="json", exclude={"result_digest"})
         if len(_canonical_bytes(body)) > MAX_RESULT_BYTES:
             raise ExternalCheckerContractError("external checker result is too large")
-        if self.result_digest != canonical_json_hash(body):
+        if self.result_digest != external_checker_json_hash(body):
             raise ExternalCheckerContractError("external checker result digest mismatch")
         return self
 
     def validate_request(self, request: ExternalCheckerExecutionRequest) -> None:
         """Require the complete registry and request identity without claiming custody."""
+        result = ExternalCheckerExecutionResult.model_validate(self)
         request = ExternalCheckerExecutionRequest.model_validate(request)
         if (
-            self.request_digest,
-            self.registry_entry_id,
-            self.registry_entry_digest,
-            self.phase,
+            result.request_digest,
+            result.registry_entry_id,
+            result.registry_entry_digest,
+            result.phase,
         ) != (
             request.request_digest,
             request.registry.registry_entry_id,
@@ -434,14 +462,14 @@ class ExternalCheckerExecutionResult(ExternalCheckerValue):
             request.identity.phase,
         ):
             raise ExternalCheckerContractError("external checker result request mismatch")
-        if self.outcome == "completed":
+        if result.outcome == "completed":
             request.registry.output_schema.validate_instance(
-                self.model_dump(mode="json", exclude={"result_digest"})
+                result.model_dump(mode="json", exclude={"result_digest"})
             )
-            if len(_canonical_bytes(self.model_dump(mode="json"))) > (
-                request.registry.resources.maximum_output_bytes
-            ):
-                raise ExternalCheckerContractError("external checker result exceeds registry limit")
+        if len(_canonical_bytes(result.model_dump(mode="json"))) > (
+            request.registry.resources.maximum_output_bytes
+        ):
+            raise ExternalCheckerContractError("external checker result exceeds registry limit")
 
 
 _REGISTRATION_FIELDS = {
@@ -466,7 +494,7 @@ def _make_derived(model, adapters, digest_field: str, fields: dict[str, object])
         for name, value in fields.items()
     }
     candidate = model.model_construct(**values, **{digest_field: "sha256:" + "0" * 64})
-    values[digest_field] = canonical_json_hash(
+    values[digest_field] = external_checker_json_hash(
         candidate.model_dump(mode="json", exclude={digest_field})
     )
     return model.model_validate(values)

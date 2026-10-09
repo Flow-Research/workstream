@@ -23,14 +23,17 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
 )
 from app.modules.checkers.api.external import (
+    MAX_SCHEMA_BYTES,
     ExternalCheckerRegistrationAuthorityFacts,
     ExternalCheckerRegistryConflict,
+    ExternalCheckerSchema,
     ExternalCheckerRegistryUnavailable,
+    external_checker_json_hash,
     make_external_checker_registration_request,
 )
 from app.modules.checkers.external_registry import ExternalCheckerRegistryService
 from app.modules.checkers.models import ExternalCheckerRegistryEntryRecord
-from tests.checkers.external.support import registration_request, registry_spec
+from tests.checkers.external.support import registration_request, registry_spec, schema
 
 
 async def _context(access, operation_id):
@@ -107,20 +110,25 @@ def _raw_values(request, authorization_decision_event_id, *, entry_digest=None):
         "authorization_decision_event_id": authorization_decision_event_id,
         **spec.resources.model_dump(),
     }
-    for prefix, schema in (
+    for prefix, schema_value in (
         ("configuration", spec.configuration_schema),
         ("input", spec.input_schema),
         ("output", spec.output_schema),
     ):
         values.update(
             {
-                f"{prefix}_schema_id": schema.schema_id,
-                f"{prefix}_schema_version": schema.schema_version,
-                f"{prefix}_schema_sha256": schema.schema_sha256,
-                f"{prefix}_schema_document": schema.document,
+                f"{prefix}_schema_id": schema_value.schema_id,
+                f"{prefix}_schema_version": schema_value.schema_version,
+                f"{prefix}_schema_sha256": schema_value.schema_sha256,
+                f"{prefix}_schema_document": schema_value.document,
             }
         )
     return values
+
+
+def _schema_document_at_limit() -> dict:
+    overhead = len('{"description":"","type":"object"}'.encode())
+    return {"type": "object", "description": "x" * (MAX_SCHEMA_BYTES - overhead)}
 
 
 @pytest.mark.asyncio
@@ -169,6 +177,138 @@ async def test_real_operator_registration_replay_conflict_and_rollback(admin_acc
         await _register(admin_access, request)
     assert await _snapshot() == after_conflict
 
+
+@pytest.mark.asyncio
+async def test_same_operation_mutations_roll_back_authority_and_preserve_facts(
+    admin_access,
+) -> None:
+    await admin_access.signed.grant(
+        admin_access.admin, admin_access.target, role="operator"
+    )
+    request = registration_request(actor_profile_id=admin_access.target.id)
+    stored = await _register(admin_access, request)
+    baseline = await _snapshot()
+    spec = request.spec
+    changed_image = type(spec).model_validate(
+        spec.model_dump() | {"image_digest": "sha256:" + "b" * 64}
+    )
+    changed_schema = type(spec).model_validate(
+        spec.model_dump()
+        | {"configuration_schema": schema("acme.changed.configuration")}
+    )
+    changed_resources = type(spec).model_validate(
+        spec.model_dump()
+        | {"resources": spec.resources.model_dump() | {"cpu_millis": 600}}
+    )
+    for registry_entry_id, changed in (
+        (new_record_id(), spec),
+        (request.registry_entry_id, changed_image),
+        (request.registry_entry_id, changed_schema),
+        (request.registry_entry_id, changed_resources),
+    ):
+        mutation = make_external_checker_registration_request(
+            actor_profile_id=request.actor_profile_id,
+            operation_id=request.operation_id,
+            registry_entry_id=registry_entry_id,
+            spec=changed,
+        )
+        with pytest.raises(ExternalCheckerRegistryConflict):
+            await _register(admin_access, mutation)
+        assert await _snapshot() == baseline
+
+    assert stored.registry_entry_id == request.registry_entry_id
+
+
+@pytest.mark.asyncio
+async def test_numeric_schema_and_exact_size_boundary_share_database_encoding(
+    admin_access,
+) -> None:
+    await admin_access.signed.grant(
+        admin_access.admin, admin_access.target, role="operator"
+    )
+    numeric_document = {
+        "type": "object",
+        "properties": {"rate": {"type": "number", "minimum": 1e-6}},
+    }
+    numeric_schema = ExternalCheckerSchema(
+        schema_id="acme.numeric.configuration",
+        schema_version="v1",
+        document=numeric_document,
+        schema_sha256=external_checker_json_hash(numeric_document),
+    )
+    numeric_spec = registry_spec()
+    numeric_spec = type(numeric_spec).model_validate(
+        numeric_spec.model_dump()
+        | {
+            "capability_version": "v1.2.4",
+            "configuration_schema": numeric_schema,
+        }
+    )
+    numeric_request = make_external_checker_registration_request(
+        actor_profile_id=admin_access.target.id,
+        operation_id=uuid4(),
+        registry_entry_id=new_record_id(),
+        spec=numeric_spec,
+    )
+    assert (await _register(admin_access, numeric_request)).entry_digest == (
+        numeric_spec.spec_digest
+    )
+
+    boundary_document = _schema_document_at_limit()
+    boundary_schema = ExternalCheckerSchema(
+        schema_id="acme.boundary.configuration",
+        schema_version="v1",
+        document=boundary_document,
+        schema_sha256=external_checker_json_hash(boundary_document),
+    )
+    boundary_spec = registry_spec("post_submit")
+    boundary_spec = type(boundary_spec).model_validate(
+        boundary_spec.model_dump()
+        | {
+            "capability_version": "v1.2.5",
+            "configuration_schema": boundary_schema,
+        }
+    )
+    boundary_request = make_external_checker_registration_request(
+        actor_profile_id=admin_access.target.id,
+        operation_id=uuid4(),
+        registry_entry_id=new_record_id(),
+        spec=boundary_spec,
+    )
+    assert (await _register(admin_access, boundary_request)).entry_digest == (
+        boundary_spec.spec_digest
+    )
+
+    oversized_request = make_external_checker_registration_request(
+        actor_profile_id=admin_access.target.id,
+        operation_id=uuid4(),
+        registry_entry_id=new_record_id(),
+        spec=type(numeric_spec).model_validate(
+            numeric_spec.model_dump() | {"capability_version": "v1.2.6"}
+        ),
+    )
+    context = await _context(admin_access, oversized_request.operation_id)
+    with pytest.raises(DBAPIError, match="schema_documents"):
+        async with db_session.get_session_factory()() as session, session.begin():
+            authority = ExternalCheckerRegistryAuthorizationAdapter(
+                AuthorizationService(session, context)
+            )
+            receipt = await authority.authorize_registration(
+                ExternalCheckerRegistrationAuthorityFacts(
+                    actor_profile_id=oversized_request.actor_profile_id,
+                    operation_id=oversized_request.operation_id,
+                    registry_entry_id=oversized_request.registry_entry_id,
+                    request_digest=oversized_request.request_digest,
+                    entry_digest=oversized_request.spec.spec_digest,
+                )
+            )
+            values = _raw_values(
+                oversized_request, receipt.authorization_decision_event_id
+            )
+            values["configuration_schema_document"] = _schema_document_at_limit() | {
+                "description": _schema_document_at_limit()["description"] + "x"
+            }
+            await session.execute(insert(ExternalCheckerRegistryEntryRecord).values(**values))
 
 @pytest.mark.asyncio
 async def test_exact_concurrent_registration_serializes_to_one_row(admin_access) -> None:
