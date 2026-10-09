@@ -136,6 +136,19 @@ typed external-checker capability must use explicit composition-root
 registration and that registry data selects immutable inputs, never Python
 code, plugins or authority.
 
+The later cutover has one strict journey: ART computes and verifies the ZIP
+digest and manifest before exposing bounded private read-only files; one
+Workstream default checker implements all four blocking defaults; every
+required digest-pinned project pre-submit image must pass; and only then does a
+caller-owned transaction create the immutable Submission, persist
+`evaluation_pending` and commit initial dispatch. Work findings create no
+Submission and leave the task `in_progress`; infrastructure outcomes remain
+distinct and recoverable. Required post-submit images start only from that
+committed custody. The target launcher and SDK are Rust, while registered OCI
+images may use other implementations. Replacement proof must remove both
+legacy catalogues without a parallel compatibility path. This chunk publishes
+only the contract and registry needed by that future journey.
+
 ## Acceptance criteria
 
 - [x] Strict pre-submit and post-submit external request variants accept only
@@ -224,6 +237,11 @@ code, plugins or authority.
   passed the DTO canonicalizer but PostgreSQL JSONB cannot store them. The
   checker canonical boundary now rejects U+0000 recursively while retaining
   ordinary Unicode and every other JSON-escaped control character.
+- Reconciliation with the lifecycle-authority extraction initially retained
+  prepared Operator filtering but omitted the registry action from the direct
+  kernel dispatch, resource and role-filter classifications. The complete
+  registry classification is restored and one direct-kernel regression binds
+  system scope, exact resource dispatch and the Operator-only grant filter.
 
 ## Reconciliation
 
@@ -238,6 +256,7 @@ code, plugins or authority.
   separate linear revision after this registry migration lands; no PILOT-02
   application files or schema are included here.
 - Remaining risks: Default-checker implementation and replacement proof, policy
-  binding, F-020, external runtime, hosted gVisor hardening, representative
-  resource limits, cleanup after host loss and complete catalogue cutover
-  remain future bounded work.
+  binding, F-020, the Rust launcher/SDK and OCI-image runtime, verified-material
+  private workspace, caller-atomic intake/public integration, hosted gVisor
+  hardening, representative resource limits, cleanup after host loss and
+  complete removal of both legacy catalogues remain future bounded work.

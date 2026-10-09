@@ -13,6 +13,7 @@ from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.checker_registry_authorization import (
     ExternalCheckerRegistryAuthorizationAdapter,
 )
+from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
@@ -52,6 +53,33 @@ class _Authority:
             actor_profile_id=facts.actor_profile_id,
             authorization_decision_event_id=uuid4(),
         )
+
+
+class _KernelAdminRepository:
+    def __init__(self) -> None:
+        self.grant_id = uuid4()
+        self.filters = None
+
+    async def lock_control(self) -> None:
+        return None
+
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        return (
+            SimpleNamespace(id=str(identity_link_id), status="active"),
+            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
+        )
+
+    async def find_effective_grant(self, *_args, **kwargs):
+        self.filters = kwargs
+        return SimpleNamespace(id=self.grant_id)
+
+
+class _Evidence:
+    def __init__(self) -> None:
+        self.events = []
+
+    async def add_authority_event(self, event) -> None:
+        self.events.append(event)
 
 
 class _Repository:
@@ -218,3 +246,43 @@ async def test_authority_adapter_binds_actor_correlation_and_exact_resource() ->
     authorization._context = context.model_copy(update={"correlation_id": uuid4()})
     with pytest.raises(ExternalCheckerRegistryUnavailable):
         await adapter.authorize_registration(facts)
+
+
+@pytest.mark.asyncio
+async def test_real_kernel_classifies_registry_as_system_operator_mutation() -> None:
+    operation_id, actor_id = uuid4(), uuid4()
+    context = HumanAuthorizationContext(
+        actor_profile_id=actor_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=uuid4(),
+        correlation_id=operation_id,
+    )
+    repository = _KernelAdminRepository()
+    authorization = AuthorizationService(
+        _Session(),
+        context,
+        admin_repository=repository,  # type: ignore[arg-type]
+    )
+    evidence = _Evidence()
+    authorization._audit = evidence  # type: ignore[assignment]
+    facts = ExternalCheckerRegistrationAuthorityFacts(
+        actor_profile_id=actor_id,
+        operation_id=operation_id,
+        registry_entry_id=uuid4(),
+        request_digest="sha256:" + "1" * 64,
+        entry_digest="sha256:" + "2" * 64,
+    )
+
+    receipt = await ExternalCheckerRegistryAuthorizationAdapter(
+        authorization
+    ).authorize_registration(facts)
+
+    assert receipt.actor_profile_id == actor_id
+    assert len(evidence.events) == 1
+    assert repository.filters is not None
+    assert repository.filters["scope_project_id"] is None
+    assert repository.filters["system_scope_only"] is True
+    assert {role.value for role in repository.filters["allowed_roles"]} == {"operator"}

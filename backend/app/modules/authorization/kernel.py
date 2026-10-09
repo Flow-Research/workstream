@@ -151,7 +151,7 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 _SERIALIZED_ADMIN_READS = frozenset(
     {
         ActionId.ACTOR_PROFILE_READ,
@@ -241,12 +241,11 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
         ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
-        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
+        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION, **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
         **GUIDE_PROPOSAL_RESOURCE_BY_ACTION,
     }
 )
-
 def project_action_available_for_status(action_id: ActionId, project_status: str) -> bool:
     """Apply project-only lifecycle guards shared by decisions and projections."""
     if action_id in {
@@ -1007,7 +1006,7 @@ class AuthorizationService:
             grant_filters.update(
                 adapter_bindings.finance_authority_grant_filters(action.action_id)
             )
-        grant_filters.update(contribution_policies.policy_finance_grant_filters(action.action_id))
+        grant_filters.update({**contribution_policies.policy_finance_grant_filters(action.action_id), **checker_registry.checker_registry_grant_filters(action.action_id)})
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,

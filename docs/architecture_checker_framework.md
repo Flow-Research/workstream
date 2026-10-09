@@ -243,7 +243,31 @@ The default checker, ART custody and project images must replace every required
 outcome before either current catalogue is removed. Human reviewers continue
 to own final quality judgment.
 
-## Required Core Checkers
+The clean-cutover intake order is fixed. ART receives the ZIP, computes its
+SHA-256, verifies the stored bytes, safely opens it within platform limits and
+builds the manifest before any external image can read material. The one
+Workstream default checker implements all four defaults above; they are not
+four independently selectable catalogue entries. Every required project
+pre-submit checker then runs as an exact digest-pinned OCI image against a
+bounded, private, read-only view of the verified files. Only after the default
+checker and every required project checker pass may one caller-owned
+transaction create the immutable Submission, persist `evaluation_pending` and
+commit initial dispatch. Work findings return without creating a Submission
+and leave the task `in_progress`. Infrastructure failure stays distinct and
+recoverable and does not count as a contributor failed attempt. Required
+post-submit images run only from the committed Submission/evaluation custody.
+External image execution never occurs inside that database transaction. A
+valid locked policy with no project pre-submit bindings is distinct from an
+unavailable required image and may proceed after the default checker passes.
+
+The target launcher and checker integration use the agreed Rust service and
+SDK. Registered OCI images are not thereby required to be written in Rust;
+their execution identity is the approved digest, schemas and resource limits.
+The replacement must remove both current pre- and post-submit catalogues after
+end-to-end replacement proof. It must not retain a legacy/new parallel path,
+weaken caller-owned atomicity or bypass phase identity and currentness checks.
+
+## Current Required Core Checkers Pending Removal
 
 The names below describe the current catalogue pending replacement; they do
 not expand the four future Workstream defaults.
