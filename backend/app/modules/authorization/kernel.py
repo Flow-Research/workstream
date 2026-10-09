@@ -24,7 +24,7 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.authorization.domain.guide_manager_resources import guide_manager_resource_denial
-from app.modules.authorization.domain import adapter_bindings, contribution_policies, guide_compilation as compilation
+from app.modules.authorization.domain import adapter_bindings, checker_registry, contribution_policies, guide_compilation as compilation
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
     CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
@@ -180,7 +180,7 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
-) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 
 _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (

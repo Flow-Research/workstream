@@ -2,7 +2,7 @@
   "entries": [
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "e9f5a282cf016d7d6aeff32a6cbb978b033f5d6f7799b0d661396f5a4b191cb7",
+      "content_sha256": "12134bdc684dd7297742241fae34845e26f19be2ef86b468e2957dcdf530efb1",
       "end_line": 1319,
       "hard_limit": 1200,
       "kind": "production_file",
