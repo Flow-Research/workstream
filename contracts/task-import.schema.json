@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "TaskImportMetadata": {
+      "additionalProperties": false,
+      "description": "Optional display label; provenance commitments remain server-owned.",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        }
+      },
+      "title": "TaskImportMetadata",
+      "type": "object"
+    },
+    "TaskImportRow": {
+      "additionalProperties": false,
+      "description": "Task instructions only; source custody and record IDs are server-owned.",
+      "properties": {
+        "external_task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "External Task Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 50000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "task_type": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty"
+        },
+        "skill_tags": {
+          "items": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Skill Tags",
+          "type": "array"
+        },
+        "estimated_time_minutes": {
+          "anyOf": [
+            {
+              "maximum": 525600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Time Minutes"
+        },
+        "acceptance_criteria": {
+          "anyOf": [
+            {
+              "maxLength": 50000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Acceptance Criteria"
+        },
+        "rejection_criteria": {
+          "anyOf": [
+            {
+              "maxLength": 50000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rejection Criteria"
+        }
+      },
+      "required": [
+        "external_task_id",
+        "title",
+        "description"
+      ],
+      "title": "TaskImportRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "UTF-8 JSON source, maximum 8388608 bytes. Object member names must be unique. external_task_id is required, case-sensitive, with no surrounding whitespace/control characters; IDs must be unique across rows. Atomic TASK import additionally rejects existing project IDs. Client conversions map category to task_type, languages/tools to skill_tags, and source ID to external_task_id. The received JSON is the retained server source, not the original CSV.",
+  "properties": {
+    "schema_version": {
+      "const": "workstream.task_import.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/TaskImportMetadata"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/TaskImportRow"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Tasks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "tasks"
+  ],
+  "title": "TaskImportDocument",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

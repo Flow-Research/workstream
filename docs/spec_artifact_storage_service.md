@@ -1072,6 +1072,9 @@ contribution records, compensation-award exposure, or reputation events.
 ## Operator Recovery
 
 Only submission-bundle and checker-output verification jobs can be retried.
+Task-import sources use the existing automatic put-observation and verification
+scanner lifecycle; they have no task selector and do not enter this task-bound
+Operator retry contract.
 Guide uploads finish at committed original-document custody; retained guide
 verification rows cannot be scanned, claimed, executed, or recovered, including
 replay of a retained recovery chain. Eligibility follows the originating put
@@ -1457,6 +1460,64 @@ POST retry may observe the same durable operation after durable intent; v0.1
 exposes no separate preparation-status GET route. No retry resolves a scratch
 path, every retry obtains fresh preparation authority, and APIs never return
 provider internals.
+
+## Task-Import Source Custody
+
+PILOT-02A exposes project-bound JSON source custody through the existing ART
+admission, put, independent verification and automatic recovery owners:
+
+```text
+POST /api/v1/projects/{project_id}/task-import-sources
+PUT  /api/v1/projects/{project_id}/task-import-sources/{source_id}/content
+GET  /api/v1/projects/{project_id}/task-import-sources/{source_id}
+GET  /api/v1/projects/{project_id}/task-import-sources/{source_id}/content
+```
+
+Declaration requires a UUID `Idempotency-Key`, canonical lowercase SHA-256
+commitment and a byte count from 1 through 8 MiB. ART creates one immutable,
+UUIDv7 source record per project/key, retaining the declaring actor, identity
+link and exact declaration AUTH decision. Media type is `application/json`.
+Same-key replay requires fresh current authority; changed hash or byte count
+conflicts. The key selects the original record and never determines its ID.
+
+Upload receives exact UTF-8 bytes with `application/json` and validates the
+published [TASK JSON contract](../contracts/task-import.schema.json) through
+bounded ART scratch before durable admission. It rejects malformed JSON,
+duplicate object members, invalid or duplicate external IDs, invalid rows and
+more than 500 tasks. The full bytes must match the declaration. Invalid input
+creates no put attempt, capacity charge or stored source content. Final admission
+locks the exact source and consumes fresh `artifact.task_import_source.upload`
+authority in the same transaction as the single source-linked put intent and
+its project, original producer and deployment charges.
+
+The closed `task_import_source` producer role references that declaration with
+an exact project/hash/count/media composite foreign key. Repeated upload uses
+the same attempt and existing replay/recovery rules, including lost provider
+acknowledgement. Verification belongs to the existing fixed verifier; the source
+does not acquire a separate artifact binding or lifecycle. Provider and capacity
+failures are infrastructure outcomes, not task-validation decisions.
+
+Status returns the declaration or its retained attempt/verification state with
+the original byte commitment. `verified` denotes retained full-read evidence;
+download additionally checks exact source/attempt/receipt/job/content/replica
+ancestry and independently reads and verifies every byte into bounded scratch
+before successful response headers. Downloads expose source facts and exact
+JSON bytes, never provider coordinates. A corrupt or unavailable provider read
+fails without delivering content or committing a successful read decision.
+
+All four routes require an active human covered Project Manager through existing
+`project.task.manage`. Source selector denials are concealed as 404. Declaration,
+upload and read use distinct closed actions and exact typed resource commitments;
+revoked authority cannot replay a prior success.
+
+A declaration is the durable parent of every admitted source attempt. Failed or
+abandoned declarations and admitted sources remain retained immutable ART facts.
+They do not claim that a batch or any Tasks were created. There is no source
+deletion API or retention scheduler, and automatic recovery cannot create Tasks.
+Atomic DRAFT import, project/external-ID conflicts, explicit screen/release and
+CLI conversion remain separate TASK-owned implementation work under issue 489.
+When a client converts CSV, the retained source is the received JSON, not the
+original CSV.
 
 ## Guide And Checker Binding
 

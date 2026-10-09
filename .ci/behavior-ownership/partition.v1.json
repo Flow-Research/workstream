@@ -286,6 +286,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/task_import_source.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/authorization.py"
     },
     {
@@ -395,6 +399,14 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/task_guide_documents.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/task_import_source_router.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/task_import_sources.py"
     },
     {
       "group": "artifacts",
@@ -523,6 +535,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/domain/adapter_bindings.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/artifact_storage.py"
     },
     {
       "group": "auth",
@@ -779,6 +795,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/task_authorization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/task_import_sources.py"
     },
     {
       "group": "auth",
@@ -1478,6 +1498,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/task_import.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/transition_audit.py"
     },
     {
@@ -1713,7 +1737,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "ef9821de8c9f801b8883d9d485e320cae5283e7ae5abd9bac3ad2ab31042731a",
+  "authority_digest": "33655ad6925a346002fb8e42897867d366e3be6def91aca757dcb0eab7118aca",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

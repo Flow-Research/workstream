@@ -227,6 +227,9 @@ class ActionId(StrEnum):
     ARTIFACT_AUDIT_READ = "artifact.audit.read"
     OPERATIONS_ARTIFACT_STORAGE_ADMISSION_READ = "operations.artifact_storage_admission.read"
     ARTIFACT_GUIDE_SOURCE_INGEST = "artifact.guide_source.ingest"
+    ARTIFACT_TASK_IMPORT_SOURCE_DECLARE = "artifact.task_import_source.declare"
+    ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD = "artifact.task_import_source.upload"
+    ARTIFACT_TASK_IMPORT_SOURCE_READ = "artifact.task_import_source.read"
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
     ARTIFACT_SUBMISSION_BUNDLE_PREPARE = "artifact.submission_bundle.prepare"
     ARTIFACT_SUBMISSION_BINDING_CREATE = "artifact.submission.binding.create"
@@ -284,6 +287,7 @@ class ActionOwner(StrEnum):
     TASK_CHECKER_CLEANUP = "task-checker-auth-cleanup"
     TASK_PROJECT_GRANT = "task-project-grant-authorization"
     PILOT_13 = "PILOT-13"
+    PILOT_02A = "PILOT-02A"
 
     AUTH_07B = "WS-AUTH-001-07B"
     AUTH_08 = "WS-AUTH-001-08"
@@ -552,6 +556,9 @@ ACTION_DEFINITIONS = (
     _active(ActionId.PROJECT_TASK_QUEUE_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C4),
     _active(ActionId.OPERATIONS_TASK_QUEUE_READ, PermissionId.OPERATIONS_STATUS_READ, ActionOwner.ARCH_03C4),
     _active(ActionId.PROJECT_TASK_CREATE, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C3),
+    _active(ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.PILOT_02A),
+    _active(ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.PILOT_02A),
+    _active(ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.PILOT_02A),
     _active(ActionId.PROJECT_TASK_SCREEN, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C3),
     _active(ActionId.PROJECT_TASK_RELEASE, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.ARCH_03C3),
     _active(ActionId.PROJECT_TASK_WORK_CONTEXT_READ, PermissionId.PROJECT_TASK_MANAGE, ActionOwner.TASK_PROJECT_GRANT),
@@ -753,7 +760,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 144:
+    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 147:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 29:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -891,6 +898,8 @@ def _index_actions(
         ActionId.TASK_GUIDE_READ,
         ActionId.PROJECT_TASK_WORK_CONTEXT_READ, ActionId.OPERATIONS_TASK_START_OVERRIDE,
         ActionId.PROJECT_TASK_CREATE, ActionId.PROJECT_TASK_SCREEN, ActionId.PROJECT_TASK_RELEASE,
+        ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE, ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD,
+        ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ,
         ActionId.TASK_QUEUE_READ, ActionId.PROJECT_TASK_QUEUE_READ, ActionId.OPERATIONS_TASK_QUEUE_READ,
         ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,

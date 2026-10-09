@@ -1,11 +1,12 @@
 """Prepared binding parser for pre-submit checker materialization."""
 
+import json
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest
-from app.modules.authorization.runtime import PreSubmitCheckerInputPreparationContext
+from app.modules.authorization.runtime import PreSubmitCheckerInputPreparationContext, TaskImportSourceResourceContext
 from app.modules.authorization.submission_consumption import parse_consumption_binding
 from app.modules.authorization.submission_preparation import (
     parse_submission_preparation_or_invalid, submission_preparation_binding_fields,
@@ -32,6 +33,16 @@ def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
 def parse_prepared_artifact_bindings(action_id: ActionId, raw: dict, invalid_error) -> dict:
     """Bind only the exact artifact facts owned by the selected prepared action."""
     fields = {}
+    if action_id in {
+        ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE, ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD,
+        ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ,
+    }:
+        try:
+            source = TaskImportSourceResourceContext.model_validate_json(json.dumps(raw))
+        except (TypeError, ValueError) as exc:
+            raise invalid_error("invalid prepared authorization handle") from exc
+        fields.update(exact_artifact_context=source.model_dump(mode="json"),
+                      exact_artifact_resource_digest=authorization_resource_digest(source))
     if action_id is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE:
         context, digest = parse_materialization_binding(raw, invalid_error)
         fields.update(exact_artifact_context=context, exact_artifact_resource_digest=digest)

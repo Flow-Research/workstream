@@ -32,6 +32,7 @@ from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.authorization.task_authorization import PreparedTaskAuthorization
+from app.modules.authorization.task_import_sources import PreparedTaskImportSourceAuthorization
 from app.modules.authorization.guide_compilation_projections import (
     ArtifactPolicyProjectionAuthorization,
     GuideSufficiencyProjectionAuthorization,
@@ -48,6 +49,13 @@ def task_authorization(
 ) -> PreparedTaskAuthorization:
     """Compose exact task authority in AUTH's registered composition root."""
     return PreparedTaskAuthorization(session, context)
+
+
+def task_import_source_authorization(
+    session: AsyncSession, context: AuthorizationContext,
+) -> PreparedTaskImportSourceAuthorization:
+    """Compose exact source authority in AUTH's registered owner root."""
+    return PreparedTaskImportSourceAuthorization(session, context)
 
 
 def guide_sufficiency_projection_authorization(
@@ -90,6 +98,7 @@ def contribution_policy_authorization(
 __all__ = (
     "assignment_invalidation_publication",
     "task_authorization",
+    "task_import_source_authorization",
     "guide_compilation_request_authority",
     "guide_compilation_execution_authority",
     "ContributionPolicyAuthorization",

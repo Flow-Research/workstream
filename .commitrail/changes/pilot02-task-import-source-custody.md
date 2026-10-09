@@ -1,0 +1,122 @@
+# PILOT-02A — Retain declared task-import JSON under ART custody
+
+- Initiative: `None`
+- Durable disposition: `Planned`
+- Intended merge outcome: A covered Project Manager declares, uploads and reads a project-bound canonical JSON task-import source with exact byte commitments and ART recovery custody.
+
+## Intent
+
+Issue [489](https://github.com/Flow-Research/workstream/issues/489) requires atomic
+DRAFT task imports whose exact received JSON remains under ART custody. This
+prerequisite makes that source usable without bypassing the existing storage
+owner. It does not create a Task or claim that a batch was imported.
+
+## Current behavior
+
+`tasks/authorized_commands.py` owns manager task commands, current authority and
+task-specific audit. `artifacts/service.py` owns prepared scratch, durable
+admission, provider operations, verification and recovery; its closed producer
+set contains guide sources, checker outputs and submission bundles only.
+`ArtifactStore` does not expose deletion and retained records are immutable.
+Neither a typed task-import source nor its PM read authority exists.
+
+## Bounded change
+
+### Allowed
+
+- `backend/app/modules/artifacts/`: project-bound task-import source declaration,
+  admission, verified read, source status and existing recovery integration.
+- `backend/app/modules/tasks/api/task_import.py` and
+  `contracts/task-import.schema.json`: canonical JSON used by live source upload.
+- `backend/app/modules/authorization/`: import-source-specific closed actions,
+  typed exact resource commitment, covered PM authority and preparation.
+- `backend/app/interfaces/artifact_operations.py`, composition-root artifact
+  adapters and public router registration: typed source operations and wiring.
+  Source composition uses the existing `adapters/artifacts/__init__.py` and
+  `adapters/auth/__init__.py` roots; no private-import debt is added.
+- Backend tests for source validation, exact bytes, authority, concurrency,
+  idempotent rollback, PostgreSQL custody and MinIO/provider recovery.
+- One migration authored solely by the coordinated backend migration owner;
+  required schema fingerprint updates follow that migration.
+- Scoped current ART/TASK/AUTH specs, README, roadmap and boundary manifests.
+  `backend/scripts/behavior_ownership.py`, its exact source target partition,
+  `backend/scripts/test_lane_catalogue.py` and the existing AUTH structure debt
+  ledger receive only additive source coverage or debt-removal reconciliation.
+  The cohesive existing ART AUTH contexts move into
+  `authorization/domain/artifact_storage.py`; the runtime facade retains its
+  existing typed contracts and union while shrinking its frozen structure debt.
+
+### Not allowed
+
+- Task creation, batch screen/release, contributor task creation, external
+  adapters, CLI conversion, per-row transactions, guide prerequisite changes.
+- A second storage lifecycle, direct product filesystem/provider access,
+  uncontrolled object deletion, checker subsystem changes or weakened CI.
+- Merge, deployment, issue closure or starting the next bounded chunk.
+
+## Design and decisions
+
+A durable ART declaration is the parent of every admitted upload attempt. Its
+project, exact SHA-256, byte count and JSON media type are immutable. Declaration
+replay uses the project/idempotency-key namespace and requires current PM
+authority. Upload validates the published 1..500-row canonical JSON contract
+and exact declared bytes before durable admission. Existing ART scratch,
+admission, put, verification and scanner owners perform byte work.
+
+Failed or abandoned declarations and admitted sources remain retained governed
+ART records, available through current authorized status/read operations when
+their bytes verify. They have never represented imported tasks. The existing
+immutable retention contract supplies custody; this change does not promise
+object deletion or introduce a retention scheduler. A later atomic TASK import
+will bind a verified source receipt and batch receipt in its root transaction.
+
+External task IDs are required, case-sensitive strings of at most 200 characters
+without surrounding whitespace; duplicate IDs inside a document fail before
+durable admission. Existing project/task conflicts are checked by the future
+TASK import owner. JSON bytes are UTF-8, with no duplicate object members or
+non-finite numeric values. The received JSON is the retained source, including
+when a client converts a CSV; it is never described as the original CSV.
+
+## Acceptance criteria
+
+- [ ] A covered PM declares/uploads a 200-row JSON source and downloads identical
+  verified bytes, SHA-256 and byte count through public routes on MinIO.
+- [ ] Invalid rows, duplicate IDs, 501 rows, malformed JSON and mismatched
+  declared bytes create no admitted attempt or stored source content.
+- [ ] Same-key exact declaration/upload replay returns original source facts;
+  changed payload/key binding conflicts and revoked-authority replay is denied.
+- [ ] Concurrent declaration/upload cannot duplicate source custody; PostgreSQL
+  rejects foreign-project/source-byte substitution and declaration mutation.
+- [ ] Provider uncertainty recovers through existing ART attempts/scanners with
+  retained declared-source custody and no task/batch effects.
+
+## Risk and review routing
+
+- Risk class: `L0`
+- Required reviewers: architecture, security, QA, test delta and documentation;
+  implementation/evidence review coordinated by the lead.
+- Human review focus: typed source role, fresh PM authority, immutable failed
+  source retention and the explicit remaining atomic task-import boundary.
+
+## Evidence
+
+| Claim | Command or proof | Result | Remaining uncertainty |
+|---|---|---|---|
+| Existing owner reuse | ART admission/put/verification and TASK command tracing | Closed producer gap identified | New typed source extension requires verification |
+| Canonical JSON and closed action mapping | Focused TASK parser and AUTH catalogue tests | 36 passed; 200 rows, ambiguity, indexed errors, strict field bounds and published schema parity | Pure rules only |
+| Boundary and documentation coherence | Protected-base module/AUTH validation, structure and behavior-ownership validation, Ruff, changed Markdown links and stale AUTH/ART contract checks | Passed without new private-import debt; exact source metadata reconciled | Reconcile union after PILOT-04 merges |
+| Existing architecture and CI metadata invariants | Module/AUTH regressions and structure/ownership/lane regressions | 130 focused tests passed; metadata suite 227 passed with one stale exact lane expectation repaired and its focused replay passed | Full integration lanes await schema handoff |
+| Exact byte custody and rollback | 15 collected public API PostgreSQL/MinIO negative/concurrency/recovery cases | Not executed: ordered source migration pending | No live custody or deployment claim |
+
+## Review findings
+
+No review findings yet.
+
+## Reconciliation
+
+- Current-source reconciliation: baseline main `baa7ae7c1bce9c3769453620f4aa0b22fe13fe3e` includes PR 517 guide-setup CLI inspection; source REST documentation preserves that delivered capability. Open PRs 516 and 518 remain undelivered and require reconciliation before freezing.
+- Next usable boundary: atomic DRAFT TASK import from verified source, then explicit batch screen/release and CLI conversion in separately authorized bounded changes.
+- Remaining risks: source retention has no deletion scheduler; full issue 489 remains open.
+- Schema handoff: PILOT-04 owns the next linear migration; the sole coordinated
+  migration author supplies this source migration only after that change merges
+  and current main is reconciled. No alternative DDL or schema bypass is used.

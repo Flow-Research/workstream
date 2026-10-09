@@ -111,7 +111,11 @@ active exact-project Submitters or Reviewers, without Finance internals or claim
 authority. ARCH-03C5 adds exact-authorized Contributor/Manager
 detail and requirements. ARCH-03C6 adds
 separate exact-authorized locked-context reads. ARCH-03C7 adds bounded public
-Audit Authority history access. ARCH-03D connects hidden intake through durable intent to the activated historical
+Audit Authority history access. PILOT-02A adds project-bound canonical JSON
+source declaration, upload, status and verified download using ART custody and
+current PM authority. Source storage creates no Tasks; atomic DRAFT import,
+explicit batch screen/release and CLI conversion remain the next PILOT-02 work.
+ARCH-03D connects hidden intake through durable intent to the activated historical
 guide using canonical owner ports. ARCH-04B adds hidden verified Submission input
 with scoped async access. ARCH-04B2 adds hidden typed checker-output storage,
 byte-free recovery and flush-only verified binding over generic ART
@@ -224,6 +228,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody | Public intake cutover after evaluation/remediation prerequisites |
 | Contribution policy administration | **Public Finance policy workflow; binding administration internal** | Internal Finance Authority adapter-binding lifecycle; public ContributionPolicy discovery/read/create/update/publish/retire with exact Finance Authority and recoverable draft selectors; immutable operation and event history; internal exact selected-version validation; CP07 binding with live exact-project manager authority of the selected published version to the active guide generation | Public intake cutover after evaluation/remediation prerequisites |
 | Task readiness and claim | **Foundation with grant-backed manager and contributor commands** | Task records, assignments and locked work context; guide-bound ContributionPolicyVersion locked before `READY` and copied to TaskAssignment; detached project/guide display; public project-scoped ready, management and operational queues with distinct current grant authority and signed bounded live pagination; public contributor/management detail with exact project and assignment authority; separate current live work-context projections with exact receipt-selected review/revision/ContributionPolicy identities and no obsolete economic fields; explicit management/operational/audit locked-context projections using one historical resolver, with separate public manager, system-Operator and Audit Authority access; immutable contributor/management requirements using one historical translator, with public exact Contributor and Manager authority; bounded public Audit Authority lifecycle evidence with atomic project/task scoping and exact transition references; public manager create/screen/release use exact covered Project Manager authority, atomic audit and replay; claim/start/contributor context use exact-project Submitter grants; assigned context lists documents only and distinct `task.guide.read` verifies locked originals before delivery; separate manager context and system-Operator start; durable claim/start retry receipts with fresh authority and exact assignment checks; hidden exact-assignment invalidation with committed cause verification, delivery fencing, exact fixed-service authority and decision-bound immutable release evidence; atomic authority-loss publication and registered prefork delivery; PILOT-14 exposes both locked contribution types in ready rows and Contributor detail for exact-project Submitters or Reviewers as unpaid or exact instrument/unit/quantity awards, without Finance binding facts | Public intake cutover follows evaluation/remediation prerequisites |
+| Bulk task source custody | **Public source foundation; atomic import planned** | PILOT-02A covered-PM project-bound declaration, canonical 1..500-row JSON upload with exact SHA/count, fresh-authority replay, source status and independently verified download; immutable declared parent and existing ART automatic put/verification recovery; no Tasks created | Atomic all-or-nothing DRAFT import with exact source/batch receipts and project/external-ID uniqueness; separate explicit batch screen/release; CLI conversion |
 | Contributor artifact preparation | **Hidden and proven** | One outer ZIP; bounded scratch inspection; canonical manifest; shared evaluation-content capacity and exact locked-policy checks before attempts or durable intent; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission; hidden final handoff validates the exact activated historical guide through owner ports | Complete the later public admission-only cutover |
 | Pre-submission intake checking | **Hidden with approved-guide lineage** | Separate versioned pre-submission catalogue, locked effective-plan compilation, platform/project checks during continuous preparation, blocking feedback before Submission creation, and one internal phase command covering execution/replay with the JSON precheck removed; ARCH-03D connects approved-guide lineage through the final durable handoff | Complete the canonical public cutover after evaluation/remediation prerequisites; passing intake must never substitute for post-submit evaluation |
 | Immutable Submission creation | **Hidden foundation; public packet creation retired** | Contributor preparation authority; durable pre-submit reservation and exact completed-evidence recovery without rerunning checks; atomic admission consumption; TASK-owned admission-backed creation with exact assignment ContributionPolicyVersion, locked policy lineage and service/database checked-packet custody; fixed-service artifact binding; replay/concurrency/rollback proof | Finish downstream evaluation and the canonical public integration. The retained submission-list GET is not a usable creation POST |
@@ -332,6 +337,11 @@ cannot be reused as post-submission review-gate evidence. See the
   [CLI project inspection](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-03.md)
   adds the existing public project read, preserving server-selected full/minimal
   fields and concealed foreign/revoked/suspended denials.
+  [PILOT-02A task-import source custody](../.commitrail/changes/pilot02-task-import-source-custody.md)
+  adds public covered-PM declaration, exact JSON upload, status and verified
+  download with immutable failed/abandoned-source retention and existing ART
+  automatic recovery. It creates no Tasks; issue 489 retains atomic DRAFT
+  import, explicit batch screen/release and CLI conversion as future boundaries.
   [CLI manager task browsing](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-04.md)
   adds one-page task discovery and exact task detail through existing manager
   reads, with server-owned live authority and opaque continuation.
@@ -591,7 +601,10 @@ The broader v0.1 sequence below retains later scope:
    ARCH-03C5 supplies exact-authorized detail and requirements; ARCH-03C6 supplies
    distinct locked-context reads; ARCH-03C7 supplies bounded public Audit Authority
    history access. AUTH-18 exposes manager activation context and the canonical
-   guide activation POST. Guide activation requires exact
+   guide activation POST. PILOT-02A supplies canonical JSON import-source custody;
+   atomic DRAFT import and explicit batch screen/release remain required for
+   bulk task intake. The source prerequisite does not change guide locks or
+   create Tasks. Guide activation requires exact
    current compilation, sufficiency, separate pre/post approvals, review/revision
    inputs and an explicitly selected published ContributionPolicyVersion.
    Registered checker implementations and configuration are checked without a
@@ -738,6 +751,7 @@ Delivered foundations (not a claim of full public integration)
   shared dispatcher + exact-authorized hidden assignment invalidation
   ARCH-03C2 invalidation producer + first handler registration
   ARCH-03C3 exact manager task create/screen/release + replay
+  PILOT-02A public canonical JSON source custody (no Task/batch creation)
   ARCH-03C4 exact-authorized public task queues and ARCH-03C5 detail/requirements
   ARCH-03C6 distinct exact-authorized locked-context reads
   ARCH-03C7 bounded exact-authorized Audit Authority task history

@@ -26,18 +26,6 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "2f9f25aad00519e3715ac3a12144aff6d1d08da1ab1ff7f6da20700286adca02",
-      "end_line": 1243,
-      "hard_limit": 1200,
-      "kind": "production_file",
-      "observed_lines": 1243,
-      "path": "backend/app/modules/authorization/runtime.py",
-      "qualified_symbol": null,
-      "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1
-    },
-    {
-      "capability": "oversized_authorization_structure",
       "content_sha256": "3a02a5b9ede4304b1fd126a51794324d78028448a0f7d1af860f1c8eed7eeec4",
       "end_line": 526,
       "hard_limit": 100,
@@ -63,14 +51,14 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "e70030fa8e350cfb2d5a98205612cc4c7364e13e2fc3ac5fbb3c065550249fd7",
-      "end_line": 938,
+      "end_line": 946,
       "hard_limit": 100,
       "kind": "production_function",
       "observed_lines": 118,
       "path": "backend/app/modules/authorization/prepared.py",
       "qualified_symbol": "PreparedAuthorizationService._binding",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 821
+      "start_line": 829
     },
     {
       "capability": "oversized_authorization_structure",

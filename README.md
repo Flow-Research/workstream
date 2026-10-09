@@ -118,7 +118,12 @@ same governed lifecycle while retaining their own user experience and operating
 model.
 
 Source-agnostic does not mean every source adapter is already implemented.
-v0.1 remains manual-first with controlled manual, Markdown, and CSV intake.
+v0.1 remains manual-first. Project Managers can declare, upload, inspect and
+download an exact verified canonical JSON task-import source through the
+[public ART contract](docs/spec_artifact_storage_service.md#task-import-source-custody).
+Source custody creates no Tasks; atomic DRAFT import, explicit batch screening
+and release, and CLI conversion remain planned. A client-converted CSV retains
+its received JSON rather than claiming original CSV custody.
 External origin onboarding, external task-routing systems, and execution workspaces remain
 later adapters. Revision and reassignment belong to the governed lifecycle;
 adjudication remains a separately approved future capability rather than a
