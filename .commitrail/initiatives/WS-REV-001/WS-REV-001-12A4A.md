@@ -93,7 +93,8 @@ remain the subsequent ARCH-04E2-B prerequisite before a production consumer.
   tests and shared fixtures. Existing production inventory tests prove absent
   surfaces; do not create a parallel registry.
 - Exact behavior ownership and lane inventory files/tests; shrink affected frozen AUTH structural debt through cohesive owner extraction, then refresh fingerprints without adding debt or relaxing limits. No CI gate changes.
-- This record; REV/AUTH/CON/ARCH/POL current overviews, ARCH/AUTH/POL current
+- This record; REV/AUTH/CON/ARCH/POL current overviews, the CLI current overview
+  for merged guide-format consistency, ARCH/AUTH/POL current
   plans/maps, Commitrail index; canonical review/compensation specifications,
   relevant authorization custody, operations and roles/permissions docs, canonical authorization/data-model specifications, README and roadmap. Local roadmap exports
   only if present. Historical completed records remain historical.
