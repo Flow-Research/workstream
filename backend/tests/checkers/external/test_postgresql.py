@@ -228,6 +228,7 @@ async def test_numeric_schema_and_exact_size_boundary_share_database_encoding(
     )
     numeric_document = {
         "type": "object",
+        "description": "line\n\t\bsnowman:☃",
         "properties": {"rate": {"type": "number", "minimum": 1e-6}},
     }
     numeric_schema = ExternalCheckerSchema(

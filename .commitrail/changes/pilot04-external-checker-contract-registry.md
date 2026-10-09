@@ -220,6 +220,10 @@ code, plugins or authority.
   unconditional match. Focused service and PostgreSQL regressions now vary the
   registry ID, image, schema and resources with valid derived request digests and
   prove conflict, audit rollback and unchanged stored facts.
+- Independent review found that JSON strings or object keys containing U+0000
+  passed the DTO canonicalizer but PostgreSQL JSONB cannot store them. The
+  checker canonical boundary now rejects U+0000 recursively while retaining
+  ordinary Unicode and every other JSON-escaped control character.
 
 ## Reconciliation
 

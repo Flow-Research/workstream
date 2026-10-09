@@ -52,6 +52,23 @@ def test_registry_canonical_hash_uses_database_numeric_encoding() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "value",
+    (
+        {"unsafe\x00key": "value"},
+        {"safe": "unsafe\x00value"},
+    ),
+)
+def test_registry_canonical_json_rejects_jsonb_untranslatable_nul(value: dict) -> None:
+    with pytest.raises(ExternalCheckerContractError, match="not canonical JSON"):
+        external_checker_json_hash(value)
+
+
+def test_registry_canonical_json_accepts_other_unicode_controls() -> None:
+    value = {"snowman-☃\n": "line\n\t\bsnowman:☃"}
+    assert external_checker_json_hash(value).startswith("sha256:")
+
+
 def test_schema_size_uses_the_canonical_persisted_representation() -> None:
     overhead = len('{"description":"","type":"object"}'.encode())
     document = {"type": "object", "description": "x" * (MAX_SCHEMA_BYTES - overhead)}

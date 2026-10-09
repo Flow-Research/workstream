@@ -66,7 +66,7 @@ class ExternalCheckerValue(BaseModel):
 def _canonical_json(value: object) -> str:
     """Match PostgreSQL JSONB canonical scalars without changing shared hashes."""
     if isinstance(value, Mapping):
-        if any(type(key) is not str for key in value):
+        if any(type(key) is not str or "\x00" in key for key in value):
             raise ExternalCheckerContractError(
                 "external checker value is not canonical JSON"
             )
@@ -91,6 +91,10 @@ def _canonical_json(value: object) -> str:
             return "0.0"
         return format(Decimal(str(value)), "f")
     if type(value) is str:
+        if "\x00" in value:
+            raise ExternalCheckerContractError(
+                "external checker value is not canonical JSON"
+            )
         return json.dumps(value, ensure_ascii=False)
     raise ExternalCheckerContractError("external checker value is not canonical JSON")
 
