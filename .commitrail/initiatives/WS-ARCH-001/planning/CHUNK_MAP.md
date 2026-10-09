@@ -1,10 +1,10 @@
 # WS-ARCH-001 — Current remaining change map
 
-[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; completion routing is next. Production registration remains unavailable.
+[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; complete authorized outcomes precede completion-handler wiring. Production registration remains unavailable.
 
-Delivery priority: [first complete contributor milestone](PLAN.md#first-complete-contributor-milestone). Use its nine-step order and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
+Delivery priority: [first complete contributor milestone](PLAN.md#first-complete-contributor-milestone). Use its five remaining outcome groups and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
 
-[ARCH-04E1B-B4](../WS-ARCH-001-04E1BB4.md) binds Submission summary and attestation to the packet retained by intake, including database custody. Initial dispatch remains next and must bind exact receipts and fresh-authorized replay before connecting workers.
+[ARCH-04E1B-B4](../WS-ARCH-001-04E1BB4.md) binds Submission summary and attestation to the packet retained by intake, including database custody. B6 delivers atomic initial dispatch with exact receipts and fresh-authorized replay; B7 delivers hidden request handling. Authorized outcomes and completion delivery remain.
 
 [ARCH-04E1B-B3](../WS-ARCH-001-04E1BB3.md) retains the inspected ZIP manifest in immutable ART evidence and returns verified file metadata on admission consumption. ARCH-04E1B-B6 commits that content, exact authority, generation-one reservation and shared request event with each new Submission. No delivery handler or routing authority is activated.
 [ARCH-04E1B-B2](../WS-ARCH-001-04E1BB2.md) supplies exact source preparation through
@@ -22,8 +22,8 @@ future source-identity reservation. ARCH-04E2-A delivers strict hidden
 resource/preparation matching and a nominal fixed-router adapter through canonical
 PREP while the action remains planned/unavailable. CON-07 hidden submitter
 participation and complete frozen award-set staging/replay are delivered. REV-04C
-adds the hidden FinalAcceptance/TASK/CON participant. Remaining 04E1B-B work begins with atomic initial
-Submission/dispatch and B7 hidden request delivery before completion routing. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
+adds the hidden FinalAcceptance/TASK/CON participant. B6 atomic initial Submission/dispatch and B7 hidden request delivery are complete.
+Next, 04E2-B completes the authorized outcome operation before 04E1B-B completion delivery. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
 TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
 before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
