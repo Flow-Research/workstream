@@ -439,6 +439,7 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "task.post_submit.route",
     "review.lifecycle.activation.manage",
     "checker.post_submit.execute",
     "checker.post_submit.finalize",

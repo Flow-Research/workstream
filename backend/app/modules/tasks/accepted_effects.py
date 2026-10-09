@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.modules.tasks.api.accepted_effects import (
     TaskAcceptedEffectsFence,
@@ -72,29 +73,36 @@ class TaskAcceptedEffectsParticipant:
         self,
         request: TaskAcceptedEffectsRequest,
         manifest_id: UUID,
+        *,
+        source_authorization_decision_id: UUID,
+        recorded_by: UUID,
+        locked_review_policy_id: UUID,
+        expected_generation: int,
+        disposition: Literal["new", "replay"],
     ) -> None:
         """Reload and compare the actual immutable false-policy routing manifest."""
         checked = self._validate_request(request)
-        if type(manifest_id) is not UUID:
+        if not isinstance(manifest_id, UUID):
             raise TaskAcceptedEffectsUnavailable("task_accepted_effects_unavailable")
-        source = await self._repository.read_routing_manifest(
-            manifest_id=manifest_id,
-            project_id=checked.project_id,
-            task_id=checked.task_id,
-            submission_id=checked.submission_id,
+        valid = await self._session.scalar(
+            text(
+                "SELECT public.task_routing_acceptance_matches(:manifest, :acceptance, :decision, "
+                ":actor, :project, :task, :submission, :policy, :generation, :is_new)"
+            ),
+            {
+                "manifest": manifest_id,
+                "acceptance": checked.final_acceptance_id,
+                "decision": source_authorization_decision_id,
+                "actor": recorded_by,
+                "project": checked.project_id,
+                "task": checked.task_id,
+                "submission": checked.submission_id,
+                "policy": locked_review_policy_id,
+                "generation": expected_generation,
+                "is_new": disposition == "new",
+            },
         )
-        if source is None or not (
-            UUID(source.project_id) == checked.project_id
-            and UUID(source.task_id) == checked.task_id
-            and UUID(source.submission_id) == checked.submission_id
-            and source.submission_version == checked.submission_version
-            and UUID(source.assignment_id) == checked.assignment_id
-            and UUID(source.contributor_id) == checked.contributor_id
-            and source.contribution_policy_version_id
-            == checked.contribution_policy_version_id
-            and source.content_sha256 == checked.content_sha256
-            and source.human_review_required is False
-        ):
+        if valid is not True:
             raise TaskAcceptedEffectsUnavailable("task_accepted_effects_unavailable")
 
     async def _lock_and_validate(

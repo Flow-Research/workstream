@@ -1,4 +1,4 @@
-"""Detached immutable TASK source evidence for future post-submit routing."""
+"""Immutable TASK routing requests and authorized outcome custody."""
 
 from __future__ import annotations
 
@@ -18,13 +18,14 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from app.db.base import Base
 
 
 class TaskPostSubmitRoutingManifest(Base):
-    """One immutable route-neutral source fact; no routing authority or currentness."""
+    """One immutable exact source, consumed routing authority and outcome identity."""
 
     __tablename__ = "task_post_submit_routing_manifests"
     __table_args__ = (
@@ -123,6 +124,37 @@ class TaskPostSubmitRoutingManifest(Base):
             ondelete="RESTRICT",
         ),
         nullable=False,
+    )
+    authorization_decision_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("audit_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    router_actor_id: Mapped[UUID] = mapped_column(
+        Uuid(), ForeignKey("actor_profiles.id"), nullable=False
+    )
+    router_identity_link_id: Mapped[UUID] = mapped_column(
+        Uuid(), ForeignKey("actor_identity_links.id"), nullable=False
+    )
+    authority_context: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    final_acceptance_id: Mapped[UUID | None] = mapped_column(
+        Uuid(),
+        ForeignKey("final_acceptances.id", deferrable=True, initially="DEFERRED"),
+        unique=True,
+    )
+    authorized_lifecycle_generation: Mapped[int | None] = mapped_column(BigInteger)
+    audit_event_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("audit_events.id", deferrable=True, initially="DEFERRED"),
+        nullable=False,
+        unique=True,
+    )
+    outcome_event_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("outbox_events.event_id", deferrable=True, initially="DEFERRED"),
+        nullable=False,
+        unique=True,
     )
     human_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False)
     replica_id: Mapped[str] = mapped_column(

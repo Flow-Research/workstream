@@ -66,7 +66,10 @@ async def next_lease(h, borrowed=None, *, shadow=False):
             return lease
 
 
-@pytest.mark.parametrize("substitution", ["previous_lease", "foreign_attempt", "material_read", "nonexistent", "shadow_tables"])
+@pytest.mark.parametrize(
+    "substitution",
+    ["previous_lease", "foreign_attempt", "material_read", "nonexistent", "shadow_tables"],
+)
 async def test_execute_receipt_substitution_rejected(tmp_path, isolated_database_env, substitution, monkeypatch):
     import app.modules.checkers.execution as execution
     monkeypatch.setattr(execution, "LEASE_SECONDS", 5)
@@ -102,8 +105,11 @@ async def test_execute_receipt_substitution_rejected(tmp_path, isolated_database
 
 
 @pytest.mark.parametrize("substitution", ["result", "material", "execute_chain"])
-async def test_final_receipt_commits_only_exact_outcome(tmp_path, isolated_database_env, substitution, monkeypatch):
+async def test_final_receipt_commits_only_exact_outcome(
+    tmp_path, isolated_database_env, substitution, monkeypatch
+):
     import app.modules.checkers.execution as execution
+
     if substitution == "execute_chain":
         monkeypatch.setattr(execution, "LEASE_SECONDS", 1)
     async with material_fixture(tmp_path, isolated_database_env) as h:
@@ -115,7 +121,7 @@ async def test_final_receipt_commits_only_exact_outcome(tmp_path, isolated_datab
                 old_execute = UUID((await session.get(CheckerRun, str(lease.reservation.attempt_id))).execute_evidence_id)
             await wait_for_expiry(h, lease)
             lease = await next_lease(h)
-        source = final_facts(h, lease)
+        source = await final_facts(h, lease)
         result = make_post_submit_result(
             request_id=h.request.evaluation_request_id, request_digest=h.request.request_sha256,
             attempt_id=lease.reservation.attempt_id, result_id=lease.reservation.result_id,
@@ -167,14 +173,24 @@ async def test_terminal_receipt_digest_matches_database(tmp_path, isolated_datab
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         if outcome == "infrastructure_failed":
-            facts = facts.model_copy(update={"material": None, "result": make_post_submit_result(
-                request_id=h.request.evaluation_request_id, request_digest=h.request.request_sha256,
-                attempt_id=lease.reservation.attempt_id, result_id=lease.reservation.result_id,
-                evaluation_generation=h.request.evaluation_generation, outcome=outcome,
-                member_results=(), infrastructure_failure_code="material_unavailable",
-            )})
+            facts = facts.model_copy(
+                update={
+                    "material": None,
+                    "input_materialization_evidence_id": None,
+                    "result": make_post_submit_result(
+                        request_id=h.request.evaluation_request_id,
+                        request_digest=h.request.request_sha256,
+                        attempt_id=lease.reservation.attempt_id,
+                        result_id=lease.reservation.result_id,
+                        evaluation_generation=h.request.evaluation_generation,
+                        outcome=outcome,
+                        member_results=(),
+                        infrastructure_failure_code="material_unavailable",
+                    ),
+                }
+            )
         assert await executor.finalize(facts) == facts.result
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
@@ -186,20 +202,32 @@ async def test_terminal_receipt_digest_matches_database(tmp_path, isolated_datab
 
 @pytest.mark.parametrize("missing_execute", [True, False])
 async def test_final_receipt_independently_requires_execute_receipt(
-    tmp_path, isolated_database_env, missing_execute,
+    tmp_path,
+    isolated_database_env,
+    missing_execute,
 ):
     """Isolate semantic receipt custody from the earlier run-state/immutability guard."""
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
-        facts = facts.model_copy(update={"material": None, "result": make_post_submit_result(
-            request_id=h.request.evaluation_request_id, request_digest=h.request.request_sha256,
-            attempt_id=lease.reservation.attempt_id, result_id=lease.reservation.result_id,
-            evaluation_generation=h.request.evaluation_generation, outcome="infrastructure_failed",
-            member_results=(), infrastructure_failure_code="material_unavailable",
-        )})
+        facts = await final_facts(h, lease)
+        facts = facts.model_copy(
+            update={
+                "material": None,
+                "input_materialization_evidence_id": None,
+                "result": make_post_submit_result(
+                    request_id=h.request.evaluation_request_id,
+                    request_digest=h.request.request_sha256,
+                    attempt_id=lease.reservation.attempt_id,
+                    result_id=lease.reservation.result_id,
+                    evaluation_generation=h.request.evaluation_generation,
+                    outcome="infrastructure_failed",
+                    member_results=(),
+                    infrastructure_failure_code="material_unavailable",
+                ),
+            }
+        )
         await executor.finalize(facts)
         before = await snapshot(h)
         replacement = new_record_id()
@@ -240,3 +268,51 @@ async def test_final_receipt_independently_requires_execute_receipt(
                 run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
                 assert run.execute_evidence_id == original_execute
                 assert run.finalize_evidence_id == str(replacement)
+
+
+@pytest.mark.parametrize("substitution", ["missing", "execute_receipt"])
+async def test_material_terminal_requires_its_actual_input_receipt(
+    tmp_path,
+    isolated_database_env,
+    substitution,
+):
+    """Keep terminal material/result valid and isolate the retained input AUTH join."""
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        await reserve(h)
+        executor = live_executor(h)
+        lease, _ = await executor._claim(h.request)
+        facts = await final_facts(h, lease)
+        async with h.factory() as session:
+            execute = UUID(
+                (
+                    await session.get(CheckerRun, str(lease.reservation.attempt_id))
+                ).execute_evidence_id
+            )
+        before = await snapshot(h)
+        async with h.factory() as session:
+            await session.begin()
+            async with post_submit_execution_authority(session).prepare_finalization(
+                h.request
+            ) as prepared:
+                final = await prepared.consume(
+                    FinalizeAuthorityFacts(**facts.model_dump(), execute_evidence_id=execute)
+                )
+                staged = facts.model_copy(
+                    update={
+                        "input_materialization_evidence_id": None
+                        if substitution == "missing"
+                        else execute
+                    }
+                )
+                await stage_terminal(
+                    session, staged, facts.material.model_dump(mode="json"), final.evidence_id
+                )
+                with pytest.raises(
+                    IntegrityError, match="checker input authorization custody mismatch"
+                ):
+                    await session.execute(
+                        text("SET CONSTRAINTS public.checker_input_receipt_custody IMMEDIATE")
+                    )
+            await session.rollback()
+        assert await snapshot(h) == before
+        assert await executor.finalize(facts) == facts.result

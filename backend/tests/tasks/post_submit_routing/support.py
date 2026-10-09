@@ -19,7 +19,7 @@ from app.modules.projects.models import (
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.post_submit_routing import TaskPostSubmitManifestFacts
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-from app.modules.tasks.models import Submission, TaskAssignment, WorkstreamTask
+from app.modules.tasks.models import Submission, SubmissionDispatch, TaskAssignment, WorkstreamTask
 from tests.checkers.execution.support import live_executor, reserve
 from tests.checkers.post_submit.support import change_request
 from tests.post_submit_materialization_helpers import material_fixture
@@ -170,6 +170,9 @@ async def joined_source_facts(h, stored: dict) -> TaskPostSubmitManifestFacts:
             else None
         )
         run = await session.get(CheckerRun, str(stored["checker_run_id"]))
+        dispatch = await session.scalar(
+            select(SubmissionDispatch).where(SubmissionDispatch.submission_id == submission.id)
+        )
     material = run.material_custody
     lineage = TaskPolicyLineage(
         locked_guide_version=submission.locked_guide_version,
@@ -218,6 +221,9 @@ async def joined_source_facts(h, stored: dict) -> TaskPostSubmitManifestFacts:
         ),
         predecessor_submission_version=predecessor.version if predecessor else None,
         admission_id=as_uuid(material["admission_id"]),
+        creation_decision_id=as_uuid(dispatch.creation_decision_id),
+        binding_decision_id=as_uuid(dispatch.binding_decision_id),
+        input_materialization_evidence_id=as_uuid(run.input_materialization_evidence_id),
         binding_id=as_uuid(material["binding_id"]),
         content_id=as_uuid(material["content_id"]),
         locked_policy=lineage,
@@ -233,15 +239,16 @@ async def completed_source(
     provision_services=True,
     storage_settings=None,
     contribution_awards=(),
-    material_source=material_fixture,
+    human_review_required=True,
 ):
     """Yield one real authorized allow-review run and its valid source scalars."""
-    async with material_source(
+    async with material_fixture(
         tmp_path,
         database_url,
         provision_services=provision_services,
         storage_settings=storage_settings,
         contribution_awards=contribution_awards,
+        human_review_required=human_review_required,
     ) as h:
         await reserve(h)
         result = await live_executor(h).evaluate_post_submission(h.request)

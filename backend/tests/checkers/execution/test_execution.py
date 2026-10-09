@@ -143,7 +143,7 @@ async def test_action_authority_is_not_interchangeable(
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
 
         # Hold the other boundary valid so each type guard is independently exercised.
         class WrongPrepared(
@@ -204,7 +204,7 @@ async def test_zero_output_finalization(tmp_path, isolated_database_env):
             assert slots.slots == ()
             with pytest.raises(CheckerOutputUnavailable, match="slot_unavailable"):
                 slots.select(selector)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         with pytest.raises(ValidationError):
             await executor.finalize(
                 facts.model_copy(update={"output_binding_ids": (new_record_id(),)})
@@ -233,9 +233,10 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         from tests.authorization.post_submit.test_receipt_custody import snapshot
         from app.modules.tasks.models import AuditEvent
+
         before = await snapshot(h)
         async with h.factory() as session, session.begin():
             await session.execute(

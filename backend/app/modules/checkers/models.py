@@ -155,6 +155,10 @@ class CheckerRun(Base):
     result_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False, unique=True)
     result_json: Mapped[str | None] = mapped_column(Text)
     result_digest: Mapped[str | None] = mapped_column(String(71))
+    input_materialization_evidence_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey("audit_events.id", name="fk_checker_input_materialization_evidence"),
+    )
     material_custody: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
     completion_event_id: Mapped[UUID | None] = mapped_column(Uuid(), ForeignKey("outbox_events.event_id"))
     supersedes_checker_run_id: Mapped[str | None] = mapped_column(

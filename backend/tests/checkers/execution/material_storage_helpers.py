@@ -67,12 +67,28 @@ async def stage_terminal(session, facts, material, evidence_id):
             payload=event.model_dump(mode="json"),
         ))
         event_id = appended.event_id
-    await session.execute(update(CheckerRun).where(CheckerRun.id == run.id).values(
-        status=result.outcome, result_json=canonical_post_submit_bytes(result, exclude={"result_digest"}).decode(),
-        result_digest=result.result_digest, material_custody=material, finalize_evidence_id=str(evidence_id),
-        completed_at=func.clock_timestamp(), outcome_source="auto_checker",
-        routing_recommendation=classification.routing, failure_code=result.infrastructure_failure_code,
-        passed_count=classification.passed, warning_count=classification.warning,
-        failed_count=classification.failed, blocking_count=classification.blocking,
-        completion_event_id=event_id,
-    ))
+    await session.execute(
+        update(CheckerRun)
+        .where(CheckerRun.id == run.id)
+        .values(
+            status=result.outcome,
+            result_json=canonical_post_submit_bytes(result, exclude={"result_digest"}).decode(),
+            result_digest=result.result_digest,
+            material_custody=material,
+            finalize_evidence_id=str(evidence_id),
+            input_materialization_evidence_id=(
+                str(facts.input_materialization_evidence_id)
+                if facts.input_materialization_evidence_id is not None
+                else None
+            ),
+            completed_at=func.clock_timestamp(),
+            outcome_source="auto_checker",
+            routing_recommendation=classification.routing,
+            failure_code=result.infrastructure_failure_code,
+            passed_count=classification.passed,
+            warning_count=classification.warning,
+            failed_count=classification.failed,
+            blocking_count=classification.blocking,
+            completion_event_id=event_id,
+        )
+    )

@@ -4,7 +4,7 @@ from app.modules.checkers.api.post_submit import make_post_submit_request
 from uuid import UUID
 
 from app.modules.artifacts.models import SubmissionBundleAdmission
-from app.modules.checkers.api.execution import FinalizeFacts, VerifiedMaterialFacts
+from app.modules.checkers.api.execution import ExecuteFacts, FinalizeFacts, VerifiedMaterialFacts
 from app.modules.checkers.api.post_submit import PostSubmitMemberResult
 from app.adapters.checkers import evaluation_coordinator
 from app.modules.checkers.post_submit_contracts import (
@@ -85,9 +85,73 @@ async def seed_storage_run(factory, submission_id, *, failures=(), state="comple
         byte_count=request.byte_count,
         semantic_manifest_sha256=admission.semantic_manifest_sha256,
     )
+    input_receipt = await authorize_stored_material(
+        factory, ExecuteFacts(request=request, lease=lease), material
+    )
     await executor.finalize(
         FinalizeFacts(
-            request=request, lease=lease, result=result, material=material, output_binding_ids=()
+            request=request,
+            lease=lease,
+            result=result,
+            material=material,
+            input_materialization_evidence_id=input_receipt,
+            output_binding_ids=(),
         )
     )
     return str(receipt.attempt_id)
+
+
+async def authorize_stored_material(factory, execution, material):
+    """Issue real input AUTH over canonical rows for storage-only terminal fixtures.
+
+    This authorizes a read; it does not claim provider I/O was exercised. Real
+    materialization tests use the provider and compare this same retained receipt.
+    """
+    from sqlalchemy import select
+    from app.adapters.auth import post_submit_materialization_authority
+    from app.modules.artifacts.models import (
+        ArtifactReplica,
+        ArtifactStorageNamespace,
+        ArtifactVerificationReceipt,
+    )
+    from app.modules.checkers.api.materialization import MaterializationFacts
+
+    async with factory() as session, session.begin():
+        async with post_submit_materialization_authority(session).prepare_materialization(
+            execution
+        ) as prepared:
+            a, v, namespace = (
+                await session.execute(
+                    select(
+                        SubmissionBundleAdmission,
+                        ArtifactVerificationReceipt,
+                        ArtifactStorageNamespace,
+                    )
+                    .join(
+                        ArtifactVerificationReceipt,
+                        ArtifactVerificationReceipt.id
+                        == SubmissionBundleAdmission.verification_receipt_id,
+                    )
+                    .join(
+                        ArtifactReplica,
+                        ArtifactReplica.id == SubmissionBundleAdmission.verified_replica_id,
+                    )
+                    .join(
+                        ArtifactStorageNamespace,
+                        ArtifactStorageNamespace.id == ArtifactReplica.storage_namespace_id,
+                    )
+                    .where(SubmissionBundleAdmission.id == str(material.admission_id))
+                )
+            ).one()
+            return await prepared.consume(
+                MaterializationFacts(
+                    execution=execution,
+                    material=material,
+                    evidence_id=UUID(a.pre_submit_evidence_set_id),
+                    verification_receipt_id=UUID(v.id),
+                    verification_job_id=UUID(v.verification_job_id),
+                    verification_generation=v.execution_generation,
+                    namespace_fingerprint=namespace.namespace_fingerprint,
+                    semantic_manifest_id=UUID(a.semantic_manifest_id),
+                )
+            )

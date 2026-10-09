@@ -1,4 +1,4 @@
-"""Fixed router preparation through AUTH/PREP; the action remains unavailable."""
+"""Fixed router preparation, consumption and exact replay through canonical AUTH/PREP."""
 
 from contextlib import asynccontextmanager
 
@@ -29,9 +29,40 @@ class _PreparedRouting:
         self._handle = handle
         self._input = caller_input
 
-    async def consume(self, resource: PostSubmitRoutingResourceContext) -> AcceptanceSourceReceiptFacts:
+    @property
+    def actor_profile_id(self):
+        return self._authority.actor_profile_id
+
+    @property
+    def identity_link_id(self):
+        return self._authority.identity_link_id
+
+    async def consume(
+        self, resource: PostSubmitRoutingResourceContext
+    ) -> AcceptanceSourceReceiptFacts:
+        if (
+            resource.router_actor_id != self.actor_profile_id
+            or resource.router_identity_link_id != self.identity_link_id
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid routing authority principal")
         decision = await self._authority.service.consume(self._handle, ROUTE, self._input, resource)
         return self._receipt(decision, resource)
+
+    async def validate_replay(self, resource, decision_id, actor_id, identity_link_id):
+        if (
+            actor_id != resource.router_actor_id
+            or identity_link_id != resource.router_identity_link_id
+            or actor_id != self.actor_profile_id
+            or identity_link_id != self.identity_link_id
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid routing replay principal")
+        await self._authority.service.validate_replay(
+            self._handle,
+            ROUTE,
+            self._input,
+            resource,
+            decision_id,
+        )
 
     def _receipt(self, decision, resource):
         """Project only the returned decision; detached values remain untrusted."""
@@ -39,15 +70,23 @@ class _PreparedRouting:
         operation_id = resource.request.route_operation_id
         digest = post_submit_routing_resource_digest(resource)
         if not (
-            decision.allowed and decision.revalidated
+            resource.router_actor_id == self.actor_profile_id
+            and resource.router_identity_link_id == self.identity_link_id
+            and decision.allowed
+            and decision.revalidated
             and decision.denial_code is None
             and decision.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE
-            and decision.matched_grant_id is None and decision.matched_scope_project_id is None
-            and decision.action_id is ROUTE and decision.permission_id is PermissionId.TASK_POST_SUBMIT_ROUTE
+            and decision.matched_grant_id is None
+            and decision.matched_scope_project_id is None
+            and decision.action_id is ROUTE
+            and decision.permission_id is PermissionId.TASK_POST_SUBMIT_ROUTE
             and decision.resource_type == resource.resource_type
             and decision.resource_id == resource.resource_id
             and decision.resource_context_digest == digest
-            and decision.request_id == decision.correlation_id == self._input.idempotency_key == operation_id
+            and decision.request_id
+            == decision.correlation_id
+            == self._input.idempotency_key
+            == operation_id
             and self._input.request_value == post_submit_routing_prepare_values(resource.request)
         ):
             raise PreparedAuthorizationHandleInvalid("invalid routing authorization receipt")

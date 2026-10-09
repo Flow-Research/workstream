@@ -15,12 +15,14 @@ from .test_receipt_custody import snapshot
 
 
 @pytest.mark.parametrize("finalization_first", [True, False])
-async def test_revocation_and_finalization_serialize(tmp_path, isolated_database_env, monkeypatch, finalization_first):
+async def test_revocation_and_finalization_serialize(
+    tmp_path, isolated_database_env, monkeypatch, finalization_first
+):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         before = await snapshot(h)
         held, release = asyncio.Event(), asyncio.Event()
         original = _PreparedFinalize.consume
@@ -47,9 +49,11 @@ async def test_revocation_and_finalization_serialize(tmp_path, isolated_database
             first = asyncio.create_task(revoke_while_held())
         second = None
         waiting_pid = asyncio.Queue()
+
         def capture_waiter(connection, cursor, statement, parameters, context, executemany):
             if asyncio.current_task() is second and ("FOR UPDATE" in statement or statement.lstrip().lower().startswith("update actor_identity_links")):
                 waiting_pid.put_nowait(connection.connection.driver_connection.get_server_pid())
+
         event.listen(h.engine.sync_engine, "before_cursor_execute", capture_waiter)
         try:
             await asyncio.wait_for(held.wait(), 10)

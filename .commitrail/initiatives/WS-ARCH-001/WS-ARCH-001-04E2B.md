@@ -39,7 +39,8 @@ canonical contracts before activating the exact operation.
 
 ### Allowed
 
-- Existing TASK `api/post_submit_routing.py`, owner-local `post_submit_routing/`
+- Existing TASK `api/post_submit_routing.py`, immutable outcome identity values in
+  `api/routing_outcome.py`, owner-local `post_submit_routing/`
   request/source/models and cohesive outcome/consumer-port files; affected
   `repository.py` and `accepted_effects.py` only for exact outcome/replay custody.
 - Existing AUTH `api/acceptance_source.py`, `acceptance_source_contracts.py`,
@@ -57,6 +58,8 @@ canonical contracts before activating the exact operation.
   the current result discards. Reuse B6 creation/binding receipts; no reverse
   audit search or borrowed phase receipt. Keep pre-consumption material facts
   distinct from the post-consumption receipt, without a compatibility default.
+- PROJECTS `api/locked_policy.py` and `locked_policy_repository.py`, only for a
+  project-qualified nonlocking review-mode observation, revalidated under custody.
 - Existing TASK/REV/CON typed participants and explicit `app/adapters/` roots;
   shared AUDIT/outbox append participants and bounded outcome event contracts.
 - One successor migration after 0028, model registration if necessary, Alembic

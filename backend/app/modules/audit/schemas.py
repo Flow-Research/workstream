@@ -34,7 +34,7 @@ _ENTITY_TYPES = frozenset(
     }
 )
 _RESOURCE_TYPES = frozenset(
-    """joint_lifecycle_control checker_run outbox_event actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
+    """task_post_submit_routing_manifest joint_lifecycle_control checker_run outbox_event actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
     submission submission_creation submission_binding review contribution compensation_award compensation_delivery compensation_adapter_binding contribution_policy operations
     audit_event project_create_operation project_submission_artifact_policy_mutation
     project_guide_activation pre_submit_checker_input project_guide_compilation_request
@@ -165,6 +165,7 @@ class LifecycleAuditEntityType(StrEnum):
 class LifecycleAuditEventType(StrEnum):
     """Canonical REV/CON lifecycle facts admitted by the shared participant."""
 
+    TASK_POST_SUBMIT_ROUTED = "TaskPostSubmitRouted"
     TASK_CREATED = "TaskCreated"
     TASK_SCREENED = "TaskScreened"
     TASK_RELEASED = "TaskReleased"
@@ -225,6 +226,7 @@ class LifecycleAuditReferenceKind(StrEnum):
     REVIEW_FINDING = "review_finding_id"
     FINDING_RESOLUTION = "finding_resolution_id"
     SUBMISSION_FINDING_RESPONSE = "submission_finding_response_id"
+    ROUTING_MANIFEST = "routing_manifest_id"
     FINAL_ACCEPTANCE = "final_acceptance_id"
     CONTRIBUTION_RECORD = "contribution_record_id"
     COMPENSATION_AWARD = "compensation_award_id"
@@ -233,6 +235,7 @@ class LifecycleAuditReferenceKind(StrEnum):
 _LIFECYCLE_EVENT_ENTITY = {
     **dict.fromkeys(
         (
+            LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED,
             LifecycleAuditEventType.TASK_CREATED,
             LifecycleAuditEventType.TASK_SCREENED,
             LifecycleAuditEventType.TASK_RELEASED,
@@ -290,21 +293,41 @@ _LIFECYCLE_EVENT_ENTITY = {
 }
 
 _LIFECYCLE_EVENT_REQUIRED_REFERENCES = {
-    **dict.fromkeys((LifecycleAuditEventType.TASK_CREATED, LifecycleAuditEventType.TASK_SCREENED,
-                     LifecycleAuditEventType.TASK_RELEASED),
-                    frozenset({LifecycleAuditReferenceKind.AUTHORIZATION_DECISION})),
-    LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED: frozenset({
-        LifecycleAuditReferenceKind.ASSIGNMENT,
-        LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
-        LifecycleAuditReferenceKind.AUTHORITY_INVALIDATION,
-    }),
+    LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED: frozenset(
+        {
+            LifecycleAuditReferenceKind.ASSIGNMENT,
+            LifecycleAuditReferenceKind.SUBMISSION,
+            LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
+            LifecycleAuditReferenceKind.ROUTING_MANIFEST,
+        }
+    ),
+    **dict.fromkeys(
+        (
+            LifecycleAuditEventType.TASK_CREATED,
+            LifecycleAuditEventType.TASK_SCREENED,
+            LifecycleAuditEventType.TASK_RELEASED,
+        ),
+        frozenset({LifecycleAuditReferenceKind.AUTHORIZATION_DECISION}),
+    ),
+    LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED: frozenset(
+        {
+            LifecycleAuditReferenceKind.ASSIGNMENT,
+            LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
+            LifecycleAuditReferenceKind.AUTHORITY_INVALIDATION,
+        }
+    ),
     **dict.fromkeys(
         (
             LifecycleAuditEventType.TASK_CLAIMED,
             LifecycleAuditEventType.TASK_STARTED,
             LifecycleAuditEventType.TASK_START_OVERRIDDEN,
         ),
-        frozenset({LifecycleAuditReferenceKind.ASSIGNMENT, LifecycleAuditReferenceKind.AUTHORIZATION_DECISION}),
+        frozenset(
+            {
+                LifecycleAuditReferenceKind.ASSIGNMENT,
+                LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
+            }
+        ),
     ),
     LifecycleAuditEventType.REVIEW_ACCEPTED: frozenset(
         {LifecycleAuditReferenceKind.FINAL_ACCEPTANCE}
@@ -407,6 +430,12 @@ class LifecycleAuditEventInput(BaseModel):
                 LifecycleAuditEventType.TASK_STARTED: ("claimed", "in_progress"),
                 LifecycleAuditEventType.TASK_START_OVERRIDDEN: ("claimed", "in_progress"),
             }.get(self.event_type)
+            if self.event_type is LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED:
+                expected = (
+                    ("evaluation_pending", self.to_status)
+                    if self.to_status in {"review_pending", "accepted"}
+                    else None
+                )
             if self.event_type is LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED:
                 expected = (self.from_status, "ready") if self.from_status in {"claimed", "in_progress"} else None
             if expected != (self.from_status, self.to_status):

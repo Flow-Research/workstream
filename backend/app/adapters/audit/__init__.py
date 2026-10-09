@@ -150,3 +150,106 @@ class _AssignmentInvalidationAudit:
 def assignment_invalidation_audit(session: AsyncSession) -> AssignmentInvalidationAuditPort:
     """The existing typed lifecycle participant is the atomic release receipt."""
     return _AssignmentInvalidationAudit(session)
+
+
+class _TaskRoutingAudit:
+    def __init__(self, session):
+        self._session = session
+        self._participant = LifecycleAuditParticipant(session)
+        self._repository = AuditRepository(session)
+
+    async def record(self, *, audit_event_id, source, authority, economic, replay):
+        s = source.source
+        await self._record(
+            LifecycleAuditEventInput(
+                event_id=audit_event_id,
+                entity_type=LifecycleAuditEntityType.TASK,
+                entity_id=s.task_id,
+                event_type=LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED,
+                actor_id=authority.actor_id,
+                reason=LifecycleAuditReason.STATE_CHANGED,
+                from_status="evaluation_pending",
+                to_status="review_pending" if s.human_review_required else "accepted",
+                references={
+                    LifecycleAuditReferenceKind.PROJECT: s.project_id,
+                    LifecycleAuditReferenceKind.TASK: s.task_id,
+                    LifecycleAuditReferenceKind.SUBMISSION: s.submission_id,
+                    LifecycleAuditReferenceKind.ASSIGNMENT: s.assignment_id,
+                    LifecycleAuditReferenceKind.AUTHORIZATION_DECISION: authority.decision_id,
+                    LifecycleAuditReferenceKind.ROUTING_MANIFEST: s.id,
+                },
+            ),
+            replay,
+        )
+        if economic is None:
+            return
+        await self._fact(
+            LifecycleAuditEventType.SUBMITTER_CONTRIBUTION_RECORDED,
+            LifecycleAuditEntityType.CONTRIBUTION,
+            economic.contribution_record_id,
+            authority.actor_id,
+            {
+                LifecycleAuditReferenceKind.PROJECT: s.project_id,
+                LifecycleAuditReferenceKind.TASK: s.task_id,
+                LifecycleAuditReferenceKind.SUBMISSION: s.submission_id,
+                LifecycleAuditReferenceKind.ASSIGNMENT: s.assignment_id,
+                LifecycleAuditReferenceKind.FINAL_ACCEPTANCE: economic.final_acceptance_id,
+                LifecycleAuditReferenceKind.CONTRIBUTION_RECORD: economic.contribution_record_id,
+            },
+            replay,
+        )
+        for award_id in economic.award_ids:
+            await self._fact(
+                LifecycleAuditEventType.COMPENSATION_AWARD_CREATED,
+                LifecycleAuditEntityType.COMPENSATION_AWARD,
+                award_id,
+                authority.actor_id,
+                {
+                    LifecycleAuditReferenceKind.PROJECT: s.project_id,
+                    LifecycleAuditReferenceKind.COMPENSATION_AWARD: award_id,
+                    LifecycleAuditReferenceKind.CONTRIBUTION_RECORD: economic.contribution_record_id,
+                },
+                replay,
+            )
+
+    async def _fact(self, event_type, entity_type, entity_id, actor_id, references, replay):
+        if replay:
+            events = await self._repository.list_audit_events(entity_type.value, str(entity_id))
+            ids = [
+                event.id
+                for event in events
+                if event.event_type == event_type.value
+                and event.auth_source == LIFECYCLE_AUTH_SOURCE
+            ]
+            if len(ids) != 1:
+                raise ValueError("routing audit is incomplete")
+            event_id = UUID(ids[0])
+        else:
+            event_id = new_record_id()
+        await self._record(
+            LifecycleAuditEventInput(
+                event_id=event_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                event_type=event_type,
+                actor_id=actor_id,
+                reason=LifecycleAuditReason.FACT_RECORDED,
+                references=references,
+            ),
+            replay,
+        )
+
+    async def _record(self, value, replay):
+        if replay:
+            events = await self._repository.list_audit_events(
+                value.entity_type.value, str(value.entity_id)
+            )
+            if not any(event.id == str(value.event_id) for event in events):
+                raise ValueError("routing audit is incomplete")
+        # The shared participant compares every retained field on exact replay.
+        await self._participant.add_event(value)
+
+
+def task_routing_audit(session):
+    """Compose routing and economic evidence through the shared audit owner."""
+    return _TaskRoutingAudit(session)

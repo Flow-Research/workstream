@@ -59,6 +59,12 @@ class FinalAcceptance(Base):
     policy_context_ref: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("review_policies.id", ondelete="RESTRICT"), nullable=False
     )
+    source_authorization_decision_id: Mapped[UUID] = mapped_column(
+        Uuid(),
+        ForeignKey("audit_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
     accepted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
     )

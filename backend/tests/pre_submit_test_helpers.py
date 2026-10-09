@@ -110,7 +110,9 @@ def evidence_workflow(
     )
 
 
-async def approved_pre_submit_fixture(factory, namespace, *, guide_version, contribution_awards=()):
+async def approved_pre_submit_fixture(
+    factory, namespace, *, guide_version, contribution_awards=(), human_review_required=True
+):
     """Build supported PROJECTS custody before the ART evidence transaction."""
     from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
     from app.modules.checkers.catalogue import build_pre_submission_checker_catalogue
@@ -119,10 +121,16 @@ async def approved_pre_submit_fixture(factory, namespace, *, guide_version, cont
     from tests.projects.unified_policy_fixtures import create_standalone_unified_policy
 
     values, effective, pre = await create_standalone_unified_policy(
-        factory, namespace, guide_version=guide_version, contribution_awards=contribution_awards,
+        factory,
+        namespace,
+        guide_version=guide_version,
+        contribution_awards=contribution_awards,
+        human_review_required=human_review_required,
         artifact_proposal=SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes=1_000_000, maximum_package_size_bytes=5_000_000,
-            required_artifacts=("task.toml",), required_evidence=("results",),
+            maximum_file_size_bytes=1_000_000,
+            maximum_package_size_bytes=5_000_000,
+            required_artifacts=("task.toml",),
+            required_evidence=("results",),
             attestation_terms=("rights_confirmed",),
         ),
     )

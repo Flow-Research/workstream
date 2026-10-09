@@ -22,6 +22,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     from tests.authorization.catalogue_fixtures import (
         historical_permissions, new_permissions, expected
     )
+
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
@@ -104,8 +105,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 107,
-        ActionAvailability.PLANNED: 37,
+        ActionAvailability.ACTIVE: 108,
+        ActionAvailability.PLANNED: 36,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -114,11 +115,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
 
 
-@pytest.mark.parametrize("action", [
-    ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
-    ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
-    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
-])
+@pytest.mark.parametrize(
+    "action",
+    [
+        ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+    ],
+)
 def test_proposal_actions_have_exact_executable_authority(action):
     definition = resolve_executable_action(action)
     assert definition is ACTION_BY_ID[action]

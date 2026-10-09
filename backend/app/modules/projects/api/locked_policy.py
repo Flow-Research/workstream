@@ -268,6 +268,10 @@ class ProjectLockedPolicyContextFacts:
 class ProjectLockedPolicyContextPort(Protocol):
     """Transaction-bound PROJECT capability for exact locked policy facts."""
 
+    async def observe_review_mode(self, project_id: UUID, review_policy_id: UUID) -> bool | None:
+        """Nonlocking branch hint only; mutation must revalidate the complete context."""
+        ...
+
     async def read_project_display(self, project_id: UUID) -> ProjectDisplayFacts | None:
         """Read existence and display only, without readiness, flush, commit or row locks."""
         ...

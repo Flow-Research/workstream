@@ -1,20 +1,15 @@
-"""Real human-source shared-acceptance lifecycle and economic proof."""
+"""Real authorized automatic acceptance and complete frozen economic facts."""
 
-from uuid import UUID
+import json
 
 import pytest
-
 from sqlalchemy import text
 
-from app.core.identifiers import new_record_id
-from app.modules.reviews.api.acceptance import FinalAcceptanceConflict
-from tests.contributions.records.support import contribution_source
-
-from .participation_support import (
-    participant,
-    prepare_review_pending,
-    request_for,
-    stored_effects,
+from app.modules.tasks.post_submit_routing.requests import TaskRoutingRequestUnavailable
+from tests.tasks.post_submit_routing.outcome_support import (
+    authorized_routing_source,
+    apply_outcome,
+    outcome_snapshot,
 )
 
 pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
@@ -25,150 +20,128 @@ pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
     [(), ("money",), ("money", "project_points")],
     ids=("unpaid", "one-award", "two-awards"),
 )
-async def test_human_acceptance_creates_and_exactly_replays_complete_effects(
-    tmp_path, isolated_database_env, instruments
+async def test_authorized_acceptance_creates_and_exactly_replays_complete_effects(
+    tmp_path,
+    isolated_database_env,
+    instruments,
 ):
-    async with contribution_source(
-        tmp_path,
-        isolated_database_env,
-        contribution_awards=instruments,
-        persist_acceptance=False,
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, contribution_awards=instruments
     ) as h:
-        await prepare_review_pending(h)
-        request = await request_for(h, correlation_id=new_record_id())
-
         async with h.factory() as session, session.begin():
-            created = await participant(session).participate(request)
-        async with h.factory() as session, session.begin():
-            replayed = await participant(session).participate(request)
-
-        assert replayed == created
-        assert created.acceptance.id == request.acceptance.id
-        assert created.acceptance.accepted_at == replayed.acceptance.accepted_at
-        assert created.task_effects.request == request.task_effects
-        assert created.task_effects.task_status == "accepted"
-        assert created.task_effects.assignment_status == "completed"
-        assert created.participation.contribution.source_final_acceptance_id == created.acceptance.id
-        assert created.participation.contribution.source_task_assignment_id == (
-            request.task_effects.assignment_id
-        )
-        assert {award.instrument_type.value for award in created.participation.awards} == set(
-            instruments
-        )
-
+            created = await apply_outcome(session, h, 2)
         async with h.factory() as session:
-            acceptance = (
-                await session.execute(
-                    text("SELECT * FROM public.final_acceptances WHERE id=:id"),
-                    {"id": created.acceptance.id},
+            before = await outcome_snapshot(session)
+            row = (
+                (
+                    await session.execute(
+                        text("""
+              SELECT to_jsonb(f) AS acceptance, to_jsonb(c) AS contribution, to_jsonb(m) AS manifest,
+                t.status AS task_status,a.status AS assignment_status
+              FROM public.final_acceptances f
+              JOIN public.task_post_submit_routing_manifests m ON m.final_acceptance_id=f.id
+              JOIN public.contribution_records c ON c.source_final_acceptance_id=f.id
+              JOIN public.workstream_tasks t ON t.id=f.task_id
+              JOIN public.task_assignments a ON a.id=c.source_task_assignment_id
+              WHERE f.id=:id
+            """),
+                        {"id": created["final_acceptance_id"]},
+                    )
                 )
-            ).mappings().one()
-            for field in (
-                "id",
-                "source_review_id",
-                "source_routing_manifest_id",
-                "policy_context_ref",
-            ):
-                assert acceptance[field] == getattr(created.acceptance, field)
+                .mappings()
+                .one()
+            )
+            f, c, m = row["acceptance"], row["contribution"], row["manifest"]
+            s = m["authority_context"]["source"]
+            assert row["task_status"] == "accepted" and row["assignment_status"] == "completed"
+            assert f == dict(
+                id=str(created["final_acceptance_id"]),
+                project_id=s["project_id"],
+                task_id=s["task_id"],
+                submission_id=s["submission_id"],
+                acceptance_source="task_post_submit_route",
+                source_review_id=None,
+                source_routing_manifest_id=s["id"],
+                accepted_submitter_id=s["contributor_id"],
+                recorded_by=m["router_actor_id"],
+                policy_context_ref=s["locked_policy"]["locked_review_policy_id"],
+                source_authorization_decision_id=m["authorization_decision_id"],
+                accepted_at=f["accepted_at"],
+            )
+            assert f["accepted_at"] is not None
+            assert c["id"] == str(created["economic"].contribution_record_id)
             for field in (
                 "project_id",
                 "task_id",
                 "submission_id",
-                "accepted_submitter_id",
-                "recorded_by",
+                "contributor_id",
+                "contribution_policy_version_id",
             ):
-                assert UUID(str(acceptance[field])) == getattr(created.acceptance, field)
-            assert acceptance["acceptance_source"] == created.acceptance.acceptance_source
-            assert acceptance["accepted_at"] == created.acceptance.accepted_at
-
-            contribution = (
-                await session.execute(
-                    text(
-                        "SELECT id,created_at FROM public.contribution_records "
-                        "WHERE source_final_acceptance_id=:id"
-                    ),
-                    {"id": created.acceptance.id},
-                )
-            ).one()
-            assert contribution == (
-                created.participation.contribution.id,
-                created.participation.contribution.created_at,
-            )
+                assert c[field] == s[field]
+            assert c["contribution_type"] == "accepted_submission"
+            assert c["source_final_acceptance_id"] == f["id"]
+            assert c["source_task_assignment_id"] == s["assignment_id"]
+            assert c["source_review_id"] is None and c["source_review_lease_id"] is None
+            assert c["artifact_hash"] == s["content_sha256"]
             awards = (
-                await session.execute(
-                    text(
-                        "SELECT id,created_at FROM public.compensation_awards "
-                        "WHERE contribution_record_id=:id ORDER BY instrument_type"
-                    ),
-                    {"id": created.participation.contribution.id},
+                (
+                    await session.execute(
+                        text("""
+              SELECT w.id,w.instrument_type,w.quantity,w.unit_code,w.created_at,
+                d.quantity AS expected_quantity,d.unit_code AS expected_unit,
+                w.award_definition_id=d.id AND w.adapter_binding_id=d.adapter_binding_id
+                  AND w.contribution_policy_version_id=d.contribution_policy_version_id AS exact_definition
+              FROM public.compensation_awards w JOIN public.contribution_award_definitions d ON d.id=w.award_definition_id
+              WHERE w.contribution_record_id=:id ORDER BY w.instrument_type
+            """),
+                        {"id": created["economic"].contribution_record_id},
+                    )
                 )
-            ).all()
-            assert awards == [
-                (award.id, award.created_at) for award in created.participation.awards
-            ]
-            assert await stored_effects(session, request.task_effects.task_id) == {
-                "task_status": "accepted",
-                "assignment_status": "completed",
-                "acceptances": 1,
-                "contributions": 1,
-                "reviewer_contributions": 0,
-                "awards": len(instruments),
-            }
-            assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 1
+                .mappings()
+                .all()
+            )
+            assert {w["instrument_type"] for w in awards} == set(instruments)
+            assert tuple(w["id"] for w in awards) == created["economic"].award_ids
+            assert all(
+                w["exact_definition"]
+                and w["quantity"] == w["expected_quantity"]
+                and w["unit_code"] == w["expected_unit"]
+                and w["created_at"]
+                for w in awards
+            )
+            assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
+        async with h.factory() as session, session.begin():
+            replayed = await apply_outcome(session, h, 2)
+            assert replayed == created | {"replayed": True}
+        async with h.factory() as session:
+            assert await outcome_snapshot(session) == before
 
 
-async def test_human_source_rejects_foreign_review_identity_and_invalid_artifact_hash(
+async def test_foreign_stored_completion_cannot_use_another_invocation(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(
-        tmp_path / "local", isolated_database_env, persist_acceptance=False
-    ) as h:
-        async with contribution_source(
+    async with authorized_routing_source(tmp_path / "local", isolated_database_env) as h:
+        async with authorized_routing_source(
             tmp_path / "foreign",
             isolated_database_env,
-            persist_acceptance=False,
-            provision_services=False,
             storage_settings=h.settings,
+            provision_services=False,
         ) as foreign:
-            await prepare_review_pending(h)
-            request = await request_for(h, correlation_id=new_record_id())
-
-            foreign_sources = (
-                request.acceptance.model_copy(
-                    update={"source_review_id": foreign.acceptance.source_review_id}
-                ),
-                request.acceptance.model_copy(
-                    update={"recorded_by": foreign.acceptance.recorded_by}
-                ),
-            )
-            for acceptance in foreign_sources:
-                async with h.factory() as session, session.begin():
-                    with pytest.raises(FinalAcceptanceConflict):
-                        await participant(session).participate(
-                            request.model_copy(update={"acceptance": acceptance})
-                        )
-
-            changed_hash = "sha256:" + (
-                "0" * 64
-                if request.task_effects.content_sha256 != "sha256:" + "0" * 64
-                else "1" * 64
-            )
-            changed_task = request.task_effects.model_copy(
-                update={"content_sha256": changed_hash}
-            )
-            async with h.factory() as session, session.begin():
-                with pytest.raises(FinalAcceptanceConflict):
-                    await participant(session).participate(
-                        request.model_copy(update={"task_effects": changed_task})
-                    )
+            assert h.request.project_id != foreign.request.project_id
+            async with h.factory() as session:
+                before = await outcome_snapshot(session)
+            # Both selections exist; the claim still belongs to the original event.
+            payload = json.loads(foreign.envelope.payload_json)
+            from app.adapters.tasks import task_post_submit_outcome
 
             async with h.factory() as session:
-                assert await stored_effects(session, request.task_effects.task_id) == {
-                    "task_status": "review_pending",
-                    "assignment_status": "active",
-                    "acceptances": 0,
-                    "contributions": 0,
-                    "reviewer_contributions": 0,
-                    "awards": 0,
-                }
-                assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 2
+                with pytest.raises(
+                    TaskRoutingRequestUnavailable, match="routing invocation unavailable"
+                ):
+                    async with session.begin():
+                        await task_post_submit_outcome(session, h.factory).apply(
+                            h.envelope.model_copy(update={"payload_json": json.dumps(payload)}),
+                            current_generation=2,
+                        )
+            async with h.factory() as session:
+                assert await outcome_snapshot(session) == before

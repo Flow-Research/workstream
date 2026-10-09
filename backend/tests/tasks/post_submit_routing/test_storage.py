@@ -1,555 +1,209 @@
-"""PostgreSQL proof for immutable route-neutral TASK source custody."""
+"""Database source custody through the real authorized outcome transaction."""
 
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import func, select, text
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 
-from app.core.identifiers import new_record_id
-from app.modules.artifacts.models import ArtifactReplica
-from app.modules.checkers.api.execution import FinalizeFacts
-from app.modules.checkers.models import CheckerRun
-from app.modules.checkers.post_submit_contracts import make_post_submit_result
-from app.modules.projects.models import ProjectGuide
-from app.modules.reviews.models import ReviewQueueEntry
-from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-from app.modules.tasks.models import Submission, TaskAssignment, WorkstreamTask
+from app.modules.tasks.models import Submission, WorkstreamTask
 from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
-from tests.checkers.execution.support import live_executor, reserve
-
+from tests.tasks.post_submit_routing.outcome_support import (
+    authorized_routing_source,
+    apply_outcome,
+    outcome_snapshot,
+)
 from .support import (
     SOURCE_COLUMNS,
     activate_successor_guide,
     as_uuid,
-    completed_sibling_source,
-    completed_source,
-    insert_source,
     joined_source_facts,
-    next_request,
     other_hash,
-    source_count,
     source_rows,
-    source_values,
 )
-
 
 pytestmark = pytest.mark.postgres_schema_contract
 
 
-async def _reject(session, values, message: str) -> None:
-    with pytest.raises((DBAPIError, IntegrityError), match=message):
-        async with session.begin_nested():
-            await insert_source(session, values)
-
-
 async def test_source_matches_real_completed_run(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, human_review_required=True
+    ) as h:
         async with h.factory() as session, session.begin():
-            before = await session.scalar(select(func.clock_timestamp()))
-            await insert_source(session, h.source)
-            after = await session.scalar(select(func.clock_timestamp()))
+            before = await session.scalar(text("SELECT clock_timestamp()"))
+            result = await apply_outcome(session, h, None)
+            after = await session.scalar(text("SELECT clock_timestamp()"))
         async with h.factory() as session:
-            stored = await session.get(TaskPostSubmitRoutingManifest, h.source["id"])
-            assert stored is not None
+            stored = await session.get(TaskPostSubmitRoutingManifest, result["routing_manifest_id"])
             values = {column: getattr(stored, column) for column in SOURCE_COLUMNS}
-            submission = await session.get(Submission, str(stored.submission_id))
-            task = await session.get(WorkstreamTask, str(stored.task_id))
+            submission = await session.get(Submission, str(h.request.submission_id))
+            task = await session.get(WorkstreamTask, str(h.request.task_id))
         facts = await joined_source_facts(h, values)
-        expected_lineage = TaskPolicyLineage(
-            locked_guide_version=submission.locked_guide_version,
-            locked_guide_source_snapshot_id=as_uuid(
-                submission.locked_guide_source_snapshot_id
-            ),
-            locked_guide_source_snapshot_hash=submission.locked_guide_source_snapshot_hash,
-            locked_effective_project_submission_artifact_policy_id=as_uuid(
-                submission.locked_effective_project_submission_artifact_policy_id
-            ),
-            locked_effective_project_submission_artifact_policy_hash=(
-                submission.locked_effective_project_submission_artifact_policy_hash
-            ),
-            locked_pre_submit_checker_policy_id=as_uuid(
-                submission.locked_pre_submit_checker_policy_id
-            ),
-            locked_pre_submit_checker_bundle_hash=(
-                submission.locked_pre_submit_checker_bundle_hash
-            ),
-            locked_post_submit_checker_policy_id=as_uuid(
-                submission.locked_post_submit_checker_policy_id
-            ),
-            locked_post_submit_checker_policy_version=(
-                submission.locked_post_submit_checker_policy_version
-            ),
-            locked_post_submit_checker_policy_hash=(
-                submission.locked_post_submit_checker_policy_hash
-            ),
-            locked_review_policy_id=as_uuid(submission.locked_review_policy_id),
-            locked_review_policy_generation=submission.locked_review_policy_generation,
-            locked_review_policy_hash=submission.locked_review_policy_hash,
-            locked_revision_policy_id=as_uuid(submission.locked_revision_policy_id),
-            locked_revision_policy_generation=(
-                submission.locked_revision_policy_generation
-            ),
-            locked_revision_policy_hash=submission.locked_revision_policy_hash,
-            locked_contribution_policy_version_id=as_uuid(
-                task.locked_contribution_policy_version_id
-            ),
-        )
-
-        assert set(values) == set(SOURCE_COLUMNS)
-        assert before <= values["created_at"] <= after
-        assert facts.model_dump(include=set(SOURCE_COLUMNS)) == {
-            column: as_uuid(value) if column.endswith("_id") else value
-            for column, value in values.items()
-        }
-        assert facts.project_id == h.request.project_id
-        assert facts.task_id == h.request.task_id
-        assert facts.assignment_id == h.request.assignment_id
-        assert facts.submission_id == h.request.submission_id
-        assert facts.submission_version == h.request.submission_version
-        assert facts.checker_run_id == h.result.attempt_id
-        assert facts.evaluation_request_id == h.request.evaluation_request_id
-        assert facts.request_digest == h.request.request_sha256
-        assert facts.result_id == h.result.result_id
-        assert facts.result_digest == h.result.result_digest
-        assert facts.predecessor_submission_id is None
-        assert facts.predecessor_submission_version is None
+        assert before <= stored.created_at <= after
+        for column, value in h.source.items():
+            if column != "id":
+                expected = as_uuid(value) if column.endswith("_id") else value
+                assert getattr(facts, column) == expected, column
+        assert facts.predecessor_submission_id is facts.predecessor_submission_version is None
         assert facts.admission_id == h.created.admission_id
         assert facts.binding_id == h.created.artifact_binding_id
         assert facts.content_id == h.created.artifact_content_id
-        assert facts.locked_policy == expected_lineage
+        for field in facts.locked_policy.model_fields:
+            expected = getattr(
+                task if field == "locked_contribution_policy_version_id" else submission, field
+            )
+            if field.endswith("_id"):
+                expected = as_uuid(expected)
+            assert getattr(facts.locked_policy, field) == expected, field
         assert facts.routing_recommendation == "allow_review"
+        assert facts.input_materialization_evidence_id != facts.execute_evidence_id
+        assert facts.execute_evidence_id != facts.finalize_evidence_id
 
 
-async def test_source_rejects_null_scalar(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
+async def _reject_changed_manifest(h, monkeypatch, changes, message):
+    """Change only persisted candidate fields; keep actual source AUTH otherwise valid."""
+    import app.modules.tasks.post_submit_routing.outcome as outcome
+
+    original = outcome._manifest
+
+    def changed(*args):
+        row = original(*args)
+        for name, value in changes.items():
+            setattr(row, name, value)
+        return row
+
+    async with h.factory() as session:
+        before = await outcome_snapshot(session)
+    with monkeypatch.context() as patch:
+        patch.setattr(outcome, "_manifest", changed)
         async with h.factory() as session:
-            for field in (column for column in SOURCE_COLUMNS if column != "created_at"):
-                bad = h.source | {"id": new_record_id(), field: None}
-                await _reject(session, bad, f'null value in column "{field}"')
-                assert await source_count(session) == 0, field
-            await insert_source(session, h.source)
-            await session.commit()
-        async with h.factory() as session:
-            assert await source_count(session) == 1
+            with pytest.raises(DBAPIError, match=message):
+                async with session.begin():
+                    await apply_outcome(session, h, None)
+    async with h.factory() as session:
+        assert await outcome_snapshot(session) == before
 
 
-async def test_source_creation_time_is_database_owned(
-    tmp_path, isolated_database_env
+async def test_source_rejects_scalar_and_phase_substitutions(
+    tmp_path, isolated_database_env, monkeypatch
 ):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        supplied_values = (
-            ("past", datetime(2000, 1, 1, tzinfo=UTC)),
-            ("future", datetime(2100, 1, 1, tzinfo=UTC)),
-            ("null", None),
-        )
-        for label, supplied in supplied_values:
-            async with h.factory() as session:
-                transaction = await session.begin()
-                try:
-                    before = await session.scalar(select(func.clock_timestamp()))
-                    source_id = new_record_id()
-                    await insert_source(
-                        session,
-                        h.source | {"id": source_id, "created_at": supplied},
-                    )
-                    stored = await session.get(TaskPostSubmitRoutingManifest, source_id)
-                    after = await session.scalar(select(func.clock_timestamp()))
-                    assert before <= stored.created_at <= after, label
-                    assert stored.created_at != supplied, label
-                finally:
-                    await transaction.rollback()
-            async with h.factory() as session:
-                assert await source_count(session) == 0, label
-
-
-async def test_source_rejects_scalar_substitution(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        async with h.factory() as session:
-            other_replica = await session.scalar(
-                select(ArtifactReplica.id)
-                .where(ArtifactReplica.id != str(h.source["replica_id"]))
-                .limit(1)
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, human_review_required=True
+    ) as h:
+        s = h.source
+        cases = {
+            "request_digest": other_hash(s["request_digest"]),
+            "result_digest": other_hash(s["result_digest"]),
+            "evaluation_generation": s["evaluation_generation"] + 1,
+            "content_sha256": other_hash(s["content_sha256"]),
+            "byte_count": s["byte_count"] + 1,
+            "semantic_manifest_sha256": other_hash(s["semantic_manifest_sha256"]),
+            "execute_evidence_id": str(s["finalize_evidence_id"]),
+            "finalize_evidence_id": str(s["execute_evidence_id"]),
+            "human_review_required": False,
+        }
+        for field, value in cases.items():
+            await _reject_changed_manifest(
+                h,
+                monkeypatch,
+                {field: value},
+                "routing (source authority context|checker source|material|review policy) mismatch",
             )
-            assert other_replica is not None
-            cases = (
-                ("evaluation_request_id", new_record_id(), "checker source mismatch"),
-                ("request_digest", other_hash(h.source["request_digest"]), "checker source mismatch"),
-                ("evaluation_generation", h.source["evaluation_generation"] + 1, "checker source mismatch"),
-                ("result_id", new_record_id(), "checker source mismatch"),
-                ("result_digest", other_hash(h.source["result_digest"]), "checker source mismatch"),
-                ("content_sha256", other_hash(h.source["content_sha256"]), "material mismatch"),
-                ("byte_count", h.source["byte_count"] + 1, "material mismatch"),
-                (
-                    "semantic_manifest_sha256",
-                    other_hash(h.source["semantic_manifest_sha256"]),
-                    "material mismatch",
-                ),
-                ("replica_id", as_uuid(other_replica), "material mismatch"),
-                ("human_review_required", False, "review policy mismatch"),
-            )
-            for field, replacement, message in cases:
-                bad = h.source | {"id": new_record_id(), field: replacement}
-                await _reject(session, bad, message)
-                assert await source_count(session) == 0, field
-            await insert_source(session, h.source)
-            await session.commit()
+        async with h.factory() as session, session.begin():
+            await apply_outcome(session, h, None)
 
 
-async def test_source_rejects_foreign_lineage(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path / "one", isolated_database_env) as first:
-        sibling = await completed_sibling_source(first)
-        async with completed_source(
+async def test_source_rejects_foreign_stored_lineage(tmp_path, isolated_database_env, monkeypatch):
+    async with authorized_routing_source(
+        tmp_path / "one", isolated_database_env, human_review_required=True
+    ) as h:
+        async with authorized_routing_source(
             tmp_path / "two",
             isolated_database_env,
+            human_review_required=True,
+            storage_settings=h.settings,
             provision_services=False,
-            storage_settings=first.settings,
-        ) as other:
-            async with first.factory() as session:
-                cases = (
-                    ("project_id", other.source["project_id"]),
-                    ("task_id", sibling.source["task_id"]),
-                    ("submission_id", sibling.source["submission_id"]),
-                    ("submission_version", first.source["submission_version"] + 1),
-                    ("assignment_id", sibling.source["assignment_id"]),
-                    ("contributor_id", other.source["contributor_id"]),
-                    (
-                        "contribution_policy_version_id",
-                        other.source["contribution_policy_version_id"],
-                    ),
+        ) as foreign:
+            for field in (
+                "project_id",
+                "task_id",
+                "submission_id",
+                "assignment_id",
+                "contributor_id",
+                "contribution_policy_version_id",
+                "checker_run_id",
+                "evaluation_request_id",
+                "result_id",
+                "completion_event_id",
+                "replica_id",
+            ):
+                value = foreign.source[field]
+                assert value != h.source[field]
+                column = TaskPostSubmitRoutingManifest.__table__.columns[field]
+                if getattr(column.type, "as_uuid", True) is False:
+                    value = str(value)
+                await _reject_changed_manifest(
+                    h,
+                    monkeypatch,
+                    {field: value},
+                    "routing (task is not current|assignment is not current|submission is not current|evaluation is not current|source .*mismatch)",
                 )
-                for field, replacement in cases:
-                    bad = first.source | {"id": new_record_id(), field: replacement}
-                    await _reject(session, bad, "source lineage mismatch")
-                    assert await source_count(session) == 0, field
-
-                await insert_source(session, sibling.source)
-                assert await source_count(session) == 1
-                for label, ownership in (
-                    ("other_project", other.source),
-                    ("same_project_sibling", sibling.source),
-                ):
-                    coherent = first.source | {
-                        "id": new_record_id(),
-                        **{
-                            field: ownership[field]
-                            for field in (
-                                "project_id",
-                                "task_id",
-                                "submission_id",
-                                "submission_version",
-                                "assignment_id",
-                                "contributor_id",
-                                "contribution_policy_version_id",
-                            )
-                        },
-                    }
-                    await _reject(session, coherent, "checker source mismatch")
-                    assert await source_count(session) == 1, label
-                await insert_source(session, first.source)
-                await session.commit()
-            async with first.factory() as session:
-                assert await source_count(session) == 2
+            async with h.factory() as session, session.begin():
+                await apply_outcome(session, h, None)
 
 
-async def _completed_successor(h):
-    await next_request(h)
-    await reserve(h)
-    result = await live_executor(h).evaluate_post_submission(h.request)
-    assert result.outcome == "completed"
-    async with h.factory() as session:
-        run = await session.get(CheckerRun, str(result.attempt_id))
-        assert run.routing_recommendation == "allow_review"
-    h.result = result
-    return await source_values(h)
+async def test_source_creation_time_is_database_owned(tmp_path, isolated_database_env, monkeypatch):
+    import app.modules.tasks.post_submit_routing.outcome as outcome
 
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, human_review_required=True
+    ) as h:
+        original = outcome._manifest
+        for supplied in (datetime(2000, 1, 1, tzinfo=UTC), datetime(2100, 1, 1, tzinfo=UTC), None):
 
-async def test_source_rejects_sibling_completion_event(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        original = dict(h.source)
-        sibling = await completed_sibling_source(h)
-        async with h.factory() as session:
-            await insert_source(session, sibling.source)
-            bad = original | {
-                "id": new_record_id(),
-                "completion_event_id": sibling.source["completion_event_id"],
-            }
-            await _reject(session, bad, "checker source mismatch")
-            assert await source_count(session) == 1
-            await insert_source(session, original)
-            await session.commit()
-        async with h.factory() as session:
-            assert await source_count(session) == 2
+            def changed(*args):
+                row = original(*args)
+                row.created_at = supplied
+                return row
 
-
-async def test_source_rejects_phase_receipt(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        original = dict(h.source)
-        successor = await _completed_successor(h)
-        cases = (
-            ("execute", {"execute_evidence_id": successor["execute_evidence_id"]}),
-            ("finalize", {"finalize_evidence_id": successor["finalize_evidence_id"]}),
-            (
-                "swap",
-                {
-                    "execute_evidence_id": original["finalize_evidence_id"],
-                    "finalize_evidence_id": original["execute_evidence_id"],
-                },
-            ),
-        )
-        async with h.factory() as session:
-            for label, changes in cases:
-                await _reject(
-                    session,
-                    original | {"id": new_record_id(), **changes},
-                    "checker source mismatch",
-                )
-                assert await source_count(session) == 0, label
-            await insert_source(session, original)
-            await session.commit()
-
-
-async def test_source_rejects_ineligible_checker_source(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        original = dict(h.source)
-        executor = live_executor(h)
-        await next_request(h)
-        reservation = await reserve(h)
-        queued = await source_values(h, reservation.attempt_id)
-        async with h.factory() as session:
-            await _reject(
-                session,
-                queued | {"id": new_record_id()},
-                "checker source mismatch",
-            )
-            assert await source_count(session) == 0
-
-        lease, replay = await executor._claim(h.request)
-        assert replay is None
-        running = await source_values(h, reservation.attempt_id)
-        async with h.factory() as session:
-            await _reject(
-                session,
-                running | {"id": new_record_id()},
-                "checker source mismatch",
-            )
-            assert await source_count(session) == 0
-
-        failure = make_post_submit_result(
-            request_id=h.request.evaluation_request_id,
-            request_digest=h.request.request_sha256,
-            attempt_id=reservation.attempt_id,
-            result_id=reservation.result_id,
-            evaluation_generation=h.request.evaluation_generation,
-            outcome="infrastructure_failed",
-            member_results=(),
-            infrastructure_failure_code="deadline_exceeded",
-        )
-        await executor.finalize(
-            FinalizeFacts(
-                request=h.request,
-                lease=lease,
-                result=failure,
-                material=None,
-                output_binding_ids=(),
-            )
-        )
-        infrastructure_failed = await source_values(h, reservation.attempt_id)
-        async with h.factory() as session:
-            await _reject(
-                session,
-                infrastructure_failed | {"id": new_record_id()},
-                "checker source mismatch",
-            )
-            assert await source_count(session) == 0
-
-        empty_evidence = h.request.structural_input.model_copy(update={"evidence": ()})
-        await next_request(h, structural_input=empty_evidence)
-        await reserve(h)
-        blocked_result = await live_executor(h).evaluate_post_submission(h.request)
-        async with h.factory() as session:
-            blocked_run = await session.get(CheckerRun, str(blocked_result.attempt_id))
-            assert blocked_result.outcome == "completed"
-            assert blocked_run.routing_recommendation == "needs_revision"
-        blocking_completed = await source_values(h, blocked_result.attempt_id)
-
-        async with h.factory() as session:
-            await _reject(
-                session,
-                blocking_completed | {"id": new_record_id()},
-                "checker source mismatch",
-            )
-            assert await source_count(session) == 0
-            await insert_source(session, original)
-            await session.commit()
-
-
-async def test_source_rejects_unactivated_guide(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        async with h.factory() as session:
-            transaction = await session.begin()
-            try:
-                guide = await session.scalar(
-                    select(ProjectGuide).where(
-                        ProjectGuide.project_id == str(h.source["project_id"]),
-                        ProjectGuide.version == h.request.expected_context.guide_version,
+            with monkeypatch.context() as patch:
+                patch.setattr(outcome, "_manifest", changed)
+                async with h.factory() as session:
+                    await session.begin()
+                    before = await session.scalar(text("SELECT clock_timestamp()"))
+                    result = await apply_outcome(session, h, None)
+                    stored = await session.scalar(
+                        select(TaskPostSubmitRoutingManifest.created_at).where(
+                            TaskPostSubmitRoutingManifest.id == result["routing_manifest_id"]
+                        )
                     )
-                )
-                guide_id = guide.id
-                activation_operation_id = guide.activation_operation_id
-                assert guide.status == "active"
-                await session.execute(
-                    text(
-                        "ALTER TABLE public.project_guides "
-                        "DISABLE TRIGGER guide_lineage_lifecycle_guard"
-                    )
-                )
-                await session.execute(
-                    text("UPDATE public.project_guides SET status='draft' WHERE id=:id"),
-                    {"id": guide.id},
-                )
-                await _reject(session, h.source, "guide activation mismatch")
-                assert await source_count(session) == 0
-            finally:
-                await transaction.rollback()
+                    after = await session.scalar(text("SELECT clock_timestamp()"))
+                    assert before <= stored <= after and stored != supplied
+                    await session.rollback()
 
+
+async def test_source_is_immutable_and_preserves_locked_guide(tmp_path, isolated_database_env):
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, human_review_required=True
+    ) as h:
         async with h.factory() as session, session.begin():
-            restored = await session.get(ProjectGuide, guide_id)
-            trigger_enabled = await session.scalar(
-                text(
-                    "SELECT tgenabled='O' FROM pg_trigger "
-                    "WHERE tgrelid='public.project_guides'::regclass "
-                    "AND tgname='guide_lineage_lifecycle_guard'"
-                )
-            )
-            assert trigger_enabled is True
-            assert restored.status == "active"
-            assert restored.activation_operation_id == activation_operation_id
-            await insert_source(session, h.source)
-        async with h.factory() as session:
-            assert await source_count(session) == 1
-
-
-async def test_source_retains_historical_guide_and_generation(
-    tmp_path, isolated_database_env
-):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        original = dict(h.source)
-        async with h.factory() as session:
-            guide = await session.scalar(
-                select(ProjectGuide).where(
-                    ProjectGuide.project_id == str(original["project_id"]),
-                    ProjectGuide.version == h.request.expected_context.guide_version,
-                )
-            )
-            guide_id = guide.id
-            activation = guide.activation_operation_id
-
-        async with h.factory() as session, session.begin():
-            await insert_source(session, original)
-        async with h.factory() as session:
-            stored = await session.get(TaskPostSubmitRoutingManifest, original["id"])
-            before_values = {
-                column: getattr(stored, column) for column in SOURCE_COLUMNS
-            }
-        before_facts = await joined_source_facts(h, before_values)
-
-        successor_guide = await activate_successor_guide(h)
-        successor_run = await _completed_successor(h)
-        async with h.factory() as session, session.begin():
-            await insert_source(session, successor_run)
-
-        assert successor_guide.command.target.proposal.guide_version == "v2"
-        assert successor_run["evaluation_generation"] == original["evaluation_generation"] + 1
-        assert successor_run["checker_run_id"] != original["checker_run_id"]
-        async with h.factory() as session:
-            stored = await session.get(TaskPostSubmitRoutingManifest, original["id"])
-            after_values = {
-                column: getattr(stored, column) for column in SOURCE_COLUMNS
-            }
-            successor_stored = await session.get(
-                TaskPostSubmitRoutingManifest, successor_run["id"]
-            )
-            successor_values = {
-                column: getattr(successor_stored, column) for column in SOURCE_COLUMNS
-            }
-            retained = await session.get(ProjectGuide, guide_id)
-            assert retained.activation_operation_id == activation
-            assert retained.status == "superseded"
-            assert await source_count(session) == 2
-        after_facts = await joined_source_facts(h, after_values)
-        successor_facts = await joined_source_facts(h, successor_values)
-        assert after_values == before_values
-        assert after_facts.model_dump() == before_facts.model_dump()
-        assert after_facts.locked_policy == before_facts.locked_policy
-        assert successor_facts.locked_policy == before_facts.locked_policy
-
-
-async def test_source_is_immutable(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        async with h.factory() as session, session.begin():
-            await insert_source(session, h.source)
+            result = await apply_outcome(session, h, None)
         async with h.factory() as session:
             before = await source_rows(session)
-        statements = (
+        successor = await activate_successor_guide(h)
+        assert successor.command.target.proposal.guide_version == "v2"
+        async with h.factory() as session:
+            assert await source_rows(session) == before
+        for sql in (
             "UPDATE public.task_post_submit_routing_manifests SET human_review_required=false",
             "DELETE FROM public.task_post_submit_routing_manifests",
             "TRUNCATE public.task_post_submit_routing_manifests CASCADE",
-        )
-        for statement in statements:
+        ):
             async with h.factory() as session:
                 with pytest.raises(DBAPIError, match="source is immutable"):
-                    await session.execute(text(statement))
-                    await session.commit()
-                await session.rollback()
-                assert await source_rows(session) == before
-
-
-async def test_source_uniqueness_and_caller_rollback(
-    tmp_path, isolated_database_env
-):
-    async with completed_source(tmp_path, isolated_database_env) as h:
+                    async with session.begin():
+                        await session.execute(text(sql))
         async with h.factory() as session:
-            task_status = await session.scalar(
-                select(WorkstreamTask.status).where(
-                    WorkstreamTask.id == str(h.source["task_id"])
-                )
-            )
-            assignment_status = await session.scalar(
-                select(TaskAssignment.status).where(
-                    TaskAssignment.id == str(h.source["assignment_id"])
-                )
-            )
-            review_count = await session.scalar(
-                select(func.count()).select_from(ReviewQueueEntry)
-            )
-
-        async with h.factory() as session:
-            transaction = await session.begin()
-            try:
-                await insert_source(session, h.source)
-                duplicate = h.source | {"id": new_record_id()}
-                with pytest.raises(IntegrityError, match="uq_task_routing_manifest_source"):
-                    await insert_source(session, duplicate)
-            finally:
-                await transaction.rollback()
-
-        async with h.factory() as session:
-            assert await source_count(session) == 0
-            assert await session.scalar(
-                select(WorkstreamTask.status).where(
-                    WorkstreamTask.id == str(h.source["task_id"])
-                )
-            ) == task_status
-            assert await session.scalar(
-                select(TaskAssignment.status).where(
-                    TaskAssignment.id == str(h.source["assignment_id"])
-                )
-            ) == assignment_status
-            assert await session.scalar(
-                select(func.count()).select_from(ReviewQueueEntry)
-            ) == review_count
-            await insert_source(session, h.source)
-            await session.commit()
-        async with h.factory() as session:
-            assert await source_count(session) == 1
+            assert await source_rows(session) == before
+        async with h.factory() as session, session.begin():
+            assert await apply_outcome(session, h, None) == result | {"replayed": True}

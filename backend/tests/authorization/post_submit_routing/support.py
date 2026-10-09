@@ -16,7 +16,7 @@ from app.modules.authorization.domain.post_submit_routing import (
 )
 from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsRequest
 from app.modules.tasks.api.post_submit_routing import (
-    TaskPostSubmitManifestFacts,
+    TaskPostSubmitSourceProposal,
     TaskRoutingRequestFacts,
     TaskRoutingSelection,
     task_routing_request_digest,
@@ -33,7 +33,7 @@ from tests.tasks.post_submit_routing.support import (
 
 def detached_request_and_source(
     *, human_review_required: bool = True
-) -> tuple[TaskRoutingRequestFacts, TaskPostSubmitManifestFacts]:
+) -> tuple[TaskRoutingRequestFacts, TaskPostSubmitSourceProposal]:
     """Build mutually exact values; neither value asserts storage or authority."""
     source_values_ = _source_values(human_review_required=human_review_required)
     selection = TaskRoutingSelection(
@@ -58,7 +58,9 @@ def detached_request_and_source(
         created_at=datetime(2026, 1, 3, tzinfo=UTC),
     )
     source_values_["id"] = request.routing_manifest_id
-    return request, TaskPostSubmitManifestFacts(**source_values_)
+    return request, TaskPostSubmitSourceProposal(
+        **{k: v for k, v in source_values_.items() if k != "created_at"}
+    )
 
 
 def claim_for(request: TaskRoutingRequestFacts) -> OutboxClaim:
@@ -75,7 +77,7 @@ def claim_for(request: TaskRoutingRequestFacts) -> OutboxClaim:
     )
 
 
-def accepted_effects_for(source: TaskPostSubmitManifestFacts) -> TaskAcceptedEffectsRequest:
+def accepted_effects_for(source: TaskPostSubmitSourceProposal) -> TaskAcceptedEffectsRequest:
     """Select the exact source lineage for the false-policy branch."""
     return TaskAcceptedEffectsRequest(
         project_id=source.project_id,
@@ -92,9 +94,7 @@ def accepted_effects_for(source: TaskPostSubmitManifestFacts) -> TaskAcceptedEff
     )
 
 
-def resource_for(
-    *, human_review_required: bool = True
-) -> PostSubmitRoutingResourceContext:
+def resource_for(*, human_review_required: bool = True) -> PostSubmitRoutingResourceContext:
     """Build one internally exact resource for the selected locked-policy branch."""
     request, source = detached_request_and_source(
         human_review_required=human_review_required
@@ -102,9 +102,13 @@ def resource_for(
     consequence = (
         HumanAdmissionConsequence()
         if human_review_required
-        else AutomatedAcceptanceConsequence(task_effects=accepted_effects_for(source))
+        else AutomatedAcceptanceConsequence(
+            task_effects=accepted_effects_for(source), authorized_lifecycle_generation=2
+        )
     )
     return PostSubmitRoutingResourceContext(
+        router_actor_id=new_record_id(),
+        router_identity_link_id=new_record_id(),
         resource_id=request.routing_manifest_id,
         scope_project_id=request.project_id,
         request=request,
@@ -170,13 +174,14 @@ async def provision_router(factory) -> None:
         )
 
 
-async def real_source_facts(h, request: TaskRoutingRequestFacts) -> TaskPostSubmitManifestFacts:
+async def real_source_facts(h, request: TaskRoutingRequestFacts) -> TaskPostSubmitSourceProposal:
     """Join genuine completed owners into the source allocated by the request."""
     stored = await source_values(h)
     async with h.factory() as session:
         stored["created_at"] = await session.scalar(text("SELECT clock_timestamp()"))
     stored["id"] = request.routing_manifest_id
-    return await joined_source_facts(h, stored)
+    joined = await joined_source_facts(h, stored)
+    return TaskPostSubmitSourceProposal(**joined.model_dump(exclude={"created_at"}))
 
 
 async def effect_snapshot(session):

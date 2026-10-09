@@ -384,7 +384,7 @@ _CONTRIBUTION_POLICY_ACTION_IDS = (
 
 
 ACTION_DEFINITIONS = (
-    _planned(ActionId.TASK_POST_SUBMIT_ROUTE, PermissionId.TASK_POST_SUBMIT_ROUTE, ActionOwner.ARCH_04E2),
+    _active(ActionId.TASK_POST_SUBMIT_ROUTE, PermissionId.TASK_POST_SUBMIT_ROUTE, ActionOwner.ARCH_04E2),
     _active(ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, PermissionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, ActionOwner.ARCH_03C1),
     _active(ActionId.OUTBOX_DISPATCH, PermissionId.OUTBOX_DISPATCH, ActionOwner.AUTH_OUTBOX_01),
     _active(
@@ -811,6 +811,7 @@ def _index_actions(
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
     active_actions = {
+        ActionId.TASK_POST_SUBMIT_ROUTE,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
         ActionId.PROJECT_GUIDE_ACTIVATE,
@@ -1003,6 +1004,7 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
 
 
 _ACTIVE_SERVICE_ACTIONS = {
+    ActionId.TASK_POST_SUBMIT_ROUTE,
     ActionId.CHECKER_POST_SUBMIT_EXECUTE,
     ActionId.CHECKER_POST_SUBMIT_FINALIZE,
     ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,

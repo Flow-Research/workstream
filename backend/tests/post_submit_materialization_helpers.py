@@ -105,9 +105,20 @@ async def material_fixture(tmp_path, database_url, **options):
 
 
 @asynccontextmanager
-async def _material_fixture(tmp_path, database_url, *, write_submission, read_request, provider="local", scratch_limits=None,
-                           storage_settings=None, provision_services=True, provision_checker=True,
-                           contribution_awards=()):
+async def _material_fixture(
+    tmp_path,
+    database_url,
+    *,
+    write_submission,
+    read_request,
+    provider="local",
+    scratch_limits=None,
+    storage_settings=None,
+    provision_services=True,
+    provision_checker=True,
+    contribution_awards=(),
+    human_review_required=True,
+):
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     if storage_settings is not None:
@@ -129,7 +140,11 @@ async def _material_fixture(tmp_path, database_url, *, write_submission, read_re
     manager = ArtifactScratchManager(root=tmp_path / "post-scratch", limits=scratch_limits if scratch_limits is not None else _limits())
     try:
         plan, policy = await approved_pre_submit_fixture(
-            factory, namespace, guide_version="v1", contribution_awards=contribution_awards
+            factory,
+            namespace,
+            guide_version="v1",
+            contribution_awards=contribution_awards,
+            human_review_required=human_review_required,
         )
         context = _context()
         await provision_material_services(factory, artifacts=provision_services, checker=provision_checker)

@@ -13,6 +13,7 @@ from app.modules.tasks.api import post_submit_routing
 from app.modules.tasks.api.post_submit_routing import TaskPostSubmitManifestFacts
 from tests.tasks.post_submit_routing.contract_fixtures import _lineage, _source_values
 
+
 @pytest.mark.parametrize(
     ("field", "value"),
     (
@@ -59,6 +60,9 @@ def test_source_contract_is_an_exact_frozen_value() -> None:
         "result_id",
         "result_digest",
         "completion_event_id",
+        "creation_decision_id",
+        "binding_decision_id",
+        "input_materialization_evidence_id",
         "execute_evidence_id",
         "finalize_evidence_id",
         "human_review_required",
@@ -160,7 +164,7 @@ def test_false_source_value_is_transport_only() -> None:
     assert source.model_dump(mode="json")["human_review_required"] is False
 
 
-def test_routing_source_foundation_has_no_runtime_entry() -> None:
+def test_routing_authority_has_no_public_or_delivery_entry() -> None:
     assert post_submit_routing.__all__ == (
         "TaskPostSubmitSourceProposal", "TaskPostSubmitManifestFacts", "task_post_submit_source_digest",
         "TaskRoutingSelection", "TaskRoutingRequestFacts", "task_routing_request_digest",
@@ -177,10 +181,9 @@ def test_routing_source_foundation_has_no_runtime_entry() -> None:
     assert not hasattr(task_api, "TaskRoutingRequests")
     action = ActionId.TASK_POST_SUBMIT_ROUTE
     assert ACTION_BY_ID[action].permission_id is PermissionId.TASK_POST_SUBMIT_ROUTE
-    assert ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+    assert ACTION_BY_ID[action].availability is ActionAvailability.ACTIVE
     assert SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.TASK_POST_SUBMIT_ROUTER] == {action}
-    with pytest.raises(ValueError, match="authorization action is not active"):
-        resolve_executable_action(action)
+    assert resolve_executable_action(action).action_id is action
 
 
 @pytest.mark.parametrize("human_review_required", [True, False])

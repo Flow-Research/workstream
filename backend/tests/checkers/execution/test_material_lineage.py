@@ -13,8 +13,8 @@ from .test_concurrency import final_facts
 from .material_storage_helpers import write_terminal
 
 
-def terminal_facts(h, lease, outcome):
-    facts = final_facts(h, lease)
+async def terminal_facts(h, lease, outcome):
+    facts = await final_facts(h, lease)
     if outcome == "infrastructure_failed":
         body = facts.result.model_dump(exclude={"result_digest"})
         body.update(outcome=outcome, member_results=(), infrastructure_failure_code="implementation_unavailable")
@@ -23,13 +23,19 @@ def terminal_facts(h, lease, outcome):
 
 
 @pytest.mark.parametrize("outcome", ["completed", "infrastructure_failed"])
-async def test_foreign_canonical_material_is_rejected_at_commit(tmp_path, isolated_database_env, outcome):
+async def test_foreign_canonical_material_is_rejected_at_commit(
+    tmp_path, isolated_database_env, outcome
+):
     async with material_fixture(tmp_path / "own", isolated_database_env) as h:
-        async with material_fixture(tmp_path / "foreign", isolated_database_env,
-                                    storage_settings=h.settings, provision_services=False) as foreign:
+        async with material_fixture(
+            tmp_path / "foreign",
+            isolated_database_env,
+            storage_settings=h.settings,
+            provision_services=False,
+        ) as foreign:
             await reserve(h)
             lease, _ = await live_executor(h)._claim(h.request)
-            facts = terminal_facts(h, lease, outcome)
+            facts = await terminal_facts(h, lease, outcome)
             canonical = facts.material.model_dump(mode="json")
             substitutions = {
                 "admission_id": str(foreign.created.admission_id),
@@ -69,14 +75,17 @@ async def test_foreign_canonical_material_is_rejected_at_commit(tmp_path, isolat
 @pytest.mark.parametrize("outcome", ["completed", "infrastructure_failed"])
 @pytest.mark.parametrize("shadow", ["checker_runs", "art_lineage"])
 async def test_temporary_tables_cannot_replace_canonical_material(
-    tmp_path, isolated_database_env, outcome, shadow,
+    tmp_path,
+    isolated_database_env,
+    outcome,
+    shadow,
 ):
     from sqlalchemy import text
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
         lease, _ = await live_executor(h)._claim(h.request)
-        facts = terminal_facts(h, lease, outcome)
+        facts = await terminal_facts(h, lease, outcome)
         canonical = facts.material.model_dump(mode="json")
         digest = canonical["semantic_manifest_sha256"]
         forged_digest = digest[:-1] + ("0" if digest[-1] != "0" else "1")
@@ -141,7 +150,7 @@ async def test_canonical_validator_binds_numeric_version_argument(tmp_path, isol
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
         lease, _ = await live_executor(h)._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         parameters = {
             "project": h.request.project_id,
             "task": h.request.task_id,
