@@ -23,6 +23,7 @@ class ExternalCheckerRegistryAuthorizationAdapter:
     """Bind CHECKERS registration facts to fresh system Operator authority."""
 
     def __init__(self, authorization: AuthorizationService) -> None:
+        """Bind one adapter to the caller's transaction-scoped AUTH service."""
         self._authorization = authorization
 
     async def authorize_registration(

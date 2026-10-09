@@ -21,6 +21,7 @@ from app.modules.checkers.models import ExternalCheckerRegistryEntryRecord
 
 
 def _schema_values(prefix: str, schema: ExternalCheckerSchema) -> dict[str, object]:
+    """Flatten one validated schema into its closed persistence columns."""
     return {
         f"{prefix}_schema_id": schema.schema_id,
         f"{prefix}_schema_version": schema.schema_version,
@@ -30,6 +31,7 @@ def _schema_values(prefix: str, schema: ExternalCheckerSchema) -> dict[str, obje
 
 
 def _row_entry(row: ExternalCheckerRegistryEntryRecord) -> ExternalCheckerRegistryEntry:
+    """Revalidate a stored row through the immutable public registry value."""
     return ExternalCheckerRegistryEntry(
         registry_entry_id=row.id,
         registration_operation_id=row.registration_operation_id,
@@ -72,6 +74,7 @@ class ExternalCheckerRegistryRepository:
     """Flush-only persistence for one caller-owned registration transaction."""
 
     def __init__(self, session: AsyncSession) -> None:
+        """Bind flush-only registry persistence to the caller's session."""
         self._session = session
 
     async def lock_registration_scopes(
@@ -90,6 +93,7 @@ class ExternalCheckerRegistryRepository:
     async def by_operation(
         self, operation_id: UUID
     ) -> ExternalCheckerRegistryEntryRecord | None:
+        """Read the row reserved by one idempotent registration operation."""
         return await self._session.scalar(
             select(ExternalCheckerRegistryEntryRecord).where(
                 ExternalCheckerRegistryEntryRecord.registration_operation_id == operation_id
@@ -99,6 +103,7 @@ class ExternalCheckerRegistryRepository:
     async def by_identity(
         self, *, capability_id: str, capability_version: str, phase: str
     ) -> ExternalCheckerRegistryEntryRecord | None:
+        """Read the immutable row for one capability, version and phase."""
         return await self._session.scalar(
             select(ExternalCheckerRegistryEntryRecord).where(
                 ExternalCheckerRegistryEntryRecord.capability_id == capability_id,
@@ -110,6 +115,7 @@ class ExternalCheckerRegistryRepository:
     async def by_exact_id(
         self, registry_entry_id: UUID
     ) -> ExternalCheckerRegistryEntryRecord | None:
+        """Read one exact durable registry identity without latest selection."""
         return await self._session.get(
             ExternalCheckerRegistryEntryRecord,
             registry_entry_id,
@@ -117,6 +123,7 @@ class ExternalCheckerRegistryRepository:
         )
 
     async def add(self, row: ExternalCheckerRegistryEntryRecord) -> None:
+        """Flush and refresh one row without committing the caller transaction."""
         self._session.add(row)
         await self._session.flush()
         await self._session.refresh(row)
@@ -130,11 +137,13 @@ class ExternalCheckerRegistryService:
         session: AsyncSession,
         authority: ExternalCheckerRegistrationAuthorityPort,
     ) -> None:
+        """Compose caller-owned persistence with fresh registration authority."""
         self._session = session
         self._authority = authority
         self._repository = ExternalCheckerRegistryRepository(session)
 
     def _require_root_transaction(self) -> None:
+        """Reject absent, inactive or nested caller transaction ownership."""
         transaction = self._session.sync_session.get_transaction()
         if (
             transaction is None
@@ -231,6 +240,7 @@ class ExternalCheckerRegistryService:
         row: ExternalCheckerRegistryEntryRecord,
         request: ExternalCheckerRegistrationRequest,
     ) -> bool:
+        """Compare replay against every stored request and specification fact."""
         try:
             entry = _row_entry(row)
         except (TypeError, ValueError):

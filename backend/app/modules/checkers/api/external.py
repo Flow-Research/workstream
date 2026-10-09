@@ -100,6 +100,7 @@ def _canonical_json(value: object) -> str:
 
 
 def _canonical_bytes(value: object) -> bytes:
+    """Encode checker-owned canonical JSON for both digests and byte ceilings."""
     return _canonical_json(value).encode("utf-8")
 
 
@@ -134,6 +135,7 @@ class ExternalCheckerSchema(ExternalCheckerValue):
 
     @model_validator(mode="after")
     def validate_schema(self) -> Self:
+        """Reject oversized, remote, invalid or digest-substituted schemas."""
         if len(_canonical_bytes(self.document)) > MAX_SCHEMA_BYTES:
             raise ExternalCheckerContractError("external checker schema is too large")
         _reject_remote_references(self.document)
@@ -178,6 +180,7 @@ class ExternalCheckerRegistrySpec(ExternalCheckerValue):
 
     @model_validator(mode="after")
     def validate_protocol_schemas(self) -> Self:
+        """Bind the registered input schema to its phase and one result schema."""
         expected_input = (
             PRE_SUBMIT_INPUT_SCHEMA_ID
             if self.phase == "pre_submit"
@@ -210,6 +213,7 @@ class ExternalCheckerRegistryEntry(ExternalCheckerRegistrySpec):
     @field_validator("registry_entry_id")
     @classmethod
     def validate_registry_entry_id(cls, value: UUID) -> UUID:
+        """Require the server-selected registry identity to be canonical UUIDv7."""
         if value.version != 7 or value.variant != RFC_4122:
             raise ExternalCheckerContractError(
                 "external checker registry entry ID must be UUIDv7"
@@ -218,6 +222,7 @@ class ExternalCheckerRegistryEntry(ExternalCheckerRegistrySpec):
 
     @model_validator(mode="after")
     def validate_entry_digest(self) -> Self:
+        """Recompute the immutable specification digest carried by the row."""
         spec = ExternalCheckerRegistrySpec.model_validate(
             self.model_dump(
                 mode="json",
@@ -248,6 +253,7 @@ class ExternalCheckerRegistrationRequest(ExternalCheckerValue):
     @field_validator("registry_entry_id")
     @classmethod
     def validate_registry_entry_id(cls, value: UUID) -> UUID:
+        """Require the requested durable identity to be canonical UUIDv7."""
         if value.version != 7 or value.variant != RFC_4122:
             raise ExternalCheckerContractError(
                 "external checker registry entry ID must be UUIDv7"
@@ -256,6 +262,7 @@ class ExternalCheckerRegistrationRequest(ExternalCheckerValue):
 
     @model_validator(mode="after")
     def validate_request_digest(self) -> Self:
+        """Reject registration commands whose complete request digest differs."""
         body = self.model_dump(mode="json", exclude={"request_digest"})
         if self.request_digest != external_checker_json_hash(body):
             raise ExternalCheckerContractError(
@@ -370,6 +377,7 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
 
     @model_validator(mode="after")
     def validate_request(self) -> Self:
+        """Close phase, material, schema, size and digest request commitments."""
         if self.registry.phase != self.identity.phase:
             raise ExternalCheckerContractError("external checker request phase mismatch")
         if len({item.role for item in self.materials}) != len(self.materials):
@@ -428,6 +436,7 @@ class ExternalCheckerExecutionResult(ExternalCheckerValue):
 
     @model_validator(mode="after")
     def validate_result(self) -> Self:
+        """Keep work verdicts distinct from bounded infrastructure outcomes."""
         if self.outcome == "infrastructure_failed":
             if self.verdict is not None or self.findings or self.infrastructure_failure_code is None:
                 raise ExternalCheckerContractError(
@@ -491,6 +500,7 @@ _RESULT_FIELDS = {
 
 
 def _make_derived(model, adapters, digest_field: str, fields: dict[str, object]):
+    """Validate caller fields and derive the one non-caller-selected digest."""
     if digest_field in fields:
         raise ExternalCheckerContractError(f"{digest_field} is derived, not caller selected")
     values = {
