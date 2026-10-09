@@ -120,7 +120,7 @@ async def test_queue_lock_order(task_client, monkeypatch, kind):
     assert_order()
     # Deliberately acquire Project before the matched grant, recreating the lock-order defect.
     from app.modules.authorization.repository import AdminAuthorizationRepository
-    method = "find_active_project_role" if kind == "ready" else "find_effective_grant"
+    method = "find_active_project_role_any" if kind == "ready" else "find_effective_grant"
     original = getattr(AdminAuthorizationRepository, method)
 
     async def reversed_locks(repository, *args, **kwargs):

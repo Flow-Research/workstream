@@ -2,13 +2,62 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Literal, Protocol, TypeAlias
 from uuid import UUID
+
+
+class LockedTaskCompensationUnavailable(RuntimeError):
+    """The task's exact locked compensation graph could not be projected."""
 
 
 def _aware(value: datetime) -> bool:
     """Require an exact, timezone-aware keyset position."""
     return isinstance(value, datetime) and value.utcoffset() is not None
+
+
+@dataclass(frozen=True, slots=True)
+class TaskCompensationAward:
+    """One contributor-safe exact award value in a TASK response."""
+
+    instrument: Literal["money", "project_points"]
+    unit: str
+    quantity: str
+
+    def __post_init__(self) -> None:
+        if (
+            self.instrument not in ("money", "project_points")
+            or type(self.unit) is not str
+            or not self.unit
+            or type(self.quantity) is not str
+            or not self.quantity
+        ):
+            raise ValueError("task compensation award is invalid")
+
+
+TaskContributionTerms: TypeAlias = Literal["unpaid"] | tuple[TaskCompensationAward, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TaskCompensationTerms:
+    """The two complete locked contribution rules disclosed by TASK."""
+
+    contribution_policy_version_id: UUID
+    accepted_submission: TaskContributionTerms
+    completed_review: TaskContributionTerms
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.contribution_policy_version_id, UUID):
+            raise ValueError("task compensation terms are invalid")
+        for value in (self.accepted_submission, self.completed_review):
+            if value == "unpaid":
+                continue
+            if (
+                type(value) is not tuple
+                or not 1 <= len(value) <= 2
+                or any(not isinstance(item, TaskCompensationAward) for item in value)
+                or len({item.instrument for item in value}) != len(value)
+            ):
+                raise ValueError("task compensation terms are invalid")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +104,7 @@ class ReadyTaskSummary:
     skill_tags: tuple[str, ...]
     estimated_time_minutes: int | None
     created_at: datetime
+    compensation: TaskCompensationTerms
 
     def __post_init__(self) -> None:
         """Keep summary facts deeply immutable and scalar."""
@@ -66,6 +116,7 @@ class ReadyTaskSummary:
             or any(not isinstance(value, str) for value in self.skill_tags)
             or (self.estimated_time_minutes is not None and type(self.estimated_time_minutes) is not int)
             or not _aware(self.created_at)
+            or not isinstance(self.compensation, TaskCompensationTerms)
         ):
             raise ValueError("ready task summary is invalid")
 

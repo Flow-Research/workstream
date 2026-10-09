@@ -163,8 +163,7 @@ class TaskService:
         request = ContributorTaskDetailRequest(project_id, task_id, contributor_id)
         with self._session.no_autoflush:
             task = await self._lock_scoped_task(project_id, task_id)
-            detail = await self._repo.read_contributor_task_detail(request)
-            if detail is None:
+            if not await self._repo.contributor_task_visible(request):
                 raise TaskNotFound("task not found")
             context = await self._load_locked_task_context(task)
             return self._contributor_submission_requirements_response(task, context)

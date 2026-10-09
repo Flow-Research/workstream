@@ -48,9 +48,9 @@ async def queue_read_denial(action, resource, context, repository, refresh, life
     if denial is not None:
         return denial, context, None, None, None, True
     if action.action_id is ActionId.TASK_QUEUE_READ:
-        grant = await repository.find_active_project_role(
+        grant = await repository.find_active_project_role_any(
             project_id=resource.scope_project_id, actor_profile_id=context.actor_profile_id,
-            role="submitter", for_update=True,
+            for_update=True,
         )
         kind = MatchedAuthorityKind.PROJECT_ROLE_GRANT
     else:

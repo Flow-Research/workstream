@@ -11,10 +11,12 @@ import pytest
 from sqlalchemy import select
 
 from app.db import session as db_session
+from app.adapters.contributions import locked_compensation_terms_port
 from app.main import create_app
 from app.modules.tasks.api import (
     ContributorTaskDetail, ContributorTaskDetailRequest,
     ManagementTaskDetail, ManagementTaskDetailRequest,
+    TaskCompensationTerms,
 )
 from app.modules.tasks.lifecycle import ALLOWED_TASK_TRANSITIONS
 from app.modules.tasks.models import TaskAssignment, WorkstreamTask
@@ -43,8 +45,10 @@ def request_for(method, project_id, task_id, contributor_id=None):
 
 async def read_once(session, method, request):
     with patch.object(session, "execute", wraps=session.execute) as execute:
-        result = await getattr(TaskRepository(session), method)(request)
-    execute.assert_awaited_once()
+        result = await getattr(
+            TaskRepository(session, compensation_terms=locked_compensation_terms_port(session)), method
+        )(request)
+    assert execute.await_count == (2 if method == READS[0] and result is not None else 1)
     return result
 
 
@@ -61,11 +65,14 @@ def test_task_detail_contracts():
     values = dict(task_id=task, project_id=project, title="Title", description="Instructions", task_type=None,
                   difficulty=None, skill_tags=("tag",), estimated_time_minutes=None, status="ready",
                   acceptance_criteria=None, rejection_criteria=None, deadline_at=None, created_at=now, updated_at=now)
-    for item in (ContributorTaskDetail(**values), ManagementTaskDetail(
+    compensation = TaskCompensationTerms(new_record_id(), "unpaid", "unpaid")
+    for item in (ContributorTaskDetail(**values, compensation=compensation), ManagementTaskDetail(
         **values, source_type="manual", source_ref=None, source_payload_hash=None, import_batch_id=None,
         external_task_id=None, created_by="creator", assigned_to=None,
     )):
-        assert set(asdict(item)) == COMMON | (MANAGEMENT if type(item) is ManagementTaskDetail else set())
+        assert set(asdict(item)) == COMMON | (
+            MANAGEMENT if type(item) is ManagementTaskDetail else {"compensation"}
+        )
         for field, value in asdict(item).items():
             with pytest.raises(ValueError, match="facts are invalid"):
                 replace(item, **{field: []})
@@ -218,19 +225,34 @@ async def test_task_detail_projection(task_client, method):
         assert row.deadline_at == deadline and row.assigned_to is None
         expected = {name: getattr(row, name) for name in COMMON - {"task_id", "project_id", "skill_tags"}}
         expected |= dict(task_id=UUID(row.id), project_id=UUID(row.project_id), skill_tags=tuple(row.skill_tags))
-        fields = COMMON | (MANAGEMENT if method == READS[1] else set())
+        fields = COMMON | (MANAGEMENT if method == READS[1] else {"compensation"})
         if method == READS[1]:
             expected |= {name: getattr(row, name) for name in MANAGEMENT}
+        else:
+            expected["compensation"] = asdict(
+                TaskCompensationTerms(
+                    row.locked_contribution_policy_version_id, "unpaid", "unpaid"
+                )
+            )
         execute = session.execute
 
         async def checked_execute(statement, *args, **kwargs):
             result = await execute(statement, *args, **kwargs)  # Actual database query, not a canned result.
-            assert set(statement.selected_columns.keys()) == fields
+            selected = set(statement.selected_columns.keys())
+            expected_selected = fields if method == READS[1] else (fields - {"compensation"}) | {
+                "locked_contribution_policy_version_id"
+            }
+            assert selected == expected_selected or selected == {
+                "version_id", "rule_id", "contribution_type", "compensation_mode",
+                "instrument_type", "unit_code", "quantity",
+            }
             return result
 
         with patch.object(session, "execute", wraps=checked_execute) as observed:
-            detail = await getattr(TaskRepository(session), method)(request_for(method, project["id"], row.id))
-        observed.assert_awaited_once()
+            detail = await getattr(
+                TaskRepository(session, compensation_terms=locked_compensation_terms_port(session)), method
+            )(request_for(method, project["id"], row.id))
+        assert observed.await_count == (2 if method == READS[0] else 1)
         assert type(detail) is (ManagementTaskDetail if method == READS[1] else ContributorTaskDetail)
         assert asdict(detail) == expected
         assert set(asdict(detail)) == fields

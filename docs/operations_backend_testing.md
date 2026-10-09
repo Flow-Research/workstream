@@ -136,8 +136,18 @@ This is not a production configuration or proof of host-power-loss durability:
 An exhausted mount fails the job; it does not silently change storage or skip tests.
 
 The `project_lifecycle_a`, `project_lifecycle_b`, and `project_lifecycle_c` lanes
-partition PROJECT nodes; `task_lifecycle_a`, `task_lifecycle_b`, and `task_lifecycle_c` use the same
-deterministic partition mechanism for TASK and checker nodes. The single `schema_contracts` lane owns all baseline/PostgreSQL schema, reset and
+partition PROJECT nodes, checker execution, materialization, evaluation capacity,
+output custody and routing AUTH preparation beside initial dispatch/delivery.
+All use the existing exact-node hash across the three lanes: placing the entire
+checker delivery group exclusively on project A exhausted its execution cap.
+Two measured broad owners, `tests/test_projects.py` and
+`tests/test_guide_document_intake.py`, instead partition their nodes only across
+project A and C. Retained runs measured capacity across that pair and a project B
+timeout when the modules used all three lanes. The lane logs retain the 25 slowest
+pytest phases for diagnosis without letting unbounded diagnostic output consume
+the execution deadline after all nodes finish.
+`task_lifecycle_a`, `task_lifecycle_b`, and `task_lifecycle_c` use the same
+deterministic partition mechanism for the remaining TASK and checker nodes. The single `schema_contracts` lane owns all baseline/PostgreSQL schema, reset and
 isolated-runner contracts. The
 `shared_foundations_a` and `shared_foundations_b` lanes deterministically
 partition exact node IDs from the remaining authorization, artifact, API, and
@@ -220,11 +230,14 @@ coverage tampering before coverage combination.
 - API contract or evidence-integrity failure: the required job remains failed;
   lane completion cannot compensate. A lower coverage percentage is not a failure.
 
-On the same exact head, rerun failed lanes (and their dependent final job), or
-rerun only the final job when the lane evidence already passed. Successful lanes
-not rerun retain their previous attempt's evidence; a rerun lane's newest bundle
-must independently pass all existing checks. A failed, cancelled or skipped
-required job still blocks fan-in. Never edit or upload evidence manually.
+After diagnosing a transient failure on the same exact head, rerun only failed
+jobs and their dependents with `gh run rerun RUN_ID --failed`; avoid the bare
+whole-workflow rerun command for that case. Successful lanes not rerun retain
+their previous attempt's evidence, while a rerun lane's newest bundle must
+independently pass all existing checks. The required aggregate job selects those
+bundles and revalidates the complete exact-head union. A failed, cancelled or
+skipped required job still blocks fan-in. Never edit or upload evidence
+manually. A repeated timeout requires diagnosis rather than retries until green.
 Review submission or dismissal does not rerun Backend because
 it does not change the tested tree. A new PR commit starts a new run and cancels
 the superseded same-PR run. Every new commit requires complete evidence because
@@ -239,6 +252,13 @@ a measured target miss at the human merge checkpoint, that performance result
 does not override otherwise passing correctness, custody, service-contract,
 API, and complete-execution gates. Coverage is diagnostic only. Never skip
 nodes or add a silent fallback to meet the target.
+
+A source push or base-branch change creates a different current tree and
+requires fresh CI; prior same-head retry evidence cannot be carried forward.
+The content-addressed MinIO cache can remove the measured 145-second image
+rebuild when its exact Docker context, Backend workflow and runner platform are
+unchanged. It does not solve observed 17-minute queue waits or 20-minute lanes
+and does not promise an eight-minute Backend completion time.
 
 ## Retired changed-scope behavior mutation
 

@@ -14,6 +14,7 @@ from app.modules.authorization.domain.audit import AuthorizationDenialCode, Matc
 TASK_CONTRIBUTOR_READ_ACTIONS = frozenset({
     ActionId.TASK_READ, ActionId.TASK_SUBMISSION_REQUIREMENTS_READ, ActionId.TASK_WORK_CONTEXT_READ,
 })
+TASK_PROJECT_ROLE_READ_ACTIONS = frozenset({ActionId.TASK_READ})
 TASK_MANAGER_READ_ACTIONS = frozenset({
     ActionId.PROJECT_TASK_READ, ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
     ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
@@ -24,13 +25,15 @@ TASK_SUBMITTER_ACTIONS = frozenset(
         ActionId.TASK_CLAIM,
         ActionId.TASK_START,
         ActionId.TASK_GUIDE_READ,
-        *TASK_CONTRIBUTOR_READ_ACTIONS,
+        ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
+        ActionId.TASK_WORK_CONTEXT_READ,
     }
 )
+TASK_PROJECT_ROLE_ACTIONS = TASK_SUBMITTER_ACTIONS | TASK_PROJECT_ROLE_READ_ACTIONS
 TASK_MANAGER_ACTIONS = frozenset({
     ActionId.PROJECT_TASK_CREATE, ActionId.PROJECT_TASK_SCREEN, ActionId.PROJECT_TASK_RELEASE,
 })
-TASK_ACTIONS = TASK_SUBMITTER_ACTIONS | TASK_MANAGER_ACTIONS | TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {
+TASK_ACTIONS = TASK_PROJECT_ROLE_ACTIONS | TASK_MANAGER_ACTIONS | TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {
     ActionId.OPERATIONS_TASK_START_OVERRIDE,
     ActionId.AUDIT_TASK_EVIDENCE_READ,
 }
@@ -166,7 +169,7 @@ def evaluate_task_authority(action, context, authority, resource, lifecycle_deni
     if denial is not None:
         return denial, None, None, None
     matched_kind = (
-        MatchedAuthorityKind.PROJECT_ROLE_GRANT if action.action_id in TASK_SUBMITTER_ACTIONS
+        MatchedAuthorityKind.PROJECT_ROLE_GRANT if action.action_id in TASK_PROJECT_ROLE_ACTIONS
         else MatchedAuthorityKind.ADMIN_ROLE_GRANT
     )
     return None, matched_kind, authority.matched_grant_id, authority.scope_project_id

@@ -513,6 +513,24 @@ Submission.contribution_policy_version_id
 The CON participant flushes only and never commits. PROJECTS owns activation;
 TASK owns readiness, claim composition, and status effects.
 
+### Contributor-visible locked terms
+
+Ready-task summaries and Contributor task detail resolve compensation only from
+`WorkstreamTask.locked_contribution_policy_version_id`. CON exposes a bounded
+public owner port for this projection; it returns the exact version UUID and
+both complete contribution rules. Each rule is either the literal `unpaid` or
+an ordered award list containing only `instrument`, `unit`, and the exact
+decimal-string `quantity`. The projection accepts published or retired versions
+so later publication cannot move terms already locked on a released task.
+
+TASK owns public disclosure authority. An active exact-project Submitter or
+Reviewer may read both contribution types; no role-specific filtering occurs.
+Missing, revoked, and foreign-project grants are concealed. The projection never
+returns definition IDs, adapter binding IDs, route keys, binding lifecycle or
+status, policy status, or other Finance administration facts. It does not create
+an award, promise fulfillment, or change publication, locking, retirement,
+payment, reconciliation, or delivery behavior.
+
 After a human `needs_revision`, task-owned preparation locks the complete
 current next-attempt context. If policy changed, it validates the newly active
 guide-bound version through CON and atomically rebases the continuing Task and

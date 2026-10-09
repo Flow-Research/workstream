@@ -148,7 +148,9 @@ def activation_service(session, actor, command, grant, *, authority=True, close_
 
 
 @asynccontextmanager
-async def activation_case(url, *, human_review_required=True, compensated=False):
+async def activation_case(
+    url, *, human_review_required=True, compensated=False, contribution_awards=()
+):
     from .source_fixtures import source_case
 
     async with source_case(url) as (values, factory, finalization, actor, grant):
@@ -167,7 +169,10 @@ async def activation_case(url, *, human_review_required=True, compensated=False)
             PostPolicyApproval(target=derived.target, idempotency_key=uuid4()),
         )
         world, policy = await publish_policy(
-            factory, finalization.project_id, compensated=compensated
+            factory,
+            finalization.project_id,
+            compensated=compensated,
+            contribution_awards=contribution_awards,
         )
         command = await activation_command(factory, approved, policy)
         yield factory, command, actor, grant, world, policy

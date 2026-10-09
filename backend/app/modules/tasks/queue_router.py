@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.repository import TaskRepository
+from app.adapters.tasks import contributor_task_repository
 from app.api.deps.authorization import (
     enforce_human_authorization_read, get_task_queue_authorization,
 )
@@ -56,10 +57,10 @@ async def ready_tasks(
     project_id: UUID, authority: Authority, session: Session,
     limit: PageLimit = 50, cursor: PageCursor = None,
 ) -> ContributorTaskQueueResponse:
-    """List unassigned ready work for an active exact-project Submitter."""
+    """List ready work for an active exact-project Submitter or Reviewer."""
     return await _page(
         project_id, limit, cursor, authority, session, READY_QUEUE_ACTION,
-        TaskRepository(session).read_ready_tasks, ContributorTaskQueueResponse,
+        contributor_task_repository(session).read_ready_tasks, ContributorTaskQueueResponse,
     )
 
 

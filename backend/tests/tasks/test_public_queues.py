@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import event, select
 
 from app.db import session as db_session
+from app.adapters.contributions import locked_compensation_terms_port
 from app.modules.actors.models import ActorIdentityLink
 from app.modules.tasks.models import WorkstreamTask
 from app.modules.tasks.repository import TaskRepository
@@ -22,10 +23,17 @@ from tests.test_tasks import (
 
 METHODS = {"ready": "read_ready_tasks", "management": "read_management_tasks", "operational": "read_operational_tasks"}
 COLUMNS = {
-    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at"},
+    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at", "locked_contribution_policy_version_id"},
     "management": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "status", "deadline_at", "created_at", "updated_at"},
     "operational": {"id", "project_id", "status", "created_at", "updated_at"},
 }
+
+
+def queue_repository(session, kind):
+    return TaskRepository(
+        session,
+        compensation_terms=locked_compensation_terms_port(session) if kind == "ready" else None,
+    )
 
 
 async def queue_actor(client, monkeypatch, project, kind):
@@ -66,7 +74,10 @@ async def test_public_queue_pages_preserve_owner_selection(task_client, monkeypa
         assert page["project_id"] == project["id"]
         assert len(page["items"]) == 1
         item = page["items"][0]
-        assert set(item) == (COLUMNS[kind] - {"id"}) | {"task_id"}
+        expected_fields = (COLUMNS[kind] - {"id", "locked_contribution_policy_version_id"}) | {"task_id"}
+        if kind == "ready":
+            expected_fields.add("compensation")
+        assert set(item) == expected_fields
         assert item["project_id"] == project["id"]
         seen.append(item["task_id"])
         cursor = page["next_cursor"]
@@ -90,7 +101,7 @@ async def test_queue_selects_only_declared_columns(task_client, monkeypatch, kin
     event.listen(engine, "before_execute", capture)
     try:
         async with db_session.get_session_factory()() as session:
-            page = await getattr(TaskRepository(session), METHODS[kind])(TaskQueueRequest(UUID(project["id"])))
+            page = await getattr(queue_repository(session, kind), METHODS[kind])(TaskQueueRequest(UUID(project["id"])))
             assert len(page.items) == 1
     finally:
         event.remove(engine, "before_execute", capture)
@@ -107,7 +118,7 @@ async def test_queue_selects_only_declared_columns(task_client, monkeypatch, kin
     event.listen(engine, "before_execute", capture)
     try:
         async with db_session.get_session_factory()() as session:
-            await getattr(TaskRepository(session), METHODS[kind])(TaskQueueRequest(UUID(project["id"])))
+            await getattr(queue_repository(session, kind), METHODS[kind])(TaskQueueRequest(UUID(project["id"])))
     finally:
         event.remove(engine, "before_execute", capture)
     assert len(observed) == 1

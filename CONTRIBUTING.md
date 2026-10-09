@@ -149,6 +149,9 @@ Different initiatives may proceed concurrently in separate branches or
 worktrees. If another pull request changes the base, inspect the new delta and
 rerun affected checks; unchanged evidence does not need ceremonial repetition.
 
+For Backend failure diagnosis and safe partial reruns, follow the canonical
+[Backend testing operations guide](docs/operations_backend_testing.md#failure-diagnosis-and-reruns).
+
 ## Behavior Ownership Catalogue
 
 The hosted behavior-mutation check is temporarily retired because its

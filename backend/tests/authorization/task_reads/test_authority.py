@@ -26,7 +26,11 @@ async def test_task_read_authority_matrix(admin_access, kind):
             grant_id = await grant_queue_role(access, other, "project_manager")
         elif role != "token_only":
             grant_id = await grant_queue_role(access, project, role)
-        allowed = role in ({"submitter"} if kind.startswith("contributor") else {"project_manager", "system_manager"})
+        allowed = role in (
+            {"submitter", "reviewer"} if kind == "contributor_detail"
+            else {"submitter"} if kind == "contributor_requirements"
+            else {"project_manager", "system_manager"}
+        )
         response = await access.signed.client.get(path(kind, project, task), headers=actor.headers)
         assert response.status_code == (200 if allowed else 404), (role, response.text)
         if allowed:
@@ -37,6 +41,10 @@ async def test_task_read_authority_matrix(admin_access, kind):
                 assert "locked_payment_policy_version" not in response.json()
                 if kind.startswith("contributor"):
                     assert "created_by" not in response.json() and "source_ref" not in response.json()
+                if kind == "contributor_detail":
+                    encoded = response.text
+                    assert "adapter_binding" not in encoded and "route_key" not in encoded
+                    assert "binding_status" not in encoded and "version_status" not in encoded
         else:
             assert response.json()["error"]["code"] == "project_authorization_resource_not_found"
         async with db_session.get_session_factory()() as session:

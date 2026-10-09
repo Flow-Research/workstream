@@ -54,6 +54,10 @@ from app.modules.tasks.api.ready_queue import (
     ReadyTaskQueuePort,
     TaskQueueRequest,
     ReadyTaskSummary,
+    LockedTaskCompensationUnavailable,
+    TaskCompensationAward,
+    TaskCompensationTerms,
+    TaskContributionTerms,
 )
 
 from app.modules.tasks.api.management_queue import (
@@ -119,6 +123,10 @@ __all__ = (
     "ReadyTaskQueuePort",
     "TaskQueueRequest",
     "ReadyTaskSummary",
+    "LockedTaskCompensationUnavailable",
+    "TaskCompensationAward",
+    "TaskCompensationTerms",
+    "TaskContributionTerms",
     "TaskTransitionAuditPort",
     "TaskTransitionFacts",
     "TaskAuthorizationPort",

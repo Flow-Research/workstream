@@ -15,7 +15,11 @@ from app.db import session as db_session
 from app.main import create_app
 from app.modules.projects.api.guide_activation_context import GuidePolicySelection
 from app.modules.projects.api.locked_policy import GuideDisplayFacts, ProjectDisplayFacts
-from app.modules.tasks.api import ContributorTaskDetail, ManagementTaskDetail
+from app.modules.tasks.api import (
+    ContributorTaskDetail,
+    ManagementTaskDetail,
+    TaskCompensationTerms,
+)
 from app.modules.tasks.schemas import (
     ContributorTaskLifecycle, ContributorTaskWorkContext, ManagementTaskWorkContext,
 )
@@ -36,19 +40,25 @@ COMMON = {"task_id", "project_id", "title", "description", "task_type", "difficu
           "deadline_at", "created_at", "updated_at"}
 MANAGEMENT = {"source_type", "source_ref", "source_payload_hash", "import_batch_id", "external_task_id",
               "created_by", "assigned_to"}
+CONTRIBUTOR = COMMON | {"compensation"}
 CONTEXT = {"task", "project", "guide", "review_policy", "revision_policy", "contribution_policy_version_id"}
 ACTIONS = ("task.work_context.read", "project.task.work_context.read")
 
 
 def context_values():
     project_id, now = new_record_id(), datetime.now(UTC)
-    task = ContributorTaskDetail(new_record_id(), project_id, "Title", "Work", None, None, ("tag",), None,
-                                 "claimed", None, None, None, now, now)
+    task = ContributorTaskDetail(
+        new_record_id(), project_id, "Title", "Work", None, None, ("tag",), None,
+        "claimed", None, None, None, now, now,
+        TaskCompensationTerms(new_record_id(), "unpaid", "unpaid"),
+    )
     selection = GuidePolicySelection(policy_id=new_record_id(), generation=1, policy_hash="sha256:" + "1" * 64)
     values = dict(project=ProjectDisplayFacts(project_id, "Project", "project", None),
                   guide=GuideDisplayFacts(new_record_id(), project_id, "guide", None, now),
                   review_policy=selection, revision_policy=selection, contribution_policy_version_id=new_record_id())
-    manager = ManagementTaskDetail(**asdict(task), source_type="manual", source_ref="private",
+    task_values = asdict(task)
+    task_values.pop("compensation")
+    manager = ManagementTaskDetail(**task_values, source_type="manual", source_ref="private",
                                    source_payload_hash=None, import_batch_id=None, external_task_id=None,
                                    created_by="creator", assigned_to="owner")
     return task, manager, values
@@ -84,8 +94,11 @@ def test_work_context_contracts():
                         kind: values[kind].model_dump() | {field: invalid},
                     }))
         subclass = type("UnexpectedTaskDetail", (type(detail),), {})
+        subclass_values = asdict(detail)
+        if isinstance(detail, ContributorTaskDetail):
+            subclass_values["compensation"] = detail.compensation
         with pytest.raises(ValidationError, match="work context task is invalid"):
-            cls(task=subclass(**asdict(detail)), **values, **extra)
+            cls(task=subclass(**subclass_values), **values, **extra)
         with pytest.raises(ValidationError, match="extra_forbidden"):
             cls(task=detail, **values, **extra, base_amount=25)
     for extra in ({"next_actions": ("submit",)}, {"next_actions": ("claim", "start")},
@@ -110,7 +123,7 @@ def test_work_context_openapi():
         assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {"$ref": f"#/components/schemas/{name}"}
         assert set(definitions[name]["properties"]) == fields
         assert definitions[name]["additionalProperties"] is False
-    assert set(definitions["ContributorTaskDetail"]["properties"]) == COMMON
+    assert set(definitions["ContributorTaskDetail"]["properties"]) == CONTRIBUTOR
     assert set(definitions["ManagementTaskDetail"]["properties"]) == COMMON | MANAGEMENT
     assert set(definitions["ContributorTaskLifecycle"]["properties"]) == {"assigned_to_current_actor", "next_actions"}
     assert set(definitions["GuidePolicySelection"]["properties"]) == {"policy_id", "generation", "policy_hash"}
@@ -179,15 +192,25 @@ async def test_work_context_public_projections(task_client, monkeypatch):
         response = await task_client.get(f"{path}/tasks/{task['id']}/work-context", headers=auth_headers())
         assert response.status_code == 200, response.text
         body = response.json()
-        fields = COMMON | (MANAGEMENT if management else set())
+        fields = (COMMON | MANAGEMENT) if management else CONTRIBUTOR
         assert set(body) == CONTEXT | (set() if management else {"lifecycle", "guide_documents"})
         assert set(body["task"]) == fields
-        for name in fields - {"created_at", "updated_at", "deadline_at"}:
+        for name in fields - {"created_at", "updated_at", "deadline_at", "compensation"}:
             assert body["task"][name] == stored["id" if name == "task_id" else name], name
         for name in ("created_at", "updated_at", "deadline_at"):
             assert datetime.fromisoformat(body["task"][name]) == stored[name]
         if not management:
-            assert body["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": ["start"]}
+            assert body["lifecycle"] == {
+                "assigned_to_current_actor": True,
+                "next_actions": ["start"],
+            }
+            assert body["task"]["compensation"] == {
+                "contribution_policy_version_id": str(
+                    stored["locked_contribution_policy_version_id"]
+                ),
+                "accepted_submission": "unpaid",
+                "completed_review": "unpaid",
+            }
             assert "PRIVATE" not in response.text
         for kind in ("review", "revision"):
             assert body[f"{kind}_policy"] == {
