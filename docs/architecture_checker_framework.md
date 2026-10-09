@@ -30,6 +30,28 @@ they are not called again as an implicit evaluator of contributor work.
 
 ## Checker Result Contract
 
+`ExternalCheckerExecutionRequest` and `ExternalCheckerExecutionResult` are the
+normalized versioned contract for the external-checker target. Every request
+binds one immutable registry entry and entry digest, the exact configuration
+and input hashes, bounded ART-verified read-only material identities, and one
+phase-specific owner identity. Pre-submit identity uses the existing prepared
+generation, attempt, attempt-request digest and effective-plan hash before a
+Submission exists. Post-submit identity uses the immutable Submission,
+evaluation request and reservation, plus the current execution lease and its
+database expiry.
+
+The normalized result echoes the exact request, registry and phase identity.
+It is either `completed`, with closed findings and a passed/failed verdict, or
+`infrastructure_failed`, with one of the existing capacity, deadline, material,
+implementation or invalid-output codes. Missing images, crashes and malformed
+or oversized output cannot become a silent pass. This contract and the
+immutable registry are available to later owner operations; no external
+launcher, routing path or execution factory is installed yet.
+
+The following catalogue contracts remain the currently executing behavior
+until the clean cutover replaces them. They are not alternate external wire
+formats.
+
 The following illustrative provenance envelope uses a pre-submission catalogue
 `v1` definition; it is not a universal serialized result schema. The
 [current post-submit contract](#current-post-submit-contract) uses
@@ -88,19 +110,29 @@ Severity:
 - high
 - critical
 
-## Durable/Post-Submit Checker Registry
+## External Checker Registry And Current Catalogues
 
-Every durable/post-submit checker is registered with a stable definition before
-projects reference it. The durable registry owns post-submit dispatch.
-Pre-submit intake is not dispatched by this registry: the single versioned
-`PreSubmissionCheckerCatalogue` is the pre-submit dispatch authority and owns
-artifact-custody defaults plus constrained project-policy primitives. Shared
-implementations may be exposed through typed adapters, but neither the durable
-registry nor the pre-submission catalogue may duplicate IDs, primitive maps, or
-dispatch authority.
+The immutable external registry publishes one capability/version/phase with an
+exact OCI `sha256` digest, bounded configuration/input/output JSON Schemas and
+CPU, memory, deadline and output ceilings. Publication requires fresh
+system-scoped Operator authority over the complete request and entry digests.
+Exact replay returns the original row; changed operation or logical-identity
+replay fails. PostgreSQL closes the authorization receipt and recomputes every
+schema, request and entry digest while denying update, delete and truncate.
 
-The hidden catalogue implementation is process-wide and immutable. Deployment
-configuration may name disabled stable definition IDs only at startup. Unknown
+Registry metadata grants no policy selection, activation, execution or routing
+authority. Consumers read an exact registry ID and digest; there is no
+"latest" lookup and no registry-driven Python plugin or callable discovery.
+The registry supports both `pre_submit` and `post_submit`, but no external
+execution is wired in this foundation.
+
+Until the replacement proof and clean cutover, the single versioned
+`PreSubmissionCheckerCatalogue` remains the pre-submit dispatch authority and
+the current process-wide post-submit catalogue remains the post-submit dispatch
+authority. They do not execute registry entries in parallel.
+
+The current hidden catalogue implementation is process-wide and immutable.
+Deployment configuration may name disabled stable definition IDs only at startup. Unknown
 or duplicate IDs, invalid dependencies/order, unknown capabilities, and unsafe
 disabled behavior fail startup validation. The pure effective-plan compiler
 binds project, guide version, source snapshot, effective policy, pre-submit
@@ -108,27 +140,21 @@ policy, catalogue manifest, availability state, ordered definition/configuration
 hashes, and deterministic rule-instance identities. It does not read artifacts
 or invoke either pre-submit or durable checkers.
 
-Definition fields:
+External registry fields include:
 
-- `checker_id`
-- `name`
-- `phase`
-- `version`
-- `default_severity`
-- `default_blocks_review`
-- `contributor_visible`
-- `description`
+- capability ID and version;
+- `pre_submit` or `post_submit` phase;
+- exact OCI image digest;
+- configuration, phase-input and normalized-result schema IDs, versions,
+  documents and hashes;
+- CPU, memory, deadline and maximum-output limits;
+- complete entry and registration-request digests plus the exact authorization
+  decision receipt.
 
-Durable phase:
-
-- project_activation
-- task_screening
-- submission_quality
-- pre_review_gate
-- lifecycle_transition
-- compensation_fulfillment_reconciliation
-
-Checker names must not drift between project guides, policy templates, implementation code, and checker results. Initial v0.1 development replaces superseded implementations and updates their callers together; it does not retain alternate software generations.
+Capability names must not drift between project guides, approved policy
+bindings, registry entries and checker results. Later policy work must bind the
+exact digest, configuration and schema identities; registration alone changes
+no locked task.
 
 ## Current post-submit contract
 
@@ -189,7 +215,7 @@ than inventing request lineage or deleting data.
 
 ## Blocking Policy
 
-Default:
+The current catalogue behavior remains:
 
 - critical- and high-severity `failed` results block human review
 - medium-severity `failed` result creates reviewer warning
@@ -199,9 +225,27 @@ Approved machine policies can declare stricter blocking behavior. `SubmissionArt
 
 Project policy cannot weaken Workstream default submission artifact rules. Workstream defaults are applied before project policy. A project policy that attempts to require a forbidden artifact, remove hash requirements, allow credential-bearing storage references, or downgrade blocking defaults is a project setup defect.
 
-The checker framework is conservative. It blocks objective structural failures and warns on judgment-heavy issues. Human reviewers own final quality judgment.
+The clean-cutover target has one versioned Workstream default checker with
+exactly four blocking behaviors:
+
+1. safely open exactly one ZIP within platform size limits, rejecting
+   encryption, symbolic links, special files and traversal paths;
+2. compute the received SHA-256 in Workstream, verify stored bytes and build
+   the file manifest;
+3. reject high-confidence private keys, cloud credentials and API tokens; and
+4. reject the same files as the preceding attempt unless the task rules changed
+   since that attempt.
+
+Missing summary or attestation produces warnings only. Required-file, project
+size and forbidden-file rules belong to digest-pinned external project images.
+The default checker, ART custody and project images must replace every required
+outcome before either current catalogue is removed. Human reviewers continue
+to own final quality judgment.
 
 ## Required Core Checkers
+
+The names below describe the current catalogue pending replacement; they do
+not expand the four future Workstream defaults.
 
 ### check_policy_context_present
 

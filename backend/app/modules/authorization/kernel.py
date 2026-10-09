@@ -24,12 +24,7 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.authorization.domain.guide_manager_resources import guide_manager_resource_denial
-from app.modules.authorization.domain import (
-    adapter_bindings,
-    checker_registry,
-    contribution_policies,
-    guide_compilation as compilation,
-)
+from app.modules.authorization.domain import adapter_bindings, checker_registry, contribution_policies, guide_compilation as compilation
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
     PROJECT_SCOPED_ADMIN_MUTATIONS, CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
@@ -242,8 +237,7 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
         ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
-        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
-        **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
+        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION, **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
         **GUIDE_PROPOSAL_RESOURCE_BY_ACTION,
     }
@@ -384,8 +378,7 @@ class AuthorizationService:
         self._validate_prepared_consumer(consumer_token)
         if self._session.in_nested_transaction():
             raise TypeError("prelocked authority requires one root transaction")
-        transaction = self._session.sync_session.get_transaction()
-        if transaction is None or not transaction.is_active:
+        if (transaction := self._session.sync_session.get_transaction()) is None or not transaction.is_active:
             raise TypeError("prelocked authority requires one active root transaction")
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         if action is None:
@@ -465,8 +458,7 @@ class AuthorizationService:
                 system_scope_only=scope.project_id is None,
                 for_update=True,
                 **adapter_bindings.finance_authority_grant_filters(action_id),
-                **contribution_policies.policy_finance_grant_filters(action_id),
-                **checker_registry.checker_registry_grant_filters(action_id),
+                **contribution_policies.policy_finance_grant_filters(action_id), **checker_registry.checker_registry_grant_filters(action_id),
             )
             if grant is None:
                 raise PreparedAuthorizationUnsupported(
@@ -641,8 +633,7 @@ class AuthorizationService:
         resource_context: AuthorizationResourceContext,
     ) -> AuthorizationDecision:
         """Return an allowed decision or raise one bounded, evidenced denial."""
-        self._pending_denial = None
-        self._pending_denial_resource_context = None
+        self._pending_denial = self._pending_denial_resource_context = None
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         context = self._context
         revalidated = False
@@ -1042,8 +1033,7 @@ class AuthorizationService:
             grant_filters.update(
                 adapter_bindings.finance_authority_grant_filters(action.action_id)
             )
-        grant_filters.update(contribution_policies.policy_finance_grant_filters(action.action_id))
-        grant_filters.update(checker_registry.checker_registry_grant_filters(action.action_id))
+        grant_filters.update({**contribution_policies.policy_finance_grant_filters(action.action_id), **checker_registry.checker_registry_grant_filters(action.action_id)})
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,

@@ -5,7 +5,6 @@ from types import MappingProxyType
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
-
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
@@ -22,9 +21,8 @@ from app.modules.authorization.domain.audit import (
 )
 from app.modules.authorization.domain.contribution_policies import ContributionPolicyReadResourceContext, ContributionPolicyMutationResourceContext
 from app.modules.authorization.domain.adapter_bindings import AdapterBindingMutationResourceContext, AdapterBindingReadResourceContext
-from app.modules.authorization.domain.checker_registry import ExternalCheckerRegistryResourceContext
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
-from app.modules.authorization.domain import task_authority, task_queues, submission_history
+from app.modules.authorization.domain import checker_registry, task_authority, task_queues, submission_history
 from app.modules.authorization.domain.guide_mutations import (
     ProjectGuideMutationResourceContext, ProjectGuideMutationPrepareDenialResourceContext,
     ProjectGuideSourceSnapshotMutationResourceContext,
@@ -1240,6 +1238,5 @@ AuthorizationResourceContext = (
     | SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext
     | AdapterBindingReadResourceContext | AdapterBindingMutationResourceContext
-    | ContributionPolicyReadResourceContext | ContributionPolicyMutationResourceContext
-    | ExternalCheckerRegistryResourceContext
+    | ContributionPolicyReadResourceContext | ContributionPolicyMutationResourceContext | checker_registry.ExternalCheckerRegistryResourceContext
 )
