@@ -15,6 +15,7 @@ context/intake requirements:
 | `workstream project create --name TEXT --slug TEXT --idempotency-key UUID` | `POST /api/v1/projects` |
 | `workstream project guide create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides` |
 | `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
+| `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -187,6 +188,28 @@ is a known denial; dropped, malformed, mismatching or unexpected responses are
 unknown outcomes. An otherwise valid unconfirmed-storage status also exits 1,
 sets `outcome_unknown` and leaves stdout empty rather than reporting success.
 Diagnostics never include file paths, contents or raw provider/transport errors.
+
+## Inspect current guide setup
+
+```sh
+workstream project guide setup PROJECT_ID GUIDE_ID --output json
+```
+
+This reads the latest setup for that exact guide, rather than replaying its
+initial creation receipt. The API owns current scoped diagnostic authority,
+actor lifecycle, project/guide membership and compilation lineage. The CLI
+makes one public GET with the caller's bearer; no polling, role preflight,
+follow-up calls, setup execution or retry is added.
+
+JSON output preserves the complete validated API object. Text renders all
+fields with terminal escaping, including nullable diagnostic and compilation
+selectors. UUID identities and timestamps are checked; the generation integer
+retains the backend response range. A pending, blocked, failed or finalized
+setup can be read successfully (exit 0); this is not a successful compilation,
+policy approval, guide activation or authority for another operation.
+Denials, malformed/substituted replies, oversized JSON and network failures
+leave stdout empty and exit 1. The normal 12-second/64KiB JSON bounds apply.
+Approval and activation commands remain separate future work.
 
 ## Create a draft project shell
 

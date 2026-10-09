@@ -9,6 +9,12 @@ async def exercise_guide_creation(
 ):
     specification = (await direct.get("/openapi.json", timeout=60)).json()
     assert "post" in specification["paths"]["/api/v1/projects/{project_id}/guides"]
+    assert (
+        "get"
+        in specification["paths"][
+            "/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest"
+        ]
+    )
     actor = profiles["cli-project-manager"]["actor_profile_id"]
     token = tokens["cli-project-manager"]
     admin = {"Authorization": f"Bearer {tokens['cli-admin']}"}
@@ -130,6 +136,22 @@ async def exercise_guide_creation(
         setup.json()["project_id"] == project_id
         and setup.json()["guide_id"] == created["id"]
     )
+
+    def inspect_setup(*, project=project_id, presented=token):
+        return cli(
+            origin,
+            presented,
+            "-o",
+            "json",
+            "project",
+            "guide",
+            "setup",
+            project,
+            created["id"],
+        )
+
+    assert positive(inspect_setup()) == setup.json()
+    denial(inspect_setup(presented=tokens["cli-outsider"]))
     recovered = await direct.post(
         f"/api/v1/projects/{project_id}/guides",
         headers=caller | {"Idempotency-Key": key},
@@ -151,6 +173,7 @@ async def exercise_guide_creation(
     )
     assert foreign.status_code == 201, foreign.text
     denial(create(body, str(uuid4()), foreign.json()["id"]))
+    denial(inspect_setup(project=foreign.json()["id"]))
     collision = body | {
         "version": "collision-" + uuid4().hex,
         "documents": [
@@ -163,12 +186,16 @@ async def exercise_guide_creation(
     # A positive immediately before revocation discriminates a real authority
     # change from a never-authorized caller. Guide replay rechecks authority.
     positive(create(body | {"version": "before-revoke-" + uuid4().hex}, str(uuid4())))
+    assert positive(inspect_setup()) == setup.json()
     await revoke(grant_id)
+    denial(inspect_setup())
     denial(create(body, key))
     denial(create(body | {"version": "revoked-" + uuid4().hex}, str(uuid4())))
     grant_id = await grant()
     positive(create(body | {"version": "before-suspend-" + uuid4().hex}, str(uuid4())))
+    assert positive(inspect_setup()) == setup.json()
     await lifecycle("suspend")
+    denial(inspect_setup())
     denial(create(body, key))
     denial(create(body | {"version": "suspended-" + uuid4().hex}, str(uuid4())))
     await lifecycle("reactivate")
