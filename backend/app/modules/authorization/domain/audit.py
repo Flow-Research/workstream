@@ -12,6 +12,7 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 
 CONTEXT_DIGEST_RESOURCE_TYPES = (
+    "joint_lifecycle_control",
     "submission_creation",
     "submission_binding",
     "outbox_event",
@@ -45,6 +46,7 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
 
 
 AuthorizationDecisionResourceType = Literal[
+    "joint_lifecycle_control",
     "outbox_event",
     "checker_run",
     "task_post_submit_routing_manifest",

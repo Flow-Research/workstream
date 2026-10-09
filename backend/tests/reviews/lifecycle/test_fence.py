@@ -164,7 +164,7 @@ async def test_missing_controller_denies_and_stale_identity_map_is_not_used(
         # Isolated corruption fixture is transactional and never committed.
         await session.execute(
             text(
-                "ALTER TABLE public.joint_lifecycle_release_control DISABLE TRIGGER joint_lifecycle_genesis_immutable"
+                "ALTER TABLE public.joint_lifecycle_release_control DISABLE TRIGGER joint_lifecycle_control_change"
             )
         )
         await session.execute(text("DELETE FROM public.joint_lifecycle_release_control"))

@@ -46,8 +46,10 @@ authorize submission, review, or adjudication.
 
 Normal project repair uses covered Project Manager permission
 `project.task.manage`. The planned review/revision repair, obligation-close,
-legacy-close, and lifecycle-control actions are unavailable until their owning
-hidden behavior, AUTH activation, and REV-13 release. Task start override uses
+and legacy-close actions remain unavailable until their owning hidden behavior,
+AUTH activation and release. REV-12A4A activates internal lifecycle control for
+live system Operators, binding the exact singleton, generation and manifest.
+It supplies no public endpoint, human-review, acceptance or payment authority. Task start override uses
 `operations.task.start_override`. Submission-gate repair
 (`operations.submission_gate.repair`) and checker retry
 (`operations.checker.retry`) are planned and unavailable; their old routes and

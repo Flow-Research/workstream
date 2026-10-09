@@ -4,8 +4,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "0028_external_checker_registry"
-down_revision = "0027_markdown_guide_media"
+revision = "0029_external_checker_registry"
+down_revision = "0028_lifecycle_transitions"
 branch_labels = None
 depends_on = None
 

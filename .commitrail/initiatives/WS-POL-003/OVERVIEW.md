@@ -1,5 +1,7 @@
 # WS-POL-003 — Unified project-guide compilation
 
+[REV-12A4A](../WS-REV-001/WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; source AUTH custody and production routing remain unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
+
 Delivery priority follows the [first complete contributor milestone](../WS-ARCH-001/planning/PLAN.md#first-complete-contributor-milestone): contribute only prerequisites of that public backend path; live human review/revision and external integrations remain later work.
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
@@ -12,7 +14,7 @@ CON-07 hidden submitter participation and complete frozen award-set staging/repl
 [REV-04C](../WS-REV-001/WS-REV-001-04C.md) now composes FinalAcceptance, TASK terminal effects and CON participation
 inside one hidden caller-owned transaction. Mandatory exact AUTH receipt input,
 database complete-set enforcement, currentness race proof, shared audit/outbox,
-fulfillment-root ordinal custody and scoped lifecycle activation remain
+the reviewed scoped lifecycle manifest remain
 required before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,

@@ -574,6 +574,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/lifecycle.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/outbox_dispatch.py"
     },
     {
@@ -666,6 +670,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/lifecycle_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/lifecycle_schemas.py"
     },
     {
@@ -707,6 +715,14 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_admin_authority.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_lifecycle_replay.py"
     },
     {
       "group": "auth",
@@ -1414,6 +1430,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/reviews/lifecycle/service.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/reviews/models.py"
     },
     {
@@ -1729,7 +1749,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "8527da867883012c457c750f86889934c874ebd62f58b4f7cb8a2ebd75705c5a",
+  "authority_digest": "01578aa0e019abf3ad11f80601cfbb33b652e552d0c0dc2a20be64031b5e379e",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -26,7 +26,7 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
     with migration_lock():
         await db_session.dispose_engine()
         await _drop_test_database_schema(isolated_database_env)
-        await asyncio.to_thread(command.upgrade, _config(), "0027_markdown_guide_media")
+        await asyncio.to_thread(command.upgrade, _config(), "0028_lifecycle_transitions")
         connection = await asyncpg.connect(url)
         role, database = await connection.fetchrow(
             "select current_user,current_database()"

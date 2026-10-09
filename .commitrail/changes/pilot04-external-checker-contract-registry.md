@@ -74,9 +74,9 @@ reproducible builds or implement a launcher.
 - `mcp_server/contracts/authorization_context_get.json` for the generated
   authorization-context ActionId enum/hash change caused solely by the new
   registration action.
-- One next-linear migration, currently reserved as
-  `0028_external_checker_registry` after merged
-  `0027_markdown_guide_media`, plus Alembic environment/current-head, schema
+- One next-linear migration, reconciled as
+  `0029_external_checker_registry` after merged
+  `0028_lifecycle_transitions`, plus Alembic environment/current-head, schema
   fingerprint/reset/inventory and model-registration consumers. If another
   migration lands first, this branch must reconcile to the actual main head and
   rename the unpublished revision rather than creating a second head.
@@ -188,7 +188,7 @@ code, plugins or authority.
 | Current owner and dependency map | Source inspection of CHECKERS pre/post APIs, ART pre-submit attempt custody, CHECKERS reservation/lease custody, AUTH actions and the PILOT-00 result | Complete; the product owner supplied the exact four-default cutover target | Runtime, policy binding, activation and catalogue cutover remain later chunks |
 | Normalized external contract | `pytest` over `tests/checkers/external/test_contracts.py`, registry service, catalogue and bounded audit/schema consumers | PASS: 25 tests on `002deda91b2d0a6ed5b6e72ab4bd325f1e76c881`; Ruff also passed | Runtime transport and sandbox remain later chunks |
 | Authorized immutable registry | Isolated PostgreSQL 16 `test_postgresql.py`, hostile-search-path migration and repeated-head test; metadata `/tmp/ws-pilot-checkers-491-final-head.json` | PASS: 7 tests in 141.60s at `002deda91`; database and role cleanup true | No public registration route in this chunk |
-| Migration and schema custody | PostgreSQL 16 predecessor/head upgrade, hostile `search_path`, graph, fixed-baseline manifest, repeated upgrade, current fingerprint/reset/inventory | PASS: focused schema batch 5 tests in 136.96s and exact-head migration coverage above | Open PR #516 must reconcile its unpublished conflicting revision before merge if this revision lands first |
+| Migration and schema custody | PostgreSQL 16 predecessor/head upgrade, hostile `search_path`, graph, fixed-baseline manifest, repeated upgrade, current fingerprint/reset/inventory | PASS: focused schema batch 5 tests in 136.96s and exact-head migration coverage above | Reconciled proof against merged lifecycle revision remains required before publication |
 | Existing behavior unchanged | Exact current pre-submit catalogue identity/manifest and post-submit catalogue contract/hash tests | PASS: 19 tests in 11.22s; neither catalogue source nor hash changed | Catalogue replacement remains later PILOT-04 work |
 | CI and owner registration | Exact lane inventory, deterministic checker-delivery partition and behavior-ownership catalogue regressions | PASS: 199 tests in 5.22s; four new test modules are assigned once and four new production targets are additive | Hosted full-suite timing remains CI evidence |
 | Review repair: canonical bytes and replay | Focused real PostgreSQL numeric-schema, exact 65,536-byte schema, oversized-schema refusal and same-operation four-field substitution tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-new2.json` | PASS: 2 tests in 29.15s; database and role cleanup true | Final exact-head replay remains required after the repair commit |
@@ -228,11 +228,11 @@ code, plugins or authority.
 ## Reconciliation
 
 - Current-source reconciliation: Started from merged main
-  `baa7ae7c1bce9c3769453620f4aa0b22fe13fe3e`, whose linear migration head is
-  `0027_markdown_guide_media`. Open PR #516 still carries a conflicting
-  unpublished `0028_lifecycle_transitions` and must reconcile its own revision
-  if this registry revision lands first. The registry branch is reconciled to
-  current main and retains one Alembic head.
+  `baa7ae7c1bce9c3769453620f4aa0b22fe13fe3e`, then reconciled after PR #516
+  merged as `dfea06a33acf4657c0a58291670233ff6f1b1a1b` with linear revision
+  `0028_lifecycle_transitions`. The registry revision moved from its unpublished
+  `0028` identifier to `0029_external_checker_registry`; lifecycle authority,
+  docs and custody remain intact and the combined graph has one head.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product/ART behavior
   and has handed migration authorship to this lane. Its DDL remains a later
   separate linear revision after this registry migration lands; no PILOT-02

@@ -25,7 +25,7 @@ from app.modules.authorization.domain.project_create import ProjectCreateResourc
 from app.modules.authorization.domain import checker_registry, task_authority, task_queues, submission_history
 from app.modules.authorization.domain.guide_mutations import (
     ProjectGuideMutationResourceContext, ProjectGuideMutationPrepareDenialResourceContext,
-    ProjectGuideSourceSnapshotMutationResourceContext,
+    ProjectGuideSourceSnapshotMutationResourceContext, validate_policy_mutation_identity,
 )
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
@@ -34,6 +34,7 @@ from app.modules.authorization.domain.outbox_dispatch import OutboxDispatchResou
 from app.modules.authorization.domain.post_submit_routing import PostSubmitRoutingResourceContext
 from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
 from app.modules.authorization.domain.guide_activation import ProjectGuideActivationResourceContext
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionResourceContext
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
@@ -489,29 +490,7 @@ class ProjectReviewPolicyMutationResourceContext(BaseModel):
     @model_validator(mode="after")
     def require_review_policy_identity(self):
         """Bind the resource selector to the review policy only."""
-        if self.resource_id != self.review_policy_id:
-            raise ValueError("review policy resource must match policy")
-        if (
-            len(
-                {
-                    self.predecessor_policy_id is None,
-                    self.predecessor_policy_generation is None,
-                    self.current_policy_digest is None,
-                }
-            )
-            != 1
-        ):
-            raise ValueError("review policy predecessor facts must be bound together")
-        if self.policy_generation == 1 and self.predecessor_policy_id is not None:
-            raise ValueError("first review policy cannot have a predecessor")
-        if self.policy_generation > 1 and self.predecessor_policy_id is None:
-            raise ValueError("replacement review policy requires a predecessor")
-        if (
-            self.predecessor_policy_generation is not None
-            and self.policy_generation != self.predecessor_policy_generation + 1
-        ):
-            raise ValueError("review policy successor generation must be exact")
-        return self
+        return validate_policy_mutation_identity(self, self.review_policy_id, "review")
 
 
 class ProjectRevisionPolicyMutationResourceContext(BaseModel):
@@ -537,29 +516,7 @@ class ProjectRevisionPolicyMutationResourceContext(BaseModel):
     @model_validator(mode="after")
     def require_revision_policy_identity(self):
         """Bind the resource selector to the revision policy only."""
-        if self.resource_id != self.revision_policy_id:
-            raise ValueError("revision policy resource must match policy")
-        if (
-            len(
-                {
-                    self.predecessor_policy_id is None,
-                    self.predecessor_policy_generation is None,
-                    self.current_policy_digest is None,
-                }
-            )
-            != 1
-        ):
-            raise ValueError("revision policy predecessor facts must be bound together")
-        if self.policy_generation == 1 and self.predecessor_policy_id is not None:
-            raise ValueError("first revision policy cannot have a predecessor")
-        if self.policy_generation > 1 and self.predecessor_policy_id is None:
-            raise ValueError("replacement revision policy requires a predecessor")
-        if (
-            self.predecessor_policy_generation is not None
-            and self.policy_generation != self.predecessor_policy_generation + 1
-        ):
-            raise ValueError("revision policy successor generation must be exact")
-        return self
+        return validate_policy_mutation_identity(self, self.revision_policy_id, "revision")
 
 
 class ProjectPolicyMutationPrepareDenialResourceContext(BaseModel):
@@ -1186,6 +1143,7 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
 
 
 AuthorizationResourceContext = (
+    ReviewLifecycleActivationContract |
     submission_history.HistoryReadResourceContext | task_queues.QueueReadResourceContext | task_authority.TaskAuthorityResourceContext | ActorSelfResourceContext
     | ProjectReadResourceContext | ProjectDiagnosticReadResourceContext
     | ProjectPolicyReadResourceContext

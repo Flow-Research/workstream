@@ -2303,7 +2303,7 @@ def test_lifecycle_fence_has_exact_ownership() -> None:
     retained = "backend/app/core/config.py"
     trusted = _partition([retained])
     ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected})), trusted)
-    for neighbor in ("backend/app/modules/reviews/lifecycle/service.py", "backend/app/modules/reviews/lifecycle/authority.py"):
+    for neighbor in ("backend/app/modules/reviews/lifecycle/dispatcher.py", "backend/app/modules/reviews/lifecycle/authority.py"):
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected, neighbor})), trusted)
 
@@ -2432,3 +2432,20 @@ def test_assigned_guide_read_ownership_accepts_only_exact_new_modules():
             ownership._validate_additive_partition_transition(
                 _partition(sorted({retained, *expected, neighbor})), trusted
             )
+
+
+def test_scoped_lifecycle_controller_has_exact_ownership() -> None:
+    expected = {
+        "backend/app/modules/authorization/domain/lifecycle.py",
+        "backend/app/modules/authorization/lifecycle_authorization.py",
+        "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+        "backend/app/modules/authorization/prepared_admin_authority.py",
+        "backend/app/modules/reviews/lifecycle/service.py",
+    }
+    assert ownership.REV_12A4A_CONTROL_TARGETS == expected
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected})), trusted)
+    for neighbor in ("backend/app/modules/reviews/lifecycle/fulfillment.py", "backend/app/modules/reviews/lifecycle/dispatcher.py"):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected, neighbor})), trusted)

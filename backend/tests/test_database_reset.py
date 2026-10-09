@@ -29,6 +29,7 @@ def test_reset_batches_all_trigger_commands_in_one_transaction(
 ) -> None:
     """Batching changes round trips, not statements or transaction ordering."""
     connection = AsyncMock()
+    connection.fetchrow.return_value = {"id": "retained-singleton", "created_at": "retained-time"}
     transaction = AsyncMock()
     connection.transaction = Mock(return_value=transaction)
     tables = {name: f'"public"."{name}"' for name in RESETTABLE_TEST_TABLES}
@@ -47,7 +48,7 @@ def test_reset_batches_all_trigger_commands_in_one_transaction(
     custody.assert_awaited_once_with(connection, "test-url")
     schema.assert_awaited_once_with(connection)
     statements = [call.args[0] for call in connection.execute.await_args_list]
-    assert len(statements) == 4
+    assert len(statements) == 6
     assert statements[0].split("; ") == [
         f"alter table {tables[name]} disable trigger user"
         for name in TRUNCATE_GUARDED_TABLES
@@ -56,11 +57,16 @@ def test_reset_batches_all_trigger_commands_in_one_transaction(
         f"truncate table {', '.join(tables.values())} restart identity cascade"
     )
     assert statements[2] == (
+        "insert into public.joint_lifecycle_release_control"
+        "(id,singleton,phase,generation,created_at) values($1,true,'disabled',0,$2)"
+    )
+    assert statements[3] == (
         "insert into authority_control"
         "(id, bootstrap_completed, bootstrap_grant_id, version) "
         "values (1, false, null, 0)"
     )
-    assert statements[3].split("; ") == [
+    assert statements[4] == "SET CONSTRAINTS ALL IMMEDIATE"
+    assert statements[5].split("; ") == [
         f"alter table {tables[name]} enable trigger user"
         for name in TRUNCATE_GUARDED_TABLES
     ]
