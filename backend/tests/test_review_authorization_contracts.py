@@ -114,12 +114,13 @@ def _obligation_values() -> dict[str, object]:
     }
 
 
-def test_manifest_exactly_covers_registered_review_actions_and_stays_unavailable():
+def test_manifest_covers_review_actions_with_only_scoped_controller_available():
     expected = frozenset(action for action in ActionId if action.value.startswith("review."))
 
     assert frozenset(REVIEW_AUTHORIZATION_CONTRACT_BY_ACTION) == expected
     assert all(
-        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED for action in expected
+        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+        for action in expected - {ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE}
     )
     assert {
         action
@@ -157,7 +158,7 @@ def test_contract_models_exclude_handles_callbacks_bytes_and_unbounded_maps():
 
 
 def _assert_inert_contract_model(model):
-    """Allow only bounded scalar, enum, literal, and optional field annotations."""
+    """Recursively require closed scalar models, enums and optional fields."""
 
     def assert_allowed(annotation, field_name):
         origin = get_origin(annotation)
@@ -166,6 +167,12 @@ def _assert_inert_contract_model(model):
         if origin in (Union, UnionType):
             for member in get_args(annotation):
                 assert_allowed(member, field_name)
+            return
+        from pydantic import BaseModel
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            assert annotation.model_config.get("extra") == "forbid"
+            assert annotation.model_config.get("frozen") is True
+            _assert_inert_contract_model(annotation)
             return
         assert annotation is not PreparedAuthorizationHandle, field_name
         assert annotation not in (bytes, bytearray), field_name
@@ -474,46 +481,32 @@ def test_revision_repair_uses_canonical_outcome_direction_and_repairability():
     assert rebased.preparation_head_direction is RevisionPreparationDirection.BACKWARD
 
 
-def test_lifecycle_activation_rejects_same_phase_and_stays_scalar_serializable():
-    values = {
-        "action_id": ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
-        "lifecycle_phase": ReviewLifecyclePhase.SHADOW,
-        "lifecycle_digest": SHA,
-        "singleton_id": new_record_id(),
-        "operation_id": new_record_id(),
-        "expected_generation": 1,
-        "current_phase": ReviewLifecyclePhase.SHADOW,
-        "target_phase": ReviewLifecyclePhase.DRAINING,
-        "adjacent_transition_confirmed": True,
-        "reviewed_manifest_digest": SHA,
-        "drain_observations_digest": SHA,
-        "batch_limit": 100,
-        "deadline": NOW,
-        "reason": "reviewed activation transition",
-    }
-    ReviewLifecycleActivationContract.model_validate(values)
-    _assert_inert_contract_model(ReviewLifecycleActivationContract)
-    genesis = values | {
-        "expected_generation": 0,
-        "current_phase": ReviewLifecyclePhase.DISABLED,
-        "lifecycle_phase": ReviewLifecyclePhase.DISABLED,
-        "target_phase": ReviewLifecyclePhase.SHADOW,
-    }
-    assert ReviewLifecycleActivationContract.model_validate(genesis).expected_generation == 0
-    for invalid in (
-        values | {"expected_generation": 0},
-        genesis | {"lifecycle_phase": ReviewLifecyclePhase.SHADOW},
-        values | {"lifecycle_phase": ReviewLifecyclePhase.LIVE},
-        genesis | {"expected_generation": True},
-        genesis | {"expected_generation": -1},
-        genesis | {"expected_generation": 2**63},
+def test_lifecycle_activation_binds_canonical_command_and_observed_facts():
+    from app.modules.reviews.api.lifecycle import (
+        JointLifecyclePhase, LifecycleTransitionCommand, LifecycleTransitionFacts,
+    )
+    values = dict(
+        operation_id=new_record_id(), singleton_id=new_record_id(),
+        actor_profile_id=new_record_id(), identity_link_id=new_record_id(),
+        expected_generation=0, current_phase=JointLifecyclePhase.DISABLED,
+        target_phase=JointLifecyclePhase.SHADOW, reviewed_manifest_digest=SHA,
+        deadline=NOW, reason="reviewed transition",
+    )
+    command = LifecycleTransitionCommand(**values)
+    facts = LifecycleTransitionFacts(command=command, observations_digest=SHA)
+    contract = ReviewLifecycleActivationContract(resource_id=command.singleton_id, facts=facts)
+    assert ReviewLifecycleActivationContract.model_validate_json(contract.model_dump_json()) == contract
+    with pytest.raises(ValidationError):
+        ReviewLifecycleActivationContract(resource_id=new_record_id(), facts=facts)
+    for changes in (
+        {"expected_generation": True}, {"expected_generation": -1},
+        {"expected_generation": 2**63 - 1},
+        {"current_phase": JointLifecyclePhase.LIVE},
+        {"target_phase": JointLifecyclePhase.DISABLED},
+        {"adjacent_transition_confirmed": True},
     ):
         with pytest.raises(ValidationError):
-            ReviewLifecycleActivationContract.model_validate(invalid)
-    with pytest.raises(ValidationError):
-        ReviewLifecycleActivationContract.model_validate(
-            values | {"target_phase": ReviewLifecyclePhase.SHADOW}
-        )
+            LifecycleTransitionCommand(**(values | changes))
 
 
 def test_contract_module_has_no_rev_import_and_workers_carry_no_prepared_handle():

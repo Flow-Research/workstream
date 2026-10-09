@@ -1,5 +1,7 @@
 # WS-REV-001 — Review and revision lifecycle
 
+[REV-12A4A](WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; source AUTH custody and production routing remain unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
+
 Delivery priority follows the [first complete contributor milestone](../WS-ARCH-001/planning/PLAN.md#first-complete-contributor-milestone): contribute only prerequisites of that public backend path; live human review/revision and external integrations remain later work.
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
@@ -12,7 +14,7 @@ are delivered. [REV-04C](WS-REV-001-04C.md) now composes FinalAcceptance, TASK t
 that CON participant in one hidden caller-owned transaction for either source.
 It is not the complete authorized operation. Mandatory exact AUTH receipt input,
 database complete-set enforcement across FinalAcceptance/TASK/CON, shared
-audit/outbox, fulfillment-root ordinal custody and scoped lifecycle activation
+audit/outbox, the reviewed scoped lifecycle manifest
 remain required before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -122,11 +124,11 @@ proof. No adjudication setting or behavior is included.
    strict participant input to require the exact AUTH decision-event receipt,
    with no optional/default path, before production consumption. 04E2-B also
    owns database-enforced complete-set closure, shared audit/outbox,
-   fulfillment-root ordinal custody and scoped activation. This foundation
+   the reviewed scoped lifecycle manifest. This foundation
    can precede human runtime: ARCH-04E uses it for false/pass acceptance without
-   live queues, leases or decisions. The delivered REV-12A1 disabled fence serves both triggers; actual root ordinal
-   custody and authorized drain/operator work extend the same controller before
-   activation, not another fence.
+   live queues, leases or decisions. REV-12A4A extends the same REV-12A1
+   controller with scoped Operator transitions. Root/ordinal/cutoff custody is
+   required before fulfillment admission, not before contribution acceptance.
    Human decision composition later adds Review/reviewer participation and
    invokes that same acceptance sequence on accept, not a second implementation.
 4. Activate public claim/decision behavior only after exact AUTH/ART/CON gates.

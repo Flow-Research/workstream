@@ -2,6 +2,8 @@
 
 ## First complete contributor milestone
 
+[REV-12A4A](../../WS-REV-001/WS-REV-001-12A4A.md) supplies the scoped controller prerequisite for step 5. It keeps fulfillment disabled and does not activate routing. Completion delivery must follow the exact authority/effect operation in steps 4–5: preparation alone must never acknowledge a completion event.
+
 This is the governing delivery order for the first usable backend journey, not
 nine promised PRs. Review each bounded change against merged owners and name the
 step it closes, its concrete prerequisite and its observable proof. Existing
@@ -16,7 +18,7 @@ outcomes.
 | 2 | [Bounded evaluation content, ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) | Complete: preparation validates the shared content contract before durable admission; later dispatch must reuse it with real record identities. No truncation or stranded successful preparation. |
 | 3 | [Atomic Submission/dispatch, ARCH-04E1B-B6](../WS-ARCH-001-04E1BB6.md) | Complete: Submission, ART binding, exact creation/binding receipts, initial evaluation reservation and shared outbox event commit together. Fresh-authorized replay returns original identities after a lost response. |
 | 4 | Hidden request/completion handlers within ARCH-04E1B-B | [B7](../WS-ARCH-001-04E1BB7.md) supplies the unregistered request handler; completion routing remains. Reuse shared outbox and CHECKERS execution. Verify exact bytes, locked policies and current generation; duplicate/stale delivery has no additional effect. |
-| 5 | Authorized governed outcomes, ARCH-04E2-B and existing shared participants | Genuine authority commits with its full consequence. False/pass atomically creates FinalAcceptance, accepted TASK state, submitter ContributionRecord and applicable awards; true preserves its independent human-review handoff. Include exact receipt, database closure, audit/outbox, lock-race and required fulfillment-root custody. Exercise the existing scoped controller action with a valid generation in the isolated hidden-composition proof; this does not enable the path in production. |
+| 5 | Authorized governed outcomes, ARCH-04E2-B and existing shared participants | Genuine authority commits with its full consequence. False/pass atomically creates FinalAcceptance, accepted TASK state, submitter ContributionRecord and applicable awards; true preserves its independent human-review handoff. Include exact receipt, database closure, audit/outbox, lock-race and the reviewed scoped lifecycle manifest. Use the REV-12A4A Operator-controlled generation in isolated composition; its initial manifest refuses retained pre-authority acceptance rows. Extend its manifest/readiness with exact source custody before production consumption. |
 | 6 | [Checker remediation and recovery, ARCH-04F](chunks/WS-ARCH-001-04F-checker-remediation.md) | Contributor-correctable failure has bounded findings and same-policy replacement ZIP intake. Infrastructure recovery and project/setup faults remain separate, with correct authorized retry and immutable prior evidence. |
 | 7 | Live composition, ARCH-04E3, and false-policy readiness | Register proven handlers; enable the false-policy path only after success, remediation and the existing scoped lifecycle activation/drain controls are proven. Preserve default-true policy and deny unsupported paths. |
 | 8 | Public intake, ARCH-02I | Expose initial upload/preparation, verification progress, feedback, admission-backed creation and checker-remediation resubmission through exact authorized APIs and outcome reads. Remove superseded touched paths; no provider coordinates or compatibility route. |
@@ -40,8 +42,10 @@ a requirement to activate human review queues for this first milestone.
 Live human review/decisions and reviewer contributions, controlled human revision,
 contributor claim expiry/skip, external integrations, frontend expansion, runtime
 reputation and unrelated cleanup follow later unless the user changes priority.
-Applicable award facts stay atomic in step 5; broader external payment fulfillment
-is not required to prove an unpaid project's first usable path. Supported registered
+Applicable award facts stay atomic in step 5 for paid and unpaid policies.
+Fulfillment admission and payment delivery remain unavailable; their obligation
+roots, ordinals and cutoff/drain machinery are required before a successor
+manifest enables fulfillment, not before the first contribution path. Supported registered
 checks must genuinely meet the selected project's requirements: structural checks
 must not be advertised as substantive judges, and an unsupported required evaluator
 blocks that project rather than being silently omitted.
@@ -69,8 +73,7 @@ source write or product effect is reachable. CON-07 hidden submitter
 participation and complete frozen award-set staging/replay are delivered. REV-04C
 adds the hidden FinalAcceptance/TASK/CON participant. Hidden handlers 04E1B-B are
 next. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
-TASK-before-CHECKERS race proof, shared audit/outbox, fulfillment-root ordinal
-custody and scoped lifecycle activation remain required
+TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
 before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
@@ -150,8 +153,8 @@ checker-remediation boundary before public Submission cutover.
 | [ARCH-04E1B-B6](../WS-ARCH-001-04E1BB6.md) | B3/B4/B5 plus existing TASK/ART/AUTH/CHECKERS/outbox owners | Complete: atomic new Submission, exact creation/binding receipts, generation-one request and shared event; fresh-authorized select-only replay; handlers remain unregistered |
 | [ARCH-04E1B-B7](../WS-ARCH-001-04E1BB7.md) | B6 plus existing execution/authorization/outbox owners | Complete: hidden request handler, exact committed invocation and per-phase fencing; UNKNOWN never automatically repeats execution; production registration remains unavailable |
 | ARCH-04E1B-B | ARCH-04E2-A and CON-02B; false additionally uses delivered REV-04C shared acceptance participation | Hidden TASK handlers plus TASK-before-CHECKERS currentness and both successor-generation race orders; durable receipt proof follows at exact activation |
-| Scoped XINT-003-08B controller activation | Existing REV-12A foundation, delivered REV-04C hidden participant and remaining real-writer observation proof | Existing Operator lifecycle-control action for the bounded shared manifest: isolated authorized proof before step 5, production enablement at step 7; not human runtime |
-| ARCH-04E2-B | ARCH-04E1B-B; valid scoped XINT-003-08B controller generation in hidden false-branch proof | Require the exact AUTH receipt on the same strict input; add database complete-set and audit/outbox closure; genuine allow commits with all governed effects |
+| [REV-12A4A scoped controller](../../WS-REV-001/WS-REV-001-12A4A.md) | Same REV-12A1 fence and REV-04C participants | Complete: internal Operator transitions, immutable AUTH/history custody and current-generation participant gates. The initial manifest refuses pre-authority acceptance rows; exact source custody and production readiness remain step 5/7 work. |
+| ARCH-04E2-B | Delivered exact source preparation and REV-12A4A generation; complete atomic operation precedes completion-handler wiring | Require the exact AUTH receipt on the same strict input; add database complete-set and audit/outbox closure; genuine allow commits with all governed effects |
 | ARCH-04E3 | ARCH-04E2, ARCH-04D2, AUTH-OUTBOX-02; shared acceptance proof for false | TASK live dispatch/routing composition: true to allow_review, false/pass to shared acceptance when proven |
 | ARCH-04E | ARCH-04E3 | Completed coordination boundary consumed by downstream REV |
 | ARCH-04F (before false activation and public intake) | Required hidden 04E result/handler contracts; no live false-branch prerequisite | CHECKER failure facts and TASK/ART remediation resubmission, not REV |

@@ -2309,13 +2309,16 @@ them, together with their closed primary-entity pairing and contract tests.
 
 REV-12A1 adds `joint_lifecycle_release_control`: one UUIDv7 identity, true singleton
 key, closed phase, nonnegative generation and database-owned creation time. The
-seed is disabled at generation zero. INSERT, UPDATE, DELETE and TRUNCATE are
-blocked after seeding; no usable generation or transition authority exists yet.
-The REV public fence reads detached facts under a caller-owned root transaction,
-acquiring its fixed advisory lock before the singleton row lock. It neither
-commits nor grants business authority. Later authorized transitions extend this
-same controller. Fulfillment roots, ordinals, cutoffs and phase history remain
-unimplemented; they are not fields on an award or a substitute outbox record.
+seed is disabled at generation zero. REV-12A4A extends this same row with an
+exact transition reference. Each generation increment requires one immutable
+`joint_lifecycle_transitions` row and its exact Operator AUTH event in the same
+transaction. Database closure rejects missing or substituted custody; controller
+identity and creation time remain unchanged. The root fence takes its advisory
+lock before the controller row. The transition operation takes this REV fence
+before AUTH custody; the fence itself grants no business authority. New participant effects
+require live/nonzero, while terminal replay stays read-only under the current
+generation. Fulfillment roots, ordinals and cutoffs remain deferred until
+fulfillment activation; conditional awards are separate atomic facts.
 
 ### TASK routing request reservation
 

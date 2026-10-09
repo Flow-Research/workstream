@@ -601,7 +601,7 @@ ACTION_DEFINITIONS = (
         PermissionId.OPERATIONS_RECONCILE_RUN,
         ActionOwner.XINT_003_08A,
     ),
-    _planned(
+    _active(
         ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         PermissionId.OPERATIONS_RECONCILE_RUN,
         ActionOwner.XINT_003_08B,
@@ -815,6 +815,7 @@ def _index_actions(
         ActionId.OUTBOX_DISPATCH,
         ActionId.PROJECT_GUIDE_ACTIVATE,
         *_CONTRIBUTION_POLICY_ACTION_IDS,
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         *GUIDE_PROPOSAL_ACTION_IDS,
         *POST_POLICY_MUTATION_ACTION_IDS,
         ActionId.ACTOR_PROFILE_READ_SELF,

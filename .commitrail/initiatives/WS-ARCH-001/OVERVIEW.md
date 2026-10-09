@@ -1,5 +1,7 @@
 # WS-ARCH-001 — Modular monolith boundaries
 
+[REV-12A4A](../WS-REV-001/WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; source AUTH custody and production routing remain unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
+
 [ARCH-04E1B-B5](WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 adds hidden request delivery with exact invocation fencing; completion routing is next. Production registration remains unavailable.
 
 Delivery priority: [first complete contributor milestone](planning/PLAN.md#first-complete-contributor-milestone). Use its nine-step order and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
@@ -26,7 +28,7 @@ CON-07 hidden submitter participation and complete frozen award-set staging/repl
 [REV-04C](../WS-REV-001/WS-REV-001-04C.md) now composes FinalAcceptance, TASK terminal effects and CON participation
 inside one hidden caller-owned transaction. Mandatory exact AUTH receipt input,
 database complete-set enforcement, currentness race proof, shared audit/outbox,
-fulfillment-root ordinal custody and scoped lifecycle activation remain
+the reviewed scoped lifecycle manifest remain
 required before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,

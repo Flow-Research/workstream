@@ -1,5 +1,7 @@
 # WS-CON-001 — Contribution and conditional compensation
 
+[REV-12A4A](../WS-REV-001/WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; source AUTH custody and production routing remain unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
+
 Delivery priority follows the [first complete contributor milestone](../WS-ARCH-001/planning/PLAN.md#first-complete-contributor-milestone): contribute only prerequisites of that public backend path; live human review/revision and external integrations remain later work.
 
 [AUTH-19A](../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
@@ -11,8 +13,7 @@ CON-07 delivers hidden source-neutral submitter participation and complete
 frozen award-set staging/replay. [REV-04C](../WS-REV-001/WS-REV-001-04C.md) now composes it with FinalAcceptance and
 TASK terminal effects in one hidden caller-owned transaction. Mandatory exact
 AUTH receipt input, database complete-set enforcement, shared audit/outbox,
-currentness race proof, fulfillment-root ordinal custody and
-scoped lifecycle activation remain required before production consumption. Neither phase may
+currentness race proof, the reviewed scoped lifecycle manifest remain required before production consumption. Neither phase may
 commit a standalone allow. The first durable receipt must commit with its full
 governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
 then live 04E3; true admission does not depend on CON/shared acceptance.
@@ -134,9 +135,10 @@ the internal policy operations; CP05A exposes their public Finance routes.
    `human_review_required` defaults true; false permits authorized automated
    acceptance without a Review or reviewer contribution. Both use the same
    FinalAcceptance/submitter-contribution participant and applicable awards.
-   The delivered REV-12A1 fence precedes this operation. Actual fulfillment-root
-   ordinal custody and authorized transition/drain proof remain required before activation; live
-   fulfillment endpoints do not block hidden composition.
+   REV-12A4A extends the delivered fence with scoped Operator transitions and
+   phase-gated participants. Fulfillment-root/ordinal custody and cutoff/drain
+   proof are required when fulfillment is enabled, not for first contribution
+   acceptance with payment delivery disabled.
    Automated acceptance must not require live human-review infrastructure;
    see the [canonical source, authority and transaction contract](../../../docs/spec_review_lifecycle.md#finalacceptance).
 3. Shared dispatcher CON-02B is pulled forward before canonical task authority

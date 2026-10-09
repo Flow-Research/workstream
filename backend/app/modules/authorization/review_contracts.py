@@ -12,6 +12,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.api.acceptance_source import HumanReviewSourceCommitment
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
@@ -585,32 +586,6 @@ class ReviewRevisionContextLegacyCloseContract(_ProjectContract):
     reason: Literal["legacy_revision_context_unrecoverable"]
 
 
-class ReviewLifecycleActivationContract(_ReviewContract):
-    """Generation-bound adjacent lifecycle-control transition facts."""
-
-    action_id: Literal[ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE]
-    singleton_id: UUID
-    operation_id: UUID
-    expected_generation: int = Field(ge=0, le=9_223_372_036_854_775_807)
-    current_phase: ReviewLifecyclePhase
-    target_phase: ReviewLifecyclePhase
-    adjacent_transition_confirmed: Literal[True]
-    reviewed_manifest_digest: str = Field(pattern=_DIGEST)
-    drain_observations_digest: str = Field(pattern=_DIGEST)
-    batch_limit: int = Field(ge=1, le=10_000)
-    deadline: AwareDatetime
-    reason: str = Field(min_length=1, max_length=512)
-
-    @model_validator(mode="after")
-    def require_phase_change(self):
-        """Reject same-phase requests; legal adjacency remains REV-owned."""
-        if self.lifecycle_phase is not self.current_phase:
-            raise ValueError("lifecycle phase must match current phase")
-        if self.expected_generation == 0 and self.current_phase is not ReviewLifecyclePhase.DISABLED:
-            raise ValueError("lifecycle generation zero must be disabled")
-        if self.current_phase is self.target_phase:
-            raise ValueError("lifecycle activation must change phase")
-        return self
 
 
 ReviewAuthorizationResourceContract = (

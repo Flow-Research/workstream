@@ -97,3 +97,21 @@ class ProjectGuideSourceSnapshotMutationResourceContext(BaseModel):
         if (self.predecessor_snapshot_id is None) != (self.predecessor_snapshot_hash is None):
             raise ValueError("source snapshot predecessor facts must be bound together")
         return self
+
+
+def validate_policy_mutation_identity(resource, policy_id: UUID, policy_kind: str):
+    """Keep review and revision edits bound to the same complete successor lineage."""
+    if resource.resource_id != policy_id:
+        raise ValueError(f"{policy_kind} policy resource must match policy")
+    if len({resource.predecessor_policy_id is None,
+            resource.predecessor_policy_generation is None,
+            resource.current_policy_digest is None}) != 1:
+        raise ValueError(f"{policy_kind} policy predecessor facts must be bound together")
+    if resource.policy_generation == 1 and resource.predecessor_policy_id is not None:
+        raise ValueError(f"first {policy_kind} policy cannot have a predecessor")
+    if resource.policy_generation > 1 and resource.predecessor_policy_id is None:
+        raise ValueError(f"replacement {policy_kind} policy requires a predecessor")
+    if (resource.predecessor_policy_generation is not None
+            and resource.policy_generation != resource.predecessor_policy_generation + 1):
+        raise ValueError(f"{policy_kind} policy successor generation must be exact")
+    return resource

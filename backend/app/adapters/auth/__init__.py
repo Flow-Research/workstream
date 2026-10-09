@@ -246,3 +246,10 @@ def post_submit_materialization_authority(session):
     """Compose the separate fixed ART materializer principal."""
     from app.modules.authorization.post_submit_authorization import PostSubmitMaterializationAuthorization
     return PostSubmitMaterializationAuthorization(session)
+
+
+def lifecycle_transition_authorization(session: AsyncSession, context):
+    """Compose the existing system Operator action for the REV controller."""
+    from app.modules.authorization.lifecycle_authorization import LifecycleAuthorizationAdapter
+
+    return LifecycleAuthorizationAdapter(session, context)

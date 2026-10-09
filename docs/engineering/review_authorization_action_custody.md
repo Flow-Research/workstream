@@ -1,6 +1,6 @@
 # Canonical REV-AUTH Action Custody
 
-This table is the planning source of truth for the v0.1 review and human-revision authorization surface. `WS-XINT-003-02C` completes all approved REV registration, fixed-principal, matrix, and database parity while keeping every lifecycle action unavailable. XINT-002 rows retain their runtime owners.
+This table is the planning source of truth for the v0.1 review and human-revision authorization surface. `WS-XINT-003-02C` completes all approved REV registration, fixed-principal, matrix, and database parity without activating lifecycle behavior. REV-12A4A subsequently activates only the internal Operator controller slice; other review/lifecycle actions remain unavailable. XINT-002 rows retain their runtime owners.
 
 ## Human and privileged actions
 
@@ -27,7 +27,7 @@ This table is the planning source of truth for the v0.1 review and human-revisio
 | `review.revision_context.repair` | `project.task.manage` | Project Manager grant for exact project | invalid revision context | REV | registered planned/unavailable | `WS-XINT-003-08A` |
 | `review.revision_obligation.close` | `project.task.manage` | Project Manager grant for exact project | exact unfulfillable obligation | REV | registered planned/unavailable | `WS-XINT-003-08A` |
 | `review.revision_context.legacy_close` | `operations.reconcile.run` | Operator; canonical reason required | exact legacy revision context | REV | registered planned/unavailable | `WS-XINT-003-08A` |
-| `review.lifecycle.activation.manage` | `operations.reconcile.run` | Operator; exact phase and reason | lifecycle release controller | REV | registered planned/unavailable | `WS-XINT-003-08B` |
+| `review.lifecycle.activation.manage` | `operations.reconcile.run` | Operator; exact phase and reason | lifecycle release controller | REV | active internally; no public route | `REV-12A4A` scoped `WS-XINT-003-08B` slice |
 | `review.reconcile.run` | `operations.reconcile.run` | one of two fixed reconciler identities | invalidation or general reconciliation batch | REV | registered planned | `WS-XINT-003-08B` |
 | `review.artifact_reference.reconcile` | `operations.reconcile.run` | fixed artifact-reference reconciler only | bounded review artifact reference batch | REV | registered planned | `WS-XINT-003-08B` |
 | `review.projection.rebuild` | `operations.projection.rebuild` | fixed projection rebuilder only | derived review projection batch | REV | registered planned | `WS-XINT-003-08B` |
@@ -113,7 +113,7 @@ actions remain reference-only external handoffs.
 | `review.revision_context.repair` | 02C unavailable registration plus merged REV-11B covered-project repair command |
 | `review.revision_obligation.close` | 02C unavailable registration plus merged REV-11B obligation-close command |
 | `review.revision_context.legacy_close` | 02C unavailable registration plus merged REV-11D legacy-close command |
-| `review.lifecycle.activation.manage` | Existing 02C/02D registration/resource; scoped shared-acceptance controller transition/recovery and real writer/drain proof for the early manifest; REV-12A4/13C later expand the same controller/action for human lifecycle |
+| `review.lifecycle.activation.manage` | Active internally through REV-12A4A: exact Operator transition/history custody for the bounded atomic-participant manifest; production acceptance and later human/fulfillment scopes require successor proofs |
 | `review.reconcile.run` | merged REV-11C invalidation and general reconciliation commands |
 | `review.artifact_reference.reconcile` | merged REV-12P2 artifact-reference command and typed ART repair port |
 | `review.projection.rebuild` | merged REV-12P2 derived-projection command |
@@ -129,22 +129,27 @@ pulls the existing XINT-003-08B controller-action slice forward after the early
 REV-12A foundation and exact shared writer/observation manifest. It does not
 activate the other 08B actions or human review. Reuse the registered Operator
 permission and `ReviewLifecycleActivationContract`; prove exact generation,
-legal phase adjacency, manifest/observation binding, real cutoff races and
-safe stop before admitting work. Unsupported resources/transitions deny.
+legal phase adjacency, manifest/observation binding and atomic writer/stop races.
+The scoped implementation is REV-12A4A; fulfillment cutoff machinery remains
+deferred until fulfillment is enabled. Unsupported resources/transitions deny.
 Later REV-12A4/13C work extends the same action only after successor parity and
 activation evidence, not by handler-only widening or an extra controller.
 
-### Disabled shared lifecycle foundation
+### Scoped shared lifecycle controller
 
-[REV-12A1](../../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A1.md) provides
-immutable disabled generation-zero storage and caller-root transaction locking.
-It does not activate `review.lifecycle.activation.manage` or an acceptance writer.
-AUTH's scalar activation contract binds its inherited phase to current_phase;
-generation zero requires disabled. Those facts do not prove adjacency or grant
-authority. Hidden AUTH preparation and nominal caller-session receipt projection
-are delivered before CON-07
-flush-only participant proof. Mandatory persisted source/FinalAcceptance custody
-accompanies the first genuine allowed consequence at 04E2-B, before production
-composition or consumption; no standalone allow is committed. Authorized
-REV transitions and real obligation/cutoff proof remain required before live
-shared acceptance, without requiring live human-review queues first.
+[REV-12A4A](../../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md)
+extends REV-12A1's same singleton and root-transaction fence. The internal
+`review.lifecycle.activation.manage` action requires live system Operator
+authority and binds the exact command, reviewed manifest and persisted
+observations. Controller, immutable transition history and actual AUTH evidence
+commit together. Unchanged operation replay requires fresh authority and does
+not write another event. New participant effects require a live nonzero
+generation; verified terminal replay uses the current generation in stopped
+phases without rewriting contribution or award facts.
+
+This is not acceptance authority. The initial manifest refuses retained
+pre-authority FinalAcceptance rows before entering live; ARCH-04E2-B must add
+mandatory source receipts and complete atomic consequences before production
+consumption. Routing, human review and payment delivery remain unavailable.
+Obligation roots, ordinals and cutoff/drain machinery are deferred until
+fulfillment activation; conditional awards remain atomic in the first path.

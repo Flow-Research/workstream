@@ -50,7 +50,11 @@ class SubmitterContributionParticipant:
                 "contribution_participation_unavailable"
             ) from exc
 
-        await self._fence.acquire(checked.expected_generation)
+        lifecycle = await self._fence.acquire(checked.expected_generation)
+        if checked.acceptance_disposition == "new" and (
+            lifecycle.phase != "live" or lifecycle.generation <= 0
+        ):
+            raise ContributionParticipationUnavailable("lifecycle is not live")
         rule = await self._repository.get_frozen_rule(
             checked.project_id, checked.contribution_policy_version_id
         )
