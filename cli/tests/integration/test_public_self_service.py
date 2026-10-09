@@ -29,6 +29,10 @@ from api_contract_e2e import (  # noqa: E402
     flow_settings,
     issue_flow_token,
 )
+from tests.conftest import (  # noqa: E402
+    clean_postgres_database as clean_postgres_database,
+    postgres_database_url as postgres_database_url,
+)
 from contributor_task_journey import exercise_contributor_task_reads  # noqa: E402
 
 
@@ -67,9 +71,12 @@ def _bootstrap(actor_id: str, env: dict[str, str]) -> None:
 
 @pytest.mark.asyncio
 async def test_installed_cli_uses_only_public_profile_and_project_context(
-    tmp_path: Path, cli
+    tmp_path: Path, cli, clean_postgres_database
 ) -> None:
+    # Bootstrap requires an empty authority baseline, not accidental collection
+    # order before every other PostgreSQL-backed CLI journey.
     env = api_environment()
+    assert env["WORKSTREAM_DATABASE_URL"] == clean_postgres_database
     # Reused canonical activation fixtures arrange identities at this issuer.
     # This remains a local HMAC verifier, not a deployed Flow certification.
     env["WORKSTREAM_E2E_FLOW_ISSUER"] = "https://identity.flowresearch.tech"

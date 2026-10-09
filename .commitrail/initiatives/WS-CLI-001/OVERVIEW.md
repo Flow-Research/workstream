@@ -16,6 +16,7 @@
   [WS-CLI-001-09](WS-CLI-001-09.md), guide declaration, illustrative tasks and document upload selectors;
   [WS-CLI-001-10](WS-CLI-001-10.md), declared-original upload with hash/size-bound storage receipts;
   [WS-CLI-001-11](WS-CLI-001-11.md), latest exact-guide setup diagnostics and compilation lineage;
+  [WS-CLI-001-12](WS-CLI-001-12.md), exact finalized-proposal findings and policy inspection;
   [PILOT-13](../../changes/pilot13-assigned-task-guide-documents.md), assigned-task locked-guide listing/download.
 
 ## Current boundary
@@ -57,6 +58,9 @@ task's locked originals with verified byte identity; setup examples stay private
 `project guide setup PROJECT_ID GUIDE_ID` reads the latest exact-guide setup
 and compilation lineage through one public GET. It does not poll, execute setup,
 approve policies or activate the guide; successful reading is not readiness.
+`project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` reads the explicit
+finalized proposal, complete findings, requirements and intake/evaluation
+bindings, without selecting latest, approving, correcting or activating it.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.
@@ -119,11 +123,14 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 11. **WS-CLI-001-11:** Inspect latest exact-guide setup and compilation lineage
     through the public diagnostic read. No polling, local readiness rules,
     execution, approval or activation.
-12. **Later governed-work commands:** Add further project setup, submission,
+12. **WS-CLI-001-12:** Inspect an explicitly selected finalized proposal through
+    its public GET, retaining complete display findings and distinct intake and
+    evaluation proposals without making a decision or substituting latest.
+13. **Later governed-work commands:** Add further project setup, submission,
    review, revision, and contribution reads/writes only as their actual public
    contracts and authority boundaries become available. Split by user journey,
    not one PR per endpoint or one giant catalogue PR.
-13. **Optional TUI:** Add a focused public queue/evidence view after its API
+14. **Optional TUI:** Add a focused public queue/evidence view after its API
    workflow is complete. Never require a TUI for agents or scripts.
 
 ## Risks and proof

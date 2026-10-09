@@ -22,6 +22,18 @@ from scripts.check_stale_workstream_wording import forbidden_path_failures
 class LightweightAgentGateTests(unittest.TestCase):
     """Keep the retained checks executable and cover their core parsing rules."""
 
+    def test_backend_redis_services_use_the_exact_official_mirror_image(self) -> None:
+        workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
+        images = re.findall(r"(?m)^      redis:\n        image: (\S+)$", workflow)
+        self.assertEqual(
+            images,
+            [
+                "public.ecr.aws/docker/library/redis:7-alpine@sha256:"
+                "520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7"
+            ]
+            * 2,
+        )
+
     def test_markdown_link_target_classification(self) -> None:
         self.assertEqual(local_target("docs/guide.md#start"), "docs/guide.md")
         self.assertEqual(local_target("<docs/a file.md>"), "docs/a file.md")
