@@ -157,7 +157,8 @@ with illustrative tasks/document selectors, and declared-original upload with
 hash/size-bound storage receipts and a local-original recheck before success, using explicit
 caller-owned retry keys, with
 text/JSON output, plus latest guide-setup diagnostic inspection without polling
-or local readiness decisions. Project inspection preserves
+or local readiness decisions, and exact finalized-proposal inspection without
+approval or implicit latest selection. Project inspection preserves
 server-selected full/minimal fields; no public project-list route is invented.
 CLI write uncertainty is explicit and never automatically
 retried. These source packages do not claim
@@ -374,6 +375,10 @@ cannot be reused as post-submission review-gate evidence. See the
   reads the latest exact-guide setup and compilation lineage through the public
   diagnostic GET. Read success does not establish compilation success, policy
   approval or guide activation; no polling or setup execution is added.
+  [CLI proposal inspection](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-12.md)
+  reads one explicitly selected finalized proposal with its complete findings,
+  inventory and intake/evaluation proposals. Blocked/historical results are
+  observations; policy approval, correction and activation are not CLI commands.
   [PILOT-13 assigned-guide access](../.commitrail/changes/pilot13-assigned-task-guide-documents.md)
   lists exact locked originals in assigned contributor context and streams
   authorized, fully verified ART bytes. `task guide` lists or safely downloads
