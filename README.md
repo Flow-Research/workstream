@@ -366,7 +366,7 @@ FILE --idempotency-key UUID` submits the deliberately prepared public intake
 approval request. It preserves the exact target, ordered warning acknowledgments
 and prior-approval selectors with explicit manual replay. The backend owns fresh
 authority, currentness and policy validation; the receipt proves intake approval,
-not post-policy approval, worker delivery or guide activation.
+not post-policy approval, post-policy job delivery or guide activation.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.

@@ -66,7 +66,7 @@ bindings, without selecting latest, approving, correcting or activating it.
 --idempotency-key UUID` commits the separately prepared intake decision. It
 never acknowledges warnings automatically or refetches latest. Backend authority
 and currentness apply on replay; an immutable receipt does not establish
-post-policy approval, worker delivery or guide activation.
+post-policy approval, post-policy job delivery or guide activation.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.

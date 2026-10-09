@@ -271,7 +271,7 @@ acknowledgments must match the request. Business digests are returned backend
 facts, not recomputed client-side. Success establishes intake approval only:
 post-submission policy approval and guide activation remain separate decisions.
 The API can publish post-policy derivation after commit; this receipt does not
-prove publication, worker delivery, derivation or successful runtime checks.
+prove publication, post-policy job delivery, derivation or successful runtime checks.
 
 There is no preflight, automatic retry or HTTP/2 body replay. A complete canonical
 4xx is a known rejection; unconfirmed writes, including malformed/substituted
@@ -285,9 +285,10 @@ authority. The common 12-second/64 KiB response bounds apply.
 Process tests prove request/receipt boundaries and no-replay uncertainty. A real
 socket/Flow/PREP/PostgreSQL journey proves deliberate warning rejection, exact
 approval/replay custody, foreign concealment, suspended and revoked replay denial.
-Retained compilation prerequisites are seeded canonical test custody, and a
-non-eager memory broker acknowledges publication without executing a worker;
-this is not deployed Flow, live setup-provider or worker-delivery proof.
+Retained compilation prerequisites are seeded canonical test custody. The API
+is configured for non-eager in-memory publication and no post-policy worker is
+started. This does not prove broker publication, job delivery, deployed Flow or
+live setup-provider execution.
 
 ## Create a draft project shell
 
