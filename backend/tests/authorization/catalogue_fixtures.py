@@ -231,7 +231,7 @@ REV_CUSTODY_EXPECTATIONS = {
     "review.lifecycle.activation.manage": (
         "operations.reconcile.run",
         "WS-XINT-003-08B",
-        "planned",
+        "active",
     ),
 }
 
@@ -439,6 +439,7 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "review.lifecycle.activation.manage",
     "checker.post_submit.execute",
     "checker.post_submit.finalize",
     "artifact.post_submit.checker_input.materialize",

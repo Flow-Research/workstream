@@ -284,9 +284,10 @@ accepted/completed effects in one caller-owned transaction for either source.
 No production recognition route, authorized acceptance operation, reviewer
 participant or fulfillment consumer is registered. Before activation,
 originating Review/FinalAcceptance authority, mandatory source receipts and
-fulfillment-root ordinal custody must be installed; retained pre-authority
+complete atomic consequences must be installed; retained pre-authority
 sources and dependent contribution/award rows must cause refusal unchanged,
-never receipt backfill or deletion.
+never receipt backfill or deletion. REV-12A4A supplies scoped lifecycle control;
+fulfillment-root ordinal custody is required only before fulfillment activation.
 
 Canonical fields:
 
@@ -590,13 +591,14 @@ shared acceptance operation must add shared audit/outbox staging. A combined
 request carrying nullable FinalAcceptance or both actors' source and policy
 facts is prohibited.
 
-Human decision order (false routing omits this reviewer operation):
+Planned human decision order (false routing omits this reviewer operation):
 
 ```text
-AUTH locks and revalidates exact reviewer authority
--> AUTH prepares review.decision for this session/action/actor/request
--> REV locks idempotency, release fence, queue, lease, task, assignment,
-   Submission, predecessor Review, findings, and resolutions
+REV acquires its root lifecycle fence, then task, assignment and Submission
+-> REV acquires queue, lease, predecessor Review, findings and resolutions
+   in the future decision chunk's proven deterministic order
+-> AUTH locks exact reviewer authority and prepares review.decision
+   for this session/action/actor/request
 -> REV recomposes final typed resource facts
 -> AUTH consumes the handle, evaluates once, and stages decision evidence
 -> REV appends immutable Review, findings, and resolutions
@@ -606,6 +608,10 @@ AUTH locks and revalidates exact reviewer authority
 -> REV stages shared audit and outbox rows from invoked CON results
 -> request route or service command commits once
 ```
+
+Exact idempotency and dependent-row ordering remains part of the decision
+chunk's required PostgreSQL concurrency proof before activation. AUTH custody
+must not precede the REV fence or TASK parent locks.
 
 ### Reviewer operation
 
@@ -779,8 +785,11 @@ CompensationAward inserts inside `review.decision` add no
 
 ### Prepared mutations
 
-For mutations, AUTH first locks and revalidates current human actor/link/exact
-grant rows or fixed-service actor/link rows. AUTH returns one opaque,
+Mutations follow their owning feature's lock contract. REV-fenced operations
+acquire REV and any required TASK custody before AUTH; TASK precedes required
+CHECKERS currentness custody. Other callers retain their owner-specific order.
+During preparation, AUTH locks and revalidates current human actor/link/exact
+grant rows or fixed-service actor/link rows and returns one opaque,
 non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 
 - caller session;
@@ -789,7 +798,8 @@ non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 - idempotency key;
 - canonical request digest.
 
-The owning feature then locks product rows and recomposes final typed facts.
+With all required product and authority locks retained, the owning feature
+recomposes final typed facts.
 AUTH consumes the handle, evaluates exactly once, and stages evidence. Reused,
 serialized, caller-constructed, cross-session/action/actor/request,
 binding-mismatched, or authority-lost handles fail before product mutation. A
@@ -1075,8 +1085,8 @@ hidden FinalAcceptance/TASK/CON composition, while
 mandatory persisted receipt custody remains required before production
 composition or consumption. Actual CON root
 storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. Later REV-12A drain/operator
-work extends this same controller; it is not a prerequisite on live human
+fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
 Every creation, requeue, successor, retry-root, and repair path that can admit a
@@ -1210,11 +1220,16 @@ decision-event receipt mandatory on the same strict input with no
 optional/default path; add database-enforced FinalAcceptance/TASK/CON
 complete-set closure, shared audit/outbox and exact activation to prove the first genuine allow
 with source, FinalAcceptance, TASK effects, CON rows and audit/outbox in one
-transaction. No standalone allow or fabricated authority fixture is permitted. Actual root ordinal custody and authorized lifecycle
-transition/drain proof precede live AUTH routing composition.
+transaction. No standalone allow or fabricated authority fixture is permitted.
+Authorized scoped lifecycle transition/drain proof precedes live AUTH routing
+composition. Conditional award facts remain atomic for paid and unpaid policies.
+The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
+unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
+successor manifest enables fulfillment, not before this contribution path.
 False guide activation follows joint proof. A stable Review FK target is
-not live ReviewLease/queue/decision behavior. The shared lifecycle/obligation
-fence is required for either trigger; human runtime and fulfillment endpoints
+not live ReviewLease/queue/decision behavior. The shared lifecycle
+fence is required for either acceptance trigger; obligation writers join that same
+fence before fulfillment admission is enabled. Human runtime and fulfillment endpoints
 are not prerequisites for accepting without a reviewer. The older interleaving
 below describes the human branch, not a second acceptance implementation.
 

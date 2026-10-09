@@ -85,7 +85,7 @@ async def request_for(h, **changes) -> FinalAcceptanceRequest:
             expected_task_status="review_pending",
         ),
         "correlation_id": new_record_id(),
-        "expected_generation": 0,
+        "expected_generation": 2,
     }
     values.update(changes)
     return FinalAcceptanceRequest(**values)

@@ -117,8 +117,8 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 9. **WS-CLI-001-09:** Declare a guide, required illustrative tasks and source
    document targets through public POST using an exact bounded JSON file.
    Setup awaits actual original upload.
-10. **WS-CLI-001-10:** Upload one declared PDF/DOCX/PPTX original through public
-   binary POST; validate storage receipt against local bytes and preserve manual
+10. **WS-CLI-001-10:** Upload one declared PDF/DOCX/PPTX or UTF-8 Markdown (`.md`)
+   original through public binary POST; validate storage receipt against local bytes and preserve manual
    replay custody. Approval and activation remain.
 11. **WS-CLI-001-11:** Inspect latest exact-guide setup and compilation lineage
     through the public diagnostic read. No polling, local readiness rules,

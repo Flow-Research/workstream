@@ -1,6 +1,7 @@
 """Real PostgreSQL proof for hidden source-neutral submitter participation."""
 
 import pytest
+
 from sqlalchemy import text
 
 from app.core.identifiers import new_record_id
@@ -28,6 +29,8 @@ from tests.contributions.records.support import (
 )
 
 from .support import participant, request_for
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 @pytest.mark.parametrize(
@@ -316,7 +319,7 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
         request = request_for(h, acceptance_disposition="replay", correlation_id=new_record_id())
         async with h.factory() as session:
             await session.begin()
-            await PostgresJointLifecycleMutationFence(session).acquire(0)
+            await PostgresJointLifecycleMutationFence(session).acquire(2)
             await insert_record(session, h.submitter_record)
             expected_awards = await award_values(session, h.submitter_record)
             await insert_award(

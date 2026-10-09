@@ -3,6 +3,7 @@
 from uuid import UUID
 
 import pytest
+
 from sqlalchemy import text
 
 from app.core.identifiers import new_record_id
@@ -15,6 +16,8 @@ from .participation_support import (
     request_for,
     stored_effects,
 )
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 @pytest.mark.parametrize(

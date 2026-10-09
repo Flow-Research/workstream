@@ -189,7 +189,11 @@ hidden source-neutral participant that stages FinalAcceptance, TASK
 accepted/completed effects and the complete CON submitter outcome in the caller's
 transaction. It is not a complete authorized acceptance operation: its input has
 no exact AUTH decision-event receipt, and database complete-set enforcement,
-currentness race proof, shared audit/outbox and lifecycle activation remain.
+currentness race proof and shared audit/outbox remain. REV-12A4A supplies internal
+Operator-authorized transitions on the existing lifecycle controller. New
+participant effects require a live, nonzero generation; exact terminal replay
+remains read-only in stopped phases. This scope keeps payment delivery disabled
+and does not grant routing or acceptance authority.
 ARCH-04E1B-B1 requires TASK locking before checker reservation, current-result
 reads and review admission INSERTs, preserving exact read-only reservation replay
 after acceptance. ARCH-04E1B-B3 retains the inspected ZIP file metadata with immutable
@@ -811,7 +815,9 @@ the committed request events are not registered for delivery.
 The mandatory exact AUTH receipt must become required on the same strict input,
 with no optional/default path, before production consumption; database
 FinalAcceptance/TASK/CON closure, TASK-before-CHECKERS race proof, shared
-audit/outbox, fulfillment-root ordinals and activation remain later gates.
+audit/outbox and production manifest readiness remain later gates. Conditional
+award facts stay atomic with contribution records. Fulfillment-root ordinals and
+payment delivery are deferred until fulfillment is enabled.
 
 ## v0.1 Success Standard
 

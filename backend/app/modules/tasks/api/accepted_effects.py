@@ -54,10 +54,22 @@ class TaskAcceptedEffectsResult(BaseModel):
     assignment_status: Literal["completed"]
 
 
+class TaskLifecycleFacts(Protocol):
+    """Read-only scalar phase facts from the externally owned canonical fence."""
+
+    @property
+    def phase(self) -> str:
+        ...
+
+    @property
+    def generation(self) -> int:
+        ...
+
+
 class TaskAcceptedEffectsFence(Protocol):
     """Acquire the canonical externally owned lifecycle fence."""
 
-    async def acquire(self, expected_generation: _Generation) -> object:
+    async def acquire(self, expected_generation: _Generation) -> TaskLifecycleFacts:
         """Retain the expected generation through the caller's transaction."""
         ...
 

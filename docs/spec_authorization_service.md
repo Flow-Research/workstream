@@ -438,6 +438,17 @@ evaluator. Reads continue through request-scoped authorization. Mutations and
 service commands later use the existing opaque, process-local, transaction-
 bound `PreparedAuthorizationHandle`; REV locks and composes canonical facts,
 while the exact activation wave installs the corresponding AUTH evaluator.
+
+REV-12A4A now activates the internal `review.lifecycle.activation.manage` slice
+with a strict nested command/observations resource owned by AUTH's lifecycle
+contract. It replaces the earlier inert scalar shape. Live system Operator
+PREP follows the REV root fence, so a transition cannot retain actor custody
+while waiting for an acceptance writer that needs TASK. The fence grants no
+authority; consumption still precedes effects and binds the singleton, operation,
+actor/link, generation, phases, deadline, manifest and observations. Controller,
+immutable history and exact AUTH evidence commit together. Same-command replay
+requires fresh same-actor authority and writes nothing. Other review actions
+remain unavailable; this action grants neither acceptance nor payment authority.
 XINT-002 packet, evidence-binding, and revision-submission actions are external
 handoff references only and are not redefined by this manifest.
 
@@ -834,16 +845,22 @@ denies even when both actions share one `PermissionId`. An own-row action still
 denies while its availability is `planned`.
 
 Sensitive mutations use the prepared protocol instead of evaluating final
-authority against unlocked feature facts:
+authority against unlocked feature facts. Each action retains its owner-specific
+lock contract; REV-fenced operations acquire REV and any required TASK custody
+before AUTH preparation, with TASK before required CHECKERS currentness locks.
+The authority-row order below applies within AUTH custody, not ahead of required
+owner locks:
 
 ```text
-AUTH locks AuthorityControl first when final-admin safety applies
+feature establishes the prerequisite custody required by its owner contract
+-> AUTH locks AuthorityControl first within AUTH when final-admin safety applies
 -> AUTH orders principals by ActorProfile ID
 -> human: ActorProfile -> exact ActorIdentityLink -> exact matched grant
 -> service: ActorProfile -> exact ActorIdentityLink -> code-owned validations
 -> AUTH creates one internal non-Pydantic PreparedAuthorizationHandle bound to
    session, action, actor reference, idempotency key, and request digest
--> feature locks its canonical rows and recomposes final typed facts
+-> feature completes any remaining owner-ordered custody and recomposes final
+   typed facts, without reversing its lock contract
 -> AUTH consumes the handle, evaluates once, and stages decision evidence
 -> feature participants flush
 -> route or service command commits once
@@ -856,8 +873,11 @@ ART foundation service actions, Project Manager
 `artifact.guide_source.read`
 action, contributor `artifact.submission_bundle.prepare`, hidden human
 `submission.create`, and fixed-service `artifact.submission.binding.create`.
-Checker, review, generic artifact-read, and the public Submission cutover remain
-planned and issue no handle.
+REV-12A4A additionally issues PREP for internal
+`review.lifecycle.activation.manage`, the sole active review exception. Human
+review, generic artifact-read and the public Submission cutover remain planned
+and issue no handle. The controller activates no public review route, routing,
+acceptance or payment delivery.
 ARCH-04E1B-B6 retains the exact creation and binding decision IDs in their owner
 receipts. Fresh PREP authority validates those immutable events on replay,
 including exact actor/service, action, permission, project, resource and canonical
