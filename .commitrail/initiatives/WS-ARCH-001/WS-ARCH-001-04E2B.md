@@ -48,7 +48,9 @@ canonical contracts before activating the exact operation.
   No alternate authorization service.
 - REV `api/acceptance.py`, `acceptance/{models,repository,participant}.py`, and
   existing lifecycle service/manifest readiness only where mandatory source
-  custody changes its retained-source validation. Existing fence is reused.
+  custody changes its retained-source validation. Existing fence is reused through
+  a REV-owned prepared acceptance capability and transaction-bound held-fence
+  view injected into the existing TASK/CON participants.
 - ART `post_submit_materialization.py` and CHECKERS `api/materialization.py`,
   `api/execution.py`, execution/coordinator/models plus their focused material
   custody tests, only to retain the actual input-materialization decision that
@@ -83,7 +85,12 @@ skips, coverage quotas or replacement of required proof with permissive mocks.
 - Observe the locked-policy branch through a bounded nonlocking TASK read before
   locks, then revalidate exact lineage under mutation custody. False acquires
   REV-12A4A before TASK/Assignment/Submission, PROJECTS and CHECKERS, then AUTH;
-  true never acquires REV/CON. Retain exact outbox invocation custody through
+  true never acquires REV/CON. Acquire a REV-owned prepared FinalAcceptance
+  capability before TASK locking; consume it after AUTH without reacquiring the
+  controller. Its held-fence view checks the original root transaction and exact
+  generation for existing TASK/CON participants instead of issuing another REV
+  lock. Detached lifecycle facts cannot substitute for this capability; use after
+  transaction end, rollback or a savepoint fails. Retain exact outbox invocation custody through
   commit using the existing port. Prove actual interleavings, not just order lists.
 - Prepare/consume AUTH over `TaskPostSubmitSourceProposal`; keep persisted
   `ManifestFacts` for stored reads. One canonical semantic digest excludes only
@@ -162,6 +169,23 @@ Verify all affected tests, module/AUTH boundaries, ownership/lane catalogue,
 lint, links, current wording and Commitrail; full hosted suite remains required.
 No percentage gate. Real storage/broker first-layer drill remains group 5;
 this operation does not claim production delivery.
+
+### Planned proof map (future implementation tests)
+
+These are named implementation targets, not claims of executed evidence.
+
+| Requirement | Future proof | Custody |
+| --- | --- | --- |
+| True handoff / false atomic acceptance and governed awards | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_policy_outcome` | Real PostgreSQL owners and AUTH, independently selected committed rows |
+| Rollback across every participant | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_participant_failure_rolls_back` | Real caller transaction, injected failure at one boundary |
+| Exact terminal replay after shutdown | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_stopped_replay_preserves_original_authority` | Actual controller transition, original receipt and unchanged row sets |
+| No REV/CON acquisition for true branch | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_true_branch_does_not_acquire_acceptance` | Forbidden participant invocation plus committed TASK/AUTH control |
+| Source/claim/event substitutions and orphan/partial SQL | `backend/tests/tasks/post_submit_routing/test_outcome_storage.py::test_incomplete_or_crossed_outcome_rejected` | Direct SQL with internally consistent digests; assert intended constraint failure |
+| REV/TASK/AUTH intermediate wait | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_transition_task_read_and_outcome` | Independent PostgreSQL sessions and observed lock waits |
+| Current completion / invocation custody | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_successor_and_delivery_cannot_cross_outcome` | Independent sessions, both transaction orders |
+| Held acceptance capability lifetime | `backend/tests/reviews/acceptance/test_prepared.py::test_prepared_acceptance_requires_original_root` | PostgreSQL root, rollback, new transaction and raw savepoint probes |
+| Retained materialization decision | Existing ART/CHECKERS materialization integration tests, extended exact persisted receipt assertions | Actual Local/MinIO materialization and immutable AUTH event |
+| Upgrade refusal preserves old data | `backend/tests/tasks/post_submit_routing/test_outcome_migration.py::test_pre_authority_rows_refuse_upgrade` | Isolated predecessor schema, rejected upgrade and unchanged rows |
 
 ## Reconciliation
 
