@@ -19,14 +19,14 @@ from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
 from app.main import create_app
-from app.modules.actors.api import ActorKind, ServiceIdentity
+from app.modules.actors.api import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink
 from app.modules.artifacts.models import ArtifactTaskImportSource, ArtifactPutAttempt, ArtifactAdmissionCharge
 from app.modules.artifacts.models import ArtifactReplica
 from app.adapters.artifacts.s3_compatible import S3CompatibleArtifactStore
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
 from app.modules.authorization.models import AdminRoleGrant
-from app.modules.authorization.runtime import ActorStatus, HumanAuthorizationContext, IdentityLinkStatus
+from app.modules.authorization.runtime import ActorKind, ActorStatus, HumanAuthorizationContext, IdentityLinkStatus
 from app.modules.authorization.task_import_sources import PreparedTaskImportSourceAuthorization
 from app.modules.artifacts.api.task_import_source import TaskImportSourceAction
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
