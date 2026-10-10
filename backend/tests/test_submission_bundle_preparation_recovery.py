@@ -1,7 +1,7 @@
 """Command recovery distinguishes checked failure, unavailable custody and authority."""
 
 from contextlib import asynccontextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
@@ -110,7 +110,7 @@ async def test_mounted_preparation_returns_exact_ordered_bounded_feedback() -> N
 
     assert response.status_code == 422
     payload = response.json()
-    assert payload["detail"] == "pre_submission_checker_failed"
+    assert set(payload) == {"error"}
     assert payload["error"]["code"] == "pre_submission_checker_failed"
     assert payload["error"]["message"] == "Pre-submission checks failed"
     assert payload["error"]["retryable"] is False
@@ -163,11 +163,14 @@ async def test_mounted_preparation_preserves_non_feedback_error_boundaries(
     assert "results" not in payload["error"]["details"]
 
 
-def test_blocked_feedback_rejects_noncanonical_or_passing_facts() -> None:
+@pytest.mark.parametrize("eligible", (True, 0, None))
+def test_blocked_feedback_rejects_noncanonical_or_non_false_facts(eligible) -> None:
     with pytest.raises(TypeError, match="feedback facts are invalid"):
         SubmissionBundlePreparationCheckFailed(object())  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="passing pre-submission facts"):
-        SubmissionBundlePreparationCheckFailed(_feedback_facts(eligible=True))
+    with pytest.raises(ValueError, match="require eligible false"):
+        SubmissionBundlePreparationCheckFailed(
+            replace(_feedback_facts(), eligible=eligible)  # type: ignore[arg-type]
+        )
 
 
 @pytest.mark.asyncio
@@ -248,6 +251,18 @@ def _preparation_replay_runtime(prepare_bytes, evidence_id, *, eligible):
         materialization=SimpleNamespace(prepare_authorization=AsyncMock(return_value=object())),
         evidence=evidence,
         durable_put=object(),
+    )
+
+
+async def _assert_blocked_feedback(command, request, runtime) -> None:
+    with pytest.raises(
+        SubmissionBundlePreparationCheckFailed,
+        match="pre_submission_checker_failed",
+    ) as failure:
+        await command.prepare(request)
+    assert (
+        failure.value.facts
+        == runtime.evidence.execute_reserved.return_value.execution.checker_facts
     )
 
 
@@ -345,12 +360,7 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch,
         runtime.evidence.reserve.return_value = runtime.evidence.execute_reserved.return_value
         assert await command.prepare(request) == expected
     elif outcome == "blocked":
-        with pytest.raises(
-            SubmissionBundlePreparationCheckFailed,
-            match="pre_submission_checker_failed",
-        ) as failure:
-            await command.prepare(request)
-        assert failure.value.facts == runtime.evidence.execute_reserved.return_value.execution.checker_facts
+        await _assert_blocked_feedback(command, request, runtime)
         command._existing_durable_result.assert_not_awaited()
     else:
         code = ("pre_submission_attempt_outcome_unresolved" if outcome == "unresolved"

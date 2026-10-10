@@ -497,6 +497,7 @@ TASK_MODULES = (
     "tests/test_checker_catalogue.py",
     "tests/test_checkers.py",
     "tests/checkers/test_effective_intake_rules.py",
+    "tests/test_blocked_pre_submit_feedback_postgresql.py",
     "tests/test_default_pre_submit_execution.py",
     "tests/test_approved_guide_intake.py",
     "tests/test_pre_submit_attempt_recovery.py",

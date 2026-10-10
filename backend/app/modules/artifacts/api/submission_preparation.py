@@ -22,8 +22,8 @@ class SubmissionBundlePreparationCheckFailed(SubmissionBundlePreparationRejected
     def __init__(self, facts: PreSubmissionExecutionFacts) -> None:
         if type(facts) is not PreSubmissionExecutionFacts:
             raise TypeError("pre-submission feedback facts are invalid")
-        if facts.eligible:
-            raise ValueError("passing pre-submission facts cannot be rejected")
+        if facts.eligible is not False:
+            raise ValueError("blocked pre-submission facts require eligible false")
         super().__init__("pre_submission_checker_failed")
         self.facts = facts
 

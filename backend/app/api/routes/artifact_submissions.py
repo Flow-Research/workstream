@@ -104,7 +104,6 @@ async def prepare_submission_bundle(
                 "eligible_to_submit": exc.facts.eligible,
                 "results": [asdict(entry) for entry in exc.facts.entries],
             },
-            compatibility={"detail": str(exc)},
         )
     except SubmissionBundlePreparationInfrastructureUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -40,15 +40,7 @@ from app.modules.artifacts.models import (
     ArtifactReplica,
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
-    PreSubmitEvidenceResult,
-    PreSubmitEvidenceSet,
-    PreSubmitExecutionAttempt,
-    SubmissionBundleAdmission,
     SubmissionBundleDurableIntent,
-)
-from app.modules.artifacts.api import SubmissionBundlePreparationCheckFailed
-from app.modules.artifacts.authorization import (
-    PreparedPreSubmitMaterializationAuthorization,
 )
 from app.modules.artifacts.pre_submit_evidence import PreSubmitEvidenceConflict, _validate_execution
 from app.modules.artifacts.service import (
@@ -56,10 +48,8 @@ from app.modules.artifacts.service import (
     ArtifactStorageNamespaceSpec,
 )
 from app.modules.artifacts.submission_admission import (
-    PreparedSubmissionBundlePreparationCommand,
     SubmissionBundleAdmissionPublisher,
     SubmissionBundleDurablePutRequest,
-    SubmissionBundlePreparationRuntime,
 )
 from app.modules.artifacts.operator import ArtifactOperatorService
 from app.modules.artifacts.metrics import artifact_admission_metrics
@@ -97,11 +87,6 @@ from app.modules.checkers.pre_submit_execution import (
     SubmissionPacketView,
 )
 from app.modules.checkers.api import PreSubmissionInfrastructureUnavailableError
-from app.adapters.artifacts import CheckerPhaseService
-from app.adapters.checkers import submission_evaluation_content
-from app.modules.projects.locked_policy_repository import ProjectLockedPolicyRepository
-from app.modules.tasks.repository import TaskRepository
-from tests.checkers.execution.support import forbidden_post_submission
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from tests.pre_submit_test_helpers import (
     approved_pre_submit_fixture,
@@ -944,160 +929,6 @@ async def test_effective_evidence_workflow_persists_once_and_replays_exactly(
         "submission_bundle_admissions": before["submission_bundle_admissions"] + 1,
         "pre_submit_evidence_sets": evidence_count, "pre_submit_evidence_results": result_count,  # noqa: E501
     }
-
-
-@pytest.mark.asyncio
-async def test_authorized_blocked_command_replays_exact_feedback_without_product_effects(
-    tmp_path: Path,
-    isolated_database_env: str,
-) -> None:
-    """Prove real blocked custody, stable replay, and the no-Submission boundary."""
-    from contextlib import asynccontextmanager
-
-    from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
-    from tests.test_pre_submit_attempt_recovery import _harness
-
-    harness = await _harness(tmp_path, isolated_database_env)
-    await harness.request.prepared_artifact.close()
-    calls: list[int] = []
-    await _seed_materializer(harness.factory)
-    task_id = str(harness.request.task_id)
-
-    async def product_state(session):
-        values = (
-            await session.execute(
-                text(
-                    "select "
-                    "(select status from workstream_tasks where id=:task) as task_status,"
-                    "(select count(*) from submissions where task_id=:task) as submissions,"
-                    "(select max(version) from submissions where task_id=:task) as max_version,"
-                    "(select count(*) from submission_bundle_admissions "
-                    " where task_id=:task and status='ready') as ready_admissions,"
-                    "(select count(*) from checker_runs where task_id=:task) as checker_runs,"
-                    "(select count(*) from audit_events where entity_type='task' "
-                    " and entity_id=:task and event_domain<>'authority') as task_events,"
-                    "(select count(*) from outbox_events where aggregate_id=:task) as outbox_events"
-                ),
-                {"task": task_id},
-            )
-        ).mappings().one()
-        return dict(values)
-
-    async def evidence_state(session):
-        attempt = await session.scalar(
-            select(PreSubmitExecutionAttempt).where(
-                PreSubmitExecutionAttempt.task_id == task_id
-            )
-        )
-        assert attempt is not None and attempt.status == "completed"
-        evidence = await session.get(PreSubmitEvidenceSet, attempt.evidence_set_id)
-        assert evidence is not None and evidence.eligible is False
-        result_ids = tuple(
-            await session.scalars(
-                select(PreSubmitEvidenceResult.id)
-                .where(PreSubmitEvidenceResult.evidence_set_id == evidence.id)
-                .order_by(PreSubmitEvidenceResult.result_order)
-            )
-        )
-        counts = {
-            "evidence": int(
-                await session.scalar(select(func.count()).select_from(PreSubmitEvidenceSet))
-                or 0
-            ),
-            "results": int(
-                await session.scalar(select(func.count()).select_from(PreSubmitEvidenceResult))
-                or 0
-            ),
-            "checker_runs": int(
-                await session.scalar(text("select count(*) from checker_runs")) or 0
-            ),
-        }
-        return evidence.id, result_ids, counts
-
-    async def invoke():
-        async with harness.factory() as session:
-            contributor = harness.contributor_authority(session)
-            materializer = PreparedPreSubmitMaterializationAuthorization(
-                session,
-                request_id=harness.preparation_request.request_id,
-                correlation_id=harness.preparation_request.correlation_id,
-            )
-            workflow = harness.workflow(
-                session,
-                calls,
-                preparation_authorization=contributor,
-            )
-            workflow._materialization._authorization = materializer
-
-            @asynccontextmanager
-            async def runtime():
-                try:
-                    yield SubmissionBundlePreparationRuntime(
-                        preparation=harness.preparation,
-                        inspector=harness.inspector,
-                        catalogue=harness.catalogue,
-                        materialization=workflow._materialization,
-                        evidence=workflow,
-                        checker_service=CheckerPhaseService(
-                            pre_submission=workflow,
-                            post_submission=forbidden_post_submission(),
-                        ),
-                        durable_put=object(),
-                        evaluation_content=submission_evaluation_content,
-                    )
-                finally:
-                    materializer.close()
-
-            command = PreparedSubmissionBundlePreparationCommand(
-                session=session,
-                authority=contributor,
-                task_contexts=TaskRepository(session),
-                project_contexts=ProjectLockedPolicyRepository(session),
-                runtime_factory=runtime,
-            )
-            request = replace(
-                harness.preparation_request,
-                contributor_attestation="",
-                byte_source=_bytes(_archive(evidence_path=harness.evidence_path)),
-            )
-            with pytest.raises(SubmissionBundlePreparationCheckFailed) as failure:
-                await command.prepare(request)
-            return failure.value.facts
-
-    try:
-        async with harness.factory() as session:
-            before = await product_state(session)
-            assert before["task_status"] == "in_progress"
-            assert before["submissions"] == 0
-            assert before["max_version"] is None
-            await session.rollback()
-
-        first_feedback = await invoke()
-        assert first_feedback.eligible is False
-        assert any(entry.failure_code is not None for entry in first_feedback.entries)
-        assert calls == [1]
-
-        async with harness.factory() as session:
-            first_identity = await evidence_state(session)
-            after_first = await product_state(session)
-            assert after_first == before
-            assert await session.scalar(
-                select(func.count())
-                .select_from(SubmissionBundleAdmission)
-                .where(SubmissionBundleAdmission.task_id == task_id)
-            ) == 0
-            await session.rollback()
-
-        replay_feedback = await invoke()
-        assert replay_feedback == first_feedback
-        assert calls == [1]
-
-        async with harness.factory() as session:
-            assert await evidence_state(session) == first_identity
-            assert await product_state(session) == before
-            await session.rollback()
-    finally:
-        await harness.close()
 
 
 @pytest.mark.asyncio

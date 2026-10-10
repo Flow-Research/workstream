@@ -62,10 +62,12 @@ Submission creation and checker-remediation replacement remain unavailable.
 - Add focused behavior proof in
   `backend/tests/test_submission_bundle_preparation_recovery.py` and
   `backend/tests/test_submission_bundle_admission.py` for the HTTP adapter and
-  error boundaries. Extend the real PostgreSQL/default-executor fixture in
-  `backend/tests/test_default_pre_submit_execution.py` as the mandatory owner
-  proof for retained evidence, replay without re-execution, and zero product
-  mutation.
+  error boundaries. Add the focused
+  `backend/tests/test_blocked_pre_submit_feedback_postgresql.py` owner proof,
+  reusing the existing real PostgreSQL/default-executor harness without growing
+  its oversized owning module. Register that module in
+  `backend/scripts/test_lane_catalogue.py` and its exact inventory assertion in
+  `backend/tests/test_ci_lane_catalogue.py`.
 - Update only current claims that say the mounted hidden route returns the code
   alone: `docs/architecture_checker_framework.md`,
   `docs/architecture_data_model.md`, `docs/architecture_lockdown.md`,
@@ -87,7 +89,7 @@ Submission creation and checker-remediation replacement remain unavailable.
   audit publication, worker/handler registration, runtime activation, external
   checker implementation, migration, persisted field, provider coordinate,
   scratch coordinate, raw path/name, checker configuration, raw message, review
-  decision, compatibility response, or alternate result schema.
+  decision, new compatibility response, or alternate result schema.
 - Do not change pre-submit execution, policy compilation, pass eligibility,
   durable evidence, admission, post-submit CHECKERS outcomes, TASK lifecycle,
   authorization, or error classification outside the exact blocked-feedback
@@ -128,7 +130,8 @@ resources remain concealed.
 - [x] An authorized blocked preparation returns HTTP 422 with canonical error
       code `pre_submission_checker_failed` and details containing exactly
       `status="failed"`, `eligible_to_submit=false`, and the ordered canonical
-      bounded results for that execution.
+      bounded results for that execution. Its top level contains only the
+      canonical `error` envelope, with no new compatibility alias.
 - [x] Feedback preserves public checker names, closed result status/severity,
       actionable failure/message codes, and canonical bounded count metadata.
       It contains no paths, filenames, raw bytes/messages, provider/scratch
@@ -143,7 +146,9 @@ resources remain concealed.
       counts.
 - [x] Context conflict, unavailable authority, and unresolved/corrupt execution
       custody preserve their distinct existing 409/404/503 behavior and expose
-      no structured checker results.
+      no structured checker results. Their existing top-level `detail` field is
+      supplied by the unchanged shared HTTP exception handler; removing that
+      repository-wide compatibility behavior remains outside this change.
 - [x] An ASGI request proves the exact ordered `error.details` projection for
       blocked feedback. Paired ASGI controls prove 409, 404, and 503 responses
       retain their existing detail-only compatibility payloads and contain no
@@ -167,8 +172,9 @@ resources remain concealed.
    contributor-correctable failure, warning/dependency state, and bounded
    counts. Prove exact ordered serialization and redaction, then pair it with
    unchanged detail-only 409/404/503 controls and continued OpenAPI absence.
-5. Extend the existing authorized default pre-submit PostgreSQL fixture to run a
-   blocked preparation through the real command twice with the same replay key.
+5. Add a focused test module that reuses the existing authorized default
+   pre-submit PostgreSQL harness to run a blocked preparation through the real
+   command twice with the same replay key.
    Record the evidence-set ID and ordered result-row IDs after the first call;
    prove the replay returns identical bounded facts, does not re-enter checker
    execution, and leaves evidence/result/checker counts unchanged. Snapshot
@@ -195,10 +201,10 @@ resources remain concealed.
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Current owner gap and reusable result contract | Inspect `PreparedSubmissionBundlePreparationCommand.prepare`, `PreSubmissionExecutionResult.bounded_facts`, `PreSubmissionExecutionFacts`, and `prepare_submission_bundle` | Confirmed before planning | Runtime proof pending implementation |
-| ASGI blocked feedback and unchanged error boundaries | `cd backend && <builder-venv>/pytest -q tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Passed: 65 tests | Uses the mounted app with controlled actor/command dependencies; it proves response serialization and error boundaries, not production dependency composition |
-| Real blocked evidence, exact replay, and zero product effects | Isolated PostgreSQL runner at migration head `0030`: `pytest -q tests/test_default_pre_submit_execution.py::test_authorized_blocked_command_replays_exact_feedback_without_product_effects` | Passed: 1 test | Uses real owner rows, authorization services, repositories, preparation, evidence and checker execution; fixture-seeded actor/service identities do not prove production composition. Hosted full-suite result remains PR evidence |
-| Static quality and owner boundaries | `cd backend && <builder-venv>/ruff check app/api/routes/artifact_submissions.py app/modules/artifacts/api/__init__.py app/modules/artifacts/api/submission_preparation.py app/modules/artifacts/submission_admission.py tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py tests/test_default_pre_submit_execution.py` | Passed | No repository type-check command is defined for this Python scope |
-| No stale current claim or broken documentation link | `python3 scripts/check_stale_authorization_docs.py`; `python3 scripts/check_stale_artifact_contracts.py`; `python3 scripts/check_markdown_links.py`; `git diff --check` | Passed | Historical early chunk specifications intentionally retain their time-bound statements; final central roadmap reconciliation remains with the lead |
+| ASGI blocked feedback, unchanged error boundaries, and CI inventory | `cd backend && <builder-venv>/pytest -q tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py tests/test_ci_lane_catalogue.py` | Passed: 112 tests | Uses the mounted app with controlled actor/command dependencies; it proves response serialization and error boundaries, not production dependency composition |
+| Real blocked evidence, exact replay, and zero product effects | Isolated PostgreSQL runner at migration head `0030`: `pytest -q tests/test_blocked_pre_submit_feedback_postgresql.py` | Passed: 2 tests | Uses real owner rows, authorization services, repositories, preparation, evidence and checker execution; fixture-seeded actor/service identities do not prove production composition. A discriminating test injects a valid submission-aggregate outbox event and proves the no-effects assertion catches it. Hosted full-suite result remains PR evidence |
+| Static quality and owner boundaries | Scoped Ruff; module/AUTH/behavior-ownership validators; frozen test-structure validator; `pytest -q tests/architecture/test_module_boundaries.py tests/architecture/test_authorization_boundary.py tests/test_artifact_architecture.py` | Passed: validators and 129 tests | The structural debt ledger is unchanged; `test_default_pre_submit_execution.py` matches its exact pre-change content. No repository type-check command is defined for this Python scope |
+| No stale current claim or broken documentation link | All four stale scripts: Workstream wording, authorization, artifact, and review; `python3 scripts/check_markdown_links.py`; `git diff --check` | Passed | Historical early chunk specifications intentionally retain their time-bound statements; final central roadmap reconciliation remains with the lead |
 
 ## Review findings
 
@@ -213,6 +219,15 @@ the existing default pre-submit fixture and a separate ASGI response/error
 matrix. The
 required L1 plan review must bind to the repaired committed planning head before
 application code begins.
+
+The first implementation review found five repair themes: remove the newly
+introduced top-level compatibility alias from blocked feedback; require
+`eligible is False`; make the PostgreSQL no-effects proof observe all outbox and
+non-authority audit rows and prove that observation discriminates; reconcile the
+remaining ADR code-only statement; and relocate the proof from an already
+oversized test module while registering its CI ownership. The repaired candidate
+retains the unchanged shared HTTP exception compatibility behavior only for the
+pre-existing 409/404/503 paths; a global handler cutover is not part of 02IA.
 
 ## Reconciliation
 

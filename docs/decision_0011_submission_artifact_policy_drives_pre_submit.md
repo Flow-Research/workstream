@@ -233,17 +233,17 @@ tests, sandboxed execution, no network, no shell, no secrets, no database access
 covered Project Manager approval of the exact code hash after those checks
 pass, and a locked code hash.
 
-Blocking pre-submit failures prevent submission creation. The target intake
-contract requires the following when checks fail; the current hidden route
-returns only the failure code and ART constructs an audit-ready payload, while
-structured public feedback and TASK audit publication remain pending:
+Blocking pre-submit failures prevent submission creation. The mounted authorized
+hidden route returns the failure code with ART's exact ordered bounded results
+in the same request. Public OpenAPI activation and TASK audit publication remain
+pending:
 
 - no `Submission` row is created
 - no submission version is assigned
 - no task transition to `submitted` occurs
 - no submission-created audit event is written
-- a task audit event named `pre_submission_check_failed` is written with the
-  structured checker result for project operators
+- a planned task audit event named `pre_submission_check_failed` remains pending
+  and is not written by the current hidden route
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
 POL-07B removes the standalone JSON precheck contract and connects the internal
