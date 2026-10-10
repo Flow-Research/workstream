@@ -362,6 +362,12 @@ approval or activation; there is no polling or setup execution in the CLI.
 the exact finalized proposal, findings, requirement inventory and proposed
 intake/evaluation bindings. It never substitutes the latest compilation or
 approves a policy; blocked and historical proposals remain observations.
+`workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input
+FILE --idempotency-key UUID` submits the deliberately prepared public intake
+approval request. It preserves the exact target, ordered warning acknowledgments
+and prior-approval selectors with explicit manual replay. The backend owns fresh
+authority, currentness and policy validation; the receipt proves intake approval,
+not post-policy approval, post-policy job delivery or guide activation.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.
