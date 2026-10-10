@@ -611,12 +611,12 @@ async def get_task_import_source_commands(
                 authorities.append(PreparedArtifactInternalAuthority(
                     session, service_identity=identity, request_id=request_id, correlation_id=correlation_id,
                 ))
-            async with authorities[0].denial_boundary(), authorities[1].denial_boundary():
-                yield TaskImportSourceRuntime(
-                    store, namespace, ArtifactPreparationService(manager), ArtifactAdmissionService(session, settings, namespace),
-                    ArtifactStorageOrchestrator(session, store, namespace, settings, authorities[0]),
-                    ArtifactStorageOrchestrator(session, store, namespace, settings, authorities[1]),
-                )
+            yield TaskImportSourceRuntime(
+                store, namespace, ArtifactPreparationService(manager), ArtifactAdmissionService(session, settings, namespace),
+                ArtifactStorageOrchestrator(session, store, namespace, settings, authorities[0]),
+                ArtifactStorageOrchestrator(session, store, namespace, settings, authorities[1]),
+                authorities[0].denial_boundary, authorities[1].denial_boundary,
+            )
         finally:
             for authority in authorities:
                 authority.discard()

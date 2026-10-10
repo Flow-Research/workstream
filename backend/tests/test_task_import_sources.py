@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from aiobotocore.session import AioSession
@@ -20,12 +21,15 @@ from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
 from app.main import create_app
 from app.modules.actors.api import ServiceIdentity
-from app.modules.actors.models import ActorIdentityLink
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.models import ArtifactTaskImportSource, ArtifactPutAttempt, ArtifactAdmissionCharge
 from app.modules.artifacts.models import ArtifactReplica
+from app.modules.artifacts.models import ArtifactVerificationJob
+from app.modules.artifacts.authorization import PreparedArtifactInternalAuthority
 from app.adapters.artifacts.s3_compatible import S3CompatibleArtifactStore
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
 from app.modules.authorization.models import AdminRoleGrant
+from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.runtime import ActorKind, ActorStatus, HumanAuthorizationContext, IdentityLinkStatus
 from app.modules.authorization.task_import_sources import PreparedTaskImportSourceAuthorization
 from app.modules.artifacts.api.task_import_source import TaskImportSourceAction
@@ -179,6 +183,11 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
     uploaded = await client.put(_path(project, source) + "/content", headers=headers | {"Content-Type": "application/json"}, content=raw)
     assert uploaded.status_code == 200 and uploaded.json()["status"] == "verified", uploaded.text
     before = await _effects()
+    async with db_session.get_session_factory()() as session:
+        parent = await session.get(ArtifactTaskImportSource, source["source_id"])
+        actor_id = parent.actor_profile_id
+        allowed_ids = set(await session.scalars(select(AuditEvent.id).where(
+            AuditEvent.resource_id == source["source_id"], AuditEvent.after_facts["allowed"].as_boolean().is_(True))))
     async with db_session.get_session_factory()() as session, session.begin():
         grant = (await session.scalars(select(AdminRoleGrant).where(
             AdminRoleGrant.role == "project_manager", AdminRoleGrant.status == "active"))).one()
@@ -200,6 +209,72 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
     foreign = await client.get(f"/api/v1/projects/{uuid4()}/task-import-sources/{source['source_id']}", headers=auth_headers())
     assert status.status_code == foreign.status_code == upload_replay.status_code == download.status_code == 404
     assert (await _effects()) == before == (1, 1, 3, 0)
+    async with db_session.get_session_factory()() as session:
+        events = list(await session.scalars(select(AuditEvent).where(
+            AuditEvent.resource_id == source["source_id"], AuditEvent.event_type == "SensitiveAuthorizationDenied")))
+        assert sorted(event.action_id for event in events) == sorted([
+            TaskImportSourceAction.DECLARE.value, TaskImportSourceAction.UPLOAD.value,
+            TaskImportSourceAction.READ.value, TaskImportSourceAction.READ.value,
+        ])
+        assert all(event.actor_id == actor_id and event.project_id == project
+                   and event.resource_type == "task_import_source" and event.permission_id == "project.task.manage"
+                   and event.denial_code == "permission_not_granted" and event.after_facts["allowed"] is False
+                   for event in events)
+        assert set(await session.scalars(select(AuditEvent.id).where(
+            AuditEvent.resource_id == source["source_id"], AuditEvent.after_facts["allowed"].as_boolean().is_(True)))) == allowed_ids
+
+
+@pytest.mark.parametrize("identity,action,resource_type", [
+    (ServiceIdentity.ARTIFACT_PUT_RESOLVER, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE, "artifact_put_attempt"),
+    (ServiceIdentity.ARTIFACT_VERIFIER, ActionId.ARTIFACT_VERIFICATION_EXECUTE, "artifact_verification_job"),
+])
+async def test_upload_retains_only_the_denied_internal_services_evidence(
+    import_source_client, monkeypatch, identity, action, resource_type,
+):
+    """A real fixed-service denial is restaged by its own authority instance."""
+    client = import_source_client
+    project = await _project(client)
+    value = document()
+    value["tasks"][0]["external_task_id"] = "service-denial-" + project
+    raw = json.dumps(value).encode()
+    source = await _declare(client, project, raw)
+    async with db_session.get_session_factory()() as session, session.begin():
+        principal = (await session.scalars(select(ActorProfile).where(ActorProfile.service_identity == identity.value))).one()
+        actor_id = principal.id
+        principal.status = "suspended"
+        principal.suspended_by = "test"
+        principal.suspended_at = datetime.now(UTC)
+        principal.suspension_reason = "exact service denial evidence control"
+    persisted_by = []
+    persist_denial = PreparedArtifactInternalAuthority.persist_denial
+
+    async def observe_persistence(authority):
+        persisted_by.append(authority._service_identity)
+        await persist_denial(authority)
+
+    monkeypatch.setattr(PreparedArtifactInternalAuthority, "persist_denial", observe_persistence)
+    response = await client.put(_path(project, source) + "/content",
+                                headers=auth_headers() | {"Content-Type": "application/json"}, content=raw)
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "task_import_source_service_unavailable"
+    assert persisted_by == [identity]
+    async with db_session.get_session_factory()() as session:
+        denied = list(await session.scalars(select(AuditEvent).where(AuditEvent.event_type == "SensitiveAuthorizationDenied")))
+        assert len(denied) == 1
+        event = denied[0]
+        assert (event.action_id, event.actor_id, event.resource_type, event.denial_code) == (
+            action.value, actor_id, resource_type, "actor_suspended",
+        )
+        assert event.after_facts["allowed"] is False
+        if identity is ServiceIdentity.ARTIFACT_PUT_RESOLVER:
+            resource = (await session.scalars(select(ArtifactPutAttempt))).one()
+            assert resource.task_import_source_id == source["source_id"]
+        else:
+            resource = (await session.scalars(select(ArtifactVerificationJob))).one()
+            attempt = await session.get(ArtifactPutAttempt, resource.originating_put_attempt_id)
+            assert attempt.task_import_source_id == source["source_id"]
+        assert event.resource_id == resource.id
+        assert await session.scalar(select(func.count()).select_from(WorkstreamTask)) == 0
 
 
 async def test_submitter_cannot_declare_or_upload_a_source(import_source_client, monkeypatch):

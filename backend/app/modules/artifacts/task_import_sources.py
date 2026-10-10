@@ -54,6 +54,8 @@ class TaskImportSourceRuntime:
     admission: ArtifactAdmissionService
     puts: ArtifactStorageOrchestrator
     verification: ArtifactStorageOrchestrator
+    put_denial_boundary: Callable[[], AbstractAsyncContextManager[None]]
+    verification_denial_boundary: Callable[[], AbstractAsyncContextManager[None]]
 
 
 class ArtifactTaskImportSourceCommands:
@@ -174,16 +176,18 @@ class ArtifactTaskImportSourceCommands:
                             TaskImportSourceAdmissionRequest(source_id, prepared.committed_source),
                             task_import_source_authority=_UploadAuthority(self, source), existing_transaction=True,
                         )
-                    if admission.replayed:
-                        await runtime.puts.resume_committed_put(attempt_id=admission.attempt_id, source=prepared.committed_source)
-                    else:
-                        await runtime.puts.execute_committed_put(attempt_id=admission.attempt_id, source=prepared.committed_source)
+                    async with runtime.put_denial_boundary():
+                        if admission.replayed:
+                            await runtime.puts.resume_committed_put(attempt_id=admission.attempt_id, source=prepared.committed_source)
+                        else:
+                            await runtime.puts.execute_committed_put(attempt_id=admission.attempt_id, source=prepared.committed_source)
                     async with self._session.begin():
                         job_id = await self._session.scalar(select(ArtifactVerificationJob.id).where(
                             ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id),
                         ).order_by(ArtifactVerificationJob.created_at.desc(), ArtifactVerificationJob.id.desc()).limit(1))
                     if job_id is not None:
-                        await runtime.verification.verify_object(UUID(job_id))
+                        async with runtime.verification_denial_boundary():
+                            await runtime.verification.verify_object(UUID(job_id))
                 finally:
                     await prepared.close()
             return await self.status(project_id, source_id)

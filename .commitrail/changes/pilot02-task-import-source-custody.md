@@ -148,6 +148,16 @@ can be overwritten. Existing provider failure and recovery behavior is preserved
 
 ## Reconciliation
 
+Independent source review found that nested resolver and verifier denial scopes
+could let the verifier intercept a resolver's denied decision. Source composition
+now passes each existing authority's denial scope to its corresponding operation;
+put/replay and verification restage only their own captured decision. Retained
+public tests suspend each real fixed-service principal and require its exact
+canonical denial event, original ART resource, and zero wrong-instance restaging.
+The revoked-manager public case also requires all four canonical denied decisions
+and no additional ALLOW evidence. These affected application changes require a
+new native proof; the earlier `c5f5a1` execution is not relabeled as that proof.
+
 - Current-source reconciliation: main `4c5720034a2a1019f00df6c7f96601407ef1e43a` includes the merged lifecycle transitions, CLI guide inspection and pre-submit proposal approval, and PILOT-04 external checker contract/registry. Source actions coexist with the complete lifecycle and registry dispatch, resource and Operator-role classifications. Native UUID mappings retain each existing owner's string or UUID representation. The roadmap preserves merged Markdown, lifecycle and CLI delivery statements and keeps only this source prerequisite's additions. Existing MCP operations remain unchanged; the selected authorization-context contract includes the three additive source actions and captures the reconciled backend revision. After this reconciliation, the complete backend, contracts, MCP and CI-metadata trees remain byte-identical to the clean `c5f5a13637d3db6958154b6b7bf97389f9c0b233` public proof; incoming CLI source is unchanged from merged main.
 - Next usable boundary: atomic DRAFT TASK import from verified source, then explicit batch screen/release and CLI conversion in separately authorized bounded changes.
 - Remaining risks: source retention has no deletion scheduler; Issue #489 remains open.
