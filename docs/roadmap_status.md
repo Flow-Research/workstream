@@ -103,9 +103,10 @@ draft post-policy read; Finance publication remains separate. Task policy
 lineage, contributor artifact preparation and immutable Submission creation have
 tested foundations; their complete public integration remains unfinished. TASK
 now reserves and replays exact post-submit routing requests internally. Hidden
-AUTH preparation strictly binds those requests to exact source and branch
-consequences through canonical PREP, but the action remains planned/unavailable.
-No handle, allow, receipt, routing outcome or acceptance is published.
+AUTH binds those requests to exact source and branch consequences through
+canonical PREP. The hidden authorized outcome operation commits source custody
+and its governed effects atomically; completion delivery and production
+registration remain unavailable.
 
 Exact assignment-invalidation authority, atomic originating publication and
 production delivery with enforced prefork topology are implemented. Manager task
@@ -127,13 +128,11 @@ and database-bound receipts; output-file authority remains unavailable. ARCH-04D
 ART material lineage for all terminal results retaining material; public intake remains deferred to
 the later cutover prerequisites. ARCH-04E1A adds one immutable route-neutral
 TASK source table, detached source facts and source-neutral accepted-effects
-contracts. REV-04C uses the bounded exact-source verifier, but there is no
-general routing publication writer/reader, handler, current pointer or routing
-authority. Required success
-then branches on the locked ReviewPolicy: true routes to human `allow_review`;
-false invokes shared authorized acceptance without a human Review. Both routing
-integrations remain planned; false has metadata and guard-reachability proof only and guide activation
-still rejects it. ART-07A1 supplies metadata-only reviewer packet types, with no resolver or byte
+contracts. Required success branches on the locked ReviewPolicy: the hidden
+operation stages the TASK human-review handoff for true and shared authorized
+acceptance without a human Review for false. These internal outcomes have
+transaction and database proof; automatic completion delivery is next, and
+guide activation still rejects false until its runtime prerequisites are met. ART-07A1 supplies metadata-only reviewer packet types, with no resolver or byte
 authority. REV-03B packets and REV-04A immutable Review source storage are delivered; REV-04B shared acceptance storage, CON-03C contribution/award storage, REV-12A1 disabled controller/fence mechanics and CON-07 hidden source-neutral submitter participation with complete frozen award sets
 are delivered. [REV-04C](../.commitrail/initiatives/WS-REV-001/WS-REV-001-04C.md)
 adds one hidden source-neutral participant that stages
