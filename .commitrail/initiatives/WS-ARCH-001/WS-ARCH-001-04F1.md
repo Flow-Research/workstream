@@ -1,7 +1,7 @@
 # ARCH-04F1 — Verified checker failure evidence
 
 - Initiative: `WS-ARCH-001`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Risk: L1 — current-result custody and separation of contributor/setup failure.
 - Intended merge outcome: the existing CHECKERS completion port verifies and returns
   retained completed failure evidence as well as success, without granting routing
@@ -90,16 +90,16 @@ condition. A separate controlled finalization fixture reuses `final_facts` and t
 real executor's `finalize`, adding a valid non-empty `PostSubmitCounter`; no database
 custody or AUTH guard is disabled to seed it.
 
-Future executable proof map (not yet run):
+Executable regression map:
 
-| File under `backend/tests/` | Future test | Boundary |
+| File under `backend/tests/` | Test | Boundary |
 | --- | --- | --- |
 | `checkers/execution/test_completion_evidence.py` | `test_current_completion_returns_exact_stored_result` | Success, contributor failure and setup fault through real executor with canonical/controlled registered handlers; exact typed results and material/receipt equality; no writes |
 | same | `test_current_completion_preserves_nonempty_stored_counters` | Real authorized finalization of controlled bounded result with populated counters; returned result equals stored JSON/result |
 | same | `test_current_completion_rejects_wrong_derived_recommendation` | All other valid recommendation literals with exact original identities; removing only equality guard must fail rejection assertion |
 | same | `test_failure_completion_rejects_foreign_owner_and_receipts` | Two valid stored projects/completions before independent event/project/task/submission/reference/execute/finalize substitutions |
 | same | `test_failure_completion_loses_currentness_to_successor` | Failure positive control, actual successor reservation, stale completion rejection without restoring fence |
-| same | `test_infrastructure_failure_has_no_verifiable_completion` | Real unavailable-handler outcome; no completion event/reference; canonical coordinator rejection |
+| `checkers/execution/test_execution.py` (retained) | `test_infrastructure_failure_is_terminal` | Existing real unavailable-handler outcome; no completion event; canonical coordinator rejection. Pure wrapper test also rejects an infrastructure result |
 | `checkers/execution/test_completion_contract.py` | `test_verified_completion_rejects_mismatched_result` | Valid wrapper plus different valid result; canonical identity/digest binding and infrastructure rejection |
 | `tasks/post_submit_routing/test_failure_completion.py` | `test_stored_failure_cannot_enter_task_routing_or_completion_delivery` | Both actual stored failure envelopes; request/source/outcome guards and hidden handler reject, no routing request/manifest/outcome or economic effects |
 

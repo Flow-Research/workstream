@@ -1,5 +1,7 @@
 # WS-ARCH-001 — Modular monolith boundaries
 
+[ARCH-04F1](WS-ARCH-001-04F1.md) extends the existing CHECKERS completion read to verified contributor/setup failure evidence, including retained typed results. TASK remediation handoff, replacement intake and authorized recovery remain next; no failure routing or public surface is activated.
+
 [REV-12A4A](../WS-REV-001/WS-REV-001-12A4A.md) adds internal Operator-controlled lifecycle transitions and current-generation terminal replay. New acceptance effects require LIVE; 04E2-B supplies hidden source AUTH custody, while production routing remains unavailable. Conditional award facts stay atomic, while fulfillment admission, payment delivery and their root/cutoff machinery remain deferred until a successor manifest enables them.
 
 [ARCH-04E1B-B5](WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; 04E2-B supplies complete authorized outcomes; B8 supplies hidden completion delivery; remediation is next. Production registration remains unavailable.
