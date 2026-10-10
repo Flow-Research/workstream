@@ -161,9 +161,19 @@ class PostSubmissionExecutor:
                     facts = ExecuteFacts(request=request, lease=_lease(run))
                     await prepared.validate_replay(facts, UUID(run.execute_evidence_id))
                     return None, FinalizeFacts(
-                        request=request, lease=facts.lease, result=stored_result(run),
-                        material=VerifiedMaterialFacts.model_validate_json(json.dumps(run.material_custody))
-                        if run.material_custody is not None else None,
+                        request=request,
+                        lease=facts.lease,
+                        result=stored_result(run),
+                        material=VerifiedMaterialFacts.model_validate_json(
+                            json.dumps(run.material_custody)
+                        )
+                        if run.material_custody is not None
+                        else None,
+                        input_materialization_evidence_id=(
+                            UUID(run.input_materialization_evidence_id)
+                            if run.input_materialization_evidence_id
+                            else None
+                        ),
                         output_binding_ids=(),
                     )
                 now = await repo.now()
@@ -195,14 +205,20 @@ class PostSubmissionExecutor:
         if replay is not None:
             return await self.finalize(replay)
         material = None
+        input_materialization_evidence_id = None
         try:
             async with asyncio.timeout(EXECUTION_TIMEOUT_SECONDS):
                 materialized = await self._materialization.materialize(
                     ExecuteFacts(request=request, lease=lease), _StructuralConsumer(self._registry, lease)
                 )
             material = VerifiedMaterialFacts(
-                **{k: v for k, v in asdict(materialized).items() if k != "evaluation"}
+                **{
+                    k: v
+                    for k, v in asdict(materialized).items()
+                    if k not in {"evaluation", "input_materialization_evidence_id"}
+                }
             )
+            input_materialization_evidence_id = materialized.input_materialization_evidence_id
             result = materialized.evaluation
         except (TimeoutError, PostSubmissionMaterializationFailure) as error:
             result = make_post_submit_result(
@@ -223,6 +239,7 @@ class PostSubmissionExecutor:
                 lease=lease,
                 result=result,
                 material=material,
+                input_materialization_evidence_id=input_materialization_evidence_id,
                 output_binding_ids=(),
             )
         )
@@ -272,6 +289,12 @@ class PostSubmissionExecutor:
                     if (
                         stored_result(run) != result
                         or _lease(run) != facts.lease
+                        or run.input_materialization_evidence_id
+                        != (
+                            str(facts.input_materialization_evidence_id)
+                            if facts.input_materialization_evidence_id
+                            else None
+                        )
                         or run.material_custody
                         != (facts.material.model_dump(mode="json") if facts.material else None)
                     ):
@@ -319,6 +342,11 @@ class PostSubmissionExecutor:
                 run.result_digest = result.result_digest
                 run.material_custody = (
                     facts.material.model_dump(mode="json") if facts.material else None
+                )
+                run.input_materialization_evidence_id = (
+                    str(facts.input_materialization_evidence_id)
+                    if facts.input_materialization_evidence_id
+                    else None
                 )
                 run.finalize_evidence_id = str(evidence_id)
                 run.routing_recommendation = classification.routing

@@ -1,4 +1,4 @@
-"""Real PostgreSQL proof that routing preparation remains unavailable and inert."""
+"""Real AUTH preparation is inert; only a complete outcome can retain its allow."""
 
 from uuid import UUID
 
@@ -47,34 +47,20 @@ from tests.authorization.post_submit_routing.support import (
 from tests.tasks.post_submit_routing.support import completed_source
 
 
-async def _planned_adapter_denial(session, request):
-    yielded = False
-    with pytest.raises(PreparedAuthorizationUnsupported) as caught:
-        async with PostSubmitRoutingAuthorization(session).prepare(request):
-            yielded = True
-    assert not yielded
-    assert caught.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
+async def _prepare_without_consuming(session, request):
+    async with PostSubmitRoutingAuthorization(session).prepare(request) as prepared:
+        assert prepared.actor_profile_id is not None
+        assert prepared.identity_link_id is not None
 
 
-async def test_provisioned_router_remains_planned(tmp_path, isolated_database_env):
+async def test_provisioned_router_preparation_has_no_effects(tmp_path, isolated_database_env):
     async with completed_source(tmp_path, isolated_database_env) as h:
         await provision_router(h.factory)
         request = await stage_real_request(h)
-        source = await real_source_facts(h, request)
-        resource = PostSubmitRoutingResourceContext(
-            resource_id=request.routing_manifest_id,
-            scope_project_id=request.project_id,
-            request=request,
-            source=source,
-            claim=claim_for(request),
-            consequence={"kind": "human_admission"},
-        )
-        assert resource.validate_identity() is resource
-
         async with h.factory() as session:
             before = await effect_snapshot(session)
         async with h.factory() as session, session.begin():
-            await _planned_adapter_denial(session, request)
+            await _prepare_without_consuming(session, request)
         async with h.factory() as session:
             assert await effect_snapshot(session) == before
 
@@ -196,9 +182,7 @@ async def test_prepared_binding_rejects_operation_and_scope_substitution(
                     )
 
 
-async def test_planned_denial_rollback_preserves_request(
-    tmp_path, isolated_database_env
-):
+async def test_unused_preparation_rollback_preserves_request(tmp_path, isolated_database_env):
     async with completed_source(tmp_path, isolated_database_env) as h:
         await provision_router(h.factory)
         request = await stage_real_request(h)
@@ -207,7 +191,7 @@ async def test_planned_denial_rollback_preserves_request(
 
         async with h.factory() as session:
             await session.begin()
-            await _planned_adapter_denial(session, request)
+            await _prepare_without_consuming(session, request)
             await session.rollback()
 
         async with h.factory() as session:
@@ -220,3 +204,54 @@ async def test_planned_denial_rollback_preserves_request(
         assert await stage_real_request(h) == request
         async with h.factory() as session:
             assert await effect_snapshot(session) == before
+
+
+@pytest.mark.parametrize("field", ("router_actor_id", "router_identity_link_id"))
+async def test_canonical_consumption_binds_the_prepared_principal(
+    tmp_path,
+    isolated_database_env,
+    field,
+):
+    async with completed_source(tmp_path, isolated_database_env) as h:
+        await provision_router(h.factory)
+        request = await stage_real_request(h)
+        source = await real_source_facts(h, request)
+        async with h.factory() as session, session.begin():
+            async with fixed_service_prepared_authorization(
+                session,
+                service_identity=ServiceIdentity.TASK_POST_SUBMIT_ROUTER,
+                request_id=request.route_operation_id,
+                correlation_id=request.route_operation_id,
+            ) as authority:
+                incoming = PreparedAuthorizationInput(
+                    idempotency_key=request.route_operation_id,
+                    request_value=post_submit_routing_prepare_values(request),
+                )
+                handle = await authority.service.prepare(
+                    ActionId.TASK_POST_SUBMIT_ROUTE,
+                    incoming,
+                    PreparedAuthorityScope(
+                        kind=PreparedAuthorityScopeKind.PROJECT, project_id=request.project_id
+                    ),
+                )
+                resource = PostSubmitRoutingResourceContext(
+                    resource_id=request.routing_manifest_id,
+                    scope_project_id=request.project_id,
+                    router_actor_id=authority.actor_profile_id,
+                    router_identity_link_id=authority.identity_link_id,
+                    request=request,
+                    source=source,
+                    claim=claim_for(request),
+                    consequence={"kind": "human_admission"},
+                )
+                before = await effect_snapshot(session)
+                with pytest.raises(
+                    PreparedAuthorizationHandleInvalid, match="invalid prepared routing authority"
+                ):
+                    await authority.service.consume(
+                        handle,
+                        ActionId.TASK_POST_SUBMIT_ROUTE,
+                        incoming,
+                        resource.model_copy(update={field: new_record_id()}),
+                    )
+                assert await effect_snapshot(session) == before

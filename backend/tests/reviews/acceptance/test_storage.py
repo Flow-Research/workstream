@@ -1,183 +1,141 @@
-"""Canonical stored-source proof, without acceptance authority or effects."""
+"""Stored acceptance custody through the actual authorized outcome operation."""
 
-import asyncio
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
 
 from app.core.identifiers import new_record_id
-from tests.reviews.acceptance.support import acceptance_source, attach_acceptance, insert_acceptance
-from tests.reviews.decision.support import attach_review_source, insert_review, review_source
-from tests.reviews.packet.support import prepare_packet
-from tests.reviews.packet.test_repository import wait_for_blocker
-from tests.tasks.post_submit_routing.support import completed_sibling_source, insert_source
+from app.modules.reviews.acceptance.models import FinalAcceptance
+from app.modules.reviews.acceptance.repository import FinalAcceptanceRepository
+from tests.tasks.post_submit_routing.outcome_support import (
+    apply_outcome,
+    authorized_routing_source,
+    outcome_snapshot,
+)
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
-async def reject(h, source, message, **overrides):
+async def reject_candidate(h, monkeypatch, changes, message):
+    """Substitute the actual candidate, preserving all other source and AUTH facts."""
+    original = FinalAcceptanceRepository.persist
+
+    async def substituted(repository, source, *, disposition):
+        return await original(
+            repository, source.model_copy(update=changes), disposition=disposition
+        )
+
     async with h.factory() as session:
-        with pytest.raises(DBAPIError, match=message):
-            await insert_acceptance(session, source, **overrides)
-            await session.commit()
+        before = await outcome_snapshot(session)
+    with monkeypatch.context() as patch:
+        patch.setattr(FinalAcceptanceRepository, "persist", substituted)
+        async with h.factory() as session:
+            with pytest.raises(DBAPIError, match=message):
+                async with session.begin():
+                    await apply_outcome(session, h, 2)
+                    await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     async with h.factory() as session:
-        assert await session.scalar(text("SELECT count(*) FROM public.final_acceptances")) == 0
+        assert await outcome_snapshot(session) == before
 
 
-@pytest.mark.asyncio
-async def test_human_acceptance_source(tmp_path, clean_postgres_database):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        async with h.factory() as session:
-            state_query = text(
-                "SELECT t.status,a.status FROM public.workstream_tasks t "
-                "JOIN public.task_assignments a ON a.task_id=t.id WHERE t.id=:id"
-            )
-            state_params = {"id": h.acceptance.task_id}
-            before = (await session.execute(state_query, state_params)).one()
-            await insert_acceptance(session, h.acceptance)
-            await session.commit()
-            actual = await session.scalar(
-                text("SELECT to_jsonb(a) FROM public.final_acceptances a")
-            )
-            assert actual.pop("accepted_at") is not None
-            assert actual == h.acceptance.model_dump(mode="json")
-            # Storage creates neither TASK effects nor contributions or fabricated Review.
-            assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 1
-            assert (await session.execute(state_query, state_params)).one() == before
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("decision", ["reject", "needs_revision"])
-async def test_non_accept_review_denied(tmp_path, clean_postgres_database, decision):
-    async with acceptance_source(tmp_path, clean_postgres_database, decision=decision) as h:
-        await reject(h, h.acceptance, "final acceptance human source mismatch")
-
-
-@pytest.mark.asyncio
-async def test_exclusive_source_shape(tmp_path, clean_postgres_database):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        for fields in (
-            {"source_review_id": None},
-            {"source_routing_manifest_id": new_record_id()},
-            {"acceptance_source": "task_post_submit_route"},
-            {"acceptance_source": "automatic"},
-        ):
-            await reject(h, h.acceptance, "ck_final_acceptances_source_shape", **fields)
-
-
-@pytest.mark.asyncio
-async def test_acceptance_owner_substitution(tmp_path, clean_postgres_database):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        sibling = await completed_sibling_source(h)
-        await prepare_packet(sibling)
-        await attach_review_source(sibling)
-        async with h.factory() as session:
-            await insert_review(session, sibling.review)
-            await session.commit()
-        await attach_acceptance(sibling)
-        for field in (
-            "task_id",
-            "submission_id",
-            "source_review_id",
-            "accepted_submitter_id",
-            "recorded_by",
-        ):
-            replacement = getattr(sibling.acceptance, field)
-            if field == "accepted_submitter_id":
-                replacement = sibling.acceptance.recorded_by
-            assert replacement != getattr(h.acceptance, field)
-            await reject(
-                h,
-                h.acceptance.model_copy(update={field: replacement}),
-                "final acceptance (canonical lineage|human source) mismatch",
-            )
-        async with acceptance_source(
-            tmp_path / "foreign",
-            clean_postgres_database,
+async def test_acceptance_owner_substitution(tmp_path, isolated_database_env, monkeypatch):
+    async with authorized_routing_source(tmp_path / "one", isolated_database_env) as h:
+        async with authorized_routing_source(
+            tmp_path / "two",
+            isolated_database_env,
             storage_settings=h.settings,
             provision_services=False,
         ) as foreign:
-            for field in ("project_id", "policy_context_ref", "source_review_id", "submission_id"):
-                await reject(
-                    h,
-                    h.acceptance.model_copy(update={field: getattr(foreign.acceptance, field)}),
-                    "final acceptance (canonical lineage|human source) mismatch",
+            # Both complete sources exist. Neither outcome has been applied.
+            async with h.factory() as session:
+                foreign_policy = await session.scalar(
+                    text("SELECT locked_review_policy_id FROM public.submissions WHERE id=:id"),
+                    {"id": foreign.request.submission_id},
                 )
-        # All other joins remain valid; remove only reviewer equality.
-        async with h.factory() as session:
-            definition = await session.scalar(
-                text(
-                    "SELECT pg_get_functiondef('public.guard_final_acceptance_source()'::regprocedure)"
-                )
-            )
-            predicate = "AND r.reviewer_id=NEW.recorded_by"
-            assert definition.count(predicate) == 1
-            await session.execute(text(definition.replace(predicate, "")))
-            with pytest.raises(pytest.fail.Exception, match="DID NOT RAISE"):
-                with pytest.raises(DBAPIError, match="final acceptance human source mismatch"):
-                    await insert_acceptance(
-                        session, h.acceptance, recorded_by=sibling.acceptance.recorded_by
-                    )
-            await session.rollback()
-        async with h.factory() as session:
-            await insert_acceptance(session, h.acceptance)
-            await session.commit()
-
-
-@pytest.mark.asyncio
-async def test_automated_branch_polarity(tmp_path, clean_postgres_database):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        async with h.factory() as session:
-            await insert_source(session, h.source)
-            await session.commit()
-            service = await session.scalar(
-                text("SELECT id FROM public.actor_profiles WHERE actor_kind='service' LIMIT 1")
-            )
-            assert service is not None
-        source = h.acceptance.model_copy(
-            update={
-                "acceptance_source": "task_post_submit_route",
-                "source_review_id": None,
-                "source_routing_manifest_id": h.source["id"],
-                "recorded_by": service,
+            replacements = {
+                "project_id": foreign.request.project_id,
+                "task_id": foreign.request.task_id,
+                "submission_id": foreign.request.submission_id,
+                "accepted_submitter_id": foreign.source["contributor_id"],
+                "policy_context_ref": foreign_policy,
             }
-        )
-        await reject(h, source, "final acceptance routing source mismatch")
-        async with h.factory() as session:
-            definition = await session.scalar(
-                text(
-                    "SELECT pg_get_functiondef('public.guard_final_acceptance_source()'::regprocedure)"
+            for field, value in replacements.items():
+                await reject_candidate(
+                    h, monkeypatch, {field: value}, "final acceptance canonical lineage mismatch"
                 )
+            await reject_candidate(
+                h,
+                monkeypatch,
+                {"source_routing_manifest_id": new_record_id()},
+                "final acceptance routing source mismatch",
             )
-            predicate = "ROW(manifest.human_review_required,policy_required)=ROW(false,false)"
-            assert definition.count(predicate) == 1
-            await session.execute(
-                text(
-                    definition.replace(
-                        predicate,
-                        "ROW(manifest.human_review_required,policy_required)=ROW(true,true)",
-                    )
-                )
+            await reject_candidate(
+                h,
+                monkeypatch,
+                {"recorded_by": h.source["contributor_id"]},
+                "final acceptance routing source mismatch",
             )
-            with pytest.raises(pytest.fail.Exception, match="DID NOT RAISE"):
-                with pytest.raises(DBAPIError, match="final acceptance routing source mismatch"):
-                    await insert_acceptance(session, source)
-            await session.rollback()
-        await reject(h, source, "final acceptance routing source mismatch")
+            # A real AUTH event for the same work is still the wrong phase receipt.
+            await reject_candidate(
+                h,
+                monkeypatch,
+                {"source_authorization_decision_id": h.source["execute_evidence_id"]},
+                "routing authority requires its complete governed outcome",
+            )
+            async with h.factory() as session, session.begin():
+                assert (await apply_outcome(session, h, 2))["final_acceptance_id"]
 
 
-@pytest.mark.asyncio
-async def test_acceptance_clock_and_immutability(tmp_path, clean_postgres_database):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        async with h.factory() as session:
-            before = await session.scalar(text("SELECT clock_timestamp()"))
-            await insert_acceptance(
-                session, h.acceptance, accepted_at=datetime(2000, 1, 1, tzinfo=UTC)
+async def test_exclusive_source_shape(tmp_path, isolated_database_env, monkeypatch):
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
+        for changes in (
+            {"source_routing_manifest_id": None},
+            {"source_review_id": new_record_id()},
+            {"acceptance_source": "human_review"},
+            {"acceptance_source": "automatic"},
+        ):
+            await reject_candidate(h, monkeypatch, changes, "ck_final_acceptances_source_shape")
+        async with h.factory() as session, session.begin():
+            assert (await apply_outcome(session, h, 2))["final_acceptance_id"]
+
+
+async def test_acceptance_clock_and_immutability(tmp_path, isolated_database_env, monkeypatch):
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
+        original = FinalAcceptanceRepository.persist
+
+        async def supplied_clock(repository, source, *, disposition):
+            assert disposition == "new"
+            values = source.model_dump()
+            for field in (
+                "project_id",
+                "task_id",
+                "submission_id",
+                "accepted_submitter_id",
+                "recorded_by",
+                "policy_context_ref",
+            ):
+                values[field] = str(values[field])
+            await repository._session.execute(
+                insert(FinalAcceptance).values(
+                    **values, accepted_at=datetime(2000, 1, 1, tzinfo=UTC)
+                )
             )
-            await session.commit()
-            stored = await session.scalar(text("SELECT accepted_at FROM public.final_acceptances"))
-            after = await session.scalar(text("SELECT clock_timestamp()"))
-            assert before <= stored <= after
+            return await original(repository, source, disposition="replay")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(FinalAcceptanceRepository, "persist", supplied_clock)
+            async with h.factory() as session, session.begin():
+                before = await session.scalar(text("SELECT clock_timestamp()"))
+                result = await apply_outcome(session, h, 2)
+                stored = await session.scalar(
+                    text("SELECT accepted_at FROM public.final_acceptances")
+                )
+                after = await session.scalar(text("SELECT clock_timestamp()"))
+                assert before <= stored <= after
+        async with h.factory() as session:
+            retained = await outcome_snapshot(session)
         for command in (
             "UPDATE public.final_acceptances SET accepted_at=clock_timestamp()",
             "UPDATE public.final_acceptances SET recorded_by=accepted_submitter_id",
@@ -186,64 +144,45 @@ async def test_acceptance_clock_and_immutability(tmp_path, clean_postgres_databa
         ):
             async with h.factory() as session:
                 with pytest.raises(DBAPIError, match="immutable"):
-                    await session.execute(text(command))
+                    async with session.begin():
+                        await session.execute(text(command))
         async with h.factory() as session:
-            assert (
-                await session.scalar(text("SELECT id FROM public.final_acceptances"))
-                == h.acceptance.id
-            )
+            assert await outcome_snapshot(session) == retained
+        async with h.factory() as session, session.begin():
+            assert await apply_outcome(session, h, 2) == result | {"replayed": True}
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("commit_first", [True, False])
-async def test_acceptance_unique_and_rollback(tmp_path, clean_postgres_database, commit_first):
-    async with acceptance_source(tmp_path, clean_postgres_database) as h:
-        ready = asyncio.Future()
-        duplicate = h.acceptance.model_copy(update={"id": new_record_id()})
+async def test_uncommitted_routing_parent_cannot_authorize_acceptance(
+    tmp_path, isolated_database_env
+):
+    """Independent visibility rejects a parent that subsequently rolls back."""
+    from uuid import UUID
 
-        async def competitor():
-            async with h.factory() as second:
-                ready.set_result(await second.scalar(text("SELECT pg_backend_pid()")))
-                if commit_first:
-                    with pytest.raises(DBAPIError, match="uq_final_acceptances_task_id"):
-                        await insert_acceptance(second, duplicate)
-                else:
-                    await insert_acceptance(second, duplicate)
-                    await second.commit()
-
-        async with h.factory() as first:
-            await insert_acceptance(first, h.acceptance)
-            contender = asyncio.create_task(competitor())
-            try:
-                await wait_for_blocker(h.factory, await ready)
-                await (first.commit() if commit_first else first.rollback())
-                await asyncio.wait_for(contender, 10)
-            finally:
-                if not contender.done():
-                    contender.cancel()
-                await asyncio.gather(contender, return_exceptions=True)
-        async with h.factory() as session:
-            ids = (await session.scalars(text("SELECT id FROM public.final_acceptances"))).all()
-            assert ids == [h.acceptance.id if commit_first else duplicate.id]
-            assert await session.scalar(text("SELECT id FROM public.reviews")) == h.review.id
-
-
-@pytest.mark.asyncio
-async def test_missing_acceptance_source(tmp_path, clean_postgres_database):
-    async with review_source(tmp_path, clean_postgres_database) as h:
-        await attach_acceptance(h)
-        await reject(h, h.acceptance, "final acceptance human source mismatch")
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         async with h.factory() as parent:
-            await insert_review(parent, h.review)
-            # A real uncommitted parent is invisible to the independent child transaction.
+            await parent.begin()
+            pending = await apply_outcome(parent, h, 2)
+            values = await parent.scalar(
+                text("SELECT to_jsonb(f) FROM public.final_acceptances f WHERE id=:id"),
+                {"id": pending["final_acceptance_id"]},
+            )
+            values.pop("accepted_at")
+            values["id"] = new_record_id()
+            for field in ("source_authorization_decision_id", "source_routing_manifest_id"):
+                values[field] = UUID(values[field])
             async with h.factory() as child:
-                await child.execute(text("SET LOCAL statement_timeout='2s'"))
-                with pytest.raises(DBAPIError, match="final acceptance human source mismatch"):
-                    await insert_acceptance(child, h.acceptance)
+                with pytest.raises(DBAPIError, match="final acceptance routing source mismatch"):
+                    async with child.begin():
+                        await child.execute(text("SET LOCAL statement_timeout='2s'"))
+                        await child.execute(insert(FinalAcceptance).values(**values))
             await parent.rollback()
         async with h.factory() as session:
-            assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
             assert await session.scalar(text("SELECT count(*) FROM public.final_acceptances")) == 0
-            await insert_review(session, h.review)
-            await insert_acceptance(session, h.acceptance)
-            await session.commit()
+            assert (
+                await session.scalar(
+                    text("SELECT count(*) FROM public.task_post_submit_routing_manifests")
+                )
+                == 0
+            )
+        async with h.factory() as session, session.begin():
+            assert (await apply_outcome(session, h, 2))["final_acceptance_id"]

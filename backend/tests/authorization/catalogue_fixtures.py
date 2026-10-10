@@ -440,6 +440,7 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "task.post_submit.route",
     "checker.registry.register",
     "review.lifecycle.activation.manage",
     "checker.post_submit.execute",

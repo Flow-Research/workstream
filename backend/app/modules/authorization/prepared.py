@@ -3,6 +3,7 @@
 from __future__ import annotations
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
+from app.modules.authorization.prepared_routing_replay import validate_routing_replay
 from app.modules.authorization.prepared_lifecycle_replay import validate_lifecycle_replay
 from app.modules.reviews.api.lifecycle import LifecycleTransitionCommand
 
@@ -591,7 +592,9 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         return issuance
 
-    def _validate_consumption(self, issuance, expected_action_id, caller_input, final_resource_context):
+    def _validate_consumption(
+        self, issuance, expected_action_id, caller_input, final_resource_context
+    ):
         """Bind consumption to its issued request, root transaction and exact resource."""
         if expected_action_id is not issuance.binding.action_id:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -611,10 +614,17 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid assignment reconciliation authority")
         if not lifecycle_matches(issuance.binding.lifecycle_command, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid lifecycle authority")
-        if expected_action_id is ROUTE and not post_submit_routing_prepare_matches(
-            issuance.binding.routing_request, final_resource_context,
-        ):
-            raise PreparedAuthorizationHandleInvalid("invalid prepared routing authority")
+        if expected_action_id is ROUTE:
+            if not post_submit_routing_prepare_matches(
+                issuance.binding.routing_request,
+                final_resource_context,
+            ) or (
+                final_resource_context.router_actor_id
+                != issuance.authority.context.actor_profile_id
+                or final_resource_context.router_identity_link_id
+                != issuance.authority.context.identity_link_id
+            ):
+                raise PreparedAuthorizationHandleInvalid("invalid prepared routing authority")
         if expected_action_id in POST_SUBMIT_ACTIONS and not post_submit_prepare_matches(
             expected_action_id, issuance.binding.post_submit_prepare_context, final_resource_context,
         ):
@@ -727,7 +737,23 @@ class PreparedAuthorizationService:
         issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
-            replay = validate_lifecycle_replay if expected_action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE else validate_submission_replay if expected_action_id in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE} else validate_post_submit_replay if expected_action_id in POST_SUBMIT_ACTIONS else validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
+            replay = (
+                validate_routing_replay
+                if expected_action_id is ActionId.TASK_POST_SUBMIT_ROUTE
+                else validate_lifecycle_replay
+                if expected_action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE
+                else validate_submission_replay
+                if expected_action_id
+                in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE}
+                else validate_post_submit_replay
+                if expected_action_id in POST_SUBMIT_ACTIONS
+                else validate_review_replay
+                if expected_action_id
+                in GUIDE_PROPOSAL_ACTION_IDS
+                | POST_POLICY_ACTION_IDS
+                | {ActionId.PROJECT_GUIDE_ACTIVATE}
+                else validate_projection_replay
+            )
             await replay(
                 self,
                 issuance,

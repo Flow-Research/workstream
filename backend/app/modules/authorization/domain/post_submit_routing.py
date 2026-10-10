@@ -12,7 +12,10 @@ from app.modules.authorization.api.acceptance_source import acceptance_source_co
 from app.modules.authorization.catalogue import ActionId
 from app.modules.outbox.api import OutboxClaim
 from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsRequest
-from app.modules.tasks.api.post_submit_routing import TaskPostSubmitManifestFacts, TaskRoutingRequestFacts
+from app.modules.tasks.api.post_submit_routing import (
+    TaskPostSubmitSourceProposal,
+    TaskRoutingRequestFacts,
+)
 
 ROUTE = ActionId.TASK_POST_SUBMIT_ROUTE
 
@@ -30,10 +33,11 @@ class HumanAdmissionConsequence(_RoutingValue):
 
 
 class AutomatedAcceptanceConsequence(_RoutingValue):
-    """Bind the exact future shared acceptance participant without applying it."""
+    """Bind the exact shared acceptance effects and original authorized generation."""
 
     kind: Literal["final_acceptance"] = "final_acceptance"
     task_effects: TaskAcceptedEffectsRequest
+    authorized_lifecycle_generation: int = Field(gt=0, le=9_223_372_036_854_775_807)
 
 
 class PostSubmitRoutingResourceContext(_RoutingValue):
@@ -42,8 +46,10 @@ class PostSubmitRoutingResourceContext(_RoutingValue):
     resource_type: Literal["task_post_submit_routing_manifest"] = "task_post_submit_routing_manifest"
     resource_id: UUID
     scope_project_id: UUID
+    router_actor_id: UUID
+    router_identity_link_id: UUID
     request: TaskRoutingRequestFacts
-    source: TaskPostSubmitManifestFacts
+    source: TaskPostSubmitSourceProposal
     claim: OutboxClaim
     consequence: Annotated[HumanAdmissionConsequence | AutomatedAcceptanceConsequence, Field(discriminator="kind")]
 
@@ -52,7 +58,7 @@ class PostSubmitRoutingResourceContext(_RoutingValue):
         # Reconstruct nested owner values: model_copy/model_construct cannot bypass
         # their validators merely by supplying an existing instance.
         request = TaskRoutingRequestFacts.model_validate(self.request.model_dump())
-        source = TaskPostSubmitManifestFacts.model_validate(self.source.model_dump())
+        source = TaskPostSubmitSourceProposal.model_validate(self.source.model_dump())
         claim = OutboxClaim.model_validate(self.claim.model_dump())
         if not (
             self.resource_type == "task_post_submit_routing_manifest"
@@ -124,13 +130,17 @@ def post_submit_routing_resource_digest(resource: PostSubmitRoutingResourceConte
         resource.source, route_operation_id=resource.request.route_operation_id,
         route_request_digest=resource.request.route_request_digest,
     )
-    return canonical_json_hash({
-        "domain": "workstream.authorization.task_post_submit_route.v0.1",
-        "resource_type": resource.resource_type,
-        "resource_id": str(resource.resource_id),
-        "project_id": str(resource.scope_project_id),
-        "request": post_submit_routing_prepare_values(resource.request),
-        "source_commitment_digest": acceptance_source_commitment_digest(source),
-        "claim": resource.claim.model_dump(mode="json"),
-        "consequence": resource.consequence.model_dump(mode="json"),
-    })
+    return canonical_json_hash(
+        {
+            "domain": "workstream.authorization.task_post_submit_route.v0.1",
+            "resource_type": resource.resource_type,
+            "resource_id": str(resource.resource_id),
+            "project_id": str(resource.scope_project_id),
+            "router_actor_id": str(resource.router_actor_id),
+            "router_identity_link_id": str(resource.router_identity_link_id),
+            "request": post_submit_routing_prepare_values(resource.request),
+            "source_commitment_digest": acceptance_source_commitment_digest(source),
+            "claim": resource.claim.model_dump(mode="json"),
+            "consequence": resource.consequence.model_dump(mode="json"),
+        }
+    )

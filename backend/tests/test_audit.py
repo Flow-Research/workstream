@@ -1211,6 +1211,7 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
             LifecycleAuditEventType.TASK_STARTED,
             LifecycleAuditEventType.TASK_START_OVERRIDDEN,
             LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED,
+            LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED,
         },
         LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: {
             LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
@@ -1316,6 +1317,12 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
                     "to_status": "claimed" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "in_progress",
                     "task_reason": "Explicit task operation",
                 }
+            if event_type is LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED:
+                references.update({
+                    LifecycleAuditReferenceKind.SUBMISSION: new_record_id(),
+                    LifecycleAuditReferenceKind.ROUTING_MANIFEST: new_record_id(),
+                })
+                transition.update(from_status="evaluation_pending", to_status="review_pending")
             if event_type is LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED:
                 references[LifecycleAuditReferenceKind.AUTHORITY_INVALIDATION] = new_record_id()
                 transition["to_status"] = "ready"

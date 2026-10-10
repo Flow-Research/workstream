@@ -1,18 +1,13 @@
 # Chunk Map: WS-POL-003 - Unified Project Guide Compilation
 
-[AUTH-19A](../../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
-planned router identity. ARCH-04E1B-A delivers caller-owned routing-request and
-future source-identity reservation. ARCH-04E2-A delivers strict hidden
-resource/preparation matching and a nominal fixed-router adapter through canonical
-PREP while the action remains planned/unavailable. CON-07 hidden submitter
-participation and complete frozen award-set staging/replay are delivered. REV-04C
-adds the hidden FinalAcceptance/TASK/CON participant. Hidden handlers 04E1B-B are
-next. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
-TASK-before-CHECKERS race proof, shared audit/outbox, the reviewed scoped lifecycle manifest remain required
-before production consumption. Neither phase may
-commit a standalone allow. The first durable receipt must commit with its full
-governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
-then live 04E3; true admission does not depend on CON/shared acceptance.
+[ARCH-04E2-B](../../WS-ARCH-001/WS-ARCH-001-04E2B.md) delivers the complete hidden
+routing operation with actual source/phase/AUTH receipts, database-enforced
+consequences, shared audit/outbox and exact replay. True performs the TASK
+human-review handoff independently of REV/CON; false uses shared acceptance and
+atomic submitter contribution/applicable awards. Completion delivery is next,
+then remediation, production composition, public intake and the first-layer drill.
+Public false-guide activation, live human review/revision and payment delivery
+remain unavailable.
 
 The delivered [ART-07A1 metadata contract](../../WS-ART-001/WS-ART-001-07A1.md)
 and REV-03B normalized packet persistence are delivered. REV-04A Review source
