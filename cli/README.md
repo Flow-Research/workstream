@@ -17,6 +17,7 @@ context/intake requirements:
 | `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
 | `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
 | `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/proposal` |
+| `workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/pre-submission-approval` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -210,7 +211,7 @@ setup can be read successfully (exit 0); this is not a successful compilation,
 policy approval, guide activation or authority for another operation.
 Denials, malformed/substituted replies, oversized JSON and network failures
 leave stdout empty and exit 1. The normal 12-second/64KiB JSON bounds apply.
-Approval and activation commands remain separate future work.
+Deliberate intake approval is a separate command below; activation remains future CLI work.
 
 ## Inspect an exact finalized guide proposal
 
@@ -239,6 +240,55 @@ after upstream approval/derivation. No automatic decision, local catalogue
 matching or digest recomputation is added. The existing 12-second deadline
 applies; the 8 MiB wire bound accommodates the stored compilation's 4 MiB
 envelope plus public target/projection overhead without raising other limits.
+
+## Approve an exact pre-submission proposal
+
+Inspect and retain the exact proposal first. Prepare the public approval request
+from that displayed target; this separate preparation does not authorize it:
+
+```sh
+workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
+jq '{target: .target, acknowledged_warning_hashes: []}' proposal.json > approval.json
+# Read the findings. Edit approval.json to acknowledge only the exact displayed
+# warning_hashes you deliberately accept; the backend requires the complete order.
+workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
+```
+
+`--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
+`GuideProposalApprovalInput`, not the entire display package. It requires
+`target`; omitted `acknowledged_warning_hashes` means an empty list, never
+automatic acknowledgment. When replacing an earlier approval, supply both
+`expected_previous_approval_operation_id` and
+`expected_previous_approval_output_digest` from the inspected prior approval.
+The CLI validates the closed wire shape and target/path membership, preserves
+the original JSON bytes, and makes one POST with the caller's bearer and UUID
+key. It does not refetch latest or decide currentness, authority, policy validity
+or which warnings are acceptable. Workstream makes those decisions atomically.
+
+The validated immutable receipt is printed in JSON or escaped text. Its four
+record identities are RFC UUIDv7; its selected artifact policy and exact ordered
+acknowledgments must match the request. Business digests are returned backend
+facts, not recomputed client-side. Success establishes intake approval only:
+post-submission policy approval and guide activation remain separate decisions.
+The API can publish post-policy derivation after commit; this receipt does not
+prove publication, post-policy job delivery, derivation or successful runtime checks.
+
+There is no preflight, automatic retry or HTTP/2 body replay. A complete canonical
+4xx is a known rejection; unconfirmed writes, including malformed/substituted
+success, lost reply, redirect, oversized response or server error, exit nonzero
+with empty stdout and JSON `error.outcome_unknown: true`. Text gives a manual
+replay hint. Retain the exact project, guide, compilation, input contents and key
+if retrying; do not mint a new key or change acknowledgment/previous-target
+facts to recover an uncertain result. Replay still requires fresh backend
+authority. The common 12-second/64 KiB response bounds apply.
+
+Process tests prove request/receipt boundaries and no-replay uncertainty. A real
+socket/Flow/PREP/PostgreSQL journey proves deliberate warning rejection, exact
+approval/replay custody, foreign concealment, suspended and revoked replay denial.
+Retained compilation prerequisites are seeded canonical test custody. The API
+is configured for non-eager in-memory publication and no post-policy worker is
+started. This does not prove broker publication, job delivery, deployed Flow or
+live setup-provider execution.
 
 ## Create a draft project shell
 
