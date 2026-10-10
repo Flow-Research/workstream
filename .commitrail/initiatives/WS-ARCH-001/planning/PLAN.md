@@ -28,12 +28,13 @@ explained; do not restart delivered work or substitute a broader subsystem.
 
 | Order | Existing boundary | Required outcome and proof |
 | --- | --- | --- |
-| 1 | [ARCH-04F remediation and recovery](chunks/WS-ARCH-001-04F-checker-remediation.md) | Contributor-correctable failures expose bounded findings and accept a replacement ZIP under the same locked policy. Preserve prior evidence; distinguish infrastructure retry and project/setup faults. Prove against hidden result/handler contracts before live false-policy activation. |
+| 1 | [ARCH-04F remediation and recovery](chunks/WS-ARCH-001-04F-checker-remediation.md) | Verified failure evidence is supplied by 04F1. Contributor-correctable failures expose bounded findings and accept a replacement ZIP under the same locked policy. Preserve prior evidence; distinguish infrastructure retry and project/setup faults. Prove against hidden result/handler contracts before live false-policy activation. |
 | 2 | ARCH-04E3 live composition and false-policy readiness | Register the proven handlers and extend the existing controller's manifest/readiness with exact production source custody. Prove success, remediation, shutdown and restart before enabling false. Preserve default-true policy and deny unsupported paths. |
 | 3 | ARCH-02I public intake and outcome access | Expose initial upload/preparation, verification progress, feedback, admission-backed creation, checker-remediation resubmission and outcome reads through exact authorized APIs. Remove superseded touched paths; no compatibility route or provider-coordinate exposure. |
 | 4 | First-layer integration drill | A real project completes guide approval, task creation/claim/start, failed intake/correction, verified Submission, automatic checking, post-check remediation and false-policy acceptance with exact contribution evidence. Exercise real PostgreSQL, S3-compatible storage and broker/workers, lost responses, duplicate delivery, restart, revocation/isolation and recovery. |
 
-**Immediate next implementation:** group 1, checker remediation and recovery.
+**Immediate next implementation:** group 1, TASK remediation handoff, replacement intake and authorized recovery.
+[ARCH-04F1](../WS-ARCH-001-04F1.md) supplies verified current failure evidence through the existing CHECKERS completion port; this does not complete the remediation workflow.
 Hidden completion delivery is complete; production registration remains disabled.
 No user-facing completion claim is valid until group 4 passes.
 

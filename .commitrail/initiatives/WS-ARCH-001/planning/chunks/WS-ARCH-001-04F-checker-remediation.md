@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ARCH-001-04F Checker Remediation Handoff
 
-Disposition: Planned. Non-executable coordination parent using the required hidden 04E result/handler contracts, to be
+Disposition: Planned. [04F1](../../WS-ARCH-001-04F1.md) supplies verified current failure evidence through the existing CHECKERS port; TASK handoff, replacement intake and authorized recovery remain. Non-executable coordination parent using the required hidden 04E result/handler contracts, to be
 split into owner-sized hidden behavior, authority and live integration changes
 before implementation; not one combined multi-owner PR. Risk: L1. Outcome: final
 current contributor-correctable checker outcomes create one bounded,
@@ -37,9 +37,7 @@ it cannot resurrect a completed failed attempt. Project/setup
 faults go to the authorized manager/operator. Neither creates contributor
 remediation or negative contribution facts. No public 02I cutover occurs here.
 
-Before implementation, replace this skeleton with a current-main contract that
-enumerates exact files, commands, migration head, authorization gates and
-reviewers.
+Each remaining owner-sized implementation uses a current-main child record naming exact files, commands, migration head, authorization gates and reviewers. The delivered 04F1 record covers only evidence verification, not the remaining workflow.
 
 ## Merge state
 

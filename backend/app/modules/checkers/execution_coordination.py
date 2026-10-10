@@ -217,7 +217,7 @@ class EvaluationCoordinator:
         """Verify caller completion against retained current custody without granting authority."""
         require_transaction(self._session)
         completion = EvaluationCompletion.model_validate(completion)
-        if not isinstance(event_id, UUID) or completion.routing_recommendation != "allow_review":
+        if not isinstance(event_id, UUID):
             raise CheckerExecutionUnavailable("checker_current_completion_unavailable")
         ref = completion.reference
         # Qualify every untrusted owner selector before acquiring any CHECKERS lock.
@@ -240,7 +240,7 @@ class EvaluationCoordinator:
         # read_current_result refreshes and locks this same run after its fence.
         if (
             completed.reference != ref
-            or completed.routing_recommendation != "allow_review"
+            or completed.routing_recommendation != completion.routing_recommendation
             or run.completion_event_id != event_id
             or run.execute_evidence_id != str(completion.execute_evidence_id)
             or run.finalize_evidence_id != str(completion.finalize_evidence_id)
@@ -263,6 +263,7 @@ class EvaluationCoordinator:
             raise CheckerExecutionUnavailable("checker_current_completion_unavailable")
         return VerifiedEvaluationCompletion(
             completion=completion,
+            result=completed.result,
             submission_version=run.submission_version,
             material=material,
             input_materialization_evidence_id=UUID(run.input_materialization_evidence_id),

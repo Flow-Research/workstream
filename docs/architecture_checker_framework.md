@@ -669,7 +669,14 @@ bytes and checker outputs are persisted; it does not redesign these routes.
 
 ARCH-04C owns CHECKERS result/currentness and its completion event, not TASK
 mutations. ARCH-04E owns the current `allow_review` manifest and TASK transition;
-ARCH-04F owns contributor-readable non-allow remediation before public cutover.
+ARCH-04F1 extends the existing `require_current_completion` port to all completed
+recommendations and returns the exact retained typed result with its verified
+material/receipt facts. It recomputes routing from the stored request/result and
+rejects a mismatching caller recommendation. Infrastructure failures still have
+no completed-result reference. This internal observation grants no routing or
+artifact authority: TASK's success consumers still require `allow_review`.
+ARCH-04F's TASK handoff, contributor-readable remediation, replacement intake and
+authorized recovery remain required before public cutover.
 The direct CHECKERS-to-TASK mutation, fabricated system actor and alternate
 Celery gate are removed. Hidden durable execution and exact service authority are implemented; automatic
 routing remains unregistered. ARCH-04E2-B supplies the hidden authorized
