@@ -143,6 +143,7 @@ def test_exact_active_action_inventory():
         ActionId.PROJECT_CHECKER_RUN_READ,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
+        ActionId.TASK_POST_SUBMIT_ROUTE,
         ActionId.PROJECT_GUIDE_ACTIVATE,
         ActionId.ACTOR_PROFILE_READ_SELF,
         ActionId.ACTOR_PROFILE_UPDATE_SELF,

@@ -116,9 +116,9 @@ async def test_upgrade_excludes_writer_across_receipt_preflight(
                 async with h.factory() as session:
                     row = (await session.execute(text("SELECT status,execute_evidence_id,worker_lease_id FROM checker_runs WHERE id=:id"), {"id": reserved.attempt_id})).one()
                     assert row == ("queued", None, None)
-                from tests.checkers.execution.support import provision_checker_service
+                from tests.checkers.execution.support import provision_post_submit_service
 
-                await provision_checker_service(h.factory)
+                await provision_post_submit_service(h.factory)
                 valid = await historical_lease(h)
                 assert valid.reservation.attempt_id == reserved.attempt_id
             finally:

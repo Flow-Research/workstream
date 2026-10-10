@@ -94,8 +94,8 @@ async def test_temporary_tables_cannot_replace_canonical_material(
         async def stage(session, material):
             await write_terminal(session, facts, material)
             # Validate the other deferred constraints against the real rows first.
-            # No guard is disabled: only 0009 remains deferred when the hostile
-            # session changes its name-resolution environment before COMMIT.
+            # No guard is disabled. Explicitly fire canonical ART lineage below
+            # after changing name resolution, before the input-receipt guard.
             await session.execute(text(
                 "SET CONSTRAINTS public.checker_terminal_custody, "
                 "public.checker_member_terminal_custody IMMEDIATE"
@@ -124,7 +124,7 @@ async def test_temporary_tables_cannot_replace_canonical_material(
         async with h.factory() as session:
             await stage(session, forged)
             with pytest.raises(IntegrityError, match="checker material canonical ART lineage mismatch"):
-                await session.commit()
+                await session.execute(text("SET CONSTRAINTS public.checker_material_lineage IMMEDIATE"))
             await session.rollback()
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(facts.result.attempt_id))
@@ -136,6 +136,7 @@ async def test_temporary_tables_cannot_replace_canonical_material(
         # The same hostile environment must not prevent valid canonical custody.
         async with h.factory() as session:
             await stage(session, canonical)
+            await session.execute(text("SET CONSTRAINTS public.checker_material_lineage IMMEDIATE"))
             await session.commit()
         async with h.factory() as session:
             row = (await session.execute(text(

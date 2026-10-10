@@ -127,9 +127,9 @@ class TaskPostSubmitOutcome:
                 raise TaskRoutingRequestUnavailable("routing invocation changed")
             if replay:
                 receipt = RoutingAuthorityFacts(
-                    decision_id=stored.authorization_decision_id,
-                    actor_id=stored.router_actor_id,
-                    identity_link_id=stored.router_identity_link_id,
+                    decision_id=UUID(stored.authorization_decision_id),
+                    actor_id=UUID(stored.router_actor_id),
+                    identity_link_id=UUID(stored.router_identity_link_id),
                     context_json=json.dumps(stored.authority_context),
                 )
                 await authority.validate_replay(source, receipt, effects, authorized_generation)
@@ -137,7 +137,7 @@ class TaskPostSubmitOutcome:
                 receipt = await authority.consume(
                     source, envelope.claim, effects, authorized_generation
                 )
-            audit_id = stored.audit_event_id if replay else new_record_id()
+            audit_id = UUID(stored.audit_event_id) if replay else new_record_id()
             if replay:
                 await self._outbox.require_existing(
                     stored.outcome_event_id, _notice(source, receipt, acceptance_id)
@@ -217,11 +217,11 @@ def _manifest(source, receipt, acceptance_id, generation, audit_id):
             fields[key] = str(fields[key])
     return TaskPostSubmitRoutingManifest(
         **fields,
-        authorization_decision_id=receipt.decision_id,
-        router_actor_id=receipt.actor_id,
-        router_identity_link_id=receipt.identity_link_id,
+        authorization_decision_id=str(receipt.decision_id),
+        router_actor_id=str(receipt.actor_id),
+        router_identity_link_id=str(receipt.identity_link_id),
         authority_context=json.loads(receipt.context_json),
         final_acceptance_id=acceptance_id,
         authorized_lifecycle_generation=generation,
-        audit_event_id=audit_id,
+        audit_event_id=str(audit_id),
     )

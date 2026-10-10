@@ -103,13 +103,15 @@ async def test_stale_worker_cannot_finalize_after_takeover(
             current.reservation == old.reservation
             and current.lease_generation == old.lease_generation + 1
         )
-        current_facts = old_facts.model_copy(update={"lease": current})
         if not old_first:
+            current_facts = await final_facts(h, current)
             await executor.finalize(current_facts)
         with pytest.raises(CheckerExecutionUnavailable):
             await executor.finalize(old_facts)
         if old_first:
+            current_facts = await final_facts(h, current)
             await executor.finalize(current_facts)
+        assert current_facts.input_materialization_evidence_id != old_facts.input_materialization_evidence_id
         async with h.factory() as session, session.begin():
             stored = await evaluation_coordinator(session).read_current_result(h.request)
             assert stored.result == current_facts.result

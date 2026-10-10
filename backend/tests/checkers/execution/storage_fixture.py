@@ -3,6 +3,7 @@
 from app.modules.checkers.api.post_submit import make_post_submit_request
 from uuid import UUID
 
+from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.checkers.api.execution import ExecuteFacts, FinalizeFacts, VerifiedMaterialFacts
 from app.modules.checkers.api.post_submit import PostSubmitMemberResult
@@ -12,7 +13,7 @@ from app.modules.checkers.post_submit_contracts import (
 )
 from app.modules.tasks.models import Submission
 from tests.checkers.post_submit.test_result_contract import result as value_result
-from tests.checkers.execution.support import live_executor, provision_checker_service
+from tests.checkers.execution.support import live_executor, provision_post_submit_service
 from types import SimpleNamespace
 
 
@@ -38,7 +39,7 @@ async def seed_storage_run(factory, submission_id, *, failures=(), state="comple
         receipt = await evaluation_coordinator(session).reserve_current_evaluation(request)
     if state == "queued":
         return str(receipt.attempt_id)
-    await provision_checker_service(factory)
+    await provision_post_submit_service(factory)
     executor = live_executor(SimpleNamespace(factory=factory, service=None))
     lease, replay = await executor._claim(request)
     assert replay is None
@@ -85,6 +86,7 @@ async def seed_storage_run(factory, submission_id, *, failures=(), state="comple
         byte_count=request.byte_count,
         semantic_manifest_sha256=admission.semantic_manifest_sha256,
     )
+    await provision_post_submit_service(factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
     input_receipt = await authorize_stored_material(
         factory, ExecuteFacts(request=request, lease=lease), material
     )

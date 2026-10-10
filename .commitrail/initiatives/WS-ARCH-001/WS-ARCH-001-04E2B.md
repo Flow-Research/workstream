@@ -66,7 +66,9 @@ canonical contracts before activating the exact operation.
   preflight/head inventory and measured schema reset fingerprint.
 - Focused AUTH routing/source, TASK routing, REV acceptance/lifecycle and CON
   participation tests and their affected fixtures; migration/storage/replay,
-  branch and concurrency regressions; required ownership/lane inventories only.
+  branch and concurrency regressions; current service-vocabulary migration tests
+  and outbox fixture cleanup affected by the new deferred outcome reference;
+  required ownership/lane inventories only.
 - This record, current ARCH plan/map/overview and active 04E child, index,
   affected AUTH/POL/REV/CON current navigation and canonical specs, README,
   architecture lockdown, product brief, authorization custody/operator docs and
@@ -221,3 +223,18 @@ hidden guarantees from remaining production and human-runtime work.
 Before the next completion-delivery consumer, replace the operation's internal
 dictionary return with one strict frozen TASK-owned outcome value. There is no
 production consumer yet; add no compatibility wrapper or parallel operation.
+
+Retained-history fixtures provision the actual materialization principal without
+reactivating an existing actor or identity link. The obsolete current-router
+unavailability assertion is removed: fixed-principal, revocation and complete
+outcome proofs cover the now-active hidden action. Historical vocabulary migration
+proof remains storage-only. Outbox fixture cleanup validates pending deferred
+constraints before re-enabling table triggers, matching the shared reset order.
+
+Obsolete fake repository transport tests are replaced by retained PostgreSQL
+source-lineage, exact TASK lineage, policy-polarity and complete outcome tests.
+Takeover fixtures obtain new materialization authority for the new lease; stale
+receipts remain invalid. Material-lineage tests explicitly fire their named
+deferred constraint under the altered search path so newer receipt guards do
+not mask that proof. New audit references preserve their referenced owners'
+string representation internally and convert to native UUID values at typed ports.

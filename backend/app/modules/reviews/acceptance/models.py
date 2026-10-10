@@ -59,8 +59,8 @@ class FinalAcceptance(Base):
     policy_context_ref: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("review_policies.id", ondelete="RESTRICT"), nullable=False
     )
-    source_authorization_decision_id: Mapped[UUID] = mapped_column(
-        Uuid(),
+    source_authorization_decision_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
         ForeignKey("audit_events.id", ondelete="RESTRICT"),
         nullable=False,
         unique=True,

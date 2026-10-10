@@ -60,11 +60,11 @@ def archive_with_modes(evidence_path, project_id):
 
 async def provision_material_services(factory, *, artifacts, checker):
     """Provision only the fixed identities present in the schema under test."""
-    from tests.checkers.execution.support import provision_checker_service
+    from tests.checkers.execution.support import provision_post_submit_service
     if artifacts:
         await _seed_services(factory)
     if checker:
-        await provision_checker_service(factory)
+        await provision_post_submit_service(factory)
 
 
 def _archive_facts(data):

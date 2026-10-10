@@ -2218,6 +2218,7 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
+        ActionId.TASK_POST_SUBMIT_ROUTE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,

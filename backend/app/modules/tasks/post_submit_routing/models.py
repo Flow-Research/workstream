@@ -125,17 +125,17 @@ class TaskPostSubmitRoutingManifest(Base):
         ),
         nullable=False,
     )
-    authorization_decision_id: Mapped[UUID] = mapped_column(
-        Uuid(),
+    authorization_decision_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
         ForeignKey("audit_events.id", ondelete="RESTRICT"),
         nullable=False,
         unique=True,
     )
-    router_actor_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("actor_profiles.id"), nullable=False
+    router_actor_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("actor_profiles.id"), nullable=False
     )
-    router_identity_link_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("actor_identity_links.id"), nullable=False
+    router_identity_link_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("actor_identity_links.id"), nullable=False
     )
     authority_context: Mapped[dict] = mapped_column(JSONB, nullable=False)
     final_acceptance_id: Mapped[UUID | None] = mapped_column(
@@ -144,8 +144,8 @@ class TaskPostSubmitRoutingManifest(Base):
         unique=True,
     )
     authorized_lifecycle_generation: Mapped[int | None] = mapped_column(BigInteger)
-    audit_event_id: Mapped[UUID] = mapped_column(
-        Uuid(),
+    audit_event_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
         ForeignKey("audit_events.id", deferrable=True, initially="DEFERRED"),
         nullable=False,
         unique=True,

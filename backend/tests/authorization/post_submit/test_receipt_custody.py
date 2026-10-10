@@ -136,7 +136,9 @@ async def test_final_receipt_commits_only_exact_outcome(
             }))
             stored = facts.model_copy(update={"result": changed})
         elif substitution == "material":
-            stored = facts.model_copy(update={"material": None})
+            stored = facts.model_copy(update={
+                "material": None, "input_materialization_evidence_id": None,
+            })
         before = await snapshot(h)
         with pytest.raises(IntegrityError, match="receipt custody"):
             async with h.factory() as session, session.begin():

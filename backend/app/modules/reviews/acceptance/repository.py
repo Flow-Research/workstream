@@ -16,7 +16,7 @@ from app.modules.reviews.api.acceptance import (
 
 _STRING_IDS = frozenset({
     "project_id", "task_id", "submission_id", "accepted_submitter_id",
-    "recorded_by", "policy_context_ref",
+    "recorded_by", "policy_context_ref", "source_authorization_decision_id",
 })
 
 

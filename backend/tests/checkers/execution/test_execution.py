@@ -407,6 +407,10 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
         executor = live_executor(h)
         if failure == "authority":
             await service_link_state(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER, active=False)
+            from tests.checkers.execution.support import provision_post_submit_service
+
+            # Reusing fixture setup must not reactivate a revoked service link.
+            await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
             expected = PostSubmissionMaterializationUnavailable
         elif failure == "cleanup":
             import sys
