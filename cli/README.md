@@ -340,8 +340,9 @@ The regular UTF-8 JSON input, at most 1 MiB, is the closed public
 `PostPolicyApprovalInput`: exactly `target` from the displayed policy package.
 No editable policy body, warning auto-acknowledgment, latest selection or
 preflight request is added. The CLI sends the original bytes and caller's
-bearer/key in one public POST. Workstream owns fresh authority, currentness,
-upstream custody and approval validity, including on replay.
+bearer/key in one public POST. Workstream checks currentness and lifecycle for
+a new approval. Exact manual replay rechecks fresh actor/grant authority and
+retained target custody, and can recover the historical immutable receipt.
 
 A successful response is a closed `PostPolicyReceipt` with an RFC UUIDv7
 operation ID, `kind=approve`, null correction and the exact submitted target.
@@ -357,8 +358,9 @@ response, redirect, server error or lost reply reports an unconfirmed write:
 empty stdout, nonzero exit and JSON `error.outcome_unknown: true`. Text explains
 manual replay with the unchanged project, guide, compilation, policy, input
 bytes and idempotency key. There is no automatic retry, including HTTP/2 replay.
-A prior receipt never exempts the caller from the backend's fresh lifecycle
-and grant checks; a second fresh key is not an instruction to approve twice.
+A prior receipt never exempts the caller from fresh actor/grant authority and
+retained target-custody checks. Replay does not repeat the new-approval
+currentness checks; a second fresh key is not an instruction to approve twice.
 
 Built-process hostile HTTP tests cover full-target substitution and transport
 uncertainty. The real Flow/socket/PREP/PostgreSQL journey arranges canonical
