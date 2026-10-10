@@ -208,7 +208,7 @@ exceeds the locked checker limits before any pre-check attempt or durable upload
 intent, using the same content contract required by later dispatch. ARCH-04E1B-B2 prepares exact source proposals from current
 CHECKERS custody and historical PROJECTS policy, without inserting a manifest
 or granting authority by itself. ARCH-04E2-B consumes this source in the complete
-authorized outcome. Completion delivery, remediation and production composition
+authorized outcome. B8 supplies hidden completion delivery; remediation and production composition
 remain before public intake and the first real end-to-end drill.
 
 Active work stays on that first contribution path. Live human review/revision,
@@ -701,8 +701,8 @@ uses hidden durable execution with exact ARCH-04D2 service authority. ARCH-04E1A
 retains route-neutral source evidence. REV-04C uses its bounded exact-source
 verifier and hidden FinalAcceptance/TASK/CON participant, while no general
 routing publication writer/reader or current pointer exists. B7 implements hidden
-request delivery with invocation fencing. Production registration and completion
-routing remain ARCH-04E work.
+request delivery with invocation fencing. B8 adds hidden completion routing with commit-before-ACK. Production
+registration remains ARCH-04E3 work.
 Submission and checker history use live exact-project Submitter authority for the
 original contributor. Separate `/projects/{project_id}` reads require a covering
 Project Manager grant and expose fixed management fields. Token roles confer no
@@ -811,8 +811,8 @@ awards and shared audit/outbox evidence. It creates no Review or reviewer
 contribution. Database closure rejects partial effects; exact replay verifies
 the original tuple with fresh authority instead of repairing it.
 
-B6 supplies atomic Submission/dispatch and B7 hidden request delivery. The next
-boundary wires completion delivery to the committed outcome. Remediation, live
+B6 supplies atomic Submission/dispatch, B7 hidden request delivery and B8 hidden
+completion handling with commit-before-ACK. Remediation, live
 registration, false-guide activation and public intake remain subsequent gates.
 The hidden false-path proof uses explicitly seeded valid policy lineage;
 normal guide activation still rejects false until the runtime is ready.

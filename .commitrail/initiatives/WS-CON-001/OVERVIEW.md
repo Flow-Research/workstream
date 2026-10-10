@@ -13,7 +13,7 @@ submitter contribution, applicable awards and audit/outbox evidence. Database
 closure rejects incomplete outcomes; fresh-authorized replay returns the stored
 complete tuple. No Review or reviewer contribution is fabricated.
 
-Completion-handler wiring is next, followed by 04F remediation, 04E3 production
+B8 supplies hidden completion delivery with commit-before-ACK. Next: 04F remediation, 04E3 production
 composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.
@@ -68,8 +68,7 @@ and the [capability ledger](../../../docs/roadmap_status.md).
   [CON-07](WS-CON-001-07.md) adds hidden source-neutral submitter participation
   and complete frozen award-set staging/replay; no recognition route or
   fulfillment operation is live.
-- Next usable boundary: completion-handler wiring consumes the delivered
-  04E2-B authorized outcome and acknowledges only after commit. Then prove 04F
+- Next usable boundary: prove 04F
   remediation, 04E3 live composition and false-guide readiness, public intake
   and the first-layer drill. True handoff remains independent of REV/CON;
   live human review/revision and payment delivery stay deferred.

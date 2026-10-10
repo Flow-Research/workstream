@@ -1,7 +1,7 @@
 # ARCH-04E1B-B8 — Hidden evaluation completion delivery
 
 - Initiative: `WS-ARCH-001`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Risk: L1 — delivery custody, authorization, transaction completion and replay.
 - Intended merge outcome: one unregistered completion handler invokes the existing
   authorized outcome operation and acknowledges only its committed result.
@@ -164,3 +164,17 @@ transaction exit establishes acknowledgment eligibility. Loss before outbox
 finalization and a finalized UNKNOWN are distinct recovery cases.
 
 Additional planned proofs: `test_completion_custody.py::test_completion_handler_invalid_result_rolls_back` exercises corrupted typed results after real staging. Retain `test_mixed_stored_sources_reject_without_effects` for canonical stored-source isolation; do not substitute observer rejection. The handler finalization race pauses after its independent observation and before outcome entry, distinct from existing outcome-level races. UNKNOWN assertions inspect delivery attempts and finalization alongside outcome snapshots.
+
+
+## Implemented boundary
+
+The TASK handler uses the existing outcome transaction and revalidates the closed
+result before commit. REV exposes only a phase-agnostic generation observation;
+existing fenced preparation remains authoritative. The provisional dictionary
+return and affected mapping callers are replaced, without aliases. Current
+navigation advances to remediation. No migration, production registration,
+public route or dependency is added. Local spreadsheet exports are absent.
+
+Plan review resolved disposition ambiguity and strengthened the proof to pause
+before commit, corrupt results after staging, distinguish active replay from
+closed UNKNOWN, and retain the existing stored-source isolation matrix.

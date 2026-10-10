@@ -4,8 +4,8 @@
 routing operation with actual source/phase/AUTH receipts, database-enforced
 consequences, shared audit/outbox and exact replay. True performs the TASK
 human-review handoff independently of REV/CON; false uses shared acceptance and
-atomic submitter contribution/applicable awards. Completion delivery is next,
-then remediation, production composition, public intake and the first-layer drill.
+atomic submitter contribution/applicable awards. Hidden completion delivery is supplied by B8; remediation is next,
+then production composition, public intake and the first-layer drill.
 Public false-guide activation, live human review/revision and payment delivery
 remain unavailable.
 
@@ -42,7 +42,7 @@ AUTH-13/14 cutovers are not additional implementation work.
   public TASK activation is complete through ARCH-03C7.
 - [AUTH-18](../WS-AUTH-001-18.md) delivers public manager activation and exact
   selection discovery over CP07/AUTH-12H. ARCH-03D completes hidden approved-guide
-  intake; ARCH-04B hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 exact input/execution/finalization authority, ARCH-04E1A source-only facts/types and ARCH-04E2-A hidden strict preparation are delivered. REV-12A1 fencing, CON-07 participation and REV-04C hidden FinalAcceptance/TASK/CON composition are delivered. 04E2-B receipt/database/effect closure is delivered. Completion delivery remains next, followed by remediation and live 04E3. True handoff remains independent of CON; false-guide activation remains gated by production readiness.
+  intake; ARCH-04B hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden durable execution is delivered; ARCH-04D1 canonical custody is delivered; ARCH-04D2 exact input/execution/finalization authority, ARCH-04E1A source-only facts/types and ARCH-04E2-A hidden strict preparation are delivered. REV-12A1 fencing, CON-07 participation and REV-04C hidden FinalAcceptance/TASK/CON composition are delivered. 04E2-B receipt/database/effect closure is delivered. B8 supplies hidden completion delivery; remediation and live 04E3 remain next. True handoff remains independent of CON; false-guide activation remains gated by production readiness.
 - CP05 owns exact ContributionPolicy-action activation after merged CP04B.
 - CP08 delivered the minimal lineage writers. ARCH-03B8 hidden task audit
   evidence and 03B9 hidden assignment invalidation are complete. ARCH-03C delivered

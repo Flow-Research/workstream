@@ -704,7 +704,7 @@ a planning document does not grant a service permission.
 | `task.assignment.authority_reconcile` | `workstream.task.assignment_reconciler` | Committed exact AUTH invalidation event, project/actor/grant-or-link, active pre-submit assignment; no wrong-role or submitted-history mutation | ARCH-03B9 hidden handler/fence and ARCH-03C1 real feature authority/decision receipts complete; ARCH-03C2 atomic producer wiring and registration |
 | `checker.post_submit.execute` | `workstream.checker.post_submit` | Immutable Submission/request/generation, locked compiled policy, attempt and admitted service; exact pre-I/O authority | Implemented by ARCH-04C/04D2; no dispatcher registration |
 | `checker.post_submit.finalize` | `workstream.checker.post_submit` | Exact execution request/fence, accepted result digest, retained material and original execute receipt; fresh post-I/O authority and atomic evidence; current outputs are empty | Implemented by ARCH-04C/04D2; no dispatcher registration |
-| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits only the TASK manifest transition to `review_pending`, false/pass binds exact accepted TASK effects for the shared FinalAcceptance consequence; never a human review decision or generic CON write | 04E2-B delivers canonical fixed-router PREP consumption and actual receipt custody with the complete hidden true/false outcome. SQL rejects orphan allows and incomplete effects. Completion delivery precedes 04F remediation and 04E3 production registration. |
+| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits only the TASK manifest transition to `review_pending`, false/pass binds exact accepted TASK effects for the shared FinalAcceptance consequence; never a human review decision or generic CON write | 04E2-B delivers canonical fixed-router PREP consumption and actual receipt custody with the complete hidden true/false outcome. SQL rejects orphan allows and incomplete effects. B8 supplies hidden completion delivery; 04F remediation precedes 04E3 production registration. |
 
 Each action maps to the identically named permission in this table and only
 its singleton fixed-service row. Humans, dispatchers and unrelated services
@@ -1695,6 +1695,6 @@ execute/finalize receipts remain distinct and are read from their canonical owne
 
 An orphan allow or incomplete outcome cannot commit. Exact replay rechecks live
 authority and the complete original tuple without issuing another allow or
-repairing effects. Completion delivery and production registration remain
-unavailable. Human acceptance-source authority is still future work; detached
+repairing effects. B8 supplies hidden completion delivery; production registration
+remains unavailable. Human acceptance-source authority is still future work; detached
 human receipts grant nothing.

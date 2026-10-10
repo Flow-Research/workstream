@@ -23,7 +23,7 @@ async def test_true_branch_does_not_acquire_acceptance(tmp_path, isolated_databa
 
             operation._acceptance = ForbiddenAcceptance()
             result = await operation.apply(envelope, current_generation=None)
-            assert result["final_acceptance_id"] is None and result["economic"] is None
+            assert result.final_acceptance_id is None and result.economic is None
         async with h.factory() as session:
             assert (
                 await session.scalar(
@@ -39,7 +39,7 @@ async def test_true_branch_does_not_acquire_acceptance(tmp_path, isolated_databa
             replay = await task_post_submit_outcome(session, h.factory).apply(
                 envelope, current_generation=None
             )
-            assert replay == result | {"replayed": True}
+            assert replay == result.model_copy(update={"replayed": True})
 
 
 async def test_false_branch_records_one_acceptance_and_submitter_contribution(
@@ -54,7 +54,7 @@ async def test_false_branch_records_one_acceptance_and_submitter_contribution(
             result = await task_post_submit_outcome(session, h.factory).apply(
                 envelope, current_generation=2
             )
-            assert result["final_acceptance_id"] is not None
+            assert result.final_acceptance_id is not None
         async with h.factory() as session:
             assert (
                 await session.scalar(
@@ -91,7 +91,7 @@ async def test_false_branch_records_one_acceptance_and_submitter_contribution(
             replay = await task_post_submit_outcome(session, h.factory).apply(
                 envelope, current_generation=2
             )
-            assert replay == result | {"replayed": True}
+            assert replay == result.model_copy(update={"replayed": True})
 
 
 async def test_orphan_routing_allow_cannot_commit(tmp_path, isolated_database_env):
@@ -203,8 +203,8 @@ async def test_database_rejects_missing_required_outcome_evidence(
                 ):
                     async with session.begin():
                         staged = await apply_outcome(session, h, 2)
-                        assert staged["economic"].contribution_record_id is not None
-                        assert len(staged["economic"].award_ids) == 1
+                        assert staged.economic.contribution_record_id is not None
+                        assert len(staged.economic.award_ids) == 1
                         assert len(omitted) == 1
                         # Isolate this boundary from unrelated deferred constraints.
                         await session.execute(
@@ -213,7 +213,7 @@ async def test_database_rejects_missing_required_outcome_evidence(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert (await apply_outcome(session, h, 2))["final_acceptance_id"] is not None
+            assert (await apply_outcome(session, h, 2)).final_acceptance_id is not None
 
 
 async def test_revoked_router_cannot_create_or_replay_an_outcome(tmp_path, isolated_database_env):
@@ -237,9 +237,9 @@ async def test_revoked_router_cannot_create_or_replay_an_outcome(tmp_path, isola
             await service_link_state(h.factory, ServiceIdentity.TASK_POST_SUBMIT_ROUTER, active=True)
             async with h.factory() as session, session.begin():
                 result = await apply_outcome(session, h, None)
-                assert result["replayed"] is replay
+                assert result.replayed is replay
                 if committed is not None:
-                    assert result == committed | {"replayed": True}
+                    assert result == committed.model_copy(update={"replayed": True})
                 committed = result
 
 
@@ -284,4 +284,4 @@ async def test_participant_failure_rolls_back(tmp_path, isolated_database_env, l
             async with h.factory() as session:
                 assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert len((await apply_outcome(session, h, 2))["economic"].award_ids) == 2
+            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 2

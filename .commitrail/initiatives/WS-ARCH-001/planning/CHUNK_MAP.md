@@ -1,17 +1,16 @@
 # WS-ARCH-001 — Current remaining change map
 
-[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; 04E2-B supplies complete authorized outcomes; completion-handler wiring is next. Production registration remains unavailable.
+[ARCH-04E1B-B5](../WS-ARCH-001-04E1BB5.md) delivers shared bounded evaluation content and rejects unrepresentable ZIP input before durable admission. ARCH-04E1B-B6 reuses this projection in atomic Submission/dispatch creation with exact AUTH receipts and select-only replay. B7 delivers hidden request delivery with exact invocation fencing; 04E2-B supplies complete authorized outcomes; B8 supplies hidden completion delivery; remediation is next. Production registration remains unavailable.
 
-Delivery priority: [first complete contributor milestone](PLAN.md#first-complete-contributor-milestone). Use its five remaining outcome groups and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
+Delivery priority: [first complete contributor milestone](PLAN.md#first-complete-contributor-milestone). Use its four remaining outcome groups and end-to-end exit proof when selecting the next bounded change; live human review/revision and external integration are later work.
 
-[ARCH-04E1B-B4](../WS-ARCH-001-04E1BB4.md) binds Submission summary and attestation to the packet retained by intake, including database custody. B6 delivers atomic initial dispatch with exact receipts and fresh-authorized replay; B7 delivers hidden request handling. 04E2-B supplies authorized outcomes; completion delivery remains.
+[ARCH-04E1B-B4](../WS-ARCH-001-04E1BB4.md) binds Submission summary and attestation to the packet retained by intake, including database custody. B6 delivers atomic initial dispatch with exact receipts and fresh-authorized replay; B7 delivers hidden request handling. 04E2-B supplies authorized outcomes; B8 supplies hidden completion delivery; remediation remains.
 
 [ARCH-04E1B-B3](../WS-ARCH-001-04E1BB3.md) retains the inspected ZIP manifest in immutable ART evidence and returns verified file metadata on admission consumption. ARCH-04E1B-B6 commits that content, exact authority, generation-one reservation and shared request event with each new Submission. No delivery handler or routing authority is activated.
 [ARCH-04E1B-B2](../WS-ARCH-001-04E1BB2.md) supplies exact source preparation through
 TASK, CHECKERS and historical PROJECTS policy facts. It stages only the existing
 routing request; proposed source facts have no fabricated creation timestamp.
-04E2-B now publishes the authorized source and complete outcome. Completion
-delivery and production activation remain required. False composition must acquire its REV lifecycle
+04E2-B now publishes the authorized source and complete outcome. B8 supplies hidden completion delivery; production activation remains required. False composition must acquire its REV lifecycle
 fence before TASK and revalidate policy under TASK custody; true admission
 remains independent of that fence.
 
@@ -25,7 +24,7 @@ submitter contribution, applicable awards and audit/outbox evidence. Database
 closure rejects incomplete outcomes; fresh-authorized replay returns the stored
 complete tuple. No Review or reviewer contribution is fabricated.
 
-Completion-handler wiring is next, followed by 04F remediation, 04E3 production
+B8 supplies hidden completion delivery with commit-before-ACK. Next: 04F remediation, 04E3 production
 composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.

@@ -27,7 +27,7 @@ complete authorized outcome over the existing owners:
    same-input FinalAcceptance authority, database complete-set closure,
    audit/outbox, exact replay and authorized currentness races. True handoff
    does not acquire REV/CON; false stages all shared acceptance effects.
-5. **Remaining 04E1B-B — Planned:** completion delivery consumes that operation
+5. **[04E1B-B8](../../WS-ARCH-001-04E1BB8.md) — Complete:** hidden completion delivery consumes that operation
    and acknowledges only the committed outcome. B7 request delivery is delivered.
 6. **04F / 04E3 / 02I — Planned:** remediation, connected production readiness,
    false-guide activation and public intake, followed by the first-layer drill.
@@ -96,9 +96,9 @@ and use real AUTH; normal guide activation still denies false.
    [04E1B-B7](../../WS-ARCH-001-04E1BB7.md) adds the unregistered request
    handler, recovering that exact request and fencing execute/finalize transactions
    against the committed outbox invocation. UNKNOWN does not renew execution.
-   The complete 04E2-B authorized operation is delivered. Completion delivery
-   must consume it and acknowledge only after commit, proving its own
-   invocation/currentness races. False composition must take the REV lifecycle
+   The complete 04E2-B authorized operation and B8 hidden completion delivery
+   are delivered. B8 acknowledges only after commit, with independent
+   invocation/finalization and generation-observation race proofs. False composition must take the REV lifecycle
    fence before TASK and revalidate the policy after locking; source preparation
    does not acquire that fence or authorize later lock-order inversion. After 04E1B-A/04E2-A and
    CON-02B's handler/claim contract (plus delivered REV-04C acceptance foundations
@@ -294,7 +294,7 @@ checker results without creating Review, ReviewFinding, or
 RevisionContextPreparation records.
 
 This is a coordination contract. Each remaining child record, beginning with
-the complete authorized outcome operation at 04E2-B, supplies its current-main
+04F checker remediation, supplies its current-main
 exact files, commands, migration head and reviewers before implementation.
 Shared acceptance foundations additionally gate false composition; they do not
 gate true admission. Both branches use delivered preparation, then the complete

@@ -31,7 +31,7 @@ async def test_paid_rollback_and_late_sql_failure_discard_every_new_effect(
             async with h.factory() as session:
                 await session.begin()
                 result = await apply_outcome(session, h, 2)
-                assert len(result["economic"].award_ids) == 2
+                assert len(result.economic.award_ids) == 2
                 if fail_sql:
                     with pytest.raises(DBAPIError, match="division by zero"):
                         await session.execute(text("SELECT 1 / 0"))
@@ -75,29 +75,29 @@ async def test_concurrent_shared_acceptance_converges_on_committed_winner_ids(
                 with suppress(asyncio.CancelledError):
                     await pending
         if commit_first:
-            assert winner == first | {"replayed": True}
+            assert winner == first.model_copy(update={"replayed": True})
         else:
             # No routing reservation committed: the winner allocates its own IDs.
-            assert winner["routing_manifest_id"] != first["routing_manifest_id"]
-            assert winner["final_acceptance_id"] != first["final_acceptance_id"]
+            assert winner.routing_manifest_id != first.routing_manifest_id
+            assert winner.final_acceptance_id != first.final_acceptance_id
             assert (
-                winner["economic"].contribution_record_id
-                != first["economic"].contribution_record_id
+                winner.economic.contribution_record_id
+                != first.economic.contribution_record_id
             )
-            assert set(winner["economic"].award_ids).isdisjoint(first["economic"].award_ids)
-            assert winner["replayed"] is False
+            assert set(winner.economic.award_ids).isdisjoint(first.economic.award_ids)
+            assert winner.replayed is False
         async with h.factory() as session:
             assert (
                 await session.scalar(text("SELECT id FROM public.final_acceptances"))
-                == winner["final_acceptance_id"]
+                == winner.final_acceptance_id
             )
             assert (
                 await session.scalar(text("SELECT id FROM public.contribution_records"))
-                == winner["economic"].contribution_record_id
+                == winner.economic.contribution_record_id
             )
             assert set(
                 await session.scalars(text("SELECT id FROM public.compensation_awards"))
-            ) == set(winner["economic"].award_ids)
+            ) == set(winner.economic.award_ids)
 
 
 @pytest.mark.parametrize("target", ["task", "assignment"])
@@ -121,7 +121,7 @@ async def test_completed_outcome_cannot_be_returned_to_partial_state(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert await apply_outcome(session, h, 2) == result | {"replayed": True}
+            assert await apply_outcome(session, h, 2) == result.model_copy(update={"replayed": True})
 
 
 @pytest.mark.parametrize("remove_guard", [False, True], ids=("protected", "guard-removal-probe"))
@@ -228,7 +228,7 @@ async def test_replay_never_repairs_a_missing_contribution(
             )
             await session.execute(
                 text("DELETE FROM public.contribution_records WHERE id=:id"),
-                {"id": committed["economic"].contribution_record_id},
+                {"id": committed.economic.contribution_record_id},
             )
             with pytest.raises(FinalAcceptanceConflict, match="final_acceptance_conflict"):
                 await apply_outcome(session, h, 2)
@@ -274,4 +274,4 @@ async def test_replay_never_repairs_a_missing_contribution(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == retained
         async with h.factory() as session, session.begin():
-            assert await apply_outcome(session, h, 2) == committed | {"replayed": True}
+            assert await apply_outcome(session, h, 2) == committed.model_copy(update={"replayed": True})
