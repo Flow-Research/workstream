@@ -15,6 +15,11 @@
   [WS-CLI-001-08](WS-CLI-001-08.md), draft project shell creation with explicit caller-owned replay;
   [WS-CLI-001-09](WS-CLI-001-09.md), guide declaration, illustrative tasks and document upload selectors;
   [WS-CLI-001-10](WS-CLI-001-10.md), declared-original upload with hash/size-bound storage receipts;
+  [WS-CLI-001-11](WS-CLI-001-11.md), latest exact-guide setup diagnostics and compilation lineage;
+  [WS-CLI-001-12](WS-CLI-001-12.md), exact finalized-proposal findings and policy inspection;
+  [WS-CLI-001-13](WS-CLI-001-13.md), deliberate exact pre-submission approval and manual replay;
+  [WS-CLI-001-14](WS-CLI-001-14.md), exact derived evaluation-policy and retained correction inspection;
+  [WS-CLI-001-15](WS-CLI-001-15.md), deliberate exact evaluation-policy approval and manual replay;
   [PILOT-13](../../changes/pilot13-assigned-task-guide-documents.md), assigned-task locked-guide listing/download.
 
 ## Current boundary
@@ -53,6 +58,25 @@ before success. Its exact-byte receipt establishes storage only, not setup readi
 approval or activation; unconfirmed outcomes require deliberate unchanged-input
 replay. `task guide TASK_ID [--download DIR]` lists or downloads the assigned
 task's locked originals with verified byte identity; setup examples stay private.
+`project guide setup PROJECT_ID GUIDE_ID` reads the latest exact-guide setup
+and compilation lineage through one public GET. It does not poll, execute setup,
+approve policies or activate the guide; successful reading is not readiness.
+`project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` reads the explicit
+finalized proposal, complete findings, requirements and intake/evaluation
+bindings, without selecting latest, approving, correcting or activating it.
+`project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE
+--idempotency-key UUID` commits the separately prepared intake decision. It
+never acknowledges warnings automatically or refetches latest. Backend authority
+and currentness apply on replay; an immutable receipt does not establish
+post-policy approval, post-policy job delivery or guide activation.
+`project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID` reads
+the exact canonical evaluation policy, unified findings, activation selectors
+and saved correction. Compiled, approved and superseded/non-current packages
+remain readable observations; no decision, dispatch or readiness rule is added.
+`project guide approve-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID --input
+FILE --idempotency-key UUID` commits a separate evaluation-policy decision using
+the inspected exact target. A validated receipt is not guide activation; fresh
+backend authority applies on manual replay and uncertain writes are not retried.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.
@@ -109,14 +133,29 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 9. **WS-CLI-001-09:** Declare a guide, required illustrative tasks and source
    document targets through public POST using an exact bounded JSON file.
    Setup awaits actual original upload.
-10. **WS-CLI-001-10:** Upload one declared PDF/DOCX/PPTX original through public
-   binary POST; validate storage receipt against local bytes and preserve manual
-   replay custody. Setup inspection, approval and activation remain.
-11. **Later governed-work commands:** Add further project setup, submission,
+10. **WS-CLI-001-10:** Upload one declared PDF/DOCX/PPTX or UTF-8 Markdown (`.md`)
+   original through public binary POST; validate storage receipt against local bytes and preserve manual
+   replay custody. Approval and activation remain.
+11. **WS-CLI-001-11:** Inspect latest exact-guide setup and compilation lineage
+    through the public diagnostic read. No polling, local readiness rules,
+    execution, approval or activation.
+12. **WS-CLI-001-12:** Inspect an explicitly selected finalized proposal through
+    its public GET, retaining complete display findings and distinct intake and
+    evaluation proposals without making a decision or substituting latest.
+13. **WS-CLI-001-13:** Approve an explicitly selected intake proposal through the
+    public POST with caller-prepared target/warning/prior selectors and exact
+    manual replay custody. No post-policy decision or guide activation.
+14. **WS-CLI-001-14:** Inspect the explicitly selected derived evaluation policy,
+    upstream proposal/findings, activation selectors and saved correction through
+    one public GET; preserve historical observations without local decisions.
+15. **WS-CLI-001-15:** Separately approve an explicitly selected evaluation policy
+    through public POST, using the caller's inspected target and exact manual
+    replay custody; validate the complete immutable receipt without activation.
+16. **Later governed-work commands:** Add further project setup, submission,
    review, revision, and contribution reads/writes only as their actual public
    contracts and authority boundaries become available. Split by user journey,
    not one PR per endpoint or one giant catalogue PR.
-12. **Optional TUI:** Add a focused public queue/evidence view after its API
+17. **Optional TUI:** Add a focused public queue/evidence view after its API
    workflow is complete. Never require a TUI for agents or scripts.
 
 ## Risks and proof

@@ -1,6 +1,7 @@
 """Real PostgreSQL proof for hidden source-neutral submitter participation."""
 
 import pytest
+
 from sqlalchemy import text
 
 from app.core.identifiers import new_record_id
@@ -20,14 +21,13 @@ from app.modules.contributions.api import (
 from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
 from tests.contributions.records.support import (
     award_values,
-    contribution_source,
-    insert_award,
-    insert_record,
-    retire_policy_and_suspend_bindings,
+    authorized_submitter_source,
     rows,
 )
 
 from .support import participant, request_for
+
+pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 
 @pytest.mark.parametrize(
@@ -38,12 +38,11 @@ from .support import participant, request_for
 async def test_create_and_exact_replay_all_frozen_award_shapes(
     tmp_path, isolated_database_env, instruments
 ):
-    async with contribution_source(
+    async with authorized_submitter_source(
         tmp_path, isolated_database_env, contribution_awards=instruments
     ) as h:
-        request = request_for(h, acceptance_disposition="new", correlation_id=new_record_id())
-        async with h.factory() as session, session.begin():
-            created = await participant(session).participate_submitter(request)
+        request = request_for(h, acceptance_disposition="replay")
+        created = h.participation
         async with h.factory() as session, session.begin():
             replayed = await participant(session).participate_submitter(
                 request.model_copy(update={"acceptance_disposition": "replay"})
@@ -151,24 +150,28 @@ async def test_create_and_exact_replay_all_frozen_award_shapes(
 async def test_missing_replay_conflicts_and_outer_commit_leaves_no_economic_facts(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        request = request_for(h, acceptance_disposition="replay", correlation_id=new_record_id())
+    async with authorized_submitter_source(tmp_path, isolated_database_env, paid=True) as h:
+        request = request_for(
+            h, acceptance_disposition="replay", final_acceptance_id=new_record_id()
+        )
+        async with h.factory() as session:
+            before = {
+                name: await rows(session, name)
+                for name in ("contribution_records", "compensation_awards")
+            }
         async with h.factory() as session, session.begin():
             with pytest.raises(ContributionParticipationConflict):
                 await participant(session).participate_submitter(request)
-
         async with h.factory() as session:
-            assert await rows(session, "contribution_records") == []
-            assert await rows(session, "compensation_awards") == []
+            assert {name: await rows(session, name) for name in before} == before
 
 
 async def test_new_against_existing_exact_facts_conflicts_without_replay(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        request = request_for(h, acceptance_disposition="new", correlation_id=new_record_id())
-        async with h.factory() as session, session.begin():
-            created = await participant(session).participate_submitter(request)
+    async with authorized_submitter_source(tmp_path, isolated_database_env, paid=True) as h:
+        request = request_for(h, acceptance_disposition="new")
+        created = h.participation
 
         async with h.factory() as session, session.begin():
             with pytest.raises(ContributionParticipationConflict):
@@ -186,17 +189,10 @@ async def test_new_against_existing_exact_facts_conflicts_without_replay(
 async def test_retired_policy_and_suspended_bindings_keep_frozen_awards_due(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        await retire_policy_and_suspend_bindings(h)
-        async with h.factory() as session, session.begin():
-            result = await participant(session).participate_submitter(
-                request_for(
-                    h,
-                    acceptance_disposition="new",
-                    correlation_id=new_record_id(),
-                )
-            )
-        assert {award.instrument_type.value for award in result.awards} == {
+    async with authorized_submitter_source(
+        tmp_path, isolated_database_env, paid=True, retire_before_outcome=True
+    ) as h:
+        assert {award.instrument_type.value for award in h.participation.awards} == {
             "money",
             "project_points",
         }
@@ -205,22 +201,21 @@ async def test_retired_policy_and_suspended_bindings_keep_frozen_awards_due(
 async def test_exact_replay_rejects_each_changed_source_fact_and_real_foreign_source(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        async with contribution_source(
+    async with authorized_submitter_source(tmp_path, isolated_database_env, paid=True) as h:
+        async with authorized_submitter_source(
             tmp_path / "foreign",
             isolated_database_env,
             paid=True,
             provision_services=False,
             storage_settings=h.settings,
         ) as foreign:
-            original = request_for(h, acceptance_disposition="new", correlation_id=new_record_id())
+            original = request_for(h, acceptance_disposition="replay")
             foreign_request = request_for(
                 foreign,
                 acceptance_disposition="replay",
                 correlation_id=original.correlation_id,
             )
-            async with h.factory() as session, session.begin():
-                created = await participant(session).participate_submitter(original)
+            created = h.participation
             replay = original.model_copy(update={"acceptance_disposition": "replay"})
 
             conflict_fields = (
@@ -258,20 +253,19 @@ async def test_exact_replay_rejects_each_changed_source_fact_and_real_foreign_so
                             update={"final_acceptance_id": foreign_request.final_acceptance_id}
                         )
                     )
-                assert len(await rows(session, "contribution_records")) == 1
-                assert len(await rows(session, "compensation_awards")) == 2
+                assert len(await rows(session, "contribution_records")) == 2
+                assert len(await rows(session, "compensation_awards")) == 4
             assert created.contribution.id is not None
 
 
 async def test_paid_correlation_conflicts_but_unpaid_replay_is_honest(
     tmp_path, isolated_database_env
 ):
-    async with contribution_source(tmp_path / "paid", isolated_database_env, paid=True) as paid:
-        paid_request = request_for(
-            paid, acceptance_disposition="new", correlation_id=new_record_id()
-        )
-        async with paid.factory() as session, session.begin():
-            created = await participant(session).participate_submitter(paid_request)
+    async with authorized_submitter_source(
+        tmp_path / "paid", isolated_database_env, paid=True
+    ) as paid:
+        paid_request = request_for(paid, acceptance_disposition="replay")
+        created = paid.participation
         async with paid.factory() as session, session.begin():
             with pytest.raises(ContributionParticipationConflict):
                 await participant(session).participate_submitter(
@@ -285,17 +279,14 @@ async def test_paid_correlation_conflicts_but_unpaid_replay_is_honest(
         async with paid.factory() as session:
             assert len(await rows(session, "compensation_awards")) == len(created.awards) == 2
 
-    async with contribution_source(
+    async with authorized_submitter_source(
         tmp_path / "unpaid",
         isolated_database_env,
         provision_services=False,
         storage_settings=paid.settings,
     ) as unpaid:
-        first_request = request_for(
-            unpaid, acceptance_disposition="new", correlation_id=new_record_id()
-        )
-        async with unpaid.factory() as session, session.begin():
-            first = await participant(session).participate_submitter(first_request)
+        first_request = request_for(unpaid, acceptance_disposition="replay")
+        first = unpaid.participation
         async with unpaid.factory() as session, session.begin():
             second = await participant(session).participate_submitter(
                 first_request.model_copy(
@@ -312,17 +303,21 @@ async def test_paid_correlation_conflicts_but_unpaid_replay_is_honest(
 async def test_partial_same_transaction_replay_rejects_without_backfill(
     tmp_path, isolated_database_env, monkeypatch
 ):
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        request = request_for(h, acceptance_disposition="replay", correlation_id=new_record_id())
+    async with authorized_submitter_source(tmp_path, isolated_database_env, paid=True) as h:
+        request = request_for(h, acceptance_disposition="replay")
         async with h.factory() as session:
             await session.begin()
-            await PostgresJointLifecycleMutationFence(session).acquire(0)
-            await insert_record(session, h.submitter_record)
+            await PostgresJointLifecycleMutationFence(session).acquire(2)
             expected_awards = await award_values(session, h.submitter_record)
-            await insert_award(
-                session,
-                expected_awards[0],
-                correlation_id=request.correlation_id,
+            # Isolate replay from storage immutability; this corruption never commits.
+            await session.execute(
+                text(
+                    "ALTER TABLE public.compensation_awards DISABLE TRIGGER compensation_award_immutable"
+                )
+            )
+            await session.execute(
+                text("DELETE FROM public.compensation_awards WHERE id=:id"),
+                {"id": h.participation.awards[1].id},
             )
             with pytest.raises(ContributionParticipationConflict):
                 await participant(session).participate_submitter(request)

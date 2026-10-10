@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
+from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
+from app.modules.authorization.prepared_routing_replay import validate_routing_replay
+from app.modules.authorization.prepared_lifecycle_replay import validate_lifecycle_replay
+from app.modules.reviews.api.lifecycle import LifecycleTransitionCommand
 
 from copy import Error as CopyError
 from contextlib import asynccontextmanager
@@ -193,6 +197,7 @@ class _PreparedAuthorizationBinding:
     post_submit_prepare_context: dict | None = None
     routing_request: TaskRoutingRequestFacts | None = None
     task_authority_context: TaskAuthorityResourceContext | None = None
+    lifecycle_command: LifecycleTransitionCommand | None = None
     project_create_operation_id: UUID | None = None
     project_create_project_id: UUID | None = None
     project_create_generation: int | None = None
@@ -587,7 +592,9 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         return issuance
 
-    def _validate_consumption(self, issuance, expected_action_id, caller_input, final_resource_context):
+    def _validate_consumption(
+        self, issuance, expected_action_id, caller_input, final_resource_context
+    ):
         """Bind consumption to its issued request, root transaction and exact resource."""
         if expected_action_id is not issuance.binding.action_id:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -605,10 +612,19 @@ class PreparedAuthorizationService:
             or issuance.binding.assignment_invalidation_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid assignment reconciliation authority")
-        if expected_action_id is ROUTE and not post_submit_routing_prepare_matches(
-            issuance.binding.routing_request, final_resource_context,
-        ):
-            raise PreparedAuthorizationHandleInvalid("invalid prepared routing authority")
+        if not lifecycle_matches(issuance.binding.lifecycle_command, final_resource_context):
+            raise PreparedAuthorizationHandleInvalid("invalid lifecycle authority")
+        if expected_action_id is ROUTE:
+            if not post_submit_routing_prepare_matches(
+                issuance.binding.routing_request,
+                final_resource_context,
+            ) or (
+                final_resource_context.router_actor_id
+                != issuance.authority.context.actor_profile_id
+                or final_resource_context.router_identity_link_id
+                != issuance.authority.context.identity_link_id
+            ):
+                raise PreparedAuthorizationHandleInvalid("invalid prepared routing authority")
         if expected_action_id in POST_SUBMIT_ACTIONS and not post_submit_prepare_matches(
             expected_action_id, issuance.binding.post_submit_prepare_context, final_resource_context,
         ):
@@ -721,7 +737,23 @@ class PreparedAuthorizationService:
         issuance = self._live_issuance(handle)
         self._issued[handle] = _CONSUMED
         try:
-            replay = validate_submission_replay if expected_action_id in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE} else validate_post_submit_replay if expected_action_id in POST_SUBMIT_ACTIONS else validate_review_replay if expected_action_id in GUIDE_PROPOSAL_ACTION_IDS | POST_POLICY_ACTION_IDS | {ActionId.PROJECT_GUIDE_ACTIVATE} else validate_projection_replay
+            replay = (
+                validate_routing_replay
+                if expected_action_id is ActionId.TASK_POST_SUBMIT_ROUTE
+                else validate_lifecycle_replay
+                if expected_action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE
+                else validate_submission_replay
+                if expected_action_id
+                in {ActionId.SUBMISSION_CREATE, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE}
+                else validate_post_submit_replay
+                if expected_action_id in POST_SUBMIT_ACTIONS
+                else validate_review_replay
+                if expected_action_id
+                in GUIDE_PROPOSAL_ACTION_IDS
+                | POST_POLICY_ACTION_IDS
+                | {ActionId.PROJECT_GUIDE_ACTIVATE}
+                else validate_projection_replay
+            )
             await replay(
                 self,
                 issuance,
@@ -836,9 +868,6 @@ class PreparedAuthorizationService:
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared routing request")
         operation_id = project_id = operation_generation = None
-        policy_mutation_project_id = policy_mutation_guide_id = policy_mutation_policy_id = policy_mutation_operation_id = None
-        policy_mutation_request_digest = policy_mutation_policy_digest = policy_mutation_predecessor_digest = None
-        policy_mutation_generation = policy_mutation_predecessor_generation = policy_mutation_predecessor_id = policy_mutation_guide_status = None
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
         if action_id is ActionId.PROJECT_CREATE:
             operation_id, project_id, operation_generation = parse_project_create_binding(
@@ -848,39 +877,6 @@ class PreparedAuthorizationService:
             action_id, caller_input.request_value, setup_bindings.get("guide_projection_prepare_context"),
         )
         sufficiency = _sufficiency_prepare_binding(action_id, caller_input, setup_bindings)
-        if action_id in {
-            ActionId.PROJECT_REVIEW_POLICY_UPDATE,
-            ActionId.PROJECT_REVISION_POLICY_UPDATE,
-        }:
-            try:
-                policy_mutation_project_id = UUID(str(caller_input.request_value["project_id"]))
-                policy_mutation_guide_id = UUID(str(caller_input.request_value["guide_id"]))
-                policy_mutation_policy_id = UUID(str(caller_input.request_value["policy_id"]))
-                policy_mutation_operation_id = UUID(str(caller_input.request_value["operation_id"]))
-                policy_mutation_request_digest = str(caller_input.request_value["request_digest"])
-                policy_mutation_policy_digest = str(caller_input.request_value["policy_digest"])
-                policy_mutation_generation = int(caller_input.request_value["policy_generation"])
-                raw_predecessor_id = caller_input.request_value["predecessor_policy_id"]
-                policy_mutation_predecessor_id = (
-                    UUID(str(raw_predecessor_id)) if raw_predecessor_id is not None else None
-                )
-                raw_predecessor_generation = caller_input.request_value[
-                    "predecessor_policy_generation"
-                ]
-                policy_mutation_predecessor_generation = (
-                    int(raw_predecessor_generation)
-                    if raw_predecessor_generation is not None
-                    else None
-                )
-                raw_predecessor_digest = caller_input.request_value["predecessor_policy_digest"]
-                policy_mutation_predecessor_digest = (
-                    str(raw_predecessor_digest) if raw_predecessor_digest is not None else None
-                )
-                policy_mutation_guide_status = str(caller_input.request_value["guide_status"])
-            except (KeyError, TypeError, ValueError) as exc:
-                raise PreparedAuthorizationHandleInvalid(
-                    "invalid prepared authorization handle"
-                ) from exc
         return _PreparedAuthorizationBinding(
             action_id=action_id,
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
@@ -893,17 +889,6 @@ class PreparedAuthorizationService:
             project_create_project_id=project_id,
             project_create_generation=operation_generation,
             **parse_prepared_guide_mutation(action_id, caller_input.request_value),
-            policy_mutation_project_id=policy_mutation_project_id,
-            policy_mutation_guide_id=policy_mutation_guide_id,
-            policy_mutation_policy_id=policy_mutation_policy_id,
-            policy_mutation_operation_id=policy_mutation_operation_id,
-            policy_mutation_request_digest=policy_mutation_request_digest,
-            policy_mutation_policy_digest=policy_mutation_policy_digest,
-            policy_mutation_generation=policy_mutation_generation,
-            policy_mutation_predecessor_id=policy_mutation_predecessor_id,
-            policy_mutation_predecessor_generation=(policy_mutation_predecessor_generation),
-            policy_mutation_predecessor_digest=policy_mutation_predecessor_digest,
-            policy_mutation_guide_status=policy_mutation_guide_status,
             sufficiency_project_id=sufficiency.get("project_id"),
             sufficiency_guide_id=sufficiency.get("guide_id"),
             sufficiency_guide_version=sufficiency.get("guide_version"),
@@ -924,6 +909,7 @@ class PreparedAuthorizationService:
             ),
             submission_policy_context=submission_policy_context,
             submission_policy_resource_digest=submission_policy_resource_digest,
+            lifecycle_command=parse_lifecycle_prepare(action_id, caller_input, scope, self._context),
             task_authority_context=parse_task_authority_binding(
                 action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
                 caller_input.idempotency_key,

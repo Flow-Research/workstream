@@ -66,8 +66,9 @@ post-submit checks pass, without human admission, a synthetic Review or a
 reviewer contribution. Its source/authority/CON design is defined in the
 [shared acceptance contract](spec_review_lifecycle.md#finalacceptance);
 REV-04C supplies its hidden FinalAcceptance/TASK/CON transaction participant,
-while exact authority/evidence, routing handlers, currentness proof and activation
-remain pending.
+and ARCH-04E2-B binds actual routing authority, immutable evidence and complete
+atomic outcomes under currentness custody. B8 supplies hidden completion delivery. Remediation and
+production composition remain before false-guide activation and public intake.
 This amendment does not enable raw checker results to create acceptance or
 change the existing human branch's implementation contract.
 The ReviewPolicy field `requires_second_review` is fixed to `false` in v0.1.

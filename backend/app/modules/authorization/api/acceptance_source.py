@@ -46,7 +46,7 @@ class HumanReviewSourceCommitment(_SourceValue):
 
 
 class PostSubmitRoutingSourceCommitment(_SourceValue):
-    """TASK source plus a distinct routing request, pending future persistence."""
+    """TASK source plus its distinct immutable routing request."""
 
     source: Literal["task_post_submit_route"]
     routing_manifest_id: UUID
@@ -102,7 +102,7 @@ def acceptance_source_commitment_digest(source: AcceptanceSourceCommitment) -> s
 class AcceptanceSourceReceiptFacts(_SourceValue):
     """Detached claimed evidence, not an AUTH decision or executable handle.
 
-    A future consumer must verify the actual immutable event and source, including
+    Every consumer must verify the actual immutable event and source, including
     persistence of this commitment. The full runtime resource digest is opaque.
     """
 
@@ -118,7 +118,6 @@ class AcceptanceSourceReceiptFacts(_SourceValue):
     resource_id: UUID
     request_id: UUID
     correlation_id: UUID
-    idempotency_reference: UUID
     resource_context_digest: _Digest
     source: AcceptanceSourceCommitment
     source_commitment_digest: _Digest
@@ -129,7 +128,7 @@ class AcceptanceSourceReceiptFacts(_SourceValue):
         source = self.source
         if isinstance(source, HumanReviewSourceCommitment):
             action, resource, identity = "review.decision", "review", source.review_id
-            operation, request = source.operation_id, source.review_decision_request_id
+            operation = source.operation_id
             principal_valid = (
                 self.actor_profile_id == source.reviewer_id
                 and self.service_identity is None
@@ -138,7 +137,7 @@ class AcceptanceSourceReceiptFacts(_SourceValue):
         else:
             action = "task.post_submit.route"
             resource, identity = "task_post_submit_routing_manifest", source.routing_manifest_id
-            operation = request = source.route_operation_id
+            operation = source.route_operation_id
             principal_valid = (
                 self.service_identity == "workstream.task.post_submit_router"
                 and self.matched_grant_id is None
@@ -150,7 +149,6 @@ class AcceptanceSourceReceiptFacts(_SourceValue):
             and self.resource_type == resource
             and self.resource_id == identity
             and self.request_id == self.correlation_id == operation
-            and self.idempotency_reference == request
             and self.source_commitment_digest == acceptance_source_commitment_digest(source)
         ):
             raise ValueError("acceptance source receipt commitment differs")

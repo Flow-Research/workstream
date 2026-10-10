@@ -36,6 +36,27 @@ func addGuideCreate(project *cobra.Command, client func() (*api.Client, error), 
 	create.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; retain with unchanged input for manual replay")
 	guide.AddCommand(create)
 	addGuideUpload(guide, client, output, stdout)
+	addGuideProposal(guide, client, output, stdout)
+	addGuidePostPolicy(guide, client, output, stdout)
+	addGuideApproval(guide, client, output, stdout)
+	addGuidePostApproval(guide, client, output, stdout)
+	guide.AddCommand(&cobra.Command{
+		Use: "setup PROJECT_ID GUIDE_ID", Short: "Inspect latest guide setup (does not approve or activate)", Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			apiClient, err := client()
+			if err != nil {
+				return err
+			}
+			result, err := apiClient.GuideSetup(cmd.Context(), args[0], args[1])
+			if err != nil {
+				return err
+			}
+			if *output == "json" {
+				return writeJSON(stdout, result.Raw)
+			}
+			return writeTaskContextFields(stdout, []contextField{{"Latest setup (not approval or activation)", result.Value}})
+		},
+	})
 	project.AddCommand(guide)
 }
 

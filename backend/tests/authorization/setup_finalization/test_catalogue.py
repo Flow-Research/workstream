@@ -129,8 +129,9 @@ def test_exact_active_action_inventory():
         for definition in ACTION_DEFINITIONS
         if definition.availability is ActionAvailability.ACTIVE
     } == {
-        ActionId.CHECKER_POST_SUBMIT_EXECUTE,
-        ActionId.CHECKER_POST_SUBMIT_FINALIZE,
+            ActionId.CHECKER_POST_SUBMIT_EXECUTE,
+            ActionId.CHECKER_POST_SUBMIT_FINALIZE,
+            ActionId.CHECKER_REGISTRY_REGISTER,
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         ActionId.TASK_SUBMISSION_LIST,
         ActionId.TASK_GUIDE_READ,
@@ -143,6 +144,7 @@ def test_exact_active_action_inventory():
         ActionId.PROJECT_CHECKER_RUN_READ,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
+        ActionId.TASK_POST_SUBMIT_ROUTE,
         ActionId.PROJECT_GUIDE_ACTIVATE,
         ActionId.ACTOR_PROFILE_READ_SELF,
         ActionId.ACTOR_PROFILE_UPDATE_SELF,
@@ -157,6 +159,7 @@ def test_exact_active_action_inventory():
         ActionId.ACTOR_IDENTITY_LINK_READ,
         ActionId.ACTOR_SERVICE_PROVISION,
         ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.ACTOR_PROFILE_REACTIVATE,
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,

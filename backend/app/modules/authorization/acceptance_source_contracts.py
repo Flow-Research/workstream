@@ -1,23 +1,25 @@
-"""Inert AUTH projection of the canonical TASK routing source."""
+"""AUTH commitment projection of the canonical TASK routing proposal."""
 
 from uuid import UUID
 
 from app.modules.authorization.api.acceptance_source import PostSubmitRoutingSourceCommitment
 from app.modules.tasks.api.post_submit_routing import (
-    TaskPostSubmitManifestFacts,
+    TaskPostSubmitSourceProposal,
     task_post_submit_source_digest,
 )
 
 
 def routing_source_commitment(
-    source: TaskPostSubmitManifestFacts,
+    source: TaskPostSubmitSourceProposal,
     *,
     route_operation_id: UUID,
     route_request_digest: str,
 ) -> PostSubmitRoutingSourceCommitment:
     """Bind a distinct routing request without granting execution or acceptance."""
     digest = task_post_submit_source_digest(source)
-    checked = TaskPostSubmitManifestFacts.model_validate(source.model_dump(mode="python"))
+    checked = TaskPostSubmitSourceProposal.model_validate(
+        source.model_dump(mode="python", exclude={"created_at"})
+    )
     if route_request_digest == checked.request_digest:
         raise ValueError("routing request digest must differ from checker request")
     return PostSubmitRoutingSourceCommitment(

@@ -1,19 +1,13 @@
 # WS-AUTH-001 — Current pre-review activation map
 
-[AUTH-19A](../../WS-AUTH-001/WS-AUTH-001-19A.md) delivers inert exact source/receipt contracts and the
-planned router identity. ARCH-04E1B-A delivers caller-owned routing-request and
-future source-identity reservation. ARCH-04E2-A delivers strict hidden
-resource/preparation matching and a nominal fixed-router adapter through canonical
-PREP while the action remains planned/unavailable. CON-07 hidden submitter
-participation and complete frozen award-set staging/replay are delivered. REV-04C
-adds the hidden FinalAcceptance/TASK/CON participant. Hidden handlers 04E1B-B are
-next. Mandatory exact same-input AUTH receipt, database complete-set enforcement,
-TASK-before-CHECKERS race proof, shared audit/outbox, fulfillment-root ordinal
-custody and scoped lifecycle activation remain required
-before production consumption. Neither phase may
-commit a standalone allow. The first durable receipt must commit with its full
-governed consequence. Hidden handlers and activation follow as 04E1B-B/04E2-B,
-then live 04E3; true admission does not depend on CON/shared acceptance.
+[ARCH-04E2-B](../../WS-ARCH-001/WS-ARCH-001-04E2B.md) delivers the complete hidden
+routing operation with actual source/phase/AUTH receipts, database-enforced
+consequences, shared audit/outbox and exact replay. True performs the TASK
+human-review handoff independently of REV/CON; false uses shared acceptance and
+atomic submitter contribution/applicable awards. Hidden completion delivery is supplied by B8; remediation is next,
+then production composition, public intake and the first-layer drill.
+Public false-guide activation, live human review/revision and payment delivery
+remain unavailable.
 
 The delivered [ART-07A1 metadata contract](../../WS-ART-001/WS-ART-001-07A1.md)
 and REV-03B normalized packet persistence are delivered. REV-04A Review source
@@ -40,7 +34,7 @@ work and historical proposals.
 | [ARCH-04D2](../../WS-ARCH-001/WS-ARCH-001-04D2.md) | Complete: exact materialization and execute/finalize authority; output write/bind unavailable; replaces AUTH-14/XINT-06B |
 | [AUTH-OUTBOX-01](PLAN.md#ws-auth-001-outbox-01--unavailable-dispatcher-contract) | Complete: unavailable exact dispatcher identity/action/phase contract; CON-02B and AUTH-OUTBOX-02 mechanics complete; feature authority/registration remain separate |
 | [AUTH-OUTBOX-02](PLAN.md#ws-auth-001-outbox-02--exact-dispatcher-activation) | Complete: exact dispatcher mechanics activation, phase audit custody and bounded prefork delivery; ARCH-03C2 subsequently registers assignment invalidation, while future handlers require their own exact authority |
-| [ARCH-04E2](../../WS-ARCH-001/planning/chunks/WS-ARCH-001-04E-canonical-allow-review.md#current-bounded-sequence) | Both branches: delivered source-only 04E1A -> request reservation 04E1B-A -> hidden AUTH preparation 04E2-A -> handlers/currentness proof 04E1B-B -> authority/evidence closure and consequence activation 04E2-B -> live 04E3. True uses its own prerequisites and does not depend on CON; false uses delivered REV-04C participation and additionally requires exact AUTH receipt/database/audit closure, fulfillment-root ordinal custody and scoped lifecycle activation |
+| [ARCH-04E2](../../WS-ARCH-001/planning/chunks/WS-ARCH-001-04E-canonical-allow-review.md#current-bounded-sequence) | Complete through hidden 04E2-B outcomes: actual receipts, database complete-set closure, audit/outbox and replay. B8 delivers hidden completion handling; remediation precedes live 04E3. True handoff has no REV/CON prerequisite; public false-guide activation remains unavailable. |
 
 Guide activation needs CP05 -> CP06 -> hidden CP07 and POL-07, which also
 requires independent ARCH-04A registered-capability proof. It does not need

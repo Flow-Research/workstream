@@ -129,6 +129,14 @@ AUTH_OUTBOX_02_TARGETS = frozenset({
 })
 CON_02B_DELIVERY_TARGETS = frozenset({'backend/app/modules/outbox/delivery_repository.py', 'backend/app/modules/outbox/api.py', 'backend/app/modules/outbox/delivery.py', 'backend/app/modules/outbox/registry.py'})
 CI_LANE_CATALOGUE_TARGETS = frozenset({"backend/scripts/test_lane_catalogue.py"})
+PILOT_04_REGISTRY_TARGETS = frozenset(
+    {
+        "backend/app/modules/authorization/checker_registry_authorization.py",
+        "backend/app/modules/authorization/domain/checker_registry.py",
+        "backend/app/modules/checkers/api/external.py",
+        "backend/app/modules/checkers/external_registry.py",
+    }
+)
 LOCAL_PILOT_HELPER_TARGETS = frozenset(
     {
         "backend/scripts/ensure_local_minio_bucket.py",
@@ -170,6 +178,13 @@ AUTH_19A_SOURCE_CONTRACT_TARGETS = frozenset({
     "backend/app/modules/authorization/api/acceptance_source.py",
     "backend/app/modules/authorization/acceptance_source_contracts.py",
 })
+REV_12A4A_CONTROL_TARGETS = frozenset({
+    "backend/app/modules/authorization/domain/lifecycle.py",
+    "backend/app/modules/authorization/lifecycle_authorization.py",
+    "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+    "backend/app/modules/authorization/prepared_admin_authority.py",
+    "backend/app/modules/reviews/lifecycle/service.py",
+})
 REV_12A1_FENCE_TARGETS = frozenset({"backend/app/modules/reviews/api/lifecycle.py", "backend/app/modules/reviews/lifecycle/models.py", "backend/app/modules/reviews/lifecycle/fence.py"})
 REV_04C_REMOVED_TARGETS = frozenset({"backend/app/modules/reviews/acceptance/schemas.py"})
 REV_04C_PARTICIPATION_TARGETS = frozenset({
@@ -187,6 +202,17 @@ ARCH_04E1BB6_DISPATCH_TARGETS = frozenset({
     "backend/app/modules/tasks/submission_participants.py",
     "backend/app/modules/authorization/prepared_submission_replay.py",
 })
+ARCH_04E2B_OUTCOME_TARGETS = frozenset({
+    "backend/app/adapters/tasks/routing_acceptance.py",
+    "backend/app/modules/authorization/prepared_routing_replay.py",
+    "backend/app/modules/tasks/api/routing_outcome.py",
+    "backend/app/modules/tasks/post_submit_routing/outcome.py",
+    "backend/app/modules/tasks/post_submit_routing/ports.py",
+})
+ARCH_04E1BB8_COMPLETION_TARGETS = frozenset({
+    "backend/app/modules/tasks/evaluation_completion_delivery.py",
+})
+
 ARCH_04E1BB7_DELIVERY_TARGETS = frozenset({
     "backend/app/modules/checkers/delivery_authority.py",
     "backend/app/modules/tasks/evaluation_delivery.py",
@@ -772,6 +798,7 @@ def _validate_additive_partition_transition(
         | ARCH_03C4_TARGETS
         | ARCH_03B9_TARGETS
         | CI_LANE_CATALOGUE_TARGETS
+        | PILOT_04_REGISTRY_TARGETS
         | LOCAL_PILOT_HELPER_TARGETS
         | MODULE_BOUNDARY_FOUNDATION_TARGETS
         | MODULE_PUBLIC_API_FOUNDATION_TARGETS
@@ -807,6 +834,8 @@ def _validate_additive_partition_transition(
         | CON_07_PARTICIPATION_TARGETS
         | AUTH_19A_SOURCE_CONTRACT_TARGETS
         | ARCH_04E2A_ROUTING_AUTH_TARGETS
+        | ARCH_04E2B_OUTCOME_TARGETS
+        | REV_12A4A_CONTROL_TARGETS
         | REV_12A1_FENCE_TARGETS
         | REV_04C_PARTICIPATION_TARGETS
         | REV_04B_ACCEPTANCE_TARGETS
@@ -817,6 +846,7 @@ def _validate_additive_partition_transition(
             | ARCH_04E1BB2_SOURCE_TARGETS
             | ARCH_04E1BB6_DISPATCH_TARGETS
             | ARCH_04E1BB7_DELIVERY_TARGETS
+            | ARCH_04E1BB8_COMPLETION_TARGETS
             | OBSERVABILITY_FOUNDATION_TARGETS
         | ARCH_04E1A_SOURCE_TARGETS
         | ARCH_04D2_AUTHORITY_TARGETS

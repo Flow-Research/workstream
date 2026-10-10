@@ -1,4 +1,4 @@
-"""Real human-source TASK state for accepted-effects participant tests."""
+"""Mechanical TASK participant inputs; no FinalAcceptance or fabricated source authority."""
 
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -8,13 +8,14 @@ from sqlalchemy import text
 from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
 from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
 from app.modules.tasks.api import TaskAcceptedEffectsRequest
-from tests.reviews.acceptance.support import acceptance_source
+from tests.reviews.decision.support import review_source
+from app.core.identifiers import new_record_id
 
 
 @asynccontextmanager
 async def accepted_effects_source(tmp_path, database_url):
     """Yield exact persisted TASK facts in the human acceptance prestate."""
-    async with acceptance_source(tmp_path, database_url) as h:
+    async with review_source(tmp_path, database_url) as h:
         async with h.factory() as session, session.begin():
             row = (
                 await session.execute(
@@ -57,7 +58,7 @@ async def accepted_effects_source(tmp_path, database_url):
             contribution_policy_version_id=row["contribution_policy_version_id"],
             content_id=UUID(str(row["artifact_content_id"])),
             content_sha256=row["sha256"],
-            final_acceptance_id=h.acceptance.id,
+            final_acceptance_id=new_record_id(),
             expected_task_status="review_pending",
         )
         h.locked_review_policy_id = UUID(str(row["locked_review_policy_id"]))

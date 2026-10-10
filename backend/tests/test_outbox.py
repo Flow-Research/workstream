@@ -68,6 +68,7 @@ async def outbox_factory(
                 text("delete from outbox_events where project_id=:project_id"),
                 {"project_id": str(project_id)},
             )
+            await connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
             await connection.execute(text("alter table outbox_events enable trigger user"))
             await connection.execute(
                 text("delete from projects where id=:project_id"),

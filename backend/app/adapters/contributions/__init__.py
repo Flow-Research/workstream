@@ -55,3 +55,13 @@ def locked_compensation_terms_port(session: AsyncSession) -> LockedCompensationT
     """Compose the contributor-safe locked-version projection at the CON owner."""
     from app.modules.contributions.repository import ContributionPolicyRepository
     return ContributionPolicyRepository(session)
+
+
+def submitter_contribution_participant(session, fence):
+    """Construct CON's atomic contribution and complete award participant."""
+    from app.modules.contributions.records.participant import SubmitterContributionParticipant
+    from app.adapters.compensation import compensation_award_participant
+
+    return SubmitterContributionParticipant(
+        session, fence=fence, awards=compensation_award_participant(session)
+    )

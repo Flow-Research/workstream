@@ -1,5 +1,7 @@
 """Hidden shared acceptance values; neither construction nor storage grants authority."""
 
+from contextlib import AbstractAsyncContextManager
+
 from typing import Annotated, Literal, Protocol, Self
 from uuid import UUID
 
@@ -12,7 +14,7 @@ _STRICT = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instan
 
 
 class FinalAcceptanceInput(BaseModel):
-    """One exclusive source; owner validation and future AUTH custody remain required."""
+    """One exclusive source; retained AUTH and owner validation remain mandatory."""
 
     model_config = _STRICT
 
@@ -26,6 +28,7 @@ class FinalAcceptanceInput(BaseModel):
     accepted_submitter_id: UUID
     recorded_by: UUID
     policy_context_ref: UUID
+    source_authorization_decision_id: UUID
 
     @model_validator(mode="after")
     def exclusive_source(self) -> Self:
@@ -42,7 +45,7 @@ class FinalAcceptanceConflict(RuntimeError):
 
 
 class FinalAcceptanceRequest(BaseModel):
-    """Exact proposed effects; verified source AUTH custody is still unavailable."""
+    """Exact proposed effects; values alone grant no source authority."""
 
     model_config = _STRICT
 
@@ -86,9 +89,25 @@ class FinalAcceptanceResult(BaseModel):
     participation: SubmitterParticipationResult
 
 
-class FinalAcceptancePort(Protocol):
-    """Hidden flush-only core; production activation must harden this same input."""
+class PreparedFinalAcceptance(Protocol):
+    """REV-held capability; construction alone grants neither custody nor authority."""
+
+    async def require_new(self) -> None:
+        """Require the held generation to admit new effects before AUTH consumption."""
+        ...
 
     async def participate(self, request: FinalAcceptanceRequest) -> FinalAcceptanceResult:
         """Stage exact effects in the caller's fenced root transaction."""
         ...
+
+
+class FinalAcceptancePort(Protocol):
+    """Prepare REV custody before any TASK locks; consume inside the same root."""
+
+    async def observe_generation(self) -> int:
+        """Observe current generation; preparation separately enforces exact custody."""
+        ...
+
+    def prepare(
+        self, expected_generation: int
+    ) -> AbstractAsyncContextManager[PreparedFinalAcceptance]: ...

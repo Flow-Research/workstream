@@ -241,6 +241,7 @@ class ActionId(StrEnum):
     ARTIFACT_CHECKER_OUTPUT_WRITE = "artifact.checker_output.write"
     ARTIFACT_REVIEW_PACKET_MATERIALIZE = "artifact.review_packet.materialize"
     ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE = "artifact.review_evidence.binding.create"
+    CHECKER_REGISTRY_REGISTER = "checker.registry.register"
     COMPENSATION_ADAPTER_BINDING_READ = "compensation.adapter_binding.read"
     COMPENSATION_ADAPTER_BINDING_CREATE = "compensation.adapter_binding.create"
     COMPENSATION_ADAPTER_BINDING_SUSPEND = "compensation.adapter_binding.suspend"
@@ -284,6 +285,7 @@ class ActionOwner(StrEnum):
     TASK_CHECKER_CLEANUP = "task-checker-auth-cleanup"
     TASK_PROJECT_GRANT = "task-project-grant-authorization"
     PILOT_13 = "PILOT-13"
+    PILOT_04 = "PILOT-04"
 
     AUTH_07B = "WS-AUTH-001-07B"
     AUTH_08 = "WS-AUTH-001-08"
@@ -384,7 +386,7 @@ _CONTRIBUTION_POLICY_ACTION_IDS = (
 
 
 ACTION_DEFINITIONS = (
-    _planned(ActionId.TASK_POST_SUBMIT_ROUTE, PermissionId.TASK_POST_SUBMIT_ROUTE, ActionOwner.ARCH_04E2),
+    _active(ActionId.TASK_POST_SUBMIT_ROUTE, PermissionId.TASK_POST_SUBMIT_ROUTE, ActionOwner.ARCH_04E2),
     _active(ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, PermissionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, ActionOwner.ARCH_03C1),
     _active(ActionId.OUTBOX_DISPATCH, PermissionId.OUTBOX_DISPATCH, ActionOwner.AUTH_OUTBOX_01),
     _active(
@@ -566,6 +568,11 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_14,
     ),
     _planned(ActionId.OPERATIONS_CHECKER_RETRY, PermissionId.OPERATIONS_CHECKER_RETRY, ActionOwner.AUTH_14),
+    _active(
+        ActionId.CHECKER_REGISTRY_REGISTER,
+        PermissionId.OPERATIONS_RECONCILE_RUN,
+        ActionOwner.PILOT_04,
+    ),
     _active(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
     _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(ActionId.REVIEW_QUEUE_INSPECT, PermissionId.REVIEW_QUEUE_INSPECT, ActionOwner.AUTH_REV_05),
@@ -601,7 +608,7 @@ ACTION_DEFINITIONS = (
         PermissionId.OPERATIONS_RECONCILE_RUN,
         ActionOwner.XINT_003_08A,
     ),
-    _planned(
+    _active(
         ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         PermissionId.OPERATIONS_RECONCILE_RUN,
         ActionOwner.XINT_003_08B,
@@ -753,7 +760,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 144:
+    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 145:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 29:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -811,10 +818,12 @@ def _index_actions(
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
     active_actions = {
+        ActionId.TASK_POST_SUBMIT_ROUTE,
         ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
         ActionId.OUTBOX_DISPATCH,
         ActionId.PROJECT_GUIDE_ACTIVATE,
         *_CONTRIBUTION_POLICY_ACTION_IDS,
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         *GUIDE_PROPOSAL_ACTION_IDS,
         *POST_POLICY_MUTATION_ACTION_IDS,
         ActionId.ACTOR_PROFILE_READ_SELF,
@@ -834,6 +843,7 @@ def _index_actions(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.CHECKER_REGISTRY_REGISTER,
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
@@ -1002,6 +1012,7 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
 
 
 _ACTIVE_SERVICE_ACTIONS = {
+    ActionId.TASK_POST_SUBMIT_ROUTE,
     ActionId.CHECKER_POST_SUBMIT_EXECUTE,
     ActionId.CHECKER_POST_SUBMIT_FINALIZE,
     ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,

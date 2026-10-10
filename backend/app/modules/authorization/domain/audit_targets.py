@@ -1,6 +1,7 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.post_submit_routing import PostSubmitRoutingResourceContext
 from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
 from app.modules.authorization.domain.assignment_invalidation import AssignmentInvalidationResourceContext
@@ -28,6 +29,9 @@ def project_authority_audit_target(
         AdapterBindingReadResourceContext,
         AdapterBindingMutationResourceContext,
     )
+    from app.modules.authorization.domain.checker_registry import (
+        ExternalCheckerRegistryResourceContext,
+    )
     from app.modules.authorization.domain.guide_compilation import (
         ProjectGuideCompilationRequestResourceContext,
         ProjectGuideCompilationExecuteResourceContext,
@@ -44,6 +48,8 @@ def project_authority_audit_target(
         ProjectGuideActivationResourceContext,
     )
 
+    if type(resource) is ReviewLifecycleActivationContract:
+        return None, resource.resource_type, str(resource.resource_id), "joint_lifecycle_control", str(resource.resource_id)
     if type(resource) is ContributionPolicyMutationScopeDenialResourceContext:
         project_id = str(resource.scope_project_id)
         if resource.project_exists:
@@ -62,6 +68,15 @@ def project_authority_audit_target(
         return (
             None, "project_create_operation", str(resource.resource_id),
             "project", str(resource.requested_project_id),
+        )
+    if isinstance(resource, ExternalCheckerRegistryResourceContext):
+        entry_id = str(resource.resource_id)
+        return (
+            None,
+            resource.resource_type,
+            entry_id,
+            resource.resource_type,
+            entry_id,
         )
     if action_id in SUBMISSION_POLICY_MUTATIONS and isinstance(
         resource, ProjectSubmissionArtifactPolicyMutationResourceContext,

@@ -17,8 +17,8 @@ def request_for(h, *, acceptance_disposition, **changes):
         "contributor_id": h.submitter_record.contributor_id,
         "contribution_policy_version_id": (h.submitter_record.contribution_policy_version_id),
         "artifact_hash": h.submitter_record.artifact_hash,
-        "correlation_id": h.submitter_record.id,
-        "expected_generation": 0,
+        "correlation_id": h.route_operation_id,
+        "expected_generation": 2,
     }
     values.update(changes)
     return SubmitterParticipationRequest(**values)

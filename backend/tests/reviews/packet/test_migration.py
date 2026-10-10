@@ -7,7 +7,7 @@ import asyncpg
 import pytest
 from alembic import command
 
-from tests.historical_submission_fixtures import historical_material_fixture
+from tests.checkers.execution.historical_execution import historical_completed_source
 from app.db import session as db_session
 from tests.migration_fixtures import add_current_art_seed_column, restore_predecessor_evidence_schema
 from tests.migration_fixtures import _config
@@ -50,7 +50,9 @@ async def test_packet_upgrade_preserves_existing_owners(
             await connection.close()
         await asyncio.to_thread(command.upgrade, _config(), "0011_task_routing_source")
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with packet_source(tmp_path, isolated_database_env, material_source=historical_material_fixture):
+        async with packet_source(
+            tmp_path, isolated_database_env, completed_source_factory=historical_completed_source
+        ):
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
             connection = await asyncpg.connect(url)
             try:

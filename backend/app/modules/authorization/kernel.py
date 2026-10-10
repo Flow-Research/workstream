@@ -24,14 +24,15 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.authorization.domain.guide_manager_resources import guide_manager_resource_denial
-from app.modules.authorization.domain import adapter_bindings, contribution_policies, guide_compilation as compilation
+from app.modules.authorization.domain import adapter_bindings, checker_registry, contribution_policies, guide_compilation as compilation
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
-    PROJECT_SCOPED_ADMIN_MUTATIONS, CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
+    CONTEXT_DIGEST_ACTIONS, EXACT_PROJECT_MANAGER_SCOPE_ACTIONS,
     supports_prepared_denial,
 )
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.audit_targets import project_authority_audit_target
+from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.prepared_service import (
     fixed_service_scope_project, fixed_service_resource_matches,
 )
@@ -40,6 +41,7 @@ from app.modules.authorization.domain.submission_history import history_read_den
 from app.modules.authorization.catalogue import HISTORY_READ_ACTIONS
 from app.modules.authorization.domain.task_queues import TASK_QUEUE_ACTIONS, queue_read_denial
 from app.modules.authorization.domain.project_reads import project_read_denial
+from app.modules.authorization.prepared_admin_authority import lock_admin_mutation_authority
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
@@ -99,7 +101,6 @@ from app.modules.authorization.artifact_project_authority import (
     PROJECT_AUTHORITY_ACTIONS,
     evaluate_project_authority,
     lock_project_authority,
-    lock_project_role_mutation_principals,
 )
 
 ContextRevalidator = Callable[
@@ -120,6 +121,7 @@ ServiceContextRevalidator = Callable[
 
 _ADMIN_ACTIONS = frozenset(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ,
         ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ,
         ActionId.ADMIN_ROLE_GRANT_LIST,
@@ -149,7 +151,7 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
-) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 _SERIALIZED_ADMIN_READS = frozenset(
     {
         ActionId.ACTOR_PROFILE_READ,
@@ -166,6 +168,7 @@ _SERIALIZED_ADMIN_READS = frozenset(
 ) | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
 _ADMIN_MUTATIONS = frozenset(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ACTOR_SERVICE_PROVISION,
@@ -177,7 +180,7 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
-) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS
+) | adapter_bindings.ADAPTER_BINDING_MUTATION_ACTIONS | contribution_policies.CONTRIBUTION_POLICY_MUTATION_ACTIONS | checker_registry.CHECKER_REGISTRY_ACTIONS
 
 _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
@@ -205,6 +208,7 @@ _ARTIFACT_INTERNAL_RESOURCES = {
 
 _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
     {
+        ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE: ReviewLifecycleActivationContract,
         ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ: PermissionCatalogueResourceContext,
         ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ: AdminRoleDefinitionsResourceContext,
         ActionId.ADMIN_ROLE_GRANT_LIST: AdminRoleGrantCollectionResourceContext,
@@ -237,12 +241,11 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
         ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         **adapter_bindings.ADAPTER_BINDING_RESOURCE_BY_ACTION,
-        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION,
+        **contribution_policies.CONTRIBUTION_POLICY_RESOURCE_BY_ACTION, **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
         **GUIDE_PROPOSAL_RESOURCE_BY_ACTION,
     }
 )
-
 def project_action_available_for_status(action_id: ActionId, project_status: str) -> bool:
     """Apply project-only lifecycle guards shared by decisions and projections."""
     if action_id in {
@@ -430,41 +433,9 @@ class AuthorizationService:
             )
             context = self._locked_human_context(locked, context)
         elif action_id in _ADMIN_MUTATIONS:
-            if not isinstance(context, HumanAuthorizationContext):
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
-            if scope.kind not in {PreparedAuthorityScopeKind.SYSTEM, PreparedAuthorityScopeKind.PROJECT}:
-                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
-            if scope.kind is PreparedAuthorityScopeKind.PROJECT and action_id not in PROJECT_SCOPED_ADMIN_MUTATIONS:
-                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
-            await self._admin.lock_control()
-            if action_id in {ActionId.PROJECT_ROLE_GRANT_ISSUE, ActionId.PROJECT_ROLE_GRANT_REVOKE}:
-                locked = await lock_project_role_mutation_principals(
-                    self._admin, context, scope, action_id,
-                )
-            else:
-                locked = await self._admin.lock_request_actor(
-                    context.identity_link_id, context.actor_profile_id
-                )
-            context = self._locked_human_context(locked, context)
-            if action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE and scope.grant_id is None:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-                )
-            grant = await self._admin.find_effective_grant(
-                context.actor_profile_id,
-                action.permission_id,
-                scope_project_id=scope.project_id,
-                system_scope_only=scope.project_id is None,
-                for_update=True,
-                **adapter_bindings.finance_authority_grant_filters(action_id),
-                **contribution_policies.policy_finance_grant_filters(action_id),
+            context, grant = await lock_admin_mutation_authority(
+                self._admin, context, scope, action_id, action.permission_id, self._locked_human_context,
             )
-            if grant is None:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                )
         elif action_id in _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS:
             context, grant = await self._prepare_project_manager(
                 context, action.permission_id, scope, action_id,
@@ -1035,7 +1006,7 @@ class AuthorizationService:
             grant_filters.update(
                 adapter_bindings.finance_authority_grant_filters(action.action_id)
             )
-        grant_filters.update(contribution_policies.policy_finance_grant_filters(action.action_id))
+        grant_filters.update({**contribution_policies.policy_finance_grant_filters(action.action_id), **checker_registry.checker_registry_grant_filters(action.action_id)})
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,

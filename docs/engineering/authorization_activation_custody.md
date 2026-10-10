@@ -70,10 +70,11 @@ use the fixed `workstream.checker.post_submit` identity and phase-specific recei
 metadata-only packet types without authority or a resolver. REV-03B normalized
 packet storage, REV-04A immutable Review source storage, REV-04B FinalAcceptance
 storage, CON-03C persistence, CON-07 participation and REV-04C hidden shared
-acceptance/TASK/CON composition are delivered. Hidden routing handlers
-ARCH-04E1B-B are next. Mandatory exact AUTH receipts, database complete-effect
-custody, shared audit/outbox and fulfillment-root custody, and both TASK-before-
-CHECKERS currentness races remain prerequisites of activation at ARCH-04E2-B.
+acceptance/TASK/CON composition are delivered. ARCH-04E2-B supplies mandatory
+actual AUTH receipts, database complete-effect custody, shared audit/outbox and
+currentness protection under the scoped lifecycle controller. B8 supplies hidden completion delivery
+consuming that committed operation. Remediation is next; production registration
+remains separate.
 
 Runtime owner `WS-XINT-002-07` retains catalogue custody. The only approved
 v0.1 availability transition is 07A packet materialization. Evidence binding
@@ -138,10 +139,11 @@ unchanged until each exact XINT-003 activation wave.
 cardinalities `2/5/3/1/1/5/2` in the table order above. The seven historical
 REV runtime owner values remain registered for those actions until their exact
 activation waves replace them. It changes no mapping or availability and
-adds no migration. All 19 actions remain planned and unavailable; these AUTH
-custodian labels grant no reviewer, Operator, or service authority. The four
-approved lifecycle actions remain planned and unavailable. The shared PREP
-foundation is already complete; its existence grants no lifecycle authority.
+adds no migration. These custodian labels alone grant no authority. Subsequent
+REV-12A4A activates only the internal `review.lifecycle.activation.manage` slice
+for exact system Operator transitions; the other 18 transferred actions remain
+planned and unavailable. Of the four 02C lifecycle registrations, only that
+controller action is active. PREP alone grants no lifecycle authority.
 
 The completed front-loaded readiness waves are:
 
@@ -203,12 +205,16 @@ it. Any activation requires a separate approved REV-owned intent.
 ## Completed prepared mutation prerequisite
 
 `WS-AUTH-001-PREP` delivered a session-bound, action-bound, opaque, single-use,
-nonserializable prepared authority handle:
+nonserializable prepared authority handle. Lock placement follows the feature
+owner's contract: REV-fenced operations take REV and required TASK custody before
+AUTH, with TASK before required CHECKERS currentness; other operations retain
+their owner-specific order. No human review runtime is enabled by this protocol:
 
 ```text
-AUTH locks canonical current authority
--> feature locks its records
--> feature recomposes final typed facts
+feature establishes prerequisite custody under its owner lock contract
+-> AUTH prepares canonical current authority
+-> feature completes required custody without reversing that contract
+   and recomposes final typed facts
 -> AUTH evaluates exactly once and stages decision evidence
 -> feature participants flush
 -> route or service command commits once
@@ -305,26 +311,31 @@ behavior stays unavailable until its exact activation is implemented and
 verified. Each PR uses the normal evidence, review and human merge workflow;
 planning records do not introduce an additional administrator checkpoint.
 
-### Disabled shared lifecycle foundation
+### Scoped shared lifecycle controller
 
-[REV-12A1](../../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A1.md) provides
-immutable disabled generation-zero storage and caller-root transaction locking.
-It does not activate `review.lifecycle.activation.manage` or an acceptance writer.
-AUTH's scalar activation contract binds its inherited phase to current_phase;
-generation zero requires disabled. Those facts do not prove adjacency or grant
-authority. Hidden AUTH preparation and nominal caller-session receipt projection
-are delivered before CON-07
-flush-only participant proof. Mandatory persisted source/FinalAcceptance custody
-accompanies the first genuine allowed consequence at 04E2-B, before production
-composition or consumption; no standalone allow is committed. Authorized
-REV transitions and real obligation/cutoff proof remain required before live
-shared acceptance, without requiring live human-review queues first.
+[REV-12A4A](../../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md)
+extends REV-12A1's same singleton and root-transaction fence. The internal
+`review.lifecycle.activation.manage` action requires live system Operator
+authority and binds the exact command, reviewed manifest and persisted
+observations. Controller, immutable transition history and actual AUTH evidence
+commit together. Unchanged operation replay requires fresh authority and does
+not write another event. New participant effects require a live nonzero
+generation; verified terminal replay uses the current generation in stopped
+phases without rewriting contribution or award facts.
+
+This is not acceptance authority. The initial manifest refuses retained
+pre-authority FinalAcceptance rows before entering live. ARCH-04E2-B supplies
+mandatory source receipts and complete atomic consequences in a hidden operation.
+B8 supplies hidden completion delivery. Production routing, human review and
+payment delivery remain unavailable.
+Obligation roots, ordinals and cutoff/drain machinery are deferred until
+fulfillment activation; conditional awards remain atomic in the first path.
 
 ARCH-04E1B-A adds immutable TASK routing-request and future source-ID reservation,
 with caller-owned rollback and current-completion replay checks. It does not
 construct acceptance-source commitments or consume receipt-shaped values as
 AUTH evidence. ARCH-04E2-A strict preparation and nominal fixed-router adapter are
-delivered through canonical PREP, but the planned action denies before a handle
-or receipt exists. Persisted source projection, actual immutable
-AUTH-event/service-actor verification and atomic publication remain required
-before consequence activation.
+delivered through canonical PREP. ARCH-04E2-B activates this exact action only
+inside the hidden complete outcome, with actual immutable AUTH-event/service
+verification and atomic source publication. No production routing handler is
+registered.

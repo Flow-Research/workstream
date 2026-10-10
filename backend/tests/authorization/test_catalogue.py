@@ -22,10 +22,11 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     from tests.authorization.catalogue_fixtures import (
         historical_permissions, new_permissions, expected
     )
+
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 144
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 145
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -104,8 +105,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 106,
-        ActionAvailability.PLANNED: 38,
+        ActionAvailability.ACTIVE: 109,
+        ActionAvailability.PLANNED: 36,
     }
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
     with pytest.raises(ValueError, match="not active"):
@@ -114,11 +115,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
 
 
-@pytest.mark.parametrize("action", [
-    ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
-    ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
-    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
-])
+@pytest.mark.parametrize(
+    "action",
+    [
+        ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_CORRECTION_REQUEST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+    ],
+)
 def test_proposal_actions_have_exact_executable_authority(action):
     definition = resolve_executable_action(action)
     assert definition is ACTION_BY_ID[action]
@@ -195,3 +199,41 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
             ActionAvailability.ACTIVE,
         ),
     }
+
+
+def test_active_fixed_service_actions_are_exact():
+    """Only the explicitly active fixed-service actions are executable."""
+    active_internal = {
+        ActionId.CHECKER_POST_SUBMIT_EXECUTE,
+        ActionId.CHECKER_POST_SUBMIT_FINALIZE,
+        ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
+        ActionId.OUTBOX_DISPATCH,
+        ActionId.TASK_POST_SUBMIT_ROUTE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
+        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+        ActionId.PROJECT_SETUP_RUN_UPDATE,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
+    }
+    assert {
+        action
+        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
+        for action in actions
+        if ACTION_BY_ID[action].availability is ActionAvailability.ACTIVE
+    } == active_internal
+    assert all(
+        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
+        for action in actions
+        if action not in active_internal
+    )
+    with pytest.raises(TypeError):
+        SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]

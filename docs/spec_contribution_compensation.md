@@ -54,8 +54,8 @@ The false branch requires the exact current successful routing manifest, locked
 the [shared acceptance contract](spec_review_lifecycle.md#finalacceptance).
 Required-check success or raw checker output alone cannot create FinalAcceptance.
 The delivered ARCH-04E1A route-neutral source row alone also cannot satisfy this
-boundary; later publication must add mandatory exact routing/owner-receipt
-custody to that same table before CON consumes the REV-owned acceptance fact.
+boundary. ARCH-04E2-B adds mandatory exact routing/owner-receipt custody to
+that same table before CON consumes the REV-owned acceptance fact.
 
 The hidden CON submitter participant is delivered as a source-neutral,
 flush-only consumer of a real stored FinalAcceptance and assignment lineage. It
@@ -281,12 +281,13 @@ CON-03C delivers immutable source and award storage. CON-07 adds the hidden
 source-neutral accepted-submission participant and complete frozen award-set
 owner. REV-04C composes that participant with hidden FinalAcceptance and TASK
 accepted/completed effects in one caller-owned transaction for either source.
-No production recognition route, authorized acceptance operation, reviewer
-participant or fulfillment consumer is registered. Before activation,
-originating Review/FinalAcceptance authority, mandatory source receipts and
-fulfillment-root ordinal custody must be installed; retained pre-authority
-sources and dependent contribution/award rows must cause refusal unchanged,
-never receipt backfill or deletion.
+ARCH-04E2-B supplies the hidden authorized routing outcome with mandatory
+source receipts and complete atomic consequences. No production recognition
+route, reviewer participant or fulfillment consumer is registered. Human decision
+authority remains future work. Migration refuses retained pre-authority sources
+and dependent contribution/award rows unchanged, never backfilling receipts or
+deleting evidence. REV-12A4A supplies scoped lifecycle control;
+fulfillment-root ordinal custody is required only before fulfillment activation.
 
 Canonical fields:
 
@@ -583,20 +584,21 @@ The target decision boundary has two ordered, operation-specific CON methods in
 the initiating command's caller-owned session. CON-07 delivers the source-neutral
 submitter port, and REV-04C invokes it from the hidden source-neutral acceptance
 participant; the reviewer participant remains future human-lifecycle work.
-Human decision composition will use the reviewer method. Before either trigger
-uses the delivered participant, its same input/schema must evolve to require the
-verified AUTH event without an optional/default path, and the complete authorized
-shared acceptance operation must add shared audit/outbox staging. A combined
+Human decision composition will use the reviewer method. ARCH-04E2-B makes the
+verified AUTH event mandatory on the shared acceptance input/schema, with no
+optional/default path, and supplies audit/outbox staging in the complete hidden
+routing outcome. Human decision authority and composition remain pending. A combined
 request carrying nullable FinalAcceptance or both actors' source and policy
 facts is prohibited.
 
-Human decision order (false routing omits this reviewer operation):
+Planned human decision order (false routing omits this reviewer operation):
 
 ```text
-AUTH locks and revalidates exact reviewer authority
--> AUTH prepares review.decision for this session/action/actor/request
--> REV locks idempotency, release fence, queue, lease, task, assignment,
-   Submission, predecessor Review, findings, and resolutions
+REV acquires its root lifecycle fence, then task, assignment and Submission
+-> REV acquires queue, lease, predecessor Review, findings and resolutions
+   in the future decision chunk's proven deterministic order
+-> AUTH locks exact reviewer authority and prepares review.decision
+   for this session/action/actor/request
 -> REV recomposes final typed resource facts
 -> AUTH consumes the handle, evaluates once, and stages decision evidence
 -> REV appends immutable Review, findings, and resolutions
@@ -606,6 +608,10 @@ AUTH locks and revalidates exact reviewer authority
 -> REV stages shared audit and outbox rows from invoked CON results
 -> request route or service command commits once
 ```
+
+Exact idempotency and dependent-row ordering remains part of the decision
+chunk's required PostgreSQL concurrency proof before activation. AUTH custody
+must not precede the REV fence or TASK parent locks.
 
 ### Reviewer operation
 
@@ -680,10 +686,10 @@ Its delivered typed input contains only immutable scalar IDs for project, task,
 Submission, FinalAcceptance, TaskAssignment, submitter and the assignment-frozen
 ContributionPolicyVersion, plus the stabilized artifact hash, caller correlation
 UUID and expected lifecycle generation. It carries no authorization decision,
-receipt-shaped value or caller-selected contribution/award ID. Before production
-consumption, the enclosing REV input must require the exact AUTH decision-event
-receipt with no optional/default path; the complete shared operation owns
-authority and request idempotency.
+receipt-shaped value or caller-selected contribution/award ID. ARCH-04E2-B makes the exact AUTH decision-event receipt mandatory on the
+enclosing REV input, with no optional/default path. The complete hidden routing
+operation consumes AUTH and owns request idempotency; CON remains a typed
+participant in that transaction.
 
 It contains no direct Review or ReviewLease contribution-source fields. It
 creates or exactly replays one `accepted_submission`, evaluates only the frozen
@@ -779,8 +785,11 @@ CompensationAward inserts inside `review.decision` add no
 
 ### Prepared mutations
 
-For mutations, AUTH first locks and revalidates current human actor/link/exact
-grant rows or fixed-service actor/link rows. AUTH returns one opaque,
+Mutations follow their owning feature's lock contract. REV-fenced operations
+acquire REV and any required TASK custody before AUTH; TASK precedes required
+CHECKERS currentness custody. Other callers retain their owner-specific order.
+During preparation, AUTH locks and revalidates current human actor/link/exact
+grant rows or fixed-service actor/link rows and returns one opaque,
 non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 
 - caller session;
@@ -789,7 +798,8 @@ non-serializable, single-use `PreparedAuthorizationHandle` bound to:
 - idempotency key;
 - canonical request digest.
 
-The owning feature then locks product rows and recomposes final typed facts.
+With all required product and authority locks retained, the owning feature
+recomposes final typed facts.
 AUTH consumes the handle, evaluates exactly once, and stages evidence. Reused,
 serialized, caller-constructed, cross-session/action/actor/request,
 binding-mismatched, or authority-lost handles fail before product mutation. A
@@ -1070,13 +1080,13 @@ REV-12A owns the only `JointLifecycleReleaseControl` and
 generation, or availability writer.
 REV-12A1 delivers its disabled generation-zero persistence and caller-root
 mutation fence. The [shared acceptance order](spec_review_lifecycle.md#implementation-order-and-required-proof)
-now includes delivered hidden AUTH preparation, CON-07 participation and REV-04C
-hidden FinalAcceptance/TASK/CON composition, while
-mandatory persisted receipt custody remains required before production
-composition or consumption. Actual CON root
+includes delivered hidden AUTH preparation, CON-07 participation, REV-04C
+FinalAcceptance/TASK/CON composition and ARCH-04E2-B mandatory persisted receipt
+custody and complete authorized outcomes. B8 supplies hidden completion delivery. Remediation and
+production composition remain pending. Actual CON root
 storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. Later REV-12A drain/operator
-work extends this same controller; it is not a prerequisite on live human
+fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
 Every creation, requeue, successor, retry-root, and repair path that can admit a
@@ -1202,19 +1212,21 @@ precede the delivered REV-04B acceptance, CON-03C contribution/award storage and
 CON-07 flush-only submitter participation. REV-12A1 supplies the disabled
 controller/fence mechanics used through CON's consumer-owned acquisition
 Protocol; TASK request staging (04E1B-A), hidden AUTH preparation (04E2-A) and
-REV-04C hidden shared composition are also delivered. Hidden handlers 04E1B-B
-are next; they must lock TASK before CHECKERS currentness and prove both
-acceptance/successor-generation race orders. These isolated controls prove
-mechanical behavior, not acceptance authority. At 04E2-B, make the exact AUTH
-decision-event receipt mandatory on the same strict input with no
-optional/default path; add database-enforced FinalAcceptance/TASK/CON
-complete-set closure, shared audit/outbox and exact activation to prove the first genuine allow
-with source, FinalAcceptance, TASK effects, CON rows and audit/outbox in one
-transaction. No standalone allow or fabricated authority fixture is permitted. Actual root ordinal custody and authorized lifecycle
-transition/drain proof precede live AUTH routing composition.
+REV-04C hidden shared composition and ARCH-04E2-B complete authorized outcomes
+are delivered. The latter requires the actual AUTH decision on the same strict
+input, validates stored source authority, and stages FinalAcceptance, TASK/CON,
+applicable awards and audit/outbox together. Database closure rejects orphan
+allows and incomplete outcomes. The authorized acceptance/successor race is
+covered; B8 supplies hidden completion delivery with invocation, generation and
+commit-before-acknowledgment proof. Next prove remediation, then enable production
+composition and false-guide readiness. Conditional award facts remain atomic for paid and unpaid policies.
+The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
+unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
+successor manifest enables fulfillment, not before this contribution path.
 False guide activation follows joint proof. A stable Review FK target is
-not live ReviewLease/queue/decision behavior. The shared lifecycle/obligation
-fence is required for either trigger; human runtime and fulfillment endpoints
+not live ReviewLease/queue/decision behavior. The shared lifecycle
+fence is required for either acceptance trigger; obligation writers join that same
+fence before fulfillment admission is enabled. Human runtime and fulfillment endpoints
 are not prerequisites for accepting without a reviewer. The older interleaving
 below describes the human branch, not a second acceptance implementation.
 

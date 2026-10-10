@@ -44,6 +44,10 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
 
 def test_checker_delivery_and_routing_preparation_partition_every_node_once() -> None:
     delivery = {
+        "tests/checkers/external/test_contracts.py",
+        "tests/checkers/external/test_migration.py",
+        "tests/checkers/external/test_postgresql.py",
+        "tests/checkers/external/test_registry.py",
         "tests/checkers/execution/test_results.py",
         "tests/checkers/execution/test_execution.py",
         "tests/checkers/execution/test_coordination.py",
@@ -124,9 +128,15 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/tasks/submission_dispatch/test_replay.py",
             "tests/tasks/submission_dispatch/test_rollback.py",
             "tests/tasks/submission_dispatch/test_storage.py",
+            "tests/reviews/acceptance/test_prepared.py",
+            "tests/tasks/post_submit_routing/test_outcome_concurrency.py",
+            "tests/tasks/post_submit_routing/test_outcome.py",
+            "tests/tasks/post_submit_routing/test_outcome_storage.py",
+            "tests/tasks/post_submit_routing/test_outcome_migration.py",
             "tests/reviews/acceptance/test_participant_contracts.py",
             "tests/reviews/acceptance/test_participation.py",
             "tests/reviews/acceptance/test_participation_transactions.py",
+            "tests/reviews/lifecycle/test_participant_control.py",
             "tests/tasks/post_submit_routing/test_evaluation_guard.py",
             "tests/tasks/post_submit_routing/test_evaluation_currentness.py",
             "tests/tasks/post_submit_routing/test_review_admission_currentness.py",
@@ -261,6 +271,12 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         == modules_by_lane["task_lifecycle_b"]
         == modules_by_lane["task_lifecycle_c"]
         == {
+            "tests/checkers/execution/test_completion_evidence.py",
+            "tests/checkers/execution/test_completion_contract.py",
+            "tests/tasks/post_submit_routing/test_failure_completion.py",
+            "tests/tasks/evaluation_delivery/test_completion.py",
+            "tests/tasks/evaluation_delivery/test_completion_contracts.py",
+            "tests/tasks/evaluation_delivery/test_completion_custody.py",
             "tests/authorization/submission_history/test_reads.py",
             "tests/authorization/submission_history/test_privacy.py",
             "tests/authorization/submission_history/test_storage.py",
@@ -393,6 +409,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
         "tests/reviews/packet/test_storage.py",
         "tests/reviews/lifecycle/test_contracts.py",
         "tests/reviews/lifecycle/test_storage.py",
+        "tests/reviews/lifecycle/test_transition_storage.py",
         "tests/reviews/lifecycle/test_fence.py",
         "tests/reviews/lifecycle/test_migration.py",
         "tests/reviews/acceptance/test_contracts.py",

@@ -37,7 +37,8 @@ or payment operations. Typed capability ports extend it and own their methods:
 ExternalServiceAdapter
 |- IdentityIssuerVerifier
 |- ProjectGuideAgentRuntime
-`- ArtifactStore
+|- ArtifactStore
+`- ExternalCheckerExecutionAdapter (planned runtime adoption)
 ```
 
 Concrete implementations satisfy explicit capability ports:
@@ -54,6 +55,14 @@ Each capability exposes a typed factory based on
 `ExternalServiceAdapterFactory[TAdapter]`. The factory owns explicit provider
 registration, duplicate-provider rejection, unknown-provider failure, typed
 construction, and stable configuration-error mapping.
+
+The checker capability already publishes a normalized pre/post request/result
+contract and immutable digest-pinned metadata registry. That registry is data,
+not an adapter factory: it cannot select Python code, discover plugins, grant
+execution authority or construct a transport. A later runtime chunk must add
+the typed `ExternalCheckerExecutionAdapter` and its explicit composition-root
+registration while preserving CHECKERS request/lease/result ownership and ART
+material custody. No checker adapter is installed by the registry foundation.
 
 Registration is explicit in the FastAPI or Celery composition root.
 Runtime plugin discovery, import scanning, mutable global registration, and

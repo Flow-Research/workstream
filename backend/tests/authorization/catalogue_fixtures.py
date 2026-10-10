@@ -231,7 +231,7 @@ REV_CUSTODY_EXPECTATIONS = {
     "review.lifecycle.activation.manage": (
         "operations.reconcile.run",
         "WS-XINT-003-08B",
-        "planned",
+        "active",
     ),
 }
 
@@ -269,6 +269,7 @@ expected = {
     "task.post_submit.route": ("task.post_submit.route", "WS-ARCH-001-04E2"),
     "checker.post_submit.execute": ("checker.post_submit.execute", "WS-ARCH-001-04D2"),
     "checker.post_submit.finalize": ("checker.post_submit.finalize", "WS-ARCH-001-04D2"),
+    "checker.registry.register": ("operations.reconcile.run", "PILOT-04"),
     "task.submission.list": ("submission.read_own", "task-checker-auth-cleanup"),
     "submission.read": ("submission.read_own", "task-checker-auth-cleanup"),
     "submission.checker_run.list": ("submission.read_own", "task-checker-auth-cleanup"),
@@ -439,6 +440,9 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "task.post_submit.route",
+    "checker.registry.register",
+    "review.lifecycle.activation.manage",
     "checker.post_submit.execute",
     "checker.post_submit.finalize",
     "artifact.post_submit.checker_input.materialize",

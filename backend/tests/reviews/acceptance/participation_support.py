@@ -1,110 +1,9 @@
-"""Real human-source composition for hidden shared-acceptance integration proof."""
-
-from uuid import UUID
+"""Outcome observations and explicitly untrusted lifecycle-denial candidates."""
 
 from sqlalchemy import text
-
 from app.core.identifiers import new_record_id
-from app.modules.compensation.awards.participant import CompensationAwardParticipant
-from app.modules.contributions.records.participant import SubmitterContributionParticipant
-from app.modules.reviews.acceptance.participant import FinalAcceptanceParticipant
 from app.modules.reviews.api.acceptance import FinalAcceptanceRequest
-from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
-from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
 from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsRequest
-
-
-async def prepare_review_pending(h) -> None:
-    """Arrange the retained human-review prestate without claiming runtime authority."""
-    async with h.factory() as session, session.begin():
-        result = await session.execute(
-            text(
-                "UPDATE public.workstream_tasks SET status='review_pending' "
-                "WHERE id=:task_id AND project_id=:project_id"
-            ),
-            {"task_id": h.acceptance.task_id, "project_id": h.acceptance.project_id},
-        )
-        assert result.rowcount == 1
-        result = await session.execute(
-            text(
-                "UPDATE public.task_assignments "
-                "SET accepted_at=coalesce(accepted_at, clock_timestamp()) "
-                "WHERE id=:assignment_id AND status='active' AND released_at IS NULL"
-            ),
-            {"assignment_id": h.review.task_assignment_id},
-        )
-        assert result.rowcount == 1
-        state = (
-            await session.execute(
-                text(
-                    "SELECT task.status AS task_status, assignment.status AS assignment_status, "
-                    "assignment.accepted_at, assignment.released_at "
-                    "FROM public.workstream_tasks task "
-                    "JOIN public.task_assignments assignment ON assignment.id=:assignment_id "
-                    "WHERE task.id=:task_id"
-                ),
-                {
-                    "task_id": h.acceptance.task_id,
-                    "assignment_id": h.review.task_assignment_id,
-                },
-            )
-        ).mappings().one()
-        assert state["task_status"] == "review_pending"
-        assert state["assignment_status"] == "active"
-        assert state["accepted_at"] is not None
-        assert state["released_at"] is None
-
-
-async def request_for(h, **changes) -> FinalAcceptanceRequest:
-    async with h.factory() as session:
-        source = (
-            await session.execute(
-                text(
-                    "SELECT s.version, s.task_assignment_id, s.contributor_id, "
-                    "s.contribution_policy_version_id, s.artifact_content_id, content.sha256 "
-                    "FROM public.submissions s "
-                    "JOIN public.artifact_contents content ON content.id=s.artifact_content_id "
-                    "WHERE s.id=:submission_id"
-                ),
-                {"submission_id": h.acceptance.submission_id},
-            )
-        ).mappings().one()
-    values = {
-        "acceptance": h.acceptance,
-        "task_effects": TaskAcceptedEffectsRequest(
-            project_id=h.acceptance.project_id,
-            task_id=h.acceptance.task_id,
-            assignment_id=UUID(str(source["task_assignment_id"])),
-            submission_id=h.acceptance.submission_id,
-            submission_version=source["version"],
-            contributor_id=UUID(str(source["contributor_id"])),
-            contribution_policy_version_id=source["contribution_policy_version_id"],
-            content_id=UUID(str(source["artifact_content_id"])),
-            content_sha256=source["sha256"],
-            final_acceptance_id=h.acceptance.id,
-            expected_task_status="review_pending",
-        ),
-        "correlation_id": new_record_id(),
-        "expected_generation": 0,
-    }
-    values.update(changes)
-    return FinalAcceptanceRequest(**values)
-
-
-def participant(session) -> FinalAcceptanceParticipant:
-    fence = PostgresJointLifecycleMutationFence(session)
-    tasks = TaskAcceptedEffectsParticipant(session, fence=fence)
-    contributions = SubmitterContributionParticipant(
-        session,
-        fence=fence,
-        awards=CompensationAwardParticipant(session),
-    )
-    return FinalAcceptanceParticipant(
-        session,
-        fence=fence,
-        tasks=tasks,
-        contributions=contributions,
-    )
 
 
 async def stored_effects(session, task_id) -> dict[str, object]:
@@ -128,12 +27,52 @@ async def stored_effects(session, task_id) -> dict[str, object]:
     return dict(row)
 
 
-async def stage_terminal_task(session, request: FinalAcceptanceRequest) -> None:
-    await session.execute(
-        text("UPDATE public.workstream_tasks SET status='accepted' WHERE id=:id"),
-        {"id": request.task_effects.task_id},
-    )
-    await session.execute(
-        text("UPDATE public.task_assignments SET status='completed' WHERE id=:id"),
-        {"id": request.task_effects.assignment_id},
+async def denial_only_request(h, generation: int) -> FinalAcceptanceRequest:
+    """Untrusted candidate for lifecycle denial; never valid source authority.
+
+    These allocated receipt/source IDs deliberately have no stored AUTH event or
+    manifest. Tests using this value must stop at the lifecycle gate, before any
+    source lookup or write. Successful acceptance uses apply_outcome instead.
+    """
+    from app.adapters.tasks import routing_source_preparer
+    from app.modules.checkers.api.execution import EvaluationCompletion
+    from app.modules.reviews.api.acceptance import FinalAcceptanceInput
+
+    async with h.factory() as session, session.begin():
+        prepared = await routing_source_preparer(session).prepare(
+            h.envelope.claim.event_id,
+            EvaluationCompletion.model_validate_json(h.envelope.payload_json),
+        )
+        source = prepared.source
+        await session.rollback()
+    acceptance_id = new_record_id()
+    return FinalAcceptanceRequest(
+        acceptance=FinalAcceptanceInput(
+            id=acceptance_id,
+            project_id=source.project_id,
+            task_id=source.task_id,
+            submission_id=source.submission_id,
+            acceptance_source="task_post_submit_route",
+            source_review_id=None,
+            source_routing_manifest_id=source.id,
+            accepted_submitter_id=source.contributor_id,
+            recorded_by=new_record_id(),
+            policy_context_ref=source.locked_policy.locked_review_policy_id,
+            source_authorization_decision_id=new_record_id(),
+        ),
+        task_effects=TaskAcceptedEffectsRequest(
+            project_id=source.project_id,
+            task_id=source.task_id,
+            assignment_id=source.assignment_id,
+            submission_id=source.submission_id,
+            submission_version=source.submission_version,
+            contributor_id=source.contributor_id,
+            contribution_policy_version_id=source.contribution_policy_version_id,
+            content_id=source.content_id,
+            content_sha256=source.content_sha256,
+            final_acceptance_id=acceptance_id,
+            expected_task_status="evaluation_pending",
+        ),
+        correlation_id=new_record_id(),
+        expected_generation=generation,
     )

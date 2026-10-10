@@ -57,6 +57,10 @@
       "target": "backend/app/adapters/projects/contribution_validation.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/tasks/routing_acceptance.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/api_controls.py"
     },
@@ -514,6 +518,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/checker_registry_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/contribution_policy_authorization.py"
     },
     {
@@ -535,6 +543,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/domain/audit_targets.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/checker_registry.py"
     },
     {
       "group": "auth",
@@ -563,6 +575,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/domain/guide_proposals.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/lifecycle.py"
     },
     {
       "group": "auth",
@@ -658,6 +674,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/lifecycle_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/lifecycle_schemas.py"
     },
     {
@@ -702,6 +722,14 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_admin_authority.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_lifecycle_replay.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/prepared_post_submit_replay.py"
     },
     {
@@ -711,6 +739,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared_proposal_replay.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_routing_replay.py"
     },
     {
       "group": "auth",
@@ -794,6 +826,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/external.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/history.py"
     },
     {
@@ -855,6 +891,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/execution_results.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/external_registry.py"
     },
     {
       "group": "artifacts",
@@ -1398,6 +1438,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/reviews/lifecycle/service.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/reviews/models.py"
     },
     {
@@ -1458,6 +1502,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/routing_outcome.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/submission_command.py"
     },
     {
@@ -1494,6 +1542,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/evaluation_completion_delivery.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/evaluation_delivery.py"
     },
     {
@@ -1511,6 +1563,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/post_submit_routing/models.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/post_submit_routing/outcome.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/post_submit_routing/ports.py"
     },
     {
       "group": "lifecycle",
@@ -1713,7 +1773,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "ef9821de8c9f801b8883d9d485e320cae5283e7ae5abd9bac3ad2ab31042731a",
+  "authority_digest": "5153c169cd97b269c67de909ffee26462e29ef5b4fac3fa86fc6ac4ab250d1c3",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

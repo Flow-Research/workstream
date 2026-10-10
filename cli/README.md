@@ -15,6 +15,10 @@ context/intake requirements:
 | `workstream project create --name TEXT --slug TEXT --idempotency-key UUID` | `POST /api/v1/projects` |
 | `workstream project guide create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides` |
 | `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
+| `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
+| `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/proposal` |
+| `workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/pre-submission-approval` |
+| `workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/post-submission-policies/POLICY_ID` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -75,7 +79,7 @@ and preserving the successful API JSON.
 Exit status is `0` for success, `1` for API/network/response failure, and `2`
 for invalid arguments or configuration. JSON requests time out after 12 seconds;
 JSON responses default to a 64 KiB bound (guide declaration and document-bearing
-work context use 2 MiB wire bounds). Original downloads stream to private files,
+work context use 2 MiB wire bounds; exact guide proposals use 8 MiB). Original downloads stream to private files,
 bounded by the advertised byte count and ART's 512 MiB hard ceiling. Downloads
 and original uploads allow up to two minutes for response headers and ten minutes overall,
 including transfer; connection/TLS timeouts and redirect/proxy refusal remain.
@@ -187,6 +191,186 @@ is a known denial; dropped, malformed, mismatching or unexpected responses are
 unknown outcomes. An otherwise valid unconfirmed-storage status also exits 1,
 sets `outcome_unknown` and leaves stdout empty rather than reporting success.
 Diagnostics never include file paths, contents or raw provider/transport errors.
+
+## Inspect current guide setup
+
+```sh
+workstream project guide setup PROJECT_ID GUIDE_ID --output json
+```
+
+This reads the latest setup for that exact guide, rather than replaying its
+initial creation receipt. The API owns current scoped diagnostic authority,
+actor lifecycle, project/guide membership and compilation lineage. The CLI
+makes one public GET with the caller's bearer; no polling, role preflight,
+follow-up calls, setup execution or retry is added.
+
+JSON output preserves the complete validated API object. Text renders all
+fields with terminal escaping, including nullable diagnostic and compilation
+selectors. UUID identities and timestamps are checked; the generation integer
+retains the backend response range. A pending, blocked, failed or finalized
+setup can be read successfully (exit 0); this is not a successful compilation,
+policy approval, guide activation or authority for another operation.
+Denials, malformed/substituted replies, oversized JSON and network failures
+leave stdout empty and exit 1. The normal 12-second/64KiB JSON bounds apply.
+Deliberate intake and evaluation approvals are separate commands below;
+activation remains future CLI work.
+
+## Inspect an exact finalized guide proposal
+
+```sh
+workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID --output json
+```
+
+Use the explicit finalized compilation ID from setup inspection. The command
+makes one public GET and never substitutes the latest result, polls, fetches
+documents, or executes a decision. Workstream owns fresh scoped manager
+authority and exact project/guide/compilation membership.
+
+JSON retains the complete public package: exact target and hashes, findings
+with display-only source locations, requirement inventory, proposed intake
+policy, pre-submission intake bindings, distinct post-submission evaluation
+bindings, suggestions, notes and nullable approval/post-policy references.
+Text renders that same complete object with terminal escaping. Private runtime
+document handles are not part of this public projection. Unknown/duplicate
+members, missing/null required facts, malformed nested types or substituted
+identities fail with empty stdout. Integer facts retain the backend range.
+
+A blocked, warning-bearing or historical (`current=false`) proposal is still a
+successful read (exit 0), not readiness or authority to approve, correct or
+activate it. Post-submission policy inspection is a separate later operation
+after upstream approval/derivation. No automatic decision, local catalogue
+matching or digest recomputation is added. The existing 12-second deadline
+applies; the 8 MiB wire bound accommodates the stored compilation's 4 MiB
+envelope plus public target/projection overhead without raising other limits.
+
+## Approve an exact pre-submission proposal
+
+Inspect and retain the exact proposal first. Prepare the public approval request
+from that displayed target; this separate preparation does not authorize it:
+
+```sh
+workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
+jq '{target: .target, acknowledged_warning_hashes: []}' proposal.json > approval.json
+# Read the findings. Edit approval.json to acknowledge only the exact displayed
+# warning_hashes you deliberately accept; the backend requires the complete order.
+workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
+```
+
+`--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
+`GuideProposalApprovalInput`, not the entire display package. It requires
+`target`; omitted `acknowledged_warning_hashes` means an empty list, never
+automatic acknowledgment. When replacing an earlier approval, supply both
+`expected_previous_approval_operation_id` and
+`expected_previous_approval_output_digest` from the inspected prior approval.
+The CLI validates the closed wire shape and target/path membership, preserves
+the original JSON bytes, and makes one POST with the caller's bearer and UUID
+key. It does not refetch latest or decide currentness, authority, policy validity
+or which warnings are acceptable. Workstream makes those decisions atomically.
+
+The validated immutable receipt is printed in JSON or escaped text. Its four
+record identities are RFC UUIDv7; its selected artifact policy and exact ordered
+acknowledgments must match the request. Business digests are returned backend
+facts, not recomputed client-side. Success establishes intake approval only:
+post-submission policy approval and guide activation remain separate decisions.
+The API can publish post-policy derivation after commit; this receipt does not
+prove publication, post-policy job delivery, derivation or successful runtime checks.
+
+There is no preflight, automatic retry or HTTP/2 body replay. A complete canonical
+4xx is a known rejection; unconfirmed writes, including malformed/substituted
+success, lost reply, redirect, oversized response or server error, exit nonzero
+with empty stdout and JSON `error.outcome_unknown: true`. Text gives a manual
+replay hint. Retain the exact project, guide, compilation, input contents and key
+if retrying; do not mint a new key or change acknowledgment/previous-target
+facts to recover an uncertain result. Replay still requires fresh backend
+authority. The common 12-second/64 KiB response bounds apply.
+
+Process tests prove request/receipt boundaries and no-replay uncertainty. A real
+socket/Flow/PREP/PostgreSQL journey proves deliberate warning rejection, exact
+approval/replay custody, foreign concealment, suspended and revoked replay denial.
+Retained compilation prerequisites are seeded canonical test custody. The API
+is configured for non-eager in-memory publication and no post-policy worker is
+started. This does not prove broker publication, job delivery, deployed Flow or
+live setup-provider execution.
+
+## Inspect an exact derived post-submission policy
+
+After backend derivation, the proposal read supplies `post_submit_policy_id`:
+
+```sh
+workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID -o json
+```
+
+One public GET returns the complete canonical evaluation policy, its exact
+upstream intake receipt, unified proposal/findings, activation selectors,
+lifecycle/currentness and any saved correction. The four IDs are explicit;
+there is no latest selection, polling, derivation, approval or activation.
+Compiled, approved and superseded/non-current packages can be read while the
+backend still authorizes the caller. Nullable activation selections do not
+imply readiness. A correction shows its exact successor setup identifiers;
+reading it does not dispatch the successor.
+
+JSON preserves the complete response; text escapes untrusted terminal content.
+The CLI validates closed wire shapes and repeated resource identities, not
+catalogue membership, business hashes, authority or lifecycle decisions. Reads
+use the shared 12-second deadline and 8 MiB proposal-response bound. Invalid
+selectors make no request; denied, malformed or substituted responses return
+nonzero with empty stdout.
+
+Built-process tests exercise malformed responses and retained history. The
+real socket/Flow/PREP/PostgreSQL test arranges canonical source prerequisites,
+approves intake through REST, explicitly executes the actual derivation task
+in an isolated subprocess, and checks CLI/REST/SQL parity. REST approval and
+correction arrange later states; CLI reads add neither policy operations nor
+activation. This proves executed worker/SQL derivation, not queued broker
+delivery, live setup inference or deployed Flow. Suspension, revoked authority,
+outsiders and stored foreign-project substitutions remain denied.
+
+## Approve an exact post-submission policy
+
+Inspect the derived evaluation policy first; approval is a separate manager
+decision, not a consequence of reading it:
+
+```sh
+workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID -o json > post-policy.json
+jq '{target: .target}' post-policy.json > post-approval.json
+workstream project guide approve-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID --input post-approval.json --idempotency-key APPROVAL_UUID -o json
+```
+
+The regular UTF-8 JSON input, at most 1 MiB, is the closed public
+`PostPolicyApprovalInput`: exactly `target` from the displayed policy package.
+No editable policy body, warning auto-acknowledgment, latest selection or
+preflight request is added. The CLI sends the original bytes and caller's
+bearer/key in one public POST. Workstream checks currentness and lifecycle for
+a new approval. Exact manual replay rechecks fresh actor/grant authority and
+retained target custody, and can recover the historical immutable receipt.
+
+A successful response is a closed `PostPolicyReceipt` with an RFC UUIDv7
+operation ID, `kind=approve`, null correction and the exact submitted target.
+UUID identity is compared independently of supported text spelling; all source,
+upstream, generation, hash and predecessor facts must match. The CLI does not
+recompute business digests, decide readiness or authorize later operations.
+JSON and escaped text return the validated immutable receipt. Approval never
+activates the guide, executes a checker or accepts submitted work.
+
+The existing 12-second deadline and 64 KiB receipt limit apply. A complete
+canonical 4xx is a known rejection. Malformed/substituted success, an oversized
+response, redirect, server error or lost reply reports an unconfirmed write:
+empty stdout, nonzero exit and JSON `error.outcome_unknown: true`. Text explains
+manual replay with the unchanged project, guide, compilation, policy, input
+bytes and idempotency key. There is no automatic retry, including HTTP/2 replay.
+A prior receipt never exempts the caller from fresh actor/grant authority and
+retained target-custody checks. Replay does not repeat the new-approval
+currentness checks; a second fresh key is not an instruction to approve twice.
+
+Built-process hostile HTTP tests cover full-target substitution and transport
+uncertainty. The real Flow/socket/PREP/PostgreSQL journey arranges canonical
+source prerequisites, publicly approves intake, explicitly applies the actual
+derivation worker, then approves through the CLI. It proves exact REST/SQL
+receipt parity, no duplicate operation/audit on replay, no activation or policy
+body replacement, and denial after suspension or grant revocation. Stored
+foreign projects and unauthenticated/unauthorized callers are also denied.
+Explicit worker application is not queued broker-delivery, live setup inference
+or deployment proof.
 
 ## Create a draft project shell
 

@@ -590,8 +590,12 @@ ART-owned `artifact.verification_job.retry` action through
 `ArtifactOperatorRecoveryPort`; shared outbox dispatch/retry remains outside
 REV ownership.
 
-Review and other sensitive mutations must wait for `WS-AUTH-001-PREP`. That
-protocol locks `AuthorityControl(id=1)` first when final-admin safety applies,
+Sensitive mutations use `WS-AUTH-001-PREP` within each feature owner's lock
+contract. REV-fenced review mutations acquire REV before AUTH preparation;
+when an operation touches TASK or CHECKERS, required TASK parent custody precedes
+AUTH and any required CHECKERS currentness custody.
+Human review runtime remains planned. Within AUTH custody, the protocol locks
+`AuthorityControl(id=1)` first when final-admin safety applies,
 orders multiple principals by ActorProfile ID, then locks each human profile,
 exact link, and exact matched grant or each service profile and exact link.
 Service identity, static matrix membership, and action availability are
@@ -599,8 +603,9 @@ code-owned validations, not database lock targets. Only then does AUTH create an
 internal, non-Pydantic `PreparedAuthorizationHandle` bound to the exact session,
 ActionId, actor reference kind, actor reference, idempotency key, and canonical
 request digest. It is never a route schema or caller input. Consumption matches
-every binding before the feature locks rows and recomposes final facts, then AUTH
-evaluates and stages evidence once before one route/service-command commit.
+every binding against the final facts recomposed from locked feature rows, then
+AUTH evaluates and stages evidence once before durable feature effects and one
+route/service-command commit.
 Crossed tests must cover link revoke, actor suspend/deactivate, exact grant
 revoke, final-admin mutation, and same-session/action cross-actor or
 cross-request substitution. Never serialize or reuse the handle, let dependency
@@ -618,10 +623,14 @@ hidden human `submission.create`, and fixed-service
 Project Manager `project.guide_compilation.review_package.read`,
 `project.submission_artifact_policy.approve`, and
 `project.guide_compilation.correction.request`; POL-05B exposes these with
-exact Project Manager authority and manual correction dispatch. Checker, review, generic artifact-read, and
-the public Submission cutover remain planned. Callers begin and own one root
-transaction, call `prepare`,
-lock their participant rows, compose final typed facts, call `consume` with the
+exact Project Manager authority and manual correction dispatch. REV-12A4A also
+supports the internal `review.lifecycle.activation.manage` action as the sole
+active review exception. Human review and generic artifact-read remain planned,
+as does the public Submission cutover. The controller activates no public
+review route, routing, acceptance or payment delivery. Callers begin and own one root
+transaction and follow their owner's lock contract for participant rows and
+`prepare`; REV-fenced operations acquire REV and any required TASK custody
+before preparation. They compose final locked facts and call `consume` with the
 independently expected ActionId and the same strict request/idempotency input,
 flush participant work, and commit once. AUTH never commits in dependency
 teardown. Roll back the caller transaction on denial, evidence/SQL failure,

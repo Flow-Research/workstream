@@ -40,7 +40,7 @@ async def test_genesis_and_sql_immutability(clean_postgres_database):
         "TRUNCATE public.joint_lifecycle_release_control CASCADE",
     ):
         async with factory() as session:
-            with pytest.raises(DBAPIError, match="joint lifecycle genesis is immutable"):
+            with pytest.raises(DBAPIError, match="joint lifecycle (custody is immutable|transition custody invalid)"):
                 await session.execute(text(statement))
                 await session.commit()
         async with factory() as session:

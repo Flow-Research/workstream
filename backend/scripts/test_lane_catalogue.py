@@ -24,6 +24,8 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/reviews/lifecycle/test_transitions.py",
+    "tests/reviews/lifecycle/test_authority_binding.py",
     "tests/artifacts/test_review_packet_contract.py",
     "tests/authorization/post_submit/test_atomicity.py",
     "tests/authorization/post_submit/test_concurrency.py",
@@ -264,9 +266,15 @@ PROJECT_MODULES = (
     "tests/tasks/submission_dispatch/test_replay.py",
     "tests/tasks/submission_dispatch/test_rollback.py",
     "tests/tasks/submission_dispatch/test_storage.py",
+    "tests/reviews/acceptance/test_prepared.py",
+    "tests/tasks/post_submit_routing/test_outcome_concurrency.py",
+    "tests/tasks/post_submit_routing/test_outcome.py",
+    "tests/tasks/post_submit_routing/test_outcome_storage.py",
+    "tests/tasks/post_submit_routing/test_outcome_migration.py",
     "tests/reviews/acceptance/test_participant_contracts.py",
     "tests/reviews/acceptance/test_participation.py",
     "tests/reviews/acceptance/test_participation_transactions.py",
+    "tests/reviews/lifecycle/test_participant_control.py",
     "tests/tasks/post_submit_routing/test_evaluation_guard.py",
     "tests/tasks/post_submit_routing/test_evaluation_currentness.py",
     "tests/tasks/post_submit_routing/test_review_admission_currentness.py",
@@ -404,6 +412,10 @@ PROJECT_AC_PARTITION_MODULES = (
 # Checker delivery shares project dispatch ownership and the existing
 # three-way partition; exclusive placement exceeded the hosted execution cap.
 CHECKER_DELIVERY_MODULES = (
+    "tests/checkers/external/test_contracts.py",
+    "tests/checkers/external/test_migration.py",
+    "tests/checkers/external/test_postgresql.py",
+    "tests/checkers/external/test_registry.py",
     "tests/checkers/execution/test_results.py",
     "tests/checkers/execution/test_execution.py",
     "tests/checkers/execution/test_coordination.py",
@@ -421,6 +433,14 @@ CHECKER_DELIVERY_MODULES = (
 
 
 TASK_MODULES = (
+    "tests/checkers/execution/test_completion_evidence.py",
+    "tests/checkers/execution/test_completion_contract.py",
+    "tests/tasks/post_submit_routing/test_failure_completion.py",
+
+    # New completion proofs use TASK custody and its measured lane headroom.
+    "tests/tasks/evaluation_delivery/test_completion.py",
+    "tests/tasks/evaluation_delivery/test_completion_contracts.py",
+    "tests/tasks/evaluation_delivery/test_completion_custody.py",
     "tests/reviews/decision/test_contracts.py",
     "tests/reviews/decision/test_storage.py",
     "tests/reviews/decision/test_migration.py",
@@ -550,6 +570,7 @@ LANES = (
             "tests/reviews/packet/test_storage.py",
             "tests/reviews/lifecycle/test_contracts.py",
             "tests/reviews/lifecycle/test_storage.py",
+            "tests/reviews/lifecycle/test_transition_storage.py",
             "tests/reviews/lifecycle/test_fence.py",
             "tests/reviews/lifecycle/test_migration.py",
             "tests/reviews/acceptance/test_contracts.py",

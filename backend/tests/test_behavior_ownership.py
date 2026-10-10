@@ -2303,7 +2303,7 @@ def test_lifecycle_fence_has_exact_ownership() -> None:
     retained = "backend/app/core/config.py"
     trusted = _partition([retained])
     ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected})), trusted)
-    for neighbor in ("backend/app/modules/reviews/lifecycle/service.py", "backend/app/modules/reviews/lifecycle/authority.py"):
+    for neighbor in ("backend/app/modules/reviews/lifecycle/dispatcher.py", "backend/app/modules/reviews/lifecycle/authority.py"):
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected, neighbor})), trusted)
 
@@ -2432,3 +2432,50 @@ def test_assigned_guide_read_ownership_accepts_only_exact_new_modules():
             ownership._validate_additive_partition_transition(
                 _partition(sorted({retained, *expected, neighbor})), trusted
             )
+
+
+def test_scoped_lifecycle_controller_has_exact_ownership() -> None:
+    expected = {
+        "backend/app/modules/authorization/domain/lifecycle.py",
+        "backend/app/modules/authorization/lifecycle_authorization.py",
+        "backend/app/modules/authorization/prepared_lifecycle_replay.py",
+        "backend/app/modules/authorization/prepared_admin_authority.py",
+        "backend/app/modules/reviews/lifecycle/service.py",
+    }
+    assert ownership.REV_12A4A_CONTROL_TARGETS == expected
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected})), trusted)
+    for neighbor in ("backend/app/modules/reviews/lifecycle/fulfillment.py", "backend/app/modules/reviews/lifecycle/dispatcher.py"):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected, neighbor})), trusted)
+
+
+def test_routing_outcome_ownership_excludes_delivery_activation():
+    targets = ownership.ARCH_04E2B_OUTCOME_TARGETS
+    assert targets == {
+        "backend/app/adapters/tasks/routing_acceptance.py",
+        "backend/app/modules/authorization/prepared_routing_replay.py",
+        "backend/app/modules/tasks/api/routing_outcome.py",
+        "backend/app/modules/tasks/post_submit_routing/outcome.py",
+        "backend/app/modules/tasks/post_submit_routing/ports.py",
+    }
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *targets})), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted({
+            retained, *targets, "backend/app/workers/routing_outcome.py",
+        })), trusted)
+
+
+def test_completion_delivery_ownership_does_not_allow_registration():
+    targets = ownership.ARCH_04E1BB8_COMPLETION_TARGETS
+    assert targets == {"backend/app/modules/tasks/evaluation_completion_delivery.py"}
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *targets})), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted({
+            retained, *targets, "backend/app/workers/evaluation_completion_delivery.py",
+        })), trusted)
