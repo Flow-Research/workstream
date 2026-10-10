@@ -70,10 +70,11 @@ use the fixed `workstream.checker.post_submit` identity and phase-specific recei
 metadata-only packet types without authority or a resolver. REV-03B normalized
 packet storage, REV-04A immutable Review source storage, REV-04B FinalAcceptance
 storage, CON-03C persistence, CON-07 participation and REV-04C hidden shared
-acceptance/TASK/CON composition are delivered. Hidden routing handlers
-ARCH-04E1B-B are next. Mandatory exact AUTH receipts, database complete-effect
-custody, shared audit/outbox and the scoped lifecycle manifest, and both TASK-before-
-CHECKERS currentness races remain prerequisites of activation at ARCH-04E2-B.
+acceptance/TASK/CON composition are delivered. ARCH-04E2-B supplies mandatory
+actual AUTH receipts, database complete-effect custody, shared audit/outbox and
+currentness protection under the scoped lifecycle controller. Completion delivery
+consuming that committed operation is next; production registration remains
+separate.
 
 Runtime owner `WS-XINT-002-07` retains catalogue custody. The only approved
 v0.1 availability transition is 07A packet materialization. Evidence binding
@@ -323,9 +324,10 @@ generation; verified terminal replay uses the current generation in stopped
 phases without rewriting contribution or award facts.
 
 This is not acceptance authority. The initial manifest refuses retained
-pre-authority FinalAcceptance rows before entering live; ARCH-04E2-B must add
-mandatory source receipts and complete atomic consequences before production
-consumption. Routing, human review and payment delivery remain unavailable.
+pre-authority FinalAcceptance rows before entering live. ARCH-04E2-B supplies
+mandatory source receipts and complete atomic consequences in a hidden operation.
+Automatic completion delivery and production routing, human review and payment
+delivery remain unavailable.
 Obligation roots, ordinals and cutoff/drain machinery are deferred until
 fulfillment activation; conditional awards remain atomic in the first path.
 
@@ -333,7 +335,7 @@ ARCH-04E1B-A adds immutable TASK routing-request and future source-ID reservatio
 with caller-owned rollback and current-completion replay checks. It does not
 construct acceptance-source commitments or consume receipt-shaped values as
 AUTH evidence. ARCH-04E2-A strict preparation and nominal fixed-router adapter are
-delivered through canonical PREP, but the planned action denies before a handle
-or receipt exists. Persisted source projection, actual immutable
-AUTH-event/service-actor verification and atomic publication remain required
-before consequence activation.
+delivered through canonical PREP. ARCH-04E2-B activates this exact action only
+inside the hidden complete outcome, with actual immutable AUTH-event/service
+verification and atomic source publication. No production routing handler is
+registered.

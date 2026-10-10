@@ -78,11 +78,17 @@ async def test_exact_materialization_reads_verified_original_and_revokes_view(tm
                 "select verified_replica_id,archive_sha256,archive_byte_count,semantic_manifest_sha256 "
                 "from submission_bundle_admissions where id=:id"
             ), {"id": str(material.admission_id)})).one()
+            actual_receipt = await session.scalar(text(
+                "select id from audit_events where action_id='artifact.post_submit.checker_input.materialize' "
+                "and resource_id=:run_id"
+            ), {"run_id": str(execution.lease.reservation.attempt_id)})
+        assert str(material.input_materialization_evidence_id) == str(actual_receipt)
         assert str(material.replica_id) == str(replica[0])
         assert (material.content_sha256, material.byte_count, material.semantic_manifest_sha256) == tuple(replica[1:])
         assert set(asdict(material)) == {"submission_id", "submission_version", "admission_id", "binding_id",
                                         "content_id", "replica_id", "content_sha256", "byte_count",
-                                        "semantic_manifest_sha256", "evaluation"}
+                                        "semantic_manifest_sha256", "evaluation",
+                                        "input_materialization_evidence_id"}
 
 
 async def test_revoked_materializer_denies_before_provider_or_scratch(tmp_path, isolated_database_env):

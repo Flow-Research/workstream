@@ -1,5 +1,7 @@
 """Disabled controller installation preserves populated contribution sources."""
 
+from tests.contributions.records.historical_support import historical_contribution_source
+
 import asyncio
 from uuid import UUID
 
@@ -7,11 +9,10 @@ import asyncpg
 import pytest
 from alembic import command
 
-from tests.historical_submission_fixtures import historical_material_fixture
+from tests.checkers.execution.historical_execution import historical_completed_source
 from app.db import session as db_session
 from tests.contributions.records.support import (
     award_values,
-    contribution_source,
     insert_award,
     insert_record,
 )
@@ -42,7 +43,12 @@ async def test_lifecycle_upgrade_preserves_sources(tmp_path, isolated_database_e
             await connection.close()
         await asyncio.to_thread(command.upgrade, _config(), "0015_contribution_awards")
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with contribution_source(tmp_path, isolated_database_env, paid=True, material_source=historical_material_fixture) as h:
+        async with historical_contribution_source(
+            tmp_path,
+            isolated_database_env,
+            paid=True,
+            completed_source_factory=historical_completed_source,
+        ) as h:
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
             async with h.factory() as session:
                 for record in (h.reviewer_record, h.submitter_record):
@@ -108,7 +114,9 @@ async def test_lifecycle_upgrade_preserves_sources(tmp_path, isolated_database_e
 
 
 async def test_transition_upgrade_preserves_genesis_and_retained_sources(
-    tmp_path, isolated_database_env, migration_lock,
+    tmp_path,
+    isolated_database_env,
+    migration_lock,
 ):
     with migration_lock():
         await db_session.dispose_engine()
@@ -118,10 +126,14 @@ async def test_transition_upgrade_preserves_genesis_and_retained_sources(
             await connection.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
         finally:
             await connection.close()
-        await asyncio.to_thread(command.upgrade, _config(), "0027_markdown_guide_media")
-        async with contribution_source(
-            tmp_path, isolated_database_env, paid=True,
+        await asyncio.to_thread(command.upgrade, _config(), "0024_require_second_review_false")
+        async with historical_contribution_source(
+            tmp_path,
+            isolated_database_env,
+            paid=True,
+            completed_source_factory=historical_completed_source,
         ):
+            await asyncio.to_thread(command.upgrade, _config(), "0027_markdown_guide_media")
             connection = await asyncpg.connect(url)
             try:
                 before = await snapshot(connection)

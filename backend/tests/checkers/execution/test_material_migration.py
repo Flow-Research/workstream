@@ -17,10 +17,12 @@ from types import SimpleNamespace
 
 from app.modules.checkers.post_submit_contracts import make_post_submit_result
 from tests.checkers.post_submit.support import change_request
-from .predecessor_material_helpers import write_terminal
-from .support import reserve
-from .predecessor_support import predecessor_lease
-from .test_material_lineage import terminal_facts
+from .historical_execution import (
+    historical_reserve,
+    historical_lease,
+    historical_terminal_facts,
+    historical_write_terminal,
+)
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -51,36 +53,40 @@ async def retained_snapshot(factory):
 
 @pytest.mark.parametrize("outcome", ["completed", "infrastructure_failed"])
 @pytest.mark.parametrize("valid", [True, False])
-async def test_retained_material_upgrade(tmp_path, isolated_database_env, migration_lock, outcome, valid):
+async def test_retained_material_upgrade(
+    tmp_path, isolated_database_env, migration_lock, outcome, valid
+):
     with migration_lock():
         await predecessor_database(isolated_database_env)
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with historical_material_fixture(tmp_path, isolated_database_env, provision_checker=False) as h:
+        async with historical_material_fixture(
+            tmp_path, isolated_database_env, provision_checker=False
+        ) as h:
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
-            await reserve(h)
-            lease = await predecessor_lease(h)
-            facts = terminal_facts(h, lease, outcome)
+            await historical_reserve(h)
+            lease = await historical_lease(h)
+            facts = historical_terminal_facts(h, lease, outcome)
             material = facts.material.model_dump(mode="json")
             if not valid:
                 # A real but wrong admission is covered separately in direct SQL
                 # tests. This retained 0008 row proves no fabricated ID backfill.
                 material["admission_id"] = str(h.request.submission_id)
             async with h.factory() as session, session.begin():
-                await write_terminal(session, facts, material)
+                await historical_write_terminal(session, facts, material)
             if valid:
                 # Preserve superseded completed/failed history and a current
                 # failure that never received material, plus later replica loss.
                 successor = SimpleNamespace(**vars(h))
                 successor.request = change_request(h.request, evaluation_generation=2,
                                                    evaluation_request_id=new_record_id())
-                await reserve(successor)
-                next_lease = await predecessor_lease(successor)
-                empty = terminal_facts(successor, next_lease, "infrastructure_failed")
+                await historical_reserve(successor)
+                next_lease = await historical_lease(successor)
+                empty = historical_terminal_facts(successor, next_lease, "infrastructure_failed")
                 body = empty.result.model_dump(exclude={"result_digest"})
                 body["infrastructure_failure_code"] = "material_unavailable"
                 empty = empty.model_copy(update={"result": make_post_submit_result(**body), "material": None})
                 async with h.factory() as session, session.begin():
-                    await write_terminal(session, empty, None)
+                    await historical_write_terminal(session, empty, None)
                     await session.execute(text(
                         "update artifact_replicas set availability_state='unavailable', "
                         "content_id=(select id from artifact_contents where id<>:content limit 1) where id=:id"
@@ -99,7 +105,10 @@ async def test_retained_material_upgrade(tmp_path, isolated_database_env, migrat
 
 
 async def test_upgrade_excludes_writer_until_guard_is_installed(
-    tmp_path, isolated_database_env, migration_lock, monkeypatch,
+    tmp_path,
+    isolated_database_env,
+    migration_lock,
+    monkeypatch,
 ):
     import threading
     from alembic.operations import Operations
@@ -107,11 +116,13 @@ async def test_upgrade_excludes_writer_until_guard_is_installed(
     with migration_lock():
         await predecessor_database(isolated_database_env)
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with historical_material_fixture(tmp_path, isolated_database_env, provision_checker=False) as h:
+        async with historical_material_fixture(
+            tmp_path, isolated_database_env, provision_checker=False
+        ) as h:
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
-            await reserve(h)
-            lease = await predecessor_lease(h)
-            facts = terminal_facts(h, lease, "completed")
+            await historical_reserve(h)
+            lease = await historical_lease(h)
+            facts = historical_terminal_facts(h, lease, "completed")
             material = facts.material.model_dump(mode="json") | {"admission_id": str(h.request.submission_id)}
             scanned, resume = threading.Event(), threading.Event()
             execute = Operations.execute
@@ -131,7 +142,7 @@ async def test_upgrade_excludes_writer_until_guard_is_installed(
             async def write():
                 async with h.factory() as session, session.begin():
                     await pid.put(await session.scalar(text("select pg_backend_pid()")))
-                    await write_terminal(session, facts, material)
+                    await historical_write_terminal(session, facts, material)
 
             try:
                 assert await asyncio.to_thread(scanned.wait, 10), "migration did not reach preflight"

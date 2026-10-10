@@ -211,7 +211,6 @@ class EvaluationCoordinator:
             reference=reference, routing_recommendation=classification.routing, result=result
         )
 
-
     async def require_current_completion(
         self, event_id: UUID, completion: EvaluationCompletion
     ) -> VerifiedEvaluationCompletion:
@@ -247,6 +246,7 @@ class EvaluationCoordinator:
             or run.finalize_evidence_id != str(completion.finalize_evidence_id)
             or completion.execute_evidence_id == completion.finalize_evidence_id
             or run.material_custody is None
+            or run.input_materialization_evidence_id is None
         ):
             raise CheckerExecutionUnavailable("checker_current_completion_unavailable")
         material = VerifiedMaterialFacts.model_validate_json(
@@ -262,7 +262,10 @@ class EvaluationCoordinator:
         ):
             raise CheckerExecutionUnavailable("checker_current_completion_unavailable")
         return VerifiedEvaluationCompletion(
-            completion=completion, submission_version=run.submission_version, material=material,
+            completion=completion,
+            submission_version=run.submission_version,
+            material=material,
+            input_materialization_evidence_id=UUID(run.input_materialization_evidence_id),
         )
 
 

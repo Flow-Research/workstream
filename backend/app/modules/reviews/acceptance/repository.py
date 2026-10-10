@@ -10,13 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.reviews.acceptance.models import FinalAcceptance
 from app.modules.reviews.api.acceptance import FinalAcceptanceInput
 from app.modules.reviews.api.acceptance import (
-    FinalAcceptanceConflict, FinalAcceptanceFacts, FinalAcceptanceRequest,
+    FinalAcceptanceConflict,
+    FinalAcceptanceFacts,
 )
-from app.modules.reviews.decision.models import Review
 
 _STRING_IDS = frozenset({
     "project_id", "task_id", "submission_id", "accepted_submitter_id",
-    "recorded_by", "policy_context_ref",
+    "recorded_by", "policy_context_ref", "source_authorization_decision_id",
 })
 
 
@@ -25,27 +25,6 @@ class FinalAcceptanceRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-
-    async def require_human_source(self, request: FinalAcceptanceRequest) -> None:
-        """Bind every relevant effect to the actual immutable accepting Review."""
-        source, task = request.acceptance, request.task_effects
-        review = await self._session.scalar(
-            select(Review).where(
-                Review.id == source.source_review_id,
-                Review.project_id == str(source.project_id),
-                Review.task_id == str(source.task_id),
-                Review.submission_id == str(source.submission_id),
-            ).execution_options(populate_existing=True)
-        )
-        if review is None or (
-            review.decision != "accept"
-            or review.task_assignment_id != str(task.assignment_id)
-            or review.submission_version != task.submission_version
-            or review.reviewer_id != str(source.recorded_by)
-            or review.locked_review_policy_id != str(source.policy_context_ref)
-            or review.artifact_hash != task.content_sha256
-        ):
-            raise FinalAcceptanceConflict("final_acceptance_conflict")
 
     async def persist(
         self, source: FinalAcceptanceInput, *, disposition: Literal["new", "replay"]

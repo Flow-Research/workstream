@@ -27,6 +27,7 @@ async def test_inactive_fixed_actor_denies_phase(tmp_path, isolated_database_env
         lease = None
         if phase != "execute":
             lease, _ = await executor._claim(h.request)
+        final = await final_facts(h, lease) if phase == "finalize" else None
         identity = ServiceIdentity.ARTIFACT_MATERIALIZER if phase == "materialize" else ServiceIdentity.CHECKER_POST_SUBMIT
         async with h.factory() as session, session.begin():
             await session.execute(text("""UPDATE actor_profiles SET status='suspended',
@@ -34,12 +35,14 @@ async def test_inactive_fixed_actor_denies_phase(tmp_path, isolated_database_env
                 WHERE service_identity=:identity"""), {"identity": identity.value})
         before = await snapshot(h)
         consumer = Consumer(h.files)
+
         async def invoke():
             if phase == "execute":
                 return await executor._claim(h.request)
             if phase == "materialize":
                 return await h.service.materialize(ExecuteFacts(request=h.request, lease=lease), consumer)
-            return await executor.finalize(final_facts(h, lease))
+            return await executor.finalize(final)
+
         expected = PostSubmissionMaterializationUnavailable if phase == "materialize" else CheckerExecutionUnavailable
         with pytest.raises(expected):
             await invoke()

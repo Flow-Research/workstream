@@ -20,6 +20,7 @@ async def test_real_audit_insert_failure_rolls_back(tmp_path, isolated_database_
         lease = None
         if phase != "execute":
             lease, _ = await executor._claim(h.request)
+        final = await final_facts(h, lease) if phase == "finalize" else None
         action = ("artifact.post_submit.checker_input.materialize" if phase == "materialize"
                   else "checker.post_submit." + phase)
         before = await snapshot(h)
@@ -42,7 +43,7 @@ async def test_real_audit_insert_failure_rolls_back(tmp_path, isolated_database_
                 return await executor._claim(h.request)
             if phase == "materialize":
                 return await h.service.materialize(ExecuteFacts(request=h.request, lease=lease), consumer)
-            return await executor.finalize(final_facts(h, lease))
+            return await executor.finalize(final)
 
         try:
             error = PostSubmissionMaterializationUnavailable if phase == "materialize" else CheckerExecutionUnavailable

@@ -315,3 +315,49 @@ async def test_root_probe_preserves_other_database_errors(clean_postgres_databas
             await PostgresJointLifecycleMutationFence(owner).acquire(0)
         assert caught.value.orig.sqlstate == "42P01"
         await owner.rollback()
+
+
+async def test_held_fence_reuses_custody_without_controller_lock(
+    clean_postgres_database, monkeypatch
+):
+    async with get_session_factory()() as session, session.begin():
+        fence = PostgresJointLifecycleMutationFence(session)
+        async with fence.hold(0) as held:
+
+            async def unexpected_lock(*args, **kwargs):
+                raise AssertionError("held custody must not reacquire REV")
+
+            monkeypatch.setattr(fence, "lock_controller", unexpected_lock)
+            before = await session.scalar(text("SELECT pg_backend_pid()"))
+            assert (await held.acquire(0)).generation == 0
+            assert (await held.acquire(0)).phase == "disabled"
+            assert await session.scalar(text("SELECT pg_backend_pid()")) == before
+        with pytest.raises(JointLifecycleUnavailable, match="unavailable"):
+            await held.acquire(0)
+
+
+@pytest.mark.parametrize("end", ["commit", "rollback"])
+async def test_held_fence_rejects_new_root(clean_postgres_database, end):
+    async with get_session_factory()() as session:
+        await session.begin()
+        async with PostgresJointLifecycleMutationFence(session).hold(0) as held:
+            await getattr(session, end)()
+            await session.begin()
+            with pytest.raises(JointLifecycleUnavailable, match="unavailable"):
+                await held.acquire(0)
+            await session.rollback()
+
+
+async def test_held_fence_rejects_raw_savepoint(clean_postgres_database):
+    async with get_session_factory()() as session:
+        await session.begin()
+        async with PostgresJointLifecycleMutationFence(session).hold(0) as held:
+            await session.execute(text("SAVEPOINT hidden_scope"))
+            assert session.in_nested_transaction() is False
+            with pytest.raises(JointLifecycleUnavailable, match="root transaction"):
+                await held.acquire(0)
+            await session.execute(text("ROLLBACK TO SAVEPOINT hidden_scope"))
+            await session.execute(text("RELEASE SAVEPOINT hidden_scope"))
+            with pytest.raises(JointLifecycleUnavailable, match="unavailable"):
+                await held.acquire(0)
+        await session.rollback()

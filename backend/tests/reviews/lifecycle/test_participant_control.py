@@ -11,9 +11,10 @@ from app.modules.reviews.acceptance.repository import FinalAcceptanceRepository
 from app.modules.reviews.api.acceptance import FinalAcceptanceConflict
 from app.modules.reviews.api.lifecycle import JointLifecycleUnavailable
 from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl
-from tests.contributions.records.support import contribution_source
+from tests.tasks.post_submit_routing.outcome_support import authorized_routing_source, apply_outcome
 from tests.reviews.acceptance.participation_support import (
-    participant, prepare_review_pending, request_for, stored_effects,
+    stored_effects,
+    denial_only_request,
 )
 from tests.reviews.lifecycle.test_fence import observe_advisory_wait
 from tests.reviews.lifecycle.transition_support import command_for, controller, transition
@@ -21,16 +22,19 @@ from tests.reviews.lifecycle.transition_support import command_for, controller, 
 
 @pytest.mark.parametrize("instruments", [(), ("money",), ("money", "project_points")])
 async def test_stopped_terminal_replay_is_select_only(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle, instruments,
+    tmp_path,
+    isolated_database_env,
+    live_acceptance_lifecycle,
+    instruments,
 ):
     access = live_acceptance_lifecycle
-    async with contribution_source(
-        tmp_path, isolated_database_env, contribution_awards=instruments, persist_acceptance=False,
+    async with authorized_routing_source(
+        tmp_path,
+        isolated_database_env,
+        contribution_awards=instruments,
     ) as h:
-        await prepare_review_pending(h)
-        request = await request_for(h)
         async with h.factory() as session, session.begin():
-            original = await participant(session).participate(request)
+            original = await apply_outcome(session, h, 2)
         for phase in ("draining", "disabled"):
             receipt = await transition(await command_for(access.target.id, phase))
             engine = h.factory.kw["bind"].sync_engine
@@ -43,54 +47,53 @@ async def test_stopped_terminal_replay_is_select_only(
             event.listen(engine, "before_cursor_execute", observe)
             try:
                 async with h.factory() as session, session.begin():
-                    replay = await participant(session).participate(
-                        request.model_copy(update={"expected_generation": receipt.generation}),
-                    )
+                    replay = await apply_outcome(session, h, receipt.generation)
             finally:
                 event.remove(engine, "before_cursor_execute", observe)
-            assert replay == original
+            assert replay == original | {"replayed": True}
             assert writes == []
-        # Source receipts are not implemented by this manifest. Preserve its
-        # mechanically retained rows, and refuse to certify them for reactivation.
+        # Valid retained receipts remain evidence after a later lifecycle restart.
         await transition(await command_for(access.target.id, "shadow"))
-        with pytest.raises(JointLifecycleUnavailable, match="pre-authority acceptance"):
-            await transition(await command_for(access.target.id, "live"))
+        restarted = await transition(await command_for(access.target.id, "live"))
+        assert restarted.phase == "live"
         async with h.factory() as session:
-            facts = await stored_effects(session, h.acceptance.task_id)
+            facts = await stored_effects(session, h.request.task_id)
             assert facts["acceptances"] == facts["contributions"] == 1
             assert facts["awards"] == len(instruments)
 
 
 async def test_current_generation_cannot_admit_new_effects_when_stopped(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle,
+    tmp_path,
+    isolated_database_env,
+    live_acceptance_lifecycle,
 ):
     access = live_acceptance_lifecycle
-    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
-        await prepare_review_pending(h)
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         async with h.factory() as session:
-            before = await stored_effects(session, h.acceptance.task_id)
+            before = await stored_effects(session, h.request.task_id)
         for phase in ("draining", "disabled", "shadow"):
             receipt = await transition(await command_for(access.target.id, phase))
-            request = await request_for(h, expected_generation=receipt.generation)
             async with h.factory() as session:
                 with pytest.raises(FinalAcceptanceConflict):
                     async with session.begin():
-                        await participant(session).participate(request)
+                        await apply_outcome(session, h, receipt.generation)
             async with h.factory() as session:
-                assert await stored_effects(session, h.acceptance.task_id) == before, phase
+                assert await stored_effects(session, h.request.task_id) == before, phase
 
 
 async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle, monkeypatch,
+    tmp_path,
+    isolated_database_env,
+    live_acceptance_lifecycle,
+    monkeypatch,
 ):
     access = live_acceptance_lifecycle
-    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
-        await prepare_review_pending(h)
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         await access.signed.grant(
-            access.admin, SimpleNamespace(id=h.acceptance.accepted_submitter_id),
+            access.admin,
+            SimpleNamespace(id=h.actor_context.actor_profile_id),
         )
-        command = await command_for(h.acceptance.accepted_submitter_id, "draining")
-        request = await request_for(h)
+        command = await command_for(h.actor_context.actor_profile_id, "draining")
         reached, proceed = asyncio.Event(), asyncio.Event()
         original = FinalAcceptanceRepository.persist
 
@@ -103,7 +106,7 @@ async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
 
         async def accept():
             async with h.factory() as session, session.begin():
-                return await participant(session).participate(request)
+                return await apply_outcome(session, h, 2)
 
         pids = asyncio.Queue()
 
@@ -121,7 +124,7 @@ async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
             await observe_advisory_wait(h.factory, pid, stopper)
             proceed.set()
             accepted, stopped = await asyncio.wait_for(asyncio.gather(writer, stopper), 15)
-            assert accepted.acceptance.id == h.acceptance.id
+            assert accepted["final_acceptance_id"] is not None
             assert stopped.phase == "draining"
         finally:
             proceed.set()
@@ -133,20 +136,20 @@ async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
         async with get_session_factory()() as session:
             control = await session.scalar(select(JointLifecycleReleaseControl))
             assert control.phase == "draining" and control.generation == 3
-            facts = await stored_effects(session, h.acceptance.task_id)
+            facts = await stored_effects(session, h.request.task_id)
             assert facts["acceptances"] == facts["contributions"] == 1
 
 
 async def test_committed_transition_fences_waiting_acceptance(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle,
+    tmp_path,
+    isolated_database_env,
+    live_acceptance_lifecycle,
 ):
     access = live_acceptance_lifecycle
-    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
-        await prepare_review_pending(h)
-        request = await request_for(h)
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         command = await command_for(access.target.id, "draining")
         async with h.factory() as session:
-            before = await stored_effects(session, h.acceptance.task_id)
+            before = await stored_effects(session, h.request.task_id)
         async with h.factory() as stopper:
             await stopper.begin()
             stopped = await controller(stopper, command).transition(command)
@@ -155,7 +158,7 @@ async def test_committed_transition_fences_waiting_acceptance(
             async def accept():
                 async with h.factory() as session, session.begin():
                     await pids.put(await session.scalar(text("SELECT pg_catalog.pg_backend_pid()")))
-                    return await participant(session).participate(request)
+                    return await apply_outcome(session, h, 2)
 
             writer = asyncio.create_task(accept())
             try:
@@ -166,34 +169,33 @@ async def test_committed_transition_fences_waiting_acceptance(
                 # A fresh generation is still not permission for stopped effects.
                 async with h.factory() as session, session.begin():
                     with pytest.raises(FinalAcceptanceConflict):
-                        await participant(session).participate(request.model_copy(update={
-                            "expected_generation": stopped.generation,
-                        }))
+                        await apply_outcome(session, h, stopped.generation)
             finally:
                 await stopper.rollback()
                 if not writer.done():
                     writer.cancel()
                 await asyncio.gather(writer, return_exceptions=True)
         async with h.factory() as session:
-            assert await stored_effects(session, h.acceptance.task_id) == before
+            assert await stored_effects(session, h.request.task_id) == before
 
 
 async def test_generation_zero_cannot_create_acceptance(tmp_path, isolated_database_env):
-    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
-        await prepare_review_pending(h)
-        request = await request_for(h, expected_generation=0)
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         async with h.factory() as session:
-            before = await stored_effects(session, h.acceptance.task_id)
+            before = await stored_effects(session, h.request.task_id)
         async with h.factory() as session, session.begin():
             with pytest.raises(FinalAcceptanceConflict):
-                await participant(session).participate(request)
+                await apply_outcome(session, h, 0)
         async with h.factory() as session:
-            assert await stored_effects(session, h.acceptance.task_id) == before
+            assert await stored_effects(session, h.request.task_id) == before
 
 
 @pytest.mark.parametrize("sequence", ["genesis", "stopped"])
 async def test_each_owner_independently_rejects_new_effects(
-    tmp_path, isolated_database_env, admin_access, sequence,
+    tmp_path,
+    isolated_database_env,
+    admin_access,
+    sequence,
 ):
     from unittest.mock import AsyncMock
 
@@ -203,31 +205,46 @@ async def test_each_owner_independently_rejects_new_effects(
     from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
     from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsUnavailable, TaskAcceptedPreparation
     from tests.contributions.participation.support import participant as contribution_participant
-    from tests.contributions.participation.support import request_for as contribution_request
+    from app.modules.contributions.api import SubmitterParticipationRequest
 
     await admin_access.signed.grant(admin_access.admin, admin_access.target)
     generation = 0
     if sequence == "stopped":
         await transition(await command_for(admin_access.target.id, "shadow"))
         await transition(await command_for(admin_access.target.id, "live"))
-    async with contribution_source(tmp_path, isolated_database_env, paid=True) as h:
-        await prepare_review_pending(h)
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, contribution_awards=("money", "project_points")
+    ) as h:
         phases = ("disabled", "shadow") if sequence == "genesis" else ("draining", "disabled", "shadow")
         for phase in phases:
             if not (sequence == "genesis" and phase == "disabled"):
                 generation = (await transition(await command_for(admin_access.target.id, phase))).generation
-            request = await request_for(h, expected_generation=generation)
+            request = await denial_only_request(h, generation)
             async with h.factory() as session:
-                before = await stored_effects(session, h.acceptance.task_id)
+                before = await stored_effects(session, h.request.task_id)
             async with h.factory() as session, session.begin():
                 task = TaskAcceptedEffectsParticipant(session, fence=PostgresJointLifecycleMutationFence(session))
                 with pytest.raises(TaskAcceptedEffectsUnavailable, match="lifecycle is not live"):
                     await task.lock_accepted_effects(request.task_effects, expected_generation=generation)
             async with h.factory() as session, session.begin():
-                with pytest.raises(ContributionParticipationUnavailable, match="lifecycle is not live"):
-                    await contribution_participant(session).participate_submitter(contribution_request(
-                        h, acceptance_disposition="new", expected_generation=generation,
-                    ))
+                with pytest.raises(
+                    ContributionParticipationUnavailable, match="lifecycle is not live"
+                ):
+                    await contribution_participant(session).participate_submitter(
+                        SubmitterParticipationRequest(
+                            acceptance_disposition="new",
+                            project_id=request.acceptance.project_id,
+                            task_id=request.acceptance.task_id,
+                            submission_id=request.acceptance.submission_id,
+                            final_acceptance_id=request.acceptance.id,
+                            task_assignment_id=request.task_effects.assignment_id,
+                            contributor_id=request.acceptance.accepted_submitter_id,
+                            contribution_policy_version_id=request.task_effects.contribution_policy_version_id,
+                            artifact_hash=request.task_effects.content_sha256,
+                            correlation_id=request.correlation_id,
+                            expected_generation=generation,
+                        )
+                    )
             async with h.factory() as session, session.begin():
                 # Isolate REV's own check: TASK supplies a correctly shaped new
                 # preparation; neither TASK nor CON can mask a missing REV gate.
@@ -235,19 +252,24 @@ async def test_each_owner_independently_rejects_new_effects(
                     disposition="new", locked_review_policy_id=request.acceptance.policy_context_ref,
                 )))
                 owner = FinalAcceptanceParticipant(
-                    session, fence=PostgresJointLifecycleMutationFence(session),
-                    tasks=tasks, contributions=AsyncMock(),
+                    session,
+                    tasks=lambda held: tasks,
+                    contributions=lambda held: AsyncMock(),
                 )
                 owner._repository.persist = AsyncMock(side_effect=AssertionError("REV reached persistence"))
                 with pytest.raises(FinalAcceptanceConflict, match="lifecycle is not live"):
-                    await owner.participate(request)
+                    async with owner.prepare(generation) as prepared:
+                        await prepared.participate(request)
                 owner._repository.persist.assert_not_awaited()
             async with h.factory() as session:
-                assert await stored_effects(session, h.acceptance.task_id) == before
+                assert await stored_effects(session, h.request.task_id) == before
 
 
 async def test_task_read_acceptance_and_transition_intermediate_waits(
-    tmp_path, isolated_database_env, live_acceptance_lifecycle, monkeypatch,
+    tmp_path,
+    isolated_database_env,
+    live_acceptance_lifecycle,
+    monkeypatch,
 ):
     from app.adapters.audit import task_transition_audit
     from app.adapters.tasks import task_commands
@@ -256,13 +278,11 @@ async def test_task_read_acceptance_and_transition_intermediate_waits(
     from tests.authorization.task_authority.test_concurrency import actor_context
 
     access = live_acceptance_lifecycle
-    async with contribution_source(tmp_path, isolated_database_env, persist_acceptance=False) as h:
-        await prepare_review_pending(h)
-        actor_id = h.acceptance.accepted_submitter_id
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
+        actor_id = h.actor_context.actor_profile_id
         await access.signed.grant(access.admin, SimpleNamespace(id=actor_id))
         actor = await actor_context(str(actor_id))
         command = await command_for(actor_id, "draining")
-        request = await request_for(h)
         task_locked, proceed = asyncio.Event(), asyncio.Event()
         original = PreparedTaskAuthorization.prepare
 
@@ -285,12 +305,12 @@ async def test_task_read_acceptance_and_transition_intermediate_waits(
                     session, settings=get_settings(), authorization=PreparedTaskAuthorization(session, actor),
                     audit=task_transition_audit(session), actor_profile_id=actor_id,
                 )
-                return await owner.management_detail(h.acceptance.project_id, h.acceptance.task_id)
+                return await owner.management_detail(h.request.project_id, h.request.task_id)
 
         async def accept():
             async with h.factory() as session, session.begin():
                 await identify(session, "accept")
-                return await participant(session).participate(request)
+                return await apply_outcome(session, h, 2)
 
         async def stop():
             async with h.factory() as session, session.begin():
@@ -320,8 +340,8 @@ async def test_task_read_acceptance_and_transition_intermediate_waits(
             await wait_for_blocker("stop", "accept", jobs[2])
             proceed.set()
             detail, accepted, stopped = await asyncio.wait_for(asyncio.gather(*jobs), 20)
-            assert detail.task_id == h.acceptance.task_id
-            assert accepted.acceptance.id == h.acceptance.id
+            assert detail.task_id == h.request.task_id
+            assert accepted["final_acceptance_id"] is not None
             assert stopped.phase == "draining" and stopped.generation == 3
         finally:
             proceed.set()
@@ -330,6 +350,6 @@ async def test_task_read_acceptance_and_transition_intermediate_waits(
                     job.cancel()
             await asyncio.gather(*jobs, return_exceptions=True)
         async with h.factory() as session:
-            facts = await stored_effects(session, h.acceptance.task_id)
+            facts = await stored_effects(session, h.request.task_id)
             assert facts["task_status"] == "accepted"
             assert facts["acceptances"] == facts["contributions"] == 1

@@ -91,10 +91,19 @@ def test_each_request_source_selector_rejects(field, changed):
         )
 
 
-@pytest.mark.parametrize("field", (
-    "resource_id", "scope_project_id", "request.routing_manifest_id", "source.id",
-    "source.project_id", "source.completion_event_id", "claim.project_id", "claim.event_id",
-))
+@pytest.mark.parametrize(
+    "field",
+    (
+        "resource_id",
+        "scope_project_id",
+        "request.routing_manifest_id",
+        "source.id",
+        "source.project_id",
+        "source.completion_event_id",
+        "claim.project_id",
+        "claim.event_id",
+    ),
+)
 def test_each_resource_and_claim_identity_rejects(field):
     control = resource_for()
     assert control.validate_identity() is control
@@ -130,7 +139,8 @@ def test_exclusive_branch_consequences():
                 human.model_dump()
                 | {
                     "consequence": AutomatedAcceptanceConsequence(
-                        task_effects=accepted_effects_for(human.source)
+                        authorized_lifecycle_generation=2,
+                        task_effects=accepted_effects_for(human.source),
                     )
                 }
             )
@@ -167,7 +177,11 @@ def test_each_consequence_identity_rejects(field):
         PostSubmitRoutingResourceContext(
             **(
                 control.model_dump()
-                | {"consequence": AutomatedAcceptanceConsequence(task_effects=effects)}
+                | {
+                    "consequence": AutomatedAcceptanceConsequence(
+                        authorized_lifecycle_generation=2, task_effects=effects
+                    )
+                }
             )
         )
 
@@ -177,9 +191,10 @@ def test_each_consequence_identity_rejects(field):
                 control.model_dump()
                 | {
                     "consequence": AutomatedAcceptanceConsequence(
+                        authorized_lifecycle_generation=2,
                         task_effects=consequence.task_effects.model_copy(
                             update={"expected_task_status": "review_pending"}
-                        )
+                        ),
                     )
                 }
             )
@@ -250,13 +265,9 @@ def test_digest_binds_claim_and_source(claim_field):
         **(resource.model_dump() | {"source": other_source})
     )
     assert post_submit_routing_resource_digest(changed_resource) != digest
-    time_only_source = resource.source.model_copy(
-        update={"created_at": resource.source.created_at + timedelta(days=1)}
-    )
-    time_only = PostSubmitRoutingResourceContext(
-        **(resource.model_dump() | {"source": time_only_source})
-    )
-    assert post_submit_routing_resource_digest(time_only) == digest
+    # AUTH consumes a pre-publication proposal; its digest cannot depend on
+    # the database creation timestamp which does not exist yet.
+    assert "created_at" not in type(resource.source).model_fields
 
     other_request = changed_request(
         resource.request, route_operation_id=new_record_id()
@@ -321,9 +332,10 @@ def test_digest_binds_each_branch_consequence():
     consequence = automated.consequence
     assert isinstance(consequence, AutomatedAcceptanceConsequence)
     changed = AutomatedAcceptanceConsequence(
+        authorized_lifecycle_generation=2,
         task_effects=consequence.task_effects.model_copy(
             update={"final_acceptance_id": new_record_id()}
-        )
+        ),
     )
     changed_resource = PostSubmitRoutingResourceContext(
         **(automated.model_dump() | {"consequence": changed})
@@ -354,7 +366,7 @@ def test_digest_binds_each_branch_consequence():
 def test_fixed_principal_and_decision_receipt_checks(field, changed):
     """Exercise only the explicitly value-only private receipt predicate."""
     resource = resource_for()
-    actor_id, link_id = new_record_id(), new_record_id()
+    actor_id, link_id = resource.router_actor_id, resource.router_identity_link_id
     caller_input = PreparedAuthorizationInput(
         idempotency_key=resource.request.route_operation_id,
         request_value=post_submit_routing_prepare_values(resource.request),
@@ -409,7 +421,6 @@ def test_fixed_principal_and_decision_receipt_checks(field, changed):
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         _PreparedRouting(authority, object(), wrong_input)._receipt(decision, resource)
 
-
     changed_value_request = changed_request(
         resource.request,
         created_at=resource.request.created_at + timedelta(microseconds=1),
@@ -423,3 +434,23 @@ def test_fixed_principal_and_decision_receipt_checks(field, changed):
         PreparedAuthorizationHandleInvalid, match="invalid routing authorization receipt"
     ):
         _PreparedRouting(authority, object(), wrong_value)._receipt(decision, resource)
+
+
+@pytest.mark.parametrize(
+    "field", ("router_actor_id", "router_identity_link_id", "authorized_lifecycle_generation")
+)
+def test_receipt_digest_binds_principal_and_original_generation(field):
+    original = resource_for(human_review_required=False)
+    if field == "authorized_lifecycle_generation":
+        changed = original.model_copy(
+            update={
+                "consequence": original.consequence.model_copy(
+                    update={field: original.consequence.authorized_lifecycle_generation + 1}
+                )
+            }
+        )
+    else:
+        changed = original.model_copy(update={field: new_record_id()})
+    assert post_submit_routing_resource_digest(changed) != post_submit_routing_resource_digest(
+        original
+    )

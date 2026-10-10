@@ -64,6 +64,7 @@ class TransactionalAssignmentInvalidationHandler:
             # The context has rolled back every staged TASK/AUTH/audit change.
             return HandlerOutcome.REJECT
 
+
 __all__ = (
     "TransactionalAssignmentInvalidationHandler",
     "task_commands",
@@ -243,3 +244,37 @@ def evaluation_request_handler(*, sessions, materialization):
         sessions, observer=committed_invocation_reader(sessions),
         evaluations=evaluation_coordinator, executor=executor,
     )
+
+
+def task_post_submit_outcome(session, sessions):
+    """Every writer uses the caller session; only committed invocation observation is independent."""
+    from app.adapters.audit import task_routing_audit
+    from app.adapters.outbox import (
+        outbox_append,
+        outbox_invocation_fence,
+        committed_invocation_reader,
+    )
+    from app.adapters.tasks.routing_acceptance import RoutingAcceptanceAdapter
+    from app.adapters.auth import task_routing_authorization
+    from app.adapters.checkers import evaluation_coordinator
+    from app.adapters.projects import project_locked_policy_context_port
+    from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
+
+    return TaskPostSubmitOutcome(
+        session,
+        projects=project_locked_policy_context_port(session),
+        evaluations=evaluation_coordinator(session),
+        authorization=task_routing_authorization(session),
+        acceptance=RoutingAcceptanceAdapter(session),
+        observer=committed_invocation_reader(sessions),
+        invocation_fence=outbox_invocation_fence(session),
+        audit=task_routing_audit(session),
+        outbox=outbox_append(session),
+    )
+
+
+def task_accepted_effects_participant(session, fence):
+    """Construct TASK's terminal writer under the shared held fence."""
+    from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
+
+    return TaskAcceptedEffectsParticipant(session, fence=fence)

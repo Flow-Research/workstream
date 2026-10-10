@@ -159,7 +159,15 @@ async def approve_unified_submission_policy(project_id, guide_id, policy_id, *, 
         ).model_dump(mode="json")
 
 
-async def create_standalone_unified_policy(sessions, namespace, *, guide_version="v1", artifact_proposal=None, contribution_awards=()):
+async def create_standalone_unified_policy(
+    sessions,
+    namespace,
+    *,
+    guide_version="v1",
+    artifact_proposal=None,
+    contribution_awards=(),
+    human_review_required=True,
+):
     """Arrange complete activated context before a downstream artifact transaction."""
     from app.modules.projects.models import PreSubmitCheckerPolicy
     from app.modules.projects.api.post_policy import PostPolicyApproval
@@ -171,14 +179,23 @@ async def create_standalone_unified_policy(sessions, namespace, *, guide_version
     from tests.projects.post_policy.pg_support import prepare_post_policy, operate
 
     url = sessions.kw["bind"].url.render_as_string(hide_password=False)
-    async with source_case(url, namespace=namespace, guide_version=guide_version,
-                           artifact_proposal=artifact_proposal) as (values, _, command, actor, grant):
-        await seed_selected_review_revision_inputs(sessions, command, actor)
+    async with source_case(
+        url, namespace=namespace, guide_version=guide_version, artifact_proposal=artifact_proposal
+    ) as (values, _, command, actor, grant):
+        await seed_selected_review_revision_inputs(
+            sessions, command, actor, human_review_required=human_review_required
+        )
         _, derived = await prepare_post_policy(sessions, command, actor, grant, service_actor(values))
         approved = await operate(sessions, actor, command.project_id, grant, "approve",
                                  PostPolicyApproval(target=derived.target, idempotency_key=uuid4()))
         _, policy = await publish_policy(sessions, command.project_id, contribution_awards=contribution_awards)
-        await activate(sessions, actor, await activation_command(sessions, approved, policy))
+        activation = await activation_command(sessions, approved, policy)
+        if human_review_required:
+            await activate(sessions, actor, activation)
+        else:
+            from tests.tasks.post_submit_routing.false_policy_fixture import activate_false_prestate
+
+            await activate_false_prestate(sessions, actor, activation)
     upstream = approved.target.upstream
     async with sessions() as session:
         effective = await session.get(EffectiveProjectSubmissionArtifactPolicy, str(upstream.effective_policy_id))

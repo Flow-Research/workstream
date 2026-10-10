@@ -49,7 +49,6 @@ def _receipt_values(source):
         resource_id=source.review_id if human else source.routing_manifest_id,
         request_id=operation,
         correlation_id=operation,
-        idempotency_reference=source.review_decision_request_id if human else operation,
         resource_context_digest=SHA_A,
         source=source,
         source_commitment_digest=acceptance_source_commitment_digest(source),
@@ -203,7 +202,6 @@ def test_route_projection_and_digest_bind_complete_reconstructed_source(human_re
         "resource_id",
         "request_id",
         "correlation_id",
-        "idempotency_reference",
         "source_commitment_digest",
         "service_identity",
         "matched_grant_id",
@@ -252,3 +250,11 @@ def test_receipt_revalidates_nested_source_and_rejects_changed_source_digest(kin
         AcceptanceSourceReceiptFacts(**(values | {"authorized": True}))
     with pytest.raises(ValidationError):
         AcceptanceSourceReceiptFacts(**(values | {"request_id": str(values["request_id"])}))
+
+
+@pytest.mark.parametrize("kind", ("human", "route_false"))
+def test_receipt_does_not_claim_administrative_idempotency_reference(kind):
+    """Routing/review operation binding is not an AUTH admin-mutation receipt."""
+    values = _receipt_values(_source(kind))
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        AcceptanceSourceReceiptFacts(**(values | {"idempotency_reference": new_record_id()}))

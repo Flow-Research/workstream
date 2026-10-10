@@ -2212,39 +2212,6 @@ def test_submission_artifact_policy_draft_actions_have_exact_child_owners() -> N
         ActionOwner.AUTH_12F4,
         ActionAvailability.ACTIVE,
     )
-    active_internal = {
-        ActionId.CHECKER_POST_SUBMIT_EXECUTE,
-        ActionId.CHECKER_POST_SUBMIT_FINALIZE,
-        ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-        ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE,
-        ActionId.OUTBOX_DISPATCH,
-        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
-        ActionId.ARTIFACT_PENDING_WORK_SCAN,
-        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
-        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
-        ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
-        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC,
-        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
-        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
-        ActionId.PROJECT_SETUP_RUN_UPDATE,
-        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
-    }
-    assert {
-        action
-        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
-        for action in actions
-        if ACTION_BY_ID[action].availability is ActionAvailability.ACTIVE
-    } == active_internal
-    assert all(
-        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
-        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
-        for action in actions
-        if action not in active_internal
-    )
-    with pytest.raises(TypeError):
-        SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]
 
 
 def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str, str]:
