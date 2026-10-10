@@ -46,7 +46,9 @@ def package():
             "guide_version": source["target"]["guide_version"],
             "catalogue_id": source["target"]["post_catalogue_id"],
             "catalogue_source_version": "v0.1",
-            "catalogue_schema_version": source["target"]["post_catalogue_schema_version"],
+            "catalogue_schema_version": source["target"][
+                "post_catalogue_schema_version"
+            ],
             "catalogue_manifest_sha256": HASH,
             "entries": [
                 {
@@ -78,7 +80,9 @@ def package():
 
 
 def invoke(cli, origin, selectors=SELECTORS, output="json", token=TOKEN):
-    return cli(origin, token, "-o", output, "project", "guide", "post-policy", *selectors)
+    return cli(
+        origin, token, "-o", output, "project", "guide", "post-policy", *selectors
+    )
 
 
 def test_post_policy_exact_read_history_defaults_and_terminal_safety(cli):
@@ -89,7 +93,10 @@ def test_post_policy_exact_read_history_defaults_and_terminal_safety(cli):
         approved["activation_context"].update(
             review={"policy_id": GUIDE, "generation": LARGE, "policy_hash": HASH},
             revision={"policy_id": SETUP, "generation": LARGE, "policy_hash": HASH},
-            contribution={"contribution_policy_id": GUIDE, "contribution_policy_version_id": OTHER},
+            contribution={
+                "contribution_policy_id": GUIDE,
+                "contribution_policy_version_id": OTHER,
+            },
             expected_previous_active_guide_id=GUIDE,
             expected_previous_active_guide_generation=LARGE,
             post_approval_operation_id=OTHER,
@@ -139,7 +146,9 @@ def test_post_policy_exact_read_history_defaults_and_terminal_safety(cli):
         compact = tuple(x.replace("-", "") for x in SELECTORS)
         assert invoke(cli, origin, compact).returncode == 0
         assert requests[-1][1].endswith("/" + quote(compact[-1]))
-        historical["proposal"]["result"]["setup_notes"] = ["Untrusted \x1b[31m\r\npolicy"]
+        historical["proposal"]["result"]["setup_notes"] = [
+            "Untrusted \x1b[31m\r\npolicy"
+        ]
         response["body"] = json.dumps(historical).encode()
         result = invoke(cli, origin, output="text")
         assert result.returncode == 0 and result.stderr == ""

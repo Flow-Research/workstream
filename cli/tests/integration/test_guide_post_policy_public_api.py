@@ -47,13 +47,27 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
 
     def token(actor):
         return issue_flow_token(
-            str(actor.actor_profile_id), [], issuer=issuer, audience=audience, secret=secret
+            str(actor.actor_profile_id),
+            [],
+            issuer=issuer,
+            audience=audience,
+            secret=secret,
         )
 
     # Canonical retained source/compilation prerequisites, not a provider-inference claim.
-    async with source_case(clean_postgres_database) as (_, factory, command, actor, grant):
-        outsider, _ = await seed_review_actor(factory, None, role="audit_authority", scope="system")
-        creator, _ = await seed_review_actor(factory, None, role="project_manager", scope="system")
+    async with source_case(clean_postgres_database) as (
+        _,
+        factory,
+        command,
+        actor,
+        grant,
+    ):
+        outsider, _ = await seed_review_actor(
+            factory, None, role="audit_authority", scope="system"
+        )
+        creator, _ = await seed_review_actor(
+            factory, None, role="project_manager", scope="system"
+        )
         administrator, _ = await seed_review_actor(
             factory, None, role="access_administrator", scope="system"
         )
@@ -81,7 +95,8 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
         try:
             await _ready(origin + "/api/v1/health", process)
             selectors = tuple(
-                str(x) for x in (command.project_id, command.guide_id, command.compilation_id)
+                str(x)
+                for x in (command.project_id, command.guide_id, command.compilation_id)
             )
             caller = token(actor)
             headers = {"Authorization": "Bearer " + caller}
@@ -108,7 +123,9 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
             def denied(result, statuses=(404,)):
                 assert result.returncode == 1 and result.stdout == "", result.stderr
                 error = json.loads(result.stderr)["error"]
-                assert error["status"] in statuses and not error.get("outcome_unknown", False)
+                assert error["status"] in statuses and not error.get(
+                    "outcome_unknown", False
+                )
 
             async def unchanged(expected_operations):
                 async with factory() as session:
@@ -127,7 +144,9 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                         == 0
                     )
 
-            async with httpx.AsyncClient(base_url=origin, trust_env=False, timeout=20) as direct:
+            async with httpx.AsyncClient(
+                base_url=origin, trust_env=False, timeout=20
+            ) as direct:
                 spec = (await direct.get("/openapi.json", timeout=60)).json()
                 route = "/api/v1/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}/post-submission-policies/{policy_id}"
                 assert (
@@ -164,7 +183,9 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                     timeout=60,
                 )
                 assert worker.returncode == 0, worker.stderr
-                assert json.loads(worker.stdout)["status"] == "policy_draft_ready", worker.stdout
+                assert json.loads(worker.stdout)["status"] == "policy_draft_ready", (
+                    worker.stdout
+                )
                 discovery = await direct.get(prefix + "/proposal", headers=headers)
                 assert discovery.status_code == 200, discovery.text
                 policy_id = discovery.json()["post_submit_policy_id"]
@@ -174,8 +195,14 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                 assert response.status_code == 200, response.text
                 compiled = success(read(policy_id))
                 assert compiled == response.json()
-                assert compiled["lifecycle_status"] == "compiled" and compiled["current"] is True
-                assert compiled["approval_operation_id"] is None and compiled["correction"] is None
+                assert (
+                    compiled["lifecycle_status"] == "compiled"
+                    and compiled["current"] is True
+                )
+                assert (
+                    compiled["approval_operation_id"] is None
+                    and compiled["correction"] is None
+                )
                 assert compiled["target"]["upstream"] == approved.json()
                 assert (
                     success(
@@ -212,7 +239,9 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                 assert approval.status_code == 200, approval.text
                 observed = success(read(policy_id))
                 assert observed["lifecycle_status"] == "approved"
-                assert observed["approval_operation_id"] == approval.json()["operation_id"]
+                assert (
+                    observed["approval_operation_id"] == approval.json()["operation_id"]
+                )
                 assert (
                     observed["activation_context"]["post_approval_operation_id"]
                     == observed["approval_operation_id"]
@@ -241,7 +270,10 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                     headers=headers,
                 )
                 assert latest.status_code == 200, latest.text
-                assert latest.json()["id"] == historical["correction"]["successor_setup_run_id"]
+                assert (
+                    latest.json()["id"]
+                    == historical["correction"]["successor_setup_run_id"]
+                )
                 assert (
                     latest.json()["setup_generation"]
                     == historical["correction"]["successor_setup_generation"]
@@ -251,7 +283,9 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                 denied(read(policy_id, presented="not-issued"), (401,))
                 assert (await direct.get(path)).status_code == 401
                 denied(read(str(uuid4())))
-                denied(read(policy_id, target=(selectors[0], selectors[1], str(uuid4()))))
+                denied(
+                    read(policy_id, target=(selectors[0], selectors[1], str(uuid4())))
+                )
                 foreign = await direct.post(
                     "/api/v1/projects",
                     headers={
