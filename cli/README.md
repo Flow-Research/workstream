@@ -292,6 +292,52 @@ is configured for non-eager in-memory publication and no post-policy worker is
 started. This does not prove broker publication, job delivery, deployed Flow or
 live setup-provider execution.
 
+## Request an exact evaluation-policy correction
+
+Prepare the public `PostPolicyCorrectionInput` from the inspected `post-policy`
+response: `{"target": <complete displayed target>, "reason": "Manager feedback"}`.
+
+```sh
+workstream project guide correct-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID \
+  --input post-correction.json --idempotency-key CORRECTION_UUID -o json
+```
+
+One POST to the existing public `/corrections` route sends the original bounded
+UTF-8 JSON file (at most 1 MiB). The four selectors and caller-owned replay key
+are explicit UUIDs; unknown, duplicate or null required fields are rejected.
+The backend normalizes and validates feedback, checks both manager authorities,
+supersedes the inspected policy and saves one unified setup successor atomically.
+This command does not edit policy content, approve anything, activate a guide,
+fetch latest or dispatch setup. Use the existing `setup` and `post-policy` reads
+to discover retained state; correction dispatch is not a CLI command yet.
+
+Success requires HTTP 201 and a closed `PostPolicyReceipt` with kind `correction`,
+the complete submitted target and a non-null correction bound to its proposal
+digest. The successor generation must be the inspected generation plus one,
+including values beyond signed 64-bit range. Record identities are UUIDv7;
+feedback hashes are structurally checked, not locally recomputed or certified.
+Text escapes terminal controls; JSON preserves the validated response.
+The usual 12-second deadline and 64 KiB write-response limit apply.
+
+New requests require current upstream custody and a usable policy. Exact replay
+recovers the saved historical receipt after fresh actor/grant checks and retained
+target validation; it does not allocate another successor or audit operation.
+Different feedback under the same key conflicts. Canonically equivalent backend
+feedback (NFC-normalized and trimmed) replays; retain the original file rather
+than rely on that normalization when recovering an uncertain write.
+
+A malformed receipt or unconfirmed write returns nonzero and empty stdout with
+`outcome_unknown` and a manual-replay hint. There is no automatic retry, including
+HTTP/2 transport replay. Replay only the unchanged selectors, file and key.
+Canonical backend 4xx responses remain known denials.
+
+Built-process hostile HTTP tests and a real Flow-verifier/uvicorn/PREP/PostgreSQL
+journey prove receipt binding, saved successor lineage, immutable policy bytes,
+exact replay, foreign-project concealment, suspension and revocation denial.
+Canonical retained source fixtures and an explicitly executed actual Celery
+derivation task arrange prerequisites; this is not live setup inference, queued
+broker delivery or deployed Flow proof.
+
 ## Inspect an exact derived post-submission policy
 
 After backend derivation, the proposal read supplies `post_submit_policy_id`:
