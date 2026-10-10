@@ -13,7 +13,8 @@ from app.api.routes.auth import actors_router
 from app.api.routes.health import router as health_router
 from app.modules.checkers.router import router as checkers_router
 from app.api.routes.artifact_submissions import router as artifact_submission_router
-from app.modules.artifacts.router import router as artifacts_router, task_import_source_router
+from app.modules.artifacts.router import router as artifacts_router
+from app.api.routes.artifact_task_import_sources import router as task_import_source_router
 from app.modules.authorization.router import router as authorization_router
 from app.modules.projects.router import router as projects_router
 from app.modules.projects.create_router import router as project_create_router

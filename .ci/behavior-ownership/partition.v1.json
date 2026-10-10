@@ -109,6 +109,10 @@
       "target": "backend/app/api/routes/artifact_submissions.py"
     },
     {
+      "group": "artifacts",
+      "target": "backend/app/api/routes/artifact_task_import_sources.py"
+    },
+    {
       "group": "auth",
       "target": "backend/app/api/routes/auth.py"
     },
@@ -403,10 +407,6 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/task_guide_documents.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/task_import_source_router.py"
     },
     {
       "group": "artifacts",
@@ -1793,7 +1793,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "851fee1049ea9d1fb9d141c68947b076963712a46d11cf581cbe3e2b2ac8e662",
+  "authority_digest": "ef27d4aa68b40e817994c0808cb4942d85c3cda784aa31f30c605a132c0ad317",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

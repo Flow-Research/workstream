@@ -37,6 +37,8 @@ authority to those owners, without creating Tasks or a second byte lifecycle.
   `adapters/auth/__init__.py` roots; no private-import debt is added.
 - Backend tests for source validation, exact bytes, authority, concurrency,
   idempotent rollback, PostgreSQL custody and MinIO/provider recovery.
+- Existing identifier inventory, public route/action inventory, AUTH custody
+  documentation and explicit predecessor fixtures affected by source admission.
 - One migration authored solely by the coordinated backend migration owner;
   required schema fingerprint updates follow that migration.
 - Scoped current ART/TASK/AUTH specs, README, roadmap and boundary manifests.
@@ -182,3 +184,25 @@ requiring raw private resource selectors.
   application author writes alternative DDL or bypasses the canonical schema
   guard. Source custody remains this chunk's complete outcome;
   atomic DRAFT import and batch operations remain separate implementation work.
+
+The first full hosted execution after routing reconciliation exposed six
+integration gaps. The source HTTP adapter moves to the existing `app/api/routes`
+composition layer; its sole public error contract now lives beside its port.
+The ART operation boundary translates existing admission/service errors to the
+same closed source codes after transaction cleanup and canonical denial
+restaging. No adapter import or new private-import debt remains in ART rules.
+The identifier inventory recognizes explicit table primary-key constraints in
+addition to inline declarations; native source primary-key custody was already
+correct. Public route/action assertions and both AUTH custody documents retain
+their previous rows and add the exact four source routes and three actions.
+Predecessor seed fixtures temporarily admit the current nullable attempt column,
+then restore the original column list and full retained ART row facts before
+the migration under test. Corruption and uncertain-write fixtures use distinct
+valid received JSON so retained provider corruption cannot contaminate another
+case. No migration, provider behavior, test threshold or hosted suite is weakened.
+The exact preceding `f1df115bc351f268c1c03603db42631921f2f91d` native control
+reproduces the ordered provider collision and predecessor seeding failure
+(two failed, one passed in 222.32 seconds), with owned database/role/MinIO cleanup.
+Both explicit primary-key variants also fail against the preceding parser.
+These controls establish the repaired defects; the earlier positive receipts
+above remain bound to their original tested trees.

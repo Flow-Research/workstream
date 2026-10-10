@@ -1779,6 +1779,9 @@ async def test_project_role_mutation_routes_enforce_project_lifecycle_without_di
 
 
 ART_ACTIVATION_CUSTODY_EXPECTATIONS = {
+    "artifact.task_import_source.declare": "PILOT-02A",
+    "artifact.task_import_source.upload": "PILOT-02A",
+    "artifact.task_import_source.read": "PILOT-02A",
     "artifact.binding.read": "WS-AUTH-001-ART-02D-OPERATOR",
     "artifact.replica.read": "WS-AUTH-001-ART-02D-OPERATOR",
     "artifact.receipt.read": "WS-AUTH-001-ART-02D-OPERATOR",
@@ -2250,6 +2253,7 @@ def test_art_custody_documentation_matches_the_independent_activation_fixture() 
     )
     expected_custody = ART_ACTIVATION_CUSTODY_EXPECTATIONS
     expected_owner_counts = {
+        "PILOT-02A": 3,
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
         "WS-XINT-002-04B": 1,

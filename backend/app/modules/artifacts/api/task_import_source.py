@@ -10,6 +10,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+class TaskImportSourceError(RuntimeError):
+    """A closed source outcome mapped to a concealed or explicit HTTP response."""
+
+    def __init__(self, code: str, status_code: int):
+        self.code, self.status_code = code, status_code
+        super().__init__(code)
+
 
 class TaskImportSourceAction(StrEnum):
     """Separate source admission and read actions under covered PM authority."""

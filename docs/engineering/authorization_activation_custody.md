@@ -47,6 +47,7 @@ mappings, and availability must remain identical.
 | `WS-AUTH-001-ART-02D-OPERATOR` | Planned: `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
+| `PILOT-02A` | Active: `artifact.task_import_source.declare`, `artifact.task_import_source.upload`, `artifact.task_import_source.read` |
 | `WS-XINT-002-05A` | Active: `artifact.submission_bundle.prepare`; registry custody remains historical while replacement implementation chunk WS-ARCH-001-02G supplies the executable PREP boundary |
 | `WS-XINT-002-06A` | Active: `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | Active on WS-ARCH-001-02H merge: `artifact.submission.binding.create`; only the fixed artifact-binding service may consume it |

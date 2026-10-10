@@ -351,7 +351,9 @@ async def test_unknown_acknowledgement_recovers_through_existing_scanner_and_wor
 
     client = import_source_client
     project = await _project(client)
-    raw = json.dumps(document()).encode()
+    value = document()
+    value["tasks"][0]["external_task_id"] = f"uncertain-source-{project}"
+    raw = json.dumps(value).encode()
     source = await _declare(client, project, raw)
     original = S3CompatibleArtifactStore.put
     writes = []
@@ -394,7 +396,9 @@ async def test_unknown_acknowledgement_recovers_through_existing_scanner_and_wor
 async def test_changed_provider_bytes_are_rejected_before_download_headers(import_source_client):
     client = import_source_client
     project = await _project(client)
-    raw = json.dumps(document()).encode()
+    value = document()
+    value["tasks"][0]["external_task_id"] = f"corrupt-source-{project}"
+    raw = json.dumps(value).encode()
     source = await _declare(client, project, raw)
     upload = await client.put(_path(project, source) + "/content", headers=auth_headers() | {"Content-Type": "application/json"}, content=raw)
     assert upload.status_code == 200 and upload.json()["status"] == "verified", upload.text

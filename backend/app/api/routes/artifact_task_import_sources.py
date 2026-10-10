@@ -13,10 +13,8 @@ from app.core.api_controls import StructuredHTTPException, parse_idempotency_key
 from app.interfaces.artifacts import ArtifactInputMismatchError, ArtifactIntegrityError, ArtifactLimitExceededError, ArtifactStoreError
 from app.modules.artifacts.api.task_import_source import (
     TaskImportSourceAction, TaskImportSourceCommandPort, TaskImportSourceDeclare, TaskImportSourceResponse,
+    TaskImportSourceError,
 )
-from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
-from app.modules.artifacts.service import ArtifactAdmissionError, ArtifactAdmissionConflictError, ArtifactAdmissionCapacityError
-from app.modules.artifacts.task_import_sources import TaskImportSourceError
 
 
 router = APIRouter(prefix="/projects/{project_id}/task-import-sources", tags=["task-import-sources"])
@@ -25,11 +23,7 @@ router = APIRouter(prefix="/projects/{project_id}/task-import-sources", tags=["t
 def _http_error(exc: Exception) -> StructuredHTTPException:
     if isinstance(exc, TaskImportSourceError):
         status_code, code = exc.status_code, exc.code
-    elif isinstance(exc, ArtifactAuthorityDeniedError):
-        status_code, code = 503, "task_import_source_service_unavailable"
-    elif isinstance(exc, ArtifactAdmissionConflictError):
-        status_code, code = 409, "task_import_source_conflict"
-    elif isinstance(exc, (ArtifactAdmissionCapacityError, ArtifactLimitExceededError)):
+    elif isinstance(exc, ArtifactLimitExceededError):
         status_code, code = 413, "task_import_source_limit_exceeded"
     elif isinstance(exc, (ArtifactInputMismatchError, ArtifactIntegrityError)):
         status_code, code = 422, "task_import_source_commitment_mismatch"
@@ -60,7 +54,7 @@ async def declare_task_import_source(
     """Declare immutable source bytes; exact same-key replay retains the original ID."""
     try:
         return await commands.declare(project_id, payload, key)
-    except (TaskImportSourceError, ArtifactAdmissionError) as exc:
+    except TaskImportSourceError as exc:
         raise _http_error(exc) from exc
 
 
@@ -77,7 +71,7 @@ async def upload_task_import_source(
                                        error_code="task_import_source_media_type_invalid", error_message="application/json is required")
     try:
         return await commands.upload(project_id, source_id, request.stream())
-    except (TaskImportSourceError, ArtifactStoreError, ArtifactAdmissionError, ArtifactAuthorityDeniedError,
+    except (TaskImportSourceError, ArtifactStoreError,
             ValidationError, ValueError) as exc:
         raise _http_error(exc) from exc
 
@@ -103,7 +97,7 @@ async def verified_import_source(
     try:
         async with commands.open(project_id, source_id) as read:
             yield read
-    except (TaskImportSourceError, ArtifactStoreError, ArtifactAdmissionError, ArtifactAuthorityDeniedError) as exc:
+    except (TaskImportSourceError, ArtifactStoreError) as exc:
         raise _http_error(exc) from exc
 
 

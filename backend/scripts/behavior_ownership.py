@@ -618,7 +618,7 @@ PILOT_13_GUIDE_READ_TARGETS = frozenset({
 })
 PILOT_02A_IMPORT_SOURCE_TARGETS = frozenset({
     "backend/app/modules/artifacts/api/task_import_source.py",
-    "backend/app/modules/artifacts/task_import_source_router.py",
+    "backend/app/api/routes/artifact_task_import_sources.py",
     "backend/app/modules/artifacts/task_import_sources.py",
     "backend/app/modules/authorization/domain/artifact_storage.py",
     "backend/app/modules/authorization/task_import_sources.py",
@@ -690,6 +690,8 @@ def changed_callable_names(root: Path, base_sha: str, head_sha: str, target: str
 
 def group_for_target(target: str) -> str:
     """Assign one exact population group without wildcard authority."""
+    if target == "backend/app/api/routes/artifact_task_import_sources.py":
+        return "artifacts"
     if target in ARCH_CP02_CON_LIFECYCLE_TARGETS | CON_03C_STORAGE_TARGETS | CON_07_PARTICIPATION_TARGETS:
         return "lifecycle"
     if "/authorization/" in target or target.endswith("/auth.py"):

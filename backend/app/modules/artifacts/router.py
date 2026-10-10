@@ -37,10 +37,9 @@ from app.modules.artifacts.schemas import (
     DenyArtifactRecoveryAuthority,
 )
 from app.modules.artifacts.service import ArtifactRecoveryService
-from app.modules.artifacts.task_import_source_router import router as task_import_source_router
 from app.modules.authorization.runtime import AuthorizationContext
 
-__all__ = ("router", "task_import_source_router")
+__all__ = ("router",)
 
 router = APIRouter(prefix="/operator/artifacts", tags=["operator-artifacts"])
 

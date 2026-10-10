@@ -12,6 +12,7 @@ from scripts.identifier_inventory import (
     _sql_created_table,
     build_inventory,
     parse_orm_models,
+    parse_schema,
     render_text,
     scan_generation_sites,
 )
@@ -30,6 +31,31 @@ def test_current_repository_inventory_has_no_unowned_or_mismatched_keys() -> Non
         site["classification"] != "unclassified" and site["reason"]
         for site in report["generation_sites"]
     )
+
+
+@pytest.mark.parametrize("constraint", ["sa.PrimaryKeyConstraint", "PrimaryKeyConstraint"])
+def test_alembic_table_primary_keys_retain_order_and_native_types(tmp_path: Path, constraint: str) -> None:
+    backend = tmp_path / "backend"
+    _write(backend / "alembic/baseline/v01_baseline_manifest.json", json.dumps({
+        "tables": [], "columns": [], "constraints": [],
+    }))
+    _write(backend / "alembic/versions/0001_records.py", f'''
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy import PrimaryKeyConstraint
+
+def upgrade():
+    op.create_table("records",
+        sa.Column("generation", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        {constraint}("id", "generation", name="pk_records"),
+    )
+''')
+    table = parse_schema(backend)["records"]
+    assert table["primary_key"] == ["id", "generation"]
+    assert {column["name"]: column["storage_kind"] for column in table["columns"]} == {
+        "id": "native_uuid", "generation": "integer",
+    }
 
 
 def test_orm_ast_inventory_captures_multiline_and_table_level_foreign_keys(
