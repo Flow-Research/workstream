@@ -816,9 +816,7 @@ def _validate_action_definitions(definitions: tuple[ActionDefinition, ...]) -> N
         raise RuntimeError("authorization action owner catalogue is incomplete")
 
 
-def _index_actions(
-    definitions: tuple[ActionDefinition, ...],
-) -> MappingProxyType[ActionId, ActionDefinition]:
+def _index_actions(definitions: tuple[ActionDefinition, ...]) -> MappingProxyType[ActionId, ActionDefinition]:
     _validate_action_definition_rows(definitions)
     indexed = {definition.action_id: definition for definition in definitions}
     _require_catalogue_counts()
