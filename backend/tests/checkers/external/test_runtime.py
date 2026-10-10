@@ -16,7 +16,10 @@ from pydantic import ValidationError
 
 from app.adapters.checkers.external_service import external_checker_execution_factory
 from app.core.config import Settings
-from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
+from app.interfaces.external_checker_execution import (
+    ExternalCheckerIsolationReceipt,
+    ExternalCheckerMaterialGrant,
+)
 from app.interfaces.external_services import UnknownExternalServiceProviderError
 from app.modules.artifacts.preparation import (
     ArtifactScratchIntegrityError,
@@ -107,6 +110,20 @@ def test_external_service_settings_share_the_art_scratch_root(tmp_path: Path):
             artifact_scratch_root=scratch,
             external_checker_service_socket=tmp_path / "service" / "checker.sock",
             external_checker_material_root=tmp_path / "other",
+        )
+    with pytest.raises(ValueError, match="isolation receipt"):
+        ExternalCheckerIsolationReceipt(
+            repository="--network/host",
+            platform_manifest_digest=SHA,
+            platform_manifest_media_type="application/vnd.oci.image.manifest.v1+json",
+            platform_manifest_byte_count=128,
+            operating_system="linux",
+            architecture="amd64",
+            config_image_id=SHA,
+            runtime="runc",
+            isolation_mode="docker-dev",
+            sandbox_uid=1000,
+            sandbox_gid=1000,
         )
 
 

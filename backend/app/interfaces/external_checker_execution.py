@@ -15,6 +15,12 @@ from app.modules.checkers.api.external import (
 )
 
 
+_REPOSITORY = re.compile(
+    r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?::[0-9]+)?"
+    r"(?:/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*"
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalCheckerMaterialGrant:
     """Opaque callback-scoped ART capability; never a filesystem path."""
@@ -50,10 +56,8 @@ class ExternalCheckerIsolationReceipt:
     def __post_init__(self) -> None:
         """Keep image identity and sandbox vocabulary closed and bounded."""
         if (
-            not self.repository
-            or len(self.repository) > 255
-            or "@" in self.repository
-            or any(item.isspace() for item in self.repository)
+            len(self.repository) > 255
+            or _REPOSITORY.fullmatch(self.repository) is None
             or re.fullmatch(r"sha256:[0-9a-f]{64}", self.platform_manifest_digest) is None
             or self.platform_manifest_media_type
             not in {

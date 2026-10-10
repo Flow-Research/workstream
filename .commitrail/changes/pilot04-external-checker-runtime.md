@@ -216,7 +216,7 @@ No database transaction crosses the client call.
 | Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace` | Seven tests pass: shared Python fixtures, numeric/NUL/extra-field controls, closed cache/runtime health, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
 | Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Five tests pass: cross-language fixtures, complete settings, typed health/execute/factory, actual prepared ZIP callback grant and symlink rejection | Product caller is intentionally absent |
 | Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
-| Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-probe-final.json` SHA-256 `1cf9e70093dbee95f1d2acdcd6987ce74dbbbd7756d62ef9abb26b5c46083b27` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
+| Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-probe-final.json` SHA-256 `371a6f31362cca3a0d8eb7d99e20b46086ef6fc302a8caa29e1c2df9e3357340` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
 
 ## Review findings
 
@@ -240,6 +240,10 @@ No database transaction crosses the client call.
   after validating only its parent. It now rejects symlinks, wrong owner/mode,
   oversized bytes and inode/device substitution before parsing the manifest;
   the retained real service probe passes through that stricter read.
+- Docker repository input initially rejected only whitespace and `@`. Both the
+  Rust cache and Python receipt now enforce a lowercase component grammar,
+  numeric registry ports and no tags or option-like leading components before a
+  repository is ever passed as a process argument.
 
 ## Reconciliation
 

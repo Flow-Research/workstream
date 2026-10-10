@@ -787,10 +787,34 @@ fn valid_digest(value: &str) -> bool {
 }
 
 fn valid_repository(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && !value.contains('@')
-        && !value.contains(char::is_whitespace)
+    if value.is_empty()
+        || value.len() > 255
+        || value.contains('@')
+        || value.bytes().any(|item| {
+            !(item.is_ascii_lowercase()
+                || item.is_ascii_digit()
+                || matches!(item, b'.' | b'_' | b'-' | b':' | b'/'))
+        })
+    {
+        return false;
+    }
+    let components: Vec<_> = value.split('/').collect();
+    if components.iter().any(|component| {
+        component.is_empty()
+            || !component.as_bytes()[0].is_ascii_alphanumeric()
+            || !component.as_bytes()[component.len() - 1].is_ascii_alphanumeric()
+    }) {
+        return false;
+    }
+    let registry = components[0];
+    let port_is_valid = registry.split_once(':').is_none_or(|(host, port)| {
+        !host.contains(':') && !port.is_empty() && port.bytes().all(|item| item.is_ascii_digit())
+    });
+    port_is_valid
+        && components
+            .iter()
+            .skip(1)
+            .all(|component| !component.contains(':'))
 }
 
 #[cfg(test)]
@@ -849,7 +873,12 @@ mod tests {
             "../extract_0123456789abcdef0123456789abcdef"
         ));
         assert!(valid_repository("registry.example/workstream/checker"));
+        assert!(valid_repository("localhost:35104/workstream/checker"));
         assert!(!valid_repository("repo@sha256:bad"));
+        assert!(!valid_repository("--network/host"));
+        assert!(!valid_repository(
+            "registry.example/workstream/checker:latest"
+        ));
     }
 
     #[test]
