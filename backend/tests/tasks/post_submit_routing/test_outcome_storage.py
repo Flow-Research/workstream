@@ -65,7 +65,7 @@ async def test_incomplete_or_crossed_outcome_rejected(tmp_path, isolated_databas
                     text(
                         "SELECT public.task_routing_context_valid(m) FROM public.task_post_submit_routing_manifests m WHERE id=:id"
                     ),
-                    {"id": result["routing_manifest_id"]},
+                    {"id": result.routing_manifest_id},
                 )
                 is True
             )
@@ -137,7 +137,7 @@ async def test_routing_event_excludes_administrative_idempotency_reference(
                 JOIN public.audit_events a ON a.id=m.authorization_decision_id
                 JOIN public.task_post_submit_routing_requests q ON q.routing_manifest_id=m.id
                 WHERE m.id=:id
-            """), {"id": result["routing_manifest_id"]})
+            """), {"id": result.routing_manifest_id})
             admin_reference, request_id, correlation_id, operation_id = retained.one()
             assert admin_reference is None
             assert request_id == correlation_id == operation_id
@@ -161,4 +161,4 @@ async def test_routing_event_excludes_administrative_idempotency_reference(
             async with h.factory() as session:
                 assert await outcome_snapshot(session) == committed
         async with h.factory() as session, session.begin():
-            assert await apply_outcome(session, h, None) == result | {"replayed": True}
+            assert await apply_outcome(session, h, None) == result.model_copy(update={"replayed": True})

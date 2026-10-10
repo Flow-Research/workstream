@@ -85,7 +85,7 @@ async def test_acceptance_owner_substitution(tmp_path, isolated_database_env, mo
                 "routing authority requires its complete governed outcome",
             )
             async with h.factory() as session, session.begin():
-                assert (await apply_outcome(session, h, 2))["final_acceptance_id"]
+                assert (await apply_outcome(session, h, 2)).final_acceptance_id
 
 
 async def test_exclusive_source_shape(tmp_path, isolated_database_env, monkeypatch):
@@ -98,7 +98,7 @@ async def test_exclusive_source_shape(tmp_path, isolated_database_env, monkeypat
         ):
             await reject_candidate(h, monkeypatch, changes, "ck_final_acceptances_source_shape")
         async with h.factory() as session, session.begin():
-            assert (await apply_outcome(session, h, 2))["final_acceptance_id"]
+            assert (await apply_outcome(session, h, 2)).final_acceptance_id
 
 
 async def test_acceptance_clock_and_immutability(tmp_path, isolated_database_env, monkeypatch):
@@ -149,7 +149,7 @@ async def test_acceptance_clock_and_immutability(tmp_path, isolated_database_env
         async with h.factory() as session:
             assert await outcome_snapshot(session) == retained
         async with h.factory() as session, session.begin():
-            assert await apply_outcome(session, h, 2) == result | {"replayed": True}
+            assert await apply_outcome(session, h, 2) == result.model_copy(update={"replayed": True})
 
 
 async def test_uncommitted_routing_parent_cannot_authorize_acceptance(
@@ -164,7 +164,7 @@ async def test_uncommitted_routing_parent_cannot_authorize_acceptance(
             pending = await apply_outcome(parent, h, 2)
             values = await parent.scalar(
                 text("SELECT to_jsonb(f) FROM public.final_acceptances f WHERE id=:id"),
-                {"id": pending["final_acceptance_id"]},
+                {"id": pending.final_acceptance_id},
             )
             values.pop("accepted_at")
             values["id"] = new_record_id()
@@ -185,4 +185,4 @@ async def test_uncommitted_routing_parent_cannot_authorize_acceptance(
                 == 0
             )
         async with h.factory() as session, session.begin():
-            assert (await apply_outcome(session, h, 2))["final_acceptance_id"]
+            assert (await apply_outcome(session, h, 2)).final_acceptance_id

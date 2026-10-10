@@ -13,7 +13,7 @@ submitter contribution, applicable awards and audit/outbox evidence. Database
 closure rejects incomplete outcomes; fresh-authorized replay returns the stored
 complete tuple. No Review or reviewer contribution is fabricated.
 
-Completion-handler wiring is next, followed by 04F remediation, 04E3 production
+B8 supplies hidden completion delivery with commit-before-ACK. Next: 04F remediation, 04E3 production
 composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.
@@ -44,8 +44,7 @@ of review/revision behavior. The downstream owner contracts remain separate.
 - Delivered storage: [REV-03B](../WS-REV-001/WS-REV-001-03B.md) freezes exact
   lease packets with normalized live guide ingests; no resolver or byte authority.
   [REV-04A](../WS-REV-001/WS-REV-001-04A.md) adds complete immutable Review, findings, resolutions and completed request storage; no decision runtime.
-- Next usable boundary: completion-handler wiring consumes the delivered
-  04E2-B authorized outcome and acknowledges only after commit. Then prove 04F
+- Next usable boundary: prove 04F
   remediation, 04E3 live composition and false-guide readiness, public intake
   and the first-layer drill. True handoff remains independent of REV/CON;
   live human review/revision and payment delivery stay deferred.
@@ -103,7 +102,7 @@ acceptance signal.
 
 The [versioned policy setting](../../changes/pre-review-plan-reconciliation.md#delivered-policy-setting-implementation)
 is available for draft configuration. ARCH-04E2-B supplies mandatory routing
-authority and atomic CON participation; completion delivery, remediation and
+authority and atomic CON participation; B8 supplies hidden completion delivery. Remediation and
 production readiness still precede enabling false. The automated branch must not depend on
 live human queues, ReviewLeases or decision endpoints. Human lifecycle work
 remains required for v0.1, but need not delay the first automated end-to-end

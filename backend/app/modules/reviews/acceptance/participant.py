@@ -41,6 +41,10 @@ class FinalAcceptanceParticipant:
         self._contributions = contributions
         self._repository = FinalAcceptanceRepository(session)
 
+    async def observe_generation(self) -> int:
+        """Delegate phase-agnostic observation to the REV controller owner."""
+        return await self._fence.observe_generation()
+
     @asynccontextmanager
     async def prepare(self, expected_generation: int):
         """Acquire REV once, before the caller locks TASK or consumes AUTH."""

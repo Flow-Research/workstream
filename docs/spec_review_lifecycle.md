@@ -285,7 +285,7 @@ earlier Submission and ReviewLease lineage remains immutable.
 Only a durable, final, current post-submit CheckerRun outcome of `allow_review`
 may admit the exact immutable Submission to human review. Admission records the
 exact CheckerRun ID and verified binding facts through the authority-hardened TASK-owned canonical `allow_review` manifest
-delivered by ARCH-04E2-B; automatic completion delivery remains pending. The manifest binds the
+delivered by ARCH-04E2-B; B8 supplies hidden completion delivery; automatic production delivery remains pending. The manifest binds the
 current evaluation generation/result and immutable Submission; it does not
 replace CHECKERS truth or grant review authority. REV validates the current
 TASK handoff through its public port before recording admission. A retry, supersession, or
@@ -297,7 +297,7 @@ entry or make REV admission a prerequisite of the TASK transition. Its false
 branch instead binds the exact `TaskAcceptedEffectsRequest` for the future shared
 FinalAcceptance operation, with no Review, ReviewLease or reviewer contribution.
 ARCH-04E2-B now authorizes both branches through the complete hidden outcome
-operation. Completion delivery and production registration remain unavailable.
+operation. B8 supplies hidden completion delivery; production registration remains unavailable.
 
 Checker routing is not human judgment. A final needs-remediation CHECKER result
 is consumed by the TASK-owned ARCH-04F handler, which moves the Task to
@@ -620,8 +620,8 @@ The migration refusal and preservation proof is in
 
 ARCH-04E2-B proves the complete hidden false-policy outcome using explicitly
 seeded, internally valid false guide lineage and real routing AUTH. It creates no
-Review. The unmodified public guide guard still denies false; completion delivery,
-remediation and production composition must pass before that guard can admit it.
+Review. B8 supplies hidden completion delivery. The public guide guard still denies
+false; remediation and production composition must pass before it can admit false.
 
 ### Shared transaction and dependency direction
 
@@ -667,8 +667,8 @@ does not acquire TASK after its own row lock; composite admission callers start
 with the guarded current-result read. PostgreSQL proof includes the intermediate
 wait between that read and queue insertion, not just completed admission. Its
 PostgreSQL controls prove that shared acceptance prevents a later generation,
-and a committed successor invalidates old routing preparation. ARCH-04E2-B exercises the authorized acceptance/successor race. Completion
-delivery still needs its own invocation/acknowledgment race proof; these hidden
+and a committed successor invalidates old routing preparation. ARCH-04E2-B exercises the authorized acceptance/successor race. B8 supplies completion
+delivery with invocation/finalization and generation-change race proof; these hidden
 controls do not register production handlers. After acceptance,
 reject a new evaluation generation, resubmission or policy
 rebase for that task. Racing acceptance, supersession and retries serialize:
@@ -724,7 +724,7 @@ Extract foundations from existing owner work, not a new initiative:
    acquires the existing REV fence before TASK and later AUTH; true acquires no
    REV/CON participant. Exact replay retains IDs and cannot repair partial facts.
    Pre-authority outcomes are refused on upgrade without rewriting them.
-   The next ARCH-04E1B-B completion handler consumes this operation and
+   The hidden ARCH-04E1B-B8 completion handler consumes this operation and
    acknowledges only after commit. Prove 04F remediation before 04E3 registers
    the connected production runtime and enables false-guide readiness. Live
    human review/revision and fulfillment remain separate work.

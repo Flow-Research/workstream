@@ -50,7 +50,7 @@ async def test_stopped_terminal_replay_is_select_only(
                     replay = await apply_outcome(session, h, receipt.generation)
             finally:
                 event.remove(engine, "before_cursor_execute", observe)
-            assert replay == original | {"replayed": True}
+            assert replay == original.model_copy(update={"replayed": True})
             assert writes == []
         # Valid retained receipts remain evidence after a later lifecycle restart.
         await transition(await command_for(access.target.id, "shadow"))
@@ -124,7 +124,7 @@ async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
             await observe_advisory_wait(h.factory, pid, stopper)
             proceed.set()
             accepted, stopped = await asyncio.wait_for(asyncio.gather(writer, stopper), 15)
-            assert accepted["final_acceptance_id"] is not None
+            assert accepted.final_acceptance_id is not None
             assert stopped.phase == "draining"
         finally:
             proceed.set()
@@ -341,7 +341,7 @@ async def test_task_read_acceptance_and_transition_intermediate_waits(
             proceed.set()
             detail, accepted, stopped = await asyncio.wait_for(asyncio.gather(*jobs), 20)
             assert detail.task_id == h.request.task_id
-            assert accepted["final_acceptance_id"] is not None
+            assert accepted.final_acceptance_id is not None
             assert stopped.phase == "draining" and stopped.generation == 3
         finally:
             proceed.set()

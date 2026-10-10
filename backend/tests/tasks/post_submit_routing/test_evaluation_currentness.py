@@ -65,7 +65,7 @@ async def _acceptance_wins(tmp_path, database_url):
         async with h.factory() as session, session.begin():
             before = await _counts(session)
             assert before == (1, 1, 1, 1, 0)
-            assert accepted["final_acceptance_id"] is not None
+            assert accepted.final_acceptance_id is not None
             assert (
                 await session.scalar(
                     text("SELECT status FROM public.workstream_tasks WHERE id=:id"),
