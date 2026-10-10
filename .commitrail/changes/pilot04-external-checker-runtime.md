@@ -272,11 +272,11 @@ No database transaction crosses the client call.
 
 - Current-source reconciliation: branch `codex/pilot04-external-runtime`
   started at merged PR #521 and merged current main
-  `4c5720034a2a1019f00df6c7f96601407ef1e43a`; the incoming CLI approval files
-  and roadmap statements are preserved.
+  `69bef5054fedc36e123a0f1352af752e433066c5`; the incoming CLI approval and
+  hidden routing-outcome files and roadmap statements are preserved.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product and ART source
-  code. Its migration is authored separately by this lane as revision 0030 and
-  is not part of this runtime PR. No PILOT-02 worktree is edited here.
+  code. Its migration is authored separately by this lane as the next linear revision after merged routing
+  revision 0030 and is not part of this runtime PR. No PILOT-02 worktree is edited here.
 - Remaining PILOT-04 work: one Workstream default checker implementing all four
   confirmed blocking behaviors, project image policy binding, full pre/post
   caller integration, caller-atomic admission, durable attempt/isolation

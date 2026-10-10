@@ -170,7 +170,9 @@ class PostSubmissionMaterializer:
             raise PostSubmissionMaterializationUnavailable("post_submit_material_unavailable") from None
 
     async def materialize(
-        self, facts: ExecuteFacts, consumer: PostSubmissionMaterialConsumer,
+        self,
+        facts: ExecuteFacts,
+        consumer: PostSubmissionMaterialConsumer,
     ) -> PostSubmissionMaterializationResult:
         """Verify bytes, run the scoped consumer, clean up, and reject late drift."""
         facts = ExecuteFacts.model_validate_json(facts.model_dump_json())
@@ -228,9 +230,15 @@ class PostSubmissionMaterializer:
             raise failure
         facts = selected.submission
         return PostSubmissionMaterializationResult(
-            submission_id=facts.submission_id, submission_version=facts.submission_version,
-            admission_id=facts.admission_id, binding_id=facts.binding_id, content_id=facts.content_id,
-            replica_id=selected.replica_id, content_sha256=selected.sha256,
-            byte_count=selected.byte_count, semantic_manifest_sha256=selected.semantic_manifest_sha256,
+            submission_id=facts.submission_id,
+            submission_version=facts.submission_version,
+            admission_id=facts.admission_id,
+            binding_id=facts.binding_id,
+            content_id=facts.content_id,
+            replica_id=selected.replica_id,
+            content_sha256=selected.sha256,
+            byte_count=selected.byte_count,
+            semantic_manifest_sha256=selected.semantic_manifest_sha256,
             evaluation=evaluation,
+            input_materialization_evidence_id=evidence_id,
         )

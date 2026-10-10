@@ -685,7 +685,8 @@ mutations. ARCH-04E owns the current `allow_review` manifest and TASK transition
 ARCH-04F owns contributor-readable non-allow remediation before public cutover.
 The direct CHECKERS-to-TASK mutation, fabricated system actor and alternate
 Celery gate are removed. Hidden durable execution and exact service authority are implemented; automatic
-routing remains unavailable until ARCH-04E.
+routing remains unregistered. ARCH-04E2-B supplies the hidden authorized
+outcome operation; completion delivery and live composition remain pending.
 
 `review_pending` marks readiness for the separately owned WS-REV lifecycle.
 WS-REV alone creates `ReviewPacketManifest`, review queues, reviewer leases,

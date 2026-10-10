@@ -5,7 +5,7 @@ from contextlib import AbstractAsyncContextManager
 from datetime import UTC
 from typing import Literal, Protocol
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
 
@@ -85,7 +85,15 @@ class FinalizeFacts(ExecuteFacts):
 
     result: PostSubmissionEvaluationResult
     material: VerifiedMaterialFacts | None
+    input_materialization_evidence_id: ResourceId | None
     output_binding_ids: tuple[ResourceId, ...] = Field(max_length=0)
+
+    @model_validator(mode="after")
+    def material_receipt_required(self):
+        """No material-bearing result may discard its actual input authority."""
+        if (self.material is None) != (self.input_materialization_evidence_id is None):
+            raise ValueError("checker material and input authorization must occur together")
+        return self
 
 
 class FinalizeAuthorityFacts(FinalizeFacts):
@@ -122,7 +130,13 @@ def execution_authority_values(facts: ExecuteFacts | FinalizeAuthorityFacts) -> 
             raise ValueError("checker authority result mismatch")
         values.update(
             execute_evidence_id=str(facts.execute_evidence_id),
-            result_digest=facts.result.result_digest, outcome=facts.result.outcome,
+            input_materialization_evidence_id=(
+                str(facts.input_materialization_evidence_id)
+                if facts.input_materialization_evidence_id is not None
+                else None
+            ),
+            result_digest=facts.result.result_digest,
+            outcome=facts.result.outcome,
             failure_code=facts.result.infrastructure_failure_code,
             material=facts.material.model_dump(mode="json") if facts.material else None,
             output_binding_ids=[],
@@ -283,3 +297,4 @@ class VerifiedEvaluationCompletion(PostSubmitValue):
     completion: EvaluationCompletion
     submission_version: VersionNumber
     material: VerifiedMaterialFacts
+    input_materialization_evidence_id: ResourceId

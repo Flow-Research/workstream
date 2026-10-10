@@ -19,9 +19,9 @@ from .test_requests import effect_snapshot
 
 
 @asynccontextmanager
-async def routing_source(tmp_path, database_url):
+async def routing_source(tmp_path, database_url, **options):
     """Real completed evaluation with its canonical pending state and claim."""
-    async with completed_source(tmp_path, database_url) as h:
+    async with completed_source(tmp_path, database_url, **options) as h:
         async with h.factory() as session, session.begin():
             started = await session.execute(text(
                 "UPDATE public.task_assignments SET accepted_at=clock_timestamp() "

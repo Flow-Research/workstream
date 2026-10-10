@@ -61,6 +61,10 @@
       "target": "backend/app/adapters/projects/contribution_validation.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/tasks/routing_acceptance.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/api_controls.py"
     },
@@ -743,6 +747,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared_proposal_replay.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_routing_replay.py"
     },
     {
       "group": "auth",
@@ -1502,6 +1510,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/routing_outcome.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/submission_command.py"
     },
     {
@@ -1555,6 +1567,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/post_submit_routing/models.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/post_submit_routing/outcome.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/post_submit_routing/ports.py"
     },
     {
       "group": "lifecycle",
@@ -1757,7 +1777,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "39bcaa0dd19e2caf1b22a1894a9af25428c2323b831f725aa0dd49d6aea8df1b",
+  "authority_digest": "d009164cb2070b810b56ea7673719e120939e9f630b26214ee5ec0ec1435abb8",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

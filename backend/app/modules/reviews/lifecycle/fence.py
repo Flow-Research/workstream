@@ -1,6 +1,7 @@
 """The one REV mutation lock, retained until the caller ends its root transaction."""
 
 import hashlib
+from contextlib import asynccontextmanager
 
 from pydantic import ValidationError
 from sqlalchemy import select, text
@@ -28,6 +29,16 @@ class PostgresJointLifecycleMutationFence:
     def __init__(self, session: AsyncSession) -> None:
         """Use the caller's session for all fence and later participant work."""
         self._session = session
+
+    @asynccontextmanager
+    async def hold(self, expected_generation: int):
+        """Issue a root-bound view after the sole controller lock acquisition."""
+        facts = await self.acquire(expected_generation)
+        held = _HeldLifecycleFence(self._session, facts)
+        try:
+            yield held
+        finally:
+            held.close()
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Return current locked scalar facts only for the expected generation."""
@@ -89,3 +100,43 @@ class PostgresJointLifecycleMutationFence:
             )
         except (ValueError, ValidationError) as exc:
             raise JointLifecycleUnavailable("lifecycle controller malformed") from exc
+
+
+class _HeldLifecycleFence:
+    """REV-owned custody view; checking it never acquires a controller lock."""
+
+    def __init__(self, session: AsyncSession, facts: JointLifecycleControlFacts):
+        """Bind retained lifecycle facts to the exact session and root transaction."""
+        self._session = session
+        self._transaction = session.sync_session.get_transaction()
+        self._facts = facts
+        self._closed = False
+
+    def close(self) -> None:
+        """Invalidate the view when the owning fence context exits."""
+        self._closed = True
+
+    async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
+        """Validate original root custody without reacquiring the controller lock."""
+        if (
+            self._closed
+            or type(expected_generation) is not int
+            or expected_generation != self._facts.generation
+            or self._session.sync_session.get_transaction() is not self._transaction
+            or self._transaction is None
+            or not self._transaction.is_active
+            or self._session.in_nested_transaction()
+        ):
+            raise JointLifecycleUnavailable("held lifecycle custody is unavailable")
+        connection = await self._session.connection()
+        if connection.in_nested_transaction():
+            raise JointLifecycleUnavailable("held lifecycle requires a root transaction")
+        try:
+            # Raw SAVEPOINT is invisible to SQLAlchemy; this adds no row lock.
+            await self._session.execute(text("SELECT pg_catalog.pg_export_snapshot()"))
+        except DBAPIError as exc:
+            if getattr(exc.orig, "sqlstate", None) != "25001":
+                raise
+            self.close()
+            raise JointLifecycleUnavailable("held lifecycle requires a root transaction") from exc
+        return self._facts

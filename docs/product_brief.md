@@ -62,8 +62,9 @@ in the existing locked ReviewPolicy may be set false for authorized automated
 acceptance, without reviewer contribution. REV-04C supplies the hidden
 FinalAcceptance/TASK/CON transaction participant, but this is not live behavior; the
 [bounded handoff](../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next)
-now provides configuration; exact authority/evidence, routing handlers,
-currentness proof and activation of the shared acceptance/CON path remain pending.
+provides configuration. ARCH-04E2-B now supplies the complete hidden authorized
+outcome over that participant. Completion delivery, remediation and production
+composition remain before false-guide activation and public intake.
 See the [checker framework](architecture_checker_framework.md) and
 [current capability ledger](roadmap_status.md) for supported boundaries.
 

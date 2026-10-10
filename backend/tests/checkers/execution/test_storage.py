@@ -63,7 +63,7 @@ async def test_terminal_member_and_routing_custody(tmp_path, isolated_database_e
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         members = list(facts.result.member_results)
         definition = h.request.catalogue.definition(
             members[0].checker_id, members[0].definition_version
@@ -130,7 +130,7 @@ async def test_unfinished_members_cannot_commit(tmp_path, isolated_database_env)
 
             repo = ExecutionRepository(session)
             run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
-            await repo.write_members(run, final_facts(h, lease).result)
+            await repo.write_members(run, (await final_facts(h, lease)).result)
             # An insert must itself schedule the parent terminal constraint; this
             # cannot depend on the caller remembering to update the parent.
             with pytest.raises(IntegrityError, match="partial checker members"):
@@ -147,7 +147,7 @@ async def test_member_shape_and_complete_set_enforced_in_database(
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         first = facts.result.member_results[0]
         values = dict(
             id=str(new_record_id()),
@@ -218,7 +218,7 @@ async def test_consistently_short_result_cannot_omit_selected_policy_member(
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        valid = final_facts(h, lease)
+        valid = await final_facts(h, lease)
         assert len(valid.result.member_results) > 1
         assert all(member.status == "passed" for member in valid.result.member_results)
         body = valid.result.model_dump(exclude={"result_digest"})
@@ -280,7 +280,10 @@ async def test_infrastructure_failure_code_is_closed_in_database(tmp_path, isola
                 ("invented_failure", None),
                 # Valid ART lineage isolates the terminal-shape guard: material
                 # must be absent when the declared failure is material_unavailable.
-                ("material_unavailable", final_facts(h, lease).material.model_dump(mode="json")),
+                (
+                    "material_unavailable",
+                    (await final_facts(h, lease)).material.model_dump(mode="json"),
+                ),
             ):
                 candidate = body | {"infrastructure_failure_code": code}
                 statement = update(CheckerRun).where(CheckerRun.id == str(result.attempt_id)).values(
@@ -296,7 +299,9 @@ async def test_infrastructure_failure_code_is_closed_in_database(tmp_path, isola
                 await session.rollback()
                 run = await session.get(CheckerRun, str(result.attempt_id))
                 assert run.status == "running" and run.result_json is None
-        valid = final_facts(h, lease).model_copy(update={"result": result, "material": None})
+        valid = (await final_facts(h, lease)).model_copy(
+            update={"result": result, "material": None, "input_materialization_evidence_id": None}
+        )
         assert await live_executor(h).finalize(valid) == result
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))

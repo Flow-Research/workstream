@@ -19,7 +19,7 @@ from app.modules.projects.models import (
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.post_submit_routing import TaskPostSubmitManifestFacts
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-from app.modules.tasks.models import Submission, TaskAssignment, WorkstreamTask
+from app.modules.tasks.models import Submission, SubmissionDispatch, TaskAssignment, WorkstreamTask
 from tests.checkers.execution.support import live_executor, reserve
 from tests.checkers.post_submit.support import change_request
 from tests.post_submit_materialization_helpers import material_fixture
@@ -55,25 +55,6 @@ SOURCE_COLUMNS = (
     "semantic_manifest_sha256",
 )
 
-_INSERT_SOURCE_WITH_CREATED_AT = text(
-    "INSERT INTO public.task_post_submit_routing_manifests ("
-    + ",".join(SOURCE_COLUMNS)
-    + ") VALUES ("
-    + ",".join(f":{column}" for column in SOURCE_COLUMNS)
-    + ")"
-)
-_DEFAULTED_SOURCE_COLUMNS = tuple(
-    column for column in SOURCE_COLUMNS if column != "created_at"
-)
-_INSERT_SOURCE = text(
-    "INSERT INTO public.task_post_submit_routing_manifests ("
-    + ",".join(_DEFAULTED_SOURCE_COLUMNS)
-    + ") VALUES ("
-    + ",".join(f":{column}" for column in _DEFAULTED_SOURCE_COLUMNS)
-    + ")"
-)
-
-
 def as_uuid(value) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
 
@@ -82,12 +63,6 @@ def other_hash(value: str) -> str:
     """Return another syntactically valid SHA-256 token."""
     suffix = "0" if value[-1] != "0" else "1"
     return value[:-1] + suffix
-
-
-async def insert_source(session, values: dict) -> None:
-    """Insert exactly one source row through the public SQL boundary."""
-    statement = _INSERT_SOURCE_WITH_CREATED_AT if "created_at" in values else _INSERT_SOURCE
-    await session.execute(statement, values)
 
 
 async def source_rows(session) -> list[dict]:
@@ -170,6 +145,9 @@ async def joined_source_facts(h, stored: dict) -> TaskPostSubmitManifestFacts:
             else None
         )
         run = await session.get(CheckerRun, str(stored["checker_run_id"]))
+        dispatch = await session.scalar(
+            select(SubmissionDispatch).where(SubmissionDispatch.submission_id == submission.id)
+        )
     material = run.material_custody
     lineage = TaskPolicyLineage(
         locked_guide_version=submission.locked_guide_version,
@@ -218,6 +196,9 @@ async def joined_source_facts(h, stored: dict) -> TaskPostSubmitManifestFacts:
         ),
         predecessor_submission_version=predecessor.version if predecessor else None,
         admission_id=as_uuid(material["admission_id"]),
+        creation_decision_id=as_uuid(dispatch.creation_decision_id),
+        binding_decision_id=as_uuid(dispatch.binding_decision_id),
+        input_materialization_evidence_id=as_uuid(run.input_materialization_evidence_id),
         binding_id=as_uuid(material["binding_id"]),
         content_id=as_uuid(material["content_id"]),
         locked_policy=lineage,
@@ -233,15 +214,16 @@ async def completed_source(
     provision_services=True,
     storage_settings=None,
     contribution_awards=(),
-    material_source=material_fixture,
+    human_review_required=True,
 ):
     """Yield one real authorized allow-review run and its valid source scalars."""
-    async with material_source(
+    async with material_fixture(
         tmp_path,
         database_url,
         provision_services=provision_services,
         storage_settings=storage_settings,
         contribution_awards=contribution_awards,
+        human_review_required=human_review_required,
     ) as h:
         await reserve(h)
         result = await live_executor(h).evaluate_post_submission(h.request)

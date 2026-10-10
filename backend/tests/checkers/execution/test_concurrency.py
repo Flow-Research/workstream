@@ -20,8 +20,25 @@ from tests.post_submit_materialization_helpers import material_fixture
 from .support import reserve, live_executor
 
 
-def final_facts(h, lease):
+async def final_facts(h, lease):
     """A controlled closed result for lease races, not a byte-evaluation assertion."""
+    from tests.checkers.execution.storage_fixture import authorize_stored_material
+    from app.modules.checkers.api.execution import ExecuteFacts
+
+    material = VerifiedMaterialFacts(
+        submission_id=h.request.submission_id,
+        submission_version=h.request.submission_version,
+        admission_id=h.created.admission_id,
+        binding_id=h.request.binding_id,
+        content_id=h.request.content_id,
+        replica_id=h.replica_id,
+        content_sha256=h.request.content_sha256,
+        byte_count=h.request.byte_count,
+        semantic_manifest_sha256=h.manifest.sha256,
+    )
+    receipt = await authorize_stored_material(
+        h.factory, ExecuteFacts(request=h.request, lease=lease), material
+    )
     return FinalizeFacts(
         request=h.request,
         lease=lease,
@@ -30,17 +47,8 @@ def final_facts(h, lease):
             attempt_id=lease.reservation.attempt_id,
             result_id=lease.reservation.result_id,
         ),
-        material=VerifiedMaterialFacts(
-            submission_id=h.request.submission_id,
-            submission_version=h.request.submission_version,
-            admission_id=h.created.admission_id,
-            binding_id=h.request.binding_id,
-            content_id=h.request.content_id,
-            replica_id=h.replica_id,
-            content_sha256=h.request.content_sha256,
-            byte_count=h.request.byte_count,
-            semantic_manifest_sha256=h.manifest.sha256,
-        ),
+        material=material,
+        input_materialization_evidence_id=receipt,
         output_binding_ids=(),
     )
 
@@ -86,7 +94,7 @@ async def test_stale_worker_cannot_finalize_after_takeover(
         executor = live_executor(h)
         monkeypatch.setattr(execution, "LEASE_SECONDS", 1)
         old, _ = await executor._claim(h.request)
-        old_facts = final_facts(h, old)
+        old_facts = await final_facts(h, old)
         async with h.factory() as session:
             await session.execute(text("select pg_sleep(1.05)"))
         monkeypatch.setattr(execution, "LEASE_SECONDS", 300)
@@ -95,13 +103,15 @@ async def test_stale_worker_cannot_finalize_after_takeover(
             current.reservation == old.reservation
             and current.lease_generation == old.lease_generation + 1
         )
-        current_facts = old_facts.model_copy(update={"lease": current})
         if not old_first:
+            current_facts = await final_facts(h, current)
             await executor.finalize(current_facts)
         with pytest.raises(CheckerExecutionUnavailable):
             await executor.finalize(old_facts)
         if old_first:
+            current_facts = await final_facts(h, current)
             await executor.finalize(current_facts)
+        assert current_facts.input_materialization_evidence_id != old_facts.input_materialization_evidence_id
         async with h.factory() as session, session.begin():
             stored = await evaluation_coordinator(session).read_current_result(h.request)
             assert stored.result == current_facts.result
@@ -115,7 +125,7 @@ async def test_generation_advance_and_finalize_serialize(
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         successor = change_request(
             h.request, evaluation_request_id=new_record_id(), evaluation_generation=2
         )
@@ -250,7 +260,7 @@ async def test_member_insertion_waits_for_terminal_parent(
         await reserve(h)
         executor = live_executor(h)
         lease, _ = await executor._claim(h.request)
-        facts = final_facts(h, lease)
+        facts = await final_facts(h, lease)
         entered, release = asyncio.Event(), asyncio.Event()
         holder = []
         original = ExecutionRepository.write_members

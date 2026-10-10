@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_uuid7_v01"
-_CURRENT_HEAD_REVISION = "0029_external_checker_registry"
+_CURRENT_HEAD_REVISION = "0030_routing_outcomes"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_uuid7_v01 migration"
@@ -52,7 +52,39 @@ def do_run_migrations(connection: Connection) -> None:
             .scalars()
             .all()
         )
-        if revisions not in ((), (_BASELINE_REVISION,), ("0002_task_queue_authority",), ("0003_task_read_authority",), ("0004_task_context_authority",), ("0005_task_evidence_authority",), ("0006_history_read_authority",), ("0007_checker_output_custody",), ("0008_checker_execution",), ("0009_checker_material_lineage",), ("0010_post_submit_authority",), ("0011_task_routing_source",), ("0012_review_packet",), ("0013_review_source",), ("0014_final_acceptance",), ("0015_contribution_awards",), ("0016_review_lifecycle_fence",), ("0017_acceptance_source_contracts",), ("0018_task_routing_request",), ("0019_submitter_awards",), ("0020_review_admission_lock_order",), ("0021_submission_manifest",), ("0022_submission_packet_custody",), ("0023_remove_task_payment_policy",), ("0024_require_second_review_false",), ("0025_submission_dispatch",), ("0026_task_guide_read",), ("0027_markdown_guide_media",), ("0028_lifecycle_transitions",), (_CURRENT_HEAD_REVISION,)):
+        if revisions not in (
+            (),
+            (_BASELINE_REVISION,),
+            ("0002_task_queue_authority",),
+            ("0003_task_read_authority",),
+            ("0004_task_context_authority",),
+            ("0005_task_evidence_authority",),
+            ("0006_history_read_authority",),
+            ("0007_checker_output_custody",),
+            ("0008_checker_execution",),
+            ("0009_checker_material_lineage",),
+            ("0010_post_submit_authority",),
+            ("0011_task_routing_source",),
+            ("0012_review_packet",),
+            ("0013_review_source",),
+            ("0014_final_acceptance",),
+            ("0015_contribution_awards",),
+            ("0016_review_lifecycle_fence",),
+            ("0017_acceptance_source_contracts",),
+            ("0018_task_routing_request",),
+            ("0019_submitter_awards",),
+            ("0020_review_admission_lock_order",),
+            ("0021_submission_manifest",),
+            ("0022_submission_packet_custody",),
+            ("0023_remove_task_payment_policy",),
+            ("0024_require_second_review_false",),
+            ("0025_submission_dispatch",),
+            ("0026_task_guide_read",),
+            ("0027_markdown_guide_media",),
+            ("0028_lifecycle_transitions",),
+            ("0029_external_checker_registry",),
+            (_CURRENT_HEAD_REVISION,),
+        ):
             raise RuntimeError(_RECREATE_GUIDANCE)
     # The read-only preflight autobegins a SQLAlchemy transaction. End that
     # transaction before Alembic establishes the migration transaction;

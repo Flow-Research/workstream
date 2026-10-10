@@ -17,11 +17,11 @@ def forbidden_post_submission():
     return ForbiddenPostSubmission()
 
 
-async def provision_checker_service(factory):
+async def provision_post_submit_service(factory, identity=ServiceIdentity.CHECKER_POST_SUBMIT):
     """Create fixture principal once without resetting an existing lifecycle decision."""
     async with factory() as session, session.begin():
         existing = await session.scalar(select(ActorProfile).where(
-            ActorProfile.service_identity == ServiceIdentity.CHECKER_POST_SUBMIT.value,
+            ActorProfile.service_identity == identity.value,
         ))
         if existing is not None:
             return existing.id
@@ -29,7 +29,7 @@ async def provision_checker_service(factory):
         session.add(ActorProfile(
             id=actor_id, actor_kind="service", status="active",
             provisioning_method="manual_service_provisioning",
-            service_identity=ServiceIdentity.CHECKER_POST_SUBMIT.value, created_by="checker-test",
+            service_identity=identity.value, created_by="checker-test",
         ))
         session.add(ActorIdentityLink(
             id=link_id, actor_profile_id=actor_id, issuer="flow-test", subject=actor_id,
