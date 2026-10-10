@@ -367,3 +367,112 @@ async def test_postgres_rejects_source_mutation_and_foreign_attempt_custody(impo
                 async with session.begin():
                     await session.execute(text(statement), params)
     assert (await _effects()) == (2, 1, 3, 0)
+
+
+async def _missing_source_put(client, monkeypatch):
+    """Prepare one admitted uncertain source whose actual MinIO object is absent."""
+    project = await _project(client)
+    raw = json.dumps(document()).encode()
+    source = await _declare(client, project, raw)
+    original_put, written_refs = S3CompatibleArtifactStore.put, []
+
+    async def lose_acknowledgement(self, prepared):
+        result = await original_put(self, prepared)
+        written_refs.append(result.provider_object_ref)
+        raise ArtifactStoreUnavailableError("uncertainty after real MinIO put")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(S3CompatibleArtifactStore, "put", lose_acknowledgement)
+        first = await client.put(_path(project, source) + "/content",
+                                 headers=auth_headers() | {"Content-Type": "application/json"}, content=raw)
+    assert first.status_code == 200 and first.json()["status"] == "acknowledgement_unknown", first.text
+    assert len(written_refs) == 1
+    settings, provider_session = get_settings(), AioSession()
+    provider_session.set_credentials("workstream-minio", "workstream-minio-secret-key")
+    async with provider_session.create_client(
+        "s3", endpoint_url=settings.artifact_s3_endpoint_url, region_name="us-east-1",
+        config=AioConfig(s3={"addressing_style": "path"}),
+    ) as provider:
+        await provider.delete_object(Bucket=settings.artifact_s3_bucket,
+                                     Key=settings.artifact_s3_private_prefix + "/" + written_refs[0])
+    async with db_session.get_session_factory()() as session, session.begin():
+        attempt = (await session.scalars(select(ArtifactPutAttempt).where(
+            ArtifactPutAttempt.task_import_source_id == source["source_id"]))).one()
+        attempt_id = UUID(attempt.id)
+        await session.execute(text("update artifact_put_attempts set next_run_at=clock_timestamp()-interval '1 second' "
+                                   "where id=:id"), {"id": attempt_id})
+    return project, source, raw, attempt_id
+
+
+async def test_upload_replay_and_terminal_absence_recovery_complete_without_lock_cycle(import_source_client, monkeypatch):
+    """A real admission-scope wait resolves without SOURCE/SCOPE deadlock or duplicate custody."""
+    from app.adapters.artifacts.internal_workers import (
+        run_artifact_internal_operation, scan_artifact_pending_work, shutdown_artifact_internal_runtime,
+    )
+    from app.modules.artifacts.repository import ArtifactRepository
+
+    client = import_source_client
+    project, source, raw, attempt_id = await _missing_source_put(client, monkeypatch)
+    published = []
+
+    async def publish_put(value):
+        published.append(value)
+
+    async def publish_job(_value):
+        raise AssertionError("missing source has no verification job")
+
+    assert await scan_artifact_pending_work(publish_put, publish_job) == 1
+    assert published == [str(attempt_id)]
+    worker_scopes_locked, release_worker, upload_scope_started = (asyncio.Event() for _ in range(3))
+    pids, tasks = {}, []
+    original_lock_scopes = ArtifactRepository.lock_charge_scopes
+    original_ensure_scopes = ArtifactRepository.ensure_and_lock_admission_scopes
+
+    async def gated_lock_scopes(self, charges):
+        result = await original_lock_scopes(self, charges)
+        if asyncio.current_task().get_name() == "source-absence-worker":
+            pids["worker"] = await self._session.scalar(text("select pg_backend_pid()"))
+            worker_scopes_locked.set()
+            await asyncio.wait_for(release_worker.wait(), timeout=20)
+        return result
+
+    async def gated_ensure_scopes(self, scopes):
+        if asyncio.current_task().get_name() == "source-upload-replay":
+            pids["upload"] = await self._session.scalar(text("select pg_backend_pid()"))
+            upload_scope_started.set()
+        return await original_ensure_scopes(self, scopes)
+
+    monkeypatch.setattr(ArtifactRepository, "lock_charge_scopes", gated_lock_scopes)
+    monkeypatch.setattr(ArtifactRepository, "ensure_and_lock_admission_scopes", gated_ensure_scopes)
+    try:
+        worker = asyncio.create_task(run_artifact_internal_operation("put", attempt_id), name="source-absence-worker")
+        tasks.append(worker)
+        await asyncio.wait_for(worker_scopes_locked.wait(), timeout=20)
+        upload = asyncio.create_task(client.put(_path(project, source) + "/content",
+            headers=auth_headers() | {"Content-Type": "application/json"}, content=raw), name="source-upload-replay")
+        tasks.append(upload)
+        await asyncio.wait_for(upload_scope_started.wait(), timeout=20)
+        waiting = None
+        for _ in range(100):
+            async with db_session.get_session_factory()() as observer:
+                waiting = (await observer.execute(text(
+                    "select wait_event_type,pg_blocking_pids(pid),query from pg_stat_activity where pid=:pid"
+                ), {"pid": pids["upload"]})).one()
+            if waiting[0] == "Lock" and pids["worker"] in waiting[1]:
+                break
+            await asyncio.sleep(0.02)
+        assert waiting[0] == "Lock" and pids["worker"] in waiting[1], "upload never waited for worker's admission scope"
+        assert "artifact_admission_scopes" in waiting[2]
+        release_worker.set()
+        worker_result, response = await asyncio.wait_for(asyncio.gather(worker, upload), timeout=20)
+        assert worker_result == "missing"
+        assert response.status_code == 200 and response.json()["status"] == "verified", response.text
+        assert response.json()["source_id"] == source["source_id"]
+        assert (await _effects()) == (1, 1, 3, 0)
+    finally:
+        release_worker.set()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        shutdown_artifact_internal_runtime()
