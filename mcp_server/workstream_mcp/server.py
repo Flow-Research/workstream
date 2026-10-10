@@ -25,7 +25,7 @@ from workstream_mcp.schemas import (
     profile_output_schema,
     profile_update_output_schema,
 )
-from workstream_mcp.tools import access_reads
+from workstream_mcp.tools import access_reads, admin_grants
 from workstream_mcp.tools.context import (
     TOOL_NAME as AUTHORIZATION_CONTEXT_TOOL_NAME,
 )
@@ -105,13 +105,21 @@ def create_app(settings: Settings) -> Starlette:
     profile_update_output_schema()
     authorization_context_output_schema()
     access_definitions = access_reads.definitions()
+    admin_grant_definitions = admin_grants.definitions()
     gateway: WorkstreamGateway | None = None
 
     async def list_tools(
         request: ServerRequestContext[Any], params: PaginatedRequestParams | None
     ) -> ListToolsResult:
         return ListToolsResult(
-            tools=[get_definition(), update_definition(), context_definition(), *access_definitions]
+            tools=[
+                get_definition(),
+                update_definition(),
+                context_definition(),
+                *access_definitions[:3],
+                *admin_grant_definitions,
+                *access_definitions[3:],
+            ]
         )
 
     async def call_tool(
@@ -122,6 +130,7 @@ def create_app(settings: Settings) -> Starlette:
             PROFILE_UPDATE_TOOL_NAME,
             AUTHORIZATION_CONTEXT_TOOL_NAME,
             *access_reads.TOOL_NAMES,
+            *admin_grants.TOOL_NAMES,
         }:
             return adapter_failure("unknown_tool", status=404)
         arguments = params.arguments if params.arguments is not None else {}
@@ -145,6 +154,10 @@ def create_app(settings: Settings) -> Starlette:
             return await invoke_update(gateway, bearer, correlation_id, arguments)
         if params.name in access_reads.TOOL_NAMES:
             return await access_reads.invoke(
+                gateway, params.name, bearer, correlation_id, arguments
+            )
+        if params.name in admin_grants.TOOL_NAMES:
+            return await admin_grants.invoke(
                 gateway, params.name, bearer, correlation_id, arguments
             )
         return await invoke_context(gateway, bearer, correlation_id, arguments)

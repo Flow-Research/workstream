@@ -24,6 +24,8 @@ OPERATIONS = {
     "actor_admin_grants_list": ("/api/v1/actors/{actor_profile_id}/admin-role-grants", "get"),
     "actor_get": ("/api/v1/actors/{actor_profile_id}", "get"),
     "actor_identity_link_get": ("/api/v1/actors/{actor_profile_id}/identity-links", "get"),
+    "admin_grants_issue": ("/api/v1/admin-role-grants", "post"),
+    "admin_grants_revoke": ("/api/v1/admin-role-grants/{grant_id}/revoke", "post"),
 }
 
 

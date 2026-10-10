@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx2 as httpx
 from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
@@ -15,6 +15,7 @@ from workstream_mcp.config import Settings
 from workstream_mcp.errors import SafeFailure
 from workstream_mcp.schemas import (
     access_read_output_validator,
+    admin_grant_output_validator,
     authorization_context_output_validator,
     profile_output_validator,
     profile_update_output_validator,
@@ -28,10 +29,14 @@ _CORRELATION_HEADERS = ("x-request-id", "x-correlation-id")
 _PUBLIC_ERROR_CODES = frozenset(
     {
         "actor_deactivated",
+        "actor_not_found",
         "actor_suspended",
         "actor_resource_not_found",
         "identity_link_revoked",
         "identity_verification_unavailable",
+        "admin_role_grant_exists",
+        "grant_not_found",
+        "idempotency_mismatch",
         "internal_error",
         "invalid_request",
         "invalid_token",
@@ -40,6 +45,10 @@ _PUBLIC_ERROR_CODES = frozenset(
         "project_authorization_resource_not_found",
         "rate_limit_exceeded",
         "scope_not_authorized",
+        "self_grant_forbidden",
+        "self_role_revoke_forbidden",
+        "last_access_administrator",
+        "invalid_role_scope",
         "service_unavailable",
         "unsupported_subject_kind",
         "validation_error",
@@ -125,8 +134,44 @@ class WorkstreamGateway:
             path = path.format(actor_profile_id=quote(arguments["actor_profile_id"], safe=""))
         params = {key: str(value) for key, value in arguments.items() if key != "actor_profile_id"}
         return await self._request(
-            "GET", path, bearer, access_read_output_validator(name), correlation_id,
+            "GET",
+            path,
+            bearer,
+            access_read_output_validator(name),
+            correlation_id,
             params=params or None,
+        )
+
+    async def admin_grant_mutation(
+        self,
+        name: str,
+        bearer: str,
+        arguments: dict[str, Any],
+        correlation_id: str | None = None,
+    ) -> GatewayResult:
+        """Dispatch one fixed administrative grant mutation."""
+        if name == "admin_grants_issue":
+            path = "/api/v1/admin-role-grants"
+            expected_status = 201
+            expected_version = 1
+        else:
+            path = "/api/v1/admin-role-grants/{grant_id}/revoke".format(
+                grant_id=quote(arguments["grant_id"], safe="")
+            )
+            expected_status = 200
+            expected_version = 2
+        return await self._request(
+            "POST",
+            path,
+            bearer,
+            admin_grant_output_validator(name),
+            correlation_id,
+            json_body=arguments["body"],
+            idempotency_key=arguments["idempotency_key"],
+            expected_status=expected_status,
+            expected_payload={"http_status": expected_status, "version": expected_version},
+            expected_resource_id=(arguments["grant_id"] if name == "admin_grants_revoke" else None),
+            mutation=True,
         )
 
     async def _request(
@@ -139,27 +184,34 @@ class WorkstreamGateway:
         *,
         json_body: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+        expected_status: int = 200,
+        expected_payload: dict[str, Any] | None = None,
+        expected_resource_id: str | None = None,
         mutation: bool = False,
     ) -> GatewayResult:
         request_id = correlation_id or str(uuid4())
         try:
             async with asyncio.timeout(self._settings.total_timeout_seconds):
                 async with self._slots:
+                    headers = {
+                        "Authorization": bearer,
+                        "Accept": "application/json",
+                        "Accept-Encoding": "identity",
+                        "X-Request-ID": request_id,
+                    }
+                    if idempotency_key is not None:
+                        headers["Idempotency-Key"] = idempotency_key
                     async with self._client.stream(
                         method,
                         path,
-                        headers={
-                            "Authorization": bearer,
-                            "Accept": "application/json",
-                            "Accept-Encoding": "identity",
-                            "X-Request-ID": request_id,
-                        },
+                        headers=headers,
                         json=json_body,
                         params=params,
                     ) as response:
                         body = await self._bounded_body(response)
                         correlation_id = self._correlation_id(response, request_id)
-                        if response.status_code != 200:
+                        if response.status_code != expected_status:
                             failure = self._api_failure(response.status_code, body, correlation_id)
                             # Proxy errors and unexpected successes cannot prove rollback.
                             if mutation and (
@@ -207,6 +259,31 @@ class WorkstreamGateway:
                                     correlation_id=correlation_id,
                                 )
                             )
+                        if expected_payload is not None and any(
+                            payload.get(key) != value for key, value in expected_payload.items()
+                        ):
+                            return GatewayResult(
+                                failure=SafeFailure(
+                                    "workstream_execution_uncertain",
+                                    status=502,
+                                    correlation_id=correlation_id,
+                                )
+                            )
+                        if expected_resource_id is not None:
+                            try:
+                                resource_matches = UUID(payload["resource_id"]) == UUID(
+                                    expected_resource_id
+                                )
+                            except (KeyError, TypeError, ValueError):
+                                resource_matches = False
+                            if not resource_matches:
+                                return GatewayResult(
+                                    failure=SafeFailure(
+                                        "workstream_execution_uncertain",
+                                        status=502,
+                                        correlation_id=correlation_id,
+                                    )
+                                )
                         return GatewayResult(data=payload)
         except asyncio.CancelledError:
             raise

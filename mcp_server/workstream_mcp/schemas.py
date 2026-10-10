@@ -37,6 +37,18 @@ AUTHORIZATION_CONTEXT_INPUT_SCHEMA: dict[str, Any] = {
 }
 
 _UUID_INPUT = {"type": "string", "format": "uuid", "minLength": 36, "maxLength": 36}
+_REASON_INPUT = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 500,
+    "pattern": r"^[^\u0000]*$",
+}
+_IDEMPOTENCY_KEY_INPUT = {
+    "type": "string",
+    "format": "uuid",
+    "minLength": 36,
+    "maxLength": 36,
+}
 _ACTOR_INPUT = {
     "type": "object",
     "properties": {"actor_profile_id": _UUID_INPUT},
@@ -81,6 +93,76 @@ ACCESS_READ_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "actor_identity_link_get": _ACTOR_INPUT,
 }
 
+ADMIN_GRANT_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "admin_grants_issue": {
+        "type": "object",
+        "properties": {
+            "body": {
+                "type": "object",
+                "properties": {
+                    "target_actor_profile_id": _UUID_INPUT,
+                    "role": {
+                        "type": "string",
+                        "enum": [
+                            "access_administrator",
+                            "operator",
+                            "project_manager",
+                            "finance_authority",
+                            "audit_authority",
+                        ],
+                    },
+                    "scope_type": {"type": "string", "enum": ["system", "project"]},
+                    "scope_project_id": {"anyOf": [_UUID_INPUT, {"type": "null"}]},
+                    "reason": _REASON_INPUT,
+                },
+                "required": ["target_actor_profile_id", "role", "scope_type", "reason"],
+                "allOf": [
+                    {
+                        "if": {"properties": {"scope_type": {"const": "project"}}},
+                        "then": {
+                            "required": ["scope_project_id"],
+                            "properties": {"scope_project_id": _UUID_INPUT},
+                        },
+                    },
+                    {
+                        "if": {"properties": {"scope_type": {"const": "system"}}},
+                        "then": {
+                            "properties": {
+                                "scope_project_id": {"type": "null"},
+                            }
+                        },
+                    },
+                    {
+                        "if": {
+                            "properties": {"role": {"enum": ["access_administrator", "operator"]}}
+                        },
+                        "then": {"properties": {"scope_type": {"const": "system"}}},
+                    },
+                ],
+                "additionalProperties": False,
+            },
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+    "admin_grants_revoke": {
+        "type": "object",
+        "properties": {
+            "grant_id": _UUID_INPUT,
+            "body": {
+                "type": "object",
+                "properties": {"reason": _REASON_INPUT},
+                "required": ["reason"],
+                "additionalProperties": False,
+            },
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["grant_id", "body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+}
+
 
 class ContractError(RuntimeError):
     """The reviewed packaged contract is absent or invalid."""
@@ -117,7 +199,7 @@ def _selected_schema(document: dict[str, Any]) -> dict[str, Any]:
         schemas = components.get("schemas")
         responses = operation.get("responses")
         if isinstance(schemas, dict) and isinstance(responses, dict):
-            success = responses.get("200")
+            success = responses.get("200") or responses.get("201")
             content = success.get("content") if isinstance(success, dict) else None
             media = content.get("application/json") if isinstance(content, dict) else None
             selected = media.get("schema") if isinstance(media, dict) else None
@@ -130,7 +212,7 @@ def _selected_schema(document: dict[str, Any]) -> dict[str, Any]:
     raise ContractError("contract does not contain an output schema")
 
 
-@lru_cache(maxsize=9)
+@lru_cache(maxsize=11)
 def _contract_output_schema(name: str) -> dict[str, Any]:
     filename = f"{name}.json"
     resource = files("workstream_mcp").joinpath(f"contracts/{filename}")
@@ -166,7 +248,7 @@ def authorization_context_output_schema() -> dict[str, Any]:
     return _contract_output_schema("authorization_context_get")
 
 
-@lru_cache(maxsize=9)
+@lru_cache(maxsize=11)
 def _contract_output_validator(name: str) -> Draft202012Validator:
     return Draft202012Validator(
         _contract_output_schema(name),
@@ -196,4 +278,17 @@ def access_read_output_schema(name: str) -> dict[str, Any]:
 def access_read_output_validator(name: str) -> Draft202012Validator:
     """Validate a bounded administrative projection, including formats."""
     access_read_output_schema(name)
+    return _contract_output_validator(name)
+
+
+def admin_grant_output_schema(name: str) -> dict[str, Any]:
+    """Load one of the reviewed administrative mutation receipts."""
+    if name not in ADMIN_GRANT_INPUT_SCHEMAS:
+        raise ContractError("unknown administrative grant contract")
+    return _contract_output_schema(name)
+
+
+def admin_grant_output_validator(name: str) -> Draft202012Validator:
+    """Validate one administrative mutation receipt, including formats."""
+    admin_grant_output_schema(name)
     return _contract_output_validator(name)

@@ -41,6 +41,8 @@ packages = ["workstream_mcp"]
 "contracts/actor_admin_grants_list.json" = "workstream_mcp/contracts/actor_admin_grants_list.json"
 "contracts/actor_get.json" = "workstream_mcp/contracts/actor_get.json"
 "contracts/actor_identity_link_get.json" = "workstream_mcp/contracts/actor_identity_link_get.json"
+"contracts/admin_grants_issue.json" = "workstream_mcp/contracts/admin_grants_issue.json"
+"contracts/admin_grants_revoke.json" = "workstream_mcp/contracts/admin_grants_revoke.json"
 
 [tool.hatch.build.targets.sdist]
 include = [
