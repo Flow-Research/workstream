@@ -91,12 +91,11 @@ can proceed after its own prerequisites without CON/shared acceptance or
 scoped lifecycle activation. False routing adds those requirements. Human final
 acceptance later uses the same authorized shared acceptance/CON operation.
 
-ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read custody
-and ordered review admission INSERTs, including intermediate admission waits,
-terminal read-only replay and both mechanical race controls. The
-delivered B6 atomic Submission/dispatch and B8 completion delivery reuse
-04E2-B outcomes; remediation is next and
-no handler or action is activated by this prerequisite.
+ARCH-04E1B-B1 supplies TASK-before-CHECKERS custody for reservation, current
+reads and admission. B6 atomically creates the Submission and initial dispatch;
+04E2-B owns the later authorized outcome. B8 consumes that outcome and commits
+before acknowledgment. Remediation is next. Both request and completion handlers
+remain absent from production registration.
 
 ## Delivered and remaining
 

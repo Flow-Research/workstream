@@ -90,12 +90,11 @@ composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.
 
-ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read guards
-and ordered review admission INSERTs,
-including terminal read-only replay and both mechanical race controls. The
-delivered B6 atomic Submission/dispatch and B8 completion handling reuse
-04E2-B outcomes; remediation is next and
-no handler or action is activated by this prerequisite.
+ARCH-04E1B-B1 supplies TASK-before-CHECKERS custody for reservation, current
+reads and admission. B6 atomically creates the Submission and initial dispatch;
+04E2-B owns the later authorized outcome. B8 consumes that outcome and commits
+before acknowledgment. Remediation is next. Both request and completion handlers
+remain absent from production registration.
 
 ## Current dependency contract
 
