@@ -167,7 +167,10 @@ deliberate caller-prepared input and retry keys; its receipt does not establish
 post-policy approval, post-policy job delivery or guide activation. Exact derived
 post-policy inspection returns the canonical policy, upstream findings, activation
 selectors and saved correction, including retained superseded policies; reading
-does not make a decision or dispatch work. No public project-list
+does not make a decision or dispatch work. Separate exact post-policy approval
+uses caller-prepared input and a retry key, validates the full returned target
+and preserves backend-owned fresh replay authority; it does not activate a guide.
+No public project-list
 route is invented.
 CLI write uncertainty is explicit and never automatically
 retried. These source packages do not claim
@@ -395,8 +398,10 @@ cannot be reused as post-submission review-gate evidence. See the
   [CLI post-policy inspection](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-14.md)
   reads an explicitly selected derived policy, unified findings, activation
   selectors and saved correction, preserving historical/non-current observations.
-  Correction, post-policy approval and
-  activation remain future CLI commands; backend owners retain all authority.
+  [CLI evaluation approval](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-15.md)
+  commits the separate exact-policy decision with caller-prepared input and retry
+  custody, complete receipt validation and fresh backend authority on replay.
+  Correction and activation remain future CLI commands; backend owners retain all authority.
   [PILOT-13 assigned-guide access](../.commitrail/changes/pilot13-assigned-task-guide-documents.md)
   lists exact locked originals in assigned contributor context and streams
   authorized, fully verified ART bytes. `task guide` lists or safely downloads
