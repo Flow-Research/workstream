@@ -216,7 +216,8 @@ No database transaction crosses the client call.
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Baseline and owner map | Implementation began at merged registry main `3110353363547e603e7527a782467f95c00cb1f7`; final reconciliation merges CLI approval main `4c5720034a2a1019f00df6c7f96601407ef1e43a` without changing the runtime sources | Complete | Later product selection and hosted deployment remain outside this chunk |
-| Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace --locked` | Twelve tests pass: shared Python fixtures, exact numeric/NUL/extra-field and Unicode controls, closed cache/runtime health, bounded partial-frame/process/client-disconnect behavior, uncertain-create cleanup, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
+| Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace --locked` | Thirteen tests pass: shared Python fixtures, exact numeric/NUL/extra-field and Unicode controls, closed cache/runtime health, absolute request/response-frame budgets, bounded process/client-disconnect behavior, uncertain-create cleanup, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
+| Numeric parity discriminator | The SDK numeric fixture test was also run against the reviewer's 2,000 finite-float Python corpus before restoring the checked-in representative fixture | All 2,000 canonical encodings match Python, including `203472594891988.12`, which the predecessor emitted as `203472594891988.13` | The retained fixture keeps representative boundary cases rather than the generated review corpus |
 | Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Eight tests pass: cross-language fixtures, complete settings, typed health/execute/factory and cancellation, actual prepared ZIP callback grant, live-owner enforcement, semantic-manifest substitution and symlink rejection | Product caller is intentionally absent |
 | Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
 | Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-repair-probe.json` SHA-256 `873b7455be71a8a19a43d00a98dcb5a335b2627c317e1e4692183c0fa3ea7a42` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
@@ -267,6 +268,18 @@ No database transaction crosses the client call.
   The locked Rust JSON parser retains numeric lexemes, shared number goldens
   cover large integers, decimal/exponent forms and negative zero, and finding
   character ceilings now match Python while the aggregate byte cap remains.
+- A later cross-language float corpus found a distinct shortest-decimal choice:
+  Python retained `203472594891988.12` while Rust displayed the same IEEE-754
+  value as `203472594891988.13`. The SDK now selects the first correctly
+  rounded significant-digit representation that round-trips to the original
+  bits before applying Workstream's fixed-decimal encoding; the 2,000-value
+  review corpus and retained representative boundaries agree with Python.
+- Socket timeouts were initially per-system-call, so a client sending one byte
+  before each timeout could monopolize the sequential listener. Request header
+  plus body now share one absolute frame deadline, response header plus body
+  receive a fresh absolute deadline after checker execution, and the trickle
+  regression proves the service returns within the request budget and serves a
+  healthy connection without waiting for the trickle schedule to complete.
 
 ## Reconciliation
 

@@ -507,7 +507,7 @@ fn canonical_number(source: &str) -> Result<String, ContractError> {
     if value == 0.0 {
         return Ok("0.0".into());
     }
-    let normalized = value.to_string();
+    let normalized = shortest_python_float(value)?;
     let Some(position) = normalized.find(['e', 'E']) else {
         if value.fract() == 0.0 && value.abs() < 1e16 {
             return Ok(format!("{normalized}.0"));
@@ -542,7 +542,27 @@ fn canonical_number(source: &str) -> Result<String, ContractError> {
         let split = new_decimal as usize;
         write!(result, "{}.{}", &digits[..split], &digits[split..]).unwrap();
     }
+    if value.fract() == 0.0 && value.abs() < 1e16 && !result.contains('.') {
+        result.push_str(".0");
+    }
     Ok(result)
+}
+
+fn shortest_python_float(value: f64) -> Result<String, ContractError> {
+    // Python's float repr and Rust's Display can select different decimal
+    // members of the same shortest round-trip interval. The Python contract
+    // selects the correctly rounded decimal at the first significant-digit
+    // precision that round-trips to the original IEEE-754 value.
+    for precision in 1..=17 {
+        let candidate = format!("{:.*e}", precision - 1, value);
+        let round_trip: f64 = candidate
+            .parse()
+            .map_err(|_| ContractError("number is invalid"))?;
+        if round_trip.to_bits() == value.to_bits() {
+            return Ok(candidate);
+        }
+    }
+    Err(ContractError("number is invalid"))
 }
 
 fn exact_object<'a>(

@@ -173,14 +173,13 @@ fn run() -> Result<(), String> {
 }
 
 fn serve_connection(config: &ServiceConfig, mut stream: UnixStream, timeout: Duration) {
-    if stream.set_read_timeout(Some(timeout)).is_err()
-        || stream.set_write_timeout(Some(timeout)).is_err()
-    {
+    if stream.set_nonblocking(true).is_err() {
         return;
     }
-    let response = handle(config, &mut stream);
+    let response = read_frame_until(&mut stream, MAX_ENVELOPE_BYTES, Instant::now() + timeout)
+        .and_then(|bytes| handle_frame(config, &stream, &bytes));
     if let Ok(bytes) = response {
-        let _ = write_frame(&mut stream, &bytes);
+        let _ = write_frame_until(&mut stream, &bytes, Instant::now() + timeout);
     }
 }
 
@@ -260,6 +259,14 @@ fn validate_config(config: &ServiceConfig) -> Result<(), String> {
 
 fn handle(config: &ServiceConfig, stream: &mut UnixStream) -> Result<Vec<u8>, String> {
     let bytes = read_frame(stream, MAX_ENVELOPE_BYTES)?;
+    handle_frame(config, stream, &bytes)
+}
+
+fn handle_frame(
+    config: &ServiceConfig,
+    stream: &UnixStream,
+    bytes: &[u8],
+) -> Result<Vec<u8>, String> {
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| "request envelope invalid")?;
     if value.get("operation").and_then(Value::as_str) == Some("health") {
         let envelope: HealthEnvelope =
@@ -1101,6 +1108,58 @@ fn read_frame(stream: &mut UnixStream, maximum: usize) -> Result<Vec<u8>, String
     Ok(bytes)
 }
 
+fn transfer_until(
+    stream: &mut UnixStream,
+    bytes: &mut [u8],
+    deadline: Instant,
+    mut operation: impl FnMut(&mut UnixStream, &mut [u8]) -> std::io::Result<usize>,
+    incomplete: &'static str,
+) -> Result<(), String> {
+    let mut offset = 0;
+    while offset < bytes.len() {
+        if Instant::now() >= deadline {
+            return Err(incomplete.into());
+        }
+        match operation(stream, &mut bytes[offset..]) {
+            Ok(0) => return Err(incomplete.into()),
+            Ok(count) => offset += count,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(2));
+            }
+            Err(_) => return Err(incomplete.into()),
+        }
+    }
+    Ok(())
+}
+
+fn read_frame_until(
+    stream: &mut UnixStream,
+    maximum: usize,
+    deadline: Instant,
+) -> Result<Vec<u8>, String> {
+    let mut header = [0_u8; 4];
+    transfer_until(
+        stream,
+        &mut header,
+        deadline,
+        |value, bytes| value.read(bytes),
+        "request frame missing",
+    )?;
+    let size = u32::from_be_bytes(header) as usize;
+    if size == 0 || size > maximum {
+        return Err("request frame unbounded".into());
+    }
+    let mut bytes = vec![0; size];
+    transfer_until(
+        stream,
+        &mut bytes,
+        deadline,
+        |value, bytes| value.read(bytes),
+        "request frame incomplete",
+    )?;
+    Ok(bytes)
+}
+
 fn write_frame(stream: &mut UnixStream, bytes: &[u8]) -> Result<(), String> {
     if bytes.is_empty() || bytes.len() > MAX_RESPONSE_BYTES {
         return Err("response frame invalid".into());
@@ -1112,6 +1171,32 @@ fn write_frame(stream: &mut UnixStream, bytes: &[u8]) -> Result<(), String> {
         .write_all(bytes)
         .map_err(|_| "response body failed")?;
     Ok(())
+}
+
+fn write_frame_until(
+    stream: &mut UnixStream,
+    bytes: &[u8],
+    deadline: Instant,
+) -> Result<(), String> {
+    if bytes.is_empty() || bytes.len() > MAX_RESPONSE_BYTES {
+        return Err("response frame invalid".into());
+    }
+    let mut header = (bytes.len() as u32).to_be_bytes();
+    transfer_until(
+        stream,
+        &mut header,
+        deadline,
+        |value, bytes| value.write(bytes),
+        "response header failed",
+    )?;
+    let mut body = bytes.to_vec();
+    transfer_until(
+        stream,
+        &mut body,
+        deadline,
+        |value, bytes| value.write(bytes),
+        "response body failed",
+    )
 }
 
 fn valid_grant_id(value: &str) -> bool {
@@ -1315,10 +1400,18 @@ mod tests {
     fn partial_frames_are_bounded_and_do_not_block_the_next_connection() {
         let (root, config) = test_config();
         let (mut stalled_client, stalled_server) = UnixStream::pair().unwrap();
-        stalled_client.write_all(&[0, 0]).unwrap();
+        let writer = thread::spawn(move || {
+            stalled_client.write_all(&20_u32.to_be_bytes()).unwrap();
+            for _ in 0..20 {
+                if stalled_client.write_all(b" ").is_err() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(30));
+            }
+        });
         let started = Instant::now();
-        serve_connection(&config, stalled_server, Duration::from_millis(50));
-        assert!(started.elapsed() < Duration::from_secs(1));
+        serve_connection(&config, stalled_server, Duration::from_millis(100));
+        assert!(started.elapsed() < Duration::from_millis(300));
 
         let (mut client, server) = UnixStream::pair().unwrap();
         let request = serde_json::to_vec(
@@ -1332,7 +1425,38 @@ mod tests {
             serde_json::from_slice::<Value>(&response).unwrap()["status"],
             "ready"
         );
+        writer.join().unwrap();
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn response_frame_write_uses_one_absolute_budget() {
+        let (mut writer, reader) = UnixStream::pair().unwrap();
+        let send_buffer: libc::c_int = 1_024;
+        // SAFETY: setsockopt receives a valid Unix socket and a pointer to a
+        // live integer whose size is supplied exactly.
+        let configured = unsafe {
+            libc::setsockopt(
+                writer.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_SNDBUF,
+                (&send_buffer as *const libc::c_int).cast(),
+                std::mem::size_of_val(&send_buffer) as libc::socklen_t,
+            )
+        };
+        assert_eq!(configured, 0);
+        writer.set_nonblocking(true).unwrap();
+        let started = Instant::now();
+        assert_eq!(
+            write_frame_until(
+                &mut writer,
+                &vec![b'x'; MAX_RESPONSE_BYTES],
+                Instant::now() + Duration::from_millis(50),
+            ),
+            Err("response body failed".into())
+        );
+        assert!(started.elapsed() < Duration::from_millis(300));
+        drop(reader);
     }
 
     #[test]
