@@ -118,12 +118,12 @@ same governed lifecycle while retaining their own user experience and operating
 model.
 
 Source-agnostic does not mean every source adapter is already implemented.
-v0.1 remains manual-first. PILOT-02A defines Project Manager declaration, upload,
+v0.1 remains manual-first. PILOT-02A provides Project Manager declaration, upload,
 inspection and verified download of canonical JSON task-import sources through the
 [public ART contract](docs/spec_artifact_storage_service.md#task-import-source-custody).
-Its ordered migration and public PostgreSQL/MinIO proof remain pending. Source
-custody creates no Tasks; atomic DRAFT import, explicit batch screening
-and release, and CLI conversion remain planned. A client-converted CSV retains
+Its public routes are covered by PostgreSQL/MinIO custody, authority, replay and
+recovery tests. Source custody creates no Tasks; atomic DRAFT import, explicit
+batch screening and release, and CLI conversion remain planned. A client-converted CSV retains
 its received JSON rather than claiming original CSV custody.
 External origin onboarding, external task-routing systems, and execution workspaces remain
 later adapters. Revision and reassignment belong to the governed lifecycle;
