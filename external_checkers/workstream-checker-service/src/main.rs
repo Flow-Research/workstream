@@ -373,9 +373,21 @@ fn verify_grant(
     {
         return Err("grant root differs".into());
     }
-    let raw = fs::read(grant_root.join(".external-checker-grant.json"))
-        .map_err(|_| "grant manifest missing")?;
-    if raw.len() > 2 * 1024 * 1024 || raw.contains(&0) {
+    let grant_metadata = fs::symlink_metadata(&grant_root).map_err(|_| "grant missing")?;
+    if !grant_metadata.file_type().is_dir()
+        || grant_metadata.file_type().is_symlink()
+        || grant_metadata.mode() & 0o777 != 0o700
+        || grant_metadata.uid() != config.sandbox_uid
+        || grant_metadata.gid() != config.sandbox_gid
+    {
+        return Err("grant root identity differs".into());
+    }
+    let raw = read_grant_manifest(
+        &grant_root.join(".external-checker-grant.json"),
+        config.sandbox_uid,
+        config.sandbox_gid,
+    )?;
+    if raw.contains(&0) {
         return Err("grant manifest invalid".into());
     }
     let manifest: GrantManifest =
@@ -398,6 +410,49 @@ fn verify_grant(
         return Err("grant material differs".into());
     }
     Ok(workspace)
+}
+
+fn read_grant_manifest(
+    path: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<Vec<u8>, String> {
+    const MAXIMUM: u64 = 2 * 1024 * 1024;
+    let before = fs::symlink_metadata(path).map_err(|_| "grant manifest missing")?;
+    if !before.file_type().is_file()
+        || before.file_type().is_symlink()
+        || before.mode() & 0o777 != 0o400
+        || before.uid() != expected_uid
+        || before.gid() != expected_gid
+        || before.len() > MAXIMUM
+    {
+        return Err("grant manifest identity differs".into());
+    }
+    let file = File::open(path).map_err(|_| "grant manifest unavailable")?;
+    let opened = file.metadata().map_err(|_| "grant manifest unavailable")?;
+    if (
+        opened.dev(),
+        opened.ino(),
+        opened.mode(),
+        opened.uid(),
+        opened.gid(),
+    ) != (
+        before.dev(),
+        before.ino(),
+        before.mode(),
+        before.uid(),
+        before.gid(),
+    ) {
+        return Err("grant manifest changed".into());
+    }
+    let mut raw = Vec::new();
+    file.take(MAXIMUM + 1)
+        .read_to_end(&mut raw)
+        .map_err(|_| "grant manifest unavailable")?;
+    if raw.len() as u64 > MAXIMUM {
+        return Err("grant manifest unbounded".into());
+    }
+    Ok(raw)
 }
 
 fn inspect_workspace(
@@ -741,6 +796,7 @@ fn valid_repository(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::symlink;
     use std::os::unix::net::UnixStream;
 
     fn test_config() -> (PathBuf, ServiceConfig) {
@@ -840,6 +896,15 @@ mod tests {
         let inventory = inspect_workspace(&workspace, metadata.uid(), metadata.gid()).unwrap();
         assert_eq!(inventory.directories, vec!["empty"]);
         assert!(inventory.files.is_empty());
+        let target = config.material_root.join("manifest.json");
+        fs::write(&target, b"{}").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o400)).unwrap();
+        let link = config.material_root.join("manifest-link.json");
+        symlink(&target, &link).unwrap();
+        assert_eq!(
+            read_grant_manifest(&link, metadata.uid(), metadata.gid()).unwrap_err(),
+            "grant manifest identity differs"
+        );
         fs::set_permissions(&workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::set_permissions(workspace.join("empty"), fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
