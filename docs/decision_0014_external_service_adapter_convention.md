@@ -38,7 +38,7 @@ ExternalServiceAdapter
 |- IdentityIssuerVerifier
 |- ProjectGuideAgentRuntime
 |- ArtifactStore
-`- ExternalCheckerExecutionAdapter (planned runtime adoption)
+`- ExternalCheckerExecutionAdapter (hidden, unselected Unix-socket runtime)
 ```
 
 Concrete implementations satisfy explicit capability ports:
@@ -56,13 +56,23 @@ Each capability exposes a typed factory based on
 registration, duplicate-provider rejection, unknown-provider failure, typed
 construction, and stable configuration-error mapping.
 
-The checker capability already publishes a normalized pre/post request/result
-contract and immutable digest-pinned metadata registry. That registry is data,
-not an adapter factory: it cannot select Python code, discover plugins, grant
-execution authority or construct a transport. A later runtime chunk must add
-the typed `ExternalCheckerExecutionAdapter` and its explicit composition-root
-registration while preserving CHECKERS request/lease/result ownership and ART
-material custody. No checker adapter is installed by the registry foundation.
+The checker capability publishes a normalized pre/post request/result contract,
+an immutable digest-pinned metadata registry, and a hidden typed Unix-socket
+adapter for its trusted Rust node service. The registry remains data, not an
+adapter factory: it cannot select Python code, discover plugins, grant execution
+authority or construct a transport. The adapter factory is instance-local and
+unselected; no product composition root or checker caller installs it yet.
+Later cutover must preserve CHECKERS request/lease/result ownership and ART
+material custody when it adds that explicit composition.
+
+The Rust service alone owns container-engine access. Python sends an opaque,
+request-bound callback grant issued from ART's existing pre-admission scratch
+lifetime. The service resolves it beneath the configured private scratch root,
+recomputes exact file and directory facts, and mounts only the sealed workspace
+read-only. Its trusted cache binds one OCI platform-manifest digest to repository,
+OS, architecture and observed config image ID; it never pulls or resolves tags.
+Hosted health fails closed without `runsc`. The explicit `docker-dev` mode is a
+local mechanism qualification and cannot report hosted gVisor isolation.
 
 Registration is explicit in the FastAPI or Celery composition root.
 Runtime plugin discovery, import scanning, mutable global registration, and

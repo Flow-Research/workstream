@@ -263,6 +263,20 @@ unavailable required image and may proceed after the default checker passes.
 The target launcher and checker integration use the agreed Rust service and
 SDK. Registered OCI images are not thereby required to be written in Rust;
 their execution identity is the approved digest, schemas and resource limits.
+The hidden runtime mechanism now supplies the strict Rust SDK and long-lived
+service plus an unselected typed Python Unix-socket adapter. ART can issue one
+opaque request-bound grant only inside the existing pre-admission prepared-ZIP
+callback; the service independently verifies its sealed file/directory manifest
+and exact private-root location before a read-only mount. The service accepts
+only an administrator-cached OCI platform manifest whose repository, platform
+and config image ID all match, and owns no-network, non-root, capability-free,
+read-only sandbox launch, bounded output/deadline handling and cleanup. Hosted
+readiness requires `runsc`; local `runc` is reported as `docker-dev`.
+
+This hidden mechanism is not selected by either current catalogue and stores no
+run state. Policy binding, caller-owned phase authority/currentness, durable
+attempt and isolation receipts, the one default checker, project-image routing,
+F-020 and public intake remain required before cutover.
 The replacement must remove both current pre- and post-submit catalogues after
 end-to-end replacement proof. It must not retain a legacy/new parallel path,
 weaken caller-owned atomicity or bypass phase identity and currentness checks.

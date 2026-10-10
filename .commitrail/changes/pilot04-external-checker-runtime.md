@@ -1,7 +1,7 @@
 # [PILOT-04] Add The External Checker Service Boundary
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Add one unselected Rust checker service and SDK,
   one typed Python Unix-socket client, and one ART-owned ephemeral material
   grant that prove a digest-pinned checker can consume verified files in a
@@ -166,33 +166,33 @@ No database transaction crosses the client call.
 
 ## Acceptance criteria
 
-- [ ] Rust SDK and Python accept identical golden
+- [x] Rust SDK and Python accept identical golden
   `external_checker_request.v1` and `external_checker_result.v1` bytes and
   reject changed numeric canonicalization, bounds, NULs, extra fields and
   derived digests.
-- [ ] The explicit Python factory constructs only the configured typed Unix-
+- [x] The explicit Python factory constructs only the configured typed Unix-
   socket adapter and rejects unknown, duplicate and identity-mismatched
   providers without plugin discovery or mutable global state.
-- [ ] Service health and hosted execution refuse missing or substituted runsc;
+- [x] Service health and hosted execution refuse missing or substituted runsc;
   local Docker mode is explicit and cannot claim hosted isolation.
-- [ ] Cache resolution binds one repository/platform-manifest digest to exact
+- [x] Cache resolution binds one repository/platform-manifest digest to exact
   OS/architecture and config image ID; tags, index substitution, platform
   substitution, missing images and pulls are rejected.
-- [ ] A focused pre-admission test uses an actual `PreparedArtifact`, inspected
+- [x] A focused pre-admission test uses an actual `PreparedArtifact`, inspected
   ZIP and prepared-attempt facts to issue the callback grant without creating a
   `Submission`. The service accepts the exact request-digest binding while the
   callback is live, and missing, changed, symlinked, replayed-after-close and
   wrong-request grants fail closed with cleanup confirmed.
-- [ ] A real service request over the Unix socket runs a digest-pinned cached
+- [x] A real service request over the Unix socket runs a digest-pinned cached
   checker with the fixed ART root mounted read-only. The probe records user,
   capabilities, network, socket absence, root/input modes, concrete platform
   and image identities, enforced resource/output/deadline behavior and owned
   cleanup. Hosted-grade proof uses gVisor; local runc proof is qualified.
-- [ ] Completed and infrastructure outputs are bounded and Python revalidates
+- [x] Completed and infrastructure outputs are bounded and Python revalidates
   them against the exact request. No infrastructure outcome can become a pass.
-- [ ] Product code does not invoke the adapter; neither catalogue, policy hash,
+- [x] Product code does not invoke the adapter; neither catalogue, policy hash,
   database schema, public behavior nor default-checker behavior changes.
-- [ ] ADR 0014, checker architecture and roadmap distinguish the hidden runtime
+- [x] ADR 0014, checker architecture and roadmap distinguish the hidden runtime
   from later policy binding, default-checker implementation, caller-atomic
   intake, F-020 and clean removal of both catalogues.
 
@@ -212,13 +212,30 @@ No database transaction crosses the client call.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Baseline and owner map | Main `3110353363547e603e7527a782467f95c00cb1f7`; merged registry/contract, pre-admission ART path, ADR 0014 and PILOT-00 result inspected | Complete | Service, grant and real execution remain unproved |
+| Baseline and owner map | Main `3110353363547e603e7527a782467f95c00cb1f7`; merged registry/contract, pre-admission ART path, ADR 0014 and PILOT-00 result inspected | Complete | Later product selection and hosted deployment remain outside this chunk |
+| Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace` | Seven tests pass: shared Python fixtures, numeric/NUL/extra-field controls, closed cache/runtime health, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
+| Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Five tests pass: cross-language fixtures, complete settings, typed health/execute/factory, actual prepared ZIP callback grant and symlink rejection | Product caller is intentionally absent |
+| Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
+| Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-probe-final.json` SHA-256 `233e6d46ed8fbb55bd2c4394332427ce276240bad031bd21db5a0cdc75afe1d3` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
 
 ## Review findings
 
 - Initial plan treated the runtime as a one-shot launcher and named no real
   cross-process ART transport. The scope now requires a long-lived Rust service
   and a request-bound callback grant owned by the existing scratch manager.
+- Focused execution found that a fixed container UID could not read ART's
+  owner-only sealed files. Configuration now binds one nonzero sandbox UID/GID,
+  the service verifies that owner on every material entry, Docker uses the same
+  numeric identity, and health/isolation receipts retain it.
+- The executor originally observed output only after process exit and mapped
+  every nonzero exit to capacity exhaustion. It now polls both private output
+  files, kills on the registered ceiling, retains OOM-only capacity mapping and
+  maps other malformed/crashed output to `invalid_output`, with cleanup owned by
+  an RAII guard.
+- Empty directories and manifest media type were initially implicit. Grant
+  custody now binds exact directory inventory, and the trusted cache and receipt
+  distinguish a bounded single-platform OCI/Docker manifest from an index while
+  separately retaining the Docker config image ID.
 
 ## Reconciliation
 

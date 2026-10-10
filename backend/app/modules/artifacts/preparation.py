@@ -19,6 +19,7 @@ import threading
 import time
 from typing import Any, BinaryIO, Protocol, TypeVar, cast
 from app.core.identifiers import new_record_id
+from app.core.hashing import canonical_json_hash
 
 from app.interfaces.artifacts import (
     ArtifactInputMismatchError,
@@ -52,6 +53,8 @@ _LEDGER_TEMP_FILE = re.compile(r"^\.ledger\.[0-9a-f]{32}\.tmp$")
 _PROCESS_IDENTITY = re.compile(r"^[0-9a-f]{64}$")
 _ROOT_MARKER = ".workstream-artifact-scratch-v1"
 _ROOT_MARKER_PREFIX = b"workstream-artifact-scratch-v1:"
+_EXTERNAL_GRANT_MANIFEST = ".external-checker-grant.json"
+_EXTERNAL_GRANT_PROTOCOL = "workstream.external_checker_material_grant.v1"
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
@@ -80,6 +83,87 @@ class ArtifactScratchIntegrityError(ArtifactIntegrityError):
     """Raised when private scratch state violates its filesystem contract."""
 
     code = "artifact_scratch_integrity_failure"
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalMaterialFile:
+    """One server-inspected file identity published to an external checker."""
+
+    normalized_path: str
+    byte_count: int
+    sha256: str
+    executable: bool
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.normalized_path) is not str
+            or not self.normalized_path
+            or self.normalized_path.startswith("/")
+            or any(part in {"", ".", ".."} for part in self.normalized_path.split("/"))
+            or "\x00" in self.normalized_path
+            or type(self.byte_count) is not int
+            or self.byte_count < 0
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", self.sha256)
+            or type(self.executable) is not bool
+        ):
+            raise ValueError("external material file identity is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalMaterialGrantRequest:
+    """Exact pre-admission facts bound to one callback-scoped material grant."""
+
+    request_digest: str
+    prepared_generation_id: str
+    attempt_id: str
+    attempt_request_digest: str
+    archive_sha256: str
+    archive_byte_count: int
+    semantic_manifest_sha256: str
+    directories: tuple[str, ...]
+    files: tuple[ExternalMaterialFile, ...]
+
+    def __post_init__(self) -> None:
+        digests = (
+            self.request_digest,
+            self.attempt_request_digest,
+            self.archive_sha256,
+            self.semantic_manifest_sha256,
+        )
+        if (
+            any(not re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in digests)
+            or any(
+                not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", value)
+                for value in (self.prepared_generation_id, self.attempt_id)
+            )
+            or type(self.archive_byte_count) is not int
+            or not 0 <= self.archive_byte_count <= HARD_MAXIMUM_ARTIFACT_BYTES
+            or type(self.files) is not tuple
+            or type(self.directories) is not tuple
+            or any(type(item) is not ExternalMaterialFile for item in self.files)
+            or any(
+                type(path) is not str
+                or not path
+                or path.startswith("/")
+                or any(part in {"", ".", ".."} for part in path.split("/"))
+                or "\x00" in path
+                for path in self.directories
+            )
+            or tuple(sorted(self.directories)) != self.directories
+            or len(set(self.directories)) != len(self.directories)
+            or tuple(sorted(self.files, key=lambda item: item.normalized_path)) != self.files
+            or len({item.normalized_path for item in self.files}) != len(self.files)
+            or set(self.directories) & {item.normalized_path for item in self.files}
+        ):
+            raise ValueError("external material grant request is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalMaterialGrant:
+    """Opaque grant identity safe to send across the checker service boundary."""
+
+    grant_id: str
+    binding_digest: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,6 +571,194 @@ class ArtifactScratchManager:
                 except BaseException:
                     self._pending_workspaces.add(workspace_name)
                     raise
+
+    @contextmanager
+    def external_material_grant(
+        self,
+        workspace: Path,
+        request: ExternalMaterialGrantRequest,
+    ) -> Iterator[ExternalMaterialGrant]:
+        """Publish one sealed request-bound workspace for the callback lifetime."""
+        if type(request) is not ExternalMaterialGrantRequest:
+            raise ValueError("external material grant request is invalid")
+        with self._tracked_operation():
+            grant = self._publish_external_grant_sync(workspace, request)
+            try:
+                yield grant
+            finally:
+                self._revoke_external_grant_sync(grant.grant_id)
+
+    def _publish_external_grant_sync(
+        self,
+        workspace: Path,
+        request: ExternalMaterialGrantRequest,
+    ) -> ExternalMaterialGrant:
+        """Move the projected tree below a fixed mount and seal its exact manifest."""
+        try:
+            resolved = workspace.resolve(strict=True)
+            expected_parent = (self._root / "workspaces").resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ArtifactScratchIntegrityError("external material workspace is invalid") from exc
+        grant_id = resolved.name
+        if resolved.parent != expected_parent or _WORKSPACE_ID.fullmatch(grant_id) is None:
+            raise ArtifactScratchIntegrityError("external material workspace is invalid")
+        root_fd = os.open(
+            grant_id,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=self._workspaces_fd,
+        )
+        try:
+            # The trusted archive inspector seals this directory before its
+            # callback. ART briefly reopens only the parent so it can publish
+            # the fixed mount child; projected members remain sealed.
+            os.fchmod(root_fd, 0o700)
+            names = os.listdir(root_fd)
+            if "workspace" in names or _EXTERNAL_GRANT_MANIFEST in names:
+                raise ArtifactScratchIntegrityError("external material workspace is invalid")
+            os.mkdir("workspace", mode=0o700, dir_fd=root_fd)
+            workspace_fd = os.open(
+                "workspace",
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=root_fd,
+            )
+            try:
+                for name in names:
+                    if name in {".", ".."} or "/" in name or "\x00" in name:
+                        raise ArtifactScratchIntegrityError("external material path is invalid")
+                    metadata = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
+                    if stat_module.S_ISDIR(metadata.st_mode):
+                        child_fd = os.open(
+                            name,
+                            os.O_RDONLY
+                            | getattr(os, "O_DIRECTORY", 0)
+                            | getattr(os, "O_NOFOLLOW", 0),
+                            dir_fd=root_fd,
+                        )
+                        try:
+                            os.fchmod(child_fd, 0o700)
+                        finally:
+                            os.close(child_fd)
+                    os.rename(name, name, src_dir_fd=root_fd, dst_dir_fd=workspace_fd)
+                observed_files, observed_directories = self._seal_external_tree(workspace_fd)
+                observed = tuple(observed_files)
+                expected = tuple(
+                    {
+                        "normalized_path": item.normalized_path,
+                        "byte_count": item.byte_count,
+                        "sha256": item.sha256,
+                        "executable": item.executable,
+                    }
+                    for item in request.files
+                )
+                if observed != expected:
+                    raise ArtifactScratchIntegrityError("external material manifest mismatch")
+                if tuple(observed_directories) != request.directories:
+                    raise ArtifactScratchIntegrityError("external material directories mismatch")
+                body = {
+                    "protocol_version": _EXTERNAL_GRANT_PROTOCOL,
+                    "grant_id": grant_id,
+                    "request_digest": request.request_digest,
+                    "prepared_generation_id": request.prepared_generation_id,
+                    "attempt_id": request.attempt_id,
+                    "attempt_request_digest": request.attempt_request_digest,
+                    "archive_sha256": request.archive_sha256,
+                    "archive_byte_count": request.archive_byte_count,
+                    "semantic_manifest_sha256": request.semantic_manifest_sha256,
+                    "directories": list(observed_directories),
+                    "files": list(observed),
+                }
+                binding_digest = canonical_json_hash(body)
+                payload = json.dumps(
+                    {**body, "binding_digest": binding_digest},
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                descriptor = os.open(
+                    _EXTERNAL_GRANT_MANIFEST,
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
+                    0o400,
+                    dir_fd=root_fd,
+                )
+                try:
+                    self._write_all(descriptor, payload)
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                os.fchmod(workspace_fd, 0o500)
+                os.fsync(workspace_fd)
+                os.fsync(root_fd)
+            finally:
+                os.close(workspace_fd)
+        finally:
+            os.close(root_fd)
+        return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+
+    def _seal_external_tree(
+        self, directory_fd: int, prefix: str = ""
+    ) -> tuple[list[dict[str, object]], list[str]]:
+        """Hash regular files descriptor-relatively and reject links or special files."""
+        entries: list[dict[str, object]] = []
+        directories: list[str] = []
+        for name in sorted(os.listdir(directory_fd)):
+            path = f"{prefix}/{name}" if prefix else name
+            metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if stat_module.S_ISDIR(metadata.st_mode):
+                child_fd = os.open(
+                    name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_fd,
+                )
+                try:
+                    child_entries, child_directories = self._seal_external_tree(child_fd, path)
+                    directories.append(path)
+                    entries.extend(child_entries)
+                    directories.extend(child_directories)
+                    os.fchmod(child_fd, 0o500)
+                    os.fsync(child_fd)
+                finally:
+                    os.close(child_fd)
+                continue
+            if not stat_module.S_ISREG(metadata.st_mode):
+                raise ArtifactScratchIntegrityError("external material entry is not regular")
+            descriptor = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
+            try:
+                digest = hashlib.sha256()
+                count = 0
+                while chunk := os.read(descriptor, 1024 * 1024):
+                    digest.update(chunk)
+                    count += len(chunk)
+                executable = bool(metadata.st_mode & 0o111)
+                os.fchmod(descriptor, 0o500 if executable else 0o400)
+            finally:
+                os.close(descriptor)
+            entries.append(
+                {
+                    "normalized_path": path,
+                    "byte_count": count,
+                    "sha256": f"sha256:{digest.hexdigest()}",
+                    "executable": executable,
+                }
+            )
+        return entries, directories
+
+    def _revoke_external_grant_sync(self, grant_id: str) -> None:
+        """Remove the published manifest before outer workspace cleanup begins."""
+        if _WORKSPACE_ID.fullmatch(grant_id) is None:
+            raise ArtifactScratchIntegrityError("external material grant is invalid")
+        root_fd = os.open(
+            grant_id,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=self._workspaces_fd,
+        )
+        try:
+            os.unlink(_EXTERNAL_GRANT_MANIFEST, dir_fd=root_fd)
+            os.fsync(root_fd)
+        except FileNotFoundError as exc:
+            raise ArtifactScratchIntegrityError("external material grant changed") from exc
+        finally:
+            os.close(root_fd)
 
     async def retry_pending_cleanup(self) -> int:
         """Retry manager-owned cleanup retained before service handoff."""
