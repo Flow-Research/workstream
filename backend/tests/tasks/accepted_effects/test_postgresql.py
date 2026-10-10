@@ -293,3 +293,46 @@ async def test_canonical_fence_rejects_missing_nested_and_stale_generation(
                 await participant(session).lock_accepted_effects(
                     h.effects_request, expected_generation=1
                 )
+
+
+async def test_routing_source_rejects_only_substituted_request_hash(tmp_path, isolated_database_env):
+    from uuid import UUID
+    from app.modules.tasks.api import TaskAcceptedEffectsRequest
+    from tests.tasks.post_submit_routing.outcome_support import (
+        authorized_routing_source, apply_outcome, outcome_snapshot,
+    )
+
+    async with authorized_routing_source(tmp_path, isolated_database_env, human_review_required=False) as h:
+        async with h.factory() as session, session.begin():
+            result = await apply_outcome(session, h, 2)
+        async with h.factory() as session, session.begin():
+            manifest = await session.scalar(text(
+                "SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE id=:id"
+            ), {"id": result["routing_manifest_id"]})
+            source = manifest["authority_context"]["source"]
+            request = TaskAcceptedEffectsRequest(
+                **{key: UUID(source[key]) for key in (
+                    "project_id", "task_id", "assignment_id", "submission_id",
+                    "contributor_id", "contribution_policy_version_id", "content_id",
+                )},
+                submission_version=source["submission_version"],
+                content_sha256=source["content_sha256"],
+                final_acceptance_id=result["final_acceptance_id"],
+                expected_task_status="evaluation_pending",
+            )
+            authority = dict(
+                source_authorization_decision_id=result["authorization_decision_id"],
+                recorded_by=UUID(manifest["router_actor_id"]),
+                locked_review_policy_id=UUID(source["locked_policy"]["locked_review_policy_id"]),
+                expected_generation=2, disposition="replay",
+            )
+            owner = participant(session)
+            before = await outcome_snapshot(session)
+            await owner.require_routing_source(request, result["routing_manifest_id"], **authority)
+            changed_hash = request.content_sha256[:-1] + ("0" if request.content_sha256[-1] != "0" else "1")
+            with pytest.raises(TaskAcceptedEffectsUnavailable):
+                await owner.require_routing_source(
+                    request.model_copy(update={"content_sha256": changed_hash}),
+                    result["routing_manifest_id"], **authority,
+                )
+            assert await outcome_snapshot(session) == before

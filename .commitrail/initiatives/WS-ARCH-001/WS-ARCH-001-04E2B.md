@@ -202,6 +202,7 @@ reviewed candidate and PR; this map does not claim hosted or live readiness.
 | Held acceptance capability lifetime | `backend/tests/reviews/acceptance/test_prepared.py::test_prepared_acceptance_requires_original_root` | PostgreSQL root, rollback, new transaction and raw savepoint probes |
 | Retained materialization decision, Local | `backend/tests/checkers/execution/test_execution.py::test_verified_material_execution_and_replay[local]` | Actual materialization receipt equals stored CHECKERS evidence |
 | Retained materialization decision, MinIO | `backend/tests/checkers/execution/test_execution.py::test_verified_material_execution_and_replay[minio]` | Actual S3-compatible materialization receipt equals stored CHECKERS evidence |
+| TASK request binds exact stored content hash | `backend/tests/tasks/accepted_effects/test_postgresql.py::test_routing_source_rejects_only_substituted_request_hash` | Actual authorized false-policy outcome; valid replay control, hash-only substitution rejected and unchanged retained state |
 | Exact event excludes administrative mutation identity | `backend/tests/tasks/post_submit_routing/test_outcome_storage.py::test_routing_event_excludes_administrative_idempotency_reference` | Real stored event, malformed insert SQL rejection and independent replay-field rejection |
 | Upgrade refusal preserves old data | `backend/tests/tasks/post_submit_routing/test_outcome_migration.py::test_pre_authority_rows_refuse_upgrade_without_rewriting` | Isolated predecessor schema, rejected upgrade and unchanged rows |
 
@@ -238,3 +239,8 @@ receipts remain invalid. Material-lineage tests explicitly fire their named
 deferred constraint under the altered search path so newer receipt guards do
 not mask that proof. New audit references preserve their referenced owners'
 string representation internally and convert to native UUID values at typed ports.
+
+The removed fake transport hash case has a distinct real PostgreSQL replacement:
+the TASK participant compares the request hash with its stored routing manifest
+alongside the existing canonical acceptance predicate. Upstream source validation
+is not a substitute for this request boundary.

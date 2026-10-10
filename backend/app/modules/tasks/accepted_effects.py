@@ -87,10 +87,13 @@ class TaskAcceptedEffectsParticipant:
         valid = await self._session.scalar(
             text(
                 "SELECT public.task_routing_acceptance_matches(:manifest, :acceptance, :decision, "
-                ":actor, :project, :task, :submission, :policy, :generation, :is_new)"
+                ":actor, :project, :task, :submission, :policy, :generation, :is_new) "
+                "FROM public.task_post_submit_routing_manifests m "
+                "WHERE m.id=:manifest AND m.content_sha256=:content_sha256"
             ),
             {
                 "manifest": manifest_id,
+                "content_sha256": checked.content_sha256,
                 "acceptance": checked.final_acceptance_id,
                 "decision": source_authorization_decision_id,
                 "actor": recorded_by,
