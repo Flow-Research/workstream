@@ -170,6 +170,8 @@ selectors and saved correction, including retained superseded policies; reading
 does not make a decision or dispatch work. Separate exact post-policy approval
 uses caller-prepared input and a retry key, validates the full returned target
 and preserves backend-owned fresh replay authority; it does not activate a guide.
+Exact post-policy correction submits the inspected target and manager feedback,
+returning one saved unified successor without dispatch or activation.
 No public project-list
 route is invented.
 CLI write uncertainty is explicit and never automatically
@@ -401,7 +403,11 @@ cannot be reused as post-submission review-gate evidence. See the
   [CLI evaluation approval](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-15.md)
   commits the separate exact-policy decision with caller-prepared input and retry
   custody, complete receipt validation and fresh backend authority on replay.
-  Correction and activation remain future CLI commands; backend owners retain all authority.
+  [CLI evaluation correction](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-16.md)
+  sends the inspected target and manager feedback to the existing public write;
+  the receipt identifies one saved unified setup successor, not dispatch or
+  activation. Exact replay retains backend authority and adds no successor.
+  Correction dispatch and activation remain future CLI commands; backend owners retain all authority.
   [PILOT-13 assigned-guide access](../.commitrail/changes/pilot13-assigned-task-guide-documents.md)
   lists exact locked originals in assigned contributor context and streams
   authorized, fully verified ART bytes. `task guide` lists or safely downloads

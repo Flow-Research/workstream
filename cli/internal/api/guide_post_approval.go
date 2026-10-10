@@ -9,16 +9,16 @@ import (
 	"slices"
 )
 
-// PostPolicyApproval is a retained decision receipt, not guide activation.
-type PostPolicyApproval struct {
+// PostPolicyReceipt is a retained decision receipt, not guide activation or dispatch.
+type PostPolicyReceipt struct {
 	OperationID string           `json:"operation_id"`
 	Kind        string           `json:"kind"`
 	Target      PostPolicyTarget `json:"target"`
 	Correction  *GuideCorrection `json:"correction"`
 }
 
-func (c *Client) ApproveGuidePostSubmission(ctx context.Context, project, guide, compilation, policy string, body json.RawMessage, key string) (Result[PostPolicyApproval], error) {
-	var result Result[PostPolicyApproval]
+func (c *Client) ApproveGuidePostSubmission(ctx context.Context, project, guide, compilation, policy string, body json.RawMessage, key string) (Result[PostPolicyReceipt], error) {
+	var result Result[PostPolicyReceipt]
 	for _, id := range []string{project, guide, compilation, policy, key} {
 		if !validUUID(id) || len(id) > 100 {
 			return result, errors.New("project, guide, compilation, policy and --idempotency-key must be UUIDs")
@@ -40,7 +40,7 @@ func (c *Client) ApproveGuidePostSubmission(ctx context.Context, project, guide,
 	if err != nil {
 		return result, postApprovalFailure(err)
 	}
-	var value PostPolicyApproval
+	var value PostPolicyReceipt
 	fields, err = contextObject(raw, &value, []string{"operation_id", "kind", "target"}, nil)
 	identity, valid := uuidIdentity(value.OperationID)
 	if err != nil || !valid || identity[6]>>4 != 7 || identity[8]&0xc0 != 0x80 || !c.safeMetadata(value.OperationID) ||
@@ -48,7 +48,7 @@ func (c *Client) ApproveGuidePostSubmission(ctx context.Context, project, guide,
 		decodePostPolicyTarget(fields["target"], &value.Target) != nil || !samePostPolicyTarget(value.Target, input.Target) {
 		return result, postApprovalFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
 	}
-	return Result[PostPolicyApproval]{Raw: raw, Value: value}, nil
+	return Result[PostPolicyReceipt]{Raw: raw, Value: value}, nil
 }
 
 func samePostPolicyTarget(a, b PostPolicyTarget) bool {
