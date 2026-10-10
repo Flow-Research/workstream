@@ -2,7 +2,11 @@
 
 from app.modules.authorization.artifact_project_authority import lock_project_role_mutation_principals
 from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.domain import adapter_bindings, contribution_policies
+from app.modules.authorization.domain import (
+    adapter_bindings,
+    checker_registry,
+    contribution_policies,
+)
 from app.modules.authorization.domain.action_groups import PROJECT_SCOPED_ADMIN_MUTATIONS
 from app.modules.authorization.runtime import (
     AuthorizationDenialCode, HumanAuthorizationContext, PreparedAuthorizationUnsupported,
@@ -45,6 +49,7 @@ async def lock_admin_mutation_authority(repository, context, scope, action_id, p
         for_update=True,
         **({"allowed_roles": (AdminRole.OPERATOR,)} if action_id is ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE else {}),
         **adapter_bindings.finance_authority_grant_filters(action_id),
+        **checker_registry.checker_registry_grant_filters(action_id),
         **contribution_policies.policy_finance_grant_filters(action_id),
     )
     if grant is None:

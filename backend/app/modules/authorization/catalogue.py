@@ -244,6 +244,7 @@ class ActionId(StrEnum):
     ARTIFACT_CHECKER_OUTPUT_WRITE = "artifact.checker_output.write"
     ARTIFACT_REVIEW_PACKET_MATERIALIZE = "artifact.review_packet.materialize"
     ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE = "artifact.review_evidence.binding.create"
+    CHECKER_REGISTRY_REGISTER = "checker.registry.register"
     COMPENSATION_ADAPTER_BINDING_READ = "compensation.adapter_binding.read"
     COMPENSATION_ADAPTER_BINDING_CREATE = "compensation.adapter_binding.create"
     COMPENSATION_ADAPTER_BINDING_SUSPEND = "compensation.adapter_binding.suspend"
@@ -288,6 +289,7 @@ class ActionOwner(StrEnum):
     TASK_PROJECT_GRANT = "task-project-grant-authorization"
     PILOT_13 = "PILOT-13"
     PILOT_02A = "PILOT-02A"
+    PILOT_04 = "PILOT-04"
 
     AUTH_07B = "WS-AUTH-001-07B"
     AUTH_08 = "WS-AUTH-001-08"
@@ -573,6 +575,11 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_14,
     ),
     _planned(ActionId.OPERATIONS_CHECKER_RETRY, PermissionId.OPERATIONS_CHECKER_RETRY, ActionOwner.AUTH_14),
+    _active(
+        ActionId.CHECKER_REGISTRY_REGISTER,
+        PermissionId.OPERATIONS_RECONCILE_RUN,
+        ActionOwner.PILOT_04,
+    ),
     _active(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
     _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(ActionId.REVIEW_QUEUE_INSPECT, PermissionId.REVIEW_QUEUE_INSPECT, ActionOwner.AUTH_REV_05),
@@ -760,7 +767,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 147:
+    if len(PERMISSION_IDS) != 78 or len(ACTION_IDS) != 148:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 29:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -842,6 +849,7 @@ def _index_actions(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.CHECKER_REGISTRY_REGISTER,
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
