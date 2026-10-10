@@ -161,6 +161,38 @@ jobs:
           path: ${{ runner.temp }}/backend-pip-cache
           key: backend-pip-v1-${{ runner.os }}-${{ runner.arch }}-py312-${{ hashFiles('backend/pyproject.toml', '.github/workflows/backend.yml') }}
 
+  external-checker-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+
+      - name: Bind exact checked-out tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain)"
+
+      - name: Install the exact Rust checker toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.84.0 --profile minimal --component rustfmt
+          rustup override set 1.84.0
+          test "$(rustc --version | cut -d' ' -f2)" = 1.84.0
+
+      - name: Verify the external checker SDK and service
+        working-directory: external_checkers
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all --check
+          cargo test --workspace --locked
+
   lanes:
     needs: minio-image
     runs-on: ubuntu-latest
@@ -349,7 +381,7 @@ jobs:
 
   test:
     if: ${{ always() }}
-    needs: [auth-boundary-preflight, lanes, minio-image, cli-public-contract]
+    needs: [auth-boundary-preflight, external-checker-runtime, lanes, minio-image, cli-public-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -448,9 +480,10 @@ jobs:
         if: ${{ always() }}
         env:
           PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}
+          EXTERNAL_CHECKER_RESULT: ${{ needs.external-checker-runtime.result }}
           LANES_RESULT: ${{ needs.lanes.result }}
           CLI_RESULT: ${{ needs.cli-public-contract.result }}
-        run: test "${PREFLIGHT_RESULT}" = success && test "${LANES_RESULT}" = success && test "${CLI_RESULT}" = success
+        run: test "${PREFLIGHT_RESULT}" = success && test "${EXTERNAL_CHECKER_RESULT}" = success && test "${LANES_RESULT}" = success && test "${CLI_RESULT}" = success
 
       - name: Merge and independently validate exact lane custody
         working-directory: backend

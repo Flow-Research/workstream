@@ -247,6 +247,13 @@ class Settings(BaseSettings):
         gt=0,
         le=86_400,
     )
+    external_checker_service_socket: Path | None = None
+    external_checker_material_root: Path | None = None
+    external_checker_service_timeout_seconds: float = Field(
+        default=3600.0,
+        gt=0.0,
+        le=3700.0,
+    )
 
     artifact_pending_work_scan_interval_seconds: int = Field(default=60, gt=0, le=3600)
     artifact_pending_work_scan_page_size: int = Field(default=100, gt=0, le=1000)
@@ -576,6 +583,24 @@ class Settings(BaseSettings):
             ):
                 raise ValueError(
                     "artifact scratch and durable local storage roots must be separate"
+                )
+        external_values = (
+            self.external_checker_service_socket,
+            self.external_checker_material_root,
+        )
+        if any(value is not None for value in external_values):
+            if any(value is None for value in external_values):
+                raise ValueError("external checker service settings must be complete")
+            socket, material = external_values
+            assert socket is not None and material is not None
+            if not socket.is_absolute() or not material.is_absolute():
+                raise ValueError("external checker service paths must be absolute")
+            if self.artifact_scratch_root is None or (
+                material.resolve(strict=False)
+                != self.artifact_scratch_root.resolve(strict=False)
+            ):
+                raise ValueError(
+                    "external checker material root must equal the artifact scratch root"
                 )
         if self.artifact_store_backend == "disabled":
             return self
