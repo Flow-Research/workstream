@@ -17,7 +17,7 @@ from uuid import uuid4
 from urllib.request import Request, urlopen
 import zipfile
 
-from app.adapters.checkers.external_service import external_checker_execution_factory
+from app.adapters.checkers import external_checker_execution_factory
 from app.core.identifiers import new_record_id
 from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
 from app.modules.artifacts.preparation import (

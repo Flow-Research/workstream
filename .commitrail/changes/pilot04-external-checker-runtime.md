@@ -298,6 +298,8 @@ No database transaction crosses the client call.
   CHECKER composition root. Factory registration and settings mapping now live
   in `app.adapters.checkers`; the architecture regression owns that fourth
   root and rejects a concrete checker adapter or factory constructed elsewhere.
+  The checked-in local probe imports that owner root as well, with no
+  compatibility export left in the concrete transport module.
 
 ## Reconciliation
 
