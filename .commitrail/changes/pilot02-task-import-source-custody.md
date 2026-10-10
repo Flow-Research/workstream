@@ -206,3 +206,34 @@ reproduces the ordered provider collision and predecessor seeding failure
 Both explicit primary-key variants also fail against the preceding parser.
 These controls establish the repaired defects; the earlier positive receipts
 above remain bound to their original tested trees.
+
+
+The repaired source/API/fixture tree at clean
+`7a7bc3825c6e36921bd572cf49cda4b9a521bd3e` passed all 18 native public
+source cases in 468.79 seconds and the separately ordered corruption then
+uncertain-acknowledgement control in 111.51 seconds. Both canonical PostgreSQL
+16/MinIO runners exited 0 at `0031_task_import_source`, with owned database,
+role and provider cleanup confirmed. All 27 affected pure checks, 173
+ownership/lane regressions, selected MCP checks (11), full Ruff, configured
+80.2% docstring audit, protected-main module/AUTH guards and stale-contract
+scans passed at that source tree.
+
+The additive AUTH custody fixture also exposed structural-ledger drift. Two
+existing expressions are compacted without changing their values or assertions;
+the file shrinks from the protected 10,959 lines to 10,958. All retained debt
+symbol hashes and lengths, thresholds, exceptions and policy are unchanged.
+The clean affected freeze `ab00589526e265422205b3515365bcb560e2cb18`
+passed the exact structure guard and all 30 custody/structure regressions in
+112.91 seconds. The native review-policy migration control that previously
+failed source-column seeding passed in 94.15 seconds at that clean head, with
+`0031_task_import_source` and database/role/MinIO cleanup confirmed. Its
+application, DDL, historical seed fixtures and public source tests are byte
+identical to the 18-case tested source tree. Independent affected source review
+passed both freezes; the migration author's SQL remains separately reviewed.
+
+The 28-node predecessor migration batch reached its declared 1,200-second cap
+after ten completed cases, without an assertion failure, and cleaned its owned
+resources. It is not a completed 28-case proof. The source-equivalent diagnostic
+review-policy run and older local proofs retain their actual execution states
+and heads. Fresh complete hosted lanes and their aggregate remain required;
+no full-suite pass or readiness is claimed from these bounded local checks.
