@@ -262,7 +262,7 @@ class EvaluationCoordinationPort(Protocol):
     async def require_current_completion(
         self, event_id: ResourceId, completion: "EvaluationCompletion"
     ) -> "VerifiedEvaluationCompletion":
-        """Lock exact current allow-review completion and return retained material facts."""
+        """Lock the exact current completed outcome and return retained result/material facts."""
         ...
 
     async def reserve_current_evaluation(
@@ -298,3 +298,10 @@ class VerifiedEvaluationCompletion(PostSubmitValue):
     submission_version: VersionNumber
     material: VerifiedMaterialFacts
     input_materialization_evidence_id: ResourceId
+    result: PostSubmissionEvaluationResult
+
+    @model_validator(mode="after")
+    def bind_completed_result(self):
+        """Bind the retained body to its complete canonical result reference."""
+        self.completion.reference.validate_result(self.result)
+        return self
