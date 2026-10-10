@@ -372,6 +372,10 @@ not post-policy approval, post-policy job delivery or guide activation.
 reads the exact derived evaluation policy, upstream proposal/findings, activation
 selectors and saved correction through one public GET. Compiled, approved and
 superseded packages remain observations, not approval or activation.
+`workstream project guide approve-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID
+--input FILE --idempotency-key UUID` separately approves the inspected evaluation
+policy. It preserves the caller's exact target and retry key, validates the
+complete returned target, and never activates a guide or retries automatically.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.

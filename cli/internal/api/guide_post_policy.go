@@ -131,19 +131,26 @@ func requiredNullable(fields map[string]json.RawMessage, keys ...string) bool {
 }
 
 func validatePostTarget(raw json.RawMessage, value *PostPolicyTarget, proposal GuideProposal, policy string) error {
+	if decodePostPolicyTarget(raw, value) != nil || !sameUUID(value.PolicyID, policy) ||
+		!sameProposalTarget(value.Proposal, proposal.Target) || value.Upstream.TargetDigest != proposal.TargetDigest {
+		return errors.New("invalid post-policy target")
+	}
+	return nil
+}
+
+func decodePostPolicyTarget(raw json.RawMessage, value *PostPolicyTarget) error {
 	fields, err := contextObject(raw, value, []string{"proposal", "upstream", "upstream_output_digest", "policy_id", "projection_operation_id", "policy_hash"}, nil)
-	if err != nil || !sameUUID(value.PolicyID, policy) || !validUUID(value.ProjectionOperationID) ||
+	if err != nil || !validUUID(value.PolicyID) || !validUUID(value.ProjectionOperationID) ||
 		(value.PredecessorPolicyID != nil && !validUUID(*value.PredecessorPolicyID)) ||
 		!proposalDigests([]string{value.UpstreamOutputDigest, value.PolicyHash}) ||
-		validateProposalTarget(fields["proposal"], &value.Proposal) != nil || !sameProposalTarget(value.Proposal, proposal.Target) {
+		validateProposalTarget(fields["proposal"], &value.Proposal) != nil {
 		return errors.New("invalid post-policy target")
 	}
 	_, err = contextObject(fields["upstream"], &value.Upstream, []string{
 		"operation_id", "target_digest", "artifact_policy_id", "effective_policy_id", "effective_policy_hash",
 		"pre_submit_policy_id", "pre_submit_bundle_hash", "effective_pre_submit_plan_hash", "acknowledged_warning_hashes",
 	}, []string{"acknowledged_warning_hashes"})
-	if err != nil || !validGuideApproval(value.Upstream, guideApprovalInput{Target: value.Proposal, AcknowledgedWarningHashes: value.Upstream.AcknowledgedWarningHashes}) ||
-		value.Upstream.TargetDigest != proposal.TargetDigest {
+	if err != nil || !validGuideApproval(value.Upstream, guideApprovalInput{Target: value.Proposal, AcknowledgedWarningHashes: value.Upstream.AcknowledgedWarningHashes}) {
 		return errors.New("invalid upstream receipt")
 	}
 	return nil
