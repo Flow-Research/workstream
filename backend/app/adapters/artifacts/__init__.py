@@ -577,7 +577,7 @@ def checker_output_binding(session, *, namespace) -> CheckerOutputBindingPort:
         reservations=checker_output_reservations(session), authority=DenyCheckerOutputBindingAuthority())
 
 
-def get_task_import_source_commands(
+async def get_task_import_source_commands(
     request: Request,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     context: Annotated[object, Depends(get_artifact_authorization_context)],
@@ -591,6 +591,9 @@ def get_task_import_source_commands(
 
     settings = request.app.state.settings
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    # Identity provisioning is committed by its owner. As in TASK commands,
+    # discard the resolver's read-only refresh before ART owns each root.
+    await session.rollback()
 
     @asynccontextmanager
     async def runtime():
