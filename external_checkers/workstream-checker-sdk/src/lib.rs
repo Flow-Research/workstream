@@ -384,12 +384,12 @@ pub fn validate_result(value: &Value, request: &ValidatedRequest) -> Result<(), 
             if finding.code.is_empty()
                 || finding.code.len() > 100
                 || finding.message.is_empty()
-                || finding.message.len() > 4096
+                || finding.message.chars().count() > 4096
                 || !matches!(finding.level.as_str(), "info" | "warning" | "error")
                 || finding
                     .path
                     .as_ref()
-                    .is_some_and(|path| path.is_empty() || path.len() > 1000)
+                    .is_some_and(|path| path.is_empty() || path.chars().count() > 1000)
             {
                 return Err(ContractError("finding is invalid"));
             }
@@ -494,13 +494,27 @@ fn write_canonical(value: &Value, output: &mut String) -> Result<(), ContractErr
 }
 
 fn canonical_number(source: &str) -> Result<String, ContractError> {
-    if source == "-0.0" || source == "-0e0" || source == "-0E0" {
+    let is_float = source.contains(['.', 'e', 'E']);
+    if !is_float {
+        return Ok(if source == "-0" { "0" } else { source }.into());
+    }
+    let value: f64 = source
+        .parse()
+        .map_err(|_| ContractError("number is invalid"))?;
+    if !value.is_finite() {
+        return Err(ContractError("number is invalid"));
+    }
+    if value == 0.0 {
         return Ok("0.0".into());
     }
-    let Some(position) = source.find(['e', 'E']) else {
-        return Ok(source.into());
+    let normalized = value.to_string();
+    let Some(position) = normalized.find(['e', 'E']) else {
+        if value.fract() == 0.0 && value.abs() < 1e16 {
+            return Ok(format!("{normalized}.0"));
+        }
+        return Ok(normalized);
     };
-    let (mantissa, exponent) = source.split_at(position);
+    let (mantissa, exponent) = normalized.split_at(position);
     let exponent: i32 = exponent[1..]
         .parse()
         .map_err(|_| ContractError("number is invalid"))?;
@@ -523,9 +537,6 @@ fn canonical_number(source: &str) -> Result<String, ContractError> {
         result.push_str(&digits);
         for _ in digits.len()..new_decimal as usize {
             result.push('0');
-        }
-        if unsigned.contains('.') {
-            result.push_str(".0");
         }
     } else {
         let split = new_decimal as usize;
@@ -600,6 +611,18 @@ mod tests {
     }
 
     #[test]
+    fn shared_numeric_fixtures_preserve_python_precision() {
+        let cases: Value =
+            serde_json::from_slice(include_bytes!("../../fixtures/canonical_numbers.json"))
+                .unwrap();
+        for case in cases.as_array().unwrap() {
+            let source = case["json"].as_str().unwrap();
+            let value: Value = serde_json::from_str(source).unwrap();
+            assert_eq!(canonical_json(&value).unwrap(), case["canonical"]);
+        }
+    }
+
+    #[test]
     fn canonical_json_rejects_nul() {
         assert!(canonical_json(&serde_json::json!({"safe": "bad\0value"})).is_err());
         assert!(canonical_json(&serde_json::json!({"bad\0key": "value"})).is_err());
@@ -630,5 +653,20 @@ mod tests {
         nested_extra["request_digest"] =
             Value::String(canonical_hash(&Value::Object(body)).unwrap());
         assert!(parse_request(&serde_json::to_vec(&nested_extra).unwrap()).is_err());
+
+        let mut unicode_result = result.clone();
+        unicode_result["verdict"] = Value::String("failed".into());
+        unicode_result["findings"] = serde_json::json!([{
+            "code": "unicode",
+            "level": "error",
+            "message": "汉".repeat(2_000),
+            "path": "路".repeat(500),
+        }]);
+        let mut body = unicode_result.as_object().unwrap().clone();
+        body.remove("result_digest");
+        unicode_result["result_digest"] =
+            Value::String(canonical_hash(&Value::Object(body)).unwrap());
+        validate_result(&unicode_result, &request)
+            .expect("character ceilings must match Python rather than UTF-8 bytes");
     }
 }

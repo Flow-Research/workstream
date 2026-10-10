@@ -55,6 +55,9 @@ container engine. Python product code never becomes a Docker launcher.
   sandbox arguments, timeout/cleanup, output bounds and closed failure mapping.
   Register only the new modules and tests in the existing ownership and lane
   catalogues.
+- `.github/workflows/backend.yml` and the existing CI catalogue regression only
+  to require the locked Rust workspace format and test commands in Backend's
+  aggregate result; no lane, service, timeout or Python selection changes.
 - A bounded local probe under `experiments/pilot04_external_checker_runtime/**`
   only if needed to reproduce the real service request and its cleanup without
   adding a product caller or deployment surface.
@@ -213,10 +216,10 @@ No database transaction crosses the client call.
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Baseline and owner map | Implementation began at merged registry main `3110353363547e603e7527a782467f95c00cb1f7`; final reconciliation merges CLI approval main `4c5720034a2a1019f00df6c7f96601407ef1e43a` without changing the runtime sources | Complete | Later product selection and hosted deployment remain outside this chunk |
-| Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace` | Seven tests pass: shared Python fixtures, numeric/NUL/extra-field controls, closed cache/runtime health, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
-| Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Five tests pass: cross-language fixtures, complete settings, typed health/execute/factory, actual prepared ZIP callback grant and symlink rejection | Product caller is intentionally absent |
+| Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace --locked` | Twelve tests pass: shared Python fixtures, exact numeric/NUL/extra-field and Unicode controls, closed cache/runtime health, bounded partial-frame/process/client-disconnect behavior, uncertain-create cleanup, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
+| Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Eight tests pass: cross-language fixtures, complete settings, typed health/execute/factory and cancellation, actual prepared ZIP callback grant, live-owner enforcement, semantic-manifest substitution and symlink rejection | Product caller is intentionally absent |
 | Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
-| Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-probe-final.json` SHA-256 `371a6f31362cca3a0d8eb7d99e20b46086ef6fc302a8caa29e1c2df9e3357340` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
+| Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-repair-probe.json` SHA-256 `873b7455be71a8a19a43d00a98dcb5a335b2627c317e1e4692183c0fa3ea7a42` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
 
 ## Review findings
 
@@ -244,6 +247,26 @@ No database transaction crosses the client call.
   Rust cache and Python receipt now enforce a lowercase component grammar,
   numeric registry ports and no tags or option-like leading components before a
   repository is ever passed as a process argument.
+- Independent process probes found that stdin delivery preceded the checker
+  deadline, Docker control commands were unbounded, final output reads escaped
+  their cap, and a partial Unix-socket frame monopolized the sequential
+  service. The repaired service starts one deadline before image inspection,
+  writes stdin nonblocking, bounds every Docker child and both output streams,
+  observes client disconnect, requires confirmed container removal, and bounds
+  socket reads and writes so a later client can recover.
+- Independent grant substitution probes found that the low-level scratch
+  publisher accepted caller-claimed preparation and semantic identities while
+  the service compared only request and binding digests. Grant publication now
+  requires the live `PreparedArtifact` callback and its server commitment; the
+  service matches prepared generation, attempt, attempt digest, archive bytes
+  and the recomputed canonical semantic manifest to the normalized pre-submit
+  request. Post-submit grants remain unavailable until a real post-submit ART
+  custody owner exists.
+- Cross-language probes found that default `serde_json` rounded integers above
+  `u64` and Rust counted UTF-8 bytes where Python counts finding characters.
+  The locked Rust JSON parser retains numeric lexemes, shared number goldens
+  cover large integers, decimal/exponent forms and negative zero, and finding
+  character ceilings now match Python while the aggregate byte cap remains.
 
 ## Reconciliation
 

@@ -32,6 +32,7 @@ _CAPABILITY = "external_checker_execution"
 _PROVIDER = "unix_socket"
 _PROTOCOL = "external_checker_service.v1"
 _MAXIMUM_RESPONSE_BYTES = MAX_RESULT_BYTES + 16_384
+_EXECUTION_OVERHEAD_SECONDS = 60.0
 
 
 class UnixSocketExternalCheckerAdapter:
@@ -81,6 +82,11 @@ class UnixSocketExternalCheckerAdapter:
             ).encode("utf-8")
             if len(payload) > 2 * 1024 * 1024:
                 raise ExternalServiceProtocolError(self._identity)
+            required_timeout = (
+                checked.registry.resources.deadline_ms / 1000 + _EXECUTION_OVERHEAD_SECONDS
+            )
+            if self._timeout_seconds < required_timeout:
+                raise ExternalServiceUnavailableError(self._identity)
             async with asyncio.timeout(self._timeout_seconds):
                 reader, writer = await asyncio.open_unix_connection(self._socket_path)
                 try:
@@ -104,9 +110,11 @@ class UnixSocketExternalCheckerAdapter:
 
         try:
             body = json.loads(raw)
-            if type(body) is not dict or set(body) != {
-                "protocol_version", "result", "isolation"
-            } or body["protocol_version"] != _PROTOCOL:
+            if (
+                type(body) is not dict
+                or set(body) != {"protocol_version", "result", "isolation"}
+                or body["protocol_version"] != _PROTOCOL
+            ):
                 raise ValueError("external checker service response is invalid")
             result = ExternalCheckerExecutionResult.model_validate_json(
                 json.dumps(body["result"], ensure_ascii=False, allow_nan=False)

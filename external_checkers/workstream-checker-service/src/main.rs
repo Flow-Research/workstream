@@ -5,10 +5,11 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use workstream_checker_sdk::{
@@ -20,6 +21,9 @@ const PROTOCOL: &str = "external_checker_service.v1";
 const GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v1";
 const MAX_ENVELOPE_BYTES: usize = MAX_REQUEST_BYTES + 16_384;
 const MAX_RESPONSE_BYTES: usize = 65_536 + 16_384;
+const SOCKET_IO_TIMEOUT: Duration = Duration::from_secs(2);
+const DOCKER_CONTROL_TIMEOUT: Duration = Duration::from_secs(10);
+const CLEANUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -132,6 +136,12 @@ struct WorkspaceInventory {
     files: Vec<GrantFile>,
 }
 
+struct BoundedCommandOutput {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    _stderr: Vec<u8>,
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("external checker service unavailable: {error}");
@@ -155,16 +165,23 @@ fn run() -> Result<(), String> {
         .map_err(|_| "socket permission failed")?;
     for connection in listener.incoming() {
         match connection {
-            Ok(mut stream) => {
-                let response = handle(&config, &mut stream);
-                if let Ok(bytes) = response {
-                    let _ = write_frame(&mut stream, &bytes);
-                }
-            }
+            Ok(stream) => serve_connection(&config, stream, SOCKET_IO_TIMEOUT),
             Err(_) => continue,
         }
     }
     Ok(())
+}
+
+fn serve_connection(config: &ServiceConfig, mut stream: UnixStream, timeout: Duration) {
+    if stream.set_read_timeout(Some(timeout)).is_err()
+        || stream.set_write_timeout(Some(timeout)).is_err()
+    {
+        return;
+    }
+    let response = handle(config, &mut stream);
+    if let Ok(bytes) = response {
+        let _ = write_frame(&mut stream, &bytes);
+    }
 }
 
 fn validate_config(config: &ServiceConfig) -> Result<(), String> {
@@ -294,9 +311,17 @@ fn handle(config: &ServiceConfig, stream: &mut UnixStream) -> Result<Vec<u8>, St
         sandbox_uid: config.sandbox_uid,
         sandbox_gid: config.sandbox_gid,
     };
+    let execution_deadline = Instant::now() + Duration::from_millis(request.deadline_ms);
     let (result, isolation) = match verify_grant(config, &request, &envelope.grant) {
-        Ok(workspace) => match inspect_image(config, cache) {
-            Ok(()) => match execute_container(config, cache, &request, &workspace) {
+        Ok(workspace) => match inspect_image(config, cache, execution_deadline) {
+            Ok(()) => match execute_container(
+                config,
+                cache,
+                &request,
+                &workspace,
+                stream,
+                execution_deadline,
+            ) {
                 Ok(result) => (result, Some(isolation)),
                 Err((code, launched)) => (
                     infrastructure_result(&request, code)
@@ -321,10 +346,13 @@ fn handle(config: &ServiceConfig, stream: &mut UnixStream) -> Result<Vec<u8>, St
 }
 
 fn runtime_ready(config: &ServiceConfig) -> Result<(), String> {
-    let status = Command::new(&config.docker_binary)
-        .args(["info", "--format", "{{json .Runtimes}}"])
-        .output()
-        .map_err(|_| "runtime health unavailable")?;
+    let status = run_bounded_command(
+        &config.docker_binary,
+        &["info", "--format", "{{json .Runtimes}}"],
+        Instant::now() + DOCKER_CONTROL_TIMEOUT,
+        64 * 1024,
+    )
+    .map_err(|_| "runtime health unavailable")?;
     let runtimes: Value =
         serde_json::from_slice(&status.stdout).map_err(|_| "runtime health invalid")?;
     if !status.status.success()
@@ -334,6 +362,127 @@ fn runtime_ready(config: &ServiceConfig) -> Result<(), String> {
         return Err("configured runtime unavailable".into());
     }
     Ok(())
+}
+
+fn set_nonblocking<T: AsRawFd>(value: &T) -> Result<(), String> {
+    let descriptor = value.as_raw_fd();
+    // SAFETY: fcntl only reads and replaces status flags on this owned descriptor.
+    let flags = unsafe { libc::fcntl(descriptor, libc::F_GETFL) };
+    if flags < 0 || unsafe { libc::fcntl(descriptor, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0
+    {
+        return Err("process descriptor unavailable".into());
+    }
+    Ok(())
+}
+
+fn read_available<R: Read>(
+    reader: &mut R,
+    bytes: &mut Vec<u8>,
+    maximum: usize,
+) -> Result<bool, String> {
+    let mut buffer = [0_u8; 8 * 1024];
+    loop {
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(true),
+            Ok(count) => {
+                if bytes.len().saturating_add(count) > maximum {
+                    return Err("process output unbounded".into());
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+            Err(_) => return Err("process output unavailable".into()),
+        }
+    }
+}
+
+fn reap_child(child: &mut Child, deadline: Instant) -> Result<ExitStatus, String> {
+    loop {
+        if let Some(status) = child.try_wait().map_err(|_| "process wait failed")? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            return Err("process wait timed out".into());
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+
+fn stop_child(child: &mut Child, deadline: Instant) -> Result<ExitStatus, String> {
+    if let Some(status) = child.try_wait().map_err(|_| "process wait failed")? {
+        return Ok(status);
+    }
+    if child.kill().is_err() {
+        return reap_child(child, deadline);
+    }
+    reap_child(child, deadline)
+}
+
+fn run_bounded_command(
+    binary: &Path,
+    arguments: &[&str],
+    deadline: Instant,
+    maximum_output: usize,
+) -> Result<BoundedCommandOutput, String> {
+    if Instant::now() >= deadline {
+        return Err("process deadline exceeded".into());
+    }
+    let mut child = Command::new(binary)
+        .args(arguments)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| "process launch failed")?;
+    let mut stdout = match child.stdout.take() {
+        Some(stdout) => stdout,
+        None => {
+            let _ = stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT);
+            return Err("process stdout unavailable".into());
+        }
+    };
+    let mut stderr = match child.stderr.take() {
+        Some(stderr) => stderr,
+        None => {
+            let _ = stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT);
+            return Err("process stderr unavailable".into());
+        }
+    };
+    if set_nonblocking(&stdout).is_err() || set_nonblocking(&stderr).is_err() {
+        let _ = stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT);
+        return Err("process descriptor unavailable".into());
+    }
+    let mut stdout_bytes = Vec::new();
+    let mut stderr_bytes = Vec::new();
+    loop {
+        if read_available(&mut stdout, &mut stdout_bytes, maximum_output).is_err()
+            || read_available(&mut stderr, &mut stderr_bytes, maximum_output).is_err()
+        {
+            let _ = stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT);
+            return Err("process output unbounded".into());
+        }
+        let status = match child.try_wait() {
+            Ok(status) => status,
+            Err(_) => {
+                let _ = stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT);
+                return Err("process wait failed".into());
+            }
+        };
+        if let Some(status) = status {
+            read_available(&mut stdout, &mut stdout_bytes, maximum_output)?;
+            read_available(&mut stderr, &mut stderr_bytes, maximum_output)?;
+            return Ok(BoundedCommandOutput {
+                status,
+                stdout: stdout_bytes,
+                _stderr: stderr_bytes,
+            });
+        }
+        if Instant::now() >= deadline {
+            stop_child(&mut child, Instant::now() + CLEANUP_TIMEOUT)?;
+            return Err("process deadline exceeded".into());
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
 }
 
 fn encode_response(
@@ -401,6 +550,7 @@ fn verify_grant(
         || manifest.request_digest != request.request_digest
         || manifest.binding_digest != binding
         || manifest.binding_digest != reference.binding_digest
+        || !grant_matches_request(&manifest, request)
     {
         return Err("grant binding differs".into());
     }
@@ -410,6 +560,66 @@ fn verify_grant(
         return Err("grant material differs".into());
     }
     Ok(workspace)
+}
+
+fn grant_matches_request(manifest: &GrantManifest, request: &ValidatedRequest) -> bool {
+    if request.phase != "pre_submit" {
+        return false;
+    }
+    let Some(identity) = request.value.get("identity").and_then(Value::as_object) else {
+        return false;
+    };
+    let Some(materials) = request.value.get("materials").and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(archive) = materials.iter().find_map(|item| {
+        let object = item.as_object()?;
+        (object.get("role")?.as_str()? == "submission_archive").then_some(object)
+    }) else {
+        return false;
+    };
+    let semantic_manifest_sha256 = semantic_manifest_hash(manifest).ok();
+    identity
+        .get("prepared_generation_id")
+        .and_then(Value::as_str)
+        == Some(&manifest.prepared_generation_id)
+        && identity.get("attempt_id").and_then(Value::as_str) == Some(&manifest.attempt_id)
+        && identity
+            .get("attempt_request_digest")
+            .and_then(Value::as_str)
+            == Some(&manifest.attempt_request_digest)
+        && archive.get("sha256").and_then(Value::as_str) == Some(&manifest.archive_sha256)
+        && archive.get("byte_count").and_then(Value::as_u64) == Some(manifest.archive_byte_count)
+        && semantic_manifest_sha256.as_deref() == Some(&manifest.semantic_manifest_sha256)
+}
+
+fn semantic_manifest_hash(manifest: &GrantManifest) -> Result<String, String> {
+    let mut entries = Vec::with_capacity(manifest.directories.len() + manifest.files.len());
+    for path in &manifest.directories {
+        entries.push(serde_json::json!({
+            "normalized_path": path,
+            "entry_type": "directory",
+        }));
+    }
+    for file in &manifest.files {
+        entries.push(serde_json::json!({
+            "normalized_path": file.normalized_path,
+            "entry_type": "file",
+            "sha256": file.sha256,
+            "byte_count": file.byte_count,
+            "executable": file.executable,
+        }));
+    }
+    entries.sort_by(|left, right| {
+        left["normalized_path"]
+            .as_str()
+            .cmp(&right["normalized_path"].as_str())
+    });
+    canonical_hash(&serde_json::json!({
+        "schema_version": "workstream.submission_bundle_manifest.v1",
+        "entries": entries,
+    }))
+    .map_err(|_| "semantic manifest invalid".into())
 }
 
 fn read_grant_manifest(
@@ -544,12 +754,19 @@ fn inspect_directory(
     Ok(())
 }
 
-fn inspect_image(config: &ServiceConfig, cache: &CacheEntry) -> Result<(), String> {
+fn inspect_image(
+    config: &ServiceConfig,
+    cache: &CacheEntry,
+    deadline: Instant,
+) -> Result<(), String> {
     let reference = format!("{}@{}", cache.repository, cache.platform_manifest_digest);
-    let output = Command::new(&config.docker_binary)
-        .args(["image", "inspect", "--format", "{{json .}}", &reference])
-        .output()
-        .map_err(|_| "image inspect unavailable")?;
+    let output = run_bounded_command(
+        &config.docker_binary,
+        &["image", "inspect", "--format", "{{json .}}", &reference],
+        deadline,
+        2 * 1024 * 1024,
+    )
+    .map_err(|_| "image inspect unavailable")?;
     if !output.status.success() {
         return Err("image missing".into());
     }
@@ -574,6 +791,8 @@ fn execute_container(
     cache: &CacheEntry,
     request: &ValidatedRequest,
     workspace: &Path,
+    client: &UnixStream,
+    deadline: Instant,
 ) -> Result<Value, (&'static str, bool)> {
     // Revalidate immediately before handing the path to Docker.
     inspect_workspace(workspace, config.sandbox_uid, config.sandbox_gid)
@@ -592,53 +811,99 @@ fn execute_container(
         "type=bind,src={},dst=/work/input,readonly",
         workspace.display()
     );
-    let created = Command::new(&config.docker_binary)
-        .args([
-            "create",
-            "--name",
-            &name,
-            "--label",
-            "workstream.external-checker=true",
-            "--runtime",
-            &config.runtime,
-            "--network",
-            "none",
-            "--read-only",
-            "--user",
-            &sandbox_user,
-            "--cap-drop",
-            "ALL",
-            "--security-opt",
-            "no-new-privileges",
-            "--pids-limit",
-            &pids,
-            "--memory",
-            &memory,
-            "--cpus",
-            &cpus,
-            "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=16777216",
-            "--mount",
-            &mount,
-            "-i",
-            &image,
-        ])
-        .output()
-        .map_err(|_| ("implementation_unavailable", false))?;
+    let create_arguments = [
+        "create",
+        "--name",
+        &name,
+        "--label",
+        "workstream.external-checker=true",
+        "--runtime",
+        &config.runtime,
+        "--network",
+        "none",
+        "--read-only",
+        "--user",
+        &sandbox_user,
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        &pids,
+        "--memory",
+        &memory,
+        "--cpus",
+        &cpus,
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=16777216",
+        "--mount",
+        &mount,
+        "-i",
+        &image,
+    ];
+    let created = match run_bounded_command(
+        &config.docker_binary,
+        &create_arguments,
+        deadline,
+        64 * 1024,
+    ) {
+        Ok(output) => output,
+        Err(error) => {
+            if !remove_container(config, &name) {
+                return Err(("implementation_unavailable", false));
+            }
+            return Err((
+                if error == "process deadline exceeded" {
+                    "deadline_exceeded"
+                } else {
+                    "implementation_unavailable"
+                },
+                false,
+            ));
+        }
+    };
     if !created.status.success() {
+        if !remove_container(config, &name) {
+            return Err(("implementation_unavailable", false));
+        }
         return Err(("implementation_unavailable", false));
     }
-    let result = run_started_container(config, &name, request);
-    let _ = Command::new(&config.docker_binary)
-        .args(["rm", "-f", &name])
-        .output();
+    let result = run_started_container(config, &name, request, client, deadline);
+    if !remove_container(config, &name) {
+        return Err(("implementation_unavailable", true));
+    }
     result.map_err(|code| (code, true))
+}
+
+fn remove_container(config: &ServiceConfig, name: &str) -> bool {
+    let cleanup_deadline = Instant::now() + CLEANUP_TIMEOUT;
+    if run_bounded_command(
+        &config.docker_binary,
+        &["rm", "-f", name],
+        cleanup_deadline,
+        64 * 1024,
+    )
+    .is_err()
+    {
+        return false;
+    }
+    matches!(
+        run_bounded_command(
+            &config.docker_binary,
+            &["container", "inspect", name],
+            cleanup_deadline,
+            64 * 1024,
+        ),
+        Ok(output) if !output.status.success()
+    )
 }
 
 fn run_started_container(
     config: &ServiceConfig,
     name: &str,
     request: &ValidatedRequest,
+    client: &UnixStream,
+    deadline: Instant,
 ) -> Result<Value, &'static str> {
     let payload = serde_json::to_vec(&request.value).map_err(|_| "invalid_output")?;
     let files = RuntimeFiles {
@@ -664,20 +929,53 @@ fn run_started_container(
         .stderr(error)
         .spawn()
         .map_err(|_| "implementation_unavailable")?;
-    if let Some(mut stdin) = child.stdin.take() {
-        if stdin.write_all(&payload).is_err() {
+    let mut stdin = match child.stdin.take() {
+        Some(stdin) => Some(stdin),
+        None => {
             terminate_container(config, name, &mut child);
             return Err("implementation_unavailable");
         }
+    };
+    if set_nonblocking(stdin.as_ref().unwrap()).is_err() {
+        terminate_container(config, name, &mut child);
+        return Err("implementation_unavailable");
     }
-    let deadline = Instant::now() + Duration::from_millis(request.deadline_ms);
+    let mut written = 0;
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(|_| "implementation_unavailable")? {
-            break status;
-        }
         if Instant::now() >= deadline {
             terminate_container(config, name, &mut child);
             return Err("deadline_exceeded");
+        }
+        if !client_is_connected(client) {
+            terminate_container(config, name, &mut child);
+            return Err("implementation_unavailable");
+        }
+        if written < payload.len() {
+            match stdin.as_mut().unwrap().write(&payload[written..]) {
+                Ok(0) => {
+                    terminate_container(config, name, &mut child);
+                    return Err("implementation_unavailable");
+                }
+                Ok(count) => written += count,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => {
+                    terminate_container(config, name, &mut child);
+                    return Err("implementation_unavailable");
+                }
+            }
+        }
+        if written == payload.len() {
+            stdin.take();
+        }
+        let status = match child.try_wait() {
+            Ok(status) => status,
+            Err(_) => {
+                terminate_container(config, name, &mut child);
+                return Err("implementation_unavailable");
+            }
+        };
+        if let Some(status) = status {
+            break status;
         }
         let sizes = fs::metadata(&files.output)
             .and_then(|output| fs::metadata(&files.error).map(|error| (output.len(), error.len())));
@@ -695,7 +993,13 @@ fn run_started_container(
         }
         thread::sleep(Duration::from_millis(10));
     };
-    let bytes = fs::read(&files.output).map_err(|_| "invalid_output")?;
+    stdin.take();
+    if written != payload.len() {
+        return Err("invalid_output");
+    }
+    let bytes = read_bounded_file(&files.output, request.maximum_output_bytes)
+        .map_err(|_| "invalid_output")?;
+    read_bounded_file(&files.error, MAX_RESULT_BYTES).map_err(|_| "invalid_output")?;
     if !status.success() {
         return if container_was_oom_killed(config, name)? {
             Err("capacity_exceeded")
@@ -724,21 +1028,61 @@ impl Drop for RuntimeFiles {
 }
 
 fn terminate_container(config: &ServiceConfig, name: &str, child: &mut std::process::Child) {
-    let _ = Command::new(&config.docker_binary)
-        .args(["kill", name])
-        .output();
-    let _ = child.wait();
+    let cleanup_deadline = Instant::now() + CLEANUP_TIMEOUT;
+    let _ = run_bounded_command(
+        &config.docker_binary,
+        &["kill", name],
+        cleanup_deadline,
+        64 * 1024,
+    );
+    if reap_child(child, Instant::now() + Duration::from_secs(1)).is_err() {
+        let _ = stop_child(child, cleanup_deadline);
+    }
 }
 
 fn container_was_oom_killed(config: &ServiceConfig, name: &str) -> Result<bool, &'static str> {
-    let output = Command::new(&config.docker_binary)
-        .args(["inspect", "--format", "{{json .State.OOMKilled}}", name])
-        .output()
-        .map_err(|_| "implementation_unavailable")?;
+    let output = run_bounded_command(
+        &config.docker_binary,
+        &["inspect", "--format", "{{json .State.OOMKilled}}", name],
+        Instant::now() + DOCKER_CONTROL_TIMEOUT,
+        16 * 1024,
+    )
+    .map_err(|_| "implementation_unavailable")?;
     if !output.status.success() {
         return Err("implementation_unavailable");
     }
     serde_json::from_slice(&output.stdout).map_err(|_| "implementation_unavailable")
+}
+
+fn read_bounded_file(path: &Path, maximum: usize) -> Result<Vec<u8>, String> {
+    let file = File::open(path).map_err(|_| "process output unavailable")?;
+    let mut bytes = Vec::new();
+    file.take(maximum as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "process output unavailable")?;
+    if bytes.len() > maximum {
+        return Err("process output unbounded".into());
+    }
+    Ok(bytes)
+}
+
+fn client_is_connected(stream: &UnixStream) -> bool {
+    let mut byte = 0_u8;
+    // SAFETY: recv peeks one byte into valid local storage without mutating the stream.
+    let result = unsafe {
+        libc::recv(
+            stream.as_raw_fd(),
+            (&mut byte as *mut u8).cast(),
+            1,
+            libc::MSG_PEEK | libc::MSG_DONTWAIT,
+        )
+    };
+    if result >= 0 {
+        false
+    } else {
+        let error = std::io::Error::last_os_error().raw_os_error();
+        error == Some(libc::EAGAIN) || error == Some(libc::EWOULDBLOCK)
+    }
 }
 
 fn read_frame(stream: &mut UnixStream, maximum: usize) -> Result<Vec<u8>, String> {
@@ -822,6 +1166,7 @@ mod tests {
     use super::*;
     use std::os::unix::fs::symlink;
     use std::os::unix::net::UnixStream;
+    use std::time::Instant;
 
     fn test_config() -> (PathBuf, ServiceConfig) {
         let root = std::env::temp_dir().join(format!(
@@ -964,5 +1309,171 @@ mod tests {
         );
         assert!(response["isolation"].is_null());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn partial_frames_are_bounded_and_do_not_block_the_next_connection() {
+        let (root, config) = test_config();
+        let (mut stalled_client, stalled_server) = UnixStream::pair().unwrap();
+        stalled_client.write_all(&[0, 0]).unwrap();
+        let started = Instant::now();
+        serve_connection(&config, stalled_server, Duration::from_millis(50));
+        assert!(started.elapsed() < Duration::from_secs(1));
+
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let request = serde_json::to_vec(
+            &serde_json::json!({"protocol_version": PROTOCOL, "operation": "health"}),
+        )
+        .unwrap();
+        write_frame(&mut client, &request).unwrap();
+        serve_connection(&config, server, Duration::from_secs(1));
+        let response = read_frame(&mut client, MAX_RESPONSE_BYTES).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&response).unwrap()["status"],
+            "ready"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn process_input_and_client_disconnect_are_bounded_by_cleanup() {
+        let (root, config) = test_config();
+        fs::write(
+            &config.docker_binary,
+            b"#!/bin/sh\ncase \"$1\" in start) sleep 5;; kill) exit 0;; *) exit 0;; esac\n",
+        )
+        .unwrap();
+        fs::set_permissions(&config.docker_binary, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        request.deadline_ms = 100;
+        request.value["input"] = Value::String("x".repeat(300_000));
+        let (_peer, client) = UnixStream::pair().unwrap();
+        let started = Instant::now();
+        assert_eq!(
+            run_started_container(
+                &config,
+                "bounded-stdin",
+                &request,
+                &client,
+                Instant::now() + Duration::from_millis(100)
+            ),
+            Err("deadline_exceeded")
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+
+        request.deadline_ms = 30_000;
+        let (peer, disconnected) = UnixStream::pair().unwrap();
+        drop(peer);
+        let started = Instant::now();
+        assert_eq!(
+            run_started_container(
+                &config,
+                "disconnected",
+                &request,
+                &disconnected,
+                Instant::now() + Duration::from_secs(30)
+            ),
+            Err("implementation_unavailable")
+        );
+        assert!(started.elapsed() < Duration::from_secs(2));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn uncertain_container_creation_is_removed_before_returning() {
+        let (root, config) = test_config();
+        fs::write(
+            &config.docker_binary,
+            b"#!/bin/sh\nroot=$(dirname \"$0\")\ncase \"$1\" in\n  create) : > \"$root/container\"; exit 17;;\n  rm) rm -f \"$root/container\"; exit 0;;\n  container) test -e \"$root/container\";;\nesac\n",
+        )
+        .unwrap();
+        fs::set_permissions(&config.docker_binary, fs::Permissions::from_mode(0o700)).unwrap();
+        let workspace = config.material_root.join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
+        let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let (_peer, client) = UnixStream::pair().unwrap();
+
+        assert_eq!(
+            execute_container(
+                &config,
+                &config.cache[0],
+                &request,
+                &workspace,
+                &client,
+                Instant::now() + Duration::from_secs(2),
+            ),
+            Err(("implementation_unavailable", false))
+        );
+        assert!(!root.join("container").exists());
+
+        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn grant_lineage_matches_the_normalized_pre_submit_request() {
+        let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let mut manifest = GrantManifest {
+            protocol_version: GRANT_PROTOCOL.into(),
+            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
+            request_digest: request.request_digest.clone(),
+            prepared_generation_id: request.value["identity"]["prepared_generation_id"]
+                .as_str()
+                .unwrap()
+                .into(),
+            attempt_id: request.value["identity"]["attempt_id"]
+                .as_str()
+                .unwrap()
+                .into(),
+            attempt_request_digest: request.value["identity"]["attempt_request_digest"]
+                .as_str()
+                .unwrap()
+                .into(),
+            archive_sha256: request.value["materials"][0]["sha256"]
+                .as_str()
+                .unwrap()
+                .into(),
+            archive_byte_count: request.value["materials"][0]["byte_count"]
+                .as_u64()
+                .unwrap(),
+            semantic_manifest_sha256: String::new(),
+            directories: Vec::new(),
+            files: Vec::new(),
+            binding_digest: format!("sha256:{}", "9".repeat(64)),
+        };
+        manifest.semantic_manifest_sha256 = semantic_manifest_hash(&manifest).unwrap();
+        assert!(grant_matches_request(&manifest, &request));
+        for field in 0..6 {
+            let original = (
+                manifest.prepared_generation_id.clone(),
+                manifest.attempt_id.clone(),
+                manifest.attempt_request_digest.clone(),
+                manifest.archive_sha256.clone(),
+                manifest.archive_byte_count,
+                manifest.semantic_manifest_sha256.clone(),
+            );
+            match field {
+                0 => {
+                    manifest.prepared_generation_id = "00000000-0000-4000-8000-000000000000".into()
+                }
+                1 => manifest.attempt_id = "00000000-0000-4000-8000-000000000000".into(),
+                2 => manifest.attempt_request_digest = format!("sha256:{}", "8".repeat(64)),
+                3 => manifest.archive_sha256 = format!("sha256:{}", "8".repeat(64)),
+                4 => manifest.archive_byte_count += 1,
+                _ => manifest.semantic_manifest_sha256 = format!("sha256:{}", "8".repeat(64)),
+            }
+            assert!(!grant_matches_request(&manifest, &request));
+            (
+                manifest.prepared_generation_id,
+                manifest.attempt_id,
+                manifest.attempt_request_digest,
+                manifest.archive_sha256,
+                manifest.archive_byte_count,
+                manifest.semantic_manifest_sha256,
+            ) = original;
+        }
+        request.phase = "post_submit".into();
+        assert!(!grant_matches_request(&manifest, &request));
     }
 }

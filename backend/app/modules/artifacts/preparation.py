@@ -39,6 +39,7 @@ from app.modules.artifacts.sources import (
     PreparedArtifact,
     PreparedArtifactInspector,
 )
+from app.modules.artifacts.submission_manifest import SubmissionManifest
 
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -133,7 +134,9 @@ class ExternalMaterialGrantRequest:
         if (
             any(not re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in digests)
             or any(
-                not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", value)
+                not re.fullmatch(
+                    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", value
+                )
                 for value in (self.prepared_generation_id, self.attempt_id)
             )
             or type(self.archive_byte_count) is not int
@@ -573,7 +576,7 @@ class ArtifactScratchManager:
                     raise
 
     @contextmanager
-    def external_material_grant(
+    def _external_material_grant(
         self,
         workspace: Path,
         request: ExternalMaterialGrantRequest,
@@ -654,6 +657,29 @@ class ArtifactScratchManager:
                     raise ArtifactScratchIntegrityError("external material manifest mismatch")
                 if tuple(observed_directories) != request.directories:
                     raise ArtifactScratchIntegrityError("external material directories mismatch")
+                semantic_body = {
+                    "schema_version": "workstream.submission_bundle_manifest.v1",
+                    "entries": sorted(
+                        [
+                            {
+                                "normalized_path": path,
+                                "entry_type": "directory",
+                            }
+                            for path in observed_directories
+                        ]
+                        + [{**item, "entry_type": "file"} for item in observed],
+                        key=lambda item: item["normalized_path"],
+                    ),
+                }
+                try:
+                    SubmissionManifest.from_dict(
+                        semantic_body,
+                        sha256=request.semantic_manifest_sha256,
+                    )
+                except ValueError as exc:
+                    raise ArtifactScratchIntegrityError(
+                        "external material semantic manifest differs"
+                    ) from exc
                 body = {
                     "protocol_version": _EXTERNAL_GRANT_PROTOCOL,
                     "grant_id": grant_id,
@@ -722,7 +748,9 @@ class ArtifactScratchManager:
                 continue
             if not stat_module.S_ISREG(metadata.st_mode):
                 raise ArtifactScratchIntegrityError("external material entry is not regular")
-            descriptor = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd)
+            descriptor = os.open(
+                name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=directory_fd
+            )
             try:
                 digest = hashlib.sha256()
                 count = 0
@@ -1740,6 +1768,7 @@ class ArtifactPreparationService:
         self._manager = manager
         self._active: dict[object, _ActivePreparation] = {}
         self._pending_cleanup: dict[str, _PendingPreparationCleanup] = {}
+        self._external_grant_workspaces: dict[object, Path] = {}
 
     @property
     def pending_cleanup_count(self) -> int:
@@ -1954,6 +1983,31 @@ class ArtifactPreparationService:
                 "artifact preparation deadline exceeded"
             ) from None
 
+    @contextmanager
+    def external_material_grant(
+        self,
+        prepared: PreparedArtifact,
+        workspace: Path,
+        request: ExternalMaterialGrantRequest,
+    ) -> Iterator[ExternalMaterialGrant]:
+        """Issue one grant from the live prepared source and current callback only."""
+        if type(prepared) is not PreparedArtifact or prepared._owner is not self:
+            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+        binding = prepared._binding
+        active = self._active.get(binding)
+        if (
+            active is None
+            or not active.handle_issued
+            or active.stream_claimed
+            or self._external_grant_workspaces.get(binding) != workspace
+            or request.prepared_generation_id != str(prepared.generation_id)
+            or request.archive_sha256 != active.commitment.sha256
+            or request.archive_byte_count != active.commitment.byte_count
+        ):
+            raise ArtifactScratchIntegrityError("external material provenance differs")
+        with self._manager._external_material_grant(workspace, request) as grant:
+            yield grant
+
     async def _process_prepared_submission(
         self,
         prepared: PreparedArtifact,
@@ -1978,6 +2032,11 @@ class ArtifactPreparationService:
                     maximum_entries=maximum_entries,
                 ) as workspace:
                     workspace_entered = True
+                    if binding in self._external_grant_workspaces:
+                        raise ArtifactScratchIntegrityError(
+                            "external material callback is already active"
+                        )
+                    self._external_grant_workspaces[binding] = workspace
                     active.reader.seek(0)
                     try:
                         # Keep callback failure distinct from the owner's cleanup.
@@ -1989,13 +2048,16 @@ class ArtifactPreparationService:
                         except BaseException as error:
                             return None, error
                     finally:
+                        self._external_grant_workspaces.pop(binding, None)
                         active.reader.seek(0)
             except ArtifactScratchIntegrityError:
                 raise
             except Exception:
                 if not workspace_entered:
                     raise
-                raise ArtifactScratchIntegrityError("submission_workspace_cleanup_unconfirmed") from None
+                raise ArtifactScratchIntegrityError(
+                    "submission_workspace_cleanup_unconfirmed"
+                ) from None
 
         operation = asyncio.create_task(process_and_cleanup())
         try:

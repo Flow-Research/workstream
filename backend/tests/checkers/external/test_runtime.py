@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import os
@@ -20,7 +21,10 @@ from app.interfaces.external_checker_execution import (
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
 )
-from app.interfaces.external_services import UnknownExternalServiceProviderError
+from app.interfaces.external_services import (
+    ExternalServiceUnavailableError,
+    UnknownExternalServiceProviderError,
+)
 from app.modules.artifacts.preparation import (
     ArtifactScratchIntegrityError,
     ArtifactPreparationLimits,
@@ -54,10 +58,10 @@ async def _stream(value: bytes):
     yield value
 
 
-def _request():
+def _request(*, identity=None, archive_sha256=SHA, archive_byte_count=4):
     return make_external_checker_execution_request(
         registry=registry_entry(),
-        identity=execution_identity(),
+        identity=identity or execution_identity(),
         configuration={},
         configuration_sha256=external_checker_json_hash({}),
         input={"task_version": "v3"},
@@ -67,8 +71,8 @@ def _request():
                 role="submission_archive",
                 content_id=uuid4(),
                 replica_id=uuid4(),
-                sha256=SHA,
-                byte_count=4,
+                sha256=archive_sha256,
+                byte_count=archive_byte_count,
                 media_type="application/zip",
             ),
         ),
@@ -89,10 +93,13 @@ def test_shared_rust_fixtures_preserve_python_contract_and_derived_digests():
     )
     changed = request.model_dump(mode="json")
     changed["configuration"]["threshold"] = 2e-6
-    with pytest.raises(
-        (ExternalCheckerContractError, ValidationError), match="digest mismatch"
-    ):
+    with pytest.raises((ExternalCheckerContractError, ValidationError), match="digest mismatch"):
         ExternalCheckerExecutionRequest.model_validate_json(json.dumps(changed))
+
+    for case in json.loads((FIXTURES / "canonical_numbers.json").read_text()):
+        assert external_checker_json_hash(json.loads(case["json"])) == (
+            "sha256:" + hashlib.sha256(case["canonical"].encode()).hexdigest()
+        )
 
 
 def test_external_service_settings_share_the_art_scratch_root(tmp_path: Path):
@@ -173,9 +180,7 @@ async def test_unix_adapter_revalidates_exact_result_and_factory_is_closed(tmp_p
                 "isolation": {
                     "repository": "registry.example/workstream/checker",
                     "platform_manifest_digest": request.registry.image_digest,
-                    "platform_manifest_media_type": (
-                        "application/vnd.oci.image.manifest.v1+json"
-                    ),
+                    "platform_manifest_media_type": ("application/vnd.oci.image.manifest.v1+json"),
                     "platform_manifest_byte_count": 1367,
                     "operating_system": "linux",
                     "architecture": "amd64",
@@ -194,9 +199,7 @@ async def test_unix_adapter_revalidates_exact_result_and_factory_is_closed(tmp_p
 
     server = await asyncio.start_unix_server(handle, socket)
     try:
-        factory = external_checker_execution_factory(
-            socket_path=socket, timeout_seconds=2.0
-        )
+        factory = external_checker_execution_factory(socket_path=socket, timeout_seconds=90.0)
         adapter = factory.create("unix_socket")
         health = await adapter.health()
         assert health.runtime == "runsc"
@@ -212,6 +215,57 @@ async def test_unix_adapter_revalidates_exact_result_and_factory_is_closed(tmp_p
         assert response.isolation is not None
         with pytest.raises(UnknownExternalServiceProviderError):
             factory.create("docker")
+        short = external_checker_execution_factory(socket_path=socket, timeout_seconds=2.0).create(
+            "unix_socket"
+        )
+        with pytest.raises(ExternalServiceUnavailableError):
+            await short.execute(
+                request,
+                ExternalCheckerMaterialGrant(
+                    grant_id="extract_" + "a" * 32,
+                    binding_digest="sha256:" + "c" * 64,
+                ),
+            )
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_unix_adapter_cancellation_closes_the_service_connection(tmp_path: Path):
+    socket = tmp_path / "checker.sock"
+    received = asyncio.Event()
+    disconnected = asyncio.Event()
+
+    async def handle(reader, writer):
+        try:
+            size = struct.unpack(">I", await reader.readexactly(4))[0]
+            await reader.readexactly(size)
+            received.set()
+            assert await reader.read() == b""
+        finally:
+            disconnected.set()
+            writer.close()
+
+    server = await asyncio.start_unix_server(handle, socket)
+    try:
+        adapter = external_checker_execution_factory(
+            socket_path=socket, timeout_seconds=90.0
+        ).create("unix_socket")
+        task = asyncio.create_task(
+            adapter.execute(
+                _request(),
+                ExternalCheckerMaterialGrant(
+                    grant_id="extract_" + "a" * 32,
+                    binding_digest="sha256:" + "c" * 64,
+                ),
+            )
+        )
+        await asyncio.wait_for(received.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(disconnected.wait(), 2)
     finally:
         server.close()
         await server.wait_closed()
@@ -255,7 +309,14 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
     )
     inspection = await prepared.inspect(inspector)
     manifest = build_submission_manifest(inspection)
-    request = _request()
+    identity = execution_identity().model_copy(
+        update={"prepared_generation_id": prepared.generation_id}
+    )
+    request = _request(
+        identity=identity,
+        archive_sha256=prepared.commitment.sha256,
+        archive_byte_count=prepared.commitment.byte_count,
+    )
     expected_files = tuple(
         ExternalMaterialFile(
             normalized_path=item.normalized_path,
@@ -291,11 +352,13 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
         async def process(self, reader, workspace):
             def project(tree):
                 assert tree.read_file("src/main.txt", maximum_bytes=64) == b"verified bytes"
-                with manager.external_material_grant(workspace, grant_request) as grant:
+                with service.external_material_grant(prepared, workspace, grant_request) as grant:
                     grant_root = root / "workspaces" / grant.grant_id
                     body = json.loads((grant_root / ".external-checker-grant.json").read_text())
                     assert body["binding_digest"] == grant.binding_digest
-                    assert (grant_root / "workspace" / "src" / "main.txt").read_bytes() == b"verified bytes"
+                    assert (
+                        grant_root / "workspace" / "src" / "main.txt"
+                    ).read_bytes() == b"verified bytes"
                     assert oct((grant_root / "workspace").stat().st_mode & 0o777) == "0o500"
                     observed.update(grant=grant, manifest=body)
                     return grant
@@ -326,20 +389,67 @@ def test_external_grant_rejects_symlinked_projected_material(tmp_path: Path):
         root=tmp_path / "scratch",
         limits=ArtifactPreparationLimits(minimum_free_bytes=0),
     )
+    request = ExternalMaterialGrantRequest(
+        request_digest=SHA,
+        prepared_generation_id=str(uuid4()),
+        attempt_id=str(uuid4()),
+        attempt_request_digest=SHA,
+        archive_sha256=SHA,
+        archive_byte_count=0,
+        semantic_manifest_sha256=SHA,
+        directories=(),
+        files=(),
+    )
     with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as workspace:
         os.symlink("/etc/passwd", workspace / "escape")
-        request = ExternalMaterialGrantRequest(
-            request_digest=SHA,
-            prepared_generation_id=str(uuid4()),
-            attempt_id=str(uuid4()),
-            attempt_request_digest=SHA,
-            archive_sha256=SHA,
-            archive_byte_count=0,
-            semantic_manifest_sha256=SHA,
-            directories=(),
-            files=(),
-        )
         with pytest.raises(ArtifactScratchIntegrityError, match="not regular"):
-            with manager.external_material_grant(workspace, request):
+            with manager._external_material_grant(workspace, request):
+                pass
+    manager.close()
+
+
+def test_external_grant_requires_a_live_prepared_callback(tmp_path: Path):
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(minimum_free_bytes=0),
+    )
+    service = ArtifactPreparationService(manager)
+    request = ExternalMaterialGrantRequest(
+        request_digest=SHA,
+        prepared_generation_id=str(uuid4()),
+        attempt_id=str(uuid4()),
+        attempt_request_digest=SHA,
+        archive_sha256=SHA,
+        archive_byte_count=0,
+        semantic_manifest_sha256=SHA,
+        directories=(),
+        files=(),
+    )
+    with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as workspace:
+        with pytest.raises(ArtifactScratchIntegrityError, match="source is unavailable"):
+            with service.external_material_grant(object(), workspace, request):
+                pass
+    manager.close()
+
+
+def test_external_grant_recomputes_the_semantic_manifest(tmp_path: Path):
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(minimum_free_bytes=0),
+    )
+    request = ExternalMaterialGrantRequest(
+        request_digest=SHA,
+        prepared_generation_id=str(uuid4()),
+        attempt_id=str(uuid4()),
+        attempt_request_digest=SHA,
+        archive_sha256=SHA,
+        archive_byte_count=0,
+        semantic_manifest_sha256=SHA,
+        directories=(),
+        files=(),
+    )
+    with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as workspace:
+        with pytest.raises(ArtifactScratchIntegrityError, match="semantic manifest differs"):
+            with manager._external_material_grant(workspace, request):
                 pass
     manager.close()

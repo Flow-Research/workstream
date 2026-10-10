@@ -121,7 +121,7 @@ async def run(reference: str, service_binary: Path) -> dict[str, object]:
     )
     manager = None
     try:
-        for _ in range(100):
+        for _ in range(1_000):
             if socket.exists():
                 break
             if service.poll() is not None:
@@ -131,7 +131,7 @@ async def run(reference: str, service_binary: Path) -> dict[str, object]:
             raise RuntimeError("service socket did not become ready")
 
         adapter = external_checker_execution_factory(
-            socket_path=socket, timeout_seconds=12.0
+            socket_path=socket, timeout_seconds=90.0
         ).create("unix_socket")
         health = await adapter.health()
         archive = io.BytesIO()
@@ -277,7 +277,9 @@ async def run(reference: str, service_binary: Path) -> dict[str, object]:
 
                 async def process(self, reader, workspace):
                     def project(_tree):
-                        with manager.external_material_grant(workspace, grant_request) as grant:
+                        with preparation.external_material_grant(
+                            prepared, workspace, grant_request
+                        ) as grant:
                             exact = ExternalCheckerMaterialGrant(
                                 grant_id=grant.grant_id,
                                 binding_digest=grant.binding_digest,
@@ -287,7 +289,9 @@ async def run(reference: str, service_binary: Path) -> dict[str, object]:
                                     grant_id=grant.grant_id,
                                     binding_digest="sha256:" + "f" * 64,
                                 )
-                                changed_result = asyncio.run(adapter.execute(request, changed))
+                                changed_result = asyncio.run(
+                                    adapter.execute(request, changed)
+                                )
                                 retained["changed_failure"] = (
                                     changed_result.result.infrastructure_failure_code
                                 )
@@ -354,7 +358,9 @@ def main() -> int:
     parser.add_argument("--image-reference", required=True)
     parser.add_argument("--service-binary", required=True, type=Path)
     args = parser.parse_args()
-    result = asyncio.run(run(args.image_reference, args.service_binary.resolve(strict=True)))
+    result = asyncio.run(
+        run(args.image_reference, args.service_binary.resolve(strict=True))
+    )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
