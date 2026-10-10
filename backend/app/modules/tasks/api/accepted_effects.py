@@ -104,6 +104,12 @@ class TaskAcceptedEffectsPort(Protocol):
         self,
         request: TaskAcceptedEffectsRequest,
         manifest_id: UUID,
+        *,
+        source_authorization_decision_id: UUID,
+        recorded_by: UUID,
+        locked_review_policy_id: UUID,
+        expected_generation: int,
+        disposition: Literal["new", "replay"],
     ) -> None:
         """Require an exact stored false-policy TASK routing manifest."""
         ...

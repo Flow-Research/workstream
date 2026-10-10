@@ -705,7 +705,7 @@ a planning document does not grant a service permission.
 | `task.assignment.authority_reconcile` | `workstream.task.assignment_reconciler` | Committed exact AUTH invalidation event, project/actor/grant-or-link, active pre-submit assignment; no wrong-role or submitted-history mutation | ARCH-03B9 hidden handler/fence and ARCH-03C1 real feature authority/decision receipts complete; ARCH-03C2 atomic producer wiring and registration |
 | `checker.post_submit.execute` | `workstream.checker.post_submit` | Immutable Submission/request/generation, locked compiled policy, attempt and admitted service; exact pre-I/O authority | Implemented by ARCH-04C/04D2; no dispatcher registration |
 | `checker.post_submit.finalize` | `workstream.checker.post_submit` | Exact execution request/fence, accepted result digest, retained material and original execute receipt; fresh post-I/O authority and atomic evidence; current outputs are empty | Implemented by ARCH-04C/04D2; no dispatcher registration |
-| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits only the TASK manifest transition to `review_pending`, false/pass binds exact accepted TASK effects for the shared FinalAcceptance consequence; never a human review decision or generic CON write | AUTH-19A inert source/request commitments, 04E1B-A request facts, 04E2-A strict preparation and the REV-04C hidden FinalAcceptance/TASK/CON participant are delivered. Planned denial still prevents a handle, allow or receipt. 04E1B-B supplies hidden handlers/currentness race proof; 04E2-B requires the exact AUTH receipt on the same strict input, adds database/audit/outbox closure and activates the first genuine atomic consequence; 04E3 wires live composition |
+| `task.post_submit.route` | `workstream.task.post_submit_router` | Committed completion event/claim, exact current CHECKER result/fence, immutable Submission, locked ReviewPolicy and TASK pre-review state; true permits only the TASK manifest transition to `review_pending`, false/pass binds exact accepted TASK effects for the shared FinalAcceptance consequence; never a human review decision or generic CON write | 04E2-B delivers canonical fixed-router PREP consumption and actual receipt custody with the complete hidden true/false outcome. SQL rejects orphan allows and incomplete effects. Completion delivery precedes 04F remediation and 04E3 production registration. |
 
 Each action maps to the identically named permission in this table and only
 its singleton fixed-service row. Humans, dispatchers and unrelated services
@@ -1700,16 +1700,18 @@ task_post_submit_routing_manifest respectively. Detached values are untrusted:
 future consumers must compare the actual immutable event and stored source.
 
 Domains workstream.task_post_submit_source.v0.1 and
-workstream.authorization.acceptance_source.v0.1 separate retained source facts
-from the opaque full runtime resource digest. Current audit events do not yet
-persist this new source commitment. ARCH-04E1B-A stages routing request facts;
-04E2-A provides strict hidden AUTH resource/preparation matching and the nominal
-fixed-router adapter through canonical PREP. The action remains planned and the
-kernel rejects before handle issuance, so the adapter cannot return an allow or
-receipt and performs no source, publication or product write. CON-07 hidden
-submitter participation and REV-04C hidden FinalAcceptance/TASK/CON composition
-are delivered; hidden handlers are next for the selected automated path.
-Mandatory exact same-input receipt and persisted source/FinalAcceptance custody follow at 04E2-B,
-with the first genuine allow and all governed effects in the same transaction,
-before production composition or consumption. No early standalone allow exists. The actor-vocabulary migration provisions
-nothing, and existing closed audit constraints still reject a route allow.
+workstream.authorization.acceptance_source.v0.1 separate exact source facts from
+the full runtime resource digest. ARCH-04E2-B activates `task.post_submit.route`
+only through canonical fixed-service PREP and the complete hidden outcome
+operation. Its immutable decision binds source, request, invocation claim,
+router/link and branch consequence, including the original false-acceptance
+generation. The manifest retains reconstructible context; SQL recomputes the
+digest and checks the actual AUTH event. FinalAcceptance requires the same
+routing decision. Submission creation/binding, input materialization and checker
+execute/finalize receipts remain distinct and are read from their canonical owners.
+
+An orphan allow or incomplete outcome cannot commit. Exact replay rechecks live
+authority and the complete original tuple without issuing another allow or
+repairing effects. Completion delivery and production registration remain
+unavailable. Human acceptance-source authority is still future work; detached
+human receipts grant nothing.

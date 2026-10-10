@@ -2,16 +2,14 @@
 
 import ast
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
 
 from app.core.identifiers import new_record_id
 from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
-from app.modules.reviews.acceptance.participant import FinalAcceptanceParticipant
 from app.modules.reviews.api.acceptance import FinalAcceptanceInput
-from app.modules.reviews.api.acceptance import FinalAcceptanceConflict, FinalAcceptanceRequest
+from app.modules.reviews.api.acceptance import FinalAcceptanceRequest
 from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsRequest
 from tests.reviews.acceptance.test_contracts import values
 
@@ -31,10 +29,19 @@ def request():
     )
 
 
-@pytest.mark.parametrize("field", [
-    "project_id", "task_id", "submission_id", "contributor_id", "final_acceptance_id",
-    "expected_task_status", "submission_version", "content_sha256",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "project_id",
+        "task_id",
+        "submission_id",
+        "contributor_id",
+        "final_acceptance_id",
+        "expected_task_status",
+        "submission_version",
+        "content_sha256",
+    ],
+)
 async def test_inconsistent_nested_effects_reject_before_any_owner(field):
     original = request()
     replacement = {
@@ -46,18 +53,19 @@ async def test_inconsistent_nested_effects_reject_before_any_owner(field):
     })
     with pytest.raises(ValidationError):
         FinalAcceptanceRequest.model_validate(forged)
-    session, fence, tasks, contributions = (AsyncMock() for _ in range(4))
-    owner = FinalAcceptanceParticipant(session, fence=fence, tasks=tasks, contributions=contributions)
-    with pytest.raises(FinalAcceptanceConflict):
-        await owner.participate(forged)
-    for collaborator in (session, fence, tasks, contributions):
-        assert collaborator.mock_calls == []
+    # Closed request validation is pure. Live prepared-capability rejection and
+    # absence of effects are proved through the PostgreSQL outcome operation.
 
 
-@pytest.mark.parametrize("change", [
-    {"expected_generation": True}, {"expected_generation": -1},
-    {"correlation_id": str(new_record_id())}, {"authorized": True},
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"expected_generation": True},
+        {"expected_generation": -1},
+        {"correlation_id": str(new_record_id())},
+        {"authorized": True},
+    ],
+)
 def test_shared_request_rejects_coercion_and_extra_authority(change):
     with pytest.raises(ValidationError):
         FinalAcceptanceRequest(**(request().model_dump() | change))
@@ -83,11 +91,13 @@ def test_automated_source_transport_requires_evaluation_prestate_without_review(
         }))
 
 
-def test_hidden_participant_has_no_production_entry_and_actions_remain_planned():
+def test_acceptance_composition_is_confined_to_routing_adapter():
     app_root = Path(__file__).resolve().parents[3] / "app"
     participant_path = app_root / "modules/reviews/acceptance/participant.py"
     found_definition = False
     for path in app_root.rglob("*.py"):
+        if path == app_root / "adapters/reviews/__init__.py":
+            continue
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == "FinalAcceptanceParticipant":
@@ -115,5 +125,5 @@ def test_hidden_participant_has_no_production_entry_and_actions_remain_planned()
                     "app.modules.reviews.acceptance.participant.FinalAcceptanceParticipant",
                 }, str(path)
     assert found_definition
-    for action in (ActionId.REVIEW_DECISION, ActionId.TASK_POST_SUBMIT_ROUTE):
-        assert ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+    assert ACTION_BY_ID[ActionId.REVIEW_DECISION].availability is ActionAvailability.PLANNED
+    assert ACTION_BY_ID[ActionId.TASK_POST_SUBMIT_ROUTE].availability is ActionAvailability.ACTIVE

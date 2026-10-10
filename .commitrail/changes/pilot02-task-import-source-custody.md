@@ -163,15 +163,16 @@ match the committed canonical event to the actual captured decision ID and
 resource-context digest, retaining AUTH's bounded audit projection rather than
 requiring raw private resource selectors.
 
-- Current-source reconciliation: main `4c5720034a2a1019f00df6c7f96601407ef1e43a` includes the merged lifecycle transitions, CLI guide inspection and pre-submit proposal approval, and PILOT-04 external checker contract/registry. Source actions coexist with the complete lifecycle and registry dispatch, resource and Operator-role classifications. Native UUID mappings retain each existing owner's string or UUID representation. The roadmap preserves merged Markdown, lifecycle and CLI delivery statements and keeps only this source prerequisite's additions. Existing MCP operations remain unchanged; the selected authorization-context contract includes the three additive source actions and captures the reconciled backend revision. At clean `94fe55c3a171deb619debb2310d323703b71c666`, before the subsequent denial-owner repair, the complete backend, contracts, MCP and CI-metadata trees were byte-identical to the clean `c5f5a13637d3db6958154b6b7bf97389f9c0b233` public proof; incoming CLI source is unchanged from merged main.
+- Current-source reconciliation: main `69bef5054fedc36e123a0f1352af752e433066c5` includes the merged lifecycle transitions, CLI guide inspection and pre-submit proposal approval, PILOT-04 external checker contract/registry, and complete hidden authorized routing outcomes. Source actions coexist with the incoming routing action activation and the complete lifecycle/registry resource and role classifications. Native UUID mappings retain each owner's string or UUID representation. The roadmap retains main's delivered routing statements and only this source prerequisite's additions; existing selected MCP operations remain unchanged. The earlier `94fe55c3a171deb619debb2310d323703b71c666` reconciliation preceded the denial-owner repair and was source-equivalent to the `c5f5a1` native proof. The subsequent exact `a3ef23fe46ec6687ba749b714b46e7e99b768a0e` denial proof remains historical evidence for its tested tree; it is not relabeled as proof of this newer integration.
 - Next usable boundary: atomic DRAFT TASK import from verified source, then explicit batch screen/release and CLI conversion in separately authorized bounded changes.
 - Remaining risks: source retention has no deletion scheduler; Issue #489 remains open.
-- Schema handoff: merged main owns `0028_lifecycle_transitions` and
-  `0029_external_checker_registry`. The sole coordinated migration author
-  supplied linear revision `0030_task_import_source`, including the reviewed
-  immutable-update lock and NULL-role repairs. The application implementer
-  consumed that isolated handoff and matched its model constraint; no second
-  migration author, alternative DDL or schema bypass was used. The clean final
-  18-case public PostgreSQL/MinIO proof above includes the retained lock race and
-  direct SQL role controls. Source custody is the complete outcome of this chunk;
+- Schema handoff: main owns `0028_lifecycle_transitions`,
+  `0029_external_checker_registry` and `0030_routing_outcomes`. The sole coordinated
+  migration author supplies successor `0031_task_import_source` after routing
+  reconciliation, retaining the reviewed immutable-update lock and NULL-role
+  repairs. The earlier isolated source revision and native proofs used ordinal
+  0030 before routing merged. This reconciliation retains those exact historical
+  receipts and requires fresh successor-schema and public-operation proof before
+  publication. No application author writes alternative DDL or bypasses the
+  canonical schema guard. Source custody remains this chunk's complete outcome;
   atomic DRAFT import and batch operations remain separate implementation work.

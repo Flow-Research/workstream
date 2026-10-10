@@ -1,5 +1,18 @@
 """Authorization application adapters and same-owner composition."""
 
+import json
+
+from app.modules.authorization.domain.post_submit_routing import (
+    AutomatedAcceptanceConsequence,
+    HumanAdmissionConsequence,
+    PostSubmitRoutingResourceContext,
+)
+from app.modules.authorization.post_submit_routing_authorization import (
+    PostSubmitRoutingAuthorization,
+)
+from app.modules.tasks.api.routing_outcome import RoutingAuthorityFacts
+from app.modules.authorization.runtime import PreparedAuthorizationHandleInvalid
+
 from app.adapters.auth.assignment_invalidation_publication import assignment_invalidation_publication
 from app.modules.projects.api.guide_activation import GuideActivationAuthorizationPort
 from contextlib import asynccontextmanager
@@ -262,3 +275,81 @@ def lifecycle_transition_authorization(session: AsyncSession, context):
     from app.modules.authorization.lifecycle_authorization import LifecycleAuthorizationAdapter
 
     return LifecycleAuthorizationAdapter(session, context)
+
+
+def _routing_resource(source, claim, effects, authorized_generation, actor_id, link_id):
+    consequence = (
+        HumanAdmissionConsequence()
+        if effects is None
+        else AutomatedAcceptanceConsequence(
+            task_effects=effects,
+            authorized_lifecycle_generation=authorized_generation,
+        )
+    )
+    if (effects is None) != (authorized_generation is None):
+        raise PreparedAuthorizationHandleInvalid("routing consequence unavailable")
+    return PostSubmitRoutingResourceContext(
+        resource_id=source.source.id,
+        scope_project_id=source.source.project_id,
+        router_actor_id=actor_id,
+        router_identity_link_id=link_id,
+        request=source.request,
+        source=source.source,
+        claim=claim,
+        consequence=consequence,
+    )
+
+
+class _TaskRoutingAuthorizationAdapter:
+    def __init__(self, session):
+        self._authority = PostSubmitRoutingAuthorization(session)
+
+    @asynccontextmanager
+    async def prepare(self, request):
+        async with self._authority.prepare(request) as prepared:
+            yield _PreparedTaskRoutingAdapter(prepared)
+
+
+class _PreparedTaskRoutingAdapter:
+    def __init__(self, prepared):
+        self._prepared = prepared
+
+    async def consume(self, source, claim, effects, authorized_generation):
+        resource = _routing_resource(
+            source,
+            claim,
+            effects,
+            authorized_generation,
+            self._prepared.actor_profile_id,
+            self._prepared.identity_link_id,
+        )
+        receipt = await self._prepared.consume(resource)
+        return RoutingAuthorityFacts(
+            decision_id=receipt.authorization_decision_event_id,
+            actor_id=receipt.actor_profile_id,
+            identity_link_id=receipt.actor_identity_link_id,
+            context_json=resource.model_dump_json(),
+        )
+
+    async def validate_replay(self, source, retained, effects, authorized_generation):
+        original = PostSubmitRoutingResourceContext.model_validate_json(retained.context_json)
+        expected = _routing_resource(
+            source,
+            original.claim,
+            effects,
+            authorized_generation,
+            retained.actor_id,
+            retained.identity_link_id,
+        )
+        if original != expected or json.loads(retained.context_json) != expected.model_dump(
+            mode="json"
+        ):
+            raise PreparedAuthorizationHandleInvalid("routing receipt unavailable")
+        await self._prepared.validate_replay(
+            expected, retained.decision_id, retained.actor_id, retained.identity_link_id
+        )
+
+
+def task_routing_authorization(session):
+    """Compose canonical router AUTH through the designated AUTH composition root."""
+    return _TaskRoutingAuthorizationAdapter(session)

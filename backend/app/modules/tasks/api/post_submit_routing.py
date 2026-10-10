@@ -1,4 +1,4 @@
-"""Detached TASK source facts for future post-submit routing."""
+"""Detached TASK source facts for authorized post-submit routing."""
 
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -42,6 +42,9 @@ class TaskPostSubmitSourceProposal(BaseModel):
     result_id: UUID
     result_digest: _Sha256
     completion_event_id: UUID
+    creation_decision_id: UUID
+    binding_decision_id: UUID
+    input_materialization_evidence_id: UUID
     execute_evidence_id: UUID
     finalize_evidence_id: UUID
     human_review_required: StrictBool
@@ -66,7 +69,14 @@ class TaskPostSubmitSourceProposal(BaseModel):
             != self.contribution_policy_version_id
         ):
             raise ValueError("routing source contribution policy lineage differs")
-        if self.execute_evidence_id == self.finalize_evidence_id:
+        receipts = (
+            self.creation_decision_id,
+            self.binding_decision_id,
+            self.input_materialization_evidence_id,
+            self.execute_evidence_id,
+            self.finalize_evidence_id,
+        )
+        if len(set(receipts)) != len(receipts):
             raise ValueError("routing source phase receipts are not distinct")
 
         has_predecessor_id = self.predecessor_submission_id is not None
@@ -92,11 +102,13 @@ class TaskPostSubmitManifestFacts(TaskPostSubmitSourceProposal):
     created_at: AwareDatetime
 
 
-def task_post_submit_source_digest(source: TaskPostSubmitManifestFacts) -> str:
+def task_post_submit_source_digest(source: TaskPostSubmitSourceProposal) -> str:
     """Commit exact source facts except the database-assigned creation time."""
-    if type(source) is not TaskPostSubmitManifestFacts:
+    if type(source) not in (TaskPostSubmitSourceProposal, TaskPostSubmitManifestFacts):
         raise ValueError("routing source facts are invalid")
-    checked = TaskPostSubmitManifestFacts.model_validate(source.model_dump(mode="python"))
+    checked = TaskPostSubmitSourceProposal.model_validate(
+        source.model_dump(mode="python", exclude={"created_at"})
+    )
     return canonical_json_hash({
         "domain": "workstream.task_post_submit_source.v0.1",
         "source": checked.model_dump(mode="json", exclude={"created_at"}),

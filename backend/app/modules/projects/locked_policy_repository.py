@@ -17,7 +17,7 @@ from app.modules.projects.api.post_policy import PostPolicySelection
 from app.modules.projects.guide_activation.custody import load_guide_activation
 from app.modules.projects.guide_compilation.repository import GuideCompilationIntegrityError
 from app.modules.projects.locked_policy_projection import complete_context
-from app.modules.projects.models import Project, ProjectGuide
+from app.modules.projects.models import Project, ProjectGuide, ReviewPolicy
 from app.modules.projects.post_policy.repository import PostPolicyRepository
 from app.modules.projects.repository import ProjectRepository
 
@@ -27,6 +27,16 @@ class ProjectLockedPolicyRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def observe_review_mode(self, project_id: UUID, review_policy_id: UUID) -> bool | None:
+        """Observe only an exact project's policy; this is neither a lock nor permission."""
+        with self._session.no_autoflush:
+            return await self._session.scalar(
+                select(ReviewPolicy.human_review_required).where(
+                    ReviewPolicy.project_id == str(project_id),
+                    ReviewPolicy.id == str(review_policy_id),
+                )
+            )
 
     async def read_project_display(self, project_id: UUID) -> ProjectDisplayFacts | None:
         """Copy stored scalars without refreshing, flushing or locking caller-owned rows."""

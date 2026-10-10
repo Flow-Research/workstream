@@ -610,9 +610,10 @@ stamps creation time and forbids request update, deletion and truncation.
 
 This is preparation only: no source manifest, current routing pointer, outbox
 publication, TASK transition, Review, FinalAcceptance or ContributionRecord is
-created. ARCH-04E2-A delivers strict hidden AUTH preparation and receipt-staging
-contracts; routing remains unavailable. Later atomic publication must bind the
-manifest to the reserved identity and verify genuine immutable AUTH evidence.
+created by that preparation alone. ARCH-04E2-B now commits exact AUTH custody
+and complete governed outcomes through the hidden operation. Production delivery
+remains unavailable. Atomic publication binds the
+manifest to the reserved identity and verifies genuine immutable AUTH evidence.
 
 
 ARCH-04E1B-B2 adds hidden exact source preparation. It requires the task's
@@ -621,9 +622,9 @@ PROJECTS policy after TASK locks and before CHECKERS custody, and combines the
 verified completion with the existing reservation. A proposal contains semantic
 source facts only; the persisted manifest additionally requires its database
 creation time. No source INSERT or authority follows from constructing a proposal.
-The current hidden intake does not yet set `evaluation_pending`; the later atomic
-dispatch composition owns that transition. Mechanical preparation tests explicitly
-arrange that state and the claim timestamp, without claiming live dispatch/claim.
+B6 atomic Submission/dispatch sets `evaluation_pending` through the canonical
+operation. 04E2-B consumes that real lineage; production dispatch registration
+and public intake remain separate boundaries.
 
 ### Checked packet custody at hidden creation
 

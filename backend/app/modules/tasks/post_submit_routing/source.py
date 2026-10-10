@@ -19,7 +19,8 @@ from app.modules.tasks.post_submit_routing.requests import (
     TaskRoutingRequests, TaskRoutingRequestUnavailable, require_routing_transaction,
 )
 from app.modules.tasks.repository import TaskRepository
-from app.modules.tasks.models import Submission
+from app.modules.tasks.models import Submission, SubmissionDispatch
+from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
 from app.modules.tasks.service import TaskService
 
 
@@ -46,7 +47,17 @@ class TaskRoutingSourcePreparer:
 
     async def _prepare(self, event_id, completion):
         task = await self._tasks.lock_project_task(completion.project_id, completion.task_id)
-        if task is None or task.status != "evaluation_pending":
+        if task is None or task.status not in {"evaluation_pending", "review_pending", "accepted"}:
+            raise TaskRoutingRequestUnavailable("routing_source_unavailable")
+        retained = await self._session.scalar(
+            select(TaskPostSubmitRoutingManifest).where(
+                TaskPostSubmitRoutingManifest.project_id == str(completion.project_id),
+                TaskPostSubmitRoutingManifest.task_id == str(completion.task_id),
+                TaskPostSubmitRoutingManifest.submission_id == str(completion.submission_id),
+                TaskPostSubmitRoutingManifest.completion_event_id == event_id,
+            )
+        )
+        if (task.status != "evaluation_pending") != (retained is not None):
             raise TaskRoutingRequestUnavailable("routing_source_unavailable")
         # Read selectors without taking a Submission lock ahead of Assignment.
         submission = await self._tasks.get_latest_submission_for_task(str(completion.task_id))
@@ -59,15 +70,20 @@ class TaskRoutingSourcePreparer:
         submission = await self._tasks.get_latest_submission_for_task(
             str(completion.task_id), for_update=True, populate_existing=True,
         )
-        if assignment is None or submission is None or not (
-            submission.id == str(completion.submission_id)
-            and submission.task_assignment_id == assignment.id
-            and assignment.status == "active" and assignment.released_at is None
-            and assignment.accepted_at is not None
-            and submission.contributor_id == assignment.contributor_id == task.assigned_to
-            and submission.contribution_policy_version_id
-            == assignment.submitter_contribution_policy_version_id
-            == task.locked_contribution_policy_version_id
+        if (
+            assignment is None
+            or submission is None
+            or not (
+                submission.id == str(completion.submission_id)
+                and submission.task_assignment_id == assignment.id
+                and assignment.status == ("completed" if task.status == "accepted" else "active")
+                and assignment.released_at is None
+                and assignment.accepted_at is not None
+                and submission.contributor_id == assignment.contributor_id == task.assigned_to
+                and submission.contribution_policy_version_id
+                == assignment.submitter_contribution_policy_version_id
+                == task.locked_contribution_policy_version_id
+            )
         ):
             raise TaskRoutingRequestUnavailable("routing_source_unavailable")
         try:
@@ -109,6 +125,19 @@ class TaskRoutingSourcePreparer:
             and material.content_id == UUID(submission.artifact_content_id)
         ):
             raise TaskRoutingRequestUnavailable("routing_source_unavailable")
+        dispatch = await self._session.scalar(
+            select(SubmissionDispatch).where(
+                SubmissionDispatch.project_id == str(completion.project_id),
+                SubmissionDispatch.task_id == str(completion.task_id),
+                SubmissionDispatch.submission_id == submission.id,
+                SubmissionDispatch.submission_version == submission.version,
+                SubmissionDispatch.admission_id == submission.submission_bundle_admission_id,
+                SubmissionDispatch.artifact_binding_id == submission.artifact_binding_id,
+                SubmissionDispatch.artifact_content_id == submission.artifact_content_id,
+            )
+        )
+        if dispatch is None:
+            raise TaskRoutingRequestUnavailable("routing_source_unavailable")
         predecessor = None
         if submission.supersedes_submission_id:
             predecessor = await self._session.scalar(select(Submission).where(
@@ -118,21 +147,37 @@ class TaskRoutingSourcePreparer:
             if predecessor is None or predecessor.task_id != submission.task_id:
                 raise TaskRoutingRequestUnavailable("routing_source_unavailable")
         source = TaskPostSubmitSourceProposal(
-            id=request.routing_manifest_id, project_id=completion.project_id,
-            task_id=completion.task_id, submission_id=completion.submission_id,
-            submission_version=verified.submission_version, assignment_id=UUID(assignment.id),
+            id=request.routing_manifest_id,
+            project_id=completion.project_id,
+            task_id=completion.task_id,
+            submission_id=completion.submission_id,
+            submission_version=verified.submission_version,
+            assignment_id=UUID(assignment.id),
             contributor_id=UUID(submission.contributor_id),
             contribution_policy_version_id=submission.contribution_policy_version_id,
-            checker_run_id=request.checker_run_id, evaluation_request_id=request.evaluation_request_id,
+            checker_run_id=request.checker_run_id,
+            evaluation_request_id=request.evaluation_request_id,
             request_digest=request.evaluation_request_digest,
-            evaluation_generation=request.evaluation_generation, result_id=request.result_id,
-            result_digest=request.result_digest, completion_event_id=event_id,
+            evaluation_generation=request.evaluation_generation,
+            result_id=request.result_id,
+            result_digest=request.result_digest,
+            completion_event_id=event_id,
+            creation_decision_id=UUID(dispatch.creation_decision_id),
+            binding_decision_id=UUID(dispatch.binding_decision_id),
+            input_materialization_evidence_id=verified.input_materialization_evidence_id,
             execute_evidence_id=verified.completion.execute_evidence_id,
             finalize_evidence_id=verified.completion.finalize_evidence_id,
             human_review_required=human_review_required,
             predecessor_submission_id=UUID(predecessor.id) if predecessor else None,
             predecessor_submission_version=predecessor.version if predecessor else None,
-            locked_policy=lineage, routing_recommendation="allow_review",
+            locked_policy=lineage,
+            routing_recommendation="allow_review",
             **material.model_dump(exclude={"submission_id", "submission_version"}),
         )
+        if retained is not None:
+            expected_status = "review_pending" if source.human_review_required else "accepted"
+            if task.status != expected_status or retained.authority_context.get(
+                "source"
+            ) != source.model_dump(mode="json"):
+                raise TaskRoutingRequestUnavailable("routing_source_unavailable")
         return TaskRoutingSourcePreparation(request=request, source=source)

@@ -177,7 +177,8 @@ durable post-submit execution and unfinished-attempt recovery. ARCH-04D2 supplie
 exact service authority. ARCH-04E1A adds immutable route-neutral TASK source
 storage, detached source facts and accepted-effects contracts. B6 commits each
 new hidden Submission with its initial checker reservation and outbox request;
-automatic request delivery, routing and acceptance remain unavailable. Project-guide ingestion stores original documents,
+automatic production delivery, routing and acceptance remain unavailable; hidden
+authorized outcomes are implemented. Project-guide ingestion stores original documents,
 records immutable metadata and provides authorized exact-file reads to the
 unified setup agent. Accepted originals are PDF, DOCX, PPTX and byte-preserved
 UTF-8 Markdown (`.md`); HTML and documentation sites are not guide inputs. Guide
@@ -193,13 +194,14 @@ fence, exact hidden AUTH preparation and CON-07 hidden source-neutral submitter
 participation with complete frozen award sets are delivered. REV-04C adds one
 hidden source-neutral participant that stages FinalAcceptance, TASK
 accepted/completed effects and the complete CON submitter outcome in the caller's
-transaction. It is not a complete authorized acceptance operation: its input has
-no exact AUTH decision-event receipt, and database complete-set enforcement,
-currentness race proof and shared audit/outbox remain. REV-12A4A supplies internal
+transaction. ARCH-04E2-B binds its mandatory actual AUTH decision-event receipt,
+database complete-set enforcement, currentness custody and shared audit/outbox
+in one hidden authorized outcome operation. REV-12A4A supplies internal
 Operator-authorized transitions on the existing lifecycle controller. New
 participant effects require a live, nonzero generation; exact terminal replay
-remains read-only in stopped phases. This scope keeps payment delivery disabled
-and does not grant routing or acceptance authority.
+remains read-only in stopped phases. The controller itself grants no routing
+authority; ARCH-04E2-B consumes the separate exact AUTH action. Payment delivery
+stays disabled.
 ARCH-04E1B-B1 requires TASK locking before checker reservation, current-result
 reads and review admission INSERTs, preserving exact read-only reservation replay
 after acceptance. ARCH-04E1B-B3 retains the inspected ZIP file metadata with immutable
@@ -211,13 +213,12 @@ service and database enforcement. ARCH-04E1B-B5 rejects evaluation content that
 exceeds the locked checker limits before any pre-check attempt or durable upload
 intent, using the same content contract required by later dispatch. ARCH-04E1B-B2 prepares exact source proposals from current
 CHECKERS custody and historical PROJECTS policy, without inserting a manifest
-or granting authority. Hidden handlers still need complete
-authorized currentness proof. These prerequisites do not require live
-human review before the first automated acceptance path.
+or granting authority by itself. ARCH-04E2-B consumes this source in the complete
+authorized outcome. Completion delivery, remediation and production composition
+remain before public intake and the first real end-to-end drill.
 
-Active work is connecting those foundations into the remaining production
-lifecycle: hidden routing handlers, acceptance authority/evidence closure,
-review and revision, reviewer participation and conditional fulfillment.
+Active work stays on that first contribution path. Live human review/revision,
+reviewer participation and fulfillment delivery follow separately.
 Contribution evidence remains the input for a separately implemented future
 reputation projection. Frontend product work follows stable and tested backend
 contracts for the surface it consumes.
@@ -805,31 +806,24 @@ remains unavailable. ARCH-04D1 validates retained terminal material against cano
 ART lineage. ARCH-04D2 supplies fixed-service input, execute and finalize authority,
 with PostgreSQL enforcement of exact execution/finalization receipts. ARCH-04E1A
 adds immutable source storage and detached contracts only. Automatic dispatch,
-routing and acceptance remain ARCH-04E work. AUTH-19A defines inert exact
-Review/routing source commitments and registers the router as planned. It does not
-issue or persist source authorization receipts. ARCH-04E1B-A reserves the TASK
-routing operation and future source identity under caller-owned transactions,
-with exact current-completion verification and replay. It publishes no source or
-outcome. ARCH-04E2-A adds strict hidden request/source/consequence matching and a
-nominal fixed-router adapter through canonical PREP. Because
-`task.post_submit.route` remains planned and unavailable, no executable handle,
-allow, receipt, source write, publication or effect is reachable. The true branch
-binds only the future TASK `evaluation_pending -> review_pending` manifest effect,
-without creating a REV queue dependency. The false branch binds exact
-`TaskAcceptedEffectsRequest` values for the shared FinalAcceptance path,
-without fabricating a Review. CON-07 now supplies the hidden source-neutral
-submitter participant and complete frozen award-set staging/replay. REV-04C now
-composes FinalAcceptance, TASK terminal effects and that CON participant in one
-hidden caller-owned transaction for either source. B5 supplies bounded evaluation
-content before durable admission; B6 uses it with real record identities in the
-atomic Submission/dispatch command. B7 adds hidden request delivery; completion routing comes next;
-the committed request events are not registered for delivery.
-The mandatory exact AUTH receipt must become required on the same strict input,
-with no optional/default path, before production consumption; database
-FinalAcceptance/TASK/CON closure, TASK-before-CHECKERS race proof, shared
-audit/outbox and production manifest readiness remain later gates. Conditional
-award facts stay atomic with contribution records. Fulfillment-root ordinals and
-payment delivery are deferred until fulfillment is enabled.
+production routing and public acceptance remain ARCH-04E work. The hidden
+[ARCH-04E2-B operation](.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E2B.md)
+consumes canonical fixed-router authorization and commits the actual receipt
+with its exact source and complete consequence. Locked true moves TASK to
+`review_pending` without a REV queue or CON dependency. Locked false invokes
+the shared acceptance participant and atomically stages FinalAcceptance,
+accepted TASK/completed assignment, submitter ContributionRecord, applicable
+awards and shared audit/outbox evidence. It creates no Review or reviewer
+contribution. Database closure rejects partial effects; exact replay verifies
+the original tuple with fresh authority instead of repairing it.
+
+B6 supplies atomic Submission/dispatch and B7 hidden request delivery. The next
+boundary wires completion delivery to the committed outcome. Remediation, live
+registration, false-guide activation and public intake remain subsequent gates.
+The hidden false-path proof uses explicitly seeded valid policy lineage;
+normal guide activation still rejects false until the runtime is ready.
+Conditional awards stay atomic; payment delivery and fulfillment-root machinery
+remain deferred until fulfillment is enabled.
 
 ## v0.1 Success Standard
 

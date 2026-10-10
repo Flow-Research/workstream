@@ -19,6 +19,7 @@ def values(source="human_review"):
                 "accepted_submitter_id",
                 "recorded_by",
                 "policy_context_ref",
+                "source_authorization_decision_id",
             )
         },
         acceptance_source=source,

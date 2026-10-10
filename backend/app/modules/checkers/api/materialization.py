@@ -116,6 +116,7 @@ class PostSubmissionMaterialConsumer(Protocol):
 @dataclass(frozen=True, slots=True)
 class PostSubmissionMaterializationResult:
     """Bind a validated evaluation to its verified immutable input custody."""
+
     submission_id: UUID
     submission_version: int
     admission_id: UUID
@@ -126,6 +127,7 @@ class PostSubmissionMaterializationResult:
     byte_count: int
     semantic_manifest_sha256: str
     evaluation: PostSubmissionEvaluationResult
+    input_materialization_evidence_id: UUID
 
 
 class PostSubmissionMaterializationPort(Protocol):

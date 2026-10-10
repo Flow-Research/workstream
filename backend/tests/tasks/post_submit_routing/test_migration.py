@@ -10,8 +10,7 @@ from app.db import session as db_session
 from tests.migration_fixtures import add_current_art_seed_column, restore_predecessor_evidence_schema
 from tests.migration_fixtures import _config
 
-from .support import completed_source
-from tests.historical_submission_fixtures import historical_material_fixture
+from tests.checkers.execution.historical_execution import historical_completed_source
 
 
 pytestmark = pytest.mark.postgres_schema_contract
@@ -83,7 +82,7 @@ async def test_upgrade_preserves_existing_sources_without_publishing(
         await asyncio.to_thread(command.upgrade, _config(), "0010_post_submit_authority")
 
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with completed_source(tmp_path, isolated_database_env, material_source=historical_material_fixture) as h:
+        async with historical_completed_source(tmp_path, isolated_database_env) as h:
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
             connection = await asyncpg.connect(url)
             try:
@@ -112,7 +111,9 @@ async def test_upgrade_preserves_existing_sources_without_publishing(
                 await connection.close()
 
 
-async def test_request_upgrade_preserves_completed_owners(tmp_path, isolated_database_env, migration_lock):
+async def test_request_upgrade_preserves_completed_owners(
+    tmp_path, isolated_database_env, migration_lock
+):
     """Upgrade actual predecessor data without creating a request or publishing a source."""
     url = isolated_database_env.replace("+asyncpg", "")
     with migration_lock():
@@ -124,7 +125,7 @@ async def test_request_upgrade_preserves_completed_owners(tmp_path, isolated_dat
             await connection.close()
         await asyncio.to_thread(command.upgrade, _config(), "0017_acceptance_source_contracts")
         original_columns = await add_current_art_seed_column(isolated_database_env)
-        async with completed_source(tmp_path, isolated_database_env, material_source=historical_material_fixture) as h:
+        async with historical_completed_source(tmp_path, isolated_database_env) as h:
             await restore_predecessor_evidence_schema(isolated_database_env, original_columns)
             connection = await asyncpg.connect(url)
             try:
