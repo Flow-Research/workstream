@@ -155,6 +155,11 @@ func (c *Client) GuideProposal(ctx context.Context, project, guide, compilation 
 	if err != nil {
 		return result, err
 	}
+	return decodeGuideProposal(raw, project, guide, compilation)
+}
+
+func decodeGuideProposal(raw json.RawMessage, project, guide, compilation string) (Result[GuideProposal], error) {
+	var result Result[GuideProposal]
 	var value GuideProposal
 	fields, err := contextObject(raw, &value, []string{"target", "target_digest", "result", "current", "warning_hashes"}, []string{"warning_hashes"})
 	if err != nil || !contextPolicyDigest.MatchString(value.TargetDigest) ||
