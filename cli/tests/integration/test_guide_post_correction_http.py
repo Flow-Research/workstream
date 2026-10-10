@@ -226,8 +226,8 @@ def test_post_correction_transport_and_credentials(cli, tmp_path):
         assert "post-submission correction outcome unknown" in result.stderr
         response["drop"] = False
         reflected = receipt()
-        hash_bearer = "sha256:" + "f" * 64
-        reflected["correction"]["feedback_hash"] = hash_bearer
+        hash_bearer = "f" * 64
+        reflected["correction"]["feedback_hash"] = "sha256:" + hash_bearer
         response.update(
             status=201,
             body=json.dumps(reflected).encode(),
