@@ -212,7 +212,7 @@ No database transaction crosses the client call.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Baseline and owner map | Main `3110353363547e603e7527a782467f95c00cb1f7`; merged registry/contract, pre-admission ART path, ADR 0014 and PILOT-00 result inspected | Complete | Later product selection and hosted deployment remain outside this chunk |
+| Baseline and owner map | Implementation began at merged registry main `3110353363547e603e7527a782467f95c00cb1f7`; final reconciliation merges CLI approval main `4c5720034a2a1019f00df6c7f96601407ef1e43a` without changing the runtime sources | Complete | Later product selection and hosted deployment remain outside this chunk |
 | Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace` | Seven tests pass: shared Python fixtures, numeric/NUL/extra-field controls, closed cache/runtime health, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
 | Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Five tests pass: cross-language fixtures, complete settings, typed health/execute/factory, actual prepared ZIP callback grant and symlink rejection | Product caller is intentionally absent |
 | Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
@@ -239,9 +239,10 @@ No database transaction crosses the client call.
 
 ## Reconciliation
 
-- Current-source reconciliation: clean branch
-  `codex/pilot04-external-runtime` starts at merged PR #521 on main
-  `3110353363547e603e7527a782467f95c00cb1f7`.
+- Current-source reconciliation: branch `codex/pilot04-external-runtime`
+  started at merged PR #521 and merged current main
+  `4c5720034a2a1019f00df6c7f96601407ef1e43a`; the incoming CLI approval files
+  and roadmap statements are preserved.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product and ART source
   code. Its migration is authored separately by this lane as revision 0030 and
   is not part of this runtime PR. No PILOT-02 worktree is edited here.

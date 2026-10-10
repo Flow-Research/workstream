@@ -891,7 +891,8 @@ selects a sealed-cache Kaniko builder plus a separate gVisor oracle sandbox for
 PILOT-04/PILOT-06. PILOT-04 now has a normalized external request/result
 contract, immutable authorized digest-pinned registry and hidden unselected Rust
 service/SDK with a typed Unix-socket adapter and request-bound ART grant. Product
-runtime composition and policy routing remain absent. The spike proves only the included small Linux fixture;
+runtime composition and policy routing remain absent. The spike proves only the
+included small Linux fixture;
 representative task sizing, hosted hardening and macOS fallback evidence
 remain.
 
