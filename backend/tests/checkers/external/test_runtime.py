@@ -276,6 +276,7 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as output:
         output.writestr("src/main.txt", b"verified bytes")
+        output.writestr("src.txt", b"root bytes sort before child")
     archive_bytes = archive.getvalue()
     root = tmp_path / "scratch"
     manager = ArtifactScratchManager(
@@ -352,6 +353,7 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
         async def process(self, reader, workspace):
             def project(tree):
                 assert tree.read_file("src/main.txt", maximum_bytes=64) == b"verified bytes"
+                assert tree.read_file("src.txt", maximum_bytes=64) == b"root bytes sort before child"
                 with service.external_material_grant(prepared, workspace, grant_request) as grant:
                     grant_root = root / "workspaces" / grant.grant_id
                     body = json.loads((grant_root / ".external-checker-grant.json").read_text())

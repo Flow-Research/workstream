@@ -280,6 +280,11 @@ No database transaction crosses the client call.
   receive a fresh absolute deadline after checker execution, and the trickle
   regression proves the service returns within the request budget and serves a
   healthy connection without waiting for the trickle schedule to complete.
+- An actual prepared ZIP containing both `src.txt` and `src/main.txt` exposed
+  depth-first grant inventory ordering where the typed request requires one
+  global normalized-path order. ART now sorts its descriptor-walked file and
+  directory identities before exact comparison and publication; the retained
+  callback test proves the root file and nested file share one valid grant.
 
 ## Reconciliation
 

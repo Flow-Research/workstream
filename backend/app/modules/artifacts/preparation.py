@@ -769,6 +769,8 @@ class ArtifactScratchManager:
                     "executable": executable,
                 }
             )
+        entries.sort(key=lambda item: str(item["normalized_path"]))
+        directories.sort()
         return entries, directories
 
     def _revoke_external_grant_sync(self, grant_id: str) -> None:
