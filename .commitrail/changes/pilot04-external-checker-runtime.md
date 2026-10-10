@@ -293,6 +293,11 @@ No database transaction crosses the client call.
   new Rust job result to its fail-closed shell probe. The regression now binds
   the exact dependency and rejects every non-success Rust result alongside the
   existing preflight, semantic-lane and CLI requirements.
+- Hosted schema contracts found that the unselected external factory was
+  assembled inside its concrete Unix-socket module rather than the existing
+  CHECKER composition root. Factory registration and settings mapping now live
+  in `app.adapters.checkers`; the architecture regression owns that fourth
+  root and rejects a concrete checker adapter or factory constructed elsewhere.
 
 ## Reconciliation
 

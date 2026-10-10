@@ -31,6 +31,7 @@ RETIRED_ARTIFACT_MATERIALIZATION_API = (
     APP_ROOT / "modules" / "artifacts" / "api" / "submission_materialization.py"
 )
 COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
+CHECKER_COMPOSITION_ROOT = APP_ROOT / "adapters" / "checkers" / "__init__.py"
 AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
 OBSERVABILITY_COMPOSITION_ROOT = APP_ROOT / "adapters" / "observability.py"
 AGENT_ADAPTER_MODULE = "app.adapters.project_agents.openai_agent_sdk"
@@ -85,6 +86,7 @@ PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
+    "app.adapters.checkers.external_service",
 }
 CONCRETE_OBSERVABILITY_MODULES = {
     "opentelemetry.exporter.otlp.proto.http.metric_exporter",
@@ -296,7 +298,16 @@ def test_concrete_adapter_construction_has_one_composition_path() -> None:
         if imports & CONCRETE_OBSERVABILITY_MODULES:
             observability_imports.append(path)
         factory_calls.extend(path for name in calls if name == "ExternalServiceAdapterFactory")
-        adapter_calls.extend(path for name in calls if name in {"LocalStorageAdapter", "S3CompatibleArtifactStore"})
+        adapter_calls.extend(
+            path
+            for name in calls
+            if name
+            in {
+                "LocalStorageAdapter",
+                "S3CompatibleArtifactStore",
+                "UnixSocketExternalCheckerAdapter",
+            }
+        )
         agent_calls.extend(path for name in calls if name == "OpenAIAgentSdkProjectGuideRuntime")
         observability_calls.extend(
             path
@@ -305,12 +316,13 @@ def test_concrete_adapter_construction_has_one_composition_path() -> None:
         )
     assert set(factory_calls) == {
         COMPOSITION_ROOT,
+        CHECKER_COMPOSITION_ROOT,
         AGENT_COMPOSITION_ROOT,
         OBSERVABILITY_COMPOSITION_ROOT,
     }
-    assert len(factory_calls) == 3
-    assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE]
-    assert set(concrete_imports) == {COMPOSITION_ROOT}
+    assert len(factory_calls) == 4
+    assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE, CHECKER_COMPOSITION_ROOT]
+    assert set(concrete_imports) == {COMPOSITION_ROOT, CHECKER_COMPOSITION_ROOT}
     assert agent_imports == [AGENT_COMPOSITION_ROOT]
     assert agent_calls == [AGENT_COMPOSITION_ROOT]
     assert observability_imports == [OBSERVABILITY_COMPOSITION_ROOT]

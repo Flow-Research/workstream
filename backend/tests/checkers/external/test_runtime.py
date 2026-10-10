@@ -15,7 +15,7 @@ import zipfile
 import pytest
 from pydantic import ValidationError
 
-from app.adapters.checkers.external_service import external_checker_execution_factory
+from app.adapters.checkers import external_checker_execution_factory
 from app.core.config import Settings
 from app.interfaces.external_checker_execution import (
     ExternalCheckerIsolationReceipt,

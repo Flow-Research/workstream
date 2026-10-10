@@ -2,6 +2,12 @@
 
 import asyncio
 import json
+from app.adapters.checkers.external_service import (
+    EXTERNAL_CHECKER_CAPABILITY_KEY,
+    EXTERNAL_CHECKER_PROVIDER_KEY,
+    UnixSocketExternalCheckerAdapter,
+)
+from app.interfaces.external_services import ExternalServiceAdapterFactory
 from app.modules.artifacts.api import SubmissionBundleFile
 from app.modules.tasks.api import TaskSubmissionContextFacts
 from app.modules.projects.api import ProjectLockedPolicyContextFacts
@@ -36,6 +42,36 @@ from app.modules.checkers.pre_submit_execution import (
     DefaultPreSubmissionExecutionInput,
     EffectivePreSubmissionProcessor,
 )
+
+
+def external_checker_execution_factory(
+    *, socket_path: Path, timeout_seconds: float
+) -> ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter]:
+    """Compose the unselected instance-local external checker adapter factory."""
+    factory = ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter](
+        EXTERNAL_CHECKER_CAPABILITY_KEY
+    )
+    factory.register(
+        EXTERNAL_CHECKER_PROVIDER_KEY,
+        lambda: UnixSocketExternalCheckerAdapter(
+            socket_path=socket_path,
+            timeout_seconds=timeout_seconds,
+        ),
+    )
+    return factory
+
+
+def configured_external_checker_execution_factory(settings):
+    """Map validated settings into the unselected explicit adapter factory."""
+    if (
+        settings.external_checker_service_socket is None
+        or settings.external_checker_material_root is None
+    ):
+        raise ValueError("external checker service is not configured")
+    return external_checker_execution_factory(
+        socket_path=settings.external_checker_service_socket,
+        timeout_seconds=float(settings.external_checker_service_timeout_seconds),
+    )
 
 
 class _ExecutionRequest(Protocol):

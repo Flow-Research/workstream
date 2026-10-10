@@ -16,7 +16,6 @@ from app.interfaces.external_checker_execution import (
     ExternalCheckerServiceHealth,
 )
 from app.interfaces.external_services import (
-    ExternalServiceAdapterFactory,
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,
@@ -28,8 +27,8 @@ from app.modules.checkers.api.external import (
     ExternalCheckerExecutionResult,
 )
 
-_CAPABILITY = "external_checker_execution"
-_PROVIDER = "unix_socket"
+EXTERNAL_CHECKER_CAPABILITY_KEY = "external_checker_execution"
+EXTERNAL_CHECKER_PROVIDER_KEY = "unix_socket"
 _PROTOCOL = "external_checker_service.v1"
 _MAXIMUM_RESPONSE_BYTES = MAX_RESULT_BYTES + 16_384
 _EXECUTION_OVERHEAD_SECONDS = 60.0
@@ -49,7 +48,10 @@ class UnixSocketExternalCheckerAdapter:
             raise ValueError("external checker service configuration is invalid")
         self._socket_path = socket_path
         self._timeout_seconds = timeout_seconds
-        self._identity = ExternalServiceAdapterIdentity(_CAPABILITY, _PROVIDER)
+        self._identity = ExternalServiceAdapterIdentity(
+            EXTERNAL_CHECKER_CAPABILITY_KEY,
+            EXTERNAL_CHECKER_PROVIDER_KEY,
+        )
 
     @property
     def identity(self) -> ExternalServiceAdapterIdentity:
@@ -197,37 +199,8 @@ class UnixSocketExternalCheckerAdapter:
         except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
             raise ExternalServiceProtocolError(self._identity) from exc
 
-
-def external_checker_execution_factory(
-    *, socket_path: Path, timeout_seconds: float
-) -> ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter]:
-    """Build the explicit instance-local factory without selecting it in product flow."""
-    factory = ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter](_CAPABILITY)
-    factory.register(
-        _PROVIDER,
-        lambda: UnixSocketExternalCheckerAdapter(
-            socket_path=socket_path,
-            timeout_seconds=timeout_seconds,
-        ),
-    )
-    return factory
-
-
-def configured_external_checker_execution_factory(settings):
-    """Map validated settings into the unselected explicit adapter factory."""
-    if (
-        settings.external_checker_service_socket is None
-        or settings.external_checker_material_root is None
-    ):
-        raise ValueError("external checker service is not configured")
-    return external_checker_execution_factory(
-        socket_path=settings.external_checker_service_socket,
-        timeout_seconds=float(settings.external_checker_service_timeout_seconds),
-    )
-
-
 __all__ = (
+    "EXTERNAL_CHECKER_CAPABILITY_KEY",
+    "EXTERNAL_CHECKER_PROVIDER_KEY",
     "UnixSocketExternalCheckerAdapter",
-    "configured_external_checker_execution_factory",
-    "external_checker_execution_factory",
 )
