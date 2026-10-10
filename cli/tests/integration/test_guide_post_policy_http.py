@@ -166,6 +166,35 @@ def test_post_policy_rejects_valid_uuid_selected_policy_substitution(cli):
         assert len(requests) == 1
 
 
+def test_post_policy_rejects_duplicate_checkers_and_noncanonical_severity_floor(cli):
+    with http_fixture() as (origin, response, requests):
+        value = package()
+        value["policy"]["blocking_severities"] = [
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "info",
+        ]
+        response["body"] = json.dumps(value).encode()
+        assert invoke(cli, origin).returncode == 0
+        duplicate = package()
+        duplicate["policy"]["entries"] *= 2
+        response["body"] = json.dumps(duplicate).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+        for severities in (
+            ["low", "info"],
+            ["high", "critical"],
+            ["critical", "high", "high"],
+            ["critical", "high", "unknown"],
+        ):
+            value = package()
+            value["policy"]["blocking_severities"] = severities
+            response["body"] = json.dumps(value).encode()
+            assert_failure(invoke(cli, origin), "invalid_api_response")
+        assert len(requests) == 6
+
+
 def test_post_policy_rejects_incomplete_malformed_and_cross_resource_packages(cli):
     mutations = [
         (("target", "proposal", "source_snapshot_id"), GUIDE),

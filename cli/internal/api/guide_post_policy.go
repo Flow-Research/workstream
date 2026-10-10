@@ -195,20 +195,27 @@ func validateCompiledPostPolicy(raw json.RawMessage, value *CompiledPostPolicy, 
 	if json.Unmarshal(fields["entries"], &entries) != nil {
 		return errors.New("invalid entries")
 	}
+	seen := make(map[string]bool, len(value.Entries))
 	for i := range value.Entries {
 		entry := &value.Entries[i]
 		_, err := contextObject(entries[i], entry, []string{"checker_id", "definition_version", "implementation_version", "classification", "configuration"}, nil)
 		var configuration struct{}
-		if err != nil || !postPolicyIdentifier.MatchString(entry.CheckerID) || !postPolicyIdentifier.MatchString(entry.ImplementationVersion) ||
+		if err != nil || seen[entry.CheckerID] || !postPolicyIdentifier.MatchString(entry.CheckerID) || !postPolicyIdentifier.MatchString(entry.ImplementationVersion) ||
 			entry.DefinitionVersion != "v0.1" || !slices.Contains([]string{"platform_default", "project_required", "project_warning"}, entry.Classification) ||
 			decode(entry.Configuration, &configuration, nil, nil) != nil {
 			return errors.New("invalid policy entry")
 		}
+		seen[entry.CheckerID] = true
 	}
-	for _, severity := range value.BlockingSeverities {
-		if !slices.Contains([]string{"critical", "high", "medium", "low", "info"}, severity) {
-			return errors.New("invalid severity")
+	// These are public response invariants, not local catalogue evaluation.
+	canonical := make([]string, 0, 5)
+	for _, severity := range []string{"critical", "high", "medium", "low", "info"} {
+		if slices.Contains(value.BlockingSeverities, severity) {
+			canonical = append(canonical, severity)
 		}
+	}
+	if !slices.Contains(canonical, "critical") || !slices.Contains(canonical, "high") || !slices.Equal(canonical, value.BlockingSeverities) {
+		return errors.New("invalid blocking severities")
 	}
 	return nil
 }
