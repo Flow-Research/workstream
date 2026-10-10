@@ -21,6 +21,7 @@ The parallel [04F remediation](planning/chunks/WS-ARCH-001-04F-checker-remediati
 
 - `backend/app/adapters/artifacts/__init__.py` for the concrete invocation-scoped adapter and reuse of current ART construction helpers.
 - `backend/tests/test_post_submit_materialization.py`, `backend/tests/post_submit_materialization_helpers.py` and focused tests under `backend/tests/tasks/evaluation_delivery/` for real hidden handler, cleanup and provider-lease lifetime. Existing shared fixtures may change only where a real provider-bound test needs them.
+- `backend/scripts/test_lane_catalogue.py` and `backend/tests/test_ci_lane_catalogue.py` to place the new PostgreSQL/MinIO module in existing TASK lanes without changing their limits or moving older tests.
 - This record, the affected ARCH overview/plan/map and `docs/roadmap_status.md` only if the hidden capability or next dependency changes on merge; relevant ownership inventory/tests if the new adapter changes an enforced boundary. No migration is expected.
 
 ## Prohibited
@@ -51,6 +52,7 @@ The focused runtime proofs use a freshly migrated PostgreSQL database and an iso
 | Cancellation during provider streaming and consumer evaluation revokes material and releases scratch/lease | `test_worker_art_lease_cancellation_revokes_view_and_scratch` |
 | Provider bootstrap uncertainty leaves no trusted result | `test_worker_bootstrap_unavailable_has_no_trusted_result` |
 | Failed scratch construction releases an acquired provider lease | `test_worker_scratch_construction_failure_releases_provider_lease` |
+| Failure after manager acquisition closes that manager and its provider lease | `test_worker_post_acquisition_failure_closes_scratch_and_lease` |
 | Verified object loss yields the existing durable infrastructure outcome | `test_worker_known_missing_object_records_infrastructure_result` |
 
 The existing ART materializer tests retain exact byte/manifest, authority, stale-source and replay proof. This slice has no checker-result or AUTH implementation change.

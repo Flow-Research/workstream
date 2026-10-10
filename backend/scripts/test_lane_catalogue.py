@@ -437,6 +437,7 @@ TASK_MODULES = (
     "tests/tasks/evaluation_delivery/test_completion.py",
     "tests/tasks/evaluation_delivery/test_completion_contracts.py",
     "tests/tasks/evaluation_delivery/test_completion_custody.py",
+    "tests/tasks/evaluation_delivery/test_worker_materialization.py",
     "tests/reviews/decision/test_contracts.py",
     "tests/reviews/decision/test_storage.py",
     "tests/reviews/decision/test_migration.py",

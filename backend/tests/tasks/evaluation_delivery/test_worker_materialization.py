@@ -10,6 +10,7 @@ from app.adapters.artifacts import worker_post_submission_materialization
 from app.adapters.artifacts import internal_workers
 from app.adapters.outbox import production_outbox_delivery
 from app.interfaces.artifacts import ArtifactObjectMissingError
+from app.modules.artifacts.preparation import ArtifactScratchIntegrityError
 from app.modules.checkers.api.execution import REQUEST_EVENT
 from app.modules.outbox.models import OutboxEvent
 from tests.checkers.execution.support import material_execution
@@ -21,6 +22,7 @@ from .support import delivery_fixture, outcome, state
 
 def _worker_port(h, monkeypatch):
     """Keep the real child runtime on the fixture's exact claimed namespace."""
+    import app.adapters.artifacts as artifact_adapter
     import app.core.config as config
     import app.modules.artifacts.service as artifact_service
 
@@ -28,16 +30,29 @@ def _worker_port(h, monkeypatch):
     monkeypatch.setattr(config, "get_settings", lambda: h.settings)
     monkeypatch.setattr(internal_workers, "get_settings", lambda: h.settings)
     monkeypatch.setattr(artifact_service, "get_session_factory", lambda: h.factory)
+    h.worker_scratch_managers = []
+    original_create = artifact_adapter.create_artifact_scratch_manager
+
+    def capture_manager(settings):
+        manager = original_create(settings)
+        h.worker_scratch_managers.append(manager)
+        return manager
+
+    monkeypatch.setattr(artifact_adapter, "create_artifact_scratch_manager", capture_manager)
     port = worker_post_submission_materialization(sessions=h.factory)
     assert internal_workers._runtime is None
     assert internal_workers._runtime_active_operations == 0
     return port
 
 
-def _scratch_is_empty(h):
+async def _scratch_is_closed(h):
     root = h.settings.artifact_scratch_root
     assert root is not None
     assert list((root / "workspaces").iterdir()) == []
+    assert h.worker_scratch_managers
+    for manager in h.worker_scratch_managers:
+        with pytest.raises(ArtifactScratchIntegrityError, match="manager is closed"):
+            await manager.usage()
     assert internal_workers._runtime_active_operations == 0
 
 
@@ -61,8 +76,7 @@ async def test_worker_art_lease_executes_exact_hidden_request(
             assert saved["run"]["material_custody"]["content_sha256"] == h.request.content_sha256
             assert saved["events"] == 1
             assert internal_workers._runtime is not None
-            _scratch_is_empty(h)
-            _scratch_is_empty(h)
+            await _scratch_is_closed(h)
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
         assert internal_workers._runtime is None
@@ -110,7 +124,7 @@ async def test_worker_art_lease_cancellation_revokes_view_and_scratch(
                     _ = consumer.view.entries
             else:
                 assert consumer.calls == 0 and consumer.view is None
-            _scratch_is_empty(h)
+            await _scratch_is_closed(h)
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
 
@@ -162,6 +176,28 @@ async def test_worker_scratch_construction_failure_releases_provider_lease(
             internal_workers.shutdown_artifact_internal_runtime()
 
 
+async def test_worker_post_acquisition_failure_closes_scratch_and_lease(
+    tmp_path, isolated_database_env, monkeypatch,
+):
+    import app.adapters.artifacts as artifact_adapter
+
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        port = _worker_port(h, monkeypatch)
+        execution = await material_execution(h)
+
+        def unavailable(**_kwargs):
+            raise RuntimeError("controlled materializer construction outage")
+
+        try:
+            with monkeypatch.context() as patch:
+                patch.setattr(artifact_adapter, "post_submission_materialization", unavailable)
+                with pytest.raises(RuntimeError, match="materializer construction outage"):
+                    await port.materialize(execution, Consumer(h.files))
+            await _scratch_is_closed(h)
+        finally:
+            internal_workers.shutdown_artifact_internal_runtime()
+
+
 async def test_worker_known_missing_object_records_infrastructure_result(
     tmp_path, isolated_database_env, monkeypatch,
 ):
@@ -187,6 +223,6 @@ async def test_worker_known_missing_object_records_infrastructure_result(
             assert saved["events"] == 0
             async with h.factory() as session:
                 assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
-            _scratch_is_empty(h)
+            await _scratch_is_closed(h)
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
