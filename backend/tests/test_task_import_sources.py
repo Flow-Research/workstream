@@ -344,10 +344,12 @@ async def test_failure_after_real_admission_authority_rolls_back_attempts_and_al
 async def test_postgres_rejects_source_mutation_and_foreign_attempt_custody(import_source_client):
     client = import_source_client
     project = await _project(client)
-    raw = json.dumps(document()).encode()
+    value = document()
+    value["tasks"][0]["external_task_id"] = "custody-" + project
+    raw = json.dumps(value).encode()
     source = await _declare(client, project, raw)
     uploaded = await client.put(_path(project, source) + "/content", headers=auth_headers() | {"Content-Type": "application/json"}, content=raw)
-    assert uploaded.status_code == 200, uploaded.text
+    assert uploaded.status_code == 200 and uploaded.json()["status"] == "verified", uploaded.text
     foreign_project = await _project(client)
     foreign = await _declare(client, foreign_project, raw)
     forged_id = new_record_id()
@@ -408,7 +410,9 @@ async def _source_role_sql_controls(original, target, project):
 async def _missing_source_put(client, monkeypatch):
     """Prepare one admitted uncertain source whose actual MinIO object is absent."""
     project = await _project(client)
-    raw = json.dumps(document()).encode()
+    value = document()
+    value["tasks"][0]["external_task_id"] = "race-" + project
+    raw = json.dumps(value).encode()
     source = await _declare(client, project, raw)
     original_put, written_refs = S3CompatibleArtifactStore.put, []
 
