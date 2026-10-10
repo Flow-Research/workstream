@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from uuid import UUID, uuid4
-from datetime import UTC, datetime
 
 from aiobotocore.session import AioSession
 from aiobotocore.config import AioConfig
@@ -20,12 +19,14 @@ from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
 from app.main import create_app
-from app.modules.actors.api import ServiceIdentity
+from app.modules.actors.api import ActorKind, ServiceIdentity
+from app.modules.actors.models import ActorIdentityLink
 from app.modules.artifacts.models import ArtifactTaskImportSource, ArtifactPutAttempt, ArtifactAdmissionCharge
 from app.modules.artifacts.models import ArtifactReplica
 from app.adapters.artifacts.s3_compatible import S3CompatibleArtifactStore
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
 from app.modules.authorization.models import AdminRoleGrant
+from app.modules.authorization.runtime import ActorStatus, HumanAuthorizationContext, IdentityLinkStatus
 from app.modules.authorization.task_import_sources import PreparedTaskImportSourceAuthorization
 from app.modules.artifacts.api.task_import_source import TaskImportSourceAction
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
@@ -33,6 +34,7 @@ from tests.project_create_fixtures import grant_system_project_manager
 from tests.test_artifact_internal_authorization import _service_principal
 from tests.test_tasks import task_database_env as task_database_env, auth_headers, admit_and_grant_project_submitter
 from tests.tasks.test_task_import_contract import document
+from tests.authorization.guide_activation.pg_support import revoke_manager_grant
 
 
 @pytest.fixture
@@ -180,12 +182,15 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
     async with db_session.get_session_factory()() as session, session.begin():
         grant = (await session.scalars(select(AdminRoleGrant).where(
             AdminRoleGrant.role == "project_manager", AdminRoleGrant.status == "active"))).one()
-        grant.status = "revoked"
-        grant.version += 1
-        grant.revoked_by_actor_profile_id = grant.target_actor_profile_id
-        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
-        grant.revoked_reason = "Source replay must require current authority"
-        grant.revoked_at = datetime.now(UTC)
+        administrator_link = (await session.scalars(select(ActorIdentityLink).where(
+            ActorIdentityLink.actor_profile_id == grant.granted_by_actor_profile_id))).one()
+        administrator = HumanAuthorizationContext(
+            actor_profile_id=UUID(administrator_link.actor_profile_id),
+            identity_link_id=UUID(administrator_link.id), actor_kind=ActorKind.HUMAN,
+            actor_status=ActorStatus.ACTIVE, identity_link_status=IdentityLinkStatus.ACTIVE,
+            request_id=uuid4(), correlation_id=uuid4(),
+        )
+        await revoke_manager_grant(session, administrator, UUID(str(grant.id)))
     replay = await client.post(f"/api/v1/projects/{project}/task-import-sources", headers=headers,
                                json={"sha256": source["sha256"], "byte_count": len(raw)})
     assert replay.status_code == 403, replay.text
@@ -275,7 +280,7 @@ async def test_unknown_acknowledgement_recovers_through_existing_scanner_and_wor
         assert puts == [] and len(jobs) == 1
         assert await run_artifact_internal_operation("verification", UUID(jobs[0])) == "verified"
     finally:
-        await shutdown_artifact_internal_runtime()
+        shutdown_artifact_internal_runtime()
     downloaded = await client.get(_path(project, source) + "/content", headers=auth_headers())
     assert downloaded.status_code == 200 and downloaded.content == raw, downloaded.text
     assert len(writes) == 1 and (await _effects()) == (1, 1, 3, 0)
