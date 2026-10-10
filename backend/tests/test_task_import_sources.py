@@ -175,7 +175,7 @@ async def test_changed_declaration_conflicts_without_partial_effects(import_sour
     assert status.status_code == 200 and status.json()["sha256"] == source["sha256"]
 
 
-async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_source_client):
+async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_source_client, monkeypatch):
     client = import_source_client
     project = await _project(client)
     raw, headers = json.dumps(document()).encode(), auth_headers()
@@ -187,7 +187,8 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
         parent = await session.get(ArtifactTaskImportSource, source["source_id"])
         actor_id = parent.actor_profile_id
         allowed_ids = set(await session.scalars(select(AuditEvent.id).where(
-            AuditEvent.resource_id == source["source_id"], AuditEvent.after_facts["allowed"].as_boolean().is_(True))))
+            AuditEvent.action_id.in_([action.value for action in TaskImportSourceAction]),
+            AuditEvent.actor_id == actor_id, AuditEvent.event_type == "SensitiveAuthorizationAllowed")))
     async with db_session.get_session_factory()() as session, session.begin():
         grant = (await session.scalars(select(AdminRoleGrant).where(
             AdminRoleGrant.role == "project_manager", AdminRoleGrant.status == "active"))).one()
@@ -200,6 +201,20 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
             request_id=uuid4(), correlation_id=uuid4(),
         )
         await revoke_manager_grant(session, administrator, UUID(str(grant.id)))
+    captured = []
+    restage_denial = PreparedTaskImportSourceAuthorization.restage_denial
+
+    async def observe_restage(authority, error):
+        decision = error.__cause__.decision
+        context = authority._kernel._pending_denial_resource_context
+        assert (context.resource_id, context.scope_project_id, context.actor_profile_id,
+                context.sha256, context.byte_count) == (
+            UUID(source["source_id"]), UUID(project), UUID(actor_id), source["sha256"], len(raw),
+        )
+        captured.append(decision)
+        await restage_denial(authority, error)
+
+    monkeypatch.setattr(PreparedTaskImportSourceAuthorization, "restage_denial", observe_restage)
     replay = await client.post(f"/api/v1/projects/{project}/task-import-sources", headers=headers,
                                json={"sha256": source["sha256"], "byte_count": len(raw)})
     assert replay.status_code == 403, replay.text
@@ -211,17 +226,24 @@ async def test_revoked_authority_cannot_replay_or_read_a_verified_source(import_
     assert (await _effects()) == before == (1, 1, 3, 0)
     async with db_session.get_session_factory()() as session:
         events = list(await session.scalars(select(AuditEvent).where(
-            AuditEvent.resource_id == source["source_id"], AuditEvent.event_type == "SensitiveAuthorizationDenied")))
+            AuditEvent.action_id.in_([action.value for action in TaskImportSourceAction]),
+            AuditEvent.actor_id == actor_id, AuditEvent.event_type == "SensitiveAuthorizationDenied")))
         assert sorted(event.action_id for event in events) == sorted([
             TaskImportSourceAction.DECLARE.value, TaskImportSourceAction.UPLOAD.value,
             TaskImportSourceAction.READ.value, TaskImportSourceAction.READ.value,
         ])
-        assert all(event.actor_id == actor_id and event.project_id == project
-                   and event.resource_type == "task_import_source" and event.permission_id == "project.task.manage"
+        assert len(captured) == 4
+        decisions = {str(decision.decision_id): decision for decision in captured}
+        assert set(decisions) == {event.id for event in events}
+        assert all(event.actor_id == actor_id and event.permission_id == "project.task.manage"
                    and event.denial_code == "permission_not_granted" and event.after_facts["allowed"] is False
+                   and event.after_facts["resource_context_digest"] == decisions[event.id].resource_context_digest
+                   and event.action_id == decisions[event.id].action_id.value
+                   and event.request_id == str(decisions[event.id].request_id)
                    for event in events)
         assert set(await session.scalars(select(AuditEvent.id).where(
-            AuditEvent.resource_id == source["source_id"], AuditEvent.after_facts["allowed"].as_boolean().is_(True)))) == allowed_ids
+            AuditEvent.action_id.in_([action.value for action in TaskImportSourceAction]),
+            AuditEvent.actor_id == actor_id, AuditEvent.event_type == "SensitiveAuthorizationAllowed"))) == allowed_ids
 
 
 @pytest.mark.parametrize("identity,action,resource_type", [
@@ -246,10 +268,12 @@ async def test_upload_retains_only_the_denied_internal_services_evidence(
         principal.suspended_at = datetime.now(UTC)
         principal.suspension_reason = "exact service denial evidence control"
     persisted_by = []
+    captured = []
     persist_denial = PreparedArtifactInternalAuthority.persist_denial
 
     async def observe_persistence(authority):
         persisted_by.append(authority._service_identity)
+        captured.append(authority._denial)
         await persist_denial(authority)
 
     monkeypatch.setattr(PreparedArtifactInternalAuthority, "persist_denial", observe_persistence)
@@ -262,10 +286,16 @@ async def test_upload_retains_only_the_denied_internal_services_evidence(
         denied = list(await session.scalars(select(AuditEvent).where(AuditEvent.event_type == "SensitiveAuthorizationDenied")))
         assert len(denied) == 1
         event = denied[0]
-        assert (event.action_id, event.actor_id, event.resource_type, event.denial_code) == (
-            action.value, actor_id, resource_type, "actor_suspended",
+        assert (event.action_id, event.actor_id, event.denial_code) == (
+            action.value, actor_id, "actor_suspended",
         )
         assert event.after_facts["allowed"] is False
+        assert len(captured) == 1
+        decision = captured[0]
+        assert event.id == str(decision.decision_id)
+        assert event.request_id == str(decision.request_id)
+        assert event.after_facts["resource_context_digest"] == decision.resource_context_digest
+        assert decision.resource_type == resource_type
         if identity is ServiceIdentity.ARTIFACT_PUT_RESOLVER:
             resource = (await session.scalars(select(ArtifactPutAttempt))).one()
             assert resource.task_import_source_id == source["source_id"]
@@ -273,7 +303,7 @@ async def test_upload_retains_only_the_denied_internal_services_evidence(
             resource = (await session.scalars(select(ArtifactVerificationJob))).one()
             attempt = await session.get(ArtifactPutAttempt, resource.originating_put_attempt_id)
             assert attempt.task_import_source_id == source["source_id"]
-        assert event.resource_id == resource.id
+        assert str(decision.resource_id) == resource.id
         assert await session.scalar(select(func.count()).select_from(WorkstreamTask)) == 0
 
 
