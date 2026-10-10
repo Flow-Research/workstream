@@ -1,0 +1,235 @@
+# [PILOT-04] Add The External Checker Service Boundary
+
+- Initiative: None
+- Durable disposition: Planned
+- Intended merge outcome: Add one unselected Rust checker service and SDK,
+  one typed Python Unix-socket client, and one ART-owned ephemeral material
+  grant that prove a digest-pinned checker can consume verified files in a
+  bounded read-only sandbox without activating either checker phase.
+
+## Intent
+
+The merged PILOT-04 registry and normalized request/result contract identify an
+exact external checker image and its limits, but Workstream has no external
+service that can execute that contract. This chunk supplies that hidden service
+boundary and the minimum real ART transport needed to test it. It does not
+select a checker, route production work, persist a run, or change admission.
+
+PILOT-00 established the usable isolation shape: administrator-registered
+`runsc` on a dedicated Linux node, a separate gVisor sandbox with no network or
+host socket, a non-root checker, no capabilities, a read-only root and bounded
+CPU, memory, PIDs and scratch. Its privileged networkless Docker-in-Docker
+container was a development harness, not the hosted deployment. The Rust
+service introduced here is the trusted node component that alone may access the
+container engine. Python product code never becomes a Docker launcher.
+
+## Bounded change
+
+### Allowed
+
+- `.commitrail/changes/pilot04-external-checker-runtime.md` for this intent,
+  acceptance, evidence and final reconciliation.
+- `external_checkers/**` for one Rust workspace containing:
+  - `workstream-checker-sdk`, the strict normalized checker wire types and
+    result builder used by external images; and
+  - `workstream-checker-service`, the long-lived Unix-socket service whose
+    private executor resolves trusted cached images and owns Docker/runsc
+    launch, health, deadline, bounded output and cleanup.
+- A typed `ExternalCheckerExecutionAdapter` port under
+  `backend/app/interfaces/**`, one Unix-socket client and explicit
+  `ExternalServiceAdapterFactory` registration under
+  `backend/app/adapters/checkers/**`, and the minimum bounded settings in
+  `backend/app/core/config.py`. The adapter remains absent from product-flow
+  composition roots.
+- `backend/app/modules/artifacts/preparation.py`,
+  `backend/app/modules/artifacts/submission_materialization.py`, the existing
+  checker materialization API, and artifact adapter composition only to extend
+  `ArtifactScratchManager` with the callback-scoped external material grant
+  described below. This is the existing pre-admission
+  `PreparedSubmissionBundlePreparationCommand` ->
+  `PreparedBundleMaterializationService` ->
+  `ArtifactPreparationService._process_prepared_submission` path; it neither
+  requires nor fabricates a `Submission`.
+- Focused Rust and Python tests and shared golden JSON fixtures for protocol
+  parity, grant custody, factory construction, digest/cache selection, health,
+  sandbox arguments, timeout/cleanup, output bounds and closed failure mapping.
+  Register only the new modules and tests in the existing ownership and lane
+  catalogues.
+- A bounded local probe under `experiments/pilot04_external_checker_runtime/**`
+  only if needed to reproduce the real service request and its cleanup without
+  adding a product caller or deployment surface.
+- `docs/decision_0014_external_service_adapter_convention.md`,
+  `docs/architecture_checker_framework.md` and the exact PILOT-04 lines in
+  `docs/roadmap_status.md` for the delivered hidden mechanism and remaining
+  cutover.
+
+### Not allowed
+
+- No project policy binding, F-020 activation guard, Workstream default checker,
+  public route, CLI, scheduler, worker selection, durable run/lease/result
+  storage or current pre/post caller activation.
+- No deletion, bypass or parallel execution of the current pre-submit or
+  post-submit catalogues. A later replacement PR must prove the complete new
+  flow and remove both catalogues in one clean cutover.
+- No database migration or durable ART lifecycle, and no `Submission`, TASK,
+  routing, review, acceptance, contribution, compensation or payment mutation.
+- No image build or pull, mutable tag or `latest` resolution, caller-selected
+  platform, arbitrary host path, plugin discovery, global registration,
+  service locator, fallback constructor or second transport.
+- No Docker or containerd socket in a checker sandbox. Local `docker-dev` is an
+  explicit development isolation result and can never be reported as hosted
+  gVisor isolation.
+- No deployment, PR merge, issue closure, held PILOT-05/PILOT-06/PILOT-09 work,
+  test skip or CI weakening.
+
+## Design and decisions
+
+### Service and image identity
+
+The typed Python adapter sends one already validated
+`ExternalCheckerExecutionRequest`, one ART grant identifier and its binding
+digest over a private Unix socket. The long-lived Rust service owns readiness,
+Docker/runsc access, container creation and cleanup. Hosted readiness fails
+closed unless the configured runtime is registered as `runsc`. Local
+`docker-dev` is an explicit mode in configuration, health and the returned
+isolation receipt.
+
+The registry `image_digest` is interpreted as the exact OCI platform-manifest
+digest. A trusted administrator-populated cache index binds repository plus
+platform-manifest digest to one OS, architecture and observed Docker config
+image ID. The service accepts no tag or caller-selected platform, never pulls,
+and rejects a missing, ambiguous or substituted manifest, platform or config
+identity. The receipt records the platform-manifest digest, OS/architecture,
+config image ID, runtime and isolation mode. An OCI multi-platform index digest
+is not silently treated as a platform manifest.
+
+### ART-owned material grant
+
+The only source of pre-submit material is the existing pre-admission preparation
+path. `ArtifactPreparationService` has already hashed the received ZIP,
+`SubmissionArchiveInspector` has rejected unsafe entries and produced the
+server-computed manifest, and `PreparedBundleMaterializationService` has
+consumed the exact TASK/AUTH preparation facts before it enters
+`_process_prepared_submission`. Inside that existing callback lifetime,
+`ArtifactScratchManager` may publish one opaque grant for the already projected
+tree. No `Submission` exists or is invented.
+
+The grant identifier has a closed grammar and names a private directory beneath
+the manager's configured scratch root. ART writes a canonical grant manifest
+with create-exclusive, descriptor-relative operations and binds:
+
+- grant identifier and protocol version;
+- external request digest and prepared generation/attempt identity;
+- archive digest, byte count and semantic manifest digest; and
+- every normalized file path, byte count, SHA-256 and executable bit.
+
+The binding digest covers the canonical grant manifest. Python sends the opaque
+identifier and binding digest, never a filesystem path. The service and ART are
+configured with the same fixed absolute host scratch root on the dedicated
+node; the Unix-socket service resolves `<root>/<grant>/workspace` itself, and
+the Docker daemon receives that exact host path as a read-only mount. Config
+validation rejects differing, relative, symlinked or permissive roots.
+
+ART creates the root and projected entries without symlinks, seals directories
+and files before publishing the manifest, and retains the live callback and
+scratch reservation throughout service execution. The Rust service opens and
+walks every component beneath the fixed root without following symlinks,
+recomputes the manifest and binding immediately before container creation, and
+rejects changed type, mode, size or digest. No untrusted actor can write the
+private root; the checker sees only the read-only mount. The service terminates
+the container before returning. ART then revokes the grant and uses the existing
+scratch cleanup/TTL owner; missing, expired or changed grants map to
+`material_unavailable`. This adds no durable artifact record or second cleanup
+lifecycle.
+
+### Protocol and failures
+
+Shared golden fixtures exercise Python and Rust parsing, canonical JSON numeric
+encoding, NUL rejection, strict extra-field behavior, byte ceilings, derived
+request/result digests and normalized outcome shapes. The SDK constructs only
+the existing `external_checker_result.v1` family. Python revalidates the result
+against the original request after the service response.
+
+The checker sandbox uses no network, a read-only root, non-root UID/GID, all
+capabilities dropped, `no-new-privileges`, the verified workspace read-only, a
+bounded no-exec temporary filesystem and the registry's CPU, memory, deadline,
+output and derived PID ceilings. No socket, secret or other project material is
+mounted. The service owns one uniquely labelled container, terminates it on
+deadline or output violation, and removes only that container.
+
+Transport failures use the existing closed result family: missing service,
+runtime or cached image is `implementation_unavailable`; absent or invalid
+material is `material_unavailable`; deadline is `deadline_exceeded`;
+OOM/resource exhaustion is `capacity_exceeded`; malformed, mismatched or
+oversized output is `invalid_output`. Completed findings remain work results.
+No database transaction crosses the client call.
+
+## Acceptance criteria
+
+- [ ] Rust SDK and Python accept identical golden
+  `external_checker_request.v1` and `external_checker_result.v1` bytes and
+  reject changed numeric canonicalization, bounds, NULs, extra fields and
+  derived digests.
+- [ ] The explicit Python factory constructs only the configured typed Unix-
+  socket adapter and rejects unknown, duplicate and identity-mismatched
+  providers without plugin discovery or mutable global state.
+- [ ] Service health and hosted execution refuse missing or substituted runsc;
+  local Docker mode is explicit and cannot claim hosted isolation.
+- [ ] Cache resolution binds one repository/platform-manifest digest to exact
+  OS/architecture and config image ID; tags, index substitution, platform
+  substitution, missing images and pulls are rejected.
+- [ ] A focused pre-admission test uses an actual `PreparedArtifact`, inspected
+  ZIP and prepared-attempt facts to issue the callback grant without creating a
+  `Submission`. The service accepts the exact request-digest binding while the
+  callback is live, and missing, changed, symlinked, replayed-after-close and
+  wrong-request grants fail closed with cleanup confirmed.
+- [ ] A real service request over the Unix socket runs a digest-pinned cached
+  checker with the fixed ART root mounted read-only. The probe records user,
+  capabilities, network, socket absence, root/input modes, concrete platform
+  and image identities, enforced resource/output/deadline behavior and owned
+  cleanup. Hosted-grade proof uses gVisor; local runc proof is qualified.
+- [ ] Completed and infrastructure outputs are bounded and Python revalidates
+  them against the exact request. No infrastructure outcome can become a pass.
+- [ ] Product code does not invoke the adapter; neither catalogue, policy hash,
+  database schema, public behavior nor default-checker behavior changes.
+- [ ] ADR 0014, checker architecture and roadmap distinguish the hidden runtime
+  from later policy binding, default-checker implementation, caller-atomic
+  intake, F-020 and clean removal of both catalogues.
+
+## Risk and review routing
+
+- Risk class: L1 with a high-impact untrusted-execution and private-material
+  boundary.
+- Required reviewers: architecture, security, reuse_dedup, qa, test_delta,
+  product_ops, documentation, ci_integrity.
+- Human review focus: service privilege separation; exact OCI platform/config
+  identity; hosted runsc fail-closed; ART grant lineage, path confinement,
+  TOCTOU and cleanup; no-network/no-socket sandbox; resource/output/deadline
+  enforcement; Rust/Python parity; closed failure mapping; absence of product
+  activation or a second scheduler/store/lifecycle.
+
+## Evidence
+
+| Claim | Command or proof | Result | Remaining uncertainty |
+|---|---|---|---|
+| Baseline and owner map | Main `3110353363547e603e7527a782467f95c00cb1f7`; merged registry/contract, pre-admission ART path, ADR 0014 and PILOT-00 result inspected | Complete | Service, grant and real execution remain unproved |
+
+## Review findings
+
+- Initial plan treated the runtime as a one-shot launcher and named no real
+  cross-process ART transport. The scope now requires a long-lived Rust service
+  and a request-bound callback grant owned by the existing scratch manager.
+
+## Reconciliation
+
+- Current-source reconciliation: clean branch
+  `codex/pilot04-external-runtime` starts at merged PR #521 on main
+  `3110353363547e603e7527a782467f95c00cb1f7`.
+- Parallel-lane reconciliation: PILOT-02 owns task-import product and ART source
+  code. Its migration is authored separately by this lane as revision 0030 and
+  is not part of this runtime PR. No PILOT-02 worktree is edited here.
+- Remaining PILOT-04 work: one Workstream default checker implementing all four
+  confirmed blocking behaviors, project image policy binding, full pre/post
+  caller integration, caller-atomic admission, durable attempt/isolation
+  receipt custody, F-020, public PILOT-12 surface and clean removal of both
+  catalogues. Summary and attestation remain warnings only.
