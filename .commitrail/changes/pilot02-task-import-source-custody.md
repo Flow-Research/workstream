@@ -112,6 +112,7 @@ when a client converts a CSV; it is never described as the original CSV.
 | Boundary and documentation coherence | Protected-base module/AUTH validation, structure and behavior-ownership validation, Ruff, changed Markdown links and stale AUTH/ART contract checks | Passed without new private-import debt; exact source metadata reconciled | Reconcile union after PILOT-04 merges |
 | Existing architecture and CI metadata invariants | Module/AUTH regressions and structure/ownership/lane regressions | 130 focused tests passed; metadata suite 227 passed with one stale exact lane expectation repaired and its focused replay passed | Full integration lanes await schema handoff |
 | Current-main architecture and CI metadata reconciliation | Protected-base module/AUTH, structure and behavior validation; architecture/ownership/lane regressions against main `dfea06a33` | Validators passed; 323 architecture/metadata checks passed, alongside the 63 parser/catalogue replay checks; selected OpenAPI/tamper/transitive guard passed all 11 cases | These checks do not establish PostgreSQL/MinIO source custody |
+| Merged PILOT-04 and current-main union | Parser, AUTH catalogue, native identifier parity and checker-registry regression tests against main `3110353363547e603e7527a782467f95c00cb1f7`; selected MCP fragment tamper/transitive and actual OpenAPI comparison | 74 backend checks and 11 MCP checks passed; 148 actions retain all lifecycle, registry and source actions; the eight other MCP operations are unchanged | The 15 public source cases remain collected only until migration 0030 is handed off |
 | Exact byte custody and rollback | 15 collected public API PostgreSQL/MinIO negative/concurrency/recovery cases | Not executed: ordered source migration pending | No live custody or deployment claim |
 
 ## Review findings
@@ -124,12 +125,12 @@ contracts; no CI configuration or percentage threshold changes.
 
 ## Reconciliation
 
-- Current-source reconciliation: main `dfea06a33acf4657c0a58291670233ff6f1b1a1b` includes PR 516 lifecycle transitions and PR 517 guide-setup CLI inspection. Source actions coexist with the merged lifecycle catalogue, preparation, runtime resources and administrative registration. Existing MCP operations remain unchanged; the selected authorization-context contract includes the additive source actions.
+- Current-source reconciliation: main `3110353363547e603e7527a782467f95c00cb1f7` includes the merged lifecycle transitions, CLI guide inspection and PILOT-04 external checker contract/registry. Source actions coexist with the complete lifecycle and registry dispatch, resource and Operator-role classifications. Native UUID mappings retain each existing owner's string or UUID representation. The roadmap preserves merged Markdown and lifecycle delivery statements and keeps only this source prerequisite's additions. Existing MCP operations remain unchanged; the selected authorization-context contract includes the three additive source actions and captures the reconciled backend revision.
 - Next usable boundary: atomic DRAFT TASK import from verified source, then explicit batch screen/release and CLI conversion in separately authorized bounded changes.
 - Remaining risks: source retention has no deletion scheduler; full issue 489 remains open.
-- Schema handoff: merged main owns `0028_lifecycle_transitions`; PILOT-04 owns
-  `0029` as the next linear migration. The sole coordinated migration author
-  supplies the subsequent source migration only after PILOT-04 merges and this
-  branch is reconciled with that main. This change authors no migration and uses
+- Schema handoff: merged main owns `0028_lifecycle_transitions` and
+  `0029_external_checker_registry`. The sole coordinated migration author
+  supplies linear revision `0030` after this branch's current-main reconciliation.
+  This implementation authors no migration and uses
   no alternative DDL or schema bypass. All 15 public PostgreSQL/MinIO source
   cases remain unexecuted until that schema handoff.
