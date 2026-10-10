@@ -89,11 +89,24 @@ async def test_routing_event_excludes_administrative_idempotency_reference(
         read = AuditService.get_authority_event
         async with h.factory() as session:
             before = await outcome_snapshot(session)
-        replacement = new_record_id()
 
         async def altered_insert(owner, value):
             if value.action_id == ActionId.TASK_POST_SUBMIT_ROUTE:
-                value = value.model_copy(update={"idempotency_reference": replacement})
+                from app.core.hashing import canonical_json_hash
+                from app.modules.audit.schemas import ActorReferenceKind
+                from app.modules.authorization.repository import AuthorityIdempotencyRepository
+                from app.modules.authorization.schemas import AuthorityOperation
+
+                # A real pending reservation satisfies the composite actor FK;
+                # it is never committed or presented as mutation authority.
+                reservation = await AuthorityIdempotencyRepository(session).reserve(
+                    idempotency_key=new_record_id(),
+                    actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+                    actor_ref=value.actor_ref,
+                    operation=AuthorityOperation.SERVICE_ACTOR_CREATE,
+                    request_digest=canonical_json_hash({"probe": "wrong-protocol"}),
+                )
+                value = value.model_copy(update={"idempotency_reference": reservation.claim.record_id})
             return await insert(owner, value)
 
         for isolate_receipt_guard in (False, True):
@@ -119,12 +132,16 @@ async def test_routing_event_excludes_administrative_idempotency_reference(
             result = await apply_outcome(session, h, None)
         async with h.factory() as session:
             retained = await session.execute(text("""
-                SELECT a.idempotency_reference, a.request_id, a.correlation_id
+                SELECT a.idempotency_reference, a.request_id, a.correlation_id, q.route_operation_id
                 FROM public.task_post_submit_routing_manifests m
                 JOIN public.audit_events a ON a.id=m.authorization_decision_id
+                JOIN public.task_post_submit_routing_requests q ON q.routing_manifest_id=m.id
                 WHERE m.id=:id
             """), {"id": result["routing_manifest_id"]})
-            assert tuple(retained.one()) == (None, h.request.route_operation_id, h.request.route_operation_id)
+            admin_reference, request_id, correlation_id, operation_id = retained.one()
+            assert admin_reference is None
+            assert request_id == correlation_id == operation_id
+            assert operation_id != h.request.evaluation_request_id
             committed = await outcome_snapshot(session)
 
         for replacement in (str(new_record_id()),):
