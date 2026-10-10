@@ -213,6 +213,7 @@ full hosted CI remains required before merge readiness.
 | Review repair: schema graph | Hostile-search-path registry upgrade, one-root/one-head graph, fixed baseline and repeated-head tests; metadata `/tmp/ws-pilot-checkers-491-review-repair-schema.json` | PASS: 4 tests in 93.21s; database and role cleanup true | Hosted full migration matrix remains CI evidence |
 | Reconciled AUTH and database custody | Exact-head PostgreSQL 16 registry, migration and repeated-head batch; `/tmp/ws-pilot-checkers-491-reconcile-auth-final.log` and matching JSON metadata | PASS: 11 tests in 176.70s at `6d288fc`; migration `0029_external_checker_registry`, database and role cleanup complete | Full hosted CI and external runtime remain pending |
 | Reconciled contract and integration guards | Pure contract/catalogue batch, generated MCP/OpenAPI comparison, module/AUTH/ownership/structure/documentation checks | PASS: 54 pure tests and 10 generated-contract tests at `6d288fc`; focused guards passed | Independent final review and required hosted checks precede merge readiness |
+| Current-main roadmap reconciliation | Compare `docs/roadmap_status.md` with merged main, retaining only the four bounded PILOT-04 contract/registry status hunks; run the changed-Markdown link check | PASS: merged Markdown and lifecycle delivery statements restored; links valid | Runtime and catalogue cutover claims remain future work |
 
 ## Review findings
 
@@ -254,6 +255,10 @@ full hosted CI remains required before merge readiness.
   columns use string-returning native UUID adapters. The registry mappings now
   match both targets and convert UUIDs only at the strict public DTO boundary;
   the physical PostgreSQL UUID columns and migration remain unchanged.
+- External review found that a roadmap merge resolution had replaced newer
+  merged Markdown and lifecycle delivery statements with older text. The final
+  roadmap starts from current main and reapplies only the four bounded PILOT-04
+  contract/registry status changes.
 
 ## Reconciliation
 
@@ -263,6 +268,9 @@ full hosted CI remains required before merge readiness.
   `0028_lifecycle_transitions`. The registry revision moved from its unpublished
   `0028` identifier to `0029_external_checker_registry`; lifecycle authority,
   docs and custody remain intact and the combined graph has one head.
+  The later merge of main `688b64ab997432f007603da6dcf7b46739c0b16c`
+  preserves its delivered roadmap statements and applies only this chunk's
+  external contract/registry status updates.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product/ART behavior
   and has handed migration authorship to this lane. Its DDL remains a later
   separate linear revision after this registry migration lands; no PILOT-02
