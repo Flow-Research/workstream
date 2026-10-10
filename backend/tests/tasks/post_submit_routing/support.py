@@ -55,25 +55,6 @@ SOURCE_COLUMNS = (
     "semantic_manifest_sha256",
 )
 
-_INSERT_SOURCE_WITH_CREATED_AT = text(
-    "INSERT INTO public.task_post_submit_routing_manifests ("
-    + ",".join(SOURCE_COLUMNS)
-    + ") VALUES ("
-    + ",".join(f":{column}" for column in SOURCE_COLUMNS)
-    + ")"
-)
-_DEFAULTED_SOURCE_COLUMNS = tuple(
-    column for column in SOURCE_COLUMNS if column != "created_at"
-)
-_INSERT_SOURCE = text(
-    "INSERT INTO public.task_post_submit_routing_manifests ("
-    + ",".join(_DEFAULTED_SOURCE_COLUMNS)
-    + ") VALUES ("
-    + ",".join(f":{column}" for column in _DEFAULTED_SOURCE_COLUMNS)
-    + ")"
-)
-
-
 def as_uuid(value) -> UUID:
     return value if isinstance(value, UUID) else UUID(str(value))
 
@@ -82,12 +63,6 @@ def other_hash(value: str) -> str:
     """Return another syntactically valid SHA-256 token."""
     suffix = "0" if value[-1] != "0" else "1"
     return value[:-1] + suffix
-
-
-async def insert_source(session, values: dict) -> None:
-    """Insert exactly one source row through the public SQL boundary."""
-    statement = _INSERT_SOURCE_WITH_CREATED_AT if "created_at" in values else _INSERT_SOURCE
-    await session.execute(statement, values)
 
 
 async def source_rows(session) -> list[dict]:

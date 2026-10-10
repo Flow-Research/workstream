@@ -97,8 +97,11 @@ async def historical_reserve(h):
             )
         )
         await session.execute(
-            text("""INSERT INTO public.checker_submission_fences(submission_id,current_run_id)
-          VALUES (:submission,:run) ON CONFLICT(submission_id) DO UPDATE SET current_run_id=excluded.current_run_id"""),
+            text(
+                "INSERT INTO public.checker_submission_fences(submission_id,current_run_id) VALUES (:submission,:run)"
+                if previous is None else
+                "UPDATE public.checker_submission_fences SET current_run_id=:run WHERE submission_id=:submission"
+            ),
             {"submission": r.submission_id, "run": run_id},
         )
     return EvaluationReservation(

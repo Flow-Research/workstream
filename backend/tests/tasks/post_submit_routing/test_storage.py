@@ -48,7 +48,7 @@ async def test_source_matches_real_completed_run(tmp_path, isolated_database_env
         assert facts.admission_id == h.created.admission_id
         assert facts.binding_id == h.created.artifact_binding_id
         assert facts.content_id == h.created.artifact_content_id
-        for field in facts.locked_policy.model_fields:
+        for field in type(facts.locked_policy).model_fields:
             expected = getattr(
                 task if field == "locked_contribution_policy_version_id" else submission, field
             )

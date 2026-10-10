@@ -8,7 +8,6 @@ from sqlalchemy.exc import DBAPIError
 from app.core.identifiers import new_record_id
 from app.modules.reviews.api.lifecycle import JointLifecycleUnavailable
 from app.modules.tasks.api import TaskAcceptedEffectsUnavailable
-from tests.tasks.post_submit_routing.support import insert_source
 
 from .support import accepted_effects_source, participant
 
@@ -245,21 +244,30 @@ async def test_preparation_retains_each_owner_lock_until_caller_rollback(
             await first.rollback()
 
 
-async def test_stored_true_policy_manifest_cannot_prove_automated_source(
-    tmp_path, isolated_database_env
-):
-    async with accepted_effects_source(tmp_path, isolated_database_env) as h:
-        assert h.source["human_review_required"] is True
+async def test_stored_true_policy_manifest_cannot_prove_automated_source(tmp_path, isolated_database_env):
+    from uuid import UUID
+    from tests.tasks.post_submit_routing.outcome_support import authorized_routing_source, apply_outcome
+    from app.modules.tasks.api import TaskAcceptedEffectsRequest
+
+    async with authorized_routing_source(tmp_path, isolated_database_env, human_review_required=True) as h:
         async with h.factory() as session, session.begin():
-            await insert_source(session, h.source)
-        automated = h.effects_request.model_copy(
-            update={"expected_task_status": "evaluation_pending"}
-        )
+            result = await apply_outcome(session, h, None)
         async with h.factory() as session, session.begin():
+            manifest = await session.scalar(text("SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE id=:id"),
+                {"id":result["routing_manifest_id"]})
+            source = manifest["authority_context"]["source"]
+            automated = TaskAcceptedEffectsRequest(
+                **{key:UUID(source[key]) for key in ("project_id","task_id","assignment_id","submission_id", "contributor_id","contribution_policy_version_id","content_id")},
+                submission_version=source["submission_version"],content_sha256=source["content_sha256"],
+                final_acceptance_id=new_record_id(),expected_task_status="evaluation_pending")
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).require_routing_source(
-                    automated, h.source["id"]
-                )
+                    automated,result["routing_manifest_id"],
+                    source_authorization_decision_id=result["authorization_decision_id"],
+                    recorded_by=UUID(manifest["router_actor_id"]),
+                    locked_review_policy_id=UUID(source["locked_policy"]["locked_review_policy_id"]),
+                    expected_generation=2,disposition="new")
+            assert await session.scalar(text("SELECT count(*) FROM public.final_acceptances")) == 0
 
 
 async def test_canonical_fence_rejects_missing_nested_and_stale_generation(

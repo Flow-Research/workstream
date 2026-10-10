@@ -2449,3 +2449,21 @@ def test_scoped_lifecycle_controller_has_exact_ownership() -> None:
     for neighbor in ("backend/app/modules/reviews/lifecycle/fulfillment.py", "backend/app/modules/reviews/lifecycle/dispatcher.py"):
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(_partition(sorted({retained, *expected, neighbor})), trusted)
+
+
+def test_routing_outcome_ownership_excludes_delivery_activation():
+    targets = ownership.ARCH_04E2B_OUTCOME_TARGETS
+    assert targets == {
+        "backend/app/adapters/tasks/routing_acceptance.py",
+        "backend/app/modules/authorization/prepared_routing_replay.py",
+        "backend/app/modules/tasks/api/routing_outcome.py",
+        "backend/app/modules/tasks/post_submit_routing/outcome.py",
+        "backend/app/modules/tasks/post_submit_routing/ports.py",
+    }
+    retained = "backend/app/core/config.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *targets})), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted({
+            retained, *targets, "backend/app/workers/routing_outcome.py",
+        })), trusted)

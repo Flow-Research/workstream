@@ -40,7 +40,7 @@ async def test_missing_checker_principal_denies_before_access(tmp_path, isolated
 
 @pytest.mark.parametrize("provider", ["local", "minio"])
 async def test_verified_material_execution_and_replay(
-    tmp_path, isolated_database_env, provider, autoflush_clock
+    tmp_path, isolated_database_env, provider, autoflush_clock, monkeypatch
 ):
     if provider == "minio":
         from tests.test_s3_artifact_store import provision_minio_bucket
@@ -48,6 +48,15 @@ async def test_verified_material_execution_and_replay(
         await provision_minio_bucket.__wrapped__()
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         reservation = await reserve(h)
+        receipts = []
+        materialize = h.service.materialize
+
+        async def observe_receipt(*args, **kwargs):
+            value = await materialize(*args, **kwargs)
+            receipts.append(value.input_materialization_evidence_id)
+            return value
+
+        monkeypatch.setattr(h.service, "materialize", observe_receipt)
         executor = live_executor(h)
         result = await executor.evaluate_post_submission(h.request)
         assert result.outcome == "completed"
@@ -64,6 +73,10 @@ async def test_verified_material_execution_and_replay(
             current = await evaluation_coordinator(session).read_current_result(h.request)
             assert current.result == result
             run = await session.get(CheckerRun, str(result.attempt_id))
+            assert [str(receipt) for receipt in receipts] == [run.input_materialization_evidence_id]
+            assert run.input_materialization_evidence_id is not None
+            assert len({run.input_materialization_evidence_id, run.execute_evidence_id,
+                        run.finalize_evidence_id}) == 3
             assert run.material_custody == {
                 "submission_id": str(h.created.submission_id),
                 "submission_version": h.created.submission_version,

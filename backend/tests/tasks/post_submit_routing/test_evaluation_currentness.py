@@ -10,11 +10,9 @@ from app.core.identifiers import new_record_id
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable, CheckerRequestConflict
 from app.modules.checkers.models import CheckerSubmissionFence
 from app.modules.tasks.post_submit_routing.evaluation_guard import TaskEvaluationGuard
-from app.modules.tasks.post_submit_routing.requests import TaskRoutingRequests
 from tests.auth_concurrency_support import wait_for_named_database_lock
 from tests.checkers.post_submit.support import change_request
 from tests.tasks.post_submit_routing.outcome_support import authorized_routing_source, apply_outcome
-from .support import completed_source, completion_for
 
 
 async def _counts(session):
@@ -121,18 +119,16 @@ async def test_terminal_guard_removal_is_detected(tmp_path, isolated_database_en
         await _acceptance_wins(tmp_path, isolated_database_env)
 
 
+@pytest.mark.usefixtures("live_acceptance_lifecycle")
 async def test_successor_blocks_then_invalidates_old_routing_completion(tmp_path, isolated_database_env):
-    async with completed_source(tmp_path, isolated_database_env) as h:
-        completion = completion_for(h)
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
         successor = change_request(h.request, evaluation_request_id=new_record_id(), evaluation_generation=2)
         name = "successor-routing-" + new_record_id().hex
 
         async def route():
             async with h.factory() as session, session.begin():
                 await session.execute(text("select set_config('application_name',:name,true)"), {"name": name})
-                return await TaskRoutingRequests(session, evaluation_coordinator(session)).stage(
-                    h.source["completion_event_id"], completion,
-                )
+                return await apply_outcome(session, h, 2)
 
         pending = None
         try:

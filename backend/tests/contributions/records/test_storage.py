@@ -380,3 +380,36 @@ async def test_routed_accepted_submission_requires_complete_awards(
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
             assert len((await apply_outcome(session, h, 2))["economic"].award_ids) == 2
+
+
+async def test_uncommitted_acceptance_and_contribution_parents_are_invisible(
+    tmp_path, isolated_database_env, live_acceptance_lifecycle,
+):
+    import json
+    from app.modules.contributions.records.schemas import ContributionRecordInput
+    async with authorized_routing_source(tmp_path, isolated_database_env, contribution_awards=("money",)) as h:
+        async with h.factory() as parent:
+            await parent.begin()
+            pending = await apply_outcome(parent, h, 2)
+            value = await parent.scalar(text("SELECT to_jsonb(c) FROM public.contribution_records c WHERE id=:id"),
+                {"id": pending["economic"].contribution_record_id})
+            value.pop("created_at")
+            record = ContributionRecordInput.model_validate_json(json.dumps(value))
+            awards = await award_values(parent, record)
+            assert len(awards) == 1
+            async with h.factory() as child:
+                with pytest.raises(DBAPIError, match="contribution submitter source mismatch"):
+                    async with child.begin():
+                        await child.execute(text("SET LOCAL statement_timeout='2s'"))
+                        await insert_record(child, record, id=new_record_id())
+            async with h.factory() as child:
+                with pytest.raises(DBAPIError, match="award contribution lineage mismatch"):
+                    async with child.begin():
+                        await child.execute(text("SET LOCAL statement_timeout='2s'"))
+                        await insert_award(child, awards[0])
+            await parent.rollback()
+        async with h.factory() as session:
+            assert await rows(session, "contribution_records") == []
+            assert await rows(session, "compensation_awards") == []
+        async with h.factory() as session, session.begin():
+            assert len((await apply_outcome(session, h, 2))["economic"].award_ids) == 1

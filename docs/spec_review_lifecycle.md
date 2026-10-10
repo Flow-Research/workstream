@@ -284,9 +284,8 @@ earlier Submission and ReviewLease lineage remains immutable.
 
 Only a durable, final, current post-submit CheckerRun outcome of `allow_review`
 may admit the exact immutable Submission to human review. Admission records the
-exact CheckerRun ID and verified binding facts through the later authority-
-hardened TASK-owned canonical `allow_review` routing manifest delivered by the
-remaining ARCH-04E sequence. The manifest binds the
+exact CheckerRun ID and verified binding facts through the authority-hardened TASK-owned canonical `allow_review` manifest
+delivered by ARCH-04E2-B; automatic completion delivery remains pending. The manifest binds the
 current evaluation generation/result and immutable Submission; it does not
 replace CHECKERS truth or grant review authority. REV validates the current
 TASK handoff through its public port before recording admission. A retry, supersession, or
@@ -297,7 +296,8 @@ ARCH-04E2-A's true-branch preparation binds only TASK's future manifest and
 entry or make REV admission a prerequisite of the TASK transition. Its false
 branch instead binds the exact `TaskAcceptedEffectsRequest` for the future shared
 FinalAcceptance operation, with no Review, ReviewLease or reviewer contribution.
-The routing action remains planned/unavailable and neither branch is executable.
+ARCH-04E2-B now authorizes both branches through the complete hidden outcome
+operation. Completion delivery and production registration remain unavailable.
 
 Checker routing is not human judgment. A final needs-remediation CHECKER result
 is consumed by the TASK-owned ARCH-04F handler, which moves the Task to
@@ -559,10 +559,9 @@ ReviewPolicy governing that Submission.
 `source_routing_manifest_id` and forbids `source_review_id`. The delivered
 ARCH-04E1A TASK source identifies the exact Submission, run,
 request/generation, final-result and canonical material lineage, but it is not
-routing authority. Before runtime REV acceptance may consume it, ARCH-04E1B/04E2 must harden the
-same table with mandatory exact route and owner-receipt custody and refuse
-retained pre-authority rows. Do not create a second manifest, an
-AutomatedDecision table or copied checker results in REV. The later AUTH event
+routing authority on its own. ARCH-04E2-B hardens the same table with mandatory
+actual route and owner-receipt custody and refuses retained pre-authority rows. Do not create a second manifest, an
+AutomatedDecision table or copied checker results in REV. The mandatory AUTH event
 reference binds the exact source, operation, actor and resource; a checker
 finalization allow cannot substitute for routing authority.
 
@@ -608,33 +607,30 @@ It flushes inside the caller's root transaction and rejects partial replay; it
 does not commit, authorize a trigger, route a result, stage shared audit/outbox,
 create reviewer participation or activate either branch.
 
-`authorization_decision_event_id` above remains a required runtime field, absent
-from this foundation because neither originating authority is live. Before any
-production consumer, evolve this same strict participant input to require the
-exact AUTH decision event, with no optional/default compatibility path, and
-harden this same table with a NOT NULL exact AUTH event plus
-source/action/actor/request/resource checks. Human authority is the exact
-`review.decision` allow; automated authority is the exact fixed
-`workstream.task.post_submit_router` actor and `task.post_submit.route` allow.
-Service actor kind alone is not provenance. The migration must refuse any
-retained pre-authority rows unchanged, never backfill or delete them.
-`test_acceptance_authority_upgrade_refuses_retained_foundation` and
-`test_acceptance_authority_upgrade_empty` are mandatory future activation proof.
+ARCH-04E2-B adds mandatory `source_authorization_decision_id` to the same
+strict input and table. The complete hidden routing operation verifies the actual
+fixed-router `task.post_submit.route` decision and binds its exact source,
+actor, request and resource. Service actor kind alone is not provenance.
+The migration refuses retained pre-authority outcomes and terminal checker
+receipts without rewriting or deleting them. Human acceptance remains unavailable;
+its future composition must verify the actual `review.decision` authority.
+The migration refusal and preservation proof is in
+`tests/tasks/post_submit_routing/test_outcome_migration.py`.
 
-Current automated proof covers closed metadata and a transactionally rolled-back
-branch-predicate probe over real true-policy sources. It does not fabricate a
-false-policy activation, a router identity or a Review. Positive false-policy
-ancestry and the full authorized transaction remain required before activation.
+ARCH-04E2-B proves the complete hidden false-policy outcome using explicitly
+seeded, internally valid false guide lineage and real routing AUTH. It creates no
+Review. The unmodified public guide guard still denies false; completion delivery,
+remediation and production composition must pass before that guard can admit it.
 
 ### Shared transaction and dependency direction
 
 REV-04C supplies the hidden transaction participant that appends the REV
 acceptance fact and invokes TASK's accepted/completed-effects port plus CON's
-existing submitter participant. At 04E2-B the same participant input/schema must
-evolve to require the verified AUTH event, without an optional/default path, and
-the complete `SharedFinalAcceptanceOperation` must stage shared audit/outbox
-effects. Both callers invoke that same evolved public operation, not copied
-sequences. CON validates the fact and
+existing submitter participant. ARCH-04E2-B requires the actual verified AUTH
+event on this same input/schema without an optional/default path. Its complete
+TASK outcome stages shared audit/outbox effects around the existing participants.
+Future human decision composition must invoke the same acceptance participant
+with verified human source authority; that runtime remains unavailable. CON validates the fact and
 exact assignment before appending the contribution and conditional awards.
 All participants flush only. The initiating command owns the single commit: human decision
 composition also stages the actual Review and reviewer contribution; TASK
@@ -670,9 +666,9 @@ does not acquire TASK after its own row lock; composite admission callers start
 with the guarded current-result read. PostgreSQL proof includes the intermediate
 wait between that read and queue insertion, not just completed admission. Its
 PostgreSQL controls prove that shared acceptance prevents a later generation,
-and a committed successor invalidates old routing preparation. The complete
-authorized routing/acceptance race remains 04E1B-B/04E2-B proof; these hidden
-controls do not activate either trigger. After acceptance,
+and a committed successor invalidates old routing preparation. ARCH-04E2-B exercises the authorized acceptance/successor race. Completion
+delivery still needs its own invocation/acknowledgment race proof; these hidden
+controls do not register production handlers. After acceptance,
 reject a new evaluation generation, resubmission or policy
 rebase for that task. Racing acceptance, supersession and retries serialize:
 an earlier supersession rejects old evidence; an earlier acceptance prevents
@@ -706,8 +702,8 @@ Extract foundations from existing owner work, not a new initiative:
    ARCH-04E1B-A delivers distinct routing-request and future source-ID reservation.
    ARCH-04E2-A delivers the hidden `task.post_submit.route` strict resource and
    preparation matcher plus nominal `workstream.task.post_submit_router` adapter
-   through canonical PREP. The action remains planned/unavailable and denial occurs
-   before handle issuance; no allow, receipt, source publication or effect exists.
+   through canonical PREP. ARCH-04E2-B now consumes it with exact stored receipt
+   custody and a complete governed outcome; standalone allows cannot commit.
    CON-07 then delivers the flush-only participant and complete frozen award-set
    owner. Its consumer-owned Protocol acquires the supplied canonical fence
    before CON or compensation access; exact source replay preserves contribution
@@ -722,22 +718,15 @@ Extract foundations from existing owner work, not a new initiative:
    admission is enabled; no award or outbox row substitutes for a root. Payment
    obligation storage and its root/cutoff proof are not prerequisites of a
    manifest that keeps fulfillment admission, dispatch and callbacks unavailable.
-4. ARCH-04E1B-B's hidden routing handler is next and invokes the delivered
-   participant for false/pass. It owns TASK-before-CHECKERS currentness and both
-   successor-generation race orders. True routing does not
-   require CON or shared acceptance; it uses the delivered preparation, hidden 04E1B-B, exact
-   AUTH 04E2-B and live 04E3 after its own prerequisites. The existing lifecycle-control command receives
-   scoped AUTH activation for the proven shared manifest as specified below;
-   ARCH-04E2-B evolves the same strict participant input to require the exact
-   AUTH decision-event receipt, with no optional/default path; installs
-   mandatory same-table receipt custody and database-enforced complete-set
-   closure across FinalAcceptance/TASK/CON; stages shared audit/outbox; and
-   activates the existing action. Its first genuine allow commits in one caller transaction
-   with source publication, FinalAcceptance, TASK effects, CON rows and audit/
-   outbox; failure rolls all back. Retained pre-authority sources remain refused.
-   ARCH-04E3 then proves live composition.
-   PROJECTS enables false only after that
-   proof and ARCH-04F's usable checker-remediation path.
+4. ARCH-04E2-B delivers mandatory actual source receipts, database-enforced
+   complete outcomes and shared audit/outbox in one caller transaction. False
+   acquires the existing REV fence before TASK and later AUTH; true acquires no
+   REV/CON participant. Exact replay retains IDs and cannot repair partial facts.
+   Pre-authority outcomes are refused on upgrade without rewriting them.
+   The next ARCH-04E1B-B completion handler consumes this operation and
+   acknowledges only after commit. Prove 04F remediation before 04E3 registers
+   the connected production runtime and enables false-guide readiness. Live
+   human review/revision and fulfillment remain separate work.
 
 These are dependency slices of existing work, expanded into bounded records
 when implemented, not an extra planning-approval loop. Do not make the early

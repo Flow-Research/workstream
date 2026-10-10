@@ -686,10 +686,10 @@ Its delivered typed input contains only immutable scalar IDs for project, task,
 Submission, FinalAcceptance, TaskAssignment, submitter and the assignment-frozen
 ContributionPolicyVersion, plus the stabilized artifact hash, caller correlation
 UUID and expected lifecycle generation. It carries no authorization decision,
-receipt-shaped value or caller-selected contribution/award ID. Before production
-consumption, the enclosing REV input must require the exact AUTH decision-event
-receipt with no optional/default path; the complete shared operation owns
-authority and request idempotency.
+receipt-shaped value or caller-selected contribution/award ID. ARCH-04E2-B makes the exact AUTH decision-event receipt mandatory on the
+enclosing REV input, with no optional/default path. The complete hidden routing
+operation consumes AUTH and owns request idempotency; CON remains a typed
+participant in that transaction.
 
 It contains no direct Review or ReviewLease contribution-source fields. It
 creates or exactly replays one `accepted_submission`, evaluates only the frozen
@@ -1212,17 +1212,14 @@ precede the delivered REV-04B acceptance, CON-03C contribution/award storage and
 CON-07 flush-only submitter participation. REV-12A1 supplies the disabled
 controller/fence mechanics used through CON's consumer-owned acquisition
 Protocol; TASK request staging (04E1B-A), hidden AUTH preparation (04E2-A) and
-REV-04C hidden shared composition are also delivered. Hidden handlers 04E1B-B
-are next; they must lock TASK before CHECKERS currentness and prove both
-acceptance/successor-generation race orders. These isolated controls prove
-mechanical behavior, not acceptance authority. At 04E2-B, make the exact AUTH
-decision-event receipt mandatory on the same strict input with no
-optional/default path; add database-enforced FinalAcceptance/TASK/CON
-complete-set closure, shared audit/outbox and exact activation to prove the first genuine allow
-with source, FinalAcceptance, TASK effects, CON rows and audit/outbox in one
-transaction. No standalone allow or fabricated authority fixture is permitted.
-Authorized scoped lifecycle transition/drain proof precedes live AUTH routing
-composition. Conditional award facts remain atomic for paid and unpaid policies.
+REV-04C hidden shared composition and ARCH-04E2-B complete authorized outcomes
+are delivered. The latter requires the actual AUTH decision on the same strict
+input, validates stored source authority, and stages FinalAcceptance, TASK/CON,
+applicable awards and audit/outbox together. Database closure rejects orphan
+allows and incomplete outcomes. The authorized acceptance/successor race is
+covered; completion delivery must still prove its own invocation/acknowledgment
+composition. Next wire that handler, prove remediation, then enable production
+composition and false-guide readiness. Conditional award facts remain atomic for paid and unpaid policies.
 The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
 unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
 successor manifest enables fulfillment, not before this contribution path.

@@ -1,7 +1,7 @@
 # WS-ARCH-001-04E2B — Commit authorized post-submit outcomes
 
 - Initiative: `WS-ARCH-001`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Intended merge outcome: One hidden callable operation commits exact routing
   authority with its full governed outcome; completion delivery and production
   registration remain separate consumers.
@@ -21,18 +21,18 @@ five remaining groups, authorized outcomes before completion delivery, and no
 repeated initial-dispatch work. It supersedes the local planning-only record;
 no separate planning PR or new prerequisite is introduced.
 
-## Current behavior
+## Starting behavior
 
 TASK `post_submit_routing/source.py` and `requests.py` retain exact current
 source proposals and a stable request/manifest identity. AUTH
-`post_submit_routing_authorization.py` prepares a planned/unavailable action.
+`post_submit_routing_authorization.py` initially prepared a planned/unavailable action.
 REV `acceptance/participant.py` composes TASK and CON under the existing fence
 but lacks mandatory source AUTH custody. Existing positive acceptance fixtures
 are mechanical human-source proof, not genuine acceptance authorization.
 
-AUTH currently requires `TaskPostSubmitManifestFacts.created_at` before source
+The starting AUTH contract required `TaskPostSubmitManifestFacts.created_at` before source
 publication, although the INSERT guard owns that timestamp. False consequence
-also omits lifecycle generation. Both gaps must be corrected in the same
+also omits lifecycle generation. Both gaps are corrected in the same
 canonical contracts before activating the exact operation.
 
 ## Bounded change
@@ -68,7 +68,7 @@ canonical contracts before activating the exact operation.
   participation tests and their affected fixtures; migration/storage/replay,
   branch and concurrency regressions; required ownership/lane inventories only.
 - This record, current ARCH plan/map/overview and active 04E child, index,
-  affected AUTH/REV/CON current navigation and canonical specs, README and
+  affected AUTH/POL/REV/CON current navigation and canonical specs, README and
   roadmap. Update local XLSX/CSV only if present.
 
 ### Not allowed
@@ -116,7 +116,8 @@ skips, coverage quotas or replacement of required proof with permissive mocks.
   its existing result/finalization custody; a material-bearing terminal result
   cannot support routing without it. No-material infrastructure outcomes do
   not fabricate a materialization receipt.
-- Refuse upgrade with retained pre-authority manifests/acceptances unchanged.
+- Refuse upgrade with retained pre-authority manifests/acceptances or terminal
+  checker finalize receipts unchanged.
   SQL independently verifies exact service/link/action/permission, project,
   request/source/claim/consequence and generation, using schema-qualified tables
   and safe function search paths. No NULL/default compatibility path.
@@ -173,22 +174,23 @@ lint, links, current wording and Commitrail; full hosted suite remains required.
 No percentage gate. Real storage/broker first-layer drill remains group 5;
 this operation does not claim production delivery.
 
-### Planned proof map (future implementation tests)
+### Implementation proof map
 
-These are named implementation targets, not claims of executed evidence.
+These tests identify the required behavior. Execution evidence belongs to the
+reviewed candidate and PR; this map does not claim hosted or live readiness.
 
-| Requirement | Future proof | Custody |
+| Requirement | Proof | Custody |
 | --- | --- | --- |
-| True handoff / false atomic acceptance and governed awards | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_policy_outcome` | Real PostgreSQL owners and AUTH, independently selected committed rows |
+| True handoff / false atomic acceptance and governed awards | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_false_branch_records_one_acceptance_and_submitter_contribution` | Real PostgreSQL owners and AUTH, independently selected committed rows |
 | Rollback across every participant | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_participant_failure_rolls_back` | Real caller transaction, injected failure at one boundary |
-| Exact terminal replay after shutdown | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_stopped_replay_preserves_original_authority` | Actual controller transition, original receipt and unchanged row sets |
+| Exact terminal replay after shutdown | `backend/tests/reviews/lifecycle/test_participant_control.py::test_stopped_terminal_replay_is_select_only` | Actual controller transition, original receipt and unchanged row sets |
 | No REV/CON acquisition for true branch | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_true_branch_does_not_acquire_acceptance` | Forbidden participant invocation plus committed TASK/AUTH control |
 | Source/claim/event substitutions and orphan/partial SQL | `backend/tests/tasks/post_submit_routing/test_outcome_storage.py::test_incomplete_or_crossed_outcome_rejected` | Direct SQL with internally consistent digests; assert intended constraint failure |
-| REV/TASK/AUTH intermediate wait | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_transition_task_read_and_outcome` | Independent PostgreSQL sessions and observed lock waits |
-| Current completion / invocation custody | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_successor_and_delivery_cannot_cross_outcome` | Independent sessions, both transaction orders |
+| REV/TASK/AUTH intermediate wait | `backend/tests/reviews/lifecycle/test_participant_control.py::test_task_read_acceptance_and_transition_intermediate_waits` | Independent PostgreSQL sessions and observed lock waits |
+| Current completion / invocation custody | `backend/tests/tasks/post_submit_routing/test_evaluation_currentness.py and test_outcome_concurrency.py` | Independent sessions, both transaction orders |
 | Held acceptance capability lifetime | `backend/tests/reviews/acceptance/test_prepared.py::test_prepared_acceptance_requires_original_root` | PostgreSQL root, rollback, new transaction and raw savepoint probes |
 | Retained materialization decision | Existing ART/CHECKERS materialization integration tests, extended exact persisted receipt assertions | Actual Local/MinIO materialization and immutable AUTH event |
-| Upgrade refusal preserves old data | `backend/tests/tasks/post_submit_routing/test_outcome_migration.py::test_pre_authority_rows_refuse_upgrade` | Isolated predecessor schema, rejected upgrade and unchanged rows |
+| Upgrade refusal preserves old data | `backend/tests/tasks/post_submit_routing/test_outcome_migration.py::test_pre_authority_rows_refuse_upgrade_without_rewriting` | Isolated predecessor schema, rejected upgrade and unchanged rows |
 
 ## Reconciliation
 

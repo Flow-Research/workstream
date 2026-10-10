@@ -32,6 +32,7 @@ async def invoked_completion(h):
         h.source["completion_event_id"], h.request.project_id, "routing-proof"
     )
     assert claim is not None
+    h.completion_delivery = dispatcher
     envelope = await dispatcher._begin_invocation(claim)
     assert envelope is not None
     return envelope
