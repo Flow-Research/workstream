@@ -20,7 +20,7 @@ from app.modules.tasks.models import AuditEvent
 from tests.outbox.conftest import Harness
 
 
-async def delivery_fixture(h, *, options=None):
+async def delivery_fixture(h, *, options=None, materialization=None):
     """Provision the real dispatcher; feature identities come from material_fixture."""
     async with h.factory() as session, session.begin():
         if await session.scalar(select(ActorProfile.id).where(
@@ -38,7 +38,10 @@ async def delivery_fixture(h, *, options=None):
                 subject=ServiceIdentity.OUTBOX_DISPATCHER.value, subject_kind="service",
                 status="active", linked_by="workstream:system:bootstrap",
             ))
-    handler = evaluation_request_handler(sessions=h.factory, materialization=h.service)
+    handler = evaluation_request_handler(
+        sessions=h.factory,
+        materialization=h.service if materialization is None else materialization,
+    )
     delivery = outbox_delivery(
         h.factory, authorization_factory=outbox_dispatch_authorization,
         registry=HandlerRegistry([(REQUEST_EVENT, 1, handler)]),

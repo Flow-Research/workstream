@@ -28,8 +28,10 @@ submitter contribution, applicable awards and audit/outbox evidence. Database
 closure rejects incomplete outcomes; fresh-authorized replay returns the stored
 complete tuple. No Review or reviewer contribution is fabricated.
 
-B8 supplies hidden completion delivery with commit-before-ACK. Next: 04F remediation, 04E3 production
-composition, public intake and the first-layer drill. False-guide activation,
+B8 supplies hidden completion delivery with commit-before-ACK. 04E3A supplies
+the hidden request handler with the existing Celery ART provider lease and
+invocation-scoped scratch, without production registration. Next: 04F remediation,
+04E3 production composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.
 

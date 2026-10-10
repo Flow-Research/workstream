@@ -72,6 +72,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_artifact_internal_authorization.py",
     "tests/test_artifact_cleanup_wiring.py",
     "tests/test_checker_materialization.py",
+    "tests/tasks/evaluation_delivery/test_worker_materialization.py",
     "tests/test_artifact_preparation.py",
     "tests/test_artifact_store_conformance.py",
     "tests/test_artifact_verification.py",
