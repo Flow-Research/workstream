@@ -266,7 +266,9 @@ Hidden exact post-submit input (ARCH-04B) is delivered with exact ARCH-04D2 serv
 authority. Hidden ARCH-04B2 output storage, recovery and verified binding are
 delivered. ARCH-04C adds hidden durable execution and exact zero-slot reservations.
 ARCH-04D2 supplies exact execution/finalization authority and durable receipts.
-Output-file authority remains unavailable; automatic request delivery and routing follow in ARCH-04E. Public intake remains deferred
+Output-file authority remains unavailable. B7 supplies hidden request delivery and
+04E2-B supplies complete hidden authorized outcomes; completion delivery and
+production registration remain pending. Public intake remains deferred
 to ARCH-02I after evaluation and remediation prerequisites.
 
 The intended unified flow uses one compilation result for sufficiency and

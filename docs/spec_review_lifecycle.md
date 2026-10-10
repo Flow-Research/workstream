@@ -513,8 +513,9 @@ effects, FinalAcceptance, contributions, awards, audit, and outbox together.
 `FinalAcceptance` is one internal immutable REV fact, created by one shared
 acceptance operation. There is no public/manual creation API, independent
 materialization action, second decision entity or automated acceptance engine.
-The hidden REV-04C participant writes this fact and composes TASK/CON effects;
-both authorized runtime branches remain unavailable.
+The hidden REV-04C participant writes this fact and composes TASK/CON effects.
+ARCH-04E2-B invokes it in the complete hidden authorized false-policy outcome.
+Production routing/acceptance and human decision runtime remain unavailable.
 
 | Trigger | Required source | Result |
 |---|---|---|

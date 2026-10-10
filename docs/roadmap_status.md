@@ -837,12 +837,13 @@ v0.1 is not ready until all of the following are true:
   post-submit result. Locked true produces human `allow_review` when eligible;
   locked false with supported requirements invokes the shared atomic acceptance
   operation with no human Review/lease/reviewer contribution.
-- Before either route is published, the existing TASK source table gains
-  mandatory exact routing and owner-receipt custody and rejects retained
-  pre-authority rows; no parallel manifest or permissive backfill is introduced.
+- ARCH-04E2-B hardens the existing TASK source table with mandatory exact
+  routing and owner-receipt custody and rejects retained pre-authority rows;
+  no parallel manifest or permissive backfill is introduced.
 - REV-12A4A supplies authorized lifecycle transitions and phase-gated atomic
-  participants. Before production shared acceptance, extend its reviewed manifest
-  with genuine source-receipt custody and complete authorized consequences.
+  participants; ARCH-04E2-B binds genuine source receipts and complete authorized
+  consequences under that manifest. Completion delivery, remediation and live
+  composition remain before production shared acceptance.
   Conditional awards remain atomic. Fulfillment obligation/root/ordinal storage
   and real cutoff/drain proof are required when payment fulfillment is enabled,
   not before the first contribution path. No fabricated observation or
@@ -991,6 +992,6 @@ ARCH-04E1B-B6 proof: [atomic Submission, exact receipts and initial request cust
 
 ARCH-04E1B-B7 proof: [hidden request delivery and invocation custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E1BB7.md). Production registration, completion routing and public intake remain unavailable.
 
-REV-12A4A proof: [scoped lifecycle control and payment-delivery deferral](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md). Exact production source receipts and acceptance activation remain required.
+REV-12A4A proof: [scoped lifecycle control and payment-delivery deferral](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md). ARCH-04E2-B supplies exact source receipts; completion delivery, remediation and production activation remain required.
 
 ARCH-04E2-B proof: [hidden authorized outcome custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E2B.md). Completion delivery, production registration and false-guide activation remain unavailable.
