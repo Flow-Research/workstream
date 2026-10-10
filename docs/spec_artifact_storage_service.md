@@ -1607,8 +1607,8 @@ with database-bound execute/finalize receipts. ARCH-04E2-B also retains the
 actual input-materialization decision through the ART result and terminal
 CHECKERS custody, and verifies it before publishing a routing source. Its hidden
 TASK operation commits the complete authorized outcome. Output write/bind
-authority remains unavailable; automatic completion delivery and production
-routing registration remain pending.
+authority remains unavailable; B8 supplies hidden completion delivery. Production
+routing registration remains pending.
 
 Current ARCH-04C behavior records known post-authorization material failures as
 terminal, unroutable `material_unavailable`, after scratch cleanup and fresh

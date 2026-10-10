@@ -150,7 +150,7 @@ phases without rewriting contribution or award facts.
 This is not acceptance authority. The initial manifest refuses retained
 pre-authority FinalAcceptance rows before entering live. ARCH-04E2-B supplies
 mandatory source receipts and complete atomic consequences in a hidden operation.
-Automatic completion delivery and production routing, human review and payment
-delivery remain unavailable.
+B8 supplies hidden completion delivery. Production routing, human review and
+payment delivery remain unavailable.
 Obligation roots, ordinals and cutoff/drain machinery are deferred until
 fulfillment activation; conditional awards remain atomic in the first path.

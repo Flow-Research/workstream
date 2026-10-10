@@ -45,7 +45,7 @@ async def test_authorized_acceptance_creates_and_exactly_replays_complete_effect
               JOIN public.task_assignments a ON a.id=c.source_task_assignment_id
               WHERE f.id=:id
             """),
-                        {"id": created["final_acceptance_id"]},
+                        {"id": created.final_acceptance_id},
                     )
                 )
                 .mappings()
@@ -55,7 +55,7 @@ async def test_authorized_acceptance_creates_and_exactly_replays_complete_effect
             s = m["authority_context"]["source"]
             assert row["task_status"] == "accepted" and row["assignment_status"] == "completed"
             assert f == dict(
-                id=str(created["final_acceptance_id"]),
+                id=str(created.final_acceptance_id),
                 project_id=s["project_id"],
                 task_id=s["task_id"],
                 submission_id=s["submission_id"],
@@ -69,7 +69,7 @@ async def test_authorized_acceptance_creates_and_exactly_replays_complete_effect
                 accepted_at=f["accepted_at"],
             )
             assert f["accepted_at"] is not None
-            assert c["id"] == str(created["economic"].contribution_record_id)
+            assert c["id"] == str(created.economic.contribution_record_id)
             for field in (
                 "project_id",
                 "task_id",
@@ -94,14 +94,14 @@ async def test_authorized_acceptance_creates_and_exactly_replays_complete_effect
               FROM public.compensation_awards w JOIN public.contribution_award_definitions d ON d.id=w.award_definition_id
               WHERE w.contribution_record_id=:id ORDER BY w.instrument_type
             """),
-                        {"id": created["economic"].contribution_record_id},
+                        {"id": created.economic.contribution_record_id},
                     )
                 )
                 .mappings()
                 .all()
             )
             assert {w["instrument_type"] for w in awards} == set(instruments)
-            assert tuple(w["id"] for w in awards) == created["economic"].award_ids
+            assert tuple(w["id"] for w in awards) == created.economic.award_ids
             assert all(
                 w["exact_definition"]
                 and w["quantity"] == w["expected_quantity"]
@@ -112,7 +112,7 @@ async def test_authorized_acceptance_creates_and_exactly_replays_complete_effect
             assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
         async with h.factory() as session, session.begin():
             replayed = await apply_outcome(session, h, 2)
-            assert replayed == created | {"replayed": True}
+            assert replayed == created.model_copy(update={"replayed": True})
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
 

@@ -30,6 +30,18 @@ class PostgresJointLifecycleMutationFence:
         """Use the caller's session for all fence and later participant work."""
         self._session = session
 
+    async def observe_generation(self) -> int:
+        """Read only the current generation, including stopped and genesis states."""
+        with self._session.no_autoflush:
+            generation = await self._session.scalar(
+                select(JointLifecycleReleaseControl.generation).where(
+                    JointLifecycleReleaseControl.singleton.is_(True)
+                )
+            )
+        if type(generation) is not int or not 0 <= generation <= 9_223_372_036_854_775_807:
+            raise JointLifecycleUnavailable("lifecycle controller missing or malformed")
+        return generation
+
     @asynccontextmanager
     async def hold(self, expected_generation: int):
         """Issue a root-bound view after the sole controller lock acquisition."""

@@ -258,3 +258,16 @@ native test passed in 49.46 seconds at that exact head, with PostgreSQL 16,
 real MinIO, `0031_task_import_source`, runner exit 0 and owned database,
 role and provider cleanup confirmed. This paired proof closes the observed
 fixture failure; fresh complete hosted CI remains required.
+
+Reconciliation with main `a51cf06ccb5ab85f2c41528855f537d4362ec26b`
+retains B8's hidden typed completion handler and commit-before-ACK owners,
+its delivered documentation and initiative navigation, and its three completion
+test modules alongside the source modules in the semantic lane catalogue.
+The ownership partition retains both populations with a regenerated canonical
+digest and its original protected base. All 25 source application, DDL and
+contract files remain byte-identical to publication `8993b12d`; all nine
+incoming application files and the initiative index match this main exactly.
+Revision `0031_task_import_source` still follows `0030_routing_outcomes`;
+no migration body, fingerprint or model change accompanies this reconciliation.
+The earlier 8,935-case hosted proof remains bound to its actual merge into
+`20b0beb8`, not this integration. Fresh hosted CI is required for the new tree.

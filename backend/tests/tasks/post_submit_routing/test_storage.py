@@ -34,7 +34,7 @@ async def test_source_matches_real_completed_run(tmp_path, isolated_database_env
             result = await apply_outcome(session, h, None)
             after = await session.scalar(text("SELECT clock_timestamp()"))
         async with h.factory() as session:
-            stored = await session.get(TaskPostSubmitRoutingManifest, result["routing_manifest_id"])
+            stored = await session.get(TaskPostSubmitRoutingManifest, result.routing_manifest_id)
             values = {column: getattr(stored, column) for column in SOURCE_COLUMNS}
             submission = await session.get(Submission, str(h.request.submission_id))
             task = await session.get(WorkstreamTask, str(h.request.task_id))
@@ -174,7 +174,7 @@ async def test_source_creation_time_is_database_owned(tmp_path, isolated_databas
                     result = await apply_outcome(session, h, None)
                     stored = await session.scalar(
                         select(TaskPostSubmitRoutingManifest.created_at).where(
-                            TaskPostSubmitRoutingManifest.id == result["routing_manifest_id"]
+                            TaskPostSubmitRoutingManifest.id == result.routing_manifest_id
                         )
                     )
                     after = await session.scalar(text("SELECT clock_timestamp()"))
@@ -206,4 +206,4 @@ async def test_source_is_immutable_and_preserves_locked_guide(tmp_path, isolated
         async with h.factory() as session:
             assert await source_rows(session) == before
         async with h.factory() as session, session.begin():
-            assert await apply_outcome(session, h, None) == result | {"replayed": True}
+            assert await apply_outcome(session, h, None) == result.model_copy(update={"replayed": True})

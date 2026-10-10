@@ -672,7 +672,7 @@ ARCH-04F owns contributor-readable non-allow remediation before public cutover.
 The direct CHECKERS-to-TASK mutation, fabricated system actor and alternate
 Celery gate are removed. Hidden durable execution and exact service authority are implemented; automatic
 routing remains unregistered. ARCH-04E2-B supplies the hidden authorized
-outcome operation; completion delivery and live composition remain pending.
+outcome operation; B8 supplies hidden completion delivery; remediation and live composition remain pending.
 
 `review_pending` marks readiness for the separately owned WS-REV lifecycle.
 WS-REV alone creates `ReviewPacketManifest`, review queues, reviewer leases,
