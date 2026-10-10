@@ -71,7 +71,8 @@ remaining setup/activation work:
 The existing versioned ReviewPolicy setting `human_review_required` defaults
 true. False may be configured in draft, but CP07 currently rejects false guide
 activation: automated acceptance is unavailable. Supporting it requires the
-future authorized shared FinalAcceptance/CON path and adequate configured checks.
+completion delivery, remediation and production readiness over the delivered
+hidden authorized FinalAcceptance/CON operation, with adequate configured checks.
 The setting is never silently switched to true. See the [implementation handoff](../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next).
 
 Guide creation freezes the declared document set internally; there is no separate

@@ -38,6 +38,7 @@ class TaskPostSubmitOutcome:
         audit,
         outbox,
     ):
+        """Inject existing owner ports into one caller-owned transaction."""
         self._session, self._projects = session, projects
         self._source = TaskRoutingSourcePreparer(
             session, projects=projects, evaluations=evaluations
@@ -174,12 +175,14 @@ class TaskPostSubmitOutcome:
             }
 
     async def _append_notice(self, source, receipt, acceptance_id):
+        """Stage the outcome notice without autoflushing an incomplete manifest."""
         # Outbox's explicit append avoids ORM autoflush before its ID is known.
         with self._session.no_autoflush:
             return await self._outbox.append(_notice(source, receipt, acceptance_id))
 
 
 def _notice(source, receipt, acceptance_id):
+    """Build the bounded shared outbox consequence from exact source and authority."""
     return OutboxAppendInput(
         event_type=OUTCOME_EVENT,
         event_version=1,
@@ -201,6 +204,7 @@ def _notice(source, receipt, acceptance_id):
 
 
 def _manifest(source, receipt, acceptance_id, generation, audit_id):
+    """Bind the source to actual authority and consequence using owner column types."""
     columns = set(TaskPostSubmitRoutingManifest.__table__.columns.keys())
     fields = source.source.model_dump(include=columns)
     # Existing owner columns deliberately store strings at their Python boundary.

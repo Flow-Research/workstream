@@ -69,3 +69,79 @@ async def test_incomplete_or_crossed_outcome_rejected(tmp_path, isolated_databas
                 )
                 is True
             )
+
+
+async def test_routing_event_excludes_administrative_idempotency_reference(
+    tmp_path, isolated_database_env, monkeypatch
+):
+    """SQL and replay independently reject an unrelated AUTH mutation reference."""
+    from types import SimpleNamespace
+
+    from app.modules.audit.service import AuditService
+    from app.modules.authorization.catalogue import ActionId
+    from app.modules.authorization.runtime import PreparedAuthorizationHandleInvalid
+    from app.modules.authorization.domain.audit import AuthorizationEvidenceUnavailable
+
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, human_review_required=True
+    ) as h:
+        insert = AuditService.add_authority_event
+        read = AuditService.get_authority_event
+        async with h.factory() as session:
+            before = await outcome_snapshot(session)
+        replacement = new_record_id()
+
+        async def altered_insert(owner, value):
+            if value.action_id == ActionId.TASK_POST_SUBMIT_ROUTE:
+                value = value.model_copy(update={"idempotency_reference": replacement})
+            return await insert(owner, value)
+
+        for isolate_receipt_guard in (False, True):
+            with monkeypatch.context() as patch:
+                patch.setattr(AuditService, "add_authority_event", altered_insert)
+                async with h.factory() as session:
+                    expected = DBAPIError if isolate_receipt_guard else AuthorizationEvidenceUnavailable
+                    message = "routing source authority context mismatch" if isolate_receipt_guard else "authorization evidence unavailable"
+                    with pytest.raises(expected, match=message) as caught:
+                        async with session.begin():
+                            if isolate_receipt_guard:
+                                # Isolate receipt validation from the canonical
+                                # insert guard. Rollback restores this trigger.
+                                await session.execute(text("ALTER TABLE public.audit_events DISABLE TRIGGER audit_events_validate_idempotency"))
+                            await apply_outcome(session, h, None)
+                    if not isolate_receipt_guard:
+                        assert "invalid authority idempotency event" in str(caught.value.__cause__)
+            async with h.factory() as session:
+                assert await outcome_snapshot(session) == before
+                assert await session.scalar(text("SELECT tgenabled::text FROM pg_trigger WHERE tgrelid='public.audit_events'::regclass AND tgname='audit_events_validate_idempotency'")) == "O"
+
+        async with h.factory() as session, session.begin():
+            result = await apply_outcome(session, h, None)
+        async with h.factory() as session:
+            retained = await session.execute(text("""
+                SELECT a.idempotency_reference, a.request_id, a.correlation_id
+                FROM public.task_post_submit_routing_manifests m
+                JOIN public.audit_events a ON a.id=m.authorization_decision_id
+                WHERE m.id=:id
+            """), {"id": result["routing_manifest_id"]})
+            assert tuple(retained.one()) == (None, h.request.route_operation_id, h.request.route_operation_id)
+            committed = await outcome_snapshot(session)
+
+        for replacement in (str(new_record_id()),):
+            async def altered_read(owner, event_id):
+                event = await read(owner, event_id)
+                if event is not None and event.action_id == ActionId.TASK_POST_SUBMIT_ROUTE.value:
+                    # Copy the actual event, changing only this field. Do not dirty
+                    # its ORM row: the replay assertion must reach AUTH, not SQL.
+                    return SimpleNamespace(**(vars(event) | {"idempotency_reference": replacement}))
+                return event
+
+            with monkeypatch.context() as patch:
+                patch.setattr(AuditService, "get_authority_event", altered_read)
+                async with h.factory() as session, session.begin():
+                    with pytest.raises(PreparedAuthorizationHandleInvalid, match="invalid retained routing receipt"):
+                        await apply_outcome(session, h, None)
+            async with h.factory() as session:
+                assert await outcome_snapshot(session) == committed
+        async with h.factory() as session, session.begin():
+            assert await apply_outcome(session, h, None) == result | {"replayed": True}

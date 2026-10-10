@@ -25,21 +25,25 @@ class _PreparedRouting:
     """A private participant; only canonical PREP owns capability lifetime."""
 
     def __init__(self, authority, handle, caller_input):
+        """Retain canonical PREP ownership and the exact caller request."""
         self._authority = authority
         self._handle = handle
         self._input = caller_input
 
     @property
     def actor_profile_id(self):
+        """Expose the server-selected router actor, never a caller-selected principal."""
         return self._authority.actor_profile_id
 
     @property
     def identity_link_id(self):
+        """Expose the admitted service link held by canonical PREP."""
         return self._authority.identity_link_id
 
     async def consume(
         self, resource: PostSubmitRoutingResourceContext
     ) -> AcceptanceSourceReceiptFacts:
+        """Consume only a resource bound to the held router actor and identity link."""
         if (
             resource.router_actor_id != self.actor_profile_id
             or resource.router_identity_link_id != self.identity_link_id
@@ -49,6 +53,7 @@ class _PreparedRouting:
         return self._receipt(decision, resource)
 
     async def validate_replay(self, resource, decision_id, actor_id, identity_link_id):
+        """Verify the original allow under fresh authority without issuing another event."""
         if (
             actor_id != resource.router_actor_id
             or identity_link_id != resource.router_identity_link_id
@@ -102,7 +107,7 @@ class _PreparedRouting:
             service_identity=ServiceIdentity.TASK_POST_SUBMIT_ROUTER.value,
             matched_grant_id=None, project_id=resource.scope_project_id,
             resource_type=resource.resource_type, resource_id=resource.resource_id,
-            request_id=operation_id, correlation_id=operation_id, idempotency_reference=operation_id,
+            request_id=operation_id, correlation_id=operation_id,
             resource_context_digest=digest, source=source,
             source_commitment_digest=acceptance_source_commitment_digest(source),
         )
@@ -112,10 +117,12 @@ class PostSubmitRoutingAuthorization:
     """Prepare only the fixed router; callers cannot choose a service principal."""
 
     def __init__(self, session):
+        """Bind preparation to the initiating command session."""
         self._session = session
 
     @asynccontextmanager
     async def prepare(self, request: TaskRoutingRequestFacts):
+        """Prepare only the canonical router for the exact stored request facts."""
         checked = TaskRoutingRequestFacts.model_validate(request.model_dump())
         async with fixed_service_prepared_authorization(
             self._session, service_identity=ServiceIdentity.TASK_POST_SUBMIT_ROUTER,

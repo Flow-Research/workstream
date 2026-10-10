@@ -106,15 +106,18 @@ class _HeldLifecycleFence:
     """REV-owned custody view; checking it never acquires a controller lock."""
 
     def __init__(self, session: AsyncSession, facts: JointLifecycleControlFacts):
+        """Bind retained lifecycle facts to the exact session and root transaction."""
         self._session = session
         self._transaction = session.sync_session.get_transaction()
         self._facts = facts
         self._closed = False
 
     def close(self) -> None:
+        """Invalidate the view when the owning fence context exits."""
         self._closed = True
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
+        """Validate original root custody without reacquiring the controller lock."""
         if (
             self._closed
             or type(expected_generation) is not int

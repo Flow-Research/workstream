@@ -68,7 +68,8 @@ canonical contracts before activating the exact operation.
   participation tests and their affected fixtures; migration/storage/replay,
   branch and concurrency regressions; required ownership/lane inventories only.
 - This record, current ARCH plan/map/overview and active 04E child, index,
-  affected AUTH/POL/REV/CON current navigation and canonical specs, README and
+  affected AUTH/POL/REV/CON current navigation and canonical specs, README,
+  architecture lockdown, product brief, authorization custody/operator docs and
   roadmap. Update local XLSX/CSV only if present.
 
 ### Not allowed
@@ -181,15 +182,25 @@ reviewed candidate and PR; this map does not claim hosted or live readiness.
 
 | Requirement | Proof | Custody |
 | --- | --- | --- |
-| True handoff / false atomic acceptance and governed awards | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_false_branch_records_one_acceptance_and_submitter_contribution` | Real PostgreSQL owners and AUTH, independently selected committed rows |
+| True handoff without acceptance | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_true_branch_does_not_acquire_acceptance` | Real PostgreSQL/AUTH; forbidden REV participant and absent economic rows |
+| False atomic acceptance with no awards or Review | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_false_branch_records_one_acceptance_and_submitter_contribution` | Real PostgreSQL/AUTH and independently selected committed rows |
+| Zero awards | `backend/tests/contributions/participation/test_postgresql.py::test_create_and_exact_replay_all_frozen_award_shapes[unpaid]` | Real outcome, retained source and zero stored awards |
+| One money award | `backend/tests/contributions/participation/test_postgresql.py::test_create_and_exact_replay_all_frozen_award_shapes[money]` | Real outcome; stored award equals frozen definition |
+| One points award | `backend/tests/contributions/participation/test_postgresql.py::test_create_and_exact_replay_all_frozen_award_shapes[points]` | Real outcome; stored award equals frozen definition |
+| Both awards | `backend/tests/contributions/participation/test_postgresql.py::test_create_and_exact_replay_all_frozen_award_shapes[money-and-points]` | Real outcome; complete stored set equals both frozen definitions |
 | Rollback across every participant | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_participant_failure_rolls_back` | Real caller transaction, injected failure at one boundary |
 | Exact terminal replay after shutdown | `backend/tests/reviews/lifecycle/test_participant_control.py::test_stopped_terminal_replay_is_select_only` | Actual controller transition, original receipt and unchanged row sets |
 | No REV/CON acquisition for true branch | `backend/tests/tasks/post_submit_routing/test_outcome.py::test_true_branch_does_not_acquire_acceptance` | Forbidden participant invocation plus committed TASK/AUTH control |
 | Source/claim/event substitutions and orphan/partial SQL | `backend/tests/tasks/post_submit_routing/test_outcome_storage.py::test_incomplete_or_crossed_outcome_rejected` | Direct SQL with internally consistent digests; assert intended constraint failure |
 | REV/TASK/AUTH intermediate wait | `backend/tests/reviews/lifecycle/test_participant_control.py::test_task_read_acceptance_and_transition_intermediate_waits` | Independent PostgreSQL sessions and observed lock waits |
-| Current completion / invocation custody | `backend/tests/tasks/post_submit_routing/test_evaluation_currentness.py and test_outcome_concurrency.py` | Independent sessions, both transaction orders |
+| Acceptance wins before successor | `backend/tests/tasks/post_submit_routing/test_evaluation_currentness.py::test_acceptance_blocks_successor_and_retains_exact_replay` | Independent sessions and observed lock wait |
+| Successor wins before outcome | `backend/tests/tasks/post_submit_routing/test_evaluation_currentness.py::test_successor_blocks_then_invalidates_old_routing_completion` | Independent sessions; actual outcome rejects after successor commits |
+| Outcome retains invocation | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_outcome_holds_invocation_until_commit` | Real finalizer blocked until caller commits |
+| Finalization invalidates observed invocation | `backend/tests/tasks/post_submit_routing/test_outcome_concurrency.py::test_finalization_between_observation_and_fence_denies_outcome` | Real finalizer commits between observation and custody; no outcome |
 | Held acceptance capability lifetime | `backend/tests/reviews/acceptance/test_prepared.py::test_prepared_acceptance_requires_original_root` | PostgreSQL root, rollback, new transaction and raw savepoint probes |
-| Retained materialization decision | Existing ART/CHECKERS materialization integration tests, extended exact persisted receipt assertions | Actual Local/MinIO materialization and immutable AUTH event |
+| Retained materialization decision, Local | `backend/tests/checkers/execution/test_execution.py::test_verified_material_execution_and_replay[local]` | Actual materialization receipt equals stored CHECKERS evidence |
+| Retained materialization decision, MinIO | `backend/tests/checkers/execution/test_execution.py::test_verified_material_execution_and_replay[minio]` | Actual S3-compatible materialization receipt equals stored CHECKERS evidence |
+| Exact event excludes administrative mutation identity | `backend/tests/tasks/post_submit_routing/test_outcome_storage.py::test_routing_event_excludes_administrative_idempotency_reference` | Real stored event, malformed insert SQL rejection and independent replay-field rejection |
 | Upgrade refusal preserves old data | `backend/tests/tasks/post_submit_routing/test_outcome_migration.py::test_pre_authority_rows_refuse_upgrade_without_rewriting` | Isolated predecessor schema, rejected upgrade and unchanged rows |
 
 ## Reconciliation
@@ -198,3 +209,15 @@ Base is merged #516/#517. Carry the reviewed five-group plan correction in this
 product PR. After this operation, complete hidden completion delivery, then
 remediation, live composition, public intake and the real drill. Default-true
 review policy stays independent; human runtime and payment delivery stay deferred.
+
+## Review refinements
+
+The detached routing receipt does not claim an administrative AUTH-mutation
+idempotency reference. Its operation is bound through request/correlation, source
+and resource digests. Python replay and SQL independently require the actual
+event's administrative idempotency field to remain NULL. Current documentation and the proof map distinguish delivered
+hidden guarantees from remaining production and human-runtime work.
+
+Before the next completion-delivery consumer, replace the operation's internal
+dictionary return with one strict frozen TASK-owned outcome value. There is no
+production consumer yet; add no compatibility wrapper or parallel operation.

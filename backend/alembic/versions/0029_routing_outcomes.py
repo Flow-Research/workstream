@@ -233,7 +233,7 @@ def _routing_authority():
           AND a.project_id=m.project_id AND a.resource_type='task_post_submit_routing_manifest'
           AND a.resource_id=m.id::text AND a.target_ref_kind='project' AND a.target_ref_id=m.project_id::text
           AND a.request_id::text=m.authority_context#>>'{request,route_operation_id}'
-          AND a.correlation_id=a.request_id
+          AND a.correlation_id=a.request_id AND a.idempotency_reference IS NULL
           AND a.after_facts::jsonb=jsonb_build_object('allowed',true,
             'resource_context_digest',public.task_routing_resource_digest(m)))
     $$;

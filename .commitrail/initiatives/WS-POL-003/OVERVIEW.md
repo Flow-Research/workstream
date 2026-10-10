@@ -50,15 +50,16 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   post-policy derivation, public complete policy read, separate approval and correction;
   ART-owned pre-submit reservation and completed evidence recovery without rerunning checks;
   one internal command per phase and removal of the standalone JSON precheck.
-  Exact hidden post-submit execution authority is delivered; automatic request delivery
-  and routing remain unavailable.
+  Exact hidden post-submit execution authority, B7 request delivery and 04E2-B
+  authorized outcomes are delivered; production delivery/routing remain unregistered.
 - Intent: compile one locked guide and its policies into authoritative,
   versioned project behavior without circular subsystem authority.
 - Delivered dependent boundary: ARCH-04E1A route-neutral source facts and
   accepted-effects contracts follow
   [ARCH-04D2](../WS-ARCH-001/WS-ARCH-001-04D2.md) exact input, execute and
   finalize authority. REV-04C supplies the hidden acceptance-effects participant,
-  but no route, authorized operation or activation support.
+  and 04E2-B supplies hidden authorized outcomes. No public route or false-guide
+  activation support is added.
   Output-file authority remains unavailable for the zero-output catalogue.
   [AUTH-18](../WS-AUTH-001/WS-AUTH-001-18.md) delivers
   public manager activation context and exact guide activation.
@@ -82,8 +83,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   Live setup consumes the [consolidated catalogue](../WS-ARCH-001/WS-ARCH-001-04A.md)
   and completed AUTH-12B2.
   Earlier development schemas require no backward-compatibility paths.
-  The existing ReviewPolicy boolean is delivered; false has metadata and guard-reachability proof
-  only and automated acceptance remains unavailable.
+  The existing ReviewPolicy boolean is delivered; false has hidden authorized-outcome proof against explicitly seeded valid lineage.
+  Public false-guide activation and automatic acceptance remain unavailable.
 - Delivered storage: [REV-03B](../WS-REV-001/WS-REV-001-03B.md) freezes exact
   lease packets with normalized live guide ingests; no resolver or byte authority.
   [REV-04A](../WS-REV-001/WS-REV-001-04A.md) adds complete immutable Review, findings, resolutions and completed request storage; no decision runtime.

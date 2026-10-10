@@ -55,7 +55,8 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   per checker ID serve active policy consumers; hidden post-submit execution has
   exact fixed-service authority. ARCH-04E1A adds immutable route-neutral TASK
   source storage, detached facts and source-neutral accepted-effects types.
-  Automatic request delivery/routing and acceptance remain unavailable.
+  Production request/completion delivery and routing remain unregistered; hidden
+  request delivery and authorized outcomes are implemented.
 - Delivered storage boundary: hidden [ARCH-04B2 checker-output custody](WS-ARCH-001-04B2.md), following hidden input materialization (ARCH-04B). Typed store, byte-free recovery and flush-only verified binding exist; the CHECKERS zero-slot reservation reader is implemented; output write/bind authority remains unavailable.
 - Delivered source boundary: [ARCH-04E1A routing-source facts](WS-ARCH-001-04E1A.md)
   follow [ARCH-04D2](WS-ARCH-001-04D2.md) exact input, execute and finalize

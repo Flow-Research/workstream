@@ -12,6 +12,7 @@ from app.modules.authorization.runtime import (
 
 
 async def validate_routing_replay(owner, issuance, action, caller_input, resource, decision_id):
+    """Match the actual retained allow after validating current PREP custody."""
     owner._validate_consumption(issuance, action, caller_input, resource)
     authority = issuance.authority
     if (
@@ -41,6 +42,7 @@ async def validate_routing_replay(owner, issuance, action, caller_input, resourc
         "matched_grant_id": None,
         "request_id": str(resource.request.route_operation_id),
         "correlation_id": str(resource.request.route_operation_id),
+        "idempotency_reference": None,
         "after_facts": {
             "allowed": True,
             "resource_context_digest": post_submit_routing_resource_digest(resource),

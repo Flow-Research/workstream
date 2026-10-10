@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RoutingAuthorityFacts(BaseModel):
+    """Actual decision identity and the exact resource context retained by TASK."""
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     decision_id: UUID
@@ -14,6 +15,7 @@ class RoutingAuthorityFacts(BaseModel):
 
 
 class RoutingEconomicFacts(BaseModel):
+    """Immutable identities returned by shared acceptance and CON participation."""
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     final_acceptance_id: UUID

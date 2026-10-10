@@ -35,6 +35,7 @@ class FinalAcceptanceParticipant:
         tasks: Callable[[JointLifecycleMutationFence], TaskAcceptedEffectsPort],
         contributions: Callable[[JointLifecycleMutationFence], SubmitterParticipationPort],
     ) -> None:
+        """Compose TASK and CON participants using the same held REV fence."""
         self._fence = PostgresJointLifecycleMutationFence(session)
         self._tasks = tasks
         self._contributions = contributions
@@ -59,6 +60,7 @@ class FinalAcceptanceParticipant:
     async def _participate(
         self, request: FinalAcceptanceRequest, lifecycle, tasks, contributions
     ) -> FinalAcceptanceResult:
+        """Stage the complete authorized acceptance or verify its exact retained tuple."""
         source, task = request.acceptance, request.task_effects
         prepared = TaskAcceptedPreparation.model_validate(
             await tasks.lock_accepted_effects(
@@ -124,12 +126,14 @@ class _PreparedFinalAcceptance:
     """Closed owner capability; neither detached lifecycle facts nor AUTH."""
 
     def __init__(self, owner, held, generation, tasks, contributions):
+        """Retain owner participants bound to one held root-transaction fence."""
         self._owner, self._held = owner, held
         self.generation = generation
         self._tasks, self._contributions = tasks, contributions
         self._closed = False
 
     def close(self):
+        """Invalidate the prepared capability when its context exits."""
         self._closed = True
 
     async def require_new(self) -> None:
@@ -141,6 +145,7 @@ class _PreparedFinalAcceptance:
             raise FinalAcceptanceConflict("lifecycle is not live")
 
     async def participate(self, request: FinalAcceptanceRequest) -> FinalAcceptanceResult:
+        """Reject closed or changed generations before staging shared acceptance."""
         if self._closed:
             raise FinalAcceptanceConflict("acceptance preparation is closed")
         try:

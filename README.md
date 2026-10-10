@@ -188,13 +188,14 @@ fence, exact hidden AUTH preparation and CON-07 hidden source-neutral submitter
 participation with complete frozen award sets are delivered. REV-04C adds one
 hidden source-neutral participant that stages FinalAcceptance, TASK
 accepted/completed effects and the complete CON submitter outcome in the caller's
-transaction. It is not a complete authorized acceptance operation: its input has
-no exact AUTH decision-event receipt, and database complete-set enforcement,
-currentness race proof and shared audit/outbox remain. REV-12A4A supplies internal
+transaction. ARCH-04E2-B binds its mandatory actual AUTH decision-event receipt,
+database complete-set enforcement, currentness custody and shared audit/outbox
+in one hidden authorized outcome operation. REV-12A4A supplies internal
 Operator-authorized transitions on the existing lifecycle controller. New
 participant effects require a live, nonzero generation; exact terminal replay
-remains read-only in stopped phases. This scope keeps payment delivery disabled
-and does not grant routing or acceptance authority.
+remains read-only in stopped phases. The controller itself grants no routing
+authority; ARCH-04E2-B consumes the separate exact AUTH action. Payment delivery
+stays disabled.
 ARCH-04E1B-B1 requires TASK locking before checker reservation, current-result
 reads and review admission INSERTs, preserving exact read-only reservation replay
 after acceptance. ARCH-04E1B-B3 retains the inspected ZIP file metadata with immutable
@@ -206,13 +207,12 @@ service and database enforcement. ARCH-04E1B-B5 rejects evaluation content that
 exceeds the locked checker limits before any pre-check attempt or durable upload
 intent, using the same content contract required by later dispatch. ARCH-04E1B-B2 prepares exact source proposals from current
 CHECKERS custody and historical PROJECTS policy, without inserting a manifest
-or granting authority. Hidden handlers still need complete
-authorized currentness proof. These prerequisites do not require live
-human review before the first automated acceptance path.
+or granting authority by itself. ARCH-04E2-B consumes this source in the complete
+authorized outcome. Completion delivery, remediation and production composition
+remain before public intake and the first real end-to-end drill.
 
-Active work is connecting those foundations into the remaining production
-lifecycle: hidden routing handlers, acceptance authority/evidence closure,
-review and revision, reviewer participation and conditional fulfillment.
+Active work stays on that first contribution path. Live human review/revision,
+reviewer participation and fulfillment delivery follow separately.
 Contribution evidence remains the input for a separately implemented future
 reputation projection. Frontend product work follows stable and tested backend
 contracts for the surface it consumes.
