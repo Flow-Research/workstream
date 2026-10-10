@@ -151,8 +151,8 @@ resources remain concealed.
       repository-wide compatibility behavior remains outside this change.
 - [x] An ASGI request proves the exact ordered `error.details` projection for
       blocked feedback. Paired ASGI controls prove 409, 404, and 503 responses
-      retain their existing detail-only compatibility payloads and contain no
-      checker feedback.
+      retain their canonical error envelopes plus the existing top-level
+      `detail` field and contain no checker feedback.
 - [x] The preparation route remains absent from OpenAPI and no public Submission
       mutation or compatibility route appears.
 - [x] Existing hidden preparation, recovery, evidence, authorization, and
@@ -171,7 +171,8 @@ resources remain concealed.
 4. At the ASGI boundary, add a canonical multi-result fixture with a
    contributor-correctable failure, warning/dependency state, and bounded
    counts. Prove exact ordered serialization and redaction, then pair it with
-   unchanged detail-only 409/404/503 controls and continued OpenAPI absence.
+   unchanged 409/404/503 canonical error envelopes plus their existing top-level
+   `detail` field, and continued OpenAPI absence.
 5. Add a focused test module that reuses the existing authorized default
    pre-submit PostgreSQL harness to run a blocked preparation through the real
    command twice with the same replay key.

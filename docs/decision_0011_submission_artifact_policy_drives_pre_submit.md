@@ -256,10 +256,15 @@ activation is still pending:
 
 ```text
 POST /api/v1/tasks/{id}/submission-bundle-preparations
-422 DomainError
+422
 {
-  "code": "pre_submission_checker_failed",
-  "details": {"status": "failed", "eligible_to_submit": false, "results": [...]}
+  "error": {
+    "code": "pre_submission_checker_failed",
+    "message": "Pre-submission checks failed",
+    "details": {"status": "failed", "eligible_to_submit": false, "results": [...]},
+    "correlation_id": "...",
+    "retryable": false
+  }
 }
 ```
 
