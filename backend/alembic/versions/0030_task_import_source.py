@@ -214,7 +214,8 @@ def _extend_put_attempts() -> None:
         "(producer_request_type='task_import_source' "
         "and task_import_source_id is not null and guide_source_item_id is null "
         "and checker_run_id is null and task_id is null and submission_id is null "
-        "and submission_version is null and logical_role='task_import_source'))",
+        "and submission_version is null "
+        "and logical_role is not distinct from 'task_import_source'))",
     )
     op.create_unique_constraint(
         "uq_artifact_put_attempt_import_source",
@@ -264,9 +265,9 @@ begin
     or (request_type='submission_bundle' and not (
       new.guide_source_item_id is null and new.checker_run_id is null
       and new.logical_role is null))
-    or (request_type='task_import_source' and not (
-      new.guide_source_item_id is null and new.checker_run_id is null
-      and new.logical_role='task_import_source'))
+    or (request_type='task_import_source' and (
+      new.guide_source_item_id is not null or new.checker_run_id is not null
+      or new.logical_role is distinct from 'task_import_source'))
     or request_type not in (
       'guide','checker_output','submission_bundle','task_import_source') then
   raise exception 'artifact receipt producer reference mismatch' using errcode='23514';
@@ -397,6 +398,13 @@ begin
      ) then
    raise exception 'task import source put attempt custody is immutable' using errcode='55000';
   end if;
+  if tg_op='UPDATE' then
+   -- INSERT validated the immutable custody tuple and its composite parent FK.
+   -- Terminal workers already hold admission-scope locks when they update only
+   -- lifecycle fields, so reacquiring the source here would reverse the public
+   -- SOURCE -> SCOPE admission order without adding another custody fact.
+   return new;
+  end if;
   select value.* into source from public.artifact_task_import_sources value
   where value.id=new.task_import_source_id for key share;
   if not found
@@ -407,7 +415,7 @@ begin
      or source.media_type is distinct from new.media_type
      or source.operation_identity is distinct from new.operation_identity
      or new.producer_type<>'actor_profile'
-     or new.logical_role<>'task_import_source' then
+     or new.logical_role is distinct from 'task_import_source' then
    raise exception 'task import source put attempt custody invalid' using errcode='23514';
   end if;
  end if;
