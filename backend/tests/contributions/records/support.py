@@ -75,12 +75,12 @@ async def authorized_submitter_source(
         async with h.factory() as session:
             value = await session.scalar(
                 text("SELECT to_jsonb(f) FROM public.final_acceptances f WHERE id=:id"),
-                {"id": h.outcome["final_acceptance_id"]},
+                {"id": h.outcome.final_acceptance_id},
             )
             h.acceptance = FinalAcceptanceFacts.model_validate_json(json.dumps(value))
             value = await session.scalar(
                 text("SELECT to_jsonb(c) FROM public.contribution_records c WHERE id=:id"),
-                {"id": h.outcome["economic"].contribution_record_id},
+                {"id": h.outcome.economic.contribution_record_id},
             )
             value.pop("created_at")
             h.submitter_record = ContributionRecordInput.model_validate_json(json.dumps(value))
@@ -89,7 +89,7 @@ async def authorized_submitter_source(
                     text(
                         "SELECT authority_context#>>'{request,route_operation_id}' FROM public.task_post_submit_routing_manifests WHERE id=:id"
                     ),
-                    {"id": h.outcome["routing_manifest_id"]},
+                    {"id": h.outcome.routing_manifest_id},
                 )
             )
         async with h.factory() as session, session.begin():

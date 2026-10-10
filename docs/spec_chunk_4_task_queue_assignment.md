@@ -635,3 +635,19 @@ shared UNKNOWN handling preserves it for later authorized recovery.
 
 The handler is unregistered. Completion routing, governed outcomes, remediation
 and public intake remain separate boundaries; this adds no Review or acceptance.
+
+
+### Hidden completion delivery
+
+ARCH-04E1B-B8 connects the closed completion envelope to the existing
+`TaskPostSubmitOutcome`. The handler independently checks committed invocation,
+selects the server-owned lifecycle generation only for false policy, and invokes
+one root outcome transaction. TASK returns a strict immutable `TaskRoutingOutcome`;
+its exact scope and economic identities are revalidated before commit. ACK follows
+successful transaction exit, including deferred constraints. Malformed or closed
+invocations reject before owner entry; uncertain owner/commit failures remain
+shared OUTBOX UNKNOWN, never an automatic uncertain-effect retry. A still-current
+unfinalized invocation can replay the exact outcome with fresh authority.
+The true branch never observes REV generation or enters CON. Both request and
+completion handlers remain absent from production registration. Remediation and
+connected production readiness precede public intake.

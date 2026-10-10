@@ -65,6 +65,10 @@ class PreparedRoutingAcceptance(Protocol):
 
 class RoutingAcceptancePort(Protocol):
     """Acquire the shared acceptance fence before false-branch source locking."""
+    async def observe_generation(self) -> int:
+        """Read the REV generation without custody or phase eligibility."""
+        ...
+
     def prepare(
         self, current_generation: int
     ) -> AbstractAsyncContextManager[PreparedRoutingAcceptance]:

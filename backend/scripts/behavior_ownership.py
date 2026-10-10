@@ -216,6 +216,10 @@ ARCH_04E2B_OUTCOME_TARGETS = frozenset({
     "backend/app/modules/tasks/post_submit_routing/outcome.py",
     "backend/app/modules/tasks/post_submit_routing/ports.py",
 })
+ARCH_04E1BB8_COMPLETION_TARGETS = frozenset({
+    "backend/app/modules/tasks/evaluation_completion_delivery.py",
+})
+
 ARCH_04E1BB7_DELIVERY_TARGETS = frozenset({
     "backend/app/modules/checkers/delivery_authority.py",
     "backend/app/modules/tasks/evaluation_delivery.py",
@@ -850,6 +854,7 @@ def _validate_additive_partition_transition(
             | ARCH_04E1BB2_SOURCE_TARGETS
             | ARCH_04E1BB6_DISPATCH_TARGETS
             | ARCH_04E1BB7_DELIVERY_TARGETS
+            | ARCH_04E1BB8_COMPLETION_TARGETS
             | OBSERVABILITY_FOUNDATION_TARGETS
         | ARCH_04E1A_SOURCE_TARGETS
         | ARCH_04D2_AUTHORITY_TARGETS

@@ -104,6 +104,10 @@ class PreparedFinalAcceptance(Protocol):
 class FinalAcceptancePort(Protocol):
     """Prepare REV custody before any TASK locks; consume inside the same root."""
 
+    async def observe_generation(self) -> int:
+        """Observe current generation; preparation separately enforces exact custody."""
+        ...
+
     def prepare(
         self, expected_generation: int
     ) -> AbstractAsyncContextManager[PreparedFinalAcceptance]: ...

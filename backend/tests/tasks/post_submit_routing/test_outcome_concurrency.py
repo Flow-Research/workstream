@@ -38,7 +38,7 @@ async def test_outcome_holds_invocation_until_commit(tmp_path, isolated_database
             receipt = await asyncio.wait_for(pending, 10)
             assert receipt.claim == h.envelope.claim
             async with h.factory() as session:
-                assert await session.scalar(text("SELECT id FROM public.final_acceptances")) == result["final_acceptance_id"]
+                assert await session.scalar(text("SELECT id FROM public.final_acceptances")) == result.final_acceptance_id
         finally:
             if pending is not None:
                 if not pending.done():

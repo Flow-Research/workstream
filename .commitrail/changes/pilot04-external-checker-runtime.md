@@ -215,7 +215,7 @@ No database transaction crosses the client call.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Baseline and owner map | Implementation began at merged registry main `3110353363547e603e7527a782467f95c00cb1f7`; final reconciliation merges current CLI inspection main `20b0beb8023c53e7c101c325aaceb3d38fb2a215` without changing the runtime sources | Complete | Later product selection and hosted deployment remain outside this chunk |
+| Baseline and owner map | Implementation began at merged registry main `3110353363547e603e7527a782467f95c00cb1f7`; final reconciliation merges current completion-delivery main `a51cf06ccb5ab85f2c41528855f537d4362ec26b` without changing the runtime sources | Complete | Later product selection and hosted deployment remain outside this chunk |
 | Rust SDK and service | `cd external_checkers && cargo fmt --all --check && cargo test --workspace --locked` | Thirteen tests pass: shared Python fixtures, exact numeric/NUL/extra-field and Unicode controls, closed cache/runtime health, absolute request/response-frame budgets, bounded process/client-disconnect behavior, uncertain-create cleanup, directory inventory and missing-image outcome | Cargo and hosted CI remain required on the final reviewed commit |
 | Numeric parity discriminator | The SDK numeric fixture test was also run against the reviewer's 2,000 finite-float Python corpus before restoring the checked-in representative fixture | All 2,000 canonical encodings match Python, including `203472594891988.12`, which the predecessor emitted as `203472594891988.13` | The retained fixture keeps representative boundary cases rather than the generated review corpus |
 | Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Eight tests pass: cross-language fixtures, complete settings, typed health/execute/factory and cancellation, actual prepared ZIP callback grant, live-owner enforcement, semantic-manifest substitution and symlink rejection | Product caller is intentionally absent |
@@ -290,9 +290,9 @@ No database transaction crosses the client call.
 
 - Current-source reconciliation: branch `codex/pilot04-external-runtime`
   started at merged PR #521 and merged current main
-  `20b0beb8023c53e7c101c325aaceb3d38fb2a215`; the incoming CLI approval,
-  inspection, hidden routing-outcome files and roadmap statements are
-  preserved.
+  `a51cf06ccb5ab85f2c41528855f537d4362ec26b`; the incoming CLI approval,
+  inspection, hidden routing-outcome and completion-delivery files, ownership
+  metadata and roadmap statements are preserved.
 - Parallel-lane reconciliation: PILOT-02 owns task-import product and ART source
   code. Its migration is authored separately by this lane as the next linear revision after merged routing
   revision 0030 and is not part of this runtime PR. No PILOT-02 worktree is edited here.

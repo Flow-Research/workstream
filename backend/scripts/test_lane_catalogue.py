@@ -434,6 +434,10 @@ CHECKER_DELIVERY_MODULES = (
 
 
 TASK_MODULES = (
+    # New completion proofs use TASK custody and its measured lane headroom.
+    "tests/tasks/evaluation_delivery/test_completion.py",
+    "tests/tasks/evaluation_delivery/test_completion_contracts.py",
+    "tests/tasks/evaluation_delivery/test_completion_custody.py",
     "tests/reviews/decision/test_contracts.py",
     "tests/reviews/decision/test_storage.py",
     "tests/reviews/decision/test_migration.py",

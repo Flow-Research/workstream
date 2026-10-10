@@ -278,3 +278,14 @@ def task_accepted_effects_participant(session, fence):
     from app.modules.tasks.accepted_effects import TaskAcceptedEffectsParticipant
 
     return TaskAcceptedEffectsParticipant(session, fence=fence)
+
+
+def evaluation_completion_handler(*, sessions):
+    """Compose hidden completion delivery; production registration remains separate."""
+    from app.adapters.outbox import committed_invocation_reader
+    from app.modules.tasks.evaluation_completion_delivery import EvaluationCompletionHandler
+
+    return EvaluationCompletionHandler(
+        sessions, observer=committed_invocation_reader(sessions),
+        outcomes=lambda session: task_post_submit_outcome(session, sessions),
+    )
