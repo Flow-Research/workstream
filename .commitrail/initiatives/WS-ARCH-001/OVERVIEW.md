@@ -94,8 +94,8 @@ acceptance later uses the same authorized shared acceptance/CON operation.
 ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read custody
 and ordered review admission INSERTs, including intermediate admission waits,
 terminal read-only replay and both mechanical race controls. The
-next steps after ARCH-04E1B-B6 atomic Submission/dispatch are
-04E1B-B completion delivery over delivered 04E2-B outcomes;
+delivered B6 atomic Submission/dispatch and B8 completion delivery reuse
+04E2-B outcomes; remediation is next and
 no handler or action is activated by this prerequisite.
 
 ## Delivered and remaining

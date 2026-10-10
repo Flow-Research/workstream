@@ -1082,7 +1082,7 @@ REV-12A1 delivers its disabled generation-zero persistence and caller-root
 mutation fence. The [shared acceptance order](spec_review_lifecycle.md#implementation-order-and-required-proof)
 includes delivered hidden AUTH preparation, CON-07 participation, REV-04C
 FinalAcceptance/TASK/CON composition and ARCH-04E2-B mandatory persisted receipt
-custody and complete authorized outcomes. Completion delivery, remediation and
+custody and complete authorized outcomes. B8 supplies hidden completion delivery. Remediation and
 production composition remain pending. Actual CON root
 storage and ordinal allocation remain required before either trigger creates
 fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
@@ -1217,8 +1217,8 @@ are delivered. The latter requires the actual AUTH decision on the same strict
 input, validates stored source authority, and stages FinalAcceptance, TASK/CON,
 applicable awards and audit/outbox together. Database closure rejects orphan
 allows and incomplete outcomes. The authorized acceptance/successor race is
-covered; completion delivery must still prove its own invocation/acknowledgment
-composition. Next wire that handler, prove remediation, then enable production
+covered; B8 supplies hidden completion delivery with invocation, generation and
+commit-before-acknowledgment proof. Next prove remediation, then enable production
 composition and false-guide readiness. Conditional award facts remain atomic for paid and unpaid policies.
 The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
 unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed

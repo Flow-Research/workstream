@@ -6,7 +6,7 @@
 - Intended merge outcome: one unregistered completion handler invokes the existing
   authorized outcome operation and acknowledges only its committed result.
 
-## Intent and current boundary
+## Intent
 
 Complete the remaining 04E1B-B delivery connection in the
 [first contributor milestone](planning/PLAN.md#first-complete-contributor-milestone).
@@ -20,7 +20,7 @@ operation, request store, retry engine or delivery state is needed. Replace the
 operation's dictionary return with the strict frozen TASK-owned result required
 by 04E2-B's review disposition before adding its first consumer.
 
-## Bounded design
+## Bounded change
 
 1. TASK returns a closed immutable outcome value containing exact project, task,
    Submission and completion-event identities, routing manifest, actual authority
@@ -75,7 +75,8 @@ by 04E2-B's review disposition before adding its first consumer.
 - Required behavior-ownership/lane inventories and their exact tests. No CI gate
   change. Existing boundary registries only if the actual owner seam requires it.
 - This record; affected current ARCH/AUTH/POL/REV/CON overview/map/plan/index,
-  canonical TASK/checker/authorization/lifecycle specs, README, operator docs and
+  canonical TASK/checker/authorization/lifecycle/artifact/compensation specs,
+  architecture lockdown, product brief, authorization custody docs, README, operator docs and
   roadmap. Local roadmap spreadsheet exports only if present.
 
 ## Prohibited changes
@@ -86,7 +87,7 @@ implementation, external checker runtime, payment delivery, contributor leases,
 compatibility path, weakened tests/gates or retained-data modification/deletion.
 Do not repeat completed initial-dispatch work or broaden fixed-service authority.
 
-## Acceptance and proof
+## Acceptance criteria
 
 - Pure result tests reject incoherent economics, wrong scalar/extra fields and
   mutation; the handler revalidates constructed/copied instances before commit.
@@ -126,7 +127,7 @@ Do not repeat completed initial-dispatch work or broaden fixed-service authority
   setup. Run focused proofs, deterministic boundaries/docs checks, then complete
   hosted suite with zero skip/deselection and real PostgreSQL/MinIO cleanup.
 
-## Review and human focus
+## Risk and review routing
 
 Required plan review before implementation; implementation tracks: architecture/
 reuse, security, QA/test-delta, CI integrity, docs/product operations. Freeze a
@@ -140,12 +141,13 @@ After hidden completion delivery: checker remediation 04F, connected production
 readiness/false-guide activation 04E3, public intake and the real first-layer drill.
 This chunk alone does not make the contributor path publicly usable.
 
-## Planned proof map
+## Evidence
 
-All entries below name future tests, not executed evidence. Owner symbols are
-existing operations unless explicitly introduced by this record.
+The named proofs protect the implemented boundaries. Owner symbols are existing
+operations unless explicitly introduced by this record; current execution and
+review results belong in the PR.
 
-| Behavior and owner | Future proof |
+| Behavior and owner | Proof |
 | --- | --- |
 | Strict `TaskRoutingOutcome` and handler result validation | `backend/tests/tasks/evaluation_delivery/test_completion_contracts.py::test_result_is_closed_and_immutable`; `test_result_binds_branch_and_completion` |
 | `EvaluationCompletionHandler` true branch, commit before ACK and no REV | `backend/tests/tasks/evaluation_delivery/test_completion.py::test_completion_handler_true_commits_before_ack_without_rev` |
@@ -163,7 +165,7 @@ acceptance port. Returning a closed result does not assert commit; only handler
 transaction exit establishes acknowledgment eligibility. Loss before outbox
 finalization and a finalized UNKNOWN are distinct recovery cases.
 
-Additional planned proofs: `test_completion_custody.py::test_completion_handler_invalid_result_rolls_back` exercises corrupted typed results after real staging. Retain `test_mixed_stored_sources_reject_without_effects` for canonical stored-source isolation; do not substitute observer rejection. The handler finalization race pauses after its independent observation and before outcome entry, distinct from existing outcome-level races. UNKNOWN assertions inspect delivery attempts and finalization alongside outcome snapshots.
+Additional proof: `test_completion_custody.py::test_completion_handler_invalid_result_rolls_back` exercises corrupted typed results after real staging. Retain `test_mixed_stored_sources_reject_without_effects` for canonical stored-source isolation; do not substitute observer rejection. The handler finalization race pauses after its independent observation and before outcome entry, distinct from existing outcome-level races. UNKNOWN assertions inspect delivery attempts and finalization alongside outcome snapshots.
 
 
 ## Implemented boundary
@@ -178,3 +180,8 @@ public route or dependency is added. Local spreadsheet exports are absent.
 Plan review resolved disposition ambiguity and strengthened the proof to pause
 before commit, corrupt results after staging, distinguish active replay from
 closed UNKNOWN, and retain the existing stored-source isolation matrix.
+
+Review corrections preserve the accepted-effects and acceptance-rollback source
+guard tests while replacing all nine remaining mapping accesses with typed
+attributes. Current capability documents distinguish delivered hidden completion
+delivery from unavailable production registration and public intake.

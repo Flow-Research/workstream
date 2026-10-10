@@ -38,7 +38,7 @@ public intake remains deferred to ARCH-02I.
 
 ARCH-04E1B-B1 delivers TASK-before-CHECKERS reservation/current-read custody,
 ordered review admission INSERTs and terminal exact replay. 04E2-B delivers complete authorized outcomes and currentness proof;
-04E1B-B completion delivery then consumes that operation before live composition.
+B8 supplies hidden completion delivery for that operation; remediation precedes live composition.
 
 | Boundary | Owner outcome | Risk | Current dependency |
 |---|---|---|---|

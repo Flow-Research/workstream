@@ -105,8 +105,8 @@ tested foundations; their complete public integration remains unfinished. TASK
 now reserves and replays exact post-submit routing requests internally. Hidden
 AUTH binds those requests to exact source and branch consequences through
 canonical PREP. The hidden authorized outcome operation commits source custody
-and its governed effects atomically; completion delivery and production
-registration remain unavailable.
+and its governed effects atomically; B8 supplies hidden completion delivery. Production
+registration remains unavailable.
 
 Exact assignment-invalidation authority, atomic originating publication and
 production delivery with enforced prefork topology are implemented. Manager task
@@ -210,7 +210,7 @@ implementation and policy binding and is not claimed live here.
 | Stage | Purpose and examples | Policy and execution boundary | Outcome |
 | --- | --- | --- | --- |
 | Pre-submission intake checks | Is this package acceptable to submit? Check completeness, required/forbidden files, evidence integrity, and configured intake-quality rules. | The locked `PreSubmitCheckerPolicy` and effective artifact policy drive the pre-submission catalogue during continuous artifact preparation, before a Submission exists. | Blocking failures return correction feedback and prevent Submission creation. Passing intake does not prove the task is accepted or ready for review. |
-| Post-submission evaluation | Does the submitted work meet the configured task/project checks? Evaluate the exact stored work and evidence under the locked requirements. | The Submission-stamped `PostSubmitCheckerPolicy` drives the current in-process structural-handler registry and durable `CheckerRun` execution after immutable Submission creation; this path is distinct from the new external-image metadata registry. Only supported, registered checks execute. | Persist current evidence. The hidden authorized operation publishes exact source custody and branches on locked ReviewPolicy: true moves TASK to `review_pending`; false invokes shared acceptance under TASK authority. CHECKERS never writes acceptance itself. Automatic delivery and production registration remain pending. |
+| Post-submission evaluation | Does the submitted work meet the configured task/project checks? Evaluate the exact stored work and evidence under the locked requirements. | The Submission-stamped `PostSubmitCheckerPolicy` drives the current in-process structural-handler registry and durable `CheckerRun` execution after immutable Submission creation; this path is distinct from the new external-image metadata registry. Only supported, registered checks execute. | Persist current evidence. The hidden authorized operation publishes exact source custody and branches on locked ReviewPolicy: true moves TASK to `review_pending`; false invokes shared acceptance under TASK authority. CHECKERS never writes acceptance itself. B8 supplies hidden completion delivery; automatic production registration remains pending. |
 
 The unified guide agent proposes both sets of policy bindings in one setup
 result. Trusted compilation, validation, and the governing approval path turn
@@ -660,7 +660,7 @@ The broader v0.1 sequence below retains later scope:
    audit/outbox evidence. PostgreSQL guards enforce complete outcomes and actual
    phase receipts; successor, lifecycle and replay tests exercise the authorized
    operation. Upgrade refuses pre-authority outcomes without rewriting retained data.
-   B8 delivers hidden completion handling, acknowledging only after commit. Next prove remediation.
+   B8 delivers hidden completion handling, acknowledging only after commit.
    Then prove 04F remediation and 04E3 production readiness before enabling false
    guide activation. Internally valid false-policy fixtures prove the hidden
    operation; they do not establish public activation. The milestone creates the

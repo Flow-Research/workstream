@@ -34,7 +34,7 @@ work and historical proposals.
 | [ARCH-04D2](../../WS-ARCH-001/WS-ARCH-001-04D2.md) | Complete: exact materialization and execute/finalize authority; output write/bind unavailable; replaces AUTH-14/XINT-06B |
 | [AUTH-OUTBOX-01](PLAN.md#ws-auth-001-outbox-01--unavailable-dispatcher-contract) | Complete: unavailable exact dispatcher identity/action/phase contract; CON-02B and AUTH-OUTBOX-02 mechanics complete; feature authority/registration remain separate |
 | [AUTH-OUTBOX-02](PLAN.md#ws-auth-001-outbox-02--exact-dispatcher-activation) | Complete: exact dispatcher mechanics activation, phase audit custody and bounded prefork delivery; ARCH-03C2 subsequently registers assignment invalidation, while future handlers require their own exact authority |
-| [ARCH-04E2](../../WS-ARCH-001/planning/chunks/WS-ARCH-001-04E-canonical-allow-review.md#current-bounded-sequence) | Complete through hidden 04E2-B outcomes: actual receipts, database complete-set closure, audit/outbox and replay. Completion delivery and remediation precede live 04E3. True handoff has no REV/CON prerequisite; public false-guide activation remains unavailable. |
+| [ARCH-04E2](../../WS-ARCH-001/planning/chunks/WS-ARCH-001-04E-canonical-allow-review.md#current-bounded-sequence) | Complete through hidden 04E2-B outcomes: actual receipts, database complete-set closure, audit/outbox and replay. B8 delivers hidden completion handling; remediation precedes live 04E3. True handoff has no REV/CON prerequisite; public false-guide activation remains unavailable. |
 
 Guide activation needs CP05 -> CP06 -> hidden CP07 and POL-07, which also
 requires independent ARCH-04A registered-capability proof. It does not need

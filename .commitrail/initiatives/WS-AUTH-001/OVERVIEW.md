@@ -70,7 +70,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
   completed ARCH-03B8 hidden task audit evidence and ARCH-03B7 requirements projections and ARCH-03B6 locked-context projections and ARCH-03B5 current work context and ARCH-03B4 hidden contributor/management task detail, ARCH-03B3 hidden management/operational queues and ARCH-03B2 contributor-ready queue facts, ARCH-03B1 detached metadata and CP08 lineage
   and minimal writers and ARCH-03A internal guide context. POL-07B internal phase composition is delivered.
   The dispatcher registers only exact assignment invalidation. Automatic checker
-  routing still requires completion delivery and production registration.
+  routing has hidden B8 completion delivery but still requires production registration.
 - Delivered routing preparation: [ARCH-04E2-A](../WS-ARCH-001/WS-ARCH-001-04E2A.md)
   adds the strict exact routing resource, request matcher, digest dispatch and
   fixed-router adapter through canonical PREP. ARCH-04E2-B consumes that

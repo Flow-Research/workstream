@@ -102,7 +102,7 @@ acceptance signal.
 
 The [versioned policy setting](../../changes/pre-review-plan-reconciliation.md#delivered-policy-setting-implementation)
 is available for draft configuration. ARCH-04E2-B supplies mandatory routing
-authority and atomic CON participation; completion delivery, remediation and
+authority and atomic CON participation; B8 supplies hidden completion delivery. Remediation and
 production readiness still precede enabling false. The automated branch must not depend on
 live human queues, ReviewLeases or decision endpoints. Human lifecycle work
 remains required for v0.1, but need not delay the first automated end-to-end

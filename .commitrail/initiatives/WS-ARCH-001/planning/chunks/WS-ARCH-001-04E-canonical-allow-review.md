@@ -58,7 +58,7 @@ CON-07/REV-04C shared acceptance prerequisites, using the delivered exact AUTH p
 REV-12A4A scoped controller/generation (retaining REV-12A1 fence mechanics),
 are hard dependencies of the false authorized outcome consumed by completion delivery, not of this
 early schema or true admission. Both branches use the delivered preparation phase
-above; complete authorized outcomes 04E2-B precede remaining completion
+above; complete authorized outcomes 04E2-B precede delivered B8 completion
 delivery 04E1B-B and live 04E3. True proceeds with its own prerequisites;
 false additionally requires shared acceptance and scoped lifecycle activation,
 with 04F remediation before false guide activation. This breaks the source-FK dependency cycle.
@@ -102,8 +102,8 @@ and use real AUTH; normal guide activation still denies false.
    fence before TASK and revalidate the policy after locking; source preparation
    does not acquire that fence or authorize later lock-order inversion. After 04E1B-A/04E2-A and
    CON-02B's handler/claim contract (plus delivered REV-04C acceptance foundations
-   for false), TASK retains the B7 unregistered request handler and, after the complete
-   04E2-B outcome operation, implements the consumer of 04C's already-defined final-result notification, exact public facts, currentness protocol
+   for false), TASK retains the B7 unregistered request handler and B8 consumer
+   of the complete 04E2-B outcome. These use 04C's final-result notification, exact public facts, currentness protocol
    and transaction proof described below. No live worker or action activation.
    Initial checker evaluation-request reservation is a bounded atomic consequence of the existing
    exact `submission.create` command, not an authority token sent to the worker.

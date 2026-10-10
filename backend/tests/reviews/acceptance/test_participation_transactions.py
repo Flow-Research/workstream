@@ -202,9 +202,7 @@ async def test_missing_contribution_cannot_leave_committed_acceptance(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert (await apply_outcome(session, h, 2))[
-                "economic"
-            ].contribution_record_id is not None
+            assert (await apply_outcome(session, h, 2)).economic.contribution_record_id is not None
 
 
 async def test_replay_never_repairs_a_missing_contribution(
