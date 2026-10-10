@@ -68,7 +68,8 @@ canonical contracts before activating the exact operation.
   participation tests and their affected fixtures; migration/storage/replay,
   branch and concurrency regressions; current service-vocabulary migration tests
   and outbox fixture cleanup affected by the new deferred outcome reference;
-  required ownership/lane inventories only.
+  required ownership/lane inventories and the AUTH structural-debt inventory
+  with an exact assertion map for the affected catalogue-test extraction.
 - This record, current ARCH plan/map/overview and active 04E child, index,
   affected AUTH/POL/REV/CON current navigation and canonical specs, README,
   architecture lockdown, product brief, authorization custody/operator docs and
@@ -244,3 +245,8 @@ The removed fake transport hash case has a distinct real PostgreSQL replacement:
 the TASK participant compares the request hash with its stored routing manifest
 alongside the existing canonical acceptance predicate. Upstream source validation
 is not a substitute for this request boundary.
+
+The affected fixed-service catalogue assertions move from the oversized AUTH
+test module to its existing focused catalogue module. All nine original assertion
+spans have explicit retained/extracted dispositions; the original module shrinks,
+and the structural inventory records that reduction without changing limits.
