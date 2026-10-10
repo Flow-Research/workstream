@@ -20,6 +20,11 @@ from app.interfaces.artifact_operations import GuideArtifactIngestCommand
 from app.modules.projects.api.guide_documents import GuideDocumentUploadTargetPort
 from app.modules.artifacts.api import SubmissionBundlePreparationCommand
 from app.modules.checkers.api.materialization import PostSubmissionMaterializationPort
+from app.modules.checkers.api.materialization import (
+    PostSubmissionMaterialConsumer,
+    PostSubmissionMaterializationResult,
+)
+from app.modules.checkers.api.execution import ExecuteFacts
 from app.modules.checkers.api.output_custody import (
     CheckerArtifactOutputPort,
     CheckerOutputBindingPort,
@@ -553,6 +558,43 @@ def post_submission_materialization(*, sessions, store, namespace, preparation, 
         authority=post_submit_materialization_authority,
         current_execution=current_post_submit_execution,
     )
+
+
+class _WorkerPostSubmissionMaterialization:
+    """Lease the Celery ART provider only while one exact materialization runs."""
+
+    def __init__(self, sessions) -> None:
+        self._sessions = sessions
+
+    async def materialize(
+        self, facts: ExecuteFacts, consumer: PostSubmissionMaterialConsumer,
+    ) -> PostSubmissionMaterializationResult:
+        from app.core.config import get_settings
+        from app.adapters.artifacts.internal_workers import (
+            _artifact_internal_runtime,
+            initialize_artifact_internal_runtime,
+        )
+        from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
+
+        settings = get_settings()
+        await initialize_artifact_internal_runtime()
+        with _artifact_internal_runtime() as (store, namespace):
+            manager = create_artifact_scratch_manager(settings)
+            try:
+                return await post_submission_materialization(
+                    sessions=self._sessions,
+                    store=store,
+                    namespace=namespace,
+                    preparation=ArtifactPreparationService(manager),
+                    inspector=SubmissionArchiveInspector(submission_archive_limits(settings)),
+                ).materialize(facts, consumer)
+            finally:
+                manager.close()
+
+
+def worker_post_submission_materialization(*, sessions) -> PostSubmissionMaterializationPort:
+    """Build the hidden request handler's lazy worker-owned ART input port."""
+    return _WorkerPostSubmissionMaterialization(sessions)
 
 
 def checker_output_storage(
