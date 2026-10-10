@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx2 as httpx
 from jsonschema import Draft202012Validator, ValidationError  # type: ignore[import-untyped]
@@ -170,6 +170,7 @@ class WorkstreamGateway:
             idempotency_key=arguments["idempotency_key"],
             expected_status=expected_status,
             expected_payload={"http_status": expected_status, "version": expected_version},
+            expected_resource_id=(arguments["grant_id"] if name == "admin_grants_revoke" else None),
             mutation=True,
         )
 
@@ -186,6 +187,7 @@ class WorkstreamGateway:
         idempotency_key: str | None = None,
         expected_status: int = 200,
         expected_payload: dict[str, Any] | None = None,
+        expected_resource_id: str | None = None,
         mutation: bool = False,
     ) -> GatewayResult:
         request_id = correlation_id or str(uuid4())
@@ -267,6 +269,21 @@ class WorkstreamGateway:
                                     correlation_id=correlation_id,
                                 )
                             )
+                        if expected_resource_id is not None:
+                            try:
+                                resource_matches = UUID(payload["resource_id"]) == UUID(
+                                    expected_resource_id
+                                )
+                            except (KeyError, TypeError, ValueError):
+                                resource_matches = False
+                            if not resource_matches:
+                                return GatewayResult(
+                                    failure=SafeFailure(
+                                        "workstream_execution_uncertain",
+                                        status=502,
+                                        correlation_id=correlation_id,
+                                    )
+                                )
                         return GatewayResult(data=payload)
         except asyncio.CancelledError:
             raise

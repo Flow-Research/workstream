@@ -15,6 +15,7 @@ from workstream_mcp.http_gateway import WorkstreamGateway
 ACTOR_ID = "019a2a00-0000-7000-8000-000000000001"
 PROJECT_ID = "019a2a00-0000-7000-8000-000000000002"
 GRANT_ID = "019a2a00-0000-7000-8000-000000000003"
+FOREIGN_GRANT_ID = "019a2a00-0000-7000-8000-000000000099"
 KEY = "019a2a00-0000-7000-8000-000000000004"
 CORRELATION_ID = "019a2a00-0000-4000-8000-000000000005"
 TOOLS = (
@@ -293,6 +294,46 @@ def test_unexpected_mutation_success_is_execution_uncertain(
     assert result["isError"] is True
     assert result["structuredContent"]["error"] == "workstream_execution_uncertain"
     assert len(received) == 1
+
+
+@pytest.mark.parametrize(
+    ("receipt_grant_id", "is_error"),
+    [
+        (FOREIGN_GRANT_ID, True),
+        (GRANT_ID.upper(), False),
+    ],
+)
+def test_revoke_receipt_is_bound_to_requested_grant_uuid(
+    adapter: Adapter,
+    call: Call,
+    receipt_grant_id: str,
+    is_error: bool,
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 200
+    upstream["json"] = {
+        **_receipt("workstream_admin_grants_revoke"),
+        "resource_id": receipt_grant_id,
+    }
+
+    result = call(
+        client,
+        name="workstream_admin_grants_revoke",
+        arguments=_revoke_arguments(),
+        extra_headers={"X-Request-ID": CORRELATION_ID},
+    ).json()["result"]
+
+    assert result["isError"] is is_error
+    assert len(received) == 1
+    if is_error:
+        assert result["structuredContent"] == {
+            "error": "workstream_execution_uncertain",
+            "retryable": False,
+            "status": 502,
+            "correlation_id": CORRELATION_ID,
+        }
+    else:
+        assert result["structuredContent"]["resource_id"] == receipt_grant_id
 
 
 @pytest.mark.parametrize(
