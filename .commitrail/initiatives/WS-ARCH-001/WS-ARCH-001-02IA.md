@@ -48,6 +48,9 @@ Submission creation and checker-remediation replacement remain unavailable.
   `backend/app/modules/artifacts/api/submission_preparation.py`. It carries the
   existing CHECKERS-owned `PreSubmissionExecutionFacts`; it does not define a
   second checker-result contract.
+- Export that carrier from the canonical ART public package in
+  `backend/app/modules/artifacts/api/__init__.py`; consumers must import it from
+  `app.modules.artifacts.api`, not the owning submodule.
 - Raise that typed rejection from
   `backend/app/modules/artifacts/submission_admission.py` only after the canonical
   ineligible execution and immutable evidence have completed.
@@ -96,6 +99,9 @@ CHECKERS remains the result owner. ART carries the already validated
 the HTTP adapter serializes that exact bounded projection. A new parallel
 Pydantic result model or a route-local allowlist would create two contracts and
 could silently drop future canonical findings, so neither is introduced.
+The HTTP adapter consumes the rejection through ART's canonical package export,
+preserving the existing module boundary instead of importing its implementation
+submodule.
 
 The error detail adds only the envelope required by the accepted intake
 contract: `status="failed"`, `eligible_to_submit=false`, and the canonical
@@ -173,13 +179,16 @@ resources remain concealed.
 | Current owner gap and reusable result contract | Inspect `PreparedSubmissionBundlePreparationCommand.prepare`, `PreSubmissionExecutionResult.bounded_facts`, `PreSubmissionExecutionFacts`, and `prepare_submission_bundle` | Confirmed before planning | Runtime proof pending implementation |
 | Focused blocked/recovery behavior | `cd backend && .venv/bin/python -m pytest -q tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Planned | PostgreSQL owner proof may require the broader default execution test |
 | Canonical execution/evidence boundary | `cd backend && .venv/bin/python -m pytest -q tests/test_default_pre_submit_execution.py tests/test_pre_submit_attempt_contracts.py` | Planned | Hosted full-suite result remains PR evidence |
-| Static quality and owner boundaries | `cd backend && .venv/bin/python -m ruff check app/api/routes/artifact_submissions.py app/modules/artifacts/api/submission_preparation.py app/modules/artifacts/submission_admission.py tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Planned | Type-check target will follow the repository command available at implementation |
+| Static quality and owner boundaries | `cd backend && .venv/bin/python -m ruff check app/api/routes/artifact_submissions.py app/modules/artifacts/api/__init__.py app/modules/artifacts/api/submission_preparation.py app/modules/artifacts/submission_admission.py tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Planned | Type-check target will follow the repository command available at implementation |
 | No stale current claim or broken documentation link | `python3 scripts/check_stale_authorization_docs.py`; `python3 scripts/check_stale_artifact_contracts.py`; `python3 scripts/check_markdown_links.py`; `git diff --check` | Planned | Final central roadmap reconciliation remains with the lead |
 
 ## Review findings
 
-No implementation review has run. The required L1 plan review must bind to the
-committed planning head before application code begins.
+No implementation review has run. Plan finding `02IA-ARCH-01` identified the
+missing canonical ART package export in the allowed files and import design; the
+plan now requires that export and forbids a route-to-submodule import. The
+required L1 plan review must bind to the repaired committed planning head before
+application code begins.
 
 ## Reconciliation
 
