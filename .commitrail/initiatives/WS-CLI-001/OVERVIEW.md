@@ -18,6 +18,7 @@
   [WS-CLI-001-11](WS-CLI-001-11.md), latest exact-guide setup diagnostics and compilation lineage;
   [WS-CLI-001-12](WS-CLI-001-12.md), exact finalized-proposal findings and policy inspection;
   [WS-CLI-001-13](WS-CLI-001-13.md), deliberate exact pre-submission approval and manual replay;
+  [WS-CLI-001-14](WS-CLI-001-14.md), exact derived evaluation-policy and retained correction inspection;
   [PILOT-13](../../changes/pilot13-assigned-task-guide-documents.md), assigned-task locked-guide listing/download.
 
 ## Current boundary
@@ -67,6 +68,10 @@ bindings, without selecting latest, approving, correcting or activating it.
 never acknowledges warnings automatically or refetches latest. Backend authority
 and currentness apply on replay; an immutable receipt does not establish
 post-policy approval, post-policy job delivery or guide activation.
+`project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID` reads
+the exact canonical evaluation policy, unified findings, activation selectors
+and saved correction. Compiled, approved and superseded/non-current packages
+remain readable observations; no decision, dispatch or readiness rule is added.
 All have text/JSON
 output and built-binary integration proof. Mutations preserve omitted/null
 semantics and explicitly report uncertain outcomes without automatic retries.
@@ -135,11 +140,14 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 13. **WS-CLI-001-13:** Approve an explicitly selected intake proposal through the
     public POST with caller-prepared target/warning/prior selectors and exact
     manual replay custody. No post-policy decision or guide activation.
-14. **Later governed-work commands:** Add further project setup, submission,
+14. **WS-CLI-001-14:** Inspect the explicitly selected derived evaluation policy,
+    upstream proposal/findings, activation selectors and saved correction through
+    one public GET; preserve historical observations without local decisions.
+15. **Later governed-work commands:** Add further project setup, submission,
    review, revision, and contribution reads/writes only as their actual public
    contracts and authority boundaries become available. Split by user journey,
    not one PR per endpoint or one giant catalogue PR.
-15. **Optional TUI:** Add a focused public queue/evidence view after its API
+16. **Optional TUI:** Add a focused public queue/evidence view after its API
    workflow is complete. Never require a TUI for agents or scripts.
 
 ## Risks and proof

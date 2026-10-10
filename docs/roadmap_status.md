@@ -161,7 +161,10 @@ or local readiness decisions, and exact finalized-proposal inspection without
 approval or implicit latest selection. Project inspection preserves
 server-selected full/minimal fields. Exact pre-submission proposal approval uses
 deliberate caller-prepared input and retry keys; its receipt does not establish
-post-policy approval, post-policy job delivery or guide activation. No public project-list
+post-policy approval, post-policy job delivery or guide activation. Exact derived
+post-policy inspection returns the canonical policy, upstream findings, activation
+selectors and saved correction, including retained superseded policies; reading
+does not make a decision or dispatch work. No public project-list
 route is invented.
 CLI write uncertainty is explicit and never automatically
 retried. These source packages do not claim
@@ -385,7 +388,11 @@ cannot be reused as post-submission review-gate evidence. See the
   [CLI intake approval](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-13.md)
   submits the exact public pre-submission decision with explicit warning
   acknowledgments and caller retry custody. Its immutable receipt is not
-  post-policy approval or post-policy job delivery. Correction, post-policy approval and
+  post-policy approval or post-policy job delivery.
+  [CLI post-policy inspection](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-14.md)
+  reads an explicitly selected derived policy, unified findings, activation
+  selectors and saved correction, preserving historical/non-current observations.
+  Correction, post-policy approval and
   activation remain future CLI commands; backend owners retain all authority.
   [PILOT-13 assigned-guide access](../.commitrail/changes/pilot13-assigned-task-guide-documents.md)
   lists exact locked originals in assigned contributor context and streams
