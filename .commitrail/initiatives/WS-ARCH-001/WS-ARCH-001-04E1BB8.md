@@ -185,3 +185,10 @@ Review corrections preserve the accepted-effects and acceptance-rollback source
 guard tests while replacing all nine remaining mapping accesses with typed
 attributes. Current capability documents distinguish delivered hidden completion
 delivery from unavailable production registration and public intake.
+
+
+The three new TASK completion test modules use the existing TASK lane partition.
+Measured baseline project-lane margins were narrower than TASK margins, and the
+real focused completion proofs add substantial database time. Existing modules,
+partition algorithm, service isolation, exact-once inventory and time caps are
+unchanged; fresh hosted evidence must verify complete execution and timing.
