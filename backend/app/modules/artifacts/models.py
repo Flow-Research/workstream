@@ -1148,7 +1148,8 @@ class ArtifactPutAttempt(Base):
             "and submission_version is null and logical_role is null) or "
             "(producer_request_type = 'task_import_source' and task_import_source_id is not null "
             "and guide_source_item_id is null and checker_run_id is null and task_id is null "
-            "and submission_id is null and submission_version is null and logical_role='task_import_source')",
+            "and submission_id is null and submission_version is null "
+            "and logical_role is not distinct from 'task_import_source')",
             name="producer_reference",
         ),
     )

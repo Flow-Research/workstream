@@ -366,7 +366,43 @@ async def test_postgres_rejects_source_mutation_and_foreign_attempt_custody(impo
             with pytest.raises(DBAPIError):
                 async with session.begin():
                     await session.execute(text(statement), params)
+    await _source_role_sql_controls(source, foreign, foreign_project)
     assert (await _effects()) == (2, 1, 3, 0)
+
+
+async def _source_role_sql_controls(original, target, project):
+    """Valid native copies roll back; only NULL source roles fail their exact guards."""
+    operation = canonical_json_hash({"request_type": "task_import_source", "source_id": target["source_id"]})
+    attempt_sql = text("insert into artifact_put_attempts select "
+        "(jsonb_populate_record(null::artifact_put_attempts,to_jsonb(a)||cast(:patch as jsonb))).* "
+        "from artifact_put_attempts a where task_import_source_id=:original returning id")
+    receipt_sql = text("insert into artifact_operation_receipts select "
+        "(jsonb_populate_record(null::artifact_operation_receipts,to_jsonb(r)||cast(:patch as jsonb))).* "
+        "from artifact_operation_receipts r join artifact_put_attempts a on a.id=r.put_attempt_id "
+        "where a.task_import_source_id=:original returning id")
+    for bad_role in (None, "attempt", "receipt"):
+        attempt_id, receipt_id = new_record_id(), new_record_id()
+        attempt_patch = {"id": str(attempt_id), "task_import_source_id": target["source_id"],
+                         "project_id": project, "operation_identity": operation, "receipt_id": None,
+                         "logical_role": None if bad_role == "attempt" else "task_import_source"}
+        receipt_patch = {"id": str(receipt_id), "put_attempt_id": str(attempt_id), "idempotency_key": operation,
+                         "logical_role": None if bad_role == "receipt" else "task_import_source"}
+        async with db_session.get_session_factory()() as session:
+            async with session.begin() as transaction:
+                await session.execute(text("set constraints all immediate"))
+                params = {"original": UUID(original["source_id"]), "patch": json.dumps(attempt_patch)}
+                if bad_role == "attempt":
+                    with pytest.raises(DBAPIError, match="task import source put attempt custody invalid"):
+                        await session.execute(attempt_sql, params)
+                else:
+                    assert (await session.execute(attempt_sql, params)).scalar_one() == attempt_id
+                    params["patch"] = json.dumps(receipt_patch)
+                    if bad_role == "receipt":
+                        with pytest.raises(DBAPIError, match="artifact receipt producer reference mismatch"):
+                            await session.execute(receipt_sql, params)
+                    else:
+                        assert (await session.execute(receipt_sql, params)).scalar_one() == receipt_id
+                await transaction.rollback()
 
 
 async def _missing_source_put(client, monkeypatch):
