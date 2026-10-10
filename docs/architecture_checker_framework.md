@@ -477,8 +477,9 @@ bundle hash and locked to the effective project submission artifact policy befor
 contributor pipeline. Tasks lock references to the shared project's compiled checker
 bundle hash. It runs inside continuous submission-bundle preparation before
 Workstream creates a submission. ART retains bounded status, eligibility and
-pass/fail/warning results. The existing hidden route returns only the code
-`pre_submission_checker_failed`; structured public intake feedback remains
+pass/fail/warning results. The mounted authorized hidden route returns
+`pre_submission_checker_failed` with those exact ordered bounded results in the
+same request. The route remains absent from OpenAPI, and public intake remains
 pending. The standalone JSON precheck and its exclusive implementation are removed
 by POL-07B. Broader
 Submission caller migration remains WS-ARCH-001-02I; this result is not a review decision value.

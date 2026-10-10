@@ -952,8 +952,9 @@ checker phase service. Authoritative pre-submit checking
 already belongs to the preparation request owning the uploaded ZIP and bounded
 scratch. Broader Submission caller migration remains WS-ARCH-001-02I.
 
-The following structured public feedback is the target intake contract; the
-existing hidden route currently returns only `pre_submission_checker_failed`:
+The existing mounted authorized hidden route returns the following structured
+same-request feedback. It remains absent from OpenAPI; public intake activation
+is still pending:
 
 ```text
 POST /api/v1/tasks/{id}/submission-bundle-preparations

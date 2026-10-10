@@ -250,8 +250,9 @@ POL-07B removes the standalone JSON precheck contract and connects the internal
 checker phase service. WS-ARCH-001-02I retains the broader
 Submission caller cutover. Authoritative intake checks run inside continuous
 submission-bundle preparation against the exact uploaded ZIP in bounded scratch.
-The structured response below is the target for the canonical public intake
-cutover, not the current hidden route’s response:
+The mounted authorized hidden route now returns the structured response below
+in the same request. It remains absent from OpenAPI; canonical public intake
+activation is still pending:
 
 ```text
 POST /api/v1/tasks/{id}/submission-bundle-preparations

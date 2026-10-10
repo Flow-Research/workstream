@@ -1,7 +1,7 @@
 # ARCH-02I-A — Hidden structured pre-submit feedback
 
 - Initiative: `WS-ARCH-001`
-- Durable disposition: `Planned`
+- Durable disposition: `Complete`
 - Intended merge outcome: the existing authorized submission-bundle preparation
   route returns the retained canonical path-free pre-submit findings for a
   blocked upload while remaining absent from OpenAPI and creating no Submission.
@@ -69,6 +69,7 @@ Submission creation and checker-remediation replacement remain unavailable.
 - Update only current claims that say the mounted hidden route returns the code
   alone: `docs/architecture_checker_framework.md`,
   `docs/architecture_data_model.md`, `docs/architecture_lockdown.md`,
+  `docs/current_system_data_flow.html`,
   `docs/decision_0011_submission_artifact_policy_drives_pre_submit.md`,
   `docs/glossary.md`, `docs/operations_project_operating_manual.md`,
   `docs/template_checker_policy.md`,
@@ -124,32 +125,32 @@ resources remain concealed.
 
 ## Acceptance criteria
 
-- [ ] An authorized blocked preparation returns HTTP 422 with canonical error
+- [x] An authorized blocked preparation returns HTTP 422 with canonical error
       code `pre_submission_checker_failed` and details containing exactly
       `status="failed"`, `eligible_to_submit=false`, and the ordered canonical
       bounded results for that execution.
-- [ ] Feedback preserves public checker names, closed result status/severity,
+- [x] Feedback preserves public checker names, closed result status/severity,
       actionable failure/message codes, and canonical bounded count metadata.
       It contains no paths, filenames, raw bytes/messages, provider/scratch
       coordinates, credentials, checker configuration, review-decision field,
       or review-decision value.
-- [ ] The blocked attempt retains immutable pre-submit evidence but creates no
+- [x] The blocked attempt retains immutable pre-submit evidence but creates no
       ready admission, Submission, submission version, task transition, or
       submission-created audit/outbox event. A real authorized PostgreSQL-backed
       preparation and exact replay retain the same evidence-set and ordered
       result-row identities; replay returns byte-for-byte equivalent canonical
       feedback without another checker execution or changes to checker/evidence
       counts.
-- [ ] Context conflict, unavailable authority, and unresolved/corrupt execution
+- [x] Context conflict, unavailable authority, and unresolved/corrupt execution
       custody preserve their distinct existing 409/404/503 behavior and expose
       no structured checker results.
-- [ ] An ASGI request proves the exact ordered `error.details` projection for
+- [x] An ASGI request proves the exact ordered `error.details` projection for
       blocked feedback. Paired ASGI controls prove 409, 404, and 503 responses
       retain their existing detail-only compatibility payloads and contain no
       checker feedback.
-- [ ] The preparation route remains absent from OpenAPI and no public Submission
+- [x] The preparation route remains absent from OpenAPI and no public Submission
       mutation or compatibility route appears.
-- [ ] Existing hidden preparation, recovery, evidence, authorization, and
+- [x] Existing hidden preparation, recovery, evidence, authorization, and
       admission behavior remains green.
 
 ## Implementation plan
@@ -194,14 +195,15 @@ resources remain concealed.
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Current owner gap and reusable result contract | Inspect `PreparedSubmissionBundlePreparationCommand.prepare`, `PreSubmissionExecutionResult.bounded_facts`, `PreSubmissionExecutionFacts`, and `prepare_submission_bundle` | Confirmed before planning | Runtime proof pending implementation |
-| ASGI blocked feedback and unchanged error boundaries | `cd backend && .venv/bin/python -m pytest -q tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Planned | Direct route-unit success is insufficient; the named HTTP proof must traverse ASGI |
-| Real blocked evidence, exact replay, and zero product effects | `cd backend && .venv/bin/python -m pytest -q tests/test_default_pre_submit_execution.py tests/test_pre_submit_attempt_contracts.py` | Planned | The default-pre-submit test must use real PostgreSQL owner rows and real execution; hosted full-suite result remains PR evidence |
-| Static quality and owner boundaries | `cd backend && .venv/bin/python -m ruff check app/api/routes/artifact_submissions.py app/modules/artifacts/api/__init__.py app/modules/artifacts/api/submission_preparation.py app/modules/artifacts/submission_admission.py tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py tests/test_default_pre_submit_execution.py` | Planned | Type-check target will follow the repository command available at implementation |
-| No stale current claim or broken documentation link | `python3 scripts/check_stale_authorization_docs.py`; `python3 scripts/check_stale_artifact_contracts.py`; `python3 scripts/check_markdown_links.py`; `git diff --check` | Planned | Final central roadmap reconciliation remains with the lead |
+| ASGI blocked feedback and unchanged error boundaries | `cd backend && <builder-venv>/pytest -q tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py` | Passed: 65 tests | Uses the mounted app with controlled actor/command dependencies; it proves response serialization and error boundaries, not production dependency composition |
+| Real blocked evidence, exact replay, and zero product effects | Isolated PostgreSQL runner at migration head `0030`: `pytest -q tests/test_default_pre_submit_execution.py::test_authorized_blocked_command_replays_exact_feedback_without_product_effects` | Passed: 1 test | Uses real owner rows, authorization services, repositories, preparation, evidence and checker execution; fixture-seeded actor/service identities do not prove production composition. Hosted full-suite result remains PR evidence |
+| Static quality and owner boundaries | `cd backend && <builder-venv>/ruff check app/api/routes/artifact_submissions.py app/modules/artifacts/api/__init__.py app/modules/artifacts/api/submission_preparation.py app/modules/artifacts/submission_admission.py tests/test_submission_bundle_preparation_recovery.py tests/test_submission_bundle_admission.py tests/test_default_pre_submit_execution.py` | Passed | No repository type-check command is defined for this Python scope |
+| No stale current claim or broken documentation link | `python3 scripts/check_stale_authorization_docs.py`; `python3 scripts/check_stale_artifact_contracts.py`; `python3 scripts/check_markdown_links.py`; `git diff --check` | Passed | Historical early chunk specifications intentionally retain their time-bound statements; final central roadmap reconciliation remains with the lead |
 
 ## Review findings
 
-No implementation review has run. Plan finding `02IA-ARCH-01` identified the
+Implementation review is pending on the frozen candidate. Plan finding
+`02IA-ARCH-01` identified the
 missing canonical ART package export in the allowed files and import design; the
 plan now requires that export and forbids a route-to-submodule import. The
 `QA-P02IA-001` finding identified that mocked route/command tests could not prove

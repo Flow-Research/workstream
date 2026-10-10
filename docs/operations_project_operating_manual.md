@@ -486,7 +486,9 @@ Before locking a submission packet:
 - revision replay exists when task was previously `NEEDS_REVISION`
 - effective project submission artifact policy is loaded
 - generated project pre-submit checker policy runs
-- failed preparation currently returns only `pre_submission_checker_failed` through the hidden route; ART retains bounded results and structured public feedback remains pending the canonical public intake cutover
+- failed preparation returns `pre_submission_checker_failed` with ART's exact
+  ordered bounded results through the mounted authorized hidden route; the route
+  remains absent from OpenAPI and public intake activation remains pending
 - POL-07B removes the standalone JSON precheck; the hidden preparation
   flow uses one internal pre-submit phase command with ART-owned evidence.
   Broader public Submission caller migration remains WS-ARCH-001-02I

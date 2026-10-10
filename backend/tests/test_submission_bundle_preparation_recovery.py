@@ -1,11 +1,14 @@
 """Command recovery distinguishes checked failure, unavailable custody and authority."""
 
 from contextlib import asynccontextmanager
+from dataclasses import asdict
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
 from app.core.identifiers import new_record_id
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.adapters.artifacts import CheckerPhaseService
 from tests.checkers.execution.support import forbidden_post_submission
@@ -14,10 +17,20 @@ from starlette.requests import Request
 
 import app.modules.artifacts.submission_admission as submission_admission_module
 from app.api.routes.artifact_submissions import prepare_submission_bundle
+from app.adapters.artifacts import (
+    get_submission_bundle_preparation_actor,
+    get_submission_bundle_preparation_command,
+)
+from app.main import create_app
 from app.modules.artifacts.api import (
+    SubmissionBundlePreparationCheckFailed,
     SubmissionBundlePreparationRequest,
     SubmissionBundlePreparationRejected, SubmissionBundlePreparationUnavailable,
     SubmissionBundlePreparationInfrastructureUnavailable, SubmissionBundlePreparationResult,
+)
+from app.modules.checkers.api import (
+    PreSubmissionExecutionEntryFacts,
+    PreSubmissionExecutionFacts,
 )
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.artifacts.pre_submit_evidence import (
@@ -28,6 +41,133 @@ from app.modules.artifacts.submission_admission import (
 )
 from tests.artifact_store_helpers import artifact_byte_stream
 from tests.test_submission_bundle_admission import _actor, _transaction
+
+
+def _feedback_facts(*, eligible: bool = False) -> PreSubmissionExecutionFacts:
+    """Build exact canonical facts without defining another feedback contract."""
+    statuses = (("passed", None, "passed"),) if eligible else (
+        ("warning", None, "quality_signal_warning"),
+        ("failed", "pre_submission_required_file_missing", "required_file_missing"),
+        ("dependency_not_run", None, "dependency_not_run"),
+    )
+    return PreSubmissionExecutionFacts(
+        plan_sha256="sha256:" + "1" * 64,
+        eligible=eligible,
+        entries=tuple(
+            PreSubmissionExecutionEntryFacts(
+                dispatch_authority="workstream.pre_submission_checker_catalogue",
+                definition_id=f"workstream.test.{index}",
+                definition_version="1.0.0",
+                public_name=f"Test check {index}",
+                policy_source="workstream_default",
+                effective_plan_sha256="sha256:" + "1" * 64,
+                rule_instance_id=None,
+                locked_policy_sha256="sha256:" + "2" * 64,
+                phase="default_policy",
+                order=index,
+                classification="advisory" if status == "warning" else "blocking",
+                severity="warning" if status == "warning" else "blocking",
+                checker_execution_status=status,
+                failure_code=failure_code,
+                message_code=message_code,
+                metadata=(("finding_count", index + 1),) if not eligible else (),
+            )
+            for index, (status, failure_code, message_code) in enumerate(statuses)
+        ),
+    )
+
+
+async def _mounted_preparation_response(error: RuntimeError):
+    app = create_app()
+    app.dependency_overrides[get_submission_bundle_preparation_actor] = _actor
+    app.dependency_overrides[get_submission_bundle_preparation_command] = lambda: SimpleNamespace(
+        prepare=AsyncMock(side_effect=error)
+    )
+    task_id, assignment_id, key = (new_record_id() for _ in range(3))
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        return await client.post(
+            f"/api/v1/tasks/{task_id}/submission-bundle-preparations",
+            headers={
+                "Content-Type": "application/zip",
+                "X-Task-Assignment-Id": str(assignment_id),
+                "Idempotency-Key": str(key),
+                "X-Submission-Summary": "summary",
+                "X-Contributor-Attestation": "attestation",
+            },
+            content=b"PK\x03\x04blocked",
+        )
+
+
+@pytest.mark.asyncio
+async def test_mounted_preparation_returns_exact_ordered_bounded_feedback() -> None:
+    facts = _feedback_facts()
+
+    response = await _mounted_preparation_response(
+        SubmissionBundlePreparationCheckFailed(facts)
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"] == "pre_submission_checker_failed"
+    assert payload["error"]["code"] == "pre_submission_checker_failed"
+    assert payload["error"]["message"] == "Pre-submission checks failed"
+    assert payload["error"]["retryable"] is False
+    assert payload["error"]["details"] == {
+        "status": "failed",
+        "eligible_to_submit": False,
+        "results": json.loads(json.dumps([asdict(entry) for entry in facts.entries])),
+    }
+    rendered = response.text
+    assert all(value not in rendered for value in ("/tmp/", "s3://", "task.toml"))
+    assert all(value not in rendered for value in ("accept", "needs_revision", "reject"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error,status_code,detail",
+    (
+        (
+            SubmissionBundlePreparationRejected(
+                "submission_bundle_preparation_context_changed"
+            ),
+            409,
+            "submission_bundle_preparation_context_changed",
+        ),
+        (
+            SubmissionBundlePreparationUnavailable(
+                "submission bundle preparation is unavailable"
+            ),
+            404,
+            "Task not found",
+        ),
+        (
+            SubmissionBundlePreparationInfrastructureUnavailable(
+                "pre_submission_attempt_outcome_unresolved"
+            ),
+            503,
+            "pre_submission_attempt_outcome_unresolved",
+        ),
+    ),
+)
+async def test_mounted_preparation_preserves_non_feedback_error_boundaries(
+    error, status_code, detail,
+) -> None:
+    response = await _mounted_preparation_response(error)
+
+    assert response.status_code == status_code
+    payload = response.json()
+    assert payload["detail"] == detail
+    assert payload["error"]["details"] == {}
+    assert "results" not in payload["error"]["details"]
+
+
+def test_blocked_feedback_rejects_noncanonical_or_passing_facts() -> None:
+    with pytest.raises(TypeError, match="feedback facts are invalid"):
+        SubmissionBundlePreparationCheckFailed(object())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="passing pre-submission facts"):
+        SubmissionBundlePreparationCheckFailed(_feedback_facts(eligible=True))
 
 
 @pytest.mark.asyncio
@@ -86,7 +226,10 @@ def _preparation_replay_runtime(prepare_bytes, evidence_id, *, eligible):
         execute_reserved=AsyncMock(return_value=PreSubmitEvidencePersistenceResult(
             evidence=SimpleNamespace(evidence_set_id=evidence_id),
             pass_capability=None, failure_audit=None,
-            execution=SimpleNamespace(eligible=eligible),
+            execution=SimpleNamespace(
+                eligible=eligible,
+                checker_facts=_feedback_facts(eligible=eligible),
+            ),
         )),
     )
     checker_service = CheckerPhaseService(
@@ -202,8 +345,12 @@ async def test_hidden_preparation_replays_persisted_checked_custody(monkeypatch,
         runtime.evidence.reserve.return_value = runtime.evidence.execute_reserved.return_value
         assert await command.prepare(request) == expected
     elif outcome == "blocked":
-        with pytest.raises(SubmissionBundlePreparationRejected, match="pre_submission_checker_failed"):
+        with pytest.raises(
+            SubmissionBundlePreparationCheckFailed,
+            match="pre_submission_checker_failed",
+        ) as failure:
             await command.prepare(request)
+        assert failure.value.facts == runtime.evidence.execute_reserved.return_value.execution.checker_facts
         command._existing_durable_result.assert_not_awaited()
     else:
         code = ("pre_submission_attempt_outcome_unresolved" if outcome == "unresolved"

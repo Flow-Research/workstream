@@ -234,7 +234,7 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated project checker matrix produced from the effective project submission artifact policy and one immutable default-catalogue snapshot. The compiled bundle embeds the catalogue version, canonical manifest digest, ordered entry ID/version/configuration hashes, and enabled/disabled state. Its compiled bundle hash therefore commits transitively to that exact snapshot, and each task locks that hash before entering the contributor pipeline. Runtime uses the same snapshot to derive the effective-plan hash. It runs against the uploaded ZIP in bounded scratch before Workstream creates a submission. ART retains bounded check results; the existing hidden preparation route returns the `pre_submission_checker_failed` code only. Structured public intake feedback remains pending. POL-07B connects the internal phase service and removes the standalone JSON precheck; broader Submission caller migration remains WS-ARCH-001-02I. Results never use review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated project checker matrix produced from the effective project submission artifact policy and one immutable default-catalogue snapshot. The compiled bundle embeds the catalogue version, canonical manifest digest, ordered entry ID/version/configuration hashes, and enabled/disabled state. Its compiled bundle hash therefore commits transitively to that exact snapshot, and each task locks that hash before entering the contributor pipeline. Runtime uses the same snapshot to derive the effective-plan hash. It runs against the uploaded ZIP in bounded scratch before Workstream creates a submission. ART retains bounded check results; the mounted authorized hidden preparation route returns `pre_submission_checker_failed` with those exact ordered bounded results in the same request. The route remains absent from OpenAPI, and public intake remains pending. POL-07B connects the internal phase service and removes the standalone JSON precheck; broader Submission caller migration remains WS-ARCH-001-02I. Results never use review decision values: `accept`, `needs_revision`, or `reject`.
 
 The hidden 04B2 Workstream-default execution slice and the hidden 04B3 complete
 effective execution use the closed entry statuses
@@ -245,7 +245,7 @@ one immutable ordered platform-plus-project evidence set after scratch cleanup.
 
 ## pre_submission_checker_failed
 
-The contributor-facing domain error code returned when submission-bundle preparation is blocked by pre-submit checks. The current hidden route returns only this code; ART retains the bounded check results. Structured public feedback remains pending the canonical public intake cutover. The code is not a review decision. It must not be stored as `accept`, `needs_revision`, or `reject`.
+The contributor-facing domain error code returned when submission-bundle preparation is blocked by pre-submit checks. The mounted authorized hidden route returns this code with the exact ordered bounded results in the same request. It remains absent from OpenAPI, and public intake activation remains pending. The code is not a review decision. It must not be stored as `accept`, `needs_revision`, or `reject`.
 
 ## Task
 
