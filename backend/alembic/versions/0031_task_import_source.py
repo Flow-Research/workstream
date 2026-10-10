@@ -4,8 +4,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0030_task_import_source"
-down_revision = "0029_external_checker_registry"
+revision = "0031_task_import_source"
+down_revision = "0030_routing_outcomes"
 branch_labels = None
 depends_on = None
 
