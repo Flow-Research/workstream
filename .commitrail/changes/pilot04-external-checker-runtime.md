@@ -55,9 +55,11 @@ container engine. Python product code never becomes a Docker launcher.
   sandbox arguments, timeout/cleanup, output bounds and closed failure mapping.
   Register only the new modules and tests in the existing ownership and lane
   catalogues.
-- `.github/workflows/backend.yml` and the existing CI catalogue regression only
-  to require the locked Rust workspace format and test commands in Backend's
-  aggregate result; no lane, service, timeout or Python selection changes.
+- `.github/workflows/backend.yml`, `scripts/test_lightweight_agent_gates.py`
+  and the existing CI catalogue regression only to require the locked Rust
+  workspace format and test commands in Backend's aggregate result and prove
+  that its fan-in fails closed; no lane, service, timeout or Python selection
+  changes.
 - A bounded local probe under `experiments/pilot04_external_checker_runtime/**`
   only if needed to reproduce the real service request and its cleanup without
   adding a product caller or deployment surface.
@@ -220,6 +222,7 @@ No database transaction crosses the client call.
 | Numeric parity discriminator | The SDK numeric fixture test was also run against the reviewer's 2,000 finite-float Python corpus before restoring the checked-in representative fixture | All 2,000 canonical encodings match Python, including `203472594891988.12`, which the predecessor emitted as `203472594891988.13` | The retained fixture keeps representative boundary cases rather than the generated review corpus |
 | Python transport and ART grant | Locked review environment Ruff plus `pytest -q tests/checkers/external/test_runtime.py` | Eight tests pass: cross-language fixtures, complete settings, typed health/execute/factory and cancellation, actual prepared ZIP callback grant, live-owner enforcement, semantic-manifest substitution and symlink rejection | Product caller is intentionally absent |
 | Test and owner routing | Exact lane ownership regression, module boundary, test-structure and behavior-ownership validators | Pass after registering the new runtime test and two new Python owner paths | Full hosted lane evidence remains required |
+| CI fan-in regression | `python3 -m unittest -v scripts.test_commitrail_contracts scripts.test_commitrail_contribution_paths scripts.test_commitrail_archive_batch scripts.test_commitrail_markdown_structure scripts.test_lightweight_agent_gates` | The lightweight gate requires the Rust runtime job in the aggregate dependencies and exercises success plus each failure/cancelled/skipped/empty/unknown result without weakening another required job | Full hosted lane evidence remains required |
 | Real local service | Isolated registry `ws-pilot-backend-p04-registry` on loopback port `35104`; `/tmp/ws-pilot04-runtime-repair-probe.json` SHA-256 `873b7455be71a8a19a43d00a98dcb5a335b2627c317e1e4692183c0fa3ea7a42` was produced by the checked-in probe | Digest-pinned Linux/amd64 manifest `sha256:8fe601562e34c74bb90943c5ae5cdce12d51ac6e827cbd19113adfe77ffd59ba` and config ID `sha256:43d669716bb289c21d5cc926692dd21e564c339b65d849fef342e13b4a4a4114` returned `passed`; changed/expired grants mapped to `material_unavailable`, deadline to `deadline_exceeded`, oversized output to `invalid_output`; exact workspace and labelled-container cleanup confirmed | Explicit `docker-dev`/runc proof only; hosted runsc deployment and representative workload sizing remain unproved |
 
 ## Review findings
@@ -285,6 +288,11 @@ No database transaction crosses the client call.
   global normalized-path order. ART now sorts its descriptor-walked file and
   directory identities before exact comparison and publication; the retained
   callback test proves the root file and nested file share one valid grant.
+- Hosted Agent Gates found that the lightweight workflow regression still
+  expected the predecessor aggregate dependency list and did not provide the
+  new Rust job result to its fail-closed shell probe. The regression now binds
+  the exact dependency and rejects every non-success Rust result alongside the
+  existing preflight, semantic-lane and CLI requirements.
 
 ## Reconciliation
 

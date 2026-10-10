@@ -189,7 +189,9 @@ class LightweightAgentGateTests(unittest.TestCase):
         )
         self.assertIn(
             "  test:\n    if: ${{ always() }}\n"
-            "    needs: [auth-boundary-preflight, lanes, minio-image, cli-public-contract]", workflow
+            "    needs: [auth-boundary-preflight, external-checker-runtime, "
+            "lanes, minio-image, cli-public-contract]",
+            workflow,
         )
         self.assertIn("Require preflight, every semantic lane and CLI public contract", workflow)
         self.assertIn(
@@ -352,6 +354,10 @@ class LightweightAgentGateTests(unittest.TestCase):
         )[1].split("\n      - name:", 1)[0]
         self.assertIn("if: ${{ always() }}", step)
         self.assertIn("PREFLIGHT_RESULT: ${{ needs.auth-boundary-preflight.result }}", step)
+        self.assertIn(
+            "EXTERNAL_CHECKER_RESULT: ${{ needs.external-checker-runtime.result }}",
+            step,
+        )
         self.assertIn("LANES_RESULT: ${{ needs.lanes.result }}", step)
         self.assertIn("CLI_RESULT: ${{ needs.cli-public-contract.result }}", step)
         guard = re.search(r"(?m)^        run: (.+)$", step)
@@ -361,7 +367,12 @@ class LightweightAgentGateTests(unittest.TestCase):
                 with self.subTest(preflight=preflight, lanes=lanes_result):
                     result = subprocess.run(
                         ["bash", "-e", "-c", guard[1]],
-                        env={"PREFLIGHT_RESULT": preflight, "LANES_RESULT": lanes_result, "CLI_RESULT": "success"},
+                        env={
+                            "PREFLIGHT_RESULT": preflight,
+                            "EXTERNAL_CHECKER_RESULT": "success",
+                            "LANES_RESULT": lanes_result,
+                            "CLI_RESULT": "success",
+                        },
                         capture_output=True,
                         check=False,
                     )
@@ -369,11 +380,36 @@ class LightweightAgentGateTests(unittest.TestCase):
                         result.returncode == 0,
                         preflight == lanes_result == "success",
                     )
+        for external_checker in (
+            "failure",
+            "cancelled",
+            "skipped",
+            "",
+            "unknown",
+        ):
+            with self.subTest(external_checker=external_checker):
+                result = subprocess.run(
+                    ["bash", "-e", "-c", guard[1]],
+                    env={
+                        "PREFLIGHT_RESULT": "success",
+                        "EXTERNAL_CHECKER_RESULT": external_checker,
+                        "LANES_RESULT": "success",
+                        "CLI_RESULT": "success",
+                    },
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
         for cli_result in ("failure", "cancelled", "skipped", "", "unknown"):
             with self.subTest(cli=cli_result):
                 result = subprocess.run(
                     ["bash", "-e", "-c", guard[1]],
-                    env={"PREFLIGHT_RESULT": "success", "LANES_RESULT": "success", "CLI_RESULT": cli_result},
+                    env={
+                        "PREFLIGHT_RESULT": "success",
+                        "EXTERNAL_CHECKER_RESULT": "success",
+                        "LANES_RESULT": "success",
+                        "CLI_RESULT": cli_result,
+                    },
                     capture_output=True,
                     check=False,
                 )
