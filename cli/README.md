@@ -18,6 +18,7 @@ context/intake requirements:
 | `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
 | `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/proposal` |
 | `workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/pre-submission-approval` |
+| `workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/post-submission-policies/POLICY_ID` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -289,6 +290,39 @@ Retained compilation prerequisites are seeded canonical test custody. The API
 is configured for non-eager in-memory publication and no post-policy worker is
 started. This does not prove broker publication, job delivery, deployed Flow or
 live setup-provider execution.
+
+## Inspect an exact derived post-submission policy
+
+After backend derivation, the proposal read supplies `post_submit_policy_id`:
+
+```sh
+workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID -o json
+```
+
+One public GET returns the complete canonical evaluation policy, its exact
+upstream intake receipt, unified proposal/findings, activation selectors,
+lifecycle/currentness and any saved correction. The four IDs are explicit;
+there is no latest selection, polling, derivation, approval or activation.
+Compiled, approved and superseded/non-current packages can be read while the
+backend still authorizes the caller. Nullable activation selections do not
+imply readiness. A correction shows its exact successor setup identifiers;
+reading it does not dispatch the successor.
+
+JSON preserves the complete response; text escapes untrusted terminal content.
+The CLI validates closed wire shapes and repeated resource identities, not
+catalogue membership, business hashes, authority or lifecycle decisions. Reads
+use the shared 12-second deadline and 8 MiB proposal-response bound. Invalid
+selectors make no request; denied, malformed or substituted responses return
+nonzero with empty stdout.
+
+Built-process tests exercise malformed responses and retained history. The
+real socket/Flow/PREP/PostgreSQL test arranges canonical source prerequisites,
+approves intake through REST, explicitly executes the actual derivation task
+in an isolated subprocess, and checks CLI/REST/SQL parity. REST approval and
+correction arrange later states; CLI reads add neither policy operations nor
+activation. This proves executed worker/SQL derivation, not queued broker
+delivery, live setup inference or deployed Flow. Suspension, revoked authority,
+outsiders and stored foreign-project substitutions remain denied.
 
 ## Create a draft project shell
 

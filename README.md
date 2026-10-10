@@ -374,6 +374,10 @@ approval request. It preserves the exact target, ordered warning acknowledgments
 and prior-approval selectors with explicit manual replay. The backend owns fresh
 authority, currentness and policy validation; the receipt proves intake approval,
 not post-policy approval, post-policy job delivery or guide activation.
+`workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID`
+reads the exact derived evaluation policy, upstream proposal/findings, activation
+selectors and saved correction through one public GET. Compiled, approved and
+superseded packages remain observations, not approval or activation.
 All support human-readable and JSON output, using the caller's Flow token.
 The first source package is buildable; further workflow commands and published
 binaries remain planned.
