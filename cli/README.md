@@ -16,6 +16,7 @@ context/intake requirements:
 | `workstream project guide create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides` |
 | `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
 | `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
+| `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/proposal` |
 | `workstream project tasks PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
@@ -76,7 +77,7 @@ and preserving the successful API JSON.
 Exit status is `0` for success, `1` for API/network/response failure, and `2`
 for invalid arguments or configuration. JSON requests time out after 12 seconds;
 JSON responses default to a 64 KiB bound (guide declaration and document-bearing
-work context use 2 MiB wire bounds). Original downloads stream to private files,
+work context use 2 MiB wire bounds; exact guide proposals use 8 MiB). Original downloads stream to private files,
 bounded by the advertised byte count and ART's 512 MiB hard ceiling. Downloads
 and original uploads allow up to two minutes for response headers and ten minutes overall,
 including transfer; connection/TLS timeouts and redirect/proxy refusal remain.
@@ -210,6 +211,34 @@ policy approval, guide activation or authority for another operation.
 Denials, malformed/substituted replies, oversized JSON and network failures
 leave stdout empty and exit 1. The normal 12-second/64KiB JSON bounds apply.
 Approval and activation commands remain separate future work.
+
+## Inspect an exact finalized guide proposal
+
+```sh
+workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID --output json
+```
+
+Use the explicit finalized compilation ID from setup inspection. The command
+makes one public GET and never substitutes the latest result, polls, fetches
+documents, or executes a decision. Workstream owns fresh scoped manager
+authority and exact project/guide/compilation membership.
+
+JSON retains the complete public package: exact target and hashes, findings
+with display-only source locations, requirement inventory, proposed intake
+policy, pre-submission intake bindings, distinct post-submission evaluation
+bindings, suggestions, notes and nullable approval/post-policy references.
+Text renders that same complete object with terminal escaping. Private runtime
+document handles are not part of this public projection. Unknown/duplicate
+members, missing/null required facts, malformed nested types or substituted
+identities fail with empty stdout. Integer facts retain the backend range.
+
+A blocked, warning-bearing or historical (`current=false`) proposal is still a
+successful read (exit 0), not readiness or authority to approve, correct or
+activate it. Post-submission policy inspection is a separate later operation
+after upstream approval/derivation. No automatic decision, local catalogue
+matching or digest recomputation is added. The existing 12-second deadline
+applies; the 8 MiB wire bound accommodates the stored compilation's 4 MiB
+envelope plus public target/projection overhead without raising other limits.
 
 ## Create a draft project shell
 
