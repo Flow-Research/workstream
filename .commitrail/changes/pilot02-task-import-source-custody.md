@@ -237,3 +237,24 @@ resources. It is not a completed 28-case proof. The source-equivalent diagnostic
 review-policy run and older local proofs retain their actual execution states
 and heads. Fresh complete hosted lanes and their aggregate remain required;
 no full-suite pass or readiness is claimed from these bounded local checks.
+
+The subsequent hosted run tested merge
+`50ff726866c5ecb0373af6bba2d5ad0e0f15d47e`, whose tree exactly matches
+publication `3ef9fbd2d8721abe334cb26e0bd7bd8796d5d431`. Eight backend lanes,
+CLI public contracts (121 cases), MCP and agent gates passed. The ninth lane
+retained one failure among 410 cases: the packet-custody migration fixture
+restored the historical attempt columns before its complete approved-policy
+seed had finished. The aggregate correctly failed closed.
+
+The existing packet-custody preservation test now keeps the temporary nullable
+attempt column through its complete seed, then asserts and restores the original
+column order and every retained ART row before upgrading the actual predecessor
+schema. The outer fixture lifetime remains alive across that upgrade; all
+submission-preservation and installed-trigger assertions remain unchanged.
+No application, model or production migration changes accompany this repair.
+Independent affected fixture review passed clean
+`1057d0cd0e05a9ec167ef83aaa0cae781062117e`. The same previously failing
+native test passed in 49.46 seconds at that exact head, with PostgreSQL 16,
+real MinIO, `0031_task_import_source`, runner exit 0 and owned database,
+role and provider cleanup confirmed. This paired proof closes the observed
+fixture failure; fresh complete hosted CI remains required.
