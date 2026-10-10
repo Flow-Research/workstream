@@ -116,6 +116,9 @@ when a client converts a CSV; it is never described as the original CSV.
 | Denial regression discrimination | Retained real-service test body replayed against clean production `94fe55c3a171deb619debb2310d323703b71c666`; source restaging disabled in memory at `a3ef23fe46ec6687ba749b714b46e7e99b768a0e` | Old boundary fails the wrong-instance assertion in 73.61 seconds; no-op restaging fails the four canonical denied-event assertion in 73.43 seconds; both native control namespaces cleaned up | Test-only overlays are controls, not full executions of either production tree |
 | Protected MCP contract coherence | Selected-fragment tamper/transitive checks and actual backend OpenAPI comparison at `dd5c6802e507b8c5d80237e99c93e7b364383be4` | All 11 passed; only the three additive source actions, selected digest and capture revision change; the eight other operations remain identical | Later DDL/test changes leave this selected public schema unchanged |
 | Architecture and CI metadata invariants | Module/AUTH, structure/ownership and lane regressions at reconciled `7d5f637e8aed61314f6f6024ef0fb611bd29ea06`; affected structure/ownership and Ruff replay at `f5b575f3d8db03d43e753aca4ab04a23fb08d626` | 404 architecture/metadata checks and protected-base validators passed; configured docstring audit passed without threshold changes | Full hosted suites and independent review remain required engineering checks |
+| Current routing/source schema and public integration | Canonical isolated runner at clean `812c68df49a6857f97858c58646ed3621fcfa59f`: all 18 public source cases plus graph, reset, native UUID and external-registry checks | All 25 passed in 437.76 seconds on PostgreSQL 16 and MinIO; runner exit 0; metadata binds that head, linear `0031_task_import_source`, and owned database/role/MinIO cleanup | Exact local integration proof after main's routing migration; full hosted suites remain required |
+| Current owner and contract coherence | Source parser, AUTH catalogue/audit/setup and CI lane metadata at `812c68df49a6857f97858c58646ed3621fcfa59f`; canonical module/AUTH architecture checks and protected-main guards | 121 pure/metadata checks passed in 9.56 seconds and 94 architecture checks in 212.12 seconds; module/AUTH, structure/ownership, Ruff, configured docstring audit and stale contract checks passed | Independent source review closes both denial findings; the migration author's DDL remains subject to the lead's independent SQL review |
+| Current selected MCP coherence | Actual backend OpenAPI, selected-fragment tamper and transitive checks at reconciled `169d2748608984257c565bff3ae05be2167bea0f` | All 11 passed in 20.27 seconds; the subsequent authored migration handoff changes only migration ordering, graph and native fingerprint consumers | Selected public schemas are unchanged by the handoff; no new MCP operation is introduced |
 
 ## Review findings
 
@@ -168,11 +171,14 @@ requiring raw private resource selectors.
 - Remaining risks: source retention has no deletion scheduler; Issue #489 remains open.
 - Schema handoff: main owns `0028_lifecycle_transitions`,
   `0029_external_checker_registry` and `0030_routing_outcomes`. The sole coordinated
-  migration author supplies successor `0031_task_import_source` after routing
-  reconciliation, retaining the reviewed immutable-update lock and NULL-role
-  repairs. The earlier isolated source revision and native proofs used ordinal
-  0030 before routing merged. This reconciliation retains those exact historical
-  receipts and requires fresh successor-schema and public-operation proof before
-  publication. No application author writes alternative DDL or bypasses the
-  canonical schema guard. Source custody remains this chunk's complete outcome;
+  migration author supplied successor `0031_task_import_source` in
+  `641b3bae2072aded46d61cfd1367cfcca42d7d0b`, integrated at `812c68df49a6857f97858c58646ed3621fcfa59f`.
+  Its SQL body retains the reviewed immutable-update lock and NULL-role repairs;
+  only the revision and predecessor identifiers change. The combined PostgreSQL
+  16 fingerprint is `a209b774a54f2dad9dacf43f7112b82e2366159fa6e7a677c2f3108a6f0d023f`.
+  The earlier isolated source revision and native proofs used ordinal 0030
+  before routing merged; their exact historical receipts remain distinct from
+  the new 25-case successor-schema and public-operation proof above. No
+  application author writes alternative DDL or bypasses the canonical schema
+  guard. Source custody remains this chunk's complete outcome;
   atomic DRAFT import and batch operations remain separate implementation work.
