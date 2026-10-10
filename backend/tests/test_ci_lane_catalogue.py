@@ -274,7 +274,6 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
             "tests/tasks/evaluation_delivery/test_completion.py",
             "tests/tasks/evaluation_delivery/test_completion_contracts.py",
             "tests/tasks/evaluation_delivery/test_completion_custody.py",
-            "tests/tasks/evaluation_delivery/test_worker_materialization.py",
             "tests/authorization/submission_history/test_reads.py",
             "tests/authorization/submission_history/test_privacy.py",
             "tests/authorization/submission_history/test_storage.py",
@@ -361,6 +360,7 @@ def test_measured_hotspots_have_explicit_semantic_owners() -> None:
     shared_a = modules_by_lane[catalogue.PARTITIONED_SHARED_LANES[0]]
     shared_b = modules_by_lane[catalogue.PARTITIONED_SHARED_LANES[1]]
     assert shared_a == shared_b == set(catalogue.SHARED_FOUNDATION_MODULES)
+    assert "tests/tasks/evaluation_delivery/test_worker_materialization.py" in shared_a
     assert "tests/artifacts/test_review_packet_contract.py" in shared_a
     assert {
         "tests/authorization/post_submit/test_atomicity.py",

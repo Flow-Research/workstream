@@ -21,7 +21,7 @@ The parallel [04F remediation](planning/chunks/WS-ARCH-001-04F-checker-remediati
 
 - `backend/app/adapters/artifacts/__init__.py` for the concrete invocation-scoped adapter and reuse of current ART construction helpers.
 - `backend/tests/test_post_submit_materialization.py`, `backend/tests/post_submit_materialization_helpers.py` and focused tests under `backend/tests/tasks/evaluation_delivery/` for real hidden handler, cleanup and provider-lease lifetime. Existing shared fixtures may change only where a real provider-bound test needs them.
-- `backend/scripts/test_lane_catalogue.py` and `backend/tests/test_ci_lane_catalogue.py` to place the new PostgreSQL/MinIO module in existing TASK lanes without changing their limits or moving older tests.
+- `backend/scripts/test_lane_catalogue.py` and `backend/tests/test_ci_lane_catalogue.py` to place the new shared ART/CHECKERS PostgreSQL/MinIO module in existing shared-foundation lanes without changing their limits or moving older tests.
 - This record, the affected ARCH overview/plan/map and `docs/roadmap_status.md` only if the hidden capability or next dependency changes on merge; relevant ownership inventory/tests if the new adapter changes an enforced boundary. No migration is expected.
 
 ## Prohibited

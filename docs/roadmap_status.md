@@ -641,7 +641,7 @@ The broader v0.1 sequence below retains later scope:
    detached facts and source-neutral accepted-effects types. CON-03C adds immutable contribution/award storage. REV-12A1 supplies disabled controller/fence mechanics with PostgreSQL-enforced root-transaction checks, including raw-SQL savepoint rejection. CON-07 supplies a hidden source-neutral submitter participant and complete frozen award-set staging/replay under that caller-root fence. REV-04C composes FinalAcceptance, TASK accepted/completed effects and that CON participant in one hidden caller-owned transaction for either source. It adds no AUTH receipt, handler, route, currentness guarantee, audit/outbox consequence, fulfillment root or reviewer participant.
    Both branches have delivered request reservation 04E1B-A, hidden AUTH
    preparation 04E2-A and complete authorized outcomes 04E2-B. B8 supplies hidden completion delivery;
-   04E3A composes the existing ART worker provider lease and bounded scratch for
+   04E3A composes the existing ART Celery child provider lease and bounded scratch for
    hidden request execution. Remediation and live 04E3 remain next.
    True routing may proceed after its own prerequisites to publish the exact TASK
    manifest and move `evaluation_pending -> review_pending` when no blocking
@@ -801,7 +801,7 @@ Delivered foundations (not a claim of full public integration)
 Remaining integration
   both branches: delivered B8 hidden completion handler (commit before ACK)
     -> acknowledge only the committed authorized outcome
-  delivered 04E3A: hidden worker ART lease + per-invocation scratch; no production registration
+  delivered 04E3A: hidden ART Celery child lease + per-invocation scratch; no production registration
   -> 04F hidden remediation + authorized recovery proof
   -> 04E3 live composition and false-policy readiness
   -> public initial/checker-remediation intake and immutable admitted Submission cutover
@@ -1013,3 +1013,5 @@ REV-12A4A proof: [scoped lifecycle control and payment-delivery deferral](../.co
 ARCH-04E2-B proof: [hidden authorized outcome custody](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E2B.md). B8 supplies hidden completion delivery; production registration and false-guide activation remain unavailable.
 
 ARCH-04E1B-B8 proof: [hidden completion delivery](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E1BB8.md). Both policy branches commit before acknowledgment; closed UNKNOWN invocations never automatically repeat effects. Production registration remains unavailable.
+
+ARCH-04E3A proof: [hidden invocation-scoped ART materialization](../.commitrail/initiatives/WS-ARCH-001/WS-ARCH-001-04E3A.md) leases the existing Celery child provider and closes bounded scratch for hidden request delivery. Production registration remains unavailable.
