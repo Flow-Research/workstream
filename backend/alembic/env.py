@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_uuid7_v01"
-_CURRENT_HEAD_REVISION = "0029_routing_outcomes"
+_CURRENT_HEAD_REVISION = "0030_routing_outcomes"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_uuid7_v01 migration"
@@ -82,6 +82,7 @@ def do_run_migrations(connection: Connection) -> None:
             ("0026_task_guide_read",),
             ("0027_markdown_guide_media",),
             ("0028_lifecycle_transitions",),
+            ("0029_external_checker_registry",),
             (_CURRENT_HEAD_REVISION,),
         ):
             raise RuntimeError(_RECREATE_GUIDANCE)

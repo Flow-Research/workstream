@@ -4,8 +4,8 @@ from alembic import op
 import sqlalchemy as sa
 from scripts.schema_baseline_sql import split_sql_statements
 
-revision = "0029_routing_outcomes"
-down_revision = "0028_lifecycle_transitions"
+revision = "0030_routing_outcomes"
+down_revision = "0029_external_checker_registry"
 branch_labels = None
 depends_on = None
 

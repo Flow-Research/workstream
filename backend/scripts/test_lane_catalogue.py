@@ -412,6 +412,10 @@ PROJECT_AC_PARTITION_MODULES = (
 # Checker delivery shares project dispatch ownership and the existing
 # three-way partition; exclusive placement exceeded the hosted execution cap.
 CHECKER_DELIVERY_MODULES = (
+    "tests/checkers/external/test_contracts.py",
+    "tests/checkers/external/test_migration.py",
+    "tests/checkers/external/test_postgresql.py",
+    "tests/checkers/external/test_registry.py",
     "tests/checkers/execution/test_results.py",
     "tests/checkers/execution/test_execution.py",
     "tests/checkers/execution/test_coordination.py",

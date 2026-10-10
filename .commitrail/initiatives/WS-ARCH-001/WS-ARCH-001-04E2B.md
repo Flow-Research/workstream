@@ -62,7 +62,8 @@ canonical contracts before activating the exact operation.
   project-qualified nonlocking review-mode observation, revalidated under custody.
 - Existing TASK/REV/CON typed participants and explicit `app/adapters/` roots;
   shared AUDIT/outbox append participants and bounded outcome event contracts.
-- One successor migration after 0028, model registration if necessary, Alembic
+- One successor migration after the coordinated checker-registry migration
+  0029, model registration if necessary, Alembic
   preflight/head inventory and measured schema reset fingerprint.
 - Focused AUTH routing/source, TASK routing, REV acceptance/lifecycle and CON
   participation tests and their affected fixtures; migration/storage/replay,
@@ -250,3 +251,10 @@ The affected fixed-service catalogue assertions move from the oversized AUTH
 test module to its existing focused catalogue module. All nine original assertion
 spans have explicit retained/extracted dispositions; the original module shrinks,
 and the structural inventory records that reduction without changing limits.
+
+Main reconciliation retains PILOT-04 registry contracts and authority alongside
+the routing outcome operation. Migration 0030 follows
+`0029_external_checker_registry` in one linear chain; predecessor-refusal tests
+start from that coordinated predecessor. Combined ownership, AUTH catalogue and
+schema inventories retain both changes; the schema fingerprint is measured from
+the resulting PostgreSQL schema rather than selecting either branch’s hash.

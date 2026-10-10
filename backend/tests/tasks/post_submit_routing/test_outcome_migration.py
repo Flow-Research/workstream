@@ -59,7 +59,7 @@ async def test_pre_authority_rows_refuse_upgrade_without_rewriting(
         async with factory(tmp_path, isolated_database_env) as h:
             if not terminal:
                 await historical_reserve(h)
-            await asyncio.to_thread(command.upgrade, _config(), "0028_lifecycle_transitions")
+            await asyncio.to_thread(command.upgrade, _config(), "0029_external_checker_registry")
             connection = await asyncpg.connect(url)
             try:
                 before = await snapshot(connection)
@@ -68,20 +68,20 @@ async def test_pre_authority_rows_refuse_upgrade_without_rewriting(
                         IntegrityError,
                         match="retained outcome or terminal material lacks required source authority",
                     ):
-                        await asyncio.to_thread(command.upgrade, _config(), "0029_routing_outcomes")
+                        await asyncio.to_thread(command.upgrade, _config(), "0030_routing_outcomes")
                     assert (
                         await connection.fetchval("SELECT version_num FROM public.alembic_version")
-                        == "0028_lifecycle_transitions"
+                        == "0029_external_checker_registry"
                     )
                     assert await snapshot(connection) == before
                     assert not await connection.fetchval("""SELECT EXISTS(SELECT 1 FROM information_schema.columns
                         WHERE table_schema='public' AND table_name='checker_runs'
                           AND column_name='input_materialization_evidence_id')""")
                 else:
-                    await asyncio.to_thread(command.upgrade, _config(), "0029_routing_outcomes")
+                    await asyncio.to_thread(command.upgrade, _config(), "0030_routing_outcomes")
                     assert (
                         await connection.fetchval("SELECT version_num FROM public.alembic_version")
-                        == "0029_routing_outcomes"
+                        == "0030_routing_outcomes"
                     )
                     after = await snapshot(connection)
                     after["checker_runs"] = await connection.fetch(
