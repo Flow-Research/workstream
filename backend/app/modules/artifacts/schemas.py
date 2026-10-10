@@ -20,6 +20,19 @@ from app.modules.actors.api import ServiceIdentity
 
 @final
 @dataclass(frozen=True, slots=True)
+class TaskImportSourceAdmissionRequest:
+    """One canonical JSON upload selected by its immutable ART declaration."""
+
+    source_id: UUID
+    source: CommittedArtifactSource
+
+
+class TaskImportSourceAdmissionAuthority(Protocol):
+    async def consume(self, request: TaskImportSourceAdmissionRequest) -> UUID: ...
+
+
+@final
+@dataclass(frozen=True, slots=True)
 class GuideArtifactAdmissionRequest:
     """One prepared guide source item admitted under its canonical project."""
 
@@ -102,6 +115,7 @@ class SubmissionBundleArtifactAdmissionRequest:
 
 ArtifactAdmissionRequest: TypeAlias = (
     GuideArtifactAdmissionRequest
+    | TaskImportSourceAdmissionRequest
     | CheckerOutputArtifactAdmissionRequest
     | SubmissionBundleArtifactAdmissionRequest
 )
@@ -434,4 +448,4 @@ class DenyArtifactOperatorAuthority:
 
 
 # Only these current producers use post-put full-object verification.
-VERIFICATION_PRODUCERS = ("checker_output", "submission_bundle")
+VERIFICATION_PRODUCERS = ("checker_output", "submission_bundle", "task_import_source")

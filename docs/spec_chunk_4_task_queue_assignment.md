@@ -70,6 +70,35 @@ There is no public JSON-packet submission creation route. The existing
 creation is usable. Admission-backed Submission creation stays hidden until
 its separate canonical public integration is complete.
 
+## Canonical Task-Import Sources
+
+The [published JSON schema](../contracts/task-import.schema.json) defines
+`workstream.task_import.v1`: optional display metadata and 1..500 task rows.
+Each row has a required case-sensitive `external_task_id` (1..200 characters,
+no surrounding whitespace or control characters), nonblank `title` and
+`description`, and optional `task_type`, `difficulty`, `skill_tags`,
+`estimated_time_minutes`, `acceptance_criteria` and `rejection_criteria`. Text and collection bounds
+are part of the schema. External IDs must be unique inside the document;
+duplicate errors identify the zero-based row and the first duplicate's row.
+The parser accepts strict UTF-8 JSON without a BOM, duplicate object members,
+non-finite numbers, NUL or unpaired surrogates. The source ceiling is 8 MiB.
+
+Client conversions map category to `task_type`, languages/tools to `skill_tags`
+and the external source ID to `external_task_id`. ART retains the exact received
+JSON bytes and server-computed SHA-256/count, including formatting; a converted
+CSV is not claimed to be the original CSV. Callers cannot supply task state,
+locked guide/policy identities, creator identity or server provenance fields.
+
+PILOT-02A supplies usable authorized declaration, upload, status and verified
+download through the [ART source custody contract](spec_artifact_storage_service.md#task-import-source-custody).
+These operations create no Tasks. Failed or abandoned declarations remain
+retained source records with no batch/task success claim. A later bounded
+PILOT-02 operation must import a verified source into DRAFT atomically, enforce
+project/external-ID uniqueness and replay/conflict rules, and bind exact ART
+and AUTH custody. Explicit screen and release, their existing locked-guide
+prerequisites and normal transitions remain unchanged. No public batch import,
+batch screen/release or CLI conversion is delivered by source custody alone.
+
 ## Transitions and locked lineage
 
 Stored task states use the canonical lowercase tokens:

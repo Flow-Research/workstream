@@ -88,6 +88,7 @@ from app.modules.authorization.runtime import (
     SubmissionBindingResourceContext,
     SubmissionCreationResourceContext,
     GuideSourceIngestResourceContext,
+    TaskImportSourceResourceContext,
     PreSubmitCheckerInputResourceContext,
     AuthorizationContext,
     AuthorizationDenialCode,
@@ -252,6 +253,12 @@ class _PreparedAuthorizationBinding:
     adapter_binding_resource_digest: str | None = None
     guide_projection_prepare_context: dict | None = None
     setup_finalization_prepare_context: dict | None = None
+
+
+TASK_IMPORT_SOURCE_ACTIONS = frozenset({
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE, ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ,
+})
 
 
 @dataclass(slots=True)
@@ -697,6 +704,7 @@ class PreparedAuthorizationService:
                 PreSubmitCheckerInputResourceContext,
                 SubmissionBindingResourceContext,
                 SubmissionCreationResourceContext,
+                TaskImportSourceResourceContext,
             ),
         ) and not _exact_artifact_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -954,6 +962,7 @@ class PreparedAuthorizationService:
             or GUIDE_PROPOSAL_RESOURCE_BY_ACTION.get(action_id)
             or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
             or (TaskAuthorityResourceContext if action_id in TASK_ACTIONS else None)
+            or (TaskImportSourceResourceContext if action_id in TASK_IMPORT_SOURCE_ACTIONS else None)
         )
         if action_id in CONTRIBUTION_POLICY_MUTATION_ACTIONS and isinstance(resource, ContributionPolicyMutationResourceContext):
             return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=resource.scope_project_id)

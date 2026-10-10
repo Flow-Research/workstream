@@ -75,6 +75,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_artifact_preparation.py",
     "tests/test_artifact_store_conformance.py",
     "tests/test_artifact_verification.py",
+    "tests/test_task_import_sources.py",
     "tests/test_artifacts.py",
     "tests/test_assertion_helpers.py",
     "tests/test_aws_credential_isolation.py",
@@ -433,6 +434,7 @@ CHECKER_DELIVERY_MODULES = (
 
 
 TASK_MODULES = (
+    "tests/tasks/test_task_import_contract.py",
     # New completion proofs use TASK custody and its measured lane headroom.
     "tests/tasks/evaluation_delivery/test_completion.py",
     "tests/tasks/evaluation_delivery/test_completion_contracts.py",

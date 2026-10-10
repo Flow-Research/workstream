@@ -620,6 +620,14 @@ PILOT_13_GUIDE_READ_TARGETS = frozenset({
     "backend/app/modules/artifacts/task_guide_documents.py",
     "backend/app/modules/tasks/api/guide_documents.py",
 })
+PILOT_02A_IMPORT_SOURCE_TARGETS = frozenset({
+    "backend/app/modules/artifacts/api/task_import_source.py",
+    "backend/app/api/routes/artifact_task_import_sources.py",
+    "backend/app/modules/artifacts/task_import_sources.py",
+    "backend/app/modules/authorization/domain/artifact_storage.py",
+    "backend/app/modules/authorization/task_import_sources.py",
+    "backend/app/modules/tasks/api/task_import.py",
+})
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -686,6 +694,8 @@ def changed_callable_names(root: Path, base_sha: str, head_sha: str, target: str
 
 def group_for_target(target: str) -> str:
     """Assign one exact population group without wildcard authority."""
+    if target == "backend/app/api/routes/artifact_task_import_sources.py":
+        return "artifacts"
     if target in ARCH_CP02_CON_LIFECYCLE_TARGETS | CON_03C_STORAGE_TARGETS | CON_07_PARTICIPATION_TARGETS:
         return "lifecycle"
     if "/authorization/" in target or target.endswith("/auth.py"):
@@ -864,6 +874,7 @@ def _validate_additive_partition_transition(
         | TASK_PROJECT_AUTHORITY_TARGETS
         | TASK_COMMAND_REPLAY_TARGETS
         | PILOT_13_GUIDE_READ_TARGETS
+        | PILOT_02A_IMPORT_SOURCE_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:

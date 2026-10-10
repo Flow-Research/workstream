@@ -39,6 +39,8 @@ from app.modules.artifacts.schemas import (
 from app.modules.artifacts.service import ArtifactRecoveryService
 from app.modules.authorization.runtime import AuthorizationContext
 
+__all__ = ("router",)
+
 router = APIRouter(prefix="/operator/artifacts", tags=["operator-artifacts"])
 
 

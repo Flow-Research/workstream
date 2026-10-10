@@ -26,7 +26,16 @@ PROJECT_SUBMITTER_ACTIONS = TASK_SUBMITTER_ACTIONS | {
 }
 PROJECT_AUTHORITY_ACTIONS = TASK_ACTIONS | PROJECT_SUBMITTER_ACTIONS | {
     ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ,
 }
+
+TASK_IMPORT_SOURCE_ACTIONS = frozenset({
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_DECLARE,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_UPLOAD,
+    ActionId.ARTIFACT_TASK_IMPORT_SOURCE_READ,
+})
 
 
 async def lock_project_authority(repository, context, scope, action, locked_context):
@@ -43,6 +52,7 @@ async def lock_project_authority(repository, context, scope, action, locked_cont
             ActionId.OPERATIONS_TASK_START_OVERRIDE, ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
         },
         allowed_roles={
+            **{action: frozenset({AdminRole.PROJECT_MANAGER}) for action in TASK_IMPORT_SOURCE_ACTIONS},
             ActionId.PROJECT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.PROJECT_MANAGER}),
             ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.OPERATOR}),
             ActionId.AUDIT_TASK_LOCKED_CONTEXT_READ: frozenset({AdminRole.AUDIT_AUTHORITY}),
@@ -80,6 +90,23 @@ def evaluate_project_authority(action, context, authority, resource, lifecycle_d
     """Keep each resource guard distinct while sharing the closed dispatch boundary."""
     if action.action_id in TASK_ACTIONS:
         return evaluate_task_authority(action, context, authority, resource, lifecycle_denial)
+    if action.action_id in TASK_IMPORT_SOURCE_ACTIONS:
+        from app.modules.authorization.runtime import TaskImportSourceResourceContext
+        denial = lifecycle_denial
+        if denial is None and action.availability is not ActionAvailability.ACTIVE:
+            denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+        if denial is None and (
+            type(resource) is not TaskImportSourceResourceContext
+            or resource.scope_project_id != authority.scope_project_id
+            or resource.actor_profile_id != context.actor_profile_id
+            or resource.identity_link_id != context.identity_link_id
+        ):
+            denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+        if denial is None and (authority.matched_grant_id is None or authority.matched_grant_status != "active"):
+            denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+        return (denial, None, None, None) if denial is not None else (
+            None, MatchedAuthorityKind.ADMIN_ROLE_GRANT, authority.matched_grant_id, authority.scope_project_id,
+        )
     if action.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
         return evaluate_guide_ingest_authority(action, authority, resource, lifecycle_denial)
     if action.action_id in PROJECT_SUBMITTER_ACTIONS:

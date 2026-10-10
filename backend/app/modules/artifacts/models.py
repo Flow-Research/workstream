@@ -34,6 +34,37 @@ ACTOR_UUID7_CHECK = (
 )
 
 
+class ArtifactTaskImportSource(Base):
+    """Immutable project-bound declaration; every upload retains this parent."""
+
+    __tablename__ = "artifact_task_import_sources"
+    __table_args__ = (
+        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        UniqueConstraint("project_id", "idempotency_key", name="uq_artifact_task_import_source_namespace"),
+        UniqueConstraint("operation_identity", name="uq_artifact_task_import_source_operation"),
+        UniqueConstraint("id", "project_id", "sha256", "byte_count", "media_type", name="uq_artifact_task_import_source_custody"),
+        CheckConstraint(SHA256_CHECK.format(column="sha256"), name="sha256_shape"),
+        CheckConstraint(SHA256_CHECK.format(column="operation_identity"), name="operation_identity_shape"),
+        CheckConstraint("byte_count between 1 and 8388608", name="byte_count_bound"),
+        CheckConstraint("media_type='application/json'", name="media_type"),
+        ForeignKeyConstraint(["identity_link_id", "actor_profile_id"],
+                             ["actor_identity_links.id", "actor_identity_links.actor_profile_id"],
+                             ondelete="RESTRICT", name="fk_artifact_task_import_source_actor_link"),
+    )
+
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"), nullable=False)
+    identity_link_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    authorization_decision_id: Mapped[str] = mapped_column(ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    operation_identity: Mapped[str] = mapped_column(String(71), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+
+
 class ArtifactContent(Base):
     """Immutable provider-neutral identity for exact stored bytes."""
 
@@ -1014,8 +1045,16 @@ class ArtifactPutAttempt(Base):
             name="fk_artifact_put_attempts_submission_version",
         ),
         UniqueConstraint("operation_identity", name="uq_artifact_put_attempt_operation"),
+        UniqueConstraint("task_import_source_id", name="uq_artifact_put_attempt_import_source"),
+        ForeignKeyConstraint(
+            ["task_import_source_id", "project_id", "sha256", "byte_count", "media_type"],
+            ["artifact_task_import_sources.id", "artifact_task_import_sources.project_id",
+             "artifact_task_import_sources.sha256", "artifact_task_import_sources.byte_count",
+             "artifact_task_import_sources.media_type"],
+            ondelete="RESTRICT", name="fk_artifact_put_attempt_import_source_custody",
+        ),
         CheckConstraint(
-            "producer_request_type in ('guide', 'checker_output', 'submission_bundle')",
+            "producer_request_type in ('guide', 'checker_output', 'submission_bundle', 'task_import_source')",
             name="producer_request_type",
         ),
         CheckConstraint(
@@ -1023,7 +1062,7 @@ class ArtifactPutAttempt(Base):
             name="producer_type",
         ),
         CheckConstraint(
-            "((producer_request_type = 'guide' "
+            "((producer_request_type in ('guide', 'task_import_source') "
             "and producer_type = 'actor_profile' and "
             + ACTOR_UUID7_CHECK.format(column="producer_ref")
             + ") or (producer_request_type = 'checker_output' "
@@ -1095,24 +1134,29 @@ class ArtifactPutAttempt(Base):
             name="prepared_execution_inactive",
         ),
         CheckConstraint(
-            "(producer_request_type = 'guide' and guide_source_item_id is not null "
+            "(producer_request_type = 'guide' and task_import_source_id is null and guide_source_item_id is not null "
             "and checker_run_id is null and task_id is null and submission_id is null "
             "and submission_version is null "
             "and logical_role is null) or "
-            "(producer_request_type = 'checker_output' and guide_source_item_id is null "
+            "(producer_request_type = 'checker_output' and task_import_source_id is null and guide_source_item_id is null "
             "and checker_run_id is not null and task_id is not null "
             "and submission_id is not null and submission_version is not null "
             "and octet_length(logical_role) between 1 and 100) or "
-            "(producer_request_type = 'submission_bundle' "
+            "(producer_request_type = 'submission_bundle' and task_import_source_id is null "
             "and guide_source_item_id is null and checker_run_id is null "
             "and task_id is not null and submission_id is null "
-            "and submission_version is null and logical_role is null)",
+            "and submission_version is null and logical_role is null) or "
+            "(producer_request_type = 'task_import_source' and task_import_source_id is not null "
+            "and guide_source_item_id is null and checker_run_id is null and task_id is null "
+            "and submission_id is null and submission_version is null "
+            "and logical_role is not distinct from 'task_import_source')",
             name="producer_reference",
         ),
     )
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     producer_request_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    task_import_source_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     producer_type: Mapped[str] = mapped_column(String(30), nullable=False)
     producer_ref: Mapped[str] = mapped_column(String(120), nullable=False)
     project_id: Mapped[str] = mapped_column(
@@ -1404,7 +1448,7 @@ class ArtifactOperationReceipt(Base):
             "(guide_source_item_id is null and checker_run_id is not null "
             "and octet_length(logical_role) between 1 and 100) or "
             "(guide_source_item_id is null and checker_run_id is null "
-            "and logical_role is null))",
+            "and (logical_role is null or logical_role='task_import_source')))",
             name="contract_producer_reference",
         ),
     )

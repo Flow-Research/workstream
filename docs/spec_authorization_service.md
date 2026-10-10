@@ -536,6 +536,7 @@ is not a permission alias.
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
 | `WS-XINT-002-04B` | Active: `artifact.guide_source.read` |
+| `PILOT-02A` | Active: `artifact.task_import_source.declare`, `artifact.task_import_source.upload`, `artifact.task_import_source.read` |
 | `WS-XINT-002-05A` | Active `artifact.submission_bundle.prepare`; registry custody retained while replacement implementation chunk WS-ARCH-001-02G supplies the executable PREP boundary |
 | `WS-XINT-002-06A` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create`; activated by replacement implementation chunk WS-ARCH-001-02H for only the fixed artifact-binding service |
@@ -721,7 +722,23 @@ Separate management/operational/audit projections preserve their respective
 permissions rather than switching one action's mapping based on token roles.
 ARCH-03C3 activates `project.task.create`, `project.task.screen` and
 `project.task.release` under existing `project.task.manage`; no new permission or
-broader Project Manager permission set is introduced. ARCH-03C4 activates:
+broader Project Manager permission set is introduced.
+PILOT-02A adds only `artifact.task_import_source.declare`,
+`artifact.task_import_source.upload` and `artifact.task_import_source.read` under
+that same permission. Each requires an active human covering Project Manager
+grant and exact project/source facts; another role sharing the permission is
+ineligible. The frozen resource commitment includes source UUID, project,
+current actor/link, original declared SHA-256/count/media, operation identity
+and declaration idempotency key. Prepared consumption rechecks those exact
+facts and live authority at the protected transaction boundary. Declaration
+retains its exact ALLOW decision; admission and successful read decisions commit
+only with their protected operation. Preflight upload ALLOW is rolled back
+before scratch work; final admission authorizes again. Same-key declaration and
+upload replay require current authority. Selector denial is concealed as 404;
+failed transactions retain canonical denial evidence without partial source
+admission. These actions grant no task creation, screen/release, Submitter access
+or fixed-service membership.
+ARCH-03C4 activates:
 `task.queue.read` under `task.queue.read` for exact-project Submitters;
 `project.task.queue.read` under `project.task.manage` for covering Project Managers;
 and `operations.task.queue.read` under `operations.status.read` for system Operators.

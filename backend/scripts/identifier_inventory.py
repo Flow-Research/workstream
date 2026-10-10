@@ -331,6 +331,14 @@ def parse_schema(backend_root: Path) -> dict[str, dict[str, Any]]:
                 or not (table_name := _string(item.args[0]))
             ):
                 continue
+            primary_key = list(dict.fromkeys(
+                name
+                for argument in item.args[1:]
+                if isinstance(argument, ast.Call)
+                and _name(argument.func) == "PrimaryKeyConstraint"
+                for value in argument.args
+                if (name := _string(value))
+            ))
             columns = []
             for argument in item.args[1:]:
                 if (
@@ -340,7 +348,7 @@ def parse_schema(backend_root: Path) -> dict[str, dict[str, Any]]:
                     or not (column_name := _string(argument.args[0]))
                 ):
                     continue
-                if any(
+                if column_name in primary_key or any(
                     keyword.arg == "primary_key"
                     and isinstance(keyword.value, ast.Constant)
                     and keyword.value.value is True
@@ -360,7 +368,7 @@ def parse_schema(backend_root: Path) -> dict[str, dict[str, Any]]:
             tables[table_name] = {
                 "name": table_name,
                 "columns": columns,
-                "primary_key": [column["name"] for column in columns],
+                "primary_key": primary_key or [column["name"] for column in columns],
                 "schema_sources": [relative],
             }
     return tables

@@ -42,6 +42,7 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
     "project_post_submit_checker_policy_mutation",
     "contribution_policy",
     "external_checker_registry_entry",
+    "task_import_source",
 )
 
 
@@ -104,6 +105,7 @@ AuthorizationDecisionResourceType = Literal[
     "compensation_adapter_binding",
     "contribution_policy",
     "external_checker_registry_entry",
+    "task_import_source",
 ]
 
 

@@ -54,6 +54,7 @@ from app.modules.artifacts.models import (
     ArtifactAdmissionCharge,
     ArtifactAdmissionScope,
     ArtifactPutAttempt,
+    ArtifactTaskImportSource,
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactPutObservationReceipt,
@@ -77,6 +78,8 @@ from app.modules.artifacts.authorization import (
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
     VERIFICATION_PRODUCERS,
+    TaskImportSourceAdmissionRequest,
+    TaskImportSourceAdmissionAuthority,
     ArtifactAdmissionRequest,
     ArtifactAdmissionResult,
     ArtifactAuthorityDeniedError,
@@ -194,6 +197,7 @@ class _AdmissionFacts:
     checker_request_digest_facts: dict[str, object] | None
     pre_submit_evidence_set_id: str | None
     operation_identity: str
+    task_import_source_id: str | None = None
 
 
 def artifact_storage_namespace_spec(
@@ -1913,6 +1917,7 @@ class ArtifactAdmissionService:
         submission_task_contexts: TaskSubmissionContextPort | None = None,
         submission_project_contexts: ProjectLockedPolicyContextPort | None = None,
         checker_output_authority: CheckerOutputAdmissionAuthority | None = None,
+        task_import_source_authority: TaskImportSourceAdmissionAuthority | None = None,
         prepared_authorization: PreparedAuthorizationHandle | None = None,
         existing_transaction: bool = False,
     ) -> ArtifactAdmissionResult:
@@ -1933,6 +1938,23 @@ class ArtifactAdmissionService:
             if type(request) is CheckerOutputArtifactAdmissionRequest:
                 assert checker_output_authority is not None
                 await checker_output_authority.consume(request)
+            import_facts = None
+            if type(request) is TaskImportSourceAdmissionRequest:
+                if task_import_source_authority is None:
+                    raise ArtifactAuthorityDeniedError("task-import source authority is unavailable")
+                actor_id = await task_import_source_authority.consume(request)
+                declared = await self._session.get(ArtifactTaskImportSource, str(request.source_id))
+                if (declared is None or (declared.sha256, declared.byte_count, declared.media_type)
+                        != (commitment.sha256, commitment.byte_count, commitment.media_type)):
+                    raise ArtifactAdmissionRelationshipError("task-import source commitment differs from declaration")
+                import_facts = _AdmissionFacts(
+                    request_type="task_import_source", producer_type="actor_profile", producer_ref=str(actor_id),
+                    project_id=declared.project_id, guide_id=None, task_id=None, guide_source_item_id=None,
+                    guide_source_snapshot_id=None, checker_run_id=None, logical_role="task_import_source",
+                    submission_id=None, submission_version=None, checker_request_digest=None,
+                    checker_request_digest_facts=None, pre_submit_evidence_set_id=None,
+                    operation_identity=declared.operation_identity, task_import_source_id=declared.id,
+                )
             if type(request) is GuideArtifactAdmissionRequest:
                 if (
                     guide_prepared_authorization is None
@@ -2042,7 +2064,7 @@ class ArtifactAdmissionService:
                 self._repo,
                 self._namespace,
             )
-            facts = submission_facts or await self._derive_admission_facts(request)
+            facts = import_facts or submission_facts or await self._derive_admission_facts(request)
             scopes = self._derive_scopes(facts)
             request_digest = canonical_json_hash(
                 {
@@ -2054,6 +2076,7 @@ class ArtifactAdmissionService:
                     "producer_ref": facts.producer_ref,
                     "project_id": facts.project_id,
                     "task_id": facts.task_id,
+                    **({"task_import_source_id": facts.task_import_source_id} if facts.task_import_source_id else {}),
                     "guide_source_item_id": facts.guide_source_item_id,
                     "checker_run_id": facts.checker_run_id,
                     "logical_role": facts.logical_role,
@@ -2126,6 +2149,7 @@ class ArtifactAdmissionService:
                 producer_ref=facts.producer_ref,
                 project_id=facts.project_id,
                 task_id=facts.task_id,
+                task_import_source_id=facts.task_import_source_id,
                 guide_source_item_id=facts.guide_source_item_id,
                 checker_run_id=facts.checker_run_id,
                 logical_role=facts.logical_role,
@@ -2173,6 +2197,7 @@ class ArtifactAdmissionService:
             GuideArtifactAdmissionRequest,
             CheckerOutputArtifactAdmissionRequest,
             SubmissionBundleArtifactAdmissionRequest,
+            TaskImportSourceAdmissionRequest,
         }:
             raise TypeError("invalid artifact admission request")
         if type(request.source) is not CommittedArtifactSource:
