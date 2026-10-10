@@ -13,6 +13,10 @@ class RoutingAcceptanceAdapter:
         """Compose the shared participant against the caller-owned session."""
         self._participant = final_acceptance_participant(session)
 
+    async def observe_generation(self) -> int:
+        """Observe through REV's public acceptance port; acquire no custody."""
+        return await self._participant.observe_generation()
+
     @asynccontextmanager
     async def prepare(self, current_generation):
         """Hold REV custody before TASK source preparation and AUTH consumption."""

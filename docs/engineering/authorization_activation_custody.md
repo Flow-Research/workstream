@@ -72,9 +72,9 @@ packet storage, REV-04A immutable Review source storage, REV-04B FinalAcceptance
 storage, CON-03C persistence, CON-07 participation and REV-04C hidden shared
 acceptance/TASK/CON composition are delivered. ARCH-04E2-B supplies mandatory
 actual AUTH receipts, database complete-effect custody, shared audit/outbox and
-currentness protection under the scoped lifecycle controller. Completion delivery
-consuming that committed operation is next; production registration remains
-separate.
+currentness protection under the scoped lifecycle controller. B8 supplies hidden completion delivery
+consuming that committed operation. Remediation is next; production registration
+remains separate.
 
 Runtime owner `WS-XINT-002-07` retains catalogue custody. The only approved
 v0.1 availability transition is 07A packet materialization. Evidence binding
@@ -326,8 +326,8 @@ phases without rewriting contribution or award facts.
 This is not acceptance authority. The initial manifest refuses retained
 pre-authority FinalAcceptance rows before entering live. ARCH-04E2-B supplies
 mandatory source receipts and complete atomic consequences in a hidden operation.
-Automatic completion delivery and production routing, human review and payment
-delivery remain unavailable.
+B8 supplies hidden completion delivery. Production routing, human review and
+payment delivery remain unavailable.
 Obligation roots, ordinals and cutoff/drain machinery are deferred until
 fulfillment activation; conditional awards remain atomic in the first path.
 

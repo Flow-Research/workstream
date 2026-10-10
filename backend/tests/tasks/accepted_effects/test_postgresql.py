@@ -254,7 +254,7 @@ async def test_stored_true_policy_manifest_cannot_prove_automated_source(tmp_pat
             result = await apply_outcome(session, h, None)
         async with h.factory() as session, session.begin():
             manifest = await session.scalar(text("SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE id=:id"),
-                {"id":result["routing_manifest_id"]})
+                {"id":result.routing_manifest_id})
             source = manifest["authority_context"]["source"]
             automated = TaskAcceptedEffectsRequest(
                 **{key:UUID(source[key]) for key in ("project_id","task_id","assignment_id","submission_id", "contributor_id","contribution_policy_version_id","content_id")},
@@ -262,8 +262,8 @@ async def test_stored_true_policy_manifest_cannot_prove_automated_source(tmp_pat
                 final_acceptance_id=new_record_id(),expected_task_status="evaluation_pending")
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).require_routing_source(
-                    automated,result["routing_manifest_id"],
-                    source_authorization_decision_id=result["authorization_decision_id"],
+                    automated,result.routing_manifest_id,
+                    source_authorization_decision_id=result.authorization_decision_id,
                     recorded_by=UUID(manifest["router_actor_id"]),
                     locked_review_policy_id=UUID(source["locked_policy"]["locked_review_policy_id"]),
                     expected_generation=2,disposition="new")
@@ -308,7 +308,7 @@ async def test_routing_source_rejects_only_substituted_request_hash(tmp_path, is
         async with h.factory() as session, session.begin():
             manifest = await session.scalar(text(
                 "SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE id=:id"
-            ), {"id": result["routing_manifest_id"]})
+            ), {"id": result.routing_manifest_id})
             source = manifest["authority_context"]["source"]
             request = TaskAcceptedEffectsRequest(
                 **{key: UUID(source[key]) for key in (
@@ -317,22 +317,22 @@ async def test_routing_source_rejects_only_substituted_request_hash(tmp_path, is
                 )},
                 submission_version=source["submission_version"],
                 content_sha256=source["content_sha256"],
-                final_acceptance_id=result["final_acceptance_id"],
+                final_acceptance_id=result.final_acceptance_id,
                 expected_task_status="evaluation_pending",
             )
             authority = dict(
-                source_authorization_decision_id=result["authorization_decision_id"],
+                source_authorization_decision_id=result.authorization_decision_id,
                 recorded_by=UUID(manifest["router_actor_id"]),
                 locked_review_policy_id=UUID(source["locked_policy"]["locked_review_policy_id"]),
                 expected_generation=2, disposition="replay",
             )
             owner = participant(session)
             before = await outcome_snapshot(session)
-            await owner.require_routing_source(request, result["routing_manifest_id"], **authority)
+            await owner.require_routing_source(request, result.routing_manifest_id, **authority)
             changed_hash = request.content_sha256[:-1] + ("0" if request.content_sha256[-1] != "0" else "1")
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await owner.require_routing_source(
                     request.model_copy(update={"content_sha256": changed_hash}),
-                    result["routing_manifest_id"], **authority,
+                    result.routing_manifest_id, **authority,
                 )
             assert await outcome_snapshot(session) == before

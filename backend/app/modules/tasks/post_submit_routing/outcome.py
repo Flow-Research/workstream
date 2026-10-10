@@ -12,7 +12,7 @@ from app.modules.outbox.api import OutboxAppendInput, OutboxEventEnvelope
 from app.modules.tasks.api.accepted_effects import TaskAcceptedEffectsRequest
 from app.modules.tasks.models import WorkstreamTask
 from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
-from app.modules.tasks.api.routing_outcome import RoutingAuthorityFacts
+from app.modules.tasks.api.routing_outcome import RoutingAuthorityFacts, TaskRoutingOutcome
 from app.modules.tasks.post_submit_routing.requests import (
     TaskRoutingRequestUnavailable,
     require_routing_transaction,
@@ -47,7 +47,7 @@ class TaskPostSubmitOutcome:
         self._observer, self._invocation_fence = observer, invocation_fence
         self._audit, self._outbox = audit, outbox
 
-    async def apply(self, envelope: OutboxEventEnvelope, *, current_generation: int | None):
+    async def apply(self, envelope: OutboxEventEnvelope, *, current_generation: int | None) -> TaskRoutingOutcome:
         """Return durable identities only after staging complete new or exact replay facts."""
         await require_routing_transaction(self._session)
         envelope = OutboxEventEnvelope.model_validate(envelope)
@@ -62,21 +62,8 @@ class TaskPostSubmitOutcome:
             or await self._observer.observe_invocation(envelope) is None
         ):
             raise TaskRoutingRequestUnavailable("routing invocation unavailable")
-        # This observation grants nothing. It selects lock order, and the complete
-        # source is revalidated after acquiring that order's mutation custody.
-        with self._session.no_autoflush:
-            policy_id = await self._session.scalar(
-                select(WorkstreamTask.locked_review_policy_id).where(
-                    WorkstreamTask.id == str(completion.task_id),
-                    WorkstreamTask.project_id == str(completion.project_id),
-                )
-            )
-            human = (
-                await self._projects.observe_review_mode(completion.project_id, UUID(policy_id))
-                if policy_id is not None
-                else None
-            )
-        if type(human) is not bool or ((current_generation is None) != human):
+        human = await self._observe_review_mode(completion)
+        if (current_generation is None) != human:
             raise TaskRoutingRequestUnavailable("routing branch unavailable")
         async with AsyncExitStack() as stack:
             acceptance = None
@@ -165,14 +152,46 @@ class TaskPostSubmitOutcome:
                 replay=replay,
             )
             await self._session.flush()
-            return {
-                "routing_manifest_id": stored.id,
-                "authorization_decision_id": receipt.decision_id,
-                "outcome_event_id": stored.outcome_event_id,
-                "final_acceptance_id": acceptance_id,
-                "economic": economic,
-                "replayed": replay,
-            }
+            return TaskRoutingOutcome(
+                project_id=source.source.project_id,
+                task_id=source.source.task_id,
+                submission_id=source.source.submission_id,
+                completion_event_id=source.source.completion_event_id,
+                routing_manifest_id=stored.id,
+                authorization_decision_id=receipt.decision_id,
+                outcome_event_id=stored.outcome_event_id,
+                final_acceptance_id=acceptance_id,
+                economic=economic,
+                replayed=replay,
+            )
+
+    async def observe_delivery_generation(self, envelope: OutboxEventEnvelope) -> int | None:
+        """Select server-owned generation without authority or mutation locks."""
+        completion = EvaluationCompletion.model_validate_json(envelope.payload_json)
+        human = await self._observe_review_mode(completion)
+        if human:
+            return None
+        return await self._acceptance.observe_generation()
+
+    async def _observe_review_mode(self, completion: EvaluationCompletion) -> bool:
+        """Observe exact task policy; authoritative source preparation rechecks it."""
+        # This observation grants nothing. It selects lock order, and the complete
+        # source is revalidated after acquiring that order's mutation custody.
+        with self._session.no_autoflush:
+            policy_id = await self._session.scalar(
+                select(WorkstreamTask.locked_review_policy_id).where(
+                    WorkstreamTask.id == str(completion.task_id),
+                    WorkstreamTask.project_id == str(completion.project_id),
+                )
+            )
+            human = (
+                await self._projects.observe_review_mode(completion.project_id, UUID(policy_id))
+                if policy_id is not None
+                else None
+            )
+        if type(human) is not bool:
+            raise TaskRoutingRequestUnavailable("routing branch unavailable")
+        return human
 
     async def _append_notice(self, source, receipt, acceptance_id):
         """Stage the outcome notice without autoflushing an incomplete manifest."""

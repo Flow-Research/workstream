@@ -63,7 +63,7 @@ acceptance, without reviewer contribution. REV-04C supplies the hidden
 FinalAcceptance/TASK/CON transaction participant, but this is not live behavior; the
 [bounded handoff](../.commitrail/changes/pre-review-plan-reconciliation.md#product-builder-handoff-implement-the-setting-next)
 provides configuration. ARCH-04E2-B now supplies the complete hidden authorized
-outcome over that participant. Completion delivery, remediation and production
+outcome over that participant. B8 supplies hidden completion delivery. Remediation and production
 composition remain before false-guide activation and public intake.
 See the [checker framework](architecture_checker_framework.md) and
 [current capability ledger](roadmap_status.md) for supported boundaries.

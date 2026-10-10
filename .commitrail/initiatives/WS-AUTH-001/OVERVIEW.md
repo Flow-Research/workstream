@@ -13,7 +13,7 @@ submitter contribution, applicable awards and audit/outbox evidence. Database
 closure rejects incomplete outcomes; fresh-authorized replay returns the stored
 complete tuple. No Review or reviewer contribution is fabricated.
 
-Completion-handler wiring is next, followed by 04F remediation, 04E3 production
+B8 supplies hidden completion delivery with commit-before-ACK. Next: 04F remediation, 04E3 production
 composition, public intake and the first-layer drill. False-guide activation,
 live human review/revision and payment delivery remain unavailable. Internally
 valid false-policy fixtures establish the hidden operation, not public readiness.
@@ -70,7 +70,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
   completed ARCH-03B8 hidden task audit evidence and ARCH-03B7 requirements projections and ARCH-03B6 locked-context projections and ARCH-03B5 current work context and ARCH-03B4 hidden contributor/management task detail, ARCH-03B3 hidden management/operational queues and ARCH-03B2 contributor-ready queue facts, ARCH-03B1 detached metadata and CP08 lineage
   and minimal writers and ARCH-03A internal guide context. POL-07B internal phase composition is delivered.
   The dispatcher registers only exact assignment invalidation. Automatic checker
-  routing still requires completion delivery and production registration.
+  routing has hidden B8 completion delivery but still requires production registration.
 - Delivered routing preparation: [ARCH-04E2-A](../WS-ARCH-001/WS-ARCH-001-04E2A.md)
   adds the strict exact routing resource, request matcher, digest dispatch and
   fixed-router adapter through canonical PREP. ARCH-04E2-B consumes that
@@ -78,8 +78,7 @@ Historical pre-cutover work records: [`STATUS.md`](pre-cutover/STATUS.md),
 - Delivered storage: [REV-03B](../WS-REV-001/WS-REV-001-03B.md) freezes exact
   lease packets with normalized live guide ingests; no resolver or byte authority.
   [REV-04A](../WS-REV-001/WS-REV-001-04A.md) adds complete immutable Review, findings, resolutions and completed request storage; no decision runtime.
-- Next usable boundary: completion-handler wiring consumes the delivered
-  04E2-B authorized outcome and acknowledges only after commit. Then prove 04F
+- Next usable boundary: prove 04F
   remediation, 04E3 live composition and false-guide readiness, public intake
   and the first-layer drill. True handoff remains independent of REV/CON;
   live human review/revision and payment delivery stay deferred.
@@ -129,5 +128,5 @@ manager proposal review, pre-submit approval and manual correction dispatch.
    AUTH-OUTBOX-01/02 bracket hidden CON-02B dispatch; ARCH-04E2 activates only
    the proven TASK routing handler before ARCH-04E3 live composition.
    TASK queue/read exposure is complete through ARCH-03C7. AUTH-18 public
-   manager guide activation/context is delivered; ARCH-03D hidden intake, hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D1 canonical material custody is delivered; ARCH-04D2 exact input/execution/finalization authority, ARCH-04E1A source-only facts/types and ARCH-04E2-A hidden strict preparation are delivered. 04E2-B authorized outcomes are delivered; completion delivery, remediation and live 04E3 remain. Shared acceptance foundations additionally gate false routing, not true admission.
+   manager guide activation/context is delivered; ARCH-03D hidden intake, hidden exact post-submit materialization and ARCH-04B2 output custody are delivered; ARCH-04C hidden execution is delivered; ARCH-04D1 canonical material custody is delivered; ARCH-04D2 exact input/execution/finalization authority, ARCH-04E1A source-only facts/types and ARCH-04E2-A hidden strict preparation are delivered. 04E2-B authorized outcomes are delivered; B8 completion delivery is implemented; remediation and live 04E3 remain. Shared acceptance foundations additionally gate false routing, not true admission.
    Remaining work must use its exact owner, not the superseded broad designs.
