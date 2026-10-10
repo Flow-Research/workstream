@@ -83,8 +83,32 @@ findings, currentness and no accidental success-authority expansion.
 Inspect existing `tests/checkers/execution/test_coordination.py` and
 `tests/tasks/post_submit_routing/test_evaluation_currentness.py` first.
 New focused tests exercise the actual coordinator and fixed-service executor with
-real PostgreSQL and artifact storage. New test names/files are chosen after fixture
-inspection. Run focused owner tests, boundaries, lint, stale wording, links and
+real PostgreSQL and artifact storage. Fixture handlers retain canonical definitions
+and replace one selected handler with a definition-valid controlled failure. This
+proves the declared classification/finalization path, not the underlying structural
+condition. A separate controlled finalization fixture reuses `final_facts` and the
+real executor's `finalize`, adding a valid non-empty `PostSubmitCounter`; no database
+custody or AUTH guard is disabled to seed it.
+
+Future executable proof map (not yet run):
+
+| File under `backend/tests/` | Future test | Boundary |
+| --- | --- | --- |
+| `checkers/execution/test_completion_evidence.py` | `test_current_completion_returns_exact_stored_result` | Success, contributor failure and setup fault through real executor with canonical/controlled registered handlers; exact typed results and material/receipt equality; no writes |
+| same | `test_current_completion_preserves_nonempty_stored_counters` | Real authorized finalization of controlled bounded result with populated counters; returned result equals stored JSON/result |
+| same | `test_current_completion_rejects_wrong_derived_recommendation` | All other valid recommendation literals with exact original identities; removing only equality guard must fail rejection assertion |
+| same | `test_failure_completion_rejects_foreign_owner_and_receipts` | Two valid stored projects/completions before independent event/project/task/submission/reference/execute/finalize substitutions |
+| same | `test_failure_completion_loses_currentness_to_successor` | Failure positive control, actual successor reservation, stale completion rejection without restoring fence |
+| same | `test_infrastructure_failure_has_no_verifiable_completion` | Real unavailable-handler outcome; no completion event/reference; canonical coordinator rejection |
+| `checkers/execution/test_completion_contract.py` | `test_verified_completion_rejects_mismatched_result` | Valid wrapper plus different valid result; canonical identity/digest binding and infrastructure rejection |
+| `tasks/post_submit_routing/test_failure_completion.py` | `test_stored_failure_cannot_enter_task_routing_or_completion_delivery` | Both actual stored failure envelopes; request/source/outcome guards and hidden handler reject, no routing request/manifest/outcome or economic effects |
+
+Shared fixture code stays in `checkers/execution/completion_fixture.py`, reusing
+existing material, executor and finalization helpers. New consumer-evidence modules
+use existing TASK lanes with measured capacity; existing modules, partitioning,
+time caps, services and exact-once inventory remain unchanged.
+
+Run focused owner tests, boundaries, lint, stale wording, links and
 Commitrail checks; then the complete hosted suite with zero skips/deselections
 and real PostgreSQL/MinIO cleanup. Reports identify the exact head and any compatible
 unchanged proof; a proposed test is not runtime evidence.
