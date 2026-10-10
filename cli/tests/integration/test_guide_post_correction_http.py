@@ -225,6 +225,15 @@ def test_post_correction_transport_and_credentials(cli, tmp_path):
         assert result.returncode == 1 and result.stdout == ""
         assert "post-submission correction outcome unknown" in result.stderr
         response["drop"] = False
+        reflected = receipt()
+        hash_bearer = "sha256:" + "f" * 64
+        reflected["correction"]["feedback_hash"] = hash_bearer
+        response.update(
+            status=201,
+            body=json.dumps(reflected).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        unknown(invoke(cli, origin, path, token=hash_bearer))
         for bearer in ("credential_canary_AAA", PROJECT):
             response.update(
                 status=403,
@@ -240,7 +249,7 @@ def test_post_correction_transport_and_credentials(cli, tmp_path):
                 bearer not in result.stderr
                 and "correlation_id" not in json.loads(result.stderr)["error"]
             )
-        assert len(requests) == 18
+        assert len(requests) == 19
     with goaway_fixture(tmp_path) as (origin, env, bodies, connections):
         unknown(invoke(cli, origin, path, extra_env=env), "service_unavailable")
         assert connections == ["h2"] and bodies == [path.read_bytes()]

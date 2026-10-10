@@ -46,6 +46,7 @@ func (c *Client) CorrectGuidePostSubmission(ctx context.Context, project, guide,
 	}
 	correction := value.Correction
 	if !c.safeMetadata(correction.OperationID) || !c.safeMetadata(correction.SuccessorSetupRunID) ||
+		!c.safeMetadata(correction.FeedbackHash) ||
 		sameUUID(correction.OperationID, c.token) || sameUUID(correction.SuccessorSetupRunID, c.token) ||
 		correction.SuccessorSetupGeneration.Cmp(new(big.Int).Add(input.Target.Proposal.SetupGeneration, big.NewInt(1))) != 0 {
 		return result, postCorrectionFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
