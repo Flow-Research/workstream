@@ -187,9 +187,10 @@ submission policy schema.
 
 `SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`. Workstream then generates, persists, and locks project `PreSubmitCheckerPolicy` with a compiled bundle hash from that effective project submission artifact policy. Tasks lock the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering the contributor pipeline.
 
-Blocking pre-submit failures prevent submission creation. The current hidden
-preparation route returns only `pre_submission_checker_failed`; bounded
-structured public feedback remains pending the canonical public intake cutover. Failures create no submission
+Blocking pre-submit failures prevent submission creation. The mounted
+authorized hidden preparation route returns `pre_submission_checker_failed`
+with exact ordered bounded results in the same request. It remains absent from
+OpenAPI, and public intake activation remains pending. Failures create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. ART constructs a bounded audit-ready projection;
 publication as a task event named `pre_submission_check_failed` remains pending.

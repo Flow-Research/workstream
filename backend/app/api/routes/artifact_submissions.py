@@ -1,17 +1,20 @@
 """Hidden delivery surface for ART-owned contributor bundle preparation."""
 
+from dataclasses import asdict
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.adapters.artifacts import (
     get_submission_bundle_preparation_actor,
     get_submission_bundle_preparation_command,
 )
-from app.core.api_controls import request_ids
+from app.core.api_controls import error_response, request_ids
 from app.modules.artifacts.api import (
+    SubmissionBundlePreparationCheckFailed,
     SubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationInfrastructureUnavailable,
@@ -58,7 +61,7 @@ async def prepare_submission_bundle(
     predecessor_submission_id: Annotated[
         str | None, Header(alias="X-Predecessor-Submission-Id")
     ] = None,
-) -> SubmissionBundlePreparationResponse:
+) -> SubmissionBundlePreparationResponse | JSONResponse:
     """Run the hidden continuous ZIP preparation surface; AUTH remains fail closed."""
     if None in (assignment_id, idempotency_key, summary, contributor_attestation):
         raise HTTPException(status_code=404, detail="Task not found")
@@ -89,6 +92,18 @@ async def prepare_submission_bundle(
                 media_type=request.headers.get("content-type", ""),
                 byte_source=request.stream(),
             )
+        )
+    except SubmissionBundlePreparationCheckFailed as exc:
+        return error_response(
+            request,
+            status_code=422,
+            code="pre_submission_checker_failed",
+            message="Pre-submission checks failed",
+            details={
+                "status": "failed",
+                "eligible_to_submit": exc.facts.eligible,
+                "results": [asdict(entry) for entry in exc.facts.entries],
+            },
         )
     except SubmissionBundlePreparationInfrastructureUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -1,6 +1,7 @@
 """Dependency-safe public API for the ARTIFACTS business module."""
 
 from app.modules.artifacts.api.submission_preparation import (
+    SubmissionBundlePreparationCheckFailed,
     SubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationInfrastructureUnavailable,
@@ -35,6 +36,7 @@ __all__ = (
     "ReviewPacketMembershipRequest",
     "ReviewPacketMembershipUnavailable",
     "ReviewSubmissionMember",
+    "SubmissionBundlePreparationCheckFailed",
     "SubmissionBundlePreparationCommand",
     "SubmissionBundlePreparationRejected",
     "SubmissionBundlePreparationInfrastructureUnavailable",

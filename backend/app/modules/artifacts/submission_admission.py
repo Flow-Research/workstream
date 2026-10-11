@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.artifacts.api import (
+    SubmissionBundlePreparationCheckFailed,
     SubmissionBundleFile,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationInfrastructureUnavailable,
@@ -565,7 +566,9 @@ class PreparedSubmissionBundlePreparationCommand:
                     reserved, preparation_request=request,
                 )
                 if not evidence.execution.eligible:
-                    raise SubmissionBundlePreparationRejected("pre_submission_checker_failed")
+                    raise SubmissionBundlePreparationCheckFailed(
+                        evidence.execution.checker_facts
+                    )
                 if evidence.pass_capability is None:
                     replay = await self._existing_durable_result(evidence.evidence.evidence_set_id)
                     if replay is None:

@@ -238,9 +238,9 @@ Generated policy lock:
 Tasks lock this project checker compiled bundle hash before entering the contributor pipeline. Tasks
 do not derive or compile their own checker by default.
 
-Failed preparation currently returns only `pre_submission_checker_failed`
-through the hidden route. ART retains bounded results; structured public
-feedback remains pending the canonical public intake cutover. POL-07B connects
+Failed preparation returns `pre_submission_checker_failed` with ART's exact
+ordered bounded results through the mounted authorized hidden route. The route
+remains absent from OpenAPI, and public intake activation remains pending. POL-07B connects
 the internal checker phase service and removes the standalone JSON precheck.
 WS-ARCH-001-02I retains the broader Submission caller cutover; no ID-addressed
 evidence-read route exists. These results never use review decision values:

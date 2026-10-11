@@ -53,9 +53,10 @@ and TaskAssignment for this next attempt; publication or submission input alone
 cannot change it.
 
 Workstream runs the single effective pre-submission plan against the uploaded
-outer ZIP in bounded scratch before creating the submission. The existing hidden preparation route returns only the code
-`pre_submission_checker_failed`; ART retains bounded check results and structured
-public intake feedback remains pending. Failed preparation creates no
+outer ZIP in bounded scratch before creating the submission. The mounted
+authorized hidden preparation route returns `pre_submission_checker_failed`
+with ART's exact ordered bounded results in the same request. It remains absent
+from OpenAPI, and public intake activation remains pending. Failed preparation creates no
 submission row, no submission version, and no submission-created audit event,
 and does not return review decision values: `accept`, `needs_revision`, or
 `reject`. POL-07B connects the internal checker phase service and removes the

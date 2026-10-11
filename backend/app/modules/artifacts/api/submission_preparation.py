@@ -9,10 +9,23 @@ from typing import Protocol
 from uuid import UUID
 
 from app.modules.authorization.api import ActorIdentityFacts
+from app.modules.checkers.api import PreSubmissionExecutionFacts
 
 
 class SubmissionBundlePreparationRejected(RuntimeError):
     """Reject preparation with one stable ART-owned failure code."""
+
+
+class SubmissionBundlePreparationCheckFailed(SubmissionBundlePreparationRejected):
+    """Carry the exact bounded CHECKERS facts for one blocked preparation."""
+
+    def __init__(self, facts: PreSubmissionExecutionFacts) -> None:
+        if type(facts) is not PreSubmissionExecutionFacts:
+            raise TypeError("pre-submission feedback facts are invalid")
+        if facts.eligible is not False:
+            raise ValueError("blocked pre-submission facts require eligible false")
+        super().__init__("pre_submission_checker_failed")
+        self.facts = facts
 
 
 class SubmissionBundlePreparationUnavailable(RuntimeError):
