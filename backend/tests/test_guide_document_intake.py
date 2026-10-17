@@ -576,7 +576,7 @@ def _open_store(settings):
     from app.adapters.artifacts import create_artifact_store_bootstrap
     from app.modules.artifacts.service import artifact_storage_namespace_spec
     from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
-    bootstrap = create_artifact_store_bootstrap(settings)
+    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(
         adapter_identity=bootstrap.identity,

@@ -31,6 +31,32 @@ def _aws_settings(tmp_path: Path, method: str = "container-role") -> Settings:
         artifact_s3_addressing_style="virtual",
         artifact_s3_credential_mode="aws_workload_identity",
         artifact_s3_aws_workload_identity_method=method,  # type: ignore[arg-type]
+        release_id="sha256:" + "1" * 64,
+        artifact_s3_runtime_role_arn=(
+            "arn:aws:iam::123456789012:role/workstream-runtime"
+        ),
+        artifact_s3_runtime_trust_policy_sha256="sha256:" + "2" * 64,
+        artifact_s3_runtime_policy_arn=(
+            "arn:aws:iam::123456789012:policy/workstream-runtime"
+        ),
+        artifact_s3_readiness_role_arn=(
+            "arn:aws:iam::123456789012:role/workstream-readiness"
+        ),
+        artifact_s3_readiness_trust_policy_sha256="sha256:" + "3" * 64,
+        artifact_s3_readiness_policy_arn=(
+            "arn:aws:iam::123456789012:policy/workstream-readiness"
+        ),
+        artifact_s3_negative_role_arn=(
+            "arn:aws:iam::123456789012:role/workstream-negative"
+        ),
+        artifact_s3_negative_trust_policy_sha256="sha256:" + "4" * 64,
+        artifact_s3_bootstrap_principal_arn=(
+            "arn:aws:iam::123456789012:role/workstream-bootstrap"
+        ),
+        artifact_s3_bucket_policy_sha256="sha256:" + "5" * 64,
+        artifact_s3_operation_total_timeout_seconds=300,
+        artifact_complete_read_deadline_seconds=300,
+        artifact_terminal_persistence_margin_seconds=120,
     )
 
 

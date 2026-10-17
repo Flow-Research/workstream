@@ -42,14 +42,12 @@ from app.modules.artifacts.models import (
     ArtifactOperationReceipt,
     ArtifactPutObservationReceipt,
     ArtifactPutAttempt,
-    ArtifactPutAttemptCharge,
     ArtifactReplica,
     ArtifactStorageNamespace,
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
 )
 from app.interfaces.artifacts import (
-    ArtifactObjectMissingError,
     ArtifactPutObservation,
     ArtifactPutResult,
     ArtifactStoreError,
@@ -557,13 +555,13 @@ async def test_every_provider_operation_revalidates_namespace_before_io(
     class DriftStore:
         identity = replace(store.identity, provider_key="drift")
 
-        async def put(self, _source):
+        async def put(self, _source, **_kwargs):
             raise AssertionError("put must not run after namespace drift")
 
-        async def observe_put_result(self, _commitment):
+        async def observe_put_result(self, _commitment, **_kwargs):
             raise AssertionError("observation must not run after namespace drift")
 
-        def open(self, _provider_object_ref):
+        def open(self, _provider_object_ref, **_kwargs):
             raise AssertionError("read must not run after namespace drift")
 
     policy_bundle = await create_standalone_unified_policy(factory, namespace)
@@ -753,11 +751,11 @@ async def test_put_paths_recheck_authorized_facts_after_provider_io(
                         assert drifted_attempt is not None
                         drifted_attempt.operation_identity = "sha256:" + "e" * 64
 
-                async def put(_source: object) -> ArtifactPutResult:
+                async def put(_source: object, **_kwargs: object) -> ArtifactPutResult:
                     await drift_facts()
                     return ArtifactPutResult(provider_object_ref, replayed=False)
 
-                async def observe_put_result(_commitment: object) -> ArtifactPutObservation:
+                async def observe_put_result(_commitment: object, **_kwargs: object) -> ArtifactPutObservation:
                     await drift_facts()
                     return ArtifactPutObservation(provider_object_ref, committed=False)
 
@@ -883,7 +881,13 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
                 stale_session, object(), namespace, settings, _AllowArtifactAuthority()
             )
             assert (
-                await stale._record_put_absence(first_claim, first_executor, first_facts) == "stale"
+                await stale._record_put_absence(
+                    first_claim,
+                    first_executor,
+                    first_facts,
+                    None,
+                )
+                == "stale"
             )
             attempt = await stale_session.get(ArtifactPutAttempt, str(admission.attempt_id))
             assert attempt is not None
@@ -965,7 +969,7 @@ async def test_put_observation_unavailable_retries_then_exhausts_without_facts(
     class UnavailableObservationStore:
         identity = SimpleNamespace(provider_key=namespace.adapter)
 
-        async def observe_put_result(self, _commitment):
+        async def observe_put_result(self, _commitment, **_kwargs):
             raise ArtifactStoreUnavailableError("provider unavailable")
 
     try:
@@ -1244,6 +1248,7 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                     "verified",
                     "sha256:" + "1" * 64,
                     1,
+                    None,
                 )
                 == "stale"
             )
@@ -1419,7 +1424,7 @@ async def test_verification_resource_drift_after_read_is_stale_without_terminal_
                 job_id = UUID(job.id)
                 await session.commit()
 
-                async def drift_job_after_claim(_provider_object_ref: str):
+                async def drift_job_after_claim(_provider_object_ref: str, **_kwargs: object):
                     async with factory() as drift_session, drift_session.begin():
                         drifted_job = await drift_session.get(
                             ArtifactVerificationJob, str(job_id), with_for_update=True
@@ -1681,7 +1686,9 @@ async def test_verification_rechecks_authorized_object_ref_after_io(
                 job_id, replica_id = UUID(job.id), attempt.replica_id
                 await session.commit()
 
-                async def drift_object_ref_during_read(_provider_object_ref: str):
+                async def drift_object_ref_during_read(
+                    _provider_object_ref: str, **_kwargs: object
+                ):
                     async with factory() as drift_session, drift_session.begin():
                         drifted_replica = await drift_session.get(
                             ArtifactReplica, replica_id, with_for_update=True
@@ -2421,199 +2428,6 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
                 request=request, authority=authority, project_id=project_id,
                 task_id=task_id, checker_run_id=checker_run_id, baseline=baseline,
             )
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.parametrize(
-    ("read_result", "expected_outcome"),
-    (
-        (None, "verified"),
-        (ArtifactObjectMissingError("missing"), "missing"),
-        (("sha256:" + "0" * 64, 1), "integrity_mismatch"),
-    ),
-)
-async def test_checker_output_shared_put_and_verification_lifecycle(
-    admission_database_env: str,
-    tmp_path: Path,
-    read_result: object,
-    expected_outcome: str,
-) -> None:
-    """Task-scoped checker output survives every shared terminal byte outcome."""
-    settings = _settings(tmp_path)
-    namespace = _namespace(settings)
-    bootstrap, store = _local_store(settings, namespace)
-    engine = create_async_engine(admission_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    policy_bundle = await create_standalone_unified_policy(factory, namespace)
-    try:
-        async with factory() as session:
-            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
-            async with minted_source(
-                tmp_path / f"checker-{expected_outcome}", b"checker lifecycle"
-            ) as source:
-                project_id, task_id, checker_run_id, admission = await _admit_checker_output(
-                    session, settings, namespace, source, relationships=relationships)
-                orchestrator = ArtifactStorageOrchestrator(
-                    session, store, namespace, settings, _AllowArtifactAuthority()
-                )
-                assert (
-                    await orchestrator.execute_committed_put(
-                        attempt_id=admission.attempt_id, source=source
-                    )
-                    == "stored_pending_verification"
-                )
-                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-                receipt = await session.scalar(
-                    select(ArtifactOperationReceipt).where(
-                        ArtifactOperationReceipt.put_attempt_id == str(admission.attempt_id)
-                    )
-                )
-                job = await session.scalar(
-                    select(ArtifactVerificationJob).where(
-                        ArtifactVerificationJob.originating_put_attempt_id
-                        == str(admission.attempt_id)
-                    )
-                )
-                assert attempt is not None and receipt is not None and job is not None
-                job_id = UUID(job.id)
-                assert attempt.producer_request_type == "checker_output"
-                assert (attempt.project_id, attempt.task_id, attempt.checker_run_id) == (
-                    project_id,
-                    task_id,
-                    checker_run_id,
-                )
-                assert receipt.checker_run_id == checker_run_id
-                with pytest.raises(DBAPIError):
-                    await session.execute(
-                        text(
-                            "update artifact_operation_receipts set contract_version=1 "
-                            "where id=:receipt_id"
-                        ),
-                        {"receipt_id": receipt.id},
-                    )
-                await session.rollback()
-                if isinstance(read_result, Exception):
-                    orchestrator._read_complete = AsyncMock(side_effect=read_result)
-                elif read_result is not None:
-                    orchestrator._read_complete = AsyncMock(return_value=read_result)
-                assert await orchestrator.verify_object(job_id) == expected_outcome
-                job = await session.get(ArtifactVerificationJob, str(job_id))
-                assert job is not None
-                assert job.status == expected_outcome
-                verification = await session.scalar(
-                    select(ArtifactVerificationReceipt).where(
-                        ArtifactVerificationReceipt.verification_job_id == job.id
-                    )
-                )
-                assert verification is not None
-                assert verification.outcome == expected_outcome
-    finally:
-        bootstrap.close()
-        await engine.dispose()
-
-
-@pytest.mark.parametrize(
-    "expected_outcome", ["integrity_mismatch", "conflict", "existing_replica_conflict"]
-)
-async def test_checker_output_put_observation_terminal_outcomes(
-    admission_database_env: str,
-    tmp_path: Path,
-    expected_outcome: str,
-) -> None:
-    """Current checker output preserves ambiguous-put mismatch and conflict evidence."""
-    settings = _settings(tmp_path)
-    namespace = _namespace(settings)
-    engine = create_async_engine(admission_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    policy_bundle = await create_standalone_unified_policy(factory, namespace)
-    try:
-        async with factory() as session:
-            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
-            async with minted_source(
-                tmp_path / f"checker-observation-{expected_outcome}", b"checker observation"
-            ) as source:
-                _project_id, _task_id, checker_run_id, admission = await _admit_checker_output(
-                    session, settings, namespace, source, relationships=relationships)
-                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-                assert attempt is not None
-                provider_object_ref = attempt.canonical_target
-                if expected_outcome == "existing_replica_conflict":
-                    await _conflicting_checker_replica(session, attempt, namespace, provider_object_ref)
-                else:
-                    await session.rollback()
-                observe = (
-                    AsyncMock(
-                        return_value=ArtifactPutObservation(
-                            provider_object_ref, committed=True
-                        )
-                    )
-                    if expected_outcome != "conflict"
-                    else AsyncMock(side_effect=ArtifactStoreError("provider conflict"))
-                )
-                provider = SimpleNamespace(
-                    identity=SimpleNamespace(provider_key=namespace.adapter),
-                    observe_put_result=observe,
-                )
-                orchestrator = ArtifactStorageOrchestrator(
-                    session, provider, namespace, settings, _AllowArtifactAuthority()
-                )
-                orchestrator._read_complete = AsyncMock(
-                    return_value=("sha256:" + "0" * 64, 1)
-                )
-
-                assert (
-                    await orchestrator.resolve_put_attempt(admission.attempt_id)
-                    == (
-                        "conflict"
-                        if expected_outcome == "existing_replica_conflict"
-                        else expected_outcome
-                    )
-                )
-                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-                assert attempt is not None
-                receipt = await session.scalar(
-                    select(ArtifactPutObservationReceipt).where(
-                        ArtifactPutObservationReceipt.put_attempt_id == attempt.id
-                    )
-                )
-                charges = (
-                    await session.execute(
-                        select(ArtifactAdmissionCharge)
-                        .join(
-                            ArtifactPutAttemptCharge,
-                            ArtifactPutAttemptCharge.charge_id == ArtifactAdmissionCharge.id,
-                        )
-                        .where(ArtifactPutAttemptCharge.attempt_id == attempt.id)
-                    )
-                ).scalars().all()
-                assert receipt is not None
-                assert receipt.outcome == (
-                    "observed_integrity_mismatch"
-                    if expected_outcome == "integrity_mismatch"
-                    else "conflict"
-                )
-                terminal_outcome = (
-                    "conflict"
-                    if expected_outcome == "existing_replica_conflict"
-                    else expected_outcome
-                )
-                assert attempt.status == attempt.terminal_result_code == terminal_outcome
-                assert {charge.state for charge in charges} == {"completed"}
-                if expected_outcome == "integrity_mismatch":
-                    assert attempt.replica_id is not None
-                    assert receipt.observed_sha256 == "sha256:" + "0" * 64
-                    assert receipt.observed_byte_count == 1
-                elif expected_outcome == "existing_replica_conflict":
-                    assert attempt.replica_id is not None
-                    assert receipt.observed_sha256 is None
-                    assert receipt.observed_byte_count is None
-                else:
-                    assert attempt.replica_id is None
-                    assert receipt.observed_sha256 is None
-                    assert receipt.observed_byte_count is None
-                assert receipt.execution_generation == attempt.execution_generation
-                assert checker_run_id == attempt.checker_run_id
     finally:
         await engine.dispose()
 

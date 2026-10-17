@@ -18,6 +18,8 @@ from app.modules.artifacts.models import (  # noqa: F401
     GuideSourceExtractionUsage,
     GuideSourceFormatClassification,
     ArtifactOperationReceipt,
+    ArtifactProviderActivation,
+    ArtifactProviderProbeResult,
     ArtifactReplica,
     ArtifactRecoveryAttempt,
     PreSubmitEvidenceResult,

@@ -6,7 +6,6 @@ from uuid import UUID
 
 from app.adapters.artifacts import (
     cleanup_stale_artifact_scratch,
-    require_artifact_runtime_eligible,
 )
 from app.core.config import get_settings
 from app.workers.async_runner import run_async_task
@@ -33,7 +32,6 @@ def cleanup_stale_scratch() -> int:
     settings = get_settings()
     if settings.artifact_store_backend == "disabled":
         return 0
-    require_artifact_runtime_eligible(settings)
     return run_async_task(lambda: cleanup_stale_artifact_scratch(settings))
 
 

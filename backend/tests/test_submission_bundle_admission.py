@@ -168,7 +168,10 @@ def test_artifact_adapter_rejects_unproven_aws_runtime() -> None:
     )
 
     with pytest.raises(ArtifactProviderLiveProofRequiredError):
-        artifact_adapters.require_artifact_runtime_eligible(settings)  # type: ignore[arg-type]
+        artifact_adapters.create_artifact_store_bootstrap(  # type: ignore[arg-type]
+            settings,
+            activation_guard=None,
+        )
 
 
 def test_artifact_adapter_requires_configured_scratch_root() -> None:
@@ -192,7 +195,7 @@ def test_artifact_adapter_builds_configured_local_bootstrap(tmp_path) -> None:
         artifact_scratch_minimum_free_bytes=0,
     )
 
-    bootstrap = artifact_adapters.create_artifact_store_bootstrap(settings)
+    bootstrap = artifact_adapters.create_artifact_store_bootstrap(settings, activation_guard=None)
 
     try:
         assert bootstrap.identity.provider_key == "local"

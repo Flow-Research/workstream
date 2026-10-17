@@ -1058,7 +1058,7 @@ async def test_post_provider_revocation_commits_denial_but_no_terminal_artifact_
     class SuspendAfterPut:
         identity = store.identity
 
-        async def put(self, source):
+        async def put(self, source, **_kwargs):
             result = await store.put(source)
             async with factory() as lifecycle_session:
                 profile = await lifecycle_session.get(ActorProfile, str(profile_id))
@@ -1070,13 +1070,13 @@ async def test_post_provider_revocation_commits_denial_but_no_terminal_artifact_
                 await lifecycle_session.commit()
             return result
 
-        async def observe_put_result(self, commitment):
+        async def observe_put_result(self, commitment, **_kwargs):
             return await store.observe_put_result(commitment)
 
-        def open(self, provider_object_ref, byte_range=None):
+        def open(self, provider_object_ref, byte_range=None, **_kwargs):
             return store.open(provider_object_ref, byte_range)
 
-        async def head(self, provider_object_ref):
+        async def head(self, provider_object_ref, **_kwargs):
             return await store.head(provider_object_ref)
 
     try:

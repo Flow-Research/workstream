@@ -5,12 +5,12 @@ from __future__ import annotations
 from celery import Celery
 from kombu import Queue
 from app.workers.outbox_topology import OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE
-from celery.signals import worker_process_init, worker_process_shutdown, worker_shutdown
+from celery.signals import beat_init, worker_process_init, worker_process_shutdown, worker_shutdown
 
-from app.adapters.artifacts import require_artifact_runtime_eligible
 from app.adapters.artifacts.internal_workers import (
     initialize_artifact_internal_runtime,
     shutdown_artifact_internal_runtime,
+    validate_artifact_internal_runtime_startup,
 )
 from app.adapters.observability import create_observability_export_adapter
 from app.core.config import get_settings
@@ -57,6 +57,12 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     run_async_task(initialize_artifact_internal_runtime)
 
 
+@beat_init.connect
+def validate_artifact_runtime_for_beat(**_kwargs: object) -> None:
+    """Fail Beat startup when the selected AWS provider lacks fresh proof."""
+    run_async_task(validate_artifact_internal_runtime_startup)
+
+
 @worker_process_init.connect
 def initialize_observability_for_process(**_kwargs: object) -> None:
     """Create diagnostic providers only in the prefork child."""
@@ -90,7 +96,6 @@ def create_celery_app() -> Celery:
         Configured Celery application for durable background jobs.
     """
     settings = get_settings()
-    require_artifact_runtime_eligible(settings)
     broker_url = settings.celery_broker_url
     if broker_url is None:
         if settings.celery_task_always_eager:

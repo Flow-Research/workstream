@@ -81,7 +81,7 @@ report that static artifact credentials require MinIO storage:
 ```bash
 docker compose --profile backend run --rm --no-deps -e WORKSTREAM_ARTIFACT_STORE_BACKEND=disabled worker \
   python -c \
-  'from app.adapters.artifacts import create_artifact_store_bootstrap; from app.core.config import get_settings; create_artifact_store_bootstrap(get_settings())'
+  'from app.adapters.artifacts import artifact_provider_activation_guard, create_artifact_store_bootstrap; from app.core.config import get_settings; settings = get_settings(); create_artifact_store_bootstrap(settings, activation_guard=artifact_provider_activation_guard(settings))'
 ```
 
 ## Create distinct identities and grant authority

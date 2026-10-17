@@ -20,7 +20,10 @@ import app.adapters.artifacts.internal_workers as internal_worker_adapter
 import app.modules.artifacts.service as artifact_service
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings, get_settings
-from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
+from app.interfaces.artifacts import (
+    ArtifactProviderOperationEvidence,
+    ArtifactStoreNamespaceClaim,
+)
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.authorization import PreparedArtifactInternalAuthority
 from app.modules.artifacts.schemas import (
@@ -310,11 +313,6 @@ async def test_internal_artifact_store_is_initialized_once_per_process(
     monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
     monkeypatch.setattr(
         internal_worker_adapter,
-        "require_artifact_runtime_eligible",
-        Mock(),
-    )
-    monkeypatch.setattr(
-        internal_worker_adapter,
         "create_artifact_store_bootstrap",
         Mock(return_value=first_bootstrap),
     )
@@ -431,9 +429,13 @@ async def test_process_runtime_shutdown_waits_for_active_lease(
     monkeypatch.setattr(
         internal_worker_adapter,
         "get_settings",
-        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+        Mock(
+            return_value=SimpleNamespace(
+                artifact_store_backend="local",
+                artifact_s3_provider_profile=None,
+            )
+        ),
     )
-    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
     monkeypatch.setattr(
         internal_worker_adapter,
         "create_artifact_store_bootstrap",
@@ -483,9 +485,13 @@ async def test_process_runtime_closes_bootstrap_when_namespace_claim_fails(
     monkeypatch.setattr(
         internal_worker_adapter,
         "get_settings",
-        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+        Mock(
+            return_value=SimpleNamespace(
+                artifact_store_backend="local",
+                artifact_s3_provider_profile=None,
+            )
+        ),
     )
-    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
     monkeypatch.setattr(
         internal_worker_adapter,
         "create_artifact_store_bootstrap",
@@ -536,9 +542,13 @@ async def test_process_runtime_closes_losing_concurrent_bootstrap(
     monkeypatch.setattr(
         internal_worker_adapter,
         "get_settings",
-        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+        Mock(
+            return_value=SimpleNamespace(
+                artifact_store_backend="local",
+                artifact_s3_provider_profile=None,
+            )
+        ),
     )
-    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
     monkeypatch.setattr(
         internal_worker_adapter,
         "create_artifact_store_bootstrap",
@@ -732,7 +742,7 @@ def test_verification_deadline_and_margin_must_fit_lease() -> None:
 @pytest.mark.asyncio
 async def test_complete_read_uses_total_deadline_for_progressing_stream() -> None:
     class SlowStore:
-        def open(self, _provider_object_ref: str):
+        def open(self, _provider_object_ref: str, **_kwargs):
             async def chunks():
                 while True:
                     await asyncio.sleep(0.02)
@@ -748,7 +758,10 @@ async def test_complete_read_uses_total_deadline_for_progressing_stream() -> Non
         artifact_terminal_persistence_margin_seconds=0.1,
     )
     with pytest.raises(TimeoutError):
-        await orchestrator._read_complete("sha256/" + "a" * 64)
+        await orchestrator._read_complete(
+            "sha256/" + "a" * 64,
+            operation_evidence=ArtifactProviderOperationEvidence(),
+        )
 
 
 def test_pending_work_facts_are_closed_and_bounded_by_construction() -> None:

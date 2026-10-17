@@ -51,6 +51,19 @@ _EMPTY_ARTIFACT_S3_SECRETS: tuple[SecretStr | None, SecretStr | None, SecretStr 
 _MISSING_SECRET = object()
 _INVALID_OBSERVABILITY_ENDPOINT = object()
 PRODUCTION_LIKE_ENVIRONMENTS = frozenset({"staging", "preview", "prod", "production"})
+ARTIFACT_AWS_ACTIVATION_VALIDITY_SECONDS = 900
+ARTIFACT_AWS_ACTIVATION_REFRESH_SECONDS = 300
+ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS = 30
+_SHA256_IDENTITY = re.compile(r"^sha256:[0-9a-f]{64}$")
+_AWS_IAM_ROLE_ARN = re.compile(
+    r"^arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$"
+)
+_AWS_IAM_POLICY_ARN = re.compile(
+    r"^arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:policy/[A-Za-z0-9+=,.@_/-]{1,512}$"
+)
+_AWS_IAM_PRINCIPAL_ARN = re.compile(
+    r"^arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:(?:root|(?:role|user)/[A-Za-z0-9+=,.@_/-]{1,512})$"
+)
 _ALTERNATE_VALIDATION_RESTORES_SECRETS: ContextVar[bool] = ContextVar(
     "alternate_validation_restores_secrets",
     default=False,
@@ -177,6 +190,17 @@ class Settings(BaseSettings):
         ]
         | None
     ) = None
+    release_id: str | None = None
+    artifact_s3_runtime_role_arn: str | None = None
+    artifact_s3_runtime_trust_policy_sha256: str | None = None
+    artifact_s3_runtime_policy_arn: str | None = None
+    artifact_s3_readiness_role_arn: str | None = None
+    artifact_s3_readiness_trust_policy_sha256: str | None = None
+    artifact_s3_readiness_policy_arn: str | None = None
+    artifact_s3_negative_role_arn: str | None = None
+    artifact_s3_negative_trust_policy_sha256: str | None = None
+    artifact_s3_bootstrap_principal_arn: str | None = None
+    artifact_s3_bucket_policy_sha256: str | None = None
     artifact_s3_connect_timeout_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
     artifact_s3_read_timeout_seconds: float = Field(default=60.0, gt=0.0, le=1800.0)
     artifact_s3_write_timeout_seconds: float = Field(default=1800.0, gt=0.0, le=3600.0)
@@ -660,6 +684,76 @@ class Settings(BaseSettings):
             raise ValueError("native AWS S3 requires workload identity")
         if self.artifact_s3_aws_workload_identity_method is None:
             raise ValueError("native AWS S3 requires one workload identity method")
+        if self.release_id is None or _SHA256_IDENTITY.fullmatch(self.release_id) is None:
+            raise ValueError("native AWS S3 requires an immutable release digest")
+        role_arns = (
+            self.artifact_s3_runtime_role_arn,
+            self.artifact_s3_readiness_role_arn,
+            self.artifact_s3_negative_role_arn,
+        )
+        if any(value is None or _AWS_IAM_ROLE_ARN.fullmatch(value) is None for value in role_arns):
+            raise ValueError("native AWS S3 requires exact workload role ARNs")
+        if len(set(role_arns)) != len(role_arns):
+            raise ValueError("native AWS S3 workload roles must be distinct")
+        trust_policy_digests = (
+            self.artifact_s3_runtime_trust_policy_sha256,
+            self.artifact_s3_readiness_trust_policy_sha256,
+            self.artifact_s3_negative_trust_policy_sha256,
+        )
+        if any(
+            value is None or _SHA256_IDENTITY.fullmatch(value) is None
+            for value in trust_policy_digests
+        ):
+            raise ValueError("native AWS S3 requires exact workload trust policy digests")
+        if len(set(trust_policy_digests)) != len(trust_policy_digests):
+            raise ValueError("native AWS S3 workload trust policies must be distinct")
+        policy_arns = (
+            self.artifact_s3_runtime_policy_arn,
+            self.artifact_s3_readiness_policy_arn,
+        )
+        if any(
+            value is None or _AWS_IAM_POLICY_ARN.fullmatch(value) is None
+            for value in policy_arns
+        ):
+            raise ValueError("native AWS S3 requires exact managed policy ARNs")
+        if len(set(policy_arns)) != len(policy_arns):
+            raise ValueError("native AWS S3 managed policies must be distinct")
+        if (
+            self.artifact_s3_bootstrap_principal_arn is None
+            or _AWS_IAM_PRINCIPAL_ARN.fullmatch(
+                self.artifact_s3_bootstrap_principal_arn
+            )
+            is None
+        ):
+            raise ValueError("native AWS S3 requires an exact bootstrap principal ARN")
+        exact_arns = (*role_arns, *policy_arns, self.artifact_s3_bootstrap_principal_arn)
+        arn_scopes = {
+            (value.split(":", 5)[1], value.split(":", 5)[4])
+            for value in exact_arns
+            if value is not None
+        }
+        if len(arn_scopes) != 1:
+            raise ValueError(
+                "native AWS S3 role and policy ARNs must share one partition and account"
+            )
+        if (
+            self.artifact_s3_bucket_policy_sha256 is None
+            or _SHA256_IDENTITY.fullmatch(self.artifact_s3_bucket_policy_sha256) is None
+        ):
+            raise ValueError("native AWS S3 requires an exact bucket policy digest")
+        operation_bound = max(
+            self.artifact_s3_operation_total_timeout_seconds,
+            self.artifact_complete_read_deadline_seconds,
+        ) + self.artifact_terminal_persistence_margin_seconds
+        usable_window = (
+            ARTIFACT_AWS_ACTIVATION_VALIDITY_SECONDS
+            - ARTIFACT_AWS_ACTIVATION_REFRESH_SECONDS
+            - ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS
+        )
+        if operation_bound > usable_window:
+            raise ValueError(
+                "native AWS S3 operation and persistence deadlines exceed activation window"
+            )
 
 
 @lru_cache

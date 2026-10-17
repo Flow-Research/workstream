@@ -6,6 +6,7 @@ import json
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
+from types import SimpleNamespace
 from typing import get_args
 
 import pytest
@@ -13,11 +14,12 @@ from pydantic import ValidationError
 from pydantic_settings import BaseSettings
 
 from app.adapters.artifacts import create_artifact_store_bootstrap, submission_archive_limits
-from app.adapters.artifacts.s3_compatible import create_minio_artifact_store_bootstrap
+from app.adapters.artifacts.s3_compatible import create_s3_compatible_artifact_store_bootstrap
 from app.adapters.auth.flow import FlowAuthVerifier
 from app.api.deps.auth import get_application_auth_verifier
 from app.core.auth import clear_auth_verifier_cache, get_auth_verifier
 from app.core.config import (
+    ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS,
     Settings,
     decode_pagination_cursor_hmac_secret,
     get_settings,
@@ -750,6 +752,20 @@ def _aws_settings(tmp_path: Path, **overrides: object) -> Settings:
         "artifact_s3_addressing_style": "virtual",
         "artifact_s3_credential_mode": "aws_workload_identity",
         "artifact_s3_aws_workload_identity_method": "container-role",
+        "release_id": "sha256:" + "1" * 64,
+        "artifact_s3_runtime_role_arn": "arn:aws:iam::123456789012:role/workstream-runtime",
+        "artifact_s3_runtime_trust_policy_sha256": "sha256:" + "3" * 64,
+        "artifact_s3_runtime_policy_arn": "arn:aws:iam::123456789012:policy/workstream-runtime",
+        "artifact_s3_readiness_role_arn": "arn:aws:iam::123456789012:role/workstream-readiness",
+        "artifact_s3_readiness_trust_policy_sha256": "sha256:" + "4" * 64,
+        "artifact_s3_readiness_policy_arn": "arn:aws:iam::123456789012:policy/workstream-readiness",
+        "artifact_s3_negative_role_arn": "arn:aws:iam::123456789012:role/workstream-negative",
+        "artifact_s3_negative_trust_policy_sha256": "sha256:" + "5" * 64,
+        "artifact_s3_bootstrap_principal_arn": "arn:aws:iam::123456789012:role/workstream-bootstrap",
+        "artifact_s3_bucket_policy_sha256": "sha256:" + "2" * 64,
+        "artifact_s3_operation_total_timeout_seconds": 300,
+        "artifact_complete_read_deadline_seconds": 300,
+        "artifact_terminal_persistence_margin_seconds": 120,
     }
     values.update(overrides)
     return Settings(**values)
@@ -933,18 +949,18 @@ def test_local_artifact_settings_and_factory(tmp_path: Path) -> None:
         artifact_operation_lock_timeout_seconds=17,
     )
     (tmp_path / "artifacts").mkdir(mode=0o700)
-    adapter = create_artifact_store_bootstrap(settings)
+    adapter = create_artifact_store_bootstrap(settings, activation_guard=None)
     assert adapter.identity.capability_key == "artifact_store"
     assert adapter.identity.provider_key == "local"
     assert adapter._adapter._lock_timeout_seconds == 17
     adapter.close()
     incomplete = settings.model_copy(update={"artifact_local_root": None})
     with pytest.raises(UnknownExternalServiceProviderError) as disabled:
-        create_artifact_store_bootstrap(Settings())
+        create_artifact_store_bootstrap(Settings(), activation_guard=None)
     assert disabled.value.identity is not None
     assert disabled.value.identity.provider_key == "disabled"
     with pytest.raises(ExternalServiceConfigurationError):
-        create_artifact_store_bootstrap(incomplete)
+        create_artifact_store_bootstrap(incomplete, activation_guard=None)
 
 
 def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
@@ -991,7 +1007,7 @@ def test_minio_settings_and_factory_construct_closed_namespace(tmp_path: Path) -
     """MinIO is the active S3-compatible runtime profile for local and CI proof."""
     settings = _minio_settings(tmp_path)
 
-    bootstrap = create_artifact_store_bootstrap(settings)
+    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
 
     try:
         assert bootstrap.identity.capability_key == "artifact_store"
@@ -1068,7 +1084,7 @@ def test_mutated_minio_settings_cannot_retain_credentials_in_constructor_error(
     settings.artifact_s3_bucket = "bucket.-invalid"
 
     with pytest.raises(ArtifactConfigurationError) as caught:
-        create_minio_artifact_store_bootstrap(settings)
+        create_s3_compatible_artifact_store_bootstrap(settings, activation_guard=None)
 
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
@@ -1084,7 +1100,7 @@ def test_mutated_minio_settings_cannot_retain_credentials_in_constructor_error(
     )
 
     with pytest.raises(ExternalServiceConfigurationError) as public_error:
-        create_artifact_store_bootstrap(settings)
+        create_artifact_store_bootstrap(settings, activation_guard=None)
     assert_secret_not_retained(
         public_error.value,
         access_key,
@@ -1412,8 +1428,8 @@ def test_minio_endpoint_is_normalized_before_namespace_identity(tmp_path: Path) 
     assert canonical.artifact_s3_endpoint_url == "http://localhost"
     assert equivalent.artifact_s3_endpoint_url == "http://localhost"
     assert (
-        create_artifact_store_bootstrap(canonical).namespace_identity
-        == create_artifact_store_bootstrap(equivalent).namespace_identity
+        create_artifact_store_bootstrap(canonical, activation_guard=None).namespace_identity
+        == create_artifact_store_bootstrap(equivalent, activation_guard=None).namespace_identity
     )
 
 
@@ -1439,6 +1455,63 @@ def test_aws_s3_settings_fail_closed(
 ) -> None:
     with pytest.raises((ValidationError, ValueError), match=message):
         _aws_settings(tmp_path, **overrides)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "release_id",
+        "artifact_s3_runtime_role_arn",
+        "artifact_s3_runtime_trust_policy_sha256",
+        "artifact_s3_runtime_policy_arn",
+        "artifact_s3_readiness_role_arn",
+        "artifact_s3_readiness_trust_policy_sha256",
+        "artifact_s3_readiness_policy_arn",
+        "artifact_s3_negative_role_arn",
+        "artifact_s3_negative_trust_policy_sha256",
+        "artifact_s3_bootstrap_principal_arn",
+        "artifact_s3_bucket_policy_sha256",
+    ],
+)
+def test_aws_s3_requires_every_exact_activation_binding(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        _aws_settings(tmp_path, **{field: None})
+
+
+def test_aws_s3_rejects_cross_account_bindings_and_oversized_deadline(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValidationError, match="partition and account"):
+        _aws_settings(
+            tmp_path,
+            artifact_s3_negative_role_arn="arn:aws:iam::999999999999:role/workstream-negative",
+        )
+    with pytest.raises(ValidationError, match="activation window"):
+        _aws_settings(tmp_path, artifact_s3_operation_total_timeout_seconds=600)
+    with pytest.raises(ValidationError, match="trust policies must be distinct"):
+        _aws_settings(
+            tmp_path,
+            artifact_s3_negative_trust_policy_sha256="sha256:" + "3" * 64,
+        )
+
+
+def test_aws_activation_uses_the_fixed_production_clock_safety_margin(
+    tmp_path: Path,
+) -> None:
+    settings = _aws_settings(tmp_path)
+
+    assert ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS == 30
+    assert (
+        max(
+            settings.artifact_s3_operation_total_timeout_seconds,
+            settings.artifact_complete_read_deadline_seconds,
+        )
+        + settings.artifact_terminal_persistence_margin_seconds
+        + ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS
+    ) == 450
 
 
 def test_aws_factory_fails_with_live_proof_before_constructing_provider(
@@ -1475,13 +1548,13 @@ def test_aws_factory_fails_with_live_proof_before_constructing_provider(
     )
 
     with pytest.raises(ArtifactProviderLiveProofRequiredError) as caught:
-        create_artifact_store_bootstrap(settings)
+        create_artifact_store_bootstrap(settings, activation_guard=None)
 
     assert caught.value.code == "artifact_provider_live_proof_required"
     assert events == []
 
 
-async def test_aws_lifespan_fails_before_namespace_claim_and_provider_io(
+async def test_aws_lifespan_claims_namespace_then_requires_activation_before_provider_io(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1490,22 +1563,27 @@ async def test_aws_lifespan_fails_before_namespace_claim_and_provider_io(
     settings = _aws_settings(tmp_path, environment="test")
     events: list[str] = []
 
-    async def namespace_must_not_run(*_args: object, **_kwargs: object) -> object:
+    async def validate_namespace(*_args: object, **_kwargs: object) -> object:
         events.append("namespace")
-        raise AssertionError("namespace claim ran before AWS live proof failure")
+        return SimpleNamespace(namespace_fingerprint="sha256:" + "3" * 64)
 
-    async def cleanup_must_not_run(*_args: object, **_kwargs: object) -> object:
-        events.append("cleanup")
-        raise AssertionError("provider cleanup ran before AWS live proof failure")
+    class Guard:
+        async def select_for_call(self, **_kwargs: object) -> object:
+            events.append("activation")
+            raise ArtifactProviderLiveProofRequiredError("proof is absent")
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/v2/credentials/runtime")
     monkeypatch.setattr(
         main_module,
         "_validate_artifact_storage_namespace_at_startup",
-        namespace_must_not_run,
+        validate_namespace,
     )
-    monkeypatch.setattr(main_module, "cleanup_stale_artifact_scratch", cleanup_must_not_run)
+    monkeypatch.setattr(
+        main_module,
+        "artifact_provider_activation_guard",
+        lambda *_args: Guard(),
+    )
     app = create_app(settings)
 
     with pytest.raises(ArtifactProviderLiveProofRequiredError) as caught:
@@ -1513,7 +1591,7 @@ async def test_aws_lifespan_fails_before_namespace_claim_and_provider_io(
             pass
 
     assert caught.value.code == "artifact_provider_live_proof_required"
-    assert events == []
+    assert events == ["namespace", "activation"]
 
 
 def test_s3_dependency_manifest_and_installed_versions_are_exact() -> None:

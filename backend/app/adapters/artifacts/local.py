@@ -31,6 +31,7 @@ from app.interfaces.artifacts import (
     ArtifactObjectHead,
     ArtifactObjectMissingError,
     ArtifactOperationConflictError,
+    ArtifactProviderOperationEvidence,
     ArtifactPutObservation,
     ArtifactPutResult,
     ArtifactRangeInvalidError,
@@ -210,7 +211,12 @@ class LocalStorageAdapter:
         """Best-effort descriptor cleanup."""
         self.close()
 
-    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+    async def put(
+        self,
+        source: CommittedArtifactSource,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> ArtifactPutResult:
         """Publish sealed bytes exclusively or verify an exact immutable replay."""
         self._require_initialized()
         if type(source) is not CommittedArtifactSource:
@@ -300,13 +306,18 @@ class LocalStorageAdapter:
     async def observe_put_result(
         self,
         commitment: ArtifactCommitment,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutObservation:
         """Read and validate the complete deterministic object when it exists."""
         self._require_initialized()
         if type(commitment) is not ArtifactCommitment:
             raise ArtifactOperationConflictError("artifact commitment is invalid")
         provider_object_ref = artifact_provider_object_ref(commitment)
-        observed = await self.head(provider_object_ref)
+        observed = await self.head(
+            provider_object_ref,
+            operation_evidence=operation_evidence,
+        )
         if not observed.exists:
             return ArtifactPutObservation(provider_object_ref, committed=False)
         await self._verify_exact(provider_object_ref, commitment)
@@ -316,6 +327,8 @@ class LocalStorageAdapter:
         self,
         provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> AsyncIterator[bytes]:
         """Stream a full object or range through bounded off-loop reads."""
         self._require_initialized()
@@ -369,7 +382,12 @@ class LocalStorageAdapter:
 
         return iterate()
 
-    async def head(self, provider_object_ref: str) -> ArtifactObjectHead:
+    async def head(
+        self,
+        provider_object_ref: str,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> ArtifactObjectHead:
         """Return an existing or missing observation without exposing paths."""
         self._require_initialized()
         parse_artifact_provider_object_ref(provider_object_ref)

@@ -794,7 +794,7 @@ async def test_guide_runtime_closes_bootstrap_when_scratch_construction_fails(
     monkeypatch.setattr(
         artifact_adapters,
         "create_artifact_store_bootstrap",
-        lambda _settings: _Bootstrap(),
+        lambda _settings, *, activation_guard: _Bootstrap(),
     )
 
     def fail_scratch(_settings: Settings):

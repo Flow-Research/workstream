@@ -211,7 +211,7 @@ class ObservedStore:
         self.put_release: asyncio.Event | None = None
         self.lose_put_acknowledgement = False
 
-    async def put(self, source):
+    async def put(self, source, **_kwargs):
         self.puts += 1
         if self.put_entered is not None:
             self.put_entered.set()
@@ -222,18 +222,19 @@ class ObservedStore:
             raise ArtifactStoreUnavailableError("controlled lost provider acknowledgement")
         return result
 
-    async def observe_put_result(self, commitment):
+    async def observe_put_result(self, commitment, **_kwargs):
         return await self.wrapped.observe_put_result(commitment)
 
     def open(
         self,
         provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
+        **_kwargs,
     ):
         self.opens += 1
         return self.wrapped.open(provider_object_ref, byte_range)
 
-    async def head(self, provider_object_ref: str):
+    async def head(self, provider_object_ref: str, **_kwargs):
         return await self.wrapped.head(provider_object_ref)
 
 
@@ -353,7 +354,7 @@ async def output_custody_harness(
         )
     else:
         settings = _settings(tmp_path, maximum_bytes=1024)
-    bootstrap = create_artifact_store_bootstrap(settings)
+    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     raw_store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(

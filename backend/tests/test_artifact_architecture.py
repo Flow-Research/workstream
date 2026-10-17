@@ -37,6 +37,7 @@ AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
 OBSERVABILITY_COMPOSITION_ROOT = APP_ROOT / "adapters" / "observability.py"
 AGENT_ADAPTER_MODULE = "app.adapters.project_agents.openai_agent_sdk"
 S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
+AWS_LIVE_PROOF_MODULE = APP_ROOT / "adapters" / "artifacts" / "aws_live_proof.py"
 CLOSED_PORTS = {
     "GuideArtifactIngestCommand",
     "GuideArtifactIngestPort",
@@ -351,7 +352,11 @@ def _assert_concrete_adapter_composition(
     }
     assert len(factory_calls) == 4
     assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE, CHECKER_COMPOSITION_ROOT]
-    assert set(concrete_imports) == {COMPOSITION_ROOT, CHECKER_COMPOSITION_ROOT}
+    assert set(concrete_imports) == {
+        COMPOSITION_ROOT,
+        CHECKER_COMPOSITION_ROOT,
+        AWS_LIVE_PROOF_MODULE,
+    }
     assert agent_imports == [AGENT_COMPOSITION_ROOT]
     assert agent_calls == [AGENT_COMPOSITION_ROOT]
     assert observability_imports == [OBSERVABILITY_COMPOSITION_ROOT]

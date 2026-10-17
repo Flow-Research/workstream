@@ -27,6 +27,8 @@ from app.interfaces.artifacts import (
     ArtifactStoreError,
     ArtifactStoreUnavailableError,
     ArtifactObjectMissingError,
+    ArtifactProviderLiveProofRequiredError,
+    ArtifactProviderOperationEvidence,
     ArtifactStoreBootstrap,
     ArtifactStoreNamespaceClaim,
     artifact_provider_object_ref,
@@ -70,6 +72,7 @@ from app.modules.artifacts.metrics import (
     artifact_admission_metrics,
 )
 from app.modules.artifacts.repository import ArtifactRepository, GuideSourceIngestConflict
+from app.modules.artifacts.provider_activation import require_provider_activation_for_terminal
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
     guide_ingest_prepared_request_digest,
@@ -559,23 +562,41 @@ class ArtifactStorageOrchestrator:
                     charge.reserved_at = now
                     charge.released_at = None
                     charge.cas_version += 1
+        operation_evidence = ArtifactProviderOperationEvidence()
         try:
-            result = await self._store.put(source)
+            result = await self._store.put(
+                source,
+                operation_evidence=operation_evidence,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                facts,
+                force_acknowledgement_unknown=True,
+            )
         except ArtifactStoreUnavailableError:
-            return await self._record_put_unavailable(claimed, executor_id, facts)
+            return await self._record_put_unavailable(executor_id, facts)
         except ArtifactStoreError:
             # Any non-acknowledgement provider error is resolved through the
             # read-only observation path; a caller write never fabricates
             # observation evidence.
-            return await self._record_put_unavailable(claimed, executor_id, facts)
-        return await self._complete_transaction_b(
-            claimed=claimed,
-            executor_id=executor_id,
-            expected_facts=facts,
-            provider_object_ref=result.provider_object_ref,
-            replayed=result.replayed,
-            observed=False,
-        )
+            return await self._record_put_unavailable(executor_id, facts)
+        try:
+            return await self._complete_transaction_b(
+                claimed=claimed,
+                executor_id=executor_id,
+                expected_facts=facts,
+                provider_object_ref=result.provider_object_ref,
+                replayed=result.replayed,
+                observed=False,
+                activation_id=operation_evidence.activation_id,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                facts,
+                force_acknowledgement_unknown=True,
+            )
 
     async def resolve_put_attempt(self, attempt_id: UUID) -> str:
         """Resolve ambiguous publication using observation only, never write replay."""
@@ -635,51 +656,101 @@ class ArtifactStorageOrchestrator:
                 await claim_transaction.rollback()
                 return "stale"
         commitment = _attempt_commitment(claimed)
+        operation_evidence = ArtifactProviderOperationEvidence()
         try:
-            observation = await self._store.observe_put_result(commitment)
+            observation = await self._store.observe_put_result(
+                commitment,
+                operation_evidence=operation_evidence,
+            )
             if not observation.committed:
-                return await self._record_put_absence(claimed, executor_id, facts)
+                return await self._record_provider_put_absence(
+                    claimed,
+                    executor_id,
+                    facts,
+                    operation_evidence.activation_id,
+                )
             observed_sha256, observed_size = await self._read_complete(
-                observation.provider_object_ref
+                observation.provider_object_ref,
+                operation_evidence=operation_evidence,
             )
         except ArtifactIntegrityError:
             try:
-                observed_sha256, observed_size = await self._read_complete(claimed.canonical_target)
+                observed_sha256, observed_size = await self._read_complete(
+                    claimed.canonical_target,
+                    operation_evidence=operation_evidence,
+                )
             except (ArtifactStoreUnavailableError, TimeoutError):
-                return await self._record_put_unavailable(claimed, executor_id, facts)
+                return await self._record_put_unavailable(executor_id, facts)
+            except ArtifactProviderLiveProofRequiredError:
+                return await self._record_put_unavailable(
+                    executor_id,
+                    facts,
+                    force_acknowledgement_unknown=True,
+                )
             except ArtifactStoreError:
-                return await self._record_put_conflict(claimed, executor_id, facts)
-            return await self._record_put_mismatch(
+                return await self._record_provider_put_conflict(
+                    claimed,
+                    executor_id,
+                    facts,
+                    operation_evidence.activation_id,
+                )
+            return await self._record_provider_put_mismatch(
                 claimed,
                 executor_id,
                 facts,
                 claimed.canonical_target,
                 observed_sha256,
                 observed_size,
+                operation_evidence.activation_id,
             )
         except ArtifactObjectMissingError:
-            return await self._record_put_absence(claimed, executor_id, facts)
+            return await self._record_provider_put_absence(
+                claimed,
+                executor_id,
+                facts,
+                operation_evidence.activation_id,
+            )
         except (ArtifactStoreUnavailableError, TimeoutError):
-            return await self._record_put_unavailable(claimed, executor_id, facts)
+            return await self._record_put_unavailable(executor_id, facts)
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                facts,
+                force_acknowledgement_unknown=True,
+            )
         except ArtifactStoreError:
-            return await self._record_put_conflict(claimed, executor_id, facts)
+            return await self._record_provider_put_conflict(
+                claimed,
+                executor_id,
+                facts,
+                operation_evidence.activation_id,
+            )
         if observed_sha256 != claimed.sha256 or observed_size != claimed.byte_count:
-            return await self._record_put_mismatch(
+            return await self._record_provider_put_mismatch(
                 claimed,
                 executor_id,
                 facts,
                 observation.provider_object_ref,
                 observed_sha256,
                 observed_size,
+                operation_evidence.activation_id,
             )
-        return await self._complete_transaction_b(
-            claimed=claimed,
-            executor_id=executor_id,
-            expected_facts=facts,
-            provider_object_ref=observation.provider_object_ref,
-            replayed=True,
-            observed=True,
-        )
+        try:
+            return await self._complete_transaction_b(
+                claimed=claimed,
+                executor_id=executor_id,
+                expected_facts=facts,
+                provider_object_ref=observation.provider_object_ref,
+                replayed=True,
+                observed=True,
+                activation_id=operation_evidence.activation_id,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                facts,
+                force_acknowledgement_unknown=True,
+            )
 
     async def verify_object(
         self,
@@ -790,32 +861,40 @@ class ArtifactStorageOrchestrator:
                 "conflict",
                 None,
                 None,
+                None,
+                provider_derived=False,
                 submission_task_contexts=submission_task_contexts,
             )
+        operation_evidence = ArtifactProviderOperationEvidence()
         try:
             observed_sha256, observed_size = await self._read_complete(
-                execution_replica.provider_object_ref
+                execution_replica.provider_object_ref,
+                operation_evidence=operation_evidence,
             )
         except ArtifactObjectMissingError:
-            return await self._complete_verification(
+            return await self._complete_provider_verification(
                 claimed,
                 executor_id,
                 facts,
                 "missing",
                 None,
                 None,
+                operation_evidence.activation_id,
                 submission_task_contexts=submission_task_contexts,
             )
         except (ArtifactStoreUnavailableError, TimeoutError):
-            return await self._record_verification_unavailable(claimed, executor_id, facts)
+            return await self._record_verification_unavailable(executor_id, facts)
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_verification_unavailable(executor_id, facts)
         except ArtifactStoreError:
-            return await self._complete_verification(
+            return await self._complete_provider_verification(
                 claimed,
                 executor_id,
                 facts,
                 "conflict",
                 None,
                 None,
+                operation_evidence.activation_id,
                 submission_task_contexts=submission_task_contexts,
             )
         outcome = (
@@ -824,22 +903,31 @@ class ArtifactStorageOrchestrator:
             and observed_size == execution_attempt.byte_count
             else "integrity_mismatch"
         )
-        return await self._complete_verification(
+        return await self._complete_provider_verification(
             claimed,
             executor_id,
             facts,
             outcome,
             observed_sha256,
             observed_size,
+            operation_evidence.activation_id,
             submission_task_contexts=submission_task_contexts,
         )
 
-    async def _read_complete(self, provider_object_ref: str) -> tuple[str, int]:
+    async def _read_complete(
+        self,
+        provider_object_ref: str,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence,
+    ) -> tuple[str, int]:
         digest = hashlib.sha256()
         byte_count = 0
         async with asyncio.timeout(self._settings.artifact_complete_read_deadline_seconds):
             try:
-                async for chunk in self._store.open(provider_object_ref):
+                async for chunk in self._store.open(
+                    provider_object_ref,
+                    operation_evidence=operation_evidence,
+                ):
                     digest.update(chunk)
                     byte_count += len(chunk)
             except ArtifactIntegrityError:
@@ -858,6 +946,7 @@ class ArtifactStorageOrchestrator:
         provider_object_ref: str,
         replayed: bool,
         observed: bool,
+        activation_id: UUID | None,
     ) -> str:
         async with self._session.begin():
             await self._authority.prepare(
@@ -876,6 +965,7 @@ class ArtifactStorageOrchestrator:
             if facts != expected_facts:
                 self._authority.discard()
                 return "stale"
+            await self._require_terminal_activation(activation_id)
             await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -897,6 +987,7 @@ class ArtifactStorageOrchestrator:
                     normalized_display_name=None,
                 )
             )
+            await self._require_terminal_activation(activation_id)
             replica = await self._repo.get_or_create_replica(
                 ArtifactReplica(
                     id=str(new_record_id()),
@@ -924,6 +1015,7 @@ class ArtifactStorageOrchestrator:
                 self._namespace.provider_profile,
             )
             if replica_identity != expected_replica_identity:
+                await self._require_terminal_activation(activation_id)
                 await self._repo.add_put_observation_receipt(
                     ArtifactPutObservationReceipt(
                         id=str(new_record_id()),
@@ -940,9 +1032,11 @@ class ArtifactStorageOrchestrator:
                 attempt.terminal_result_code = "conflict"
                 attempt.terminal_at = now
                 _clear_put_fence(attempt)
+                await self._require_terminal_activation(activation_id)
                 return "conflict"
             is_guide_document = attempt.producer_request_type == "guide"
             if observed:
+                await self._require_terminal_activation(activation_id)
                 observation_receipt = await self._repo.add_put_observation_receipt(
                     ArtifactPutObservationReceipt(
                         id=str(new_record_id()),
@@ -957,6 +1051,7 @@ class ArtifactStorageOrchestrator:
                 )
                 receipt_id = observation_receipt.id
             else:
+                await self._require_terminal_activation(activation_id)
                 receipt = await self._repo.add_receipt(
                     ArtifactOperationReceipt(
                         id=str(new_record_id()),
@@ -978,6 +1073,7 @@ class ArtifactStorageOrchestrator:
                 )
                 receipt_id = receipt.id
             if not is_guide_document:
+                await self._require_terminal_activation(activation_id)
                 await self._repo.add_verification_job(
                     ArtifactVerificationJob(
                         id=str(new_record_id()),
@@ -1002,15 +1098,17 @@ class ArtifactStorageOrchestrator:
             )
             attempt.terminal_at = now
             attempt.cas_version += 1
+            await self._require_terminal_activation(activation_id)
         return "document_stored" if is_guide_document else (
             "observed_confirmed" if observed else "stored_pending_verification"
         )
 
     async def _record_put_unavailable(
         self,
-        claimed: ArtifactPutAttempt,
         executor_id: UUID,
         expected_facts: ArtifactPutAttemptAuthorityFacts,
+        *,
+        force_acknowledgement_unknown: bool = False,
     ) -> str:
         async with self._session.begin():
             await self._authority.prepare(
@@ -1020,13 +1118,15 @@ class ArtifactStorageOrchestrator:
                 phase="terminal",
                 idempotency_key=executor_id,
             )
-            attempt = await self._repo.lock_put_attempt(claimed.id)
-            if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
+            attempt = await self._repo.lock_put_attempt(str(expected_facts.resource_id))
+            if not _matching_put_fence(
+                attempt, executor_id, expected_facts.execution_generation
+            ):
                 self._authority.discard()
                 return "stale"
             assert attempt is not None
             terminal_facts = _put_authority_facts(
-                attempt, executor_id, claimed.execution_generation
+                attempt, executor_id, expected_facts.execution_generation
             )
             if terminal_facts != expected_facts:
                 self._authority.discard()
@@ -1037,7 +1137,10 @@ class ArtifactStorageOrchestrator:
                 facts=terminal_facts,
             )
             now = await self._repo.database_now()
-            exhausted = attempt.observation_count >= attempt.maximum_observations
+            exhausted = (
+                not force_acknowledgement_unknown
+                and attempt.observation_count >= attempt.maximum_observations
+            )
             attempt.status = "provider_unavailable" if exhausted else "acknowledgement_unknown"
             attempt.next_run_at = (
                 None
@@ -1050,11 +1153,81 @@ class ArtifactStorageOrchestrator:
             _clear_put_fence(attempt)
         return "provider_unavailable" if exhausted else "acknowledgement_unknown"
 
+    async def _record_provider_put_absence(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+        activation_id: UUID | None,
+    ) -> str:
+        try:
+            return await self._record_put_absence(
+                claimed,
+                executor_id,
+                expected_facts,
+                activation_id,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                expected_facts,
+                force_acknowledgement_unknown=True,
+            )
+
+    async def _record_provider_put_mismatch(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+        provider_object_ref: str,
+        observed_sha256: str,
+        observed_size: int,
+        activation_id: UUID | None,
+    ) -> str:
+        try:
+            return await self._record_put_mismatch(
+                claimed,
+                executor_id,
+                expected_facts,
+                provider_object_ref,
+                observed_sha256,
+                observed_size,
+                activation_id,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                expected_facts,
+                force_acknowledgement_unknown=True,
+            )
+
+    async def _record_provider_put_conflict(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+        activation_id: UUID | None,
+    ) -> str:
+        try:
+            return await self._record_put_conflict(
+                claimed,
+                executor_id,
+                expected_facts,
+                activation_id,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_put_unavailable(
+                executor_id,
+                expected_facts,
+                force_acknowledgement_unknown=True,
+            )
+
     async def _record_put_absence(
         self,
         claimed: ArtifactPutAttempt,
         executor_id: UUID,
         expected_facts: ArtifactPutAttemptAuthorityFacts,
+        activation_id: UUID | None,
     ) -> str:
         async with self._session.begin():
             await self._authority.prepare(
@@ -1075,6 +1248,7 @@ class ArtifactStorageOrchestrator:
             if terminal_facts != expected_facts:
                 self._authority.discard()
                 return "stale"
+            await self._require_terminal_activation(activation_id)
             await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1092,6 +1266,7 @@ class ArtifactStorageOrchestrator:
                     scope = scope_by_key[(charge.scope_type, charge.scope_id)]
                     scope.counted_bytes -= charge.byte_count
                     scope.cas_version += 1
+            await self._require_terminal_activation(activation_id)
             await self._repo.add_put_observation_receipt(
                 ArtifactPutObservationReceipt(
                     id=str(new_record_id()),
@@ -1106,6 +1281,7 @@ class ArtifactStorageOrchestrator:
             attempt.terminal_result_code = "missing"
             attempt.terminal_at = now
             _clear_put_fence(attempt)
+            await self._require_terminal_activation(activation_id)
         return "missing"
 
     async def _record_put_mismatch(
@@ -1116,6 +1292,7 @@ class ArtifactStorageOrchestrator:
         provider_object_ref: str,
         observed_sha256: str,
         observed_size: int,
+        activation_id: UUID | None,
     ) -> str:
         return await self._record_put_terminal_observation(
             claimed,
@@ -1126,6 +1303,7 @@ class ArtifactStorageOrchestrator:
             observed_sha256=observed_sha256,
             observed_size=observed_size,
             provider_object_ref=provider_object_ref,
+            activation_id=activation_id,
         )
 
     async def _record_put_conflict(
@@ -1133,6 +1311,7 @@ class ArtifactStorageOrchestrator:
         claimed: ArtifactPutAttempt,
         executor_id: UUID,
         expected_facts: ArtifactPutAttemptAuthorityFacts,
+        activation_id: UUID | None,
     ) -> str:
         return await self._record_put_terminal_observation(
             claimed,
@@ -1143,6 +1322,7 @@ class ArtifactStorageOrchestrator:
             observed_sha256=None,
             observed_size=None,
             provider_object_ref=None,
+            activation_id=activation_id,
         )
 
     async def _record_put_terminal_observation(
@@ -1156,6 +1336,7 @@ class ArtifactStorageOrchestrator:
         observed_sha256: str | None,
         observed_size: int | None,
         provider_object_ref: str | None,
+        activation_id: UUID | None,
     ) -> str:
         async with self._session.begin():
             await self._authority.prepare(
@@ -1176,6 +1357,7 @@ class ArtifactStorageOrchestrator:
             if terminal_facts != expected_facts:
                 self._authority.discard()
                 return "stale"
+            await self._require_terminal_activation(activation_id)
             await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1201,6 +1383,7 @@ class ArtifactStorageOrchestrator:
                 if locked_content is None:
                     raise ArtifactIngestStateError("artifact content is unavailable")
                 content = locked_content
+                await self._require_terminal_activation(activation_id)
                 replica = await self._repo.get_or_create_replica(
                     ArtifactReplica(
                         id=str(new_record_id()),
@@ -1231,6 +1414,7 @@ class ArtifactStorageOrchestrator:
                     replica.availability_state = "available"
                     replica.integrity_state = "invalid"
                 attempt.replica_id = replica.id
+            await self._require_terminal_activation(activation_id)
             await self._repo.add_put_observation_receipt(
                 ArtifactPutObservationReceipt(
                     id=str(new_record_id()),
@@ -1247,11 +1431,11 @@ class ArtifactStorageOrchestrator:
             attempt.terminal_result_code = status
             attempt.terminal_at = now
             _clear_put_fence(attempt)
+            await self._require_terminal_activation(activation_id)
         return status
 
     async def _record_verification_unavailable(
         self,
-        claimed: ArtifactVerificationJob,
         executor_id: UUID,
         expected_facts: ArtifactVerificationAuthorityFacts,
     ) -> str:
@@ -1263,8 +1447,12 @@ class ArtifactStorageOrchestrator:
                 phase="terminal",
                 idempotency_key=executor_id,
             )
-            job = await self._repo.lock_verification_job(claimed.id)
-            if not _matching_job_fence(job, executor_id, claimed.execution_generation):
+            job = await self._repo.lock_verification_job(str(expected_facts.resource_id))
+            if not _matching_job_fence(
+                job,
+                executor_id,
+                expected_facts.execution_generation,
+            ):
                 self._authority.discard()
                 return "stale"
             assert job is not None
@@ -1275,7 +1463,11 @@ class ArtifactStorageOrchestrator:
                 return "conflict"
             content = await self._repo.lock_content(replica.content_id)
             terminal_facts = _verification_authority_facts(
-                job, replica, attempt, executor_id, claimed.execution_generation
+                job,
+                replica,
+                attempt,
+                executor_id,
+                expected_facts.execution_generation,
             )
             if terminal_facts != expected_facts:
                 self._authority.discard()
@@ -1304,6 +1496,36 @@ class ArtifactStorageOrchestrator:
                 await self._finalize_recovery_for_job(job, "provider_unavailable", now)
         return "provider_unavailable"
 
+    async def _complete_provider_verification(
+        self,
+        claimed: ArtifactVerificationJob,
+        executor_id: UUID,
+        expected_facts: ArtifactVerificationAuthorityFacts,
+        outcome: str,
+        observed_sha256: str | None,
+        observed_size: int | None,
+        activation_id: UUID | None,
+        *,
+        submission_task_contexts: TaskSubmissionContextPort | None = None,
+    ) -> str:
+        """Terminalize provider evidence or retain a recoverable unavailable job."""
+        try:
+            return await self._complete_verification(
+                claimed,
+                executor_id,
+                expected_facts,
+                outcome,
+                observed_sha256,
+                observed_size,
+                activation_id,
+                submission_task_contexts=submission_task_contexts,
+            )
+        except ArtifactProviderLiveProofRequiredError:
+            return await self._record_verification_unavailable(
+                executor_id,
+                expected_facts,
+            )
+
     async def _complete_verification(
         self,
         claimed: ArtifactVerificationJob,
@@ -1312,7 +1534,9 @@ class ArtifactStorageOrchestrator:
         outcome: str,
         observed_sha256: str | None,
         observed_size: int | None,
+        activation_id: UUID | None,
         *,
+        provider_derived: bool = True,
         submission_task_contexts: TaskSubmissionContextPort | None = None,
     ) -> str:
         claim_id, claim_generation = claimed.id, claimed.execution_generation
@@ -1320,6 +1544,8 @@ class ArtifactStorageOrchestrator:
             return await self._complete_verification_transaction(
                 claim_id, claim_generation, executor_id, expected_facts, outcome,
                 observed_sha256, observed_size,
+                activation_id,
+                provider_derived=provider_derived,
                 submission_task_contexts=submission_task_contexts,
             )
         except IntegrityError as exc:
@@ -1331,6 +1557,8 @@ class ArtifactStorageOrchestrator:
             return await self._complete_verification_transaction(
                 claim_id, claim_generation, executor_id, expected_facts, outcome,
                 observed_sha256, observed_size,
+                activation_id,
+                provider_derived=provider_derived,
                 submission_task_contexts=submission_task_contexts,
                 publication_conflict=True,
             )
@@ -1344,7 +1572,9 @@ class ArtifactStorageOrchestrator:
         outcome: str,
         observed_sha256: str | None,
         observed_size: int | None,
+        activation_id: UUID | None,
         *,
+        provider_derived: bool,
         submission_task_contexts: TaskSubmissionContextPort | None = None,
         publication_conflict: bool = False,
     ) -> str:
@@ -1388,6 +1618,8 @@ class ArtifactStorageOrchestrator:
             if terminal_facts != expected_facts:
                 self._authority.discard()
                 return "stale"
+            if provider_derived:
+                await self._require_terminal_activation(activation_id)
             await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -1424,10 +1656,14 @@ class ArtifactStorageOrchestrator:
                         replica.integrity_state,
                     )
             else:
+                if provider_derived:
+                    await self._require_terminal_activation(activation_id)
                 replica.verification_state, replica.availability_state, replica.integrity_state = (
                     states
                 )
                 replica.last_reconciled_at = now
+            if provider_derived:
+                await self._require_terminal_activation(activation_id)
             verification_receipt = await self._repo.add_verification_receipt(
                 ArtifactVerificationReceipt(
                     id=str(new_record_id()),
@@ -1463,7 +1699,20 @@ class ArtifactStorageOrchestrator:
             job.terminal_at = now
             _clear_job_fence(job)
             await self._finalize_recovery_for_job(job, outcome, now)
+            if provider_derived:
+                await self._require_terminal_activation(activation_id)
         return outcome
+
+    async def _require_terminal_activation(self, activation_id: UUID | None) -> None:
+        """Recheck the exact AWS activation inside the current transaction."""
+        if self._settings.artifact_s3_provider_profile != "aws_s3":
+            return
+        await require_provider_activation_for_terminal(
+            self._session,
+            self._settings,
+            namespace_fingerprint=self._namespace.namespace_fingerprint,
+            activation_id=activation_id,
+        )
 
     async def _terminalize_verification_conflict(
         self,

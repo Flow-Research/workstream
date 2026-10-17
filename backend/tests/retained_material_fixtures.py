@@ -81,7 +81,7 @@ class MemoryStore:
         self.identity = ExternalServiceAdapterIdentity("artifact_store", namespace.adapter)
         self.objects = {} if objects is None else objects
 
-    async def put(self, source):
+    async def put(self, source, **_kwargs):
         ref = artifact_provider_object_ref(source.commitment)
         data = b"".join([chunk async for chunk in source.stream()])
         replayed = ref in self.objects
@@ -90,18 +90,18 @@ class MemoryStore:
         self.objects[ref] = data
         return ArtifactPutResult(ref, replayed)
 
-    async def observe_put_result(self, commitment):
+    async def observe_put_result(self, commitment, **_kwargs):
         ref = artifact_provider_object_ref(commitment)
         return ArtifactPutObservation(ref, ref in self.objects)
 
-    async def open(self, ref, byte_range=None):
+    async def open(self, ref, byte_range=None, **_kwargs):
         data = self.objects[ref]
         if byte_range is not None:
             end = None if byte_range.length is None else byte_range.offset + byte_range.length
             data = data[byte_range.offset : end]
         yield data
 
-    async def head(self, ref):
+    async def head(self, ref, **_kwargs):
         data = self.objects.get(ref)
         return ArtifactObjectHead(ref, data is not None, len(data) if data is not None else None)
 

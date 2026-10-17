@@ -58,7 +58,7 @@ async def test_art_deadline_race_reenters_terminal_conflict_path():
     ])
     claim = SimpleNamespace(id="job", execution_generation=2)
     assert await service._complete_verification(
-        claim, None, None, "verified", None, None,
+        claim, None, None, "verified", None, None, None,
     ) == "conflict"
     assert service._complete_verification_transaction.await_count == 2
     assert service._complete_verification_transaction.await_args.kwargs["publication_conflict"] is True
@@ -72,6 +72,6 @@ async def test_art_other_integrity_failure_does_not_retry():
     with pytest.raises(IntegrityError):
         await service._complete_verification(
             SimpleNamespace(id="job", execution_generation=2), None, None,
-            "verified", None, None,
+            "verified", None, None, None,
         )
     service._complete_verification_transaction.assert_awaited_once()

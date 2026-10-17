@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 import re
 from typing import Protocol
+from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.core.s3_validation import validate_s3_namespace_descriptor
@@ -208,6 +209,59 @@ class ArtifactStoreNamespaceClaim:
             raise ValueError("artifact namespace fingerprint is invalid")
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactProviderActivationLease:
+    """One exact database-time activation admitted for an AWS provider call."""
+
+    activation_id: UUID
+
+    def __post_init__(self) -> None:
+        """Keep a lease bound to one native record identifier."""
+        if type(self.activation_id) is not UUID:
+            raise ValueError("artifact provider activation ID is invalid")
+
+
+class ArtifactProviderOperationEvidence:
+    """Capture the first activation selected for one logical store operation."""
+
+    __slots__ = ("_activation_id",)
+
+    def __init__(self) -> None:
+        self._activation_id: UUID | None = None
+
+    @property
+    def activation_id(self) -> UUID | None:
+        """Return the activation actually used, if this provider requires one."""
+        return self._activation_id
+
+    def bind(self, lease: ArtifactProviderActivationLease) -> None:
+        """Bind once to the first lease; later calls must retain the same ID."""
+        if type(lease) is not ArtifactProviderActivationLease:
+            raise ValueError("artifact provider activation lease is invalid")
+        if self._activation_id not in {None, lease.activation_id}:
+            raise ValueError("artifact provider activation changed within one operation")
+        self._activation_id = lease.activation_id
+
+
+class ArtifactProviderActivationGuard(Protocol):
+    """Load one exact fresh AWS activation without exposing ART persistence."""
+
+    async def select_for_call(
+        self,
+        *,
+        namespace_fingerprint: str,
+    ) -> ArtifactProviderActivationLease:
+        """Select a deterministic activation with sufficient remaining TTL."""
+
+    async def require_for_call(
+        self,
+        activation_id: UUID,
+        *,
+        namespace_fingerprint: str,
+    ) -> ArtifactProviderActivationLease:
+        """Reload one previously selected activation before another AWS call."""
+
+
 class ArtifactStoreError(Exception):
     """Base class for stable, provider-secret-safe artifact failures."""
 
@@ -305,7 +359,7 @@ class ArtifactConfigurationError(ArtifactStoreError):
 
 
 class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
-    """Raised while an AWS profile lacks the later live activation proof."""
+    """Raised while an AWS profile lacks fresh exact live activation proof."""
 
     code = "artifact_provider_live_proof_required"
 
@@ -313,12 +367,19 @@ class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
 class ArtifactStore(ExternalServiceAdapter, Protocol):
     """Immutable byte-provider capability used only by artifact orchestration."""
 
-    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+    async def put(
+        self,
+        source: CommittedArtifactSource,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> ArtifactPutResult:
         """Publish one sealed committed source or prove an exact replay."""
 
     async def observe_put_result(
         self,
         commitment: ArtifactCommitment,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutObservation:
         """Observe one commitment-derived object without replaying a write."""
 
@@ -326,10 +387,17 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
         self,
         provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> AsyncIterator[bytes]:
         """Stream one object or bounded range in bounded chunks."""
 
-    async def head(self, provider_object_ref: str) -> ArtifactObjectHead:
+    async def head(
+        self,
+        provider_object_ref: str,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> ArtifactObjectHead:
         """Return a safe existing or missing object observation."""
 
 

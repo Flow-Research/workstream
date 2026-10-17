@@ -25,9 +25,7 @@ async def _audit_constraint_snapshot(
     connection = await asyncpg.connect(url)
     try:
         return (
-            await connection.fetchval(
-                "select version_num from public.alembic_version"
-            ),
+            await connection.fetchval("select version_num from public.alembic_version"),
             await connection.fetchval(
                 "select pg_get_constraintdef(oid) from pg_constraint "
                 "where conrelid='public.audit_events'::regclass "
@@ -81,15 +79,12 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
         await _drop_test_database_schema(isolated_database_env)
         await asyncio.to_thread(command.upgrade, _config(), "0028_lifecycle_transitions")
         connection = await asyncpg.connect(url)
-        role, database = await connection.fetchrow(
-            "select current_user,current_database()"
-        )
+        role, database = await connection.fetchrow("select current_user,current_database()")
         assert ROLE_RE.fullmatch(role) and NAME_RE.fullmatch(database)
         try:
             await connection.execute(f"create schema {shadow}")
             await connection.execute(
-                f"create table {shadow}.audit_events "
-                "(like public.audit_events including all)"
+                f"create table {shadow}.audit_events (like public.audit_events including all)"
             )
             shadow_before = await connection.fetchval(
                 "select pg_get_constraintdef(oid) from pg_constraint "
@@ -98,8 +93,7 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
                 f"{shadow}.audit_events",
             )
             await connection.execute(
-                f'alter role "{role}" in database "{database}" '
-                f"set search_path={shadow},public"
+                f'alter role "{role}" in database "{database}" set search_path={shadow},public'
             )
         finally:
             await connection.close()
@@ -108,12 +102,12 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
             await asyncio.to_thread(command.upgrade, _config(), "head")
             probe = await asyncpg.connect(url)
             try:
+                assert (
+                    await probe.fetchval("select version_num from public.alembic_version")
+                    == current_schema_revision()
+                )
                 assert await probe.fetchval(
-                    "select version_num from public.alembic_version"
-                ) == current_schema_revision()
-                assert await probe.fetchval(
-                    "select to_regclass('public.external_checker_registry_entries') "
-                    "is not null"
+                    "select to_regclass('public.external_checker_registry_entries') is not null"
                 )
                 assert await probe.fetchval(
                     "select to_regclass($1) is null", f"{shadow}.external_checker_registry_entries"
@@ -140,9 +134,7 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
                 )
                 assert shadow_after == shadow_before
                 for action, permission in exact_pairs:
-                    await _insert_audit_pair(
-                        probe, action_id=action, permission_id=permission
-                    )
+                    await _insert_audit_pair(probe, action_id=action, permission_id=permission)
                     with pytest.raises(asyncpg.CheckViolationError) as error:
                         await _insert_audit_pair(
                             probe,
@@ -157,7 +149,9 @@ async def test_registry_upgrade_targets_public_schema_with_shadow_search_path(
         finally:
             cleanup = await asyncpg.connect(url)
             try:
-                await cleanup.execute(f'alter role "{role}" in database "{database}" reset search_path')
+                await cleanup.execute(
+                    f'alter role "{role}" in database "{database}" reset search_path'
+                )
                 await cleanup.execute(f"drop schema if exists {shadow} cascade")
             finally:
                 await cleanup.close()
@@ -168,17 +162,33 @@ async def test_operational_read_audit_one_step_downgrade_refuses_without_mutatio
     migration_lock,
 ) -> None:
     url = isolated_database_env.replace("+asyncpg", "")
-    before = await _audit_constraint_snapshot(url)
-    assert before[0] == "0051_operational_read_audit"
-
-    with migration_lock(), pytest.raises(
-        RuntimeError,
-        match="Workstream v0.1 migrations cannot be downgraded; recreate the database",
-    ):
+    with migration_lock():
+        await db_session.dispose_engine()
+        await _drop_test_database_schema(isolated_database_env)
         await asyncio.to_thread(
-            command.downgrade,
+            command.upgrade,
             _config(),
-            "0050_contributor_reads",
+            "0051_operational_read_audit",
         )
+        try:
+            before = await _audit_constraint_snapshot(url)
+            assert before[0] == "0051_operational_read_audit"
 
-    assert await _audit_constraint_snapshot(url) == before
+            with pytest.raises(
+                RuntimeError,
+                match=("Workstream v0.1 migrations cannot be downgraded; recreate the database"),
+            ):
+                await asyncio.to_thread(
+                    command.downgrade,
+                    _config(),
+                    "0050_contributor_reads",
+                )
+
+            assert await _audit_constraint_snapshot(url) == before
+        finally:
+            await _drop_test_database_schema(isolated_database_env)
+            await asyncio.to_thread(
+                command.upgrade,
+                _config(),
+                current_schema_revision(),
+            )

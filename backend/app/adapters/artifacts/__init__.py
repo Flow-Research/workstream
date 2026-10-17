@@ -7,7 +7,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.api_controls import request_ids
@@ -15,7 +15,7 @@ from app.api.deps.authorization import get_authorization_actor_identity
 from app.adapters.checkers import checker_output_reservations
 from app.adapters.projects import project_locked_policy_context_port
 from app.adapters.tasks import task_submission_context_port
-from app.db.session import get_db_session
+from app.db.session import get_db_session, get_session_factory
 from app.interfaces.artifact_operations import GuideArtifactIngestCommand
 from app.modules.projects.api.guide_documents import GuideDocumentUploadTargetPort
 from app.modules.artifacts.api import SubmissionBundlePreparationCommand
@@ -33,6 +33,7 @@ from app.modules.checkers.api.output_custody import (
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactConfigurationError,
+    ArtifactProviderActivationGuard,
     ArtifactProviderLiveProofRequiredError,
     ArtifactStoreBootstrap,
     ArtifactStoreNamespaceClaim,
@@ -71,7 +72,29 @@ async def get_submission_bundle_preparation_actor(
     return actor
 
 
-def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstrap:
+def artifact_provider_activation_guard(
+    settings: Settings,
+    sessions: async_sessionmaker[AsyncSession] | None = None,
+) -> ArtifactProviderActivationGuard | None:
+    """Compose the ART-owned guard and resolve DB state only for native AWS."""
+    if not (
+        settings.artifact_store_backend == "s3_compatible"
+        and settings.artifact_s3_provider_profile == "aws_s3"
+    ):
+        return None
+    from app.modules.artifacts.provider_activation import (
+        SqlAlchemyArtifactProviderActivationGuard,
+    )
+
+    sessions = sessions or get_session_factory()
+    return SqlAlchemyArtifactProviderActivationGuard(sessions, settings)
+
+
+def create_artifact_store_bootstrap(
+    settings: Settings,
+    *,
+    activation_guard: ArtifactProviderActivationGuard | None,
+) -> ArtifactStoreBootstrap:
     """Construct the selected store bootstrap through one typed factory.
 
     Args:
@@ -83,17 +106,25 @@ def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstra
     Raises:
         ExternalServiceConfigurationError: If the provider is not registered.
     """
-    require_artifact_runtime_eligible(settings)
-
+    if (
+        settings.artifact_store_backend == "s3_compatible"
+        and settings.artifact_s3_provider_profile == "aws_s3"
+        and activation_guard is None
+    ):
+        raise ArtifactProviderLiveProofRequiredError(
+            "AWS artifact provider requires an activation guard"
+        )
     from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
     from app.adapters.artifacts.s3_compatible import (
-        create_minio_artifact_store_bootstrap,
+        create_s3_compatible_artifact_store_bootstrap,
     )
 
     factory = ExternalServiceAdapterFactory[ArtifactStoreBootstrap](ARTIFACT_STORE_CAPABILITY_KEY)
 
     def create_local_store() -> ArtifactStoreBootstrap:
         """Pin the configured development-only LocalStorage provider root."""
+        if activation_guard is not None:
+            raise ArtifactConfigurationError("local artifact storage cannot use AWS activation")
         if settings.artifact_local_root is None:
             raise ArtifactConfigurationError("local artifact root is not configured")
         return LocalStorageBootstrap(
@@ -107,20 +138,12 @@ def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstra
     factory.register("local", create_local_store)
     factory.register(
         "s3_compatible",
-        lambda: create_minio_artifact_store_bootstrap(settings),
+        lambda: create_s3_compatible_artifact_store_bootstrap(
+            settings,
+            activation_guard=activation_guard,
+        ),
     )
     return factory.create(settings.artifact_store_backend)
-
-
-def require_artifact_runtime_eligible(settings: Settings) -> None:
-    """Reject configured providers that this chunk has not activated."""
-    if (
-        settings.artifact_store_backend == "s3_compatible"
-        and settings.artifact_s3_provider_profile == "aws_s3"
-    ):
-        raise ArtifactProviderLiveProofRequiredError(
-            "AWS artifact provider requires live deployment proof"
-        )
 
 
 def artifact_preparation_limits(settings: Settings) -> ArtifactPreparationLimits:
@@ -174,7 +197,10 @@ def task_guide_documents_port(session: AsyncSession, settings: Settings) -> Task
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(settings)
+        bootstrap = create_artifact_store_bootstrap(
+            settings,
+            activation_guard=artifact_provider_activation_guard(settings),
+        )
         manager = None
         try:
             manager = create_artifact_scratch_manager(settings)
@@ -235,7 +261,10 @@ def get_guide_artifact_ingest_command(
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(settings)
+        bootstrap = create_artifact_store_bootstrap(
+            settings,
+            activation_guard=artifact_provider_activation_guard(settings),
+        )
         try:
             manager = create_artifact_scratch_manager(settings)
         except BaseException:
@@ -347,7 +376,10 @@ def get_submission_bundle_preparation_command(
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(settings)
+        bootstrap = create_artifact_store_bootstrap(
+            settings,
+            activation_guard=artifact_provider_activation_guard(settings),
+        )
         try:
             manager = create_artifact_scratch_manager(settings)
         except BaseException:
@@ -447,7 +479,6 @@ def get_submission_bundle_preparation_command(
 
 async def cleanup_stale_artifact_scratch(settings: Settings) -> int:
     """Run one database-independent stale cleanup with shared construction."""
-    require_artifact_runtime_eligible(settings)
     manager = create_artifact_scratch_manager(settings)
     try:
         return await manager.cleanup_stale()
@@ -610,7 +641,10 @@ def task_import_source_commands(session: AsyncSession, *, settings, context):
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(settings)
+        bootstrap = create_artifact_store_bootstrap(
+            settings,
+            activation_guard=artifact_provider_activation_guard(settings),
+        )
         manager = None
         authorities = []
         try:

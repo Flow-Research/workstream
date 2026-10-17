@@ -30,7 +30,8 @@ class ReadStore:
         self.release = None
         self.closed = 0
 
-    async def open(self, reference):
+    async def open(self, reference, byte_range=None, **_kwargs):
+        assert byte_range is None
         self.calls.append(reference)
         self.entered.set()
         try:

@@ -12,7 +12,11 @@ from app.adapters.artifacts import create_artifact_store_bootstrap, post_submiss
 from app.adapters.tasks import submitted_bundle_port
 from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
-from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
+from app.interfaces.artifacts import (
+    ArtifactByteRange,
+    ArtifactProviderOperationEvidence,
+    ArtifactStoreNamespaceClaim,
+)
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
@@ -40,9 +44,19 @@ class CountedStore:
         self.wrapped, self.opens = store, []
         self.identity = store.identity
 
-    def open(self, reference):
+    def open(
+        self,
+        reference: str,
+        byte_range: ArtifactByteRange | None = None,
+        *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ):
         self.opens.append(reference)
-        return self.wrapped.open(reference)
+        return self.wrapped.open(
+            reference,
+            byte_range,
+            operation_evidence=operation_evidence,
+        )
 
 
 def archive_with_modes(evidence_path, project_id):
@@ -138,7 +152,7 @@ def _material_storage(tmp_path, provider, storage_settings, scratch_limits, post
                 "external_checker_material_root": tmp_path / "scratch",
             }
         )
-    bootstrap = create_artifact_store_bootstrap(settings)
+    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(
