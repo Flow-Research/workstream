@@ -1,0 +1,22 @@
+{
+  "socket_path": "/run/workstream-checker/checker.sock",
+  "material_root": "/var/lib/workstream/scratch",
+  "docker_binary": "/usr/local/bin/docker",
+  "runtime": "runsc",
+  "isolation_mode": "gvisor",
+  "operating_system": "linux",
+  "architecture": "amd64",
+  "sandbox_uid": 10001,
+  "sandbox_gid": 10001,
+  "cache": [
+    {
+      "repository": "registry.example/workstream/project-checker",
+      "platform_manifest_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "platform_manifest_media_type": "application/vnd.oci.image.manifest.v1+json",
+      "platform_manifest_byte_count": 1,
+      "operating_system": "linux",
+      "architecture": "amd64",
+      "config_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ]
+}

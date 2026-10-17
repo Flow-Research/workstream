@@ -4,6 +4,21 @@
 !docker/
 !docker/backend/
 !docker/backend/Dockerfile.dev
+!docker/backend/Dockerfile.release
+!docker/backend/release-entrypoint.sh
+!docker/checker/
+!docker/checker/Dockerfile.release
+!external_checkers/
+!external_checkers/Cargo.lock
+!external_checkers/Cargo.toml
+!external_checkers/workstream-checker-sdk/
+!external_checkers/workstream-checker-sdk/Cargo.toml
+!external_checkers/workstream-checker-sdk/src/
+!external_checkers/workstream-checker-sdk/src/**
+!external_checkers/workstream-checker-service/
+!external_checkers/workstream-checker-service/Cargo.toml
+!external_checkers/workstream-checker-service/src/
+!external_checkers/workstream-checker-service/src/**
 
 backend/.ci/
 backend/.coverage*
@@ -13,3 +28,6 @@ backend/.ruff_cache/
 backend/.venv/
 backend/**/__pycache__/
 backend/**/*.pyc
+
+backend/build/
+backend/*.egg-info/

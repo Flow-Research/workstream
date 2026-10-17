@@ -1,0 +1,257 @@
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in the release environment file}
+
+x-backend-environment: &backend-environment
+  WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES: "4294967296"
+  WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES: "268435456"
+  WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES: "1073741824"
+  WORKSTREAM_ARTIFACT_ADMISSION_TASK_MAXIMUM_BYTES: "67108864"
+  WORKSTREAM_RELEASE_ID: ${WORKSTREAM_RELEASE_ID:?set the immutable release digest}
+  WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE: virtual
+  WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD: ${WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD:?set the approved workload identity method}
+  WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN: ${WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN:?set the exact bootstrap principal ARN}
+  WORKSTREAM_ARTIFACT_S3_BUCKET: ${WORKSTREAM_ARTIFACT_S3_BUCKET:?set the private AWS S3 bucket}
+  WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256:?set the exact bucket policy digest}
+  WORKSTREAM_ARTIFACT_S3_CONNECT_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_CONNECT_TIMEOUT_SECONDS:?set the measured S3 connect timeout}
+  WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE: aws_workload_identity
+  WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN:?set the exact negative-proof role ARN}
+  WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256:?set the exact negative-proof trust policy digest}
+  WORKSTREAM_ARTIFACT_S3_OPERATION_TOTAL_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_OPERATION_TOTAL_TIMEOUT_SECONDS:?set the measured total S3 operation timeout}
+  WORKSTREAM_ARTIFACT_S3_POOL_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_POOL_TIMEOUT_SECONDS:?set the measured S3 pool timeout}
+  WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX: ${WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX:?set the private artifact prefix}
+  WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE: aws_s3
+  WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN: ${WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN:?set the exact readiness policy ARN}
+  WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN:?set the exact readiness role ARN}
+  WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256:?set the exact readiness trust policy digest}
+  WORKSTREAM_ARTIFACT_S3_READ_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_READ_TIMEOUT_SECONDS:?set the measured S3 read timeout}
+  WORKSTREAM_ARTIFACT_S3_REGION: ${WORKSTREAM_ARTIFACT_S3_REGION:?set the AWS region}
+  WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN:?set the exact runtime policy ARN}
+  WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN:?set the exact runtime role ARN}
+  WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256:?set the exact runtime trust policy digest}
+  WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS:?set the measured S3 write timeout}
+  WORKSTREAM_ARTIFACT_SCRATCH_ROOT: /var/lib/workstream/scratch
+  WORKSTREAM_ARTIFACT_STORE_BACKEND: s3_compatible
+  WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS:?set the measured complete-read deadline}
+  WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS: ${WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS:?set the measured terminal persistence margin}
+  WORKSTREAM_AUTH_PROVIDER: flow
+  WORKSTREAM_DEBUG: "false"
+  WORKSTREAM_ENVIRONMENT: production
+  WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT: /var/lib/workstream/scratch
+  WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET: /run/workstream-checker/checker.sock
+  WORKSTREAM_OBSERVABILITY_LOG_LEVEL: ${WORKSTREAM_OBSERVABILITY_LOG_LEVEL:-INFO}
+  WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT: ${WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT:-}
+  WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO: ${WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.1}
+  WORKSTREAM_REQUIRED_HUMAN_SCOPE: ${WORKSTREAM_REQUIRED_HUMAN_SCOPE:?set the Flow human scope}
+  WORKSTREAM_REQUIRED_SERVICE_SCOPE: ${WORKSTREAM_REQUIRED_SERVICE_SCOPE:?set the Flow service scope}
+  WORKSTREAM_TOKEN_ALGORITHMS: ${WORKSTREAM_TOKEN_ALGORITHMS:?set the pinned Flow algorithms}
+  WORKSTREAM_TOKEN_AUDIENCE: ${WORKSTREAM_TOKEN_AUDIENCE:?set the Flow audience}
+  WORKSTREAM_TOKEN_INTROSPECTION_DISABLED_REASON: ${WORKSTREAM_TOKEN_INTROSPECTION_DISABLED_REASON:?document the Flow issuer introspection policy}
+  WORKSTREAM_TOKEN_INTROSPECTION_MODE: ${WORKSTREAM_TOKEN_INTROSPECTION_MODE:?set the Flow introspection policy}
+  WORKSTREAM_TOKEN_ISSUER: ${WORKSTREAM_TOKEN_ISSUER:?set the Flow issuer}
+  WORKSTREAM_TOKEN_JWKS_URL: ${WORKSTREAM_TOKEN_JWKS_URL:?set the Flow JWKS URL}
+
+x-backend-runtime: &backend-runtime
+  image: ${WORKSTREAM_BACKEND_IMAGE:?set a digest-qualified backend image}
+  pull_policy: always
+  init: true
+  user: "${WORKSTREAM_RUNTIME_UID:?set runtime UID}:${WORKSTREAM_RUNTIME_GID:?set runtime GID}"
+  environment: *backend-environment
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:mode=0700,uid=${WORKSTREAM_RUNTIME_UID},gid=${WORKSTREAM_RUNTIME_GID}
+
+services:
+  checker-service:
+    image: ${WORKSTREAM_CHECKER_SERVICE_IMAGE:?set a digest-qualified checker-service image}
+    pull_policy: always
+    init: true
+    user: "${WORKSTREAM_RUNTIME_UID}:${WORKSTREAM_RUNTIME_GID}"
+    group_add: ["${WORKSTREAM_DOCKER_SOCKET_GID:?set the Docker socket group ID}"]
+    command: [/etc/workstream/checker-service.json]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: on-failure:5
+    tmpfs:
+      - /tmp:mode=0700,uid=${WORKSTREAM_RUNTIME_UID},gid=${WORKSTREAM_RUNTIME_GID}
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_CHECKER_CONFIG_FILE:?set the private checker config path}
+        target: /etc/workstream/checker-service.json
+        read_only: true
+      - type: bind
+        source: /var/lib/workstream/scratch
+        target: /var/lib/workstream/scratch
+        read_only: true
+      - type: bind
+        source: /run/workstream-checker
+        target: /run/workstream-checker
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    healthcheck:
+      test: [CMD-SHELL, "test -S /run/workstream-checker/checker.sock && docker info --format '{{json .Runtimes.runsc}}' | grep -vq '^null$'"]
+      interval: 15s
+      timeout: 10s
+      retries: 4
+      start_period: 10s
+
+  api:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: api
+      WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+      WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE: /run/secrets/api_rate_limit_key
+      WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE: /run/secrets/pagination_cursor_hmac
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: api_rate_limit_key
+        target: api_rate_limit_key
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: pagination_cursor_hmac
+        target: pagination_cursor_hmac
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - /bin/sh
+      - -c
+      - python -m alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:${WORKSTREAM_API_HOST_PORT:-8000}:8000"
+    volumes:
+      - type: bind
+        source: /var/lib/workstream/scratch
+        target: /var/lib/workstream/scratch
+      - type: bind
+        source: /run/workstream-checker
+        target: /run/workstream-checker
+    depends_on:
+      checker-service:
+        condition: service_healthy
+    restart: on-failure:5
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+
+  worker:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: worker
+      WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: openai_api_key
+        target: openai_api_key
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-2}
+      - --hostname=worker@%h
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+    volumes:
+      - type: bind
+        source: /var/lib/workstream/scratch
+        target: /var/lib/workstream/scratch
+      - type: bind
+        source: /run/workstream-checker
+        target: /run/workstream-checker
+    depends_on:
+      api:
+        condition: service_healthy
+      checker-service:
+        condition: service_healthy
+    restart: on-failure:5
+    stop_grace_period: 3700s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-worker.pid && kill -0 $$(cat /tmp/celery-worker.pid)"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  beat:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: beat
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+    secrets:
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - beat
+      - --schedule=/tmp/celerybeat-schedule
+      - --pidfile=/tmp/celerybeat.pid
+      - --loglevel=INFO
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure:5
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celerybeat.pid && kill -0 $$(cat /tmp/celerybeat.pid)"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+secrets:
+  database_url:
+    file: ${WORKSTREAM_DATABASE_URL_FILE:?set the private database URL file}
+  celery_broker_url:
+    file: ${WORKSTREAM_CELERY_BROKER_URL_FILE:?set the private broker URL file}
+  api_rate_limit_key:
+    file: ${WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE:?set the private rate-limit key file}
+  pagination_cursor_hmac:
+    file: ${WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE:?set the private cursor key file}
+  openai_api_key:
+    file: ${OPENAI_API_KEY_FILE:?set the private OpenAI key file}
