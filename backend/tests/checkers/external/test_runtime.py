@@ -24,6 +24,7 @@ from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_PROVIDER_KEY,
 )
 from app.core.config import Settings
+from app.core.hashing import canonical_json_hash
 from app.interfaces.external_checker_execution import (
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
@@ -36,10 +37,12 @@ from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
     ArtifactPreparationLimits,
     ArtifactPreparationService,
+    ArtifactScratchCapacityError,
     ArtifactScratchIntegrityError,
     ArtifactScratchManager,
     ExternalMaterialFile,
     ExternalMaterialGrantRequest,
+    PostExternalMaterialGrantRequest,
 )
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
@@ -47,6 +50,7 @@ from app.modules.artifacts.submission_archive import (
     SubmissionArchiveEntryType,
 )
 from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.submission_manifest import SUBMISSION_MANIFEST_SCHEMA_VERSION
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
@@ -514,4 +518,307 @@ def test_external_grant_recomputes_the_semantic_manifest(tmp_path: Path):
         with pytest.raises(ArtifactScratchIntegrityError, match="semantic manifest differs"):
             with manager._external_material_grant(workspace, request):
                 pass
+    manager.close()
+
+
+def _empty_post_grant_request(*, terminal: bool) -> PostExternalMaterialGrantRequest:
+    identifiers = [str(uuid4()) for _ in range(11)]
+    return PostExternalMaterialGrantRequest(
+        request_digest=SHA,
+        submission_id=identifiers[0],
+        submission_version=1,
+        evaluation_request_id=identifiers[1],
+        evaluation_request_digest=SHA,
+        evaluation_generation=1,
+        attempt_id=identifiers[2],
+        result_id=identifiers[3],
+        lease_id=identifiers[4],
+        lease_generation=1,
+        lease_expires_at="2026-10-16T00:00:00Z",
+        binding_id=identifiers[5],
+        content_id=identifiers[6],
+        replica_id=identifiers[7],
+        content_sha256=SHA,
+        byte_count=0,
+        evidence_id=identifiers[8],
+        verification_receipt_id=identifiers[9],
+        verification_job_id=identifiers[10],
+        verification_generation=1,
+        namespace_fingerprint=SHA,
+        semantic_manifest_sha256=canonical_json_hash(
+            {"schema_version": SUBMISSION_MANIFEST_SCHEMA_VERSION, "entries": []}
+        ),
+        registry_capability_id=(
+            "workstream.terminal_benchmark_project" if terminal else "acme.safe_archive"
+        ),
+        registry_capability_version="v1" if terminal else "v1.2.3",
+        directories=(),
+        files=(),
+    )
+
+
+def test_post_external_grant_uses_existing_workspace_byte_and_entry_ownership(
+    tmp_path: Path,
+) -> None:
+    """Bind runtime scratch to the existing ledger and admit its exact entry limit."""
+    maximum_entries = 6
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(
+            aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+            minimum_free_bytes=0,
+            maximum_workspace_entries=maximum_entries,
+        ),
+    )
+    semantic_manifest_sha256 = canonical_json_hash(
+        {"schema_version": SUBMISSION_MANIFEST_SCHEMA_VERSION, "entries": []}
+    )
+    identifiers = [str(uuid4()) for _ in range(11)]
+    request = PostExternalMaterialGrantRequest(
+        request_digest=SHA,
+        submission_id=identifiers[0],
+        submission_version=1,
+        evaluation_request_id=identifiers[1],
+        evaluation_request_digest=SHA,
+        evaluation_generation=1,
+        attempt_id=identifiers[2],
+        result_id=identifiers[3],
+        lease_id=identifiers[4],
+        lease_generation=1,
+        lease_expires_at="2026-10-16T00:00:00Z",
+        binding_id=identifiers[5],
+        content_id=identifiers[6],
+        replica_id=identifiers[7],
+        content_sha256=SHA,
+        byte_count=0,
+        evidence_id=identifiers[8],
+        verification_receipt_id=identifiers[9],
+        verification_job_id=identifiers[10],
+        verification_generation=1,
+        namespace_fingerprint=SHA,
+        semantic_manifest_sha256=semantic_manifest_sha256,
+        registry_capability_id="workstream.terminal_benchmark_project",
+        registry_capability_version="v1",
+        directories=(),
+        files=(),
+    )
+
+    with manager.extraction_workspace(reserved_bytes=0, maximum_entries=1) as workspace:
+        with manager._external_material_grant(workspace, request) as grant:
+            grant_root = tmp_path / "scratch" / "workspaces" / grant.grant_id
+            manifest = json.loads(
+                (grant_root / ".external-checker-grant.json").read_text()
+            )
+            assert manifest["runtime_scratch"] == {
+                "byte_allowance": HARD_MAXIMUM_ARTIFACT_BYTES,
+                "entry_allowance": maximum_entries - 3,
+                "gid": os.getgid(),
+                "mode": 0o700,
+                "uid": os.getuid(),
+            }
+            ledger = json.loads((tmp_path / "scratch" / ".ledger.json").read_text())
+            [reservation] = ledger["workspaces"]
+            assert reservation["reserved_bytes"] == HARD_MAXIMUM_ARTIFACT_BYTES
+            assert reservation["maximum_entries"] == maximum_entries
+            runtime = grant_root / "runtime"
+            for index in range(manifest["runtime_scratch"]["entry_allowance"]):
+                (runtime / f"entry-{index}").write_bytes(b"")
+
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    manager.close()
+
+
+def test_terminal_grant_holds_aggregate_capacity_until_workspace_release(
+    tmp_path: Path,
+) -> None:
+    """Reject a second expansion without residue, then admit it after release."""
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(
+            aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+            minimum_free_bytes=0,
+            maximum_workspace_entries=6,
+        ),
+    )
+    request = _empty_post_grant_request(terminal=True)
+
+    with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as first:
+        with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as second:
+            with manager._external_material_grant(first, request):
+                with pytest.raises(
+                    ArtifactScratchCapacityError,
+                    match="artifact scratch byte limit reached",
+                ):
+                    with manager._external_material_grant(second, request):
+                        pytest.fail("second terminal grant exceeded aggregate capacity")
+                assert list(second.iterdir()) == []
+
+    with manager.extraction_workspace(reserved_bytes=0, maximum_entries=4) as retry:
+        with manager._external_material_grant(retry, request) as grant:
+            grant_root = tmp_path / "scratch" / "workspaces" / grant.grant_id
+            assert (grant_root / "runtime").is_dir()
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    manager.close()
+
+
+def test_conventional_post_grants_keep_small_concurrent_reservations(
+    tmp_path: Path,
+) -> None:
+    """Keep ordinary POST concurrency outside the terminal scratch reservation."""
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(
+            aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+            minimum_free_bytes=0,
+            maximum_workspace_entries=6,
+        ),
+    )
+    request = _empty_post_grant_request(terminal=False)
+
+    with manager.extraction_workspace(reserved_bytes=1, maximum_entries=4) as first:
+        with manager.extraction_workspace(reserved_bytes=1, maximum_entries=4) as second:
+            with manager._external_material_grant(first, request) as first_grant:
+                with manager._external_material_grant(second, request) as second_grant:
+                    roots = [
+                        tmp_path / "scratch" / "workspaces" / item.grant_id
+                        for item in (first_grant, second_grant)
+                    ]
+                    assert all(not (root / "runtime").exists() for root in roots)
+                    ledger = json.loads(
+                        (tmp_path / "scratch" / ".ledger.json").read_text()
+                    )
+                    assert [item["reserved_bytes"] for item in ledger["workspaces"]] == [
+                        1,
+                        1,
+                    ]
+                    assert [item["maximum_entries"] for item in ledger["workspaces"]] == [
+                        4,
+                        4,
+                    ]
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
+    manager.close()
+
+
+def test_post_external_grant_preserves_submitted_reserved_names(
+    tmp_path: Path,
+) -> None:
+    """Move submitted reserved names below ART's distinct grant control paths."""
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(
+            aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+            minimum_free_bytes=0,
+            maximum_workspace_entries=16,
+        ),
+    )
+    payload = b"print('starter')\n"
+    submitted_manifest = b"submitted project file\n"
+    files = tuple(
+        sorted(
+            (
+                ExternalMaterialFile(
+                    normalized_path=".external-checker-grant.json",
+                    byte_count=len(submitted_manifest),
+                    sha256=(
+                        f"sha256:{hashlib.sha256(submitted_manifest).hexdigest()}"
+                    ),
+                    executable=False,
+                ),
+                ExternalMaterialFile(
+                    normalized_path="workspace/program.py",
+                    byte_count=len(payload),
+                    sha256=f"sha256:{hashlib.sha256(payload).hexdigest()}",
+                    executable=False,
+                ),
+            ),
+            key=lambda item: item.normalized_path,
+        )
+    )
+    manifest_entries = sorted(
+        [
+            {"normalized_path": "runtime", "entry_type": "directory"},
+            {"normalized_path": "workspace", "entry_type": "directory"},
+            *(
+                {
+                    "normalized_path": file.normalized_path,
+                    "entry_type": "file",
+                    "byte_count": file.byte_count,
+                    "sha256": file.sha256,
+                    "executable": file.executable,
+                }
+                for file in files
+            ),
+        ],
+        key=lambda item: item["normalized_path"],
+    )
+    semantic_manifest_sha256 = canonical_json_hash(
+        {
+            "schema_version": SUBMISSION_MANIFEST_SCHEMA_VERSION,
+            "entries": manifest_entries,
+        }
+    )
+    identifiers = [str(uuid4()) for _ in range(11)]
+    request = PostExternalMaterialGrantRequest(
+        request_digest=SHA,
+        submission_id=identifiers[0],
+        submission_version=1,
+        evaluation_request_id=identifiers[1],
+        evaluation_request_digest=SHA,
+        evaluation_generation=1,
+        attempt_id=identifiers[2],
+        result_id=identifiers[3],
+        lease_id=identifiers[4],
+        lease_generation=1,
+        lease_expires_at="2026-10-16T00:00:00Z",
+        binding_id=identifiers[5],
+        content_id=identifiers[6],
+        replica_id=identifiers[7],
+        content_sha256=SHA,
+        byte_count=len(payload) + len(submitted_manifest),
+        evidence_id=identifiers[8],
+        verification_receipt_id=identifiers[9],
+        verification_job_id=identifiers[10],
+        verification_generation=1,
+        namespace_fingerprint=SHA,
+        semantic_manifest_sha256=semantic_manifest_sha256,
+        registry_capability_id="acme.safe_archive",
+        registry_capability_version="v1.2.3",
+        directories=("runtime", "workspace"),
+        files=files,
+    )
+
+    with manager.extraction_workspace(
+        reserved_bytes=len(payload) + len(submitted_manifest), maximum_entries=5
+    ) as extraction:
+        (extraction / ".external-checker-grant.json").write_bytes(submitted_manifest)
+        (extraction / "runtime").mkdir()
+        submitted_workspace = extraction / "workspace"
+        submitted_workspace.mkdir()
+        (submitted_workspace / "program.py").write_bytes(payload)
+        with manager._external_material_grant(extraction, request) as grant:
+            grant_root = tmp_path / "scratch" / "workspaces" / grant.grant_id
+            assert (grant_root / "workspace/workspace/program.py").read_bytes() == payload
+            assert (grant_root / "workspace/runtime").is_dir()
+            assert (
+                grant_root / "workspace/.external-checker-grant.json"
+            ).read_bytes() == submitted_manifest
+            assert json.loads((grant_root / ".external-checker-grant.json").read_text())[
+                "grant_id"
+            ] == grant.grant_id
+            manifest = json.loads(
+                (grant_root / ".external-checker-grant.json").read_text()
+            )
+            assert "runtime_scratch" not in manifest
+            assert not (grant_root / "runtime").exists()
+            [reservation] = json.loads(
+                (tmp_path / "scratch" / ".ledger.json").read_text()
+            )["workspaces"]
+            assert reservation["reserved_bytes"] == len(payload) + len(submitted_manifest)
+            assert reservation["maximum_entries"] == 5
+            assert not any(
+                item.name.startswith(".external-material-")
+                for item in grant_root.iterdir()
+            )
+
+    assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     manager.close()

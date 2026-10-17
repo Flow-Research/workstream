@@ -1,0 +1,144 @@
+name: Terminal benchmark project checker proof
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/terminal-benchmark-project-checkers.yml"
+      - ".commitrail/changes/terminal-benchmark-project-checkers.md"
+      - "experiments/pilot00_gvisor_offline/**"
+      - "experiments/terminal_benchmark_project_checkers/**"
+      - "external_checkers/**"
+      - "pilots/terminal_benchmark/**"
+      - "backend/app/adapters/checkers/**"
+      - "backend/app/interfaces/external_checker_execution.py"
+      - "backend/app/core/file_locks.py"
+      - "backend/app/core/hashing.py"
+      - "backend/app/core/identifiers.py"
+      - "backend/app/modules/artifacts/post_submit_materialization.py"
+      - "backend/app/modules/artifacts/preparation.py"
+      - "backend/app/modules/artifacts/sources.py"
+      - "backend/app/modules/artifacts/submission_manifest.py"
+      - "backend/app/modules/checkers/api/external.py"
+      - "backend/tests/checkers/external/test_runtime.py"
+      - "backend/tests/test_artifact_preparation.py"
+      - "backend/tests/test_post_submit_materialization.py"
+      - "backend/tests/test_submission_manifest.py"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+
+concurrency:
+  group: terminal-benchmark-project-checkers-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-runtime-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      WS493_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      WS493_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      PROOF_SCRIPT: experiments/terminal_benchmark_project_checkers/proof.sh
+      XFS_PROGS_VERSION: 6.6.0-1ubuntu2.1
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Bind the exact pull-request head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${WS493_EXPECTED_HEAD}"
+          test -z "$(git status --porcelain=v1)"
+          test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "${WS493_EXPECTED_HEAD}^{tree}")"
+          "${PROOF_SCRIPT}" preflight
+
+      - name: Install the exact quota and language tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/experiments/terminal_benchmark_project_checkers/inputs.env"
+          sudo apt-get update -qq
+          cd "${RUNNER_TEMP}"
+          rm -f "xfsprogs_${XFS_PROGS_VERSION}_amd64.deb"
+          apt-get download "xfsprogs=${XFS_PROGS_VERSION}"
+          test "$(dpkg-deb --field "xfsprogs_${XFS_PROGS_VERSION}_amd64.deb" Version)" = "${XFS_PROGS_VERSION}"
+          sudo dpkg -i "xfsprogs_${XFS_PROGS_VERSION}_amd64.deb"
+          test "$(dpkg-query -W -f='${Version}' xfsprogs)" = "${XFS_PROGS_VERSION}"
+          rm -rf ws493-crane ws493-crane.tar.gz
+          curl --fail --location --silent --show-error \
+            "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            --output ws493-crane.tar.gz
+          printf '%s  %s\n' "${CRANE_ARCHIVE_SHA256}" ws493-crane.tar.gz | sha256sum --check
+          mkdir -m 0700 ws493-crane
+          tar -xzf ws493-crane.tar.gz -C ws493-crane crane
+          chmod 0555 ws493-crane/crane
+          test "$(ws493-crane/crane version)" = "${CRANE_VERSION#v}"
+          rustup toolchain install 1.84.0 --profile minimal
+          test "$(rustc +1.84.0 --version | cut -d' ' -f2)" = 1.84.0
+          python3 -m venv "${GITHUB_WORKSPACE}/backend/.venv"
+          "${GITHUB_WORKSPACE}/backend/.venv/bin/python" -m pip install "uv==0.10.7"
+          test "$("${GITHUB_WORKSPACE}/backend/.venv/bin/uv" --version)" = "uv 0.10.7"
+          cd "${GITHUB_WORKSPACE}/backend"
+          UV_PROJECT_ENVIRONMENT=.venv .venv/bin/uv sync --frozen --extra dev
+
+      - name: Prepare exact images and quota-backed isolated DIND
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=WS493_EXPECTED_HEAD,WS493_RUN_ID,RUNNER_TEMP \
+            env "PATH=${PATH}" \
+            "RUSTUP_HOME=${RUSTUP_HOME:-${HOME}/.rustup}" \
+            "CARGO_HOME=${CARGO_HOME:-${HOME}/.cargo}" \
+            RUSTUP_TOOLCHAIN=1.84.0 \
+            timeout --signal=TERM --kill-after=15s 1200 \
+            "${PROOF_SCRIPT}" prepare
+
+      - name: Execute the interrupted and complete POST matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=WS493_EXPECTED_HEAD,WS493_RUN_ID,RUNNER_TEMP \
+            env "PATH=${PATH}" timeout --signal=TERM --kill-after=15s 900 \
+            "${PROOF_SCRIPT}" run
+
+      - name: Stage the bounded nonsecret evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=WS493_EXPECTED_HEAD,WS493_RUN_ID,RUNNER_TEMP \
+            env "PATH=${PATH}" "${PROOF_SCRIPT}" stage
+
+      - name: Remove exact owned runtime resources
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=WS493_EXPECTED_HEAD,WS493_RUN_ID,RUNNER_TEMP \
+            env "PATH=${PATH}" timeout --signal=TERM --kill-after=15s 180 \
+            "${PROOF_SCRIPT}" cleanup
+
+      - name: Verify the final staged evidence
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=WS493_EXPECTED_HEAD,WS493_RUN_ID,RUNNER_TEMP \
+            env "PATH=${PATH}" "${PROOF_SCRIPT}" final
+
+      - name: Upload the verified nonsecret proof
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: terminal-benchmark-project-checker-${{ github.event.pull_request.head.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ws493-${{ github.run_id }}-${{ github.run_attempt }}-staging/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

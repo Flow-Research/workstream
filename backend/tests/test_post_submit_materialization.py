@@ -19,6 +19,7 @@ from tests.checkers.execution.support import material_execution, service_link_st
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.preparation import ArtifactScratchIntegrityError
 from app.modules.checkers.api.external import (
+    ExternalCheckerRegistryEntry,
     PostSubmitExternalCheckerIdentity,
     external_checker_json_hash,
     make_external_checker_execution_request,
@@ -60,7 +61,7 @@ class ExternalGrantConsumer(Consumer):
         self.grant_path = None
         self.manifest = None
 
-    def external_request(self, material, *, identity=None):
+    def external_request(self, material, *, identity=None, terminal=False):
         source, lease = self.execution.request, self.execution.lease
         reservation = lease.reservation
         identity = identity or PostSubmitExternalCheckerIdentity(
@@ -78,8 +79,29 @@ class ExternalGrantConsumer(Consumer):
             lease_generation=lease.lease_generation,
             lease_expires_at=lease.expires_at,
         )
+        registry = registry_entry("post_submit")
+        if terminal:
+            values = registry.model_dump(mode="json")
+            values["capability_id"] = "workstream.terminal_benchmark_project"
+            spec = {
+                key: value
+                for key, value in values.items()
+                if key
+                not in {
+                    "registry_entry_id",
+                    "entry_digest",
+                    "registration_operation_id",
+                    "registered_by_actor_profile_id",
+                    "authorization_decision_event_id",
+                    "created_at",
+                }
+            }
+            values["entry_digest"] = external_checker_json_hash(spec)
+            registry = ExternalCheckerRegistryEntry.model_validate_json(
+                json.dumps(values, separators=(",", ":"), sort_keys=True)
+            )
         return make_external_checker_execution_request(
-            registry=registry_entry("post_submit"),
+            registry=registry,
             identity=identity,
             configuration={},
             configuration_sha256=external_checker_json_hash({}),
@@ -100,10 +122,23 @@ class ExternalGrantConsumer(Consumer):
             assert self.manifest["submission_id"] == str(request.submission_id)
             assert self.manifest["request_digest"] == external_request.request_digest
             assert self.manifest["binding_digest"] == grant.binding_digest
+            assert "runtime_scratch" not in self.manifest
+            assert not (self.grant_path / "runtime").exists()
         # Revocation removes the service grant immediately; the outer material
         # callback still owns its workspace until materialization completes.
         assert self.grant_path.is_dir()
         assert not (self.grant_path / ".external-checker-grant.json").exists()
+
+        terminal_request = self.external_request(
+            view.external_checker_material, terminal=True
+        )
+        with view.external_checker_grant(terminal_request) as grant:
+            terminal_root = self.scratch / "workspaces" / grant.grant_id
+            terminal_manifest = json.loads(
+                (terminal_root / ".external-checker-grant.json").read_text()
+            )
+            assert terminal_manifest["runtime_scratch"]["byte_allowance"] > 0
+            assert (terminal_root / "runtime").is_dir()
 
         changed = view.external_checker_material.model_copy(
             update={"binding_id": new_record_id()}

@@ -16,11 +16,31 @@ readonly PREFIX="ws-pilot00-${RUN_ID}"
 readonly DIND_NAME="${PREFIX}-dind"
 readonly DIND_VOLUME="${PREFIX}-dind-state"
 readonly STATE_DIR="${PILOT00_STATE_DIR:-/tmp/${PREFIX}}"
+readonly DIND_STATE_DIR="${PILOT00_DIND_STATE_DIR:-}"
+readonly SHARED_STATE_PATH="${PILOT00_SHARED_STATE_PATH:-}"
+readonly RUNTIME_KEY="${PILOT00_RUNTIME_KEY:-ws-pilot00-runsc}"
+readonly HARNESS_ONLY="${PILOT00_HARNESS_ONLY:-0}"
 readonly TOOLS_DIR="${STATE_DIR}/tools"
 readonly CACHE_DIR="${STATE_DIR}/cache"
 readonly RESULTS_DIR="${STATE_DIR}/results"
 readonly DAEMON_CONFIG="${STATE_DIR}/daemon.json"
 readonly OWNER_LABEL="org.workstream.pilot00.run=${RUN_ID}"
+[[ "${RUNTIME_KEY}" =~ ^[a-z][a-z0-9.-]{0,31}$ ]] || {
+  echo "PILOT00_RUNTIME_KEY must be a bounded lowercase runtime key" >&2
+  exit 64
+}
+[[ "${HARNESS_ONLY}" == 0 || "${HARNESS_ONLY}" == 1 ]] || {
+  echo "PILOT00_HARNESS_ONLY must be 0 or 1" >&2
+  exit 64
+}
+if [[ -n "${DIND_STATE_DIR}" && "${DIND_STATE_DIR}" != /* ]]; then
+  echo "PILOT00_DIND_STATE_DIR must be absolute" >&2
+  exit 64
+fi
+if [[ -n "${SHARED_STATE_PATH}" && "${SHARED_STATE_PATH}" != "${STATE_DIR}" ]]; then
+  echo "PILOT00_SHARED_STATE_PATH must equal PILOT00_STATE_DIR" >&2
+  exit 64
+fi
 # shellcheck source=daemon_ready.sh
 source "${SCRIPT_DIR}/daemon_ready.sh"
 
@@ -49,6 +69,7 @@ assert_owned_volume() {
 }
 
 ensure_owned_volume() {
+  [[ -z "${DIND_STATE_DIR}" ]] || return 0
   if docker volume inspect "${DIND_VOLUME}" >/dev/null 2>&1; then
     assert_owned_volume "${DIND_VOLUME}" || {
       echo "refusing volume not owned by this probe: ${DIND_VOLUME}" >&2
@@ -61,6 +82,10 @@ ensure_owned_volume() {
       exit 73
     }
   fi
+}
+
+prepare_harness_image() {
+  docker pull "${DIND_IMAGE}" >/dev/null
 }
 
 prepare_tools() {
@@ -77,7 +102,7 @@ prepare_tools() {
 }
 
 prepare_images_and_cache() {
-  docker pull "${DIND_IMAGE}" >/dev/null
+  prepare_harness_image
   docker pull "${KANIKO_IMAGE}" >/dev/null
   docker pull "${BASE_PLATFORM_IMAGE}" >/dev/null
   [[ "$(docker image inspect "${KANIKO_IMAGE}" --format '{{.Id}}')" == "${KANIKO_IMAGE_ID}" ]]
@@ -122,10 +147,10 @@ prepare_images_and_cache() {
 }
 
 write_daemon_config() {
-  cat > "${DAEMON_CONFIG}" <<'JSON'
+  cat > "${DAEMON_CONFIG}" <<JSON
 {
   "runtimes": {
-    "ws-pilot00-runsc": {
+    "${RUNTIME_KEY}": {
       "path": "/opt/gvisor/runsc",
       "runtimeArgs": [
         "--network=none",
@@ -147,6 +172,18 @@ start_harness() {
   mkdir -p "${RESULTS_DIR}"
   write_daemon_config
   ensure_owned_volume
+  local -a state_mount shared_mount
+  if [[ -n "${DIND_STATE_DIR}" ]]; then
+    mkdir -p "${DIND_STATE_DIR}"
+    state_mount=(--mount "type=bind,src=${DIND_STATE_DIR},dst=/var/lib/docker")
+  else
+    state_mount=(-v "${DIND_VOLUME}:/var/lib/docker")
+  fi
+  if [[ -n "${SHARED_STATE_PATH}" ]]; then
+    shared_mount=(--mount "type=bind,src=${STATE_DIR},dst=${STATE_DIR}")
+  else
+    shared_mount=(-v "${STATE_DIR}:/evidence")
+  fi
   if docker inspect "${DIND_NAME}" >/dev/null 2>&1; then
     assert_owned_container "${DIND_NAME}" || {
       echo "refusing container not owned by this probe: ${DIND_NAME}" >&2
@@ -165,23 +202,25 @@ start_harness() {
       --memory 4g \
       --pids-limit 768 \
       -e DOCKER_TLS_CERTDIR= \
-      -v "${DIND_VOLUME}:/var/lib/docker" \
+      "${state_mount[@]}" \
       -v "${TOOLS_DIR}:/opt/gvisor:ro" \
       -v "${DAEMON_CONFIG}:/etc/docker/pilot-daemon.json:ro" \
       -v "${SCRIPT_DIR}:/pilot:ro" \
-      -v "${STATE_DIR}:/evidence" \
+      "${shared_mount[@]}" \
       "${DIND_IMAGE}" \
       --config-file=/etc/docker/pilot-daemon.json >/dev/null
   fi
 
   wait_for_daemon "${DIND_NAME}"
   docker exec "${DIND_NAME}" docker info --format '{{json .Runtimes}}' \
-    | grep -F 'ws-pilot00-runsc' >/dev/null
+    | grep -F "${RUNTIME_KEY}" >/dev/null
 
-  if ! docker exec "${DIND_NAME}" docker image inspect "${KANIKO_IMAGE_ID}" >/dev/null 2>&1; then
+  if [[ "${HARNESS_ONLY}" == 0 ]] && ! docker exec "${DIND_NAME}" docker image inspect "${KANIKO_IMAGE_ID}" >/dev/null 2>&1; then
     docker save "${KANIKO_IMAGE}" | docker exec -i "${DIND_NAME}" docker load >/dev/null
   fi
-  docker exec "${DIND_NAME}" docker image inspect "${KANIKO_IMAGE_ID}" >/dev/null
+  if [[ "${HARNESS_ONLY}" == 0 ]]; then
+    docker exec "${DIND_NAME}" docker image inspect "${KANIKO_IMAGE_ID}" >/dev/null
+  fi
 }
 
 inner_docker() {
@@ -206,7 +245,7 @@ create_builder() {
 
   inner_docker create \
     --name "${name}" \
-    --runtime ws-pilot00-runsc \
+    --runtime "${RUNTIME_KEY}" \
     --network none \
     --user 0:0 \
     --cap-drop ALL \
@@ -248,7 +287,7 @@ capture_builder_boundary() {
   local result_dir="$1"
   inner_docker run --rm \
     --name "${PREFIX}-builder-boundary" \
-    --runtime ws-pilot00-runsc \
+    --runtime "${RUNTIME_KEY}" \
     --network none \
     --user 0:0 \
     --cap-drop ALL \
@@ -325,7 +364,7 @@ run_probe() {
   local oracle_name="${PREFIX}-oracle"
   inner_docker create \
     --name "${oracle_name}" \
-    --runtime ws-pilot00-runsc \
+    --runtime "${RUNTIME_KEY}" \
     --network none \
     --read-only \
     --user 65532:65532 \
@@ -532,7 +571,7 @@ cleanup() {
     docker stop --time 20 "${DIND_NAME}" >/dev/null
     docker rm "${DIND_NAME}" >/dev/null
   fi
-  if docker volume inspect "${DIND_VOLUME}" >/dev/null 2>&1; then
+  if [[ -z "${DIND_STATE_DIR}" ]] && docker volume inspect "${DIND_VOLUME}" >/dev/null 2>&1; then
     assert_owned_volume "${DIND_VOLUME}" || {
       echo "refusing volume not owned by this probe: ${DIND_VOLUME}" >&2
       exit 73
@@ -550,13 +589,21 @@ assert_linux_amd64
 case "${ACTION}" in
   prepare)
     prepare_tools
-    prepare_images_and_cache
+    if [[ "${HARNESS_ONLY}" == 1 ]]; then
+      prepare_harness_image
+    else
+      prepare_images_and_cache
+    fi
     start_harness
     ;;
   run)
     run_probe
     ;;
   all)
+    [[ "${HARNESS_ONLY}" == 0 ]] || {
+      echo "PILOT00_HARNESS_ONLY cannot run the sample matrix" >&2
+      exit 64
+    }
     prepare_tools
     prepare_images_and_cache
     start_harness

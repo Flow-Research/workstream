@@ -36,6 +36,7 @@ from app.modules.checkers.api.evaluation_contract import (
 )
 from app.modules.checkers.api.execution import EvaluationReservation, ExecutionLease
 from app.modules.checkers.api.materialization import SubmissionMaterialEntry
+from app.modules.artifacts.preparation import ArtifactScratchIntegrityError
 from app.modules.checkers.selected_post_submit_execution import (
     SelectedPostSubmitProcessor,
 )
@@ -140,30 +141,43 @@ def _request(identity, policy):
 
 
 class _MaterialView:
-    def __init__(self, material) -> None:
+    def __init__(self, material, *, events=None, cleanup_failure=False) -> None:
         self.external_checker_material = material
         self.entries = (
             SubmissionMaterialEntry("src/main.py", "file", 4, SHA, False),
         )
         self.requests = []
+        self.events = events
+        self.cleanup_failure = cleanup_failure
 
     @contextmanager
     def external_checker_grant(self, request):
         self.requests.append(request)
-        yield ExternalCheckerMaterialGrant(
-            grant_id="extract_" + "a" * 32,
-            binding_digest="sha256:" + "b" * 64,
-        )
+        if self.events is not None:
+            self.events.append("grant_entered")
+        try:
+            yield ExternalCheckerMaterialGrant(
+                grant_id="extract_" + "a" * 32,
+                binding_digest="sha256:" + "b" * 64,
+            )
+        finally:
+            if self.events is not None:
+                self.events.append("grant_closed")
+            if self.cleanup_failure:
+                raise ArtifactScratchIntegrityError("controlled grant cleanup failure")
 
 
 class _Execution:
-    def __init__(self, *, outcome="completed", verdict="passed") -> None:
+    def __init__(self, *, outcome="completed", verdict="passed", events=None) -> None:
         self.outcome, self.verdict = outcome, verdict
         self.requests = []
+        self.events = events
 
     async def execute(self, request, _grant):
         assert type(_grant) is ExternalCheckerMaterialGrant
         self.requests.append(request)
+        if self.events is not None:
+            self.events.append("execute")
         infrastructure = self.outcome == "infrastructure_failed"
         findings = () if self.verdict == "passed" or infrastructure else ({
             "check_id": "post_evidence",
@@ -181,7 +195,7 @@ class _Execution:
             findings=findings,
             infrastructure_failure_code="deadline_exceeded" if infrastructure else None,
         )
-        return ExternalCheckerExecutionResponse(
+        response = ExternalCheckerExecutionResponse(
             result=result,
             isolation=None if infrastructure else ExternalCheckerIsolationReceipt(
                 repository="registry.example/workstream/checker",
@@ -197,6 +211,9 @@ class _Execution:
                 sandbox_gid=65532,
             ),
         )
+        if self.events is not None:
+            self.events.append("response_received")
+        return response
 
 
 @pytest.mark.asyncio
@@ -229,6 +246,44 @@ async def test_selected_post_separates_infrastructure_from_work_findings() -> No
             identity=identity,
             execution=_Execution(outcome="infrastructure_failed"),
         ).evaluate(object(), _MaterialView(execution_material(identity)))
+
+
+@pytest.mark.asyncio
+async def test_selected_post_exposes_result_only_after_grant_cleanup() -> None:
+    identity = execution_identity("post_submit")
+    events = []
+    result = await SelectedPostSubmitProcessor(
+        policy=_policy(),
+        identity=identity,
+        execution=_Execution(events=events),
+    ).evaluate(
+        object(),
+        _MaterialView(execution_material(identity), events=events),
+    )
+
+    assert result.external_members[0].result.verdict == "passed"
+    assert events == ["grant_entered", "execute", "response_received", "grant_closed"]
+
+
+@pytest.mark.asyncio
+async def test_selected_post_discards_received_result_when_grant_cleanup_fails() -> None:
+    identity = execution_identity("post_submit")
+    events = []
+    with pytest.raises(ArtifactScratchIntegrityError, match="controlled grant cleanup failure"):
+        await SelectedPostSubmitProcessor(
+            policy=_policy(),
+            identity=identity,
+            execution=_Execution(events=events),
+        ).evaluate(
+            object(),
+            _MaterialView(
+                execution_material(identity),
+                events=events,
+                cleanup_failure=True,
+            ),
+        )
+
+    assert events == ["grant_entered", "execute", "response_received", "grant_closed"]
 
 
 @pytest.mark.postgres_schema_contract

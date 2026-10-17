@@ -1,5 +1,9 @@
 [workspace]
-members = ["workstream-checker-sdk", "workstream-checker-service"]
+members = [
+    "workstream-checker-sdk",
+    "workstream-checker-service",
+    "workstream-terminal-benchmark-checker",
+]
 resolver = "2"
 
 [workspace.package]

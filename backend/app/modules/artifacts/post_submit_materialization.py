@@ -153,6 +153,8 @@ class _MaterialView:
             verification_generation=material.verification_generation,
             namespace_fingerprint=material.namespace_fingerprint,
             semantic_manifest_sha256=material.semantic_manifest_sha256,
+            registry_capability_id=checked.registry.capability_id,
+            registry_capability_version=checked.registry.capability_version,
             directories=directories, files=files,
         )
         with self._preparation.external_material_grant(

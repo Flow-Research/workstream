@@ -10,6 +10,7 @@ pub const REQUEST_SCHEMA_VERSION: &str = "external_checker_request.v1";
 pub const RESULT_SCHEMA_VERSION: &str = "external_checker_result.v1";
 pub const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_RESULT_BYTES: usize = 65_536;
+pub const TERMINAL_BENCHMARK_PLAN_VERSION: &str = "terminal_benchmark_build_oracle.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractError(&'static str);
@@ -29,6 +30,7 @@ pub struct ValidatedRequest {
     pub registry_entry_id: String,
     pub registry_entry_digest: String,
     pub image_digest: String,
+    pub configuration_digest: String,
     pub phase: String,
     pub cpu_millis: u64,
     pub memory_bytes: u64,
@@ -47,9 +49,22 @@ pub struct Finding {
     pub line: Option<u64>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TerminalBenchmarkPlan {
+    pub schema_version: String,
+    pub request_digest: String,
+    pub registry_entry_id: String,
+    pub registry_entry_digest: String,
+    pub checker_image_digest: String,
+    pub configuration_digest: String,
+    pub external_task_id: String,
+    pub plan_digest: String,
+}
+
 /// Mirrors Python `safe_finding_path`: a relative archive path with no control,
 /// formatting, traversal or absolute forms. Python revalidates every result.
-fn is_safe_finding_path(path: &str) -> bool {
+pub fn is_safe_finding_path(path: &str) -> bool {
     let formatting = |item: char| {
         matches!(item as u32,
             0x0080..=0x009F | 0x2028 | 0x2029 | 0x00AD | 0x0600..=0x0605 | 0x061C | 0x06DD | 0x070F | 0x0890..=0x0891 | 0x08E2
@@ -256,18 +271,147 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
     let registry_entry_id = string(registry, "registry_entry_id")?.to_owned();
     let registry_entry_digest = digest(registry, "entry_digest")?.to_owned();
     let image_digest = digest(registry, "image_digest")?.to_owned();
+    let configuration_digest = digest(object, "configuration_sha256")?.to_owned();
     Ok(ValidatedRequest {
         value,
         request_digest,
         registry_entry_id,
         registry_entry_digest,
         image_digest,
+        configuration_digest,
         phase,
         cpu_millis: limits.0,
         memory_bytes: limits.1,
         deadline_ms: limits.2,
         maximum_output_bytes: limits.3 as usize,
     })
+}
+
+pub fn completed_result(
+    request: &ValidatedRequest,
+    findings: Vec<Finding>,
+) -> Result<Value, ContractError> {
+    let failed = findings.iter().any(|finding| finding.level == "error");
+    let findings =
+        serde_json::to_value(findings).map_err(|_| ContractError("findings encoding failed"))?;
+    let mut body = Map::new();
+    body.insert(
+        "schema_version".into(),
+        Value::String(RESULT_SCHEMA_VERSION.into()),
+    );
+    body.insert(
+        "request_digest".into(),
+        Value::String(request.request_digest.clone()),
+    );
+    body.insert(
+        "registry_entry_id".into(),
+        Value::String(request.registry_entry_id.clone()),
+    );
+    body.insert(
+        "registry_entry_digest".into(),
+        Value::String(request.registry_entry_digest.clone()),
+    );
+    body.insert("phase".into(), Value::String(request.phase.clone()));
+    body.insert("outcome".into(), Value::String("completed".into()));
+    body.insert(
+        "verdict".into(),
+        Value::String(if failed { "failed" } else { "passed" }.into()),
+    );
+    body.insert("findings".into(), findings);
+    body.insert("infrastructure_failure_code".into(), Value::Null);
+    let digest = canonical_hash(&Value::Object(body.clone()))?;
+    body.insert("result_digest".into(), Value::String(digest));
+    let value = Value::Object(body);
+    validate_result(&value, request)?;
+    Ok(value)
+}
+
+pub fn terminal_benchmark_plan(
+    request: &ValidatedRequest,
+    external_task_id: &str,
+) -> Result<Value, ContractError> {
+    if request.phase != "post_submit" || !is_identifier(external_task_id) {
+        return Err(ContractError("terminal benchmark plan identity is invalid"));
+    }
+    let mut body = Map::new();
+    body.insert(
+        "schema_version".into(),
+        Value::String(TERMINAL_BENCHMARK_PLAN_VERSION.into()),
+    );
+    body.insert(
+        "request_digest".into(),
+        Value::String(request.request_digest.clone()),
+    );
+    body.insert(
+        "registry_entry_id".into(),
+        Value::String(request.registry_entry_id.clone()),
+    );
+    body.insert(
+        "registry_entry_digest".into(),
+        Value::String(request.registry_entry_digest.clone()),
+    );
+    body.insert(
+        "checker_image_digest".into(),
+        Value::String(request.image_digest.clone()),
+    );
+    body.insert(
+        "configuration_digest".into(),
+        Value::String(request.configuration_digest.clone()),
+    );
+    body.insert(
+        "external_task_id".into(),
+        Value::String(external_task_id.into()),
+    );
+    let digest = canonical_hash(&Value::Object(body.clone()))?;
+    body.insert("plan_digest".into(), Value::String(digest));
+    let value = Value::Object(body);
+    parse_terminal_benchmark_plan(&value, request)?;
+    Ok(value)
+}
+
+pub fn parse_terminal_benchmark_plan(
+    value: &Value,
+    request: &ValidatedRequest,
+) -> Result<TerminalBenchmarkPlan, ContractError> {
+    let object = exact_object(
+        value,
+        &[
+            "schema_version",
+            "request_digest",
+            "registry_entry_id",
+            "registry_entry_digest",
+            "checker_image_digest",
+            "configuration_digest",
+            "external_task_id",
+            "plan_digest",
+        ],
+    )?;
+    let plan: TerminalBenchmarkPlan = serde_json::from_value(value.clone())
+        .map_err(|_| ContractError("terminal benchmark plan is invalid"))?;
+    let mut body = object.clone();
+    body.remove("plan_digest");
+    if request.phase != "post_submit"
+        || plan.schema_version != TERMINAL_BENCHMARK_PLAN_VERSION
+        || plan.request_digest != request.request_digest
+        || plan.registry_entry_id != request.registry_entry_id
+        || plan.registry_entry_digest != request.registry_entry_digest
+        || plan.checker_image_digest != request.image_digest
+        || plan.configuration_digest != request.configuration_digest
+        || !is_identifier(&plan.external_task_id)
+        || !valid_digest_text(&plan.plan_digest)
+        || canonical_hash(&Value::Object(body))? != plan.plan_digest
+    {
+        return Err(ContractError("terminal benchmark plan identity differs"));
+    }
+    Ok(plan)
+}
+
+fn valid_digest_text(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .chars()
+            .all(|item| item.is_ascii_hexdigit() && !item.is_ascii_uppercase())
 }
 
 fn validate_registry(registry: &Map<String, Value>, phase: &str) -> Result<(), ContractError> {
@@ -755,6 +899,35 @@ mod tests {
     fn canonical_json_rejects_nul() {
         assert!(canonical_json(&serde_json::json!({"safe": "bad\0value"})).is_err());
         assert!(canonical_json(&serde_json::json!({"bad\0key": "value"})).is_err());
+    }
+
+    #[test]
+    fn terminal_benchmark_plan_binds_only_request_facts_and_rejects_substitution() {
+        let request = ValidatedRequest {
+            value: serde_json::json!({}),
+            request_digest: format!("sha256:{}", "0".repeat(64)),
+            registry_entry_id: "019a0000-0000-7000-8000-000000000001".into(),
+            registry_entry_digest: format!("sha256:{}", "1".repeat(64)),
+            image_digest: format!("sha256:{}", "2".repeat(64)),
+            configuration_digest: format!("sha256:{}", "3".repeat(64)),
+            phase: "post_submit".into(),
+            cpu_millis: 1000,
+            memory_bytes: 256 * 1024 * 1024,
+            deadline_ms: 30_000,
+            maximum_output_bytes: 65_536,
+        };
+        let plan = terminal_benchmark_plan(&request, "terminal-ledger-reconcile").unwrap();
+        let parsed = parse_terminal_benchmark_plan(&plan, &request).unwrap();
+        assert_eq!(parsed.request_digest, request.request_digest);
+        assert!(plan.get("grant_id").is_none());
+        assert!(plan.get("grant_binding_digest").is_none());
+
+        let mut substituted = request.clone();
+        substituted.configuration_digest = format!("sha256:{}", "4".repeat(64));
+        assert!(parse_terminal_benchmark_plan(&plan, &substituted).is_err());
+        let mut extra = plan;
+        extra["grant_id"] = Value::String("extract_0123456789abcdef0123456789abcdef".into());
+        assert!(parse_terminal_benchmark_plan(&extra, &request).is_err());
     }
 
     #[test]

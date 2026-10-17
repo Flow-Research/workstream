@@ -32,6 +32,14 @@ Docker resources:
 ./experiments/pilot00_gvisor_offline/test_probe.sh
 ```
 
+The WS493 project-checker proof reuses only the harness boundary. It sets
+`PILOT00_HARNESS_ONLY=1`, selects the service's fixed `runsc` key with
+`PILOT00_RUNTIME_KEY=runsc`, supplies an absolute bind-backed Docker state path
+with `PILOT00_DIND_STATE_DIR`, and mirrors `PILOT00_STATE_DIR` at that same
+absolute path inside DIND with `PILOT00_SHARED_STATE_PATH`. These inputs leave
+the default sample matrix and named-volume behavior unchanged. Harness-only
+mode is valid with `prepare` and cannot run the sample `all` action.
+
 `prepare` is the only network-using phase. It downloads the exact gVisor
 release, pulls digest-pinned harness/builder/base images, and warms the base
 cache. The harness itself starts with `--network none`. `run` mounts the sealed
