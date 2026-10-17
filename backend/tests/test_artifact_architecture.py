@@ -161,10 +161,13 @@ def test_only_canonical_admission_backed_contributor_intake_routes_are_composed(
     )
     assert not {path for path in paths if any(fragment in path for fragment in forbidden_fragments)}
     preparation_path = "/api/v1/tasks/{task_id}/submission-bundle-preparations"
-    # Contributors also read their own preparations back; only the POST prepares.
+    project_preparations = "/api/v1/projects/{project_id}/submission-bundle-preparations"
+    # Contributors read their own preparations back and Project Managers list a
+    # project's; only the task POST prepares.
     assert {path for path in paths if "submission-bundle" in path} == {
-        preparation_path, f"{preparation_path}/{{preparation_id}}",
+        preparation_path, f"{preparation_path}/{{preparation_id}}", project_preparations,
     }
+    assert set(paths[project_preparations]) - {"parameters"} == {"get"}
     assert {method for path, operations in paths.items() if "submission-bundle" in path
             for method in operations if method != "parameters"} == {"post", "get"}
     assert "post" not in paths[f"{preparation_path}/{{preparation_id}}"]

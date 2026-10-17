@@ -93,6 +93,10 @@
       "target": "backend/app/api/deps/contribution_policies.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/deps/contribution_policy_list.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/contributor_reads.py"
     },
@@ -117,8 +121,28 @@
       "target": "backend/app/api/deps/post_policy.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/deps/project_guide_reads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/deps/project_management_reads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/deps/project_preparation_reads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/deps/project_work_reads.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/api/deps/rate_controls.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/api/deps/snapshot_reads.py"
     },
     {
       "group": "lifecycle",
@@ -167,6 +191,18 @@
     {
       "group": "shared",
       "target": "backend/app/api/routes/post_policy.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/routes/project_guide_reads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/routes/project_preparation_reads.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/api/routes/project_work_reads.py"
     },
     {
       "group": "shared",
@@ -542,6 +578,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/api/management_reads.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/api/outbox_dispatch.py"
     },
     {
@@ -674,6 +714,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/management_reads.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/outbox_dispatch.py"
     },
     {
@@ -795,6 +839,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/lifecycle_service.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/management_read.py"
     },
     {
       "group": "auth",
@@ -1178,6 +1226,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/contributions/policy_views.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/contributions/records/csv.py"
     },
     {
@@ -1295,6 +1347,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/api/guide_proposals.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/guide_reads.py"
     },
     {
       "group": "lifecycle",
@@ -1479,6 +1535,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_mutation_service.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_reads.py"
     },
     {
       "group": "lifecycle",
@@ -1698,6 +1758,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/project_reads.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/ready_queue.py"
     },
     {
@@ -1819,6 +1883,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/post_submit_routing/terminal_replay.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/project_reads.py"
     },
     {
       "group": "lifecycle",
@@ -2101,7 +2169,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "3f771fab02514171549d615554c0dace62fecbdb15648fc3e4a503e54a0c0ed0",
+  "authority_digest": "0d9480e84576c00552c97e402999847c1e4651093c5a7e7e01264465daa749ec",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

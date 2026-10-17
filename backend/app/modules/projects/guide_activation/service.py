@@ -1,5 +1,6 @@
 """One complete-guide activation operation in the caller root transaction."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -13,16 +14,20 @@ from app.modules.checkers.api.external_policy import (
 from app.modules.checkers.api.external import ExternalCheckerRegistryPort
 from app.modules.projects.api.guide_activation import (
     GuideActivationCommand,
+    GuideActivationCondition,
     GuideActivationFacts,
     GuideActivationLocator,
+    GuideActivationReadiness,
     GuideActivationReceipt,
     GuideContributionPolicyFacts,
     PreparedGuideActivation,
 )
+from app.modules.projects.api.guide_activation_context import GuideContributionDiscoveryPort
 from app.modules.projects.api.guide_proposals import GuideProposalError, MissingCheckerCapability
 from app.modules.projects.api.post_policy import PostPolicySelection
 from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
 from app.modules.projects.guide_mutation_repository import GuideMutationRepository
+from app.modules.projects.post_policy.custody import load_post_policy_custody
 from app.modules.projects.post_policy.repository import PostPolicyRepository
 from app.modules.projects.repository import ProjectRepository
 from app.modules.projects.service import GuideActivationBlocked, ProjectService, ProjectServiceError
@@ -104,68 +109,22 @@ class GuideActivationService:
                         raise GuideProposalError("operation_conflict")
                     await prepared.validate_replay(facts, authority.authorization_decision_event_id)
                     return receipt
-                if project.status not in {"draft", "active"}:
-                    raise GuideProposalError("approval_blocked")
-                locked, policy, post_custody = await self.post.lock_policy(
+                checked = await self._evaluate(
+                    _ActivationConditions(collect=False),
+                    project,
                     PostPolicySelection(
                         project_id=target.project_id,
                         guide_id=target.guide_id,
                         compilation_id=target.compilation_id,
                         policy_id=command.target.policy_id,
-                    )
-                )
-                await self.post.require_current_upstream(locked)
-                if (
-                    post_custody.target != command.target
-                    or post_custody.approval is None
-                    or post_custody.approval.operation_id != command.post_approval_operation_id
-                    or post_custody.approval.output_digest != command.post_approval_output_digest
-                ):
-                    raise GuideProposalError("proposal_stale")
-                guide = locked.view.guide
-                if (
-                    guide.status != "draft"
-                    or guide.mutation_generation != command.guide_mutation_generation
-                ):
-                    raise GuideProposalError("proposal_stale")
-                previous = await self.projects.lock_active_guide(str(target.project_id))
-                if (
-                    UUID(previous.id) if previous else None
-                ) != command.expected_previous_active_guide_id or (
-                    previous.mutation_generation if previous else None
-                ) != command.expected_previous_active_guide_generation:
-                    raise GuideProposalError("proposal_stale")
-                review = await self.projects.lock_review_policy(guide.project_id, guide.version)
-                revision = await self.projects.lock_revision_policy(guide.project_id, guide.version)
-                for kind, row in (("review", review), ("revision", revision)):
-                    selection = getattr(command, kind)
-                    if row is None or (row.id, row.policy_generation, row.policy_hash) != (
-                        str(selection.policy_id),
-                        selection.generation,
-                        selection.policy_hash,
-                    ):
-                        raise GuideProposalError("proposal_stale")
-                try:
-                    source_items = await self.projects.lock_guide_source_snapshot_items(
-                        locked.view.snapshot.id
-                    )
-                    await ProjectService(self.session).validate_source_snapshot_integrity(
-                        locked.view.snapshot,
-                        GuideActivationBlocked,
-                        persisted_items=source_items,
-                    )
-                    await self._readiness(command, locked, policy, post_custody, review, revision)
-                except ProjectServiceError:
-                    raise GuideProposalError("approval_blocked") from None
-                try:
-                    selected_contribution = await self.contribution.validate_for_activation(
-                        target.project_id,
+                    ),
+                    expected=command,
+                    contribution_selection=(
                         command.contribution_policy_id,
                         command.contribution_policy_version_id,
-                    )
-                except ValueError:
-                    raise GuideProposalError("proposal_stale") from None
-                contribution = GuideContributionPolicyFacts.model_validate(selected_contribution)
+                    ),
+                )
+                guide, previous, contribution = checked.guide, checked.previous, checked.contribution
                 operation_id = new_record_id()
                 receipt = GuideActivationReceipt(
                     operation_id=operation_id,
@@ -222,30 +181,202 @@ class GuideActivationService:
             await self.replay.complete(record, response_json=receipt.model_dump(mode="json"))
             return receipt
 
-    async def _readiness(self, command, locked, policy, post, review, revision):
+    async def readiness(
+        self,
+        project_id: UUID,
+        guide_id: UUID,
+        *,
+        contribution: GuideContributionDiscoveryPort,
+    ) -> GuideActivationReadiness:
+        """Dry-run activation's own conditions over the current selections.
+
+        Evaluates the same ``_evaluate`` path as ``activate`` with the guide's
+        latest derived post-submit policy, its current approval, selected
+        review and revision policies, the current active guide and the
+        project's current published contribution policy version. It takes the
+        same transactional row locks as the post-policy review read, until the
+        caller ends its transaction, and never prepares or consumes activation
+        authority, reserves replay or writes. Product refusals become unmet
+        conditions in activation's order; storage and authority failures
+        raise ``GuideProposalError``.
+        """
+        if (
+            not self.session.in_transaction()
+            or self.session.in_nested_transaction()
+            or self.session.new
+            or self.session.dirty
+            or self.session.deleted
+        ):
+            raise GuideProposalError("storage_unavailable")
+        conditions = _ActivationConditions(collect=True)
+        try:
+            async with GuideProposalService._bounded_errors():
+                project = await self.projects.get_project(str(project_id), for_update=True)
+                if project is None:
+                    raise GuideProposalError("proposal_unavailable")
+                latest = await self.post.latest_policy(guide_id)
+                selection = None
+                if latest is not None and latest.project_id == str(project_id):
+                    custody = await load_post_policy_custody(self.session, latest)
+                    selection = PostPolicySelection(
+                        project_id=project_id,
+                        guide_id=guide_id,
+                        compilation_id=custody.target.proposal.compilation_id,
+                        policy_id=UUID(latest.id),
+                    )
+                published = await contribution.published_selection(project_id)
+                await self._evaluate(
+                    conditions,
+                    project,
+                    selection,
+                    expected=None,
+                    contribution_selection=None
+                    if published is None
+                    else (published.contribution_policy_id, published.contribution_policy_version_id),
+                )
+        except GuideProposalError as exc:
+            if exc.code not in _PRODUCT_REFUSALS:
+                raise
+            # Evaluation stopped at an integrity fault activation would also refuse.
+            conditions.fail(exc.code, "activation_integrity_failed")
+        if self.session.new or self.session.dirty or self.session.deleted:
+            raise GuideProposalError("storage_unavailable")
+        unmet = tuple(conditions.unmet)
+        return GuideActivationReadiness(
+            project_id=project_id, guide_id=guide_id, ready=not unmet, unmet=unmet
+        )
+
+    async def _evaluate(
+        self,
+        conditions: "_ActivationConditions",
+        project,
+        selection: PostPolicySelection | None,
+        *,
+        expected: GuideActivationCommand | None,
+        contribution_selection: tuple[UUID, UUID] | None,
+    ) -> "_CheckedActivation | None":
+        """Every activation precondition, in activation's order, shared by activate and readiness.
+
+        ``expected`` is the manager's displayed selection on activation and
+        ``None`` on a readiness read, which compares only against the current
+        records. ``conditions`` raises the first unmet condition for
+        activation and collects every evaluable one for readiness.
+        """
+        if project.status not in {"draft", "active"}:
+            conditions.fail("approval_blocked", "project_not_activatable")
+        if selection is None:
+            conditions.fail("proposal_unavailable", "post_policy_unavailable")
+            return None
+        try:
+            # The same mapping activation's outer boundary applies to a refused lineage.
+            async with GuideProposalService._bounded_errors():
+                locked, policy, post_custody = await self.post.lock_policy(selection)
+        except GuideProposalError as exc:
+            if not conditions.collect or exc.code not in _PRODUCT_REFUSALS:
+                raise
+            # The lock admits only a draft guide; name that cause with the
+            # lock's own refusal code, which activation raises unchanged.
+            guide = await self.projects.get_guide(str(selection.guide_id))
+            conditions.fail(exc.code, "guide_not_draft" if guide is not None and guide.status != "draft"
+                            else "post_policy_unavailable")
+            return None
+        try:
+            await self.post.require_current_upstream(locked)
+        except GuideProposalError as exc:
+            if not conditions.collect:
+                raise
+            conditions.fail(exc.code, "upstream_approval_not_current")
+        if post_custody.approval is None:
+            conditions.fail("proposal_stale", "post_policy_not_approved")
+        elif expected is not None and (
+            post_custody.target != expected.target
+            or post_custody.approval.operation_id != expected.post_approval_operation_id
+            or post_custody.approval.output_digest != expected.post_approval_output_digest
+        ):
+            conditions.fail("proposal_stale", "selection_stale")
+        guide = locked.view.guide
+        if expected is not None and guide.mutation_generation != expected.guide_mutation_generation:
+            conditions.fail("proposal_stale", "selection_stale")
+        previous = await self.projects.lock_active_guide(str(selection.project_id))
+        if expected is not None and (
+            (UUID(previous.id) if previous else None) != expected.expected_previous_active_guide_id
+            or (previous.mutation_generation if previous else None)
+            != expected.expected_previous_active_guide_generation
+        ):
+            conditions.fail("proposal_stale", "selection_stale")
+        review = await self.projects.lock_review_policy(guide.project_id, guide.version)
+        revision = await self.projects.lock_revision_policy(guide.project_id, guide.version)
+        for kind, row in (("review", review), ("revision", revision)):
+            if row is None:
+                conditions.fail("proposal_stale", f"{kind}_policy_unselected")
+            elif expected is not None:
+                chosen = getattr(expected, kind)
+                if (row.id, row.policy_generation, row.policy_hash) != (
+                    str(chosen.policy_id),
+                    chosen.generation,
+                    chosen.policy_hash,
+                ):
+                    conditions.fail("proposal_stale", "selection_stale")
+        if review is not None and revision is not None:
+            source_items = await self.projects.lock_guide_source_snapshot_items(
+                locked.view.snapshot.id
+            )
+            try:
+                await ProjectService(self.session).validate_source_snapshot_integrity(
+                    locked.view.snapshot,
+                    GuideActivationBlocked,
+                    persisted_items=source_items,
+                )
+                snapshot_invalid = False
+            except ProjectServiceError:
+                snapshot_invalid = True
+            if snapshot_invalid:
+                conditions.fail("approval_blocked", "source_snapshot_invalid")
+            await self._readiness(conditions, locked, policy, post_custody, review, revision)
+        contribution = None
+        if contribution_selection is None:
+            conditions.fail("proposal_stale", "contribution_policy_unpublished")
+        else:
+            try:
+                selected = await self.contribution.validate_for_activation(
+                    selection.project_id, *contribution_selection
+                )
+            except ValueError:
+                selected = None
+            if selected is None:
+                conditions.fail("proposal_stale", "contribution_policy_invalid")
+            else:
+                contribution = GuideContributionPolicyFacts.model_validate(selected)
+        return _CheckedActivation(guide, previous, contribution)
+
+    async def _readiness(self, conditions, locked, policy, post, review, revision):
+        """Checker, requirement and approval-chain readiness of the locked approved generation."""
         approval = locked.view.approval_custody
         external = (
             approval.operation.effective_pre_submit_plan.get("schema_version")
             == "external_checker_policies.v1"
         )
         if not external or self.registry is None:
-            raise GuideProposalError("approval_blocked")
+            conditions.fail("approval_blocked", "checker_policy_unsupported")
+            return
         policies = validate_stored_external_checker_policies(
             approval.operation.effective_pre_submit_plan
         )
         if policies.pre_submit.model_dump(mode="json") != approval.pre.compiled_bundle:
-            raise GuideProposalError("approval_blocked")
+            conditions.fail("approval_blocked", "checker_policy_mismatch")
         for binding in (*policies.pre_submit.entries, *policies.post_submit.entries):
             current = await self.registry.read_exact(
                 binding.registry.registry_entry_id,
                 binding.registry.entry_digest,
             )
             if current != binding.registry:
-                raise GuideProposalError("approval_blocked")
+                conditions.fail("approval_blocked", "checker_registry_changed")
+                break
         if locked.result.capability_suggestions:
-            raise GuideProposalError(
+            conditions.fail(
                 "approval_blocked",
-                missing_capabilities=tuple(
+                "checker_capability_missing",
+                tuple(
                     MissingCheckerCapability(
                         requirement_id=item.requirement_id,
                         stage=item.stage,
@@ -258,17 +389,53 @@ class GuideActivationService:
             item.disposition is RequirementDisposition.HUMAN_REVIEW
             for item in locked.result.requirements
         ):
-            raise GuideProposalError("approval_blocked")
-        ProjectService(self.session).validate_activation_ready(
-            locked.view.guide,
-            locked.view.snapshot,
-            locked.view.report,
-            locked.view.policy,
-            approval.effective,
-            approval.pre,
-            policy,
-            review,
-            revision,
-            approval_custody=approval,
-            post_policy_custody=post,
-        )
+            conditions.fail("approval_blocked", "human_review_required_by_guide")
+        try:
+            ProjectService(self.session).validate_activation_ready(
+                locked.view.guide,
+                locked.view.snapshot,
+                locked.view.report,
+                locked.view.policy,
+                approval.effective,
+                approval.pre,
+                policy,
+                review,
+                revision,
+                approval_custody=approval,
+                post_policy_custody=post,
+            )
+            blocked = False
+        except ProjectServiceError:
+            blocked = True
+        if blocked:
+            conditions.fail("approval_blocked", "activation_requirements_unmet")
+
+
+_PRODUCT_REFUSALS = frozenset({"proposal_unavailable", "proposal_stale", "approval_blocked"})
+
+
+@dataclass(frozen=True, slots=True)
+class _CheckedActivation:
+    """The locked rows activation writes after every condition holds."""
+
+    guide: object
+    previous: object | None
+    contribution: GuideContributionPolicyFacts | None
+
+
+class _ActivationConditions:
+    """Activation raises the first unmet condition; readiness collects them all."""
+
+    def __init__(self, *, collect: bool) -> None:
+        self.collect = collect
+        self.unmet: list[GuideActivationCondition] = []
+
+    def fail(self, code, reason, missing_capabilities=()) -> None:
+        """Refuse activation now, or record the condition for a readiness read.
+
+        ``selection_stale`` compares a displayed selection, which only
+        activation has, so that reason never reaches a readiness answer.
+        """
+        if not self.collect:
+            raise GuideProposalError(code, missing_capabilities=missing_capabilities)
+        self.unmet.append(GuideActivationCondition.of(code, reason, missing_capabilities))

@@ -112,6 +112,25 @@ PILOT_READ_2_TARGETS = frozenset({
     "backend/app/modules/tasks/api/contributor_reads.py",
     "backend/app/modules/tasks/contributor_reads.py",
 })
+PILOT_READ_3_TARGETS = frozenset({
+    "backend/app/api/deps/contribution_policy_list.py",
+    "backend/app/api/deps/project_guide_reads.py",
+    "backend/app/api/deps/project_management_reads.py",
+    "backend/app/api/deps/project_preparation_reads.py",
+    "backend/app/api/deps/project_work_reads.py",
+    "backend/app/api/deps/snapshot_reads.py",
+    "backend/app/api/routes/project_guide_reads.py",
+    "backend/app/api/routes/project_preparation_reads.py",
+    "backend/app/api/routes/project_work_reads.py",
+    "backend/app/modules/authorization/api/management_reads.py",
+    "backend/app/modules/authorization/domain/management_reads.py",
+    "backend/app/modules/authorization/management_read.py",
+    "backend/app/modules/contributions/policy_views.py",
+    "backend/app/modules/projects/api/guide_reads.py",
+    "backend/app/modules/projects/guide_reads.py",
+    "backend/app/modules/tasks/api/project_reads.py",
+    "backend/app/modules/tasks/project_reads.py",
+})
 TASK_CHECKER_CLEANUP_REMOVED_TARGETS = frozenset({
     "backend/app/core/permissions.py",
     "backend/app/modules/tasks/authorization.py",
@@ -948,6 +967,7 @@ def _validate_additive_partition_transition(
         | PILOT_08_REVISION_TARGETS
         | PILOT_READ_1_TARGETS
         | PILOT_READ_2_TARGETS
+        | PILOT_READ_3_TARGETS
         | CON_02B_DELIVERY_TARGETS
         | AUTH_OUTBOX_02_TARGETS
         | ARCH_03C1_TARGETS

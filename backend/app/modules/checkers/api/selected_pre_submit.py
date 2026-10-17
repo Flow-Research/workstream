@@ -920,14 +920,18 @@ class SelectedPreSubmitAuthorityUnavailable(RuntimeError):
     """Conceal fixed-service PRE authorization loss without product facts."""
 
 
+SelectedPreSubmitRunStatus = Literal["queued", "running", "completed", "infrastructure_failed"]
+
+
 @dataclass(frozen=True, slots=True)
 class SelectedPreSubmitRunView:
-    """One retained selected PRE run of its own contributor, with revalidated terminal facts."""
+    """One retained selected PRE run and its contributor, with revalidated terminal facts."""
 
     run_id: UUID
+    actor_profile_id: UUID
     task_id: UUID
     assignment_id: UUID
-    status: Literal["queued", "running", "completed", "infrastructure_failed"]
+    status: SelectedPreSubmitRunStatus
     archive_sha256: str
     archive_byte_count: int
     queued_at: datetime
@@ -936,12 +940,21 @@ class SelectedPreSubmitRunView:
 
 
 class SelectedPreSubmitRunReadPort(Protocol):
-    """Read one contributor's runs for one task, newest first; the caller authorizes."""
+    """Read retained runs newest first; the caller authorizes."""
 
     async def read_contributor_runs(
         self, *, actor_profile_id: UUID, task_id: UUID, run_id: UUID | None,
         limit: int, before: tuple[datetime, UUID] | None,
-    ) -> tuple[tuple[SelectedPreSubmitRunView, ...], bool]: ...
+    ) -> tuple[tuple[SelectedPreSubmitRunView, ...], bool]:
+        """One contributor's runs for one task, optionally one exact run."""
+        ...
+
+    async def read_project_runs(
+        self, *, project_id: UUID, statuses: tuple[SelectedPreSubmitRunStatus, ...] | None,
+        eligible: bool | None, limit: int, before: tuple[datetime, UUID] | None,
+    ) -> tuple[tuple[SelectedPreSubmitRunView, ...], bool]:
+        """Every contributor's runs in one project, by stored status and eligibility."""
+        ...
 
 
 __all__ = (
@@ -964,6 +977,7 @@ __all__ = (
     "SelectedPreSubmitReservationFacts",
     "SelectedPreSubmitRequestConflict",
     "SelectedPreSubmitRunReadPort",
+    "SelectedPreSubmitRunStatus",
     "SelectedPreSubmitRunView",
     "SelectedPreSubmitTerminalFacts",
     "SelectedPreSubmitUnavailable",

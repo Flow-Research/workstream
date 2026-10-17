@@ -172,7 +172,7 @@ async def test_preparation_projection_maps_every_check_and_custody_state(status,
         terminal = SimpleNamespace(execution=_execution(terminal), infrastructure_failure_code=None)
     now = datetime.now(UTC)
     view = SelectedPreSubmitRunView(
-        run_id=uuid4(), task_id=uuid4(), assignment_id=uuid4(), status=status,
+        run_id=uuid4(), actor_profile_id=uuid4(), task_id=uuid4(), assignment_id=uuid4(), status=status,
         archive_sha256="sha256:" + "a" * 64, archive_byte_count=10, queued_at=now,
         completed_at=None if terminal is None else now, terminal=terminal,
     )

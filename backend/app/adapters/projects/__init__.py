@@ -3,8 +3,10 @@
 from app.modules.projects.api.guide_activation import (
     GuideActivationAuthorizationPort,
     GuideActivationPort,
+    GuideActivationReadinessPort,
     GuideContributionPolicyPort,
 )
+from app.modules.projects.api.guide_reads import ProjectGuideReadPort
 
 
 from app.modules.projects.api.guide_documents import ProjectGuideDocumentScopePort
@@ -243,6 +245,29 @@ def project_guide_activation_port(
         authorization=authorization,
         registry=external_checker_registry_reader(session),
     )
+
+
+def project_guide_activation_readiness_port(
+    session: AsyncSession,
+    *,
+    contribution: GuideContributionPolicyPort,
+) -> GuideActivationReadinessPort:
+    """Compose activation's own conditions for a dry run; no activation authority is bound."""
+    from app.adapters.checkers import external_checker_registry_reader
+    from app.modules.projects.guide_activation.service import GuideActivationService
+
+    return GuideActivationService(
+        session,
+        contribution=contribution,
+        registry=external_checker_registry_reader(session),
+    )
+
+
+def project_guide_reader(session: AsyncSession) -> ProjectGuideReadPort:
+    """Read a project's guides, declared documents and selected policies for an authorized caller."""
+    from app.modules.projects.guide_reads import ProjectGuideReader
+
+    return ProjectGuideReader(session)
 
 
 def project_summary_reader(session: AsyncSession):

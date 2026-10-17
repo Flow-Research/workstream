@@ -1,6 +1,7 @@
 """CONTRIBUTIONS-owned composition adapters."""
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.modules.contributions.api.policies import ContributionPolicyVersionListPort
 from app.modules.contributions.api.published_selection import PublishedContributionPolicyPort
 from app.modules.contributions.api.records import (
     ContributionExportPort, ContributionReadAuthorizationPort, ContributionExportResponse,
@@ -32,6 +33,15 @@ def contribution_policy_service(
         session,
         read_authorization=read_authorization,
         mutation_authorization=mutation_authorization,
+        projects=project_contribution_policy_eligibility_port(session),
+        bindings=policy_adapter_binding_port(session),
+    )
+
+
+def contribution_policy_version_list(session: AsyncSession) -> ContributionPolicyVersionListPort:
+    """Compose only the lock-free version list; the caller has authorized the project read."""
+    return ContributionPolicyService(
+        session, read_authorization=None, mutation_authorization=None,
         projects=project_contribution_policy_eligibility_port(session),
         bindings=policy_adapter_binding_port(session),
     )

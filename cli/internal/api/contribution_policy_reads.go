@@ -97,20 +97,31 @@ func (c *Client) ContributionPolicy(ctx context.Context, project, policy string,
 		return result, err
 	}
 	var value ContributionPolicyVersion
-	fields, err := contextObject(raw, &value, []string{
-		"project_id", "contribution_policy_id", "name", "policy_status", "contribution_policy_version_id", "version_number", "version_status", "rules",
-	}, nil)
-	if err != nil || !sameUUID(value.ProjectID, project) || !sameUUID(value.ContributionPolicyID, policy) ||
-		!validUUID(value.ContributionPolicyVersionID) || (version != nil && !sameUUID(value.ContributionPolicyVersionID, *version)) ||
+	fields, err := contextObject(raw, &value, policyVersionFields, nil)
+	if err != nil || !validPolicyVersion(fields, &value) || !sameUUID(value.ProjectID, project) ||
+		!sameUUID(value.ContributionPolicyID, policy) ||
+		(version != nil && !sameUUID(value.ContributionPolicyVersionID, *version)) || !c.safeMutationResponse(raw) {
+		return result, &Failure{Code: "invalid_api_response"}
+	}
+	return Result[ContributionPolicyVersion]{Raw: raw, Value: value}, nil
+}
+
+var policyVersionFields = []string{
+	"project_id", "contribution_policy_id", "name", "policy_status", "contribution_policy_version_id", "version_number", "version_status", "rules",
+}
+
+// validPolicyVersion checks one decoded version view and its closed rule graph.
+func validPolicyVersion(fields map[string]json.RawMessage, value *ContributionPolicyVersion) bool {
+	if !validUUID(value.ProjectID) || !validUUID(value.ContributionPolicyID) || !validUUID(value.ContributionPolicyVersionID) ||
 		strings.TrimSpace(value.Name) == "" || value.VersionNumber == nil || value.VersionNumber.Sign() <= 0 ||
 		(value.PolicyStatus != "draft" && value.PolicyStatus != "active" && value.PolicyStatus != "retired") ||
 		(value.VersionStatus != "draft" && value.VersionStatus != "published" && value.VersionStatus != "retired") ||
-		value.Rules == nil || len(value.Rules) > 2 || !c.safeMutationResponse(raw) {
-		return result, &Failure{Code: "invalid_api_response"}
+		value.Rules == nil || len(value.Rules) > 2 {
+		return false
 	}
 	var rules []json.RawMessage
 	if err := json.Unmarshal(fields["rules"], &rules); err != nil {
-		return result, &Failure{Code: "invalid_api_response"}
+		return false
 	}
 	seenRules, seenDefinitions := make(map[[16]byte]bool), make(map[[16]byte]bool)
 	seenTypes := make(map[string]bool)
@@ -121,12 +132,12 @@ func (c *Client) ContributionPolicy(ctx context.Context, project, policy string,
 		if err != nil || !valid || seenRules[id] || seenTypes[rule.ContributionType] ||
 			(rule.ContributionType != "accepted_submission" && rule.ContributionType != "completed_review") ||
 			(rule.CompensationMode != "unpaid" && rule.CompensationMode != "compensated") || rule.Definitions == nil || len(rule.Definitions) > 2 {
-			return result, &Failure{Code: "invalid_api_response"}
+			return false
 		}
 		seenRules[id], seenTypes[rule.ContributionType] = true, true
 		var definitions []json.RawMessage
 		if err := json.Unmarshal(members["definitions"], &definitions); err != nil {
-			return result, &Failure{Code: "invalid_api_response"}
+			return false
 		}
 		seenInstruments := make(map[string]bool)
 		for index, rawDefinition := range definitions {
@@ -136,10 +147,63 @@ func (c *Client) ContributionPolicy(ctx context.Context, project, policy string,
 			award := CompensationAward{Instrument: definition.InstrumentType, Unit: definition.UnitCode, Quantity: definition.Quantity}
 			if err != nil || !valid || seenDefinitions[id] || !validUUID(definition.AdapterBindingID) ||
 				!validCompensationAward(award) || seenInstruments[definition.InstrumentType] {
-				return result, &Failure{Code: "invalid_api_response"}
+				return false
 			}
 			seenDefinitions[id], seenInstruments[definition.InstrumentType] = true, true
 		}
 	}
-	return Result[ContributionPolicyVersion]{Raw: raw, Value: value}, nil
+	return true
+}
+
+// ContributionPolicyVersionItem is one stored version with its lifecycle instants.
+type ContributionPolicyVersionItem struct {
+	ContributionPolicyVersion
+	CreatedAt   string  `json:"created_at"`
+	PublishedAt *string `json:"published_at"`
+	RetiredAt   *string `json:"retired_at"`
+}
+
+type ContributionPolicyVersionPage struct {
+	Items  []ContributionPolicyVersionItem `json:"items"`
+	Cursor *string                         `json:"next_cursor"`
+}
+
+// ContributionPolicyVersions lists every stored version of the project's policies, oldest first.
+func (c *Client) ContributionPolicyVersions(ctx context.Context, project string, q PageQuery) (Result[ContributionPolicyVersionPage], error) {
+	var result Result[ContributionPolicyVersionPage]
+	if q.ProjectID != nil || q.TaskID != nil || q.State != nil || q.Status != nil || q.UpdatedSince != nil || q.Outcome != nil {
+		return result, errors.New("policy versions accept no filters")
+	}
+	path, err := contributionPolicyPath(project)
+	if err != nil {
+		return result, err
+	}
+	query, err := q.encode()
+	if err != nil {
+		return result, err
+	}
+	raw, fields, items, err := c.readPage(ctx, path, query, q.Limit)
+	if err != nil {
+		return result, err
+	}
+	page := ContributionPolicyVersionPage{Items: make([]ContributionPolicyVersionItem, 0, len(items))}
+	if json.Unmarshal(fields["next_cursor"], &page.Cursor) != nil {
+		return result, &Failure{Code: "invalid_api_response"}
+	}
+	seen := map[[16]byte]bool{}
+	for _, item := range items {
+		var value ContributionPolicyVersionItem
+		itemFields, err := contextObject(item, &value, append(policyVersionFields[:len(policyVersionFields):len(policyVersionFields)], "created_at"), nil)
+		id, _ := uuidIdentity(value.ContributionPolicyVersionID)
+		if err != nil || !validPolicyVersion(itemFields, &value.ContributionPolicyVersion) || !sameUUID(value.ProjectID, project) ||
+			!requiredNullable(itemFields, "published_at", "retired_at") || !validTime(value.CreatedAt) ||
+			(value.PublishedAt != nil && !validTime(*value.PublishedAt)) || (value.RetiredAt != nil && !validTime(*value.RetiredAt)) ||
+			(value.VersionStatus == "draft") != (value.PublishedAt == nil) || (value.VersionStatus == "retired") != (value.RetiredAt != nil) ||
+			seen[id] {
+			return result, &Failure{Code: "invalid_api_response"}
+		}
+		seen[id] = true
+		page.Items = append(page.Items, value)
+	}
+	return Result[ContributionPolicyVersionPage]{Raw: raw, Value: page}, nil
 }

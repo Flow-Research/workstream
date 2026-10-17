@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError
 from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.guide_activation.custody import load_guide_activation
 from app.modules.projects.models import ProjectGuide
-from .pg_support import activation_case, activation_service
+from .pg_support import activation_case, activation_service, readiness_read
 
 
 async def _activation_effects(session):
@@ -358,6 +358,13 @@ async def test_checker_registration_requires_corrected_approval_before_activatio
             guide = await session.get(ProjectGuide, str(stale.target.proposal.guide_id))
             assert guide.status == "draft" and guide.activation_operation_id is None
             assert await _activation_effects(session) == before
+        # PILOT-READ-3 C3: readiness reports the same refusal with the same capability list.
+        readiness = await readiness_read(factory, initial.project_id, initial.guide_id)
+        first_unmet = readiness.unmet[0]
+        assert (first_unmet.code, first_unmet.reason) == (refusal.value.code, "checker_capability_missing")
+        assert [item.model_dump(mode="json") for item in first_unmet.missing_capabilities] == [
+            item.model_dump(mode="json") for item in refusal.value.missing_capabilities
+        ]
 
         correction = await correct(
             factory,

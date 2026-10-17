@@ -4,35 +4,39 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strings"
 
 	"github.com/Flow-Research/workstream/cli/internal/api"
 	"github.com/spf13/cobra"
 )
 
-// pageFlags binds the shared page and filter flags; unset flags stay nil.
+// pageFlags binds the shared page and filter flags of every signed list; unset flags stay nil.
 type pageFlags struct {
-	limit                                       int
-	cursor, project, task, state, status, since string
+	limit                                                int
+	cursor, project, task, state, status, since, outcome string
 }
 
-func (f *pageFlags) query(cmd *cobra.Command) api.ContributorQuery {
+func (f *pageFlags) query(cmd *cobra.Command) api.PageQuery {
 	selected := func(name string, value *string) *string {
 		if cmd.Flags().Changed(name) {
 			return value
 		}
 		return nil
 	}
-	return api.ContributorQuery{
+	return api.PageQuery{
 		Limit: f.limit, Cursor: selected("cursor", &f.cursor), ProjectID: selected("project", &f.project),
 		TaskID: selected("task", &f.task), State: selected("state", &f.state), Status: selected("status", &f.status),
-		UpdatedSince: selected("updated-since", &f.since),
+		UpdatedSince: selected("updated-since", &f.since), Outcome: selected("outcome", &f.outcome),
 	}
 }
 
+// bind adds the page flags and the named filters; "name=help" overrides a
+// filter's help text where a list stores other values (such as guide status).
 func (f *pageFlags) bind(cmd *cobra.Command, limit int, filters ...string) {
 	cmd.Flags().IntVar(&f.limit, "limit", limit, "Page size (1–100; keep unchanged when continuing)")
 	cmd.Flags().StringVar(&f.cursor, "cursor", "", "Opaque next cursor from the previous page (same filters)")
-	for _, name := range filters {
+	for _, filter := range filters {
+		name, help, overridden := strings.Cut(filter, "=")
 		switch name {
 		case "project":
 			cmd.Flags().StringVar(&f.project, "project", "", "Only this project (needs your Submitter grant)")
@@ -41,9 +45,14 @@ func (f *pageFlags) bind(cmd *cobra.Command, limit int, filters ...string) {
 		case "state":
 			cmd.Flags().StringVar(&f.state, "state", "", "active or closed")
 		case "status":
-			cmd.Flags().StringVar(&f.status, "status", "", "evaluation_pending, review_pending, accepted, needs_revision or rejected")
+			if !overridden {
+				help = "evaluation_pending, review_pending, accepted, needs_revision or rejected"
+			}
+			cmd.Flags().StringVar(&f.status, "status", "", help)
 		case "updated-since":
 			cmd.Flags().StringVar(&f.since, "updated-since", "", "Only rows changed at or after this RFC 3339 time")
+		case "outcome":
+			cmd.Flags().StringVar(&f.outcome, "outcome", "", "pending, passed, failed or infrastructure_failed")
 		}
 	}
 }

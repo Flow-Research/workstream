@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
-// ContributorQuery selects one page of the caller's own work. The server binds
-// every continuation to the same filters and limit.
-type ContributorQuery struct {
+// PageQuery selects one page of a signed list: the caller's own work or a
+// project-wide management list. The server binds every continuation to the
+// same filters and limit; each list accepts only its own filters.
+type PageQuery struct {
 	Limit        int
 	Cursor       *string
 	ProjectID    *string
@@ -20,6 +22,7 @@ type ContributorQuery struct {
 	State        *string
 	Status       *string
 	UpdatedSince *string
+	Outcome      *string
 }
 
 type ActiveGuide struct {
@@ -153,11 +156,19 @@ func oneOf(value string, allowed ...string) bool {
 
 var attemptStatuses = []string{"evaluation_pending", "review_pending", "accepted", "needs_revision", "rejected"}
 
-func (q ContributorQuery) encode() (string, error) {
+func (q PageQuery) encode() (string, error) { return q.encodeWith(attemptStatuses) }
+
+// encodeWith validates and encodes every set filter; status is checked
+// against the list's own stored statuses. Only preparation lists accept an
+// outcome, through encodePreparations.
+func (q PageQuery) encodeWith(statuses []string) (string, error) {
+	if q.Outcome != nil {
+		return "", errors.New("only preparation lists accept --outcome")
+	}
 	if q.Limit < 1 || q.Limit > 100 || (q.Cursor != nil && !validTaskCursor(*q.Cursor)) ||
 		!optionalUUID(q.ProjectID) || !optionalUUID(q.TaskID) ||
 		(q.State != nil && !oneOf(*q.State, "active", "closed")) ||
-		(q.Status != nil && !oneOf(*q.Status, attemptStatuses...)) ||
+		(q.Status != nil && !oneOf(*q.Status, statuses...)) ||
 		(q.UpdatedSince != nil && !validTime(*q.UpdatedSince)) {
 		return "", errors.New("limit must be 1–100; cursor 1–512 characters; IDs UUIDs; times RFC 3339; state active or closed")
 	}
@@ -173,11 +184,32 @@ func (q ContributorQuery) encode() (string, error) {
 	return query.Encode(), nil
 }
 
-func (c *Client) contributorPage(ctx context.Context, path string, q ContributorQuery) (json.RawMessage, map[string]json.RawMessage, []json.RawMessage, error) {
+// encodePreparations encodes a preparation list page and its optional outcome.
+func (q PageQuery) encodePreparations() (string, error) {
+	outcome := q.Outcome
+	if outcome != nil && !oneOf(*outcome, preparationOutcomes...) {
+		return "", errors.New("--outcome must be " + strings.Join(preparationOutcomes, ", "))
+	}
+	q.Outcome = nil
+	query, err := q.encode()
+	if err != nil || outcome == nil {
+		return query, err
+	}
+	values, _ := url.ParseQuery(query)
+	values.Set("outcome", *outcome)
+	return values.Encode(), nil
+}
+
+func (c *Client) contributorPage(ctx context.Context, path string, q PageQuery) (json.RawMessage, map[string]json.RawMessage, []json.RawMessage, error) {
 	query, err := q.encode()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	return c.readPage(ctx, path, query, q.Limit)
+}
+
+// readPage fetches one closed {items, next_cursor} page of at most limit items.
+func (c *Client) readPage(ctx context.Context, path, query string, limit int) (json.RawMessage, map[string]json.RawMessage, []json.RawMessage, error) {
 	raw, err := c.requestWithResponseLimit(ctx, http.MethodGet, path, query, nil, "", http.StatusOK, maxSubmissionReadBytes)
 	if err != nil {
 		return nil, nil, nil, err
@@ -187,7 +219,7 @@ func (c *Client) contributorPage(ctx context.Context, path string, q Contributor
 		Cursor *string           `json:"next_cursor"`
 	}
 	fields, err := contextObject(raw, &page, []string{"items"}, nil)
-	if err != nil || !requiredNullable(fields, "next_cursor") || page.Items == nil || len(page.Items) > q.Limit ||
+	if err != nil || !requiredNullable(fields, "next_cursor") || page.Items == nil || len(page.Items) > limit ||
 		(page.Cursor != nil && (!validTaskCursor(*page.Cursor) || len(page.Items) == 0)) || !c.safeMutationResponse(raw) {
 		return nil, nil, nil, &Failure{Code: "invalid_api_response"}
 	}
@@ -224,7 +256,7 @@ func decodeActorProject(raw json.RawMessage) (ActorProject, bool) {
 }
 
 // MyProjects lists projects where the caller holds an exact grant.
-func (c *Client) MyProjects(ctx context.Context, q ContributorQuery) (Result[ActorProjectPage], error) {
+func (c *Client) MyProjects(ctx context.Context, q PageQuery) (Result[ActorProjectPage], error) {
 	var result Result[ActorProjectPage]
 	raw, fields, items, err := c.contributorPage(ctx, "/api/v1/actors/me/projects", q)
 	if err != nil {
@@ -275,7 +307,7 @@ func decodeContributorAssignment(raw json.RawMessage) (ContributorAssignment, bo
 }
 
 // MyAssignments lists the caller's claims in projects where it holds a Submitter grant.
-func (c *Client) MyAssignments(ctx context.Context, q ContributorQuery) (Result[ContributorAssignmentPage], error) {
+func (c *Client) MyAssignments(ctx context.Context, q PageQuery) (Result[ContributorAssignmentPage], error) {
 	var result Result[ContributorAssignmentPage]
 	raw, fields, items, err := c.contributorPage(ctx, "/api/v1/actors/me/assignments", q)
 	if err != nil {
@@ -311,7 +343,7 @@ func decodeContributorSubmission(raw json.RawMessage) (ContributorSubmission, bo
 }
 
 // MySubmissions lists the caller's attempts in projects where it holds a Submitter grant.
-func (c *Client) MySubmissions(ctx context.Context, q ContributorQuery) (Result[ContributorSubmissionPage], error) {
+func (c *Client) MySubmissions(ctx context.Context, q PageQuery) (Result[ContributorSubmissionPage], error) {
 	var result Result[ContributorSubmissionPage]
 	raw, fields, items, err := c.contributorPage(ctx, "/api/v1/actors/me/submissions", q)
 	if err != nil {
@@ -377,9 +409,10 @@ func contextObjectError(raw json.RawMessage, value any, required ...string) bool
 	return err != nil
 }
 
-func validPreparation(fields map[string]json.RawMessage, value PreparationSummary, task string) bool {
+// validPreparation checks one preparation summary; callers bind its task or project.
+func validPreparation(fields map[string]json.RawMessage, value PreparationSummary) bool {
 	if !requiredNullable(fields, "storage_status", "infrastructure_failure_code", "finding_counts", "admission_id", "submission_id", "completed_at") ||
-		!validUUID(value.PreparationID) || !sameUUID(value.TaskID, task) || !validUUID(value.AssignmentID) ||
+		!validUUID(value.PreparationID) || !validUUID(value.TaskID) || !validUUID(value.AssignmentID) ||
 		!oneOf(value.Outcome, "pending", "passed", "failed", "infrastructure_failed") ||
 		!oneOf(value.State, "checking", "checks_failed", "infrastructure_failed", "storing", "ready", "submitted", "stale") ||
 		!policyHash.MatchString(value.ArchiveSHA256) || value.ArchiveByteCount == nil || value.ArchiveByteCount.Sign() <= 0 ||
@@ -403,13 +436,17 @@ func preparationsPath(task string) (string, error) {
 }
 
 // Preparations lists the caller's ZIP preparations for one task, newest first.
-func (c *Client) Preparations(ctx context.Context, task string, q ContributorQuery) (Result[PreparationPage], error) {
+func (c *Client) Preparations(ctx context.Context, task string, q PageQuery) (Result[PreparationPage], error) {
 	var result Result[PreparationPage]
 	path, err := preparationsPath(task)
 	if err != nil {
 		return result, err
 	}
-	raw, fields, items, err := c.contributorPage(ctx, path, q)
+	query, err := q.encodePreparations()
+	if err != nil {
+		return result, err
+	}
+	raw, fields, items, err := c.readPage(ctx, path, query, q.Limit)
 	if err != nil {
 		return result, err
 	}
@@ -422,7 +459,7 @@ func (c *Client) Preparations(ctx context.Context, task string, q ContributorQue
 		var value PreparationSummary
 		itemFields, err := contextObject(item, &value, []string{"preparation_id", "task_id", "assignment_id", "outcome", "state", "archive_sha256", "archive_byte_count", "created_at"}, nil)
 		id, _ := uuidIdentity(value.PreparationID)
-		if err != nil || !validPreparation(itemFields, value, task) || seen[id] {
+		if err != nil || !validPreparation(itemFields, value) || !sameUUID(value.TaskID, task) || seen[id] {
 			return result, &Failure{Code: "invalid_api_response"}
 		}
 		seen[id] = true
@@ -447,7 +484,7 @@ func (c *Client) Preparation(ctx context.Context, task, preparation string) (Res
 	}
 	var value PreparationDetail
 	fields, err := contextObject(raw, &value, []string{"preparation_id", "task_id", "assignment_id", "outcome", "state", "archive_sha256", "archive_byte_count", "created_at", "findings"}, nil)
-	if err != nil || !validPreparation(fields, value.PreparationSummary, task) || !sameUUID(value.PreparationID, preparation) ||
+	if err != nil || !validPreparation(fields, value.PreparationSummary) || !sameUUID(value.TaskID, task) || !sameUUID(value.PreparationID, preparation) ||
 		value.Findings == nil || !validPreSubmissionResults(value.Findings, value.Outcome == "passed") || !c.safeMutationResponse(raw) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}

@@ -20,7 +20,7 @@ class ContributionAwardReadPort(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ContributorAwardTotal:
-    """The exact sum of one contributor's immutable awards in one instrument and unit."""
+    """The exact sum of immutable awards in one instrument and unit; not a payment claim."""
 
     instrument_type: str
     unit_code: str
@@ -33,3 +33,11 @@ class ContributorAwardTotalsPort(Protocol):
     async def read_award_totals(
         self, contributor_id: UUID, project_ids: frozenset[UUID],
     ) -> tuple[ContributorAwardTotal, ...]: ...
+
+
+class ProjectAwardTotalsPort(Protocol):
+    """Sum every contributor's awards in one project whose totals the caller may see."""
+
+    async def read_project_award_totals(self, project_id: UUID) -> tuple[ContributorAwardTotal, ...]:
+        """Exact Decimal sums per instrument and unit, in a stable order."""
+        ...

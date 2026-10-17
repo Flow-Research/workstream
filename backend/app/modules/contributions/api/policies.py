@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal, Protocol, TypeAlias
 from uuid import UUID
 
-from pydantic import ConfigDict, with_config
+from pydantic import BaseModel, ConfigDict, with_config
 
 from app.modules.compensation.api import CompensationInstrumentType
 
@@ -18,6 +18,8 @@ PolicyAction = Literal[
 PolicyEventType = Literal["draft_created", "draft_updated", "published", "retired"]
 ContributionType = Literal["accepted_submission", "completed_review"]
 CompensationMode = Literal["unpaid", "compensated"]
+ContributionPolicyStatus = Literal["draft", "active", "retired"]
+ContributionPolicyVersionStatus = Literal["draft", "published", "retired"]
 
 
 class ContributionPolicyUnavailable(RuntimeError):
@@ -165,11 +167,29 @@ class ContributionPolicyView:
     project_id: UUID
     contribution_policy_id: UUID
     name: str
-    policy_status: str
+    policy_status: ContributionPolicyStatus
     contribution_policy_version_id: UUID
     version_number: int
-    version_status: str
+    version_status: ContributionPolicyVersionStatus
     rules: tuple[PolicyRuleView, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContributionPolicyVersionListItem(ContributionPolicyView):
+    """One stored version of the project's policy with its lifecycle instants."""
+
+    created_at: datetime
+    published_at: datetime | None
+    retired_at: datetime | None
+
+
+class ContributionPolicyVersionPage(BaseModel):
+    """One page of every stored policy version in the project, oldest first."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    items: tuple[ContributionPolicyVersionListItem, ...]
+    next_cursor: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -192,6 +212,16 @@ class ContributionPolicyMutationResult:
     from_version_status: str | None
     to_version_status: str
     occurred_at: datetime
+
+
+class ContributionPolicyVersionListPort(Protocol):
+    """The lock-free version list behind the Finance D1 read; no policy operation."""
+
+    async def read_versions(
+        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+    ) -> tuple[tuple[ContributionPolicyVersionListItem, ...], bool]:
+        """Every stored version oldest first; the caller has already authorized the project read."""
+        ...
 
 
 class ContributionPolicyOperationsPort(Protocol):

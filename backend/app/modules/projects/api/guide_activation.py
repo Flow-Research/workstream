@@ -9,9 +9,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
-from app.modules.projects.api.guide_proposals import Digest
+from app.modules.projects.api.guide_proposals import Digest, MissingCheckerCapability
 from app.modules.projects.api.post_policy import PostPolicyTarget
-from app.modules.projects.api.guide_activation_context import GuidePolicySelection
+from app.modules.projects.api.guide_activation_context import (
+    GuideContributionDiscoveryPort,
+    GuidePolicySelection,
+)
 
 
 class ActivationValue(BaseModel):
@@ -184,3 +187,99 @@ class GuideActivationPort(Protocol[_Actor]):
         actor: _Actor,
         request_id: UUID,
     ) -> GuideActivationReceipt: ...
+
+
+GuideActivationRefusalCode = Literal["proposal_unavailable", "proposal_stale", "approval_blocked"]
+GuideActivationUnmetReason = Literal[
+    "project_not_activatable",
+    "post_policy_unavailable",
+    "upstream_approval_not_current",
+    "post_policy_not_approved",
+    "guide_not_draft",
+    "review_policy_unselected",
+    "revision_policy_unselected",
+    "source_snapshot_invalid",
+    "checker_policy_unsupported",
+    "checker_policy_mismatch",
+    "checker_registry_changed",
+    "checker_capability_missing",
+    "human_review_required_by_guide",
+    "activation_requirements_unmet",
+    "contribution_policy_unpublished",
+    "contribution_policy_invalid",
+    "activation_integrity_failed",
+]
+_UNMET_MESSAGES: dict[str, str] = {
+    "project_not_activatable": "The project is not draft or active.",
+    "post_policy_unavailable": "No derived post-submit checker policy is available for this guide.",
+    "upstream_approval_not_current": "The guide proposal approval is not the current approved chain tip.",
+    "post_policy_not_approved": "The post-submit checker policy is not approved.",
+    "guide_not_draft": "Only a draft guide can be activated.",
+    "review_policy_unselected": "The guide has no selected review policy.",
+    "revision_policy_unselected": "The guide has no selected revision policy.",
+    "source_snapshot_invalid": "The guide source snapshot failed its integrity check.",
+    "checker_policy_unsupported": "The approved checker policy is not a supported external checker policy.",
+    "checker_policy_mismatch": "The approved pre-submit checker bundle differs from its stored policy.",
+    "checker_registry_changed": "A selected checker registry entry changed after approval.",
+    "checker_capability_missing": "The approved compilation still lists missing checker capabilities.",
+    "human_review_required_by_guide": "The review policy disables human review but a requirement needs it.",
+    "activation_requirements_unmet": "The guide, its policies or their approvals do not meet activation requirements.",
+    "contribution_policy_unpublished": "The project has no current published contribution policy version.",
+    "contribution_policy_invalid": "The current published contribution policy version cannot bind a guide.",
+    "activation_integrity_failed": "Stored activation inputs failed an integrity check.",
+}
+
+
+class GuideActivationCondition(ActivationValue):
+    """One unmet precondition with the refusal code activation would raise for it."""
+
+    code: GuideActivationRefusalCode
+    reason: GuideActivationUnmetReason
+    message: str = Field(min_length=1, max_length=200)
+    missing_capabilities: tuple[MissingCheckerCapability, ...] = Field(default=(), max_length=200)
+
+    @classmethod
+    def of(
+        cls,
+        code: GuideActivationRefusalCode,
+        reason: GuideActivationUnmetReason,
+        missing_capabilities: tuple[MissingCheckerCapability, ...] = (),
+    ) -> "GuideActivationCondition":
+        """Build a condition with the fixed message for its reason."""
+        return cls(
+            code=code, reason=reason, message=_UNMET_MESSAGES[reason],
+            missing_capabilities=missing_capabilities,
+        )
+
+
+class GuideActivationReadiness(ActivationValue):
+    """Dry-run result over the current selections; not a promise that activation will succeed later.
+
+    ``unmet`` is in activation's check order, so its first entry carries the
+    refusal code activation would raise now. A check whose inputs are missing
+    is not evaluated.
+    """
+
+    project_id: UUID
+    guide_id: UUID
+    ready: bool
+    unmet: tuple[GuideActivationCondition, ...]
+
+    @model_validator(mode="after")
+    def ready_means_no_unmet(self):
+        """``ready`` is exactly the absence of unmet conditions."""
+        if self.ready == bool(self.unmet):
+            raise ValueError("activation readiness disagrees with its unmet conditions")
+        return self
+
+
+class GuideActivationReadinessPort(Protocol):
+    """Evaluate activation's own conditions in the caller transaction, without writes or authority."""
+
+    async def readiness(
+        self,
+        project_id: UUID,
+        guide_id: UUID,
+        *,
+        contribution: GuideContributionDiscoveryPort,
+    ) -> GuideActivationReadiness: ...

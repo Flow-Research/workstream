@@ -48,7 +48,8 @@ from app.modules.authorization.runtime import (
     ServiceAuthorizationContext,
 )
 from app.modules.authorization.catalogue import (
-    ActionId, CONTRIBUTOR_READ_ACTIONS, TASK_CONCEALED_READ_ACTIONS, HISTORY_READ_ACTIONS,
+    ActionId, CONTRIBUTOR_READ_ACTIONS, PROJECT_MANAGEMENT_READ_ACTIONS, TASK_CONCEALED_READ_ACTIONS,
+    HISTORY_READ_ACTIONS,
 )
 from app.schemas.auth import AuthVerificationResult
 
@@ -344,6 +345,7 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
     }
     if exc.decision.action_id in (
         concealed_project_reads | TASK_CONCEALED_READ_ACTIONS | HISTORY_READ_ACTIONS | CONTRIBUTOR_READ_ACTIONS
+        | PROJECT_MANAGEMENT_READ_ACTIONS
     ):
         return StructuredHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

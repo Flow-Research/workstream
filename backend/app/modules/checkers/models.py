@@ -564,3 +564,12 @@ class SelectedPreSubmitRun(Base):
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# A project's preparation list reads newest first by (queued_at, id).
+Index(
+    "ix_selected_pre_submit_runs_project_queued",
+    SelectedPreSubmitRun.project_id,
+    SelectedPreSubmitRun.queued_at.desc(),
+    SelectedPreSubmitRun.id.desc(),
+)

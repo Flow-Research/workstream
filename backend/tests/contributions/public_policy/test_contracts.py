@@ -38,11 +38,13 @@ def test_public_policy_contract():
         assert len(key) == 1 and key[0]["required"] and key[0]["schema"]["format"] == "uuid"
     for suffix in ("/current", "/{policy_id}"):
         assert schema["paths"][ROOT + suffix]["get"]["x-workstream-action-id"] == "contribution.policy.read"
+    listing = schema["paths"][ROOT]
+    assert set(listing) == {"get"} and listing["get"]["x-workstream-action-id"] == "contribution.policy.list"
     models = schema["components"]["schemas"]
     for name in ("PolicyCreateInput", "PolicyUpdateInput", "PolicyDecisionInput", "PolicyRuleInput", "PolicyDefinitionInput"):
         assert models[name]["additionalProperties"] is False
     assert set(schema["paths"]) == {ROOT + suffix for suffix in (
-        "/current", "/{policy_id}", *(r[1] for r in ROUTES),
+        "", "/current", "/{policy_id}", *(r[1] for r in ROUTES),
     )}
 
 

@@ -49,14 +49,22 @@ class ContributionAwardReadRepository:
         """Exact Decimal sums per instrument and unit, in a stable order."""
         if not project_ids:
             return ()
+        return await self._totals(
+            CompensationAward.contributor_id == str(contributor_id),
+            CompensationAward.project_id.in_([str(item) for item in project_ids]),
+        )
+
+    async def read_project_award_totals(self, project_id: UUID) -> tuple[ContributorAwardTotal, ...]:
+        """Every contributor's awards in one project, summed per instrument and unit."""
+        return await self._totals(CompensationAward.project_id == str(project_id))
+
+    async def _totals(self, *scope) -> tuple[ContributorAwardTotal, ...]:
+        """One grouped sum over the selected awards."""
         rows = (await self._session.execute(
             select(
                 CompensationAward.instrument_type, CompensationAward.unit_code,
                 func.sum(CompensationAward.quantity),
-            ).where(
-                CompensationAward.contributor_id == str(contributor_id),
-                CompensationAward.project_id.in_([str(item) for item in project_ids]),
-            ).group_by(CompensationAward.instrument_type, CompensationAward.unit_code).order_by(
+            ).where(*scope).group_by(CompensationAward.instrument_type, CompensationAward.unit_code).order_by(
                 CompensationAward.instrument_type, CompensationAward.unit_code,
             )
         )).all()

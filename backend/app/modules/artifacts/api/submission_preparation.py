@@ -171,7 +171,7 @@ class PreparationFindingCounts(BaseModel):
 
 
 class SubmissionBundlePreparationSummary(BaseModel):
-    """One own preparation: intake outcome, storage progress and any created Submission."""
+    """One preparation: intake outcome, storage progress and any created Submission."""
 
     model_config = _FROZEN
     preparation_id: UUID
@@ -202,13 +202,36 @@ class SubmissionBundlePreparationPage(BaseModel):
     next_cursor: str | None
 
 
+class ProjectSubmissionBundlePreparation(SubmissionBundlePreparationSummary):
+    """One preparation in a project with its contributor; finding counts only, no findings or files."""
+
+    actor_profile_id: UUID
+
+
+class ProjectSubmissionBundlePreparationPage(BaseModel):
+    """One page of a project's preparations, newest first."""
+
+    model_config = _FROZEN
+    items: tuple[ProjectSubmissionBundlePreparation, ...]
+    next_cursor: str | None
+
+
 class SubmissionBundlePreparationReadPort(Protocol):
-    """Read the caller's own preparations for one task, newest first."""
+    """Read preparations newest first; the caller authorizes."""
 
     async def read(
         self, *, actor_profile_id: UUID, task_id: UUID, preparation_id: UUID | None,
         limit: int, before: tuple[datetime, UUID] | None,
-    ) -> tuple[tuple[SubmissionBundlePreparationDetail, ...], bool]: ...
+    ) -> tuple[tuple[SubmissionBundlePreparationDetail, ...], bool]:
+        """The caller's own preparations for one task, with findings."""
+        ...
+
+    async def read_project(
+        self, *, project_id: UUID, outcome: PreparationOutcome | None,
+        limit: int, before: tuple[datetime, UUID] | None,
+    ) -> tuple[tuple[ProjectSubmissionBundlePreparation, ...], bool]:
+        """Every contributor's preparations in one project, without findings."""
+        ...
 
 
 class SubmissionBundlePreparationCommand(Protocol):

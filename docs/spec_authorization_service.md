@@ -141,6 +141,31 @@ response. Each decision digest binds the caller, resource, normalized filters,
 limit, order and a hash of any presented cursor; signed cursors bind the same
 query.
 
+PILOT-READ-3 activates ten project-wide reads through one closed evaluator.
+`project.guide.list`, `project.guide.read`,
+`project.guide.activation_readiness.read` and `project.guide.document.read`
+map to `project.guide.manage`; `project.submission.list`,
+`project.assignment.list`, `project.summary.read`,
+`project.task.import_batch.list` and
+`project.submission_bundle_preparation.list` map to `project.task.manage`; all
+nine accept only a Project Manager grant covering the project (system or
+exact). `contribution.policy.list` maps to `compensation.policy.manage` and
+accepts only a covering Finance Authority grant. The evaluator locks actor,
+matched grant and Project in that order. A guide or document read names the
+selected record inside the project; its owner conceals a record of another
+project after the decision. For `project.summary.read` the same evaluator,
+after the Project Manager grant and before Project, also resolves and locks
+any exact-project Finance Authority `compensation.award.read` grant; award
+totals are disclosed only when one exists (the PILOT-10 exact-project Finance
+rule), and the recorded decision's resource digest then binds that grant:
+the digest is recomputable from the request and the candidate grant, though
+the grant id itself is not stored. That grant narrows disclosure and
+authorizes nothing; the Project Manager grant stays the matched grant. Denials use the
+concealed not-found response. Decision digests and signed cursors bind the
+caller, project, resource, normalized filters, limit and order as for
+PILOT-READ-2; single-record and summary reads accept no cursor. These actions
+are not listed in the actor authorization context.
+
 ### Project Contributor Grants
 
 | Grant | Exact-project capability |

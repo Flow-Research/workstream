@@ -51,6 +51,16 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
     "actor_work_summary",
     "task_submission_bundle_preparation_collection",
     "submission_bundle_preparation_read",
+    "project_guide_collection",
+    "project_guide_read",
+    "project_guide_activation_readiness",
+    "project_guide_document_read",
+    "project_submission_collection",
+    "project_assignment_collection",
+    "project_work_summary",
+    "project_task_import_batch_collection",
+    "project_submission_bundle_preparation_collection",
+    "contribution_policy_collection",
 )
 
 
@@ -122,6 +132,16 @@ AuthorizationDecisionResourceType = Literal[
     "actor_work_summary",
     "task_submission_bundle_preparation_collection",
     "submission_bundle_preparation_read",
+    "project_guide_collection",
+    "project_guide_read",
+    "project_guide_activation_readiness",
+    "project_guide_document_read",
+    "project_submission_collection",
+    "project_assignment_collection",
+    "project_work_summary",
+    "project_task_import_batch_collection",
+    "project_submission_bundle_preparation_collection",
+    "contribution_policy_collection",
 ]
 
 

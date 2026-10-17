@@ -144,3 +144,9 @@ class CheckerHistoryRepository:
                 row["blocking"], row["warning"], row["coverage_incomplete"],
             )
         return counts
+
+    async def count_infrastructure_failures(self, project_id) -> int:
+        """Post-submit checker runs in the project that ended ``infrastructure_failed``."""
+        return await self._session.scalar(select(func.count()).select_from(CheckerRun).where(
+            CheckerRun.project_id == str(project_id), CheckerRun.status == "infrastructure_failed",
+        ))

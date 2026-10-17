@@ -144,6 +144,26 @@ def activation_service(session, actor, command, grant, *, authority=True, close_
     )
 
 
+async def readiness_read(factory, project_id, guide_id):
+    """One activation-readiness read through the composed owner, in its own transaction, writing nothing."""
+    from app.adapters.contributions import contribution_policy_validation_port, published_contribution_policy_port
+    from app.adapters.projects import project_guide_activation_readiness_port
+    from app.adapters.projects.contribution_validation import (
+        GuideContributionPolicyDiscovery, GuideContributionPolicyValidation,
+    )
+
+    async with factory() as session, session.begin():
+        port = project_guide_activation_readiness_port(
+            session, contribution=GuideContributionPolicyValidation(contribution_policy_validation_port(session)),
+        )
+        result = await port.readiness(
+            project_id, guide_id,
+            contribution=GuideContributionPolicyDiscovery(published_contribution_policy_port(session)),
+        )
+        assert not (session.new or session.dirty or session.deleted)
+    return result
+
+
 @asynccontextmanager
 async def activation_case(
     url, *, human_review_required=True, compensated=False, contribution_awards=(),

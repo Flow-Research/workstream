@@ -59,6 +59,7 @@ from app.modules.artifacts.authorization import (
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.api import ActorIdentityFacts
 from app.modules.tasks.api.guide_documents import TaskGuideDocumentsPort
+from app.modules.projects.api.guide_reads import ProjectGuideDocumentContentPort
 
 
 async def get_submission_bundle_preparation_actor(
@@ -165,11 +166,8 @@ def create_artifact_scratch_manager(settings: Settings) -> ArtifactScratchManage
     )
 
 
-def task_guide_documents_port(session: AsyncSession, settings: Settings) -> TaskGuideDocumentsPort:
-    """Compose exact contributor originals without opening a provider for metadata."""
-    from app.adapters.projects import project_guide_document_scope_port
-    from app.modules.artifacts.guide_documents import SqlAlchemyGuideDocumentManifest
-    from app.modules.artifacts.task_guide_documents import ArtifactTaskGuideDocuments
+def _guide_original_runtime(settings: Settings):
+    """Open the provider, namespace and scratch only when a verified original read begins."""
     from app.modules.artifacts.service import artifact_storage_namespace_spec
 
     @asynccontextmanager
@@ -189,9 +187,31 @@ def task_guide_documents_port(session: AsyncSession, settings: Settings) -> Task
                 manager.close()
             bootstrap.close()
 
+    return runtime
+
+
+def task_guide_documents_port(session: AsyncSession, settings: Settings) -> TaskGuideDocumentsPort:
+    """Compose exact contributor originals without opening a provider for metadata."""
+    from app.adapters.projects import project_guide_document_scope_port
+    from app.modules.artifacts.guide_documents import SqlAlchemyGuideDocumentManifest
+    from app.modules.artifacts.task_guide_documents import ArtifactTaskGuideDocuments
+
     scope = project_guide_document_scope_port(session)
     return ArtifactTaskGuideDocuments(
-        session, scope=scope, manifest=SqlAlchemyGuideDocumentManifest(session, scope), runtime=runtime,
+        session, scope=scope, manifest=SqlAlchemyGuideDocumentManifest(session, scope),
+        runtime=_guide_original_runtime(settings),
+    )
+
+
+def project_guide_documents_port(session: AsyncSession, settings: Settings) -> ProjectGuideDocumentContentPort:
+    """Compose a Project Manager's verified original read; the provider opens only on ``open``."""
+    from app.adapters.projects import project_guide_document_scope_port
+    from app.modules.artifacts.guide_documents import SqlAlchemyGuideDocumentManifest
+    from app.modules.artifacts.task_guide_documents import ArtifactProjectGuideDocuments
+
+    return ArtifactProjectGuideDocuments(
+        session, manifest=SqlAlchemyGuideDocumentManifest(session, project_guide_document_scope_port(session)),
+        runtime=_guide_original_runtime(settings),
     )
 
 

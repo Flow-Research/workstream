@@ -8,6 +8,9 @@ from app.api.routes.post_policy import router as post_policy_router
 from app.api.routes.contribution_policies import router as contribution_policy_router
 from app.api.routes.contributions import router as contributions_router
 from app.api.routes.contributor_reads import router as contributor_reads_router
+from app.api.routes.project_guide_reads import router as project_guide_reads_router
+from app.api.routes.project_preparation_reads import router as project_preparation_reads_router
+from app.api.routes.project_work_reads import router as project_work_reads_router
 
 from fastapi import APIRouter
 
@@ -34,6 +37,9 @@ api_router.include_router(project_create_router, prefix="/api/v1")
 api_router.include_router(guide_mutation_router, prefix="/api/v1")
 api_router.include_router(policy_mutation_router, prefix="/api/v1")
 api_router.include_router(projects_router, prefix="/api/v1")
+api_router.include_router(project_guide_reads_router, prefix="/api/v1")
+api_router.include_router(project_work_reads_router, prefix="/api/v1")
+api_router.include_router(project_preparation_reads_router, prefix="/api/v1")
 api_router.include_router(tasks_router, prefix="/api/v1")
 api_router.include_router(checkers_router, prefix="/api/v1")
 api_router.include_router(artifacts_router, prefix="/api/v1")

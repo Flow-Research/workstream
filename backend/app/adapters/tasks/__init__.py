@@ -588,3 +588,15 @@ def contribution_task_evidence_port(session):
     from app.adapters.tasks.contribution_reads import ContributionTaskSourceReadAdapter
 
     return ContributionTaskSourceReadAdapter(ContributionTaskEvidenceRepository(session))
+
+
+def project_work_reader(session: AsyncSession):
+    """Compose TASK's project-wide projections with CON terms and CHECKERS counts."""
+    from app.adapters.checkers import checker_history_repository
+    from app.adapters.contributions import locked_compensation_terms_port
+    from app.modules.tasks.project_reads import ProjectWorkReader
+
+    return ProjectWorkReader(
+        session, compensation_terms=locked_compensation_terms_port(session),
+        finding_counts=checker_history_repository(session),
+    )

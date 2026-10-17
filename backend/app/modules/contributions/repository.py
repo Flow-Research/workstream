@@ -1,9 +1,10 @@
 """Flush-only persistence and bounded reads for ContributionPolicy behavior."""
 
 import hashlib
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, select, text
+from sqlalchemy import and_, delete, func, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
@@ -306,6 +307,27 @@ class ContributionPolicyRepository:
                 )
             )
         return await self.get_version(UUID(policy.project_id), policy.id, selected, graph=True)
+
+    async def read_policy_versions(
+        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+    ) -> tuple[list[tuple[ContributionPolicy, ContributionPolicyVersion]], bool]:
+        """One page of the project's versions by ``(created_at, id)`` with their graphs, no locks."""
+        version = ContributionPolicyVersion
+        query = (
+            select(version, ContributionPolicy)
+            .join(ContributionPolicy, and_(
+                ContributionPolicy.id == version.contribution_policy_id,
+                ContributionPolicy.project_id == version.project_id,
+            ))
+            .where(version.project_id == str(project_id))
+            .options(selectinload(version.rules).selectinload(ContributionRule.award_definitions))
+        )
+        if after is not None:
+            query = query.where(tuple_(version.created_at, version.id) > after)
+        rows = (await self._session.execute(
+            query.order_by(version.created_at, version.id).limit(limit + 1)
+        )).all()
+        return [(policy, row) for row, policy in rows[:limit]], len(rows) > limit
 
     async def lock_unit(
         self, project_id: UUID, instrument_type: str, unit_code: str

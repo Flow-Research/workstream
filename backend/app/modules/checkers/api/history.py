@@ -98,3 +98,7 @@ class CheckerHistoryReadPort(Protocol):
     def evidence_stamps(self) -> Subquery:
         """``(submission_id, evidence_at)``: when the current run completed, else when it was queued."""
         ...
+
+    async def count_infrastructure_failures(self, project_id: UUID) -> int:
+        """Count the project's post-submit checker runs whose status is ``infrastructure_failed``."""
+        ...

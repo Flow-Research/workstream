@@ -28,8 +28,17 @@ contribution-evidence exports:
 | `workstream project guide correct PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE --idempotency-key UUID` | Exact compilation `POST .../corrections` |
 | `workstream project guide dispatch-correction PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE` | Exact saved correction `POST .../corrections/OPERATION_ID/dispatch` |
 | `workstream project guide activate PROJECT_ID GUIDE_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/activate` |
+| `workstream project guide list PROJECT_ID [--status draft\|active\|superseded] [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/guides` |
+| `workstream project guide show PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID` |
+| `workstream project guide readiness PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/activation-readiness` |
+| `workstream project guide document PROJECT_ID GUIDE_ID DOCUMENT_ID --download DIR` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
 | `workstream project tasks PROJECT_ID [--status S] [--assignee UUID] [--import-batch UUID] [--updated-since TIME]` | `GET /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task PROJECT_ID TASK_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/TASK_ID` |
+| `workstream project submissions PROJECT_ID [--task UUID] [--status S] [--submitter UUID] [--updated-since TIME] [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/submissions` |
+| `workstream project assignments PROJECT_ID [--state active\|closed] [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/assignments` |
+| `workstream project summary PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/summary` |
+| `workstream project import-batches PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/task-import-batches` |
+| `workstream project preparations PROJECT_ID [--outcome pending\|passed\|failed\|infrastructure_failed] [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/submission-bundle-preparations` |
 | `workstream project task create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/tasks` |
 | `workstream project task screen PROJECT_ID TASK_ID --idempotency-key UUID [--reason TEXT]` | `POST /api/v1/tasks/TASK_ID/screen` |
 | `workstream project task release PROJECT_ID TASK_ID --idempotency-key UUID --reason TEXT` | `POST /api/v1/tasks/TASK_ID/release` |
@@ -47,6 +56,7 @@ contribution-evidence exports:
 | `workstream project role-grant show PROJECT_ID GRANT_ID` | `GET /api/v1/projects/PROJECT_ID/role-grants/GRANT_ID` |
 | `workstream project contribution-policy current PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/contribution-policies/current` |
 | `workstream project contribution-policy show PROJECT_ID POLICY_ID [--version UUID]` | `GET /api/v1/projects/PROJECT_ID/contribution-policies/POLICY_ID` with optional `version_id` |
+| `workstream project contribution-policy list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/projects/PROJECT_ID/contribution-policies` |
 | `workstream project contribution-policy create PROJECT_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/contribution-policies/drafts` |
 | `workstream project contribution-policy update PROJECT_ID POLICY_ID VERSION_ID --input FILE --idempotency-key UUID` | `PUT /api/v1/projects/PROJECT_ID/contribution-policies/POLICY_ID/versions/VERSION_ID` |
 | `workstream project contribution-policy publish PROJECT_ID POLICY_ID VERSION_ID --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/contribution-policies/POLICY_ID/versions/VERSION_ID/publication` |
@@ -293,7 +303,13 @@ They do not cache permission, authorize a later write, or establish rollback.
 workstream project contribution-policy current PROJECT_ID -o json
 workstream project contribution-policy show PROJECT_ID POLICY_ID -o json
 workstream project contribution-policy show PROJECT_ID POLICY_ID --version VERSION_ID -o json
+workstream project contribution-policy list PROJECT_ID --limit 20 -o json
 ```
+
+`list` returns every stored version of the project's policies, oldest first,
+with its `draft`, `published` or `retired` version status and its created,
+published and retired instants; continue with `--cursor` and the same
+`--limit`.
 
 These are Finance Authority reads, not Project Manager permissions. Workstream
 requires current covering Finance authority and active admission for each call;
@@ -1107,6 +1123,46 @@ same revision fields as `task context`. Lists page with `--limit` and an opaque
 `--cursor` bound to the same filters; `--updated-since` is inclusive. Award
 totals are immutable earned terms, not payment status. Text output summarizes;
 use `--output json` for complete records, including preparation findings.
+
+## See a whole project as a Project Manager
+
+```sh
+workstream project guide list PROJECT_ID --status active
+workstream project guide show PROJECT_ID GUIDE_ID --output json
+workstream project guide readiness PROJECT_ID GUIDE_ID
+workstream project guide document PROJECT_ID GUIDE_ID DOCUMENT_ID --download ./originals
+workstream project submissions PROJECT_ID --status review_pending --updated-since 2026-10-01T00:00:00Z
+workstream project assignments PROJECT_ID --state active
+workstream project summary PROJECT_ID --output json
+workstream project import-batches PROJECT_ID
+workstream project preparations PROJECT_ID --outcome failed
+```
+
+These reads require a current Project Manager grant covering the project; any
+other caller, project, guide or document is reported as not found. `guide list`
+shows each guide version with its stored `draft`, `active` or `superseded`
+status. `guide show` returns the declared documents with ingest state and
+SHA-256, the selected review and revision policy values and the latest setup
+run and compilation IDs. `guide readiness` is a dry run of activation's own
+conditions: it reports `ready` or the unmet conditions it evaluates, each with
+the same refusal code activation would return (a check whose inputs are
+missing is not evaluated), and it activates, consumes and reserves nothing.
+`guide document` downloads one uploaded original into an existing directory,
+verifies it against the declared SHA-256 and never overwrites a file; a
+declared document that is not uploaded fails with `guide_document_not_uploaded`.
+
+`submissions` and `assignments` list every attempt and claim in the project
+with the submitter or contributor and the same fields as `me submissions` and
+`me assignments`. `summary` counts tasks by status, claims by state and attempts
+by outcome, with the acceptance rate (accepted over decided attempts) and
+post-submission checker infrastructure failures; award totals appear only when
+you also hold an exact-project Finance Authority grant and are otherwise null.
+`import-batches` lists native task import batches with state and member counts.
+`preparations` lists every contributor's ZIP preparations, newest first, with
+finding counts only; `--outcome failed` shows intake checks that blocked a ZIP.
+Lists page with `--limit` and an opaque `--cursor` bound to the same filters;
+`--updated-since` is inclusive. Text output summarizes; use `--output json` for
+complete records.
 
 ## Discover work as a contributor
 

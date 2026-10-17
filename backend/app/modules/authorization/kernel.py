@@ -583,9 +583,7 @@ class AuthorizationService:
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         context = self._context
         revalidated = False
-        matched_grant_id = None
-        matched_project_id = None
-        matched_kind = None
+        matched_grant_id = matched_project_id = matched_kind = None
         if isinstance(context, ServiceAuthorizationContext):
             denial, context, revalidated = await self._service_denial(
                 action_id,
@@ -605,7 +603,7 @@ class AuthorizationService:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
         elif action is not None and action.action_id in READ_ACTIONS:
             (denial, context, matched_kind, matched_grant_id, matched_project_id,
-             revalidated) = await read_denial(
+             revalidated, resource_context) = await read_denial(
                 action, resource_context, context, self._admin,
                 self._locked_human_context, self._lifecycle_denial, self._revalidate_actor_self,
             )

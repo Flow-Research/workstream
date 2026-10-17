@@ -33,8 +33,8 @@ async def _clone(connection, table, template, varying, constant=None):
     )
 
 
-async def _seed(database_url, task, submission):
-    """Clone the real claimed task, assignment, attempt and preparation under bulk restore."""
+async def _seed(database_url, task, submission, *, preparations=PREPARATIONS):
+    """Clone the real claimed task, assignment, attempt and ``preparations`` runs under bulk restore."""
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         start = await connection.fetchval("SELECT updated_at FROM public.workstream_tasks WHERE id=$1", task)
@@ -64,11 +64,11 @@ async def _seed(database_url, task, submission):
                     "submission_bundle_admission_id", "artifact_binding_id", "artifact_content_id",
                     "supersedes_submission_id",
                 ), "NULL")})
-            runs = [new_record_id() for _ in range(PREPARATIONS)]
+            runs = [new_record_id() for _ in range(preparations)]
             await _clone(connection, "selected_pre_submit_runs", run, {
                 "id": ("uuid", runs), "idempotency_key": ("uuid", [new_record_id() for _ in runs]),
                 "request_digest": ("text", ["sha256:" + secrets.token_hex(32) for _ in runs]),
-                "queued_at": ("timestamptz", [start + timedelta(seconds=index + 1) for index in range(PREPARATIONS)]),
+                "queued_at": ("timestamptz", [start + timedelta(seconds=index + 1) for index in range(preparations)]),
             }, {"status": "'queued'", "lease_generation": "0", **dict.fromkeys((
                 "terminal_json", "terminal_digest", "eligible", "lease_id", "lease_expires_at", "started_at",
                 "completed_at", "execute_evidence_id", "finalize_evidence_id",

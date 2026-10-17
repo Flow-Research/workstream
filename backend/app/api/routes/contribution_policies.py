@@ -3,9 +3,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.deps.authorization import enforce_human_authorization_read
+from app.api.deps.contribution_policy_list import ContributionPolicyListRead, get_contribution_policy_list
 from app.api.deps.contribution_policies import (
     IDEMPOTENCY_PARAMETER, PolicyRequest, commit_policy_response, get_policy_request,
     require_policy_key,
@@ -17,6 +18,7 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest, ContributionPolicyReadRequest,
     ContributionPolicyRetireRequest, ContributionPolicyUpdateDraftRequest, ContributionPolicyView,
 )
+from app.modules.contributions.api.policies import ContributionPolicyVersionPage
 from app.modules.contributions.api.policy_http import PolicyCreateInput, PolicyDecisionInput, PolicyUpdateInput
 
 router = APIRouter(
@@ -26,6 +28,17 @@ router = APIRouter(
 )
 RequestOwner = Annotated[PolicyRequest, Depends(get_policy_request)]
 ReplayKey = Annotated[UUID, Depends(require_policy_key)]
+
+
+@router.get("", response_model=ContributionPolicyVersionPage,
+            openapi_extra={"x-workstream-action-id": "contribution.policy.list"})
+async def list_policy_versions(
+    project_id: UUID, reads: Annotated[ContributionPolicyListRead, Depends(get_contribution_policy_list)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(min_length=1, max_length=512)] = None,
+) -> ContributionPolicyVersionPage:
+    """Every stored version of the project's policies, oldest first, with its draft, published or retired status."""
+    return await reads.list(project_id=project_id, limit=limit, cursor=cursor)
 
 
 @router.get("/current", response_model=ContributionPolicyProjectSelection,

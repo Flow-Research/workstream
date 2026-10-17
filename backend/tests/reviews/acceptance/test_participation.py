@@ -145,3 +145,31 @@ async def test_foreign_stored_completion_cannot_use_another_invocation(
                         )
             async with h.factory() as session:
                 assert await outcome_snapshot(session) == before
+
+
+async def test_project_award_totals_are_the_exact_sums_of_the_projects_stored_awards(
+    tmp_path, isolated_database_env
+):
+    """PILOT-READ-3 C6: the summary's project award totals over real accepted-work awards."""
+    from decimal import Decimal
+
+    from app.adapters.compensation import project_award_totals_port
+    from app.core.identifiers import new_record_id
+
+    # The fixture's published policy terms (PolicyWorld.request): one accepted
+    # submission earns each configured award exactly once.
+    configured = {"money": ("USD", "2.125000000000000001"), "project_points": ("PTS", "7")}
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, contribution_awards=tuple(configured)
+    ) as h:
+        async with h.factory() as session, session.begin():
+            await apply_outcome(session, h, 2)
+        async with h.factory() as session:
+            port = project_award_totals_port(session)
+            totals = await port.read_project_award_totals(h.request.project_id)
+            assert [(t.instrument_type, t.unit_code, Decimal(t.quantity)) for t in totals] == [
+                (instrument, unit, Decimal(quantity))
+                for instrument, (unit, quantity) in sorted(configured.items())
+            ]
+            # Another project's totals never include these awards.
+            assert await port.read_project_award_totals(new_record_id()) == ()

@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.authorization import get_authorization_actor_identity, get_authorization_service
+from app.api.deps.snapshot_reads import run_snapshot_read, start_read_snapshot
 from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
 from app.modules.artifacts.api.submission_preparation import (
@@ -112,6 +113,23 @@ def _missing() -> StructuredHTTPException:
     )
 
 
+def _cursor_invalid() -> StructuredHTTPException:
+    """A malformed, forged or substituted continuation."""
+    return StructuredHTTPException(
+        status_code=422, detail="Invalid contributor read cursor",
+        error_code="contributor_read_cursor_invalid", error_message="Invalid contributor read cursor",
+    )
+
+
+def _unavailable() -> StructuredHTTPException:
+    """The retryable failure for any infrastructure or integrity fault."""
+    return StructuredHTTPException(
+        status_code=503, detail="Contributor read unavailable",
+        error_code="contributor_read_unavailable", error_message="Contributor read unavailable",
+        retryable=True,
+    )
+
+
 def _instant(value: datetime | None) -> str | None:
     """Canonical cursor-bound text for an optional instant."""
     return None if value is None else value.astimezone(UTC).isoformat(timespec="microseconds")
@@ -135,35 +153,14 @@ class ContributorReadOperation:
         self._work, self._preparations = work, preparations
         self._projects, self._awards = projects, awards
 
-    async def _snapshot(self) -> None:
-        """Start the one REPEATABLE READ snapshot that every statement of this response reads."""
-        if self._session.in_transaction():
-            await self._session.commit()
-        await self._session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-
     async def _run(self, request: ContributorReadRequest, read, *, in_snapshot: bool = False):
         """One bounded read: AUTH denials propagate to the decision owner for restaging."""
-        try:
-            if not in_snapshot:
-                await self._snapshot()
-            grant = await self._authority.authorize(request)
-            response = await read(grant)
-            response.model_dump(mode="json")
-            await self._session.commit()
-            return response
-        except ContributorReadCursorInvalid as exc:
-            await self._session.rollback()
-            raise StructuredHTTPException(
-                status_code=422, detail="Invalid contributor read cursor",
-                error_code="contributor_read_cursor_invalid", error_message="Invalid contributor read cursor",
-            ) from exc
-        except (ContributorReadUnavailable, SelectedPreSubmitUnavailable, SQLAlchemyError, ValueError) as exc:
-            await self._session.rollback()
-            raise StructuredHTTPException(
-                status_code=503, detail="Contributor read unavailable",
-                error_code="contributor_read_unavailable", error_message="Contributor read unavailable",
-                retryable=True,
-            ) from exc
+        return await run_snapshot_read(
+            self._session, lambda: self._authority.authorize(request), read,
+            cursor_invalid=ContributorReadCursorInvalid, invalid_cursor=_cursor_invalid,
+            faults=(ContributorReadUnavailable, SelectedPreSubmitUnavailable, SQLAlchemyError, ValueError),
+            unavailable=_unavailable, in_snapshot=in_snapshot,
+        )
 
     def _request(self, action, query, *, cursor=None, resource_id=None, project_id=None):
         """Bind the action, actor, scope and canonical filters into one AUTH request."""
@@ -245,15 +242,11 @@ class ContributorReadOperation:
     async def _task_project(self, task_id: UUID) -> UUID:
         """Resolve the task inside the response snapshot that the authorized read then uses."""
         try:
-            await self._snapshot()
+            await start_read_snapshot(self._session)
             project_id = await self._work.resolve_contributor_task(task_id, self._actor_id)
         except SQLAlchemyError as exc:
             await self._session.rollback()
-            raise StructuredHTTPException(
-                status_code=503, detail="Contributor read unavailable",
-                error_code="contributor_read_unavailable", error_message="Contributor read unavailable",
-                retryable=True,
-            ) from exc
+            raise _unavailable() from exc
         if project_id is None:
             await self._session.rollback()
             raise _missing()

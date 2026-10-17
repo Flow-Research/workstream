@@ -91,6 +91,7 @@ or the exact project; own means record-level ownership still applies.
 | Task claim/start | no | explicit recovery only | no | no | no | exact project under guards | no |
 | Submission create/read | no | operational projection only | management projection only | no | read covered | own assignment | read-for-review only |
 | Own projects, claims, attempts, preparations and totals | own grants only | own grants only | own grants only | own grants only | own grants only | own records, exact project under current grant | own grants only |
+| Project guides, submissions, assignments, summary, import batches and preparations | no | no | covered | award totals only with an exact-project grant alongside a Project Manager grant | no | no | no |
 | Human review decision | no | no | no without reviewer grant | no | no | no | exact project under review guards |
 | Adjudication action | no | no | no | no | no | no | no |
 | Compensation award read and delivery reconciliation | no | no | no | covered | read covered | no | no |
@@ -124,6 +125,17 @@ return only the caller's own records in projects where the caller holds a
 current Submitter grant. A project filter or task without that grant, and
 another contributor's preparation, receive the concealed not-found response.
 Administrative grants add no contributor records to these reads.
+
+The Project Manager reads under `/api/v1/projects/{project_id}` (`guides`,
+`guides/{guide_id}`, its `activation-readiness` and
+`documents/{document_id}/content`, `submissions`, `assignments`, `summary`,
+`task-import-batches` and `submission-bundle-preparations`) require a current
+Project Manager grant covering the project, system or exact. The summary
+includes award totals only when the caller also holds a current exact-project
+Finance Authority grant; a system Finance grant does not add them.
+`GET /api/v1/projects/{project_id}/contribution-policies` lists every policy
+version under a covering Finance Authority grant. Any other caller, including
+a contributor of the project, receives the concealed not-found response.
 
 ## Separation Rules
 

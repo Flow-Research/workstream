@@ -1,5 +1,6 @@
 """ContributionPolicy read and draft mutation orchestration."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import cast
 from uuid import UUID
@@ -9,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.compensation.api import (
-    CompensationInstrumentType,
     PolicyAdapterBindingPort,
     PolicyAdapterBindingUnavailable,
 )
@@ -31,11 +31,10 @@ from app.modules.contributions.api import (
     ContributionPolicyView,
     DenyContributionPolicyAuthorization,
     PolicyAction,
-    PolicyDefinitionView,
     PolicyEventType,
     PolicyRuleInput,
-    PolicyRuleView,
 )
+from app.modules.contributions.api.policies import ContributionPolicyVersionListItem
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
     ContributionPolicy,
@@ -48,6 +47,7 @@ from app.modules.contributions.policy_validation import (
     validate_policy_graph,
     validate_policy_name,
 )
+from app.modules.contributions.policy_views import policy_version_list_item, policy_view
 from app.modules.contributions.policy_publication import ContributionPolicyPublicationService
 from app.modules.contributions.policy_mutation_support import (
     begin_and_recover_policy_mutation,
@@ -120,7 +120,18 @@ class ContributionPolicyService:
         )
         if version is None:
             raise ContributionPolicyConflict("contribution_policy_not_found")
-        return self._view(policy, version)
+        return policy_view(policy, version)
+
+    async def read_versions(
+        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+    ) -> tuple[tuple[ContributionPolicyVersionListItem, ...], bool]:
+        """Every stored version of the project's policies, oldest first.
+
+        The caller has already authorized ``contribution.policy.list`` for the
+        project in this transaction; this read takes no locks and writes nothing.
+        """
+        rows, more = await self._repository.read_policy_versions(project_id, after=after, limit=limit)
+        return tuple(policy_version_list_item(policy, version) for policy, version in rows), more
 
     async def read_current(self, request: ContributionPolicyProjectReadRequest) -> ContributionPolicyProjectSelection:
         """Authorize one current aggregate, then refresh its exact public selectors."""
@@ -454,40 +465,4 @@ class ContributionPolicyService:
             from_version_status=event.from_version_status,
             to_version_status=event.to_version_status,
             occurred_at=event.occurred_at,
-        )
-
-    @staticmethod
-    def _view(
-        policy: ContributionPolicy, version: ContributionPolicyVersion
-    ) -> ContributionPolicyView:
-        """Project an ORM graph into immutable public policy facts."""
-        rules = tuple(
-            PolicyRuleView(
-                rule_id=rule.id,
-                contribution_type=cast(object, rule.contribution_type),  # type: ignore[arg-type]
-                compensation_mode=cast(object, rule.compensation_mode),  # type: ignore[arg-type]
-                definitions=tuple(
-                    PolicyDefinitionView(
-                        definition_id=item.id,
-                        instrument_type=CompensationInstrumentType(item.instrument_type),
-                        unit_code=item.unit_code,
-                        quantity=format(item.quantity, "f"),
-                        adapter_binding_id=item.adapter_binding_id,
-                    )
-                    for item in sorted(
-                        rule.award_definitions, key=lambda value: value.instrument_type
-                    )
-                ),
-            )
-            for rule in sorted(version.rules, key=lambda value: value.contribution_type)
-        )
-        return ContributionPolicyView(
-            project_id=UUID(policy.project_id),
-            contribution_policy_id=policy.id,
-            name=policy.name,
-            policy_status=policy.status,
-            contribution_policy_version_id=version.id,
-            version_number=version.version_number,
-            version_status=version.status,
-            rules=rules,
         )
