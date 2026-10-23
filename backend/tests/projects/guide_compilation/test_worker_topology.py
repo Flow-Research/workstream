@@ -492,7 +492,6 @@ def test_prefork_hard_timeout_acknowledges_without_reinvocation(
     from kombu.message import Message
 
     from app.workers import project_setup
-    assert project_setup.celery_app.conf.task_always_eager is False
     from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -503,6 +502,7 @@ def test_prefork_hard_timeout_acknowledges_without_reinvocation(
         seed_database,
     )
 
+    assert project_setup.celery_app.conf.task_always_eager is False
     marker = tmp_path / "provider-invocations.txt"
 
     async def reserve_attempt():

@@ -136,7 +136,10 @@ def test_stale_coordinator_error_is_rejected_without_transport_retry(worker, mon
         async def run(self, delivery):
             raise ProjectGuideCompilationDeliveryError()
 
-    monkeypatch.setattr(worker, "get_database_url", lambda: "postgresql+asyncpg://localhost/unit_test")
+    monkeypatch.setattr(
+        worker, "get_database_url", lambda: "postgresql+asyncpg://localhost/unit_test"
+    )
+
     async def coordinator(_sessions):
         return Coordinator()
 
