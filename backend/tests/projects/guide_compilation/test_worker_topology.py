@@ -18,6 +18,7 @@ from celery.exceptions import WorkerShutdown
 
 from app.core.config import get_settings
 from app.workers import project_setup_topology as topology
+from app.workers.task_settings import sync_task_settings
 
 
 _REDIS_PROBE_TASK = "tests.project_guide_delivery_probe"
@@ -332,6 +333,9 @@ def restore_state(monkeypatch):
     monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME", "openai_agents_sdk")
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "redis://localhost:6379/0")
     get_settings.cache_clear()
+    from app.workers import project_setup
+
+    sync_task_settings(project_setup.run_project_guide_compilation)
     monkeypatch.setattr(topology, "_validated_parent", None)
     try:
         yield
@@ -488,6 +492,7 @@ def test_prefork_hard_timeout_acknowledges_without_reinvocation(
     from kombu.message import Message
 
     from app.workers import project_setup
+    assert project_setup.celery_app.conf.task_always_eager is False
     from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine

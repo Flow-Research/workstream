@@ -7,19 +7,23 @@ import pytest
 
 from app.core.config import get_settings
 from app.interfaces.external_services import UnknownExternalServiceProviderError
+from app.workers.task_settings import sync_task_settings
 from .helpers import manager_runtime_configuration, runtime_configuration
 
 
 @pytest.fixture
 def worker(monkeypatch):
-    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
-    get_settings.cache_clear()
-    from app.workers import project_setup
+    with monkeypatch.context() as eager_settings:
+        eager_settings.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+        get_settings.cache_clear()
+        from app.workers import project_setup
 
-    monkeypatch.setattr(project_setup, "run_async_task", lambda factory: asyncio.run(factory()))
-    monkeypatch.setattr(project_setup, "require_project_setup_worker", lambda _task: None)
-    yield project_setup
+        sync_task_settings(project_setup.run_project_guide_compilation)
+        monkeypatch.setattr(project_setup, "run_async_task", lambda factory: asyncio.run(factory()))
+        monkeypatch.setattr(project_setup, "require_project_setup_worker", lambda _task: None)
+        yield project_setup
     get_settings.cache_clear()
+    sync_task_settings(project_setup.run_project_guide_compilation)
 
 
 @pytest.mark.parametrize(
