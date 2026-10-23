@@ -1,0 +1,193 @@
+[
+  {
+    "case": "overlap",
+    "wall_seconds": 3.473,
+    "report": {
+      "outcome": "completed",
+      "failure": null,
+      "cleanup_confirmed": true,
+      "upload_ms": 1947,
+      "preparation_ms": 625,
+      "post_upload_wait_ms": 0,
+      "execution_ms": 316,
+      "cleanup_ms": 81,
+      "total_ms": 2344,
+      "preparation_attempts": 1
+    },
+    "checker": {
+      "findings": [],
+      "infrastructure_failure_code": null,
+      "outcome": "completed",
+      "phase": "pre_submit",
+      "registry_entry_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_entry_id": "00000000-0000-7000-8000-000000000001",
+      "request_digest": "sha256:5e738c49127cf739295c9853e989e4c8b97d1729a3438d9baea1cb9528014d41",
+      "result_digest": "sha256:01c7b3b19b025aaf53c6f3b960087d0cf8720221eb4116ccacd21f13b1de9140",
+      "schema_version": "external_checker_result.v1",
+      "verdict": "passed"
+    }
+  },
+  {
+    "case": "invalid_work",
+    "wall_seconds": 2.204,
+    "report": {
+      "outcome": "completed",
+      "failure": null,
+      "cleanup_confirmed": true,
+      "upload_ms": 1,
+      "preparation_ms": 645,
+      "post_upload_wait_ms": 644,
+      "execution_ms": 325,
+      "cleanup_ms": 81,
+      "total_ms": 1051,
+      "preparation_attempts": 1
+    },
+    "checker": {
+      "findings": [
+        {
+          "check_id": "package_layout",
+          "code": "layout_missing_required_file",
+          "level": "error",
+          "line": null,
+          "message": "Add the required root file: instruction.md.",
+          "path": "instruction.md"
+        }
+      ],
+      "infrastructure_failure_code": null,
+      "outcome": "completed",
+      "phase": "pre_submit",
+      "registry_entry_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry_entry_id": "00000000-0000-7000-8000-000000000001",
+      "request_digest": "sha256:250839bbd8283502bcc7dc15ec6babfa008759783454df9b0adb617199b1cdf3",
+      "result_digest": "sha256:8dee2dd42b96e38f7732a943a3db4a8aa84a538e0723cc4a79b302f555d8de69",
+      "schema_version": "external_checker_result.v1",
+      "verdict": "failed"
+    }
+  },
+  {
+    "case": "truncated",
+    "wall_seconds": 3.179,
+    "report": {
+      "outcome": "infrastructure_failed",
+      "failure": "upload_size_mismatch",
+      "cleanup_confirmed": true,
+      "upload_ms": 1934,
+      "preparation_ms": 665,
+      "post_upload_wait_ms": 0,
+      "execution_ms": 0,
+      "cleanup_ms": 81,
+      "total_ms": 2016,
+      "preparation_attempts": 1
+    },
+    "checker": null
+  },
+  {
+    "case": "overlimit",
+    "wall_seconds": 3.174,
+    "report": {
+      "outcome": "infrastructure_failed",
+      "failure": "upload_size_mismatch",
+      "cleanup_confirmed": true,
+      "upload_ms": 1935,
+      "preparation_ms": 625,
+      "post_upload_wait_ms": 0,
+      "execution_ms": 0,
+      "cleanup_ms": 81,
+      "total_ms": 2016,
+      "preparation_attempts": 1
+    },
+    "checker": null
+  },
+  {
+    "case": "abandoned",
+    "wall_seconds": 7.005,
+    "report": {
+      "outcome": "infrastructure_failed",
+      "failure": "deadline_exceeded",
+      "cleanup_confirmed": true,
+      "upload_ms": 4980,
+      "preparation_ms": 625,
+      "post_upload_wait_ms": 0,
+      "execution_ms": 0,
+      "cleanup_ms": 71,
+      "total_ms": 5052,
+      "preparation_attempts": 1
+    },
+    "checker": null
+  },
+  {
+    "case": "check_timeout",
+    "wall_seconds": 7.178,
+    "report": {
+      "outcome": "infrastructure_failed",
+      "failure": "deadline_or_cancelled",
+      "cleanup_confirmed": true,
+      "upload_ms": 1,
+      "preparation_ms": 625,
+      "post_upload_wait_ms": 624,
+      "execution_ms": 5348,
+      "cleanup_ms": 81,
+      "total_ms": 6054,
+      "preparation_attempts": 1
+    },
+    "checker": null
+  },
+  {
+    "case": "parent_death",
+    "cleanup_confirmed": true,
+    "foreign_control_survived": true,
+    "owned_vm": "ws-smol-probe-031ea9da97cd3a6900fcaffcc2e343b6",
+    "runtime_inventory": {
+      "block_io": "sync",
+      "branchable": false,
+      "branchpoint_held": false,
+      "cmd": [],
+      "cpus": 1,
+      "created_at": 1792770831,
+      "cuda": false,
+      "cuda_branch_pool_size": null,
+      "cuda_fork_pool_size": null,
+      "cuda_vram_limit_mib": null,
+      "detached": false,
+      "disk_durability": "full",
+      "disks": [],
+      "entrypoint": [],
+      "ephemeral": false,
+      "forkable": false,
+      "forkpoint_held": false,
+      "gpu": false,
+      "gpu_vram_mib": null,
+      "health_cmd": null,
+      "health_interval_secs": null,
+      "health_retries": null,
+      "health_startup_grace_secs": null,
+      "health_timeout_secs": null,
+      "image": "local:83952c661d5bbbcedda082f683e402cf7e9ac0cb1448783cd174e4b1625aefd7",
+      "labels": {
+        "workstream-probe-owner": "031ea9da97cd3a6900fcaffcc2e343b6"
+      },
+      "memory_mib": 512,
+      "mounts": 0,
+      "name": "ws-smol-probe-031ea9da97cd3a6900fcaffcc2e343b6",
+      "network": false,
+      "overlay_gb": 1,
+      "parent_machine": null,
+      "pid": 16598,
+      "ports": 0,
+      "restart_count": 0,
+      "restart_max_retries": 0,
+      "restart_policy": "never",
+      "state": "running",
+      "state_reason": null,
+      "storage_gb": 2
+    },
+    "guest": {
+      "uid": 65532,
+      "input_exists": false,
+      "interfaces": [
+        "dummy0",
+        "lo"
+      ]
+    }
+  }
+]

@@ -104,3 +104,13 @@ normal versioned registration, proposal and approval process. A retained image
 that returns a private plan now produces an invalid-output infrastructure failure,
 not a continuation or a contributor-work failure. Do not blindly retry it as if
 the capability still exists.
+
+## Smol lifecycle qualification
+
+The opt-in [Smol experiment](../experiments/precheck_smol_lifecycle/README.md)
+measures fresh microVM preparation overlapping ZIP upload and exact-owner cleanup.
+It runs the existing project Python checker without changing this production
+service, its supported runtimes or ART custody. The [live evidence](../experiments/precheck_smol_lifecycle/QUALIFICATION.md)
+includes upload failures, checker timeout and request-process death; production
+resource parity, external-model access and the typed upload-preparation integration
+remain unimplemented.
