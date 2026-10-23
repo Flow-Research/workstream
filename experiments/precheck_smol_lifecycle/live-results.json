@@ -1,17 +1,17 @@
 [
   {
     "case": "overlap",
-    "wall_seconds": 3.473,
+    "wall_seconds": 3.485,
     "report": {
       "outcome": "completed",
       "failure": null,
       "cleanup_confirmed": true,
-      "upload_ms": 1947,
-      "preparation_ms": 625,
+      "upload_ms": 1926,
+      "preparation_ms": 645,
       "post_upload_wait_ms": 0,
-      "execution_ms": 316,
+      "execution_ms": 325,
       "cleanup_ms": 81,
-      "total_ms": 2344,
+      "total_ms": 2332,
       "preparation_attempts": 1
     },
     "checker": {
@@ -29,17 +29,17 @@
   },
   {
     "case": "invalid_work",
-    "wall_seconds": 2.204,
+    "wall_seconds": 2.176,
     "report": {
       "outcome": "completed",
       "failure": null,
       "cleanup_confirmed": true,
       "upload_ms": 1,
-      "preparation_ms": 645,
-      "post_upload_wait_ms": 644,
-      "execution_ms": 325,
+      "preparation_ms": 635,
+      "post_upload_wait_ms": 634,
+      "execution_ms": 326,
       "cleanup_ms": 81,
-      "total_ms": 1051,
+      "total_ms": 1043,
       "preparation_attempts": 1
     },
     "checker": {
@@ -66,68 +66,68 @@
   },
   {
     "case": "truncated",
-    "wall_seconds": 3.179,
+    "wall_seconds": 3.172,
     "report": {
       "outcome": "infrastructure_failed",
       "failure": "upload_size_mismatch",
       "cleanup_confirmed": true,
-      "upload_ms": 1934,
-      "preparation_ms": 665,
+      "upload_ms": 1945,
+      "preparation_ms": 624,
       "post_upload_wait_ms": 0,
       "execution_ms": 0,
       "cleanup_ms": 81,
-      "total_ms": 2016,
+      "total_ms": 2027,
       "preparation_attempts": 1
     },
     "checker": null
   },
   {
     "case": "overlimit",
-    "wall_seconds": 3.174,
+    "wall_seconds": 3.173,
     "report": {
       "outcome": "infrastructure_failed",
       "failure": "upload_size_mismatch",
       "cleanup_confirmed": true,
-      "upload_ms": 1935,
+      "upload_ms": 1944,
       "preparation_ms": 625,
       "post_upload_wait_ms": 0,
       "execution_ms": 0,
       "cleanup_ms": 81,
-      "total_ms": 2016,
+      "total_ms": 2026,
       "preparation_attempts": 1
     },
     "checker": null
   },
   {
     "case": "abandoned",
-    "wall_seconds": 7.005,
+    "wall_seconds": 7.004,
     "report": {
       "outcome": "infrastructure_failed",
       "failure": "deadline_exceeded",
       "cleanup_confirmed": true,
       "upload_ms": 4980,
-      "preparation_ms": 625,
+      "preparation_ms": 646,
       "post_upload_wait_ms": 0,
       "execution_ms": 0,
-      "cleanup_ms": 71,
-      "total_ms": 5052,
+      "cleanup_ms": 81,
+      "total_ms": 5062,
       "preparation_attempts": 1
     },
     "checker": null
   },
   {
     "case": "check_timeout",
-    "wall_seconds": 7.178,
+    "wall_seconds": 7.174,
     "report": {
       "outcome": "infrastructure_failed",
       "failure": "deadline_or_cancelled",
       "cleanup_confirmed": true,
       "upload_ms": 1,
-      "preparation_ms": 625,
-      "post_upload_wait_ms": 624,
-      "execution_ms": 5348,
+      "preparation_ms": 635,
+      "post_upload_wait_ms": 634,
+      "execution_ms": 5338,
       "cleanup_ms": 81,
-      "total_ms": 6054,
+      "total_ms": 6055,
       "preparation_attempts": 1
     },
     "checker": null
@@ -136,14 +136,14 @@
     "case": "parent_death",
     "cleanup_confirmed": true,
     "foreign_control_survived": true,
-    "owned_vm": "ws-smol-probe-031ea9da97cd3a6900fcaffcc2e343b6",
+    "owned_vm": "ws-smol-probe-0b5aedcb997db41bcfe7136c87cb3cba",
     "runtime_inventory": {
       "block_io": "sync",
       "branchable": false,
       "branchpoint_held": false,
       "cmd": [],
       "cpus": 1,
-      "created_at": 1792770831,
+      "created_at": 1792771164,
       "cuda": false,
       "cuda_branch_pool_size": null,
       "cuda_fork_pool_size": null,
@@ -164,15 +164,15 @@
       "health_timeout_secs": null,
       "image": "local:83952c661d5bbbcedda082f683e402cf7e9ac0cb1448783cd174e4b1625aefd7",
       "labels": {
-        "workstream-probe-owner": "031ea9da97cd3a6900fcaffcc2e343b6"
+        "workstream-probe-owner": "0b5aedcb997db41bcfe7136c87cb3cba"
       },
       "memory_mib": 512,
       "mounts": 0,
-      "name": "ws-smol-probe-031ea9da97cd3a6900fcaffcc2e343b6",
+      "name": "ws-smol-probe-0b5aedcb997db41bcfe7136c87cb3cba",
       "network": false,
       "overlay_gb": 1,
       "parent_machine": null,
-      "pid": 16598,
+      "pid": 20839,
       "ports": 0,
       "restart_count": 0,
       "restart_max_retries": 0,

@@ -14,11 +14,12 @@ that checker consumes; it is not a production authorized invocation.
 ## Local mechanism tests
 
 ```sh
-cargo test --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml --locked
+cargo +1.85.1 test --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml --locked
 python3 -m unittest discover -s experiments/precheck_smol_lifecycle -p 'test_*.py'
 ```
 
-Rust 1.85.1 was used locally because the installed default 1.84 compiler/linker
+Install the isolated toolchain if needed with
+`rustup toolchain install 1.85.1 --profile minimal`. Rust 1.85.1 was used locally because the installed default 1.84 compiler/linker
 crashed while building unchanged dependencies. No global toolchain is changed.
 
 ## Live host prerequisites
@@ -49,7 +50,7 @@ exported bytes; it is not an OCI manifest digest. The variables below are operat
 inputs; no example path is treated as verified content.
 
 ```sh
-cargo build --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml --locked
+cargo +1.85.1 build --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml --locked
 export PROBE_SMOLVM=/absolute/path/to/verified/smolvm
 export PROBE_IMAGE=/absolute/path/to/terminal-pre.tar
 python3 experiments/precheck_smol_lifecycle/make_fixture.py \

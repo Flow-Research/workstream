@@ -1,7 +1,7 @@
 # Qualify upload-overlapped Smol preparation
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Add an executable Rust probe for fresh Smol preparation during ZIP upload, bounded execution and resource cleanup before changing production's verified-material boundary.
 
 ## Intent
@@ -103,10 +103,10 @@ vCPU/MiB settings are not automatically identical to current container ceilings.
 
 | Claim | Command/proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Orchestration | `cargo test --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml` | Six lifecycle and three controlled-process tests pass with Rust 1.85.1 | Real runtime and process-death cases remain |
+| Orchestration | `cargo +1.85.1 test --manifest-path experiments/precheck_smol_lifecycle/Cargo.toml` | Eight lifecycle and three controlled-process tests pass with Rust 1.85.1 | This local command does not prove VM behavior; the live row below supplies that evidence |
 | Guest archive handling | `python3 -m unittest discover -s experiments/precheck_smol_lifecycle -p 'test_*.py'` | Six focused extraction tests pass | Not canonical production ART verification |
 | Live lifecycle | Runbook matrix: valid/invalid Terminal Systems ZIP, delayed/truncated stdin, deadline, SIGKILL and foreign VM | Live seven-case matrix passes; see experiment qualification | No production isolation/resource-parity claim |
-| AWS host | Read-only SSH and AWS DescribeInstanceTypes | Authorized CPU option enabled; KVM API 12 and live VM boot verified | Existing containers restored; AWS live proof refreshed; API/worker/beat/checker healthy |
+| AWS host | Authorized CPU-option change, KVM boot and service-health verification | Authorized CPU option enabled; KVM API 12 and live VM boot verified | Existing containers restored; AWS live proof refreshed; API/worker/beat/checker healthy |
 
 The unchanged default Rust 1.84 toolchain crashed in compiler/linker dependencies.
 A task-specific Rust 1.85.1 toolchain builds the probe; the global default is unchanged.
@@ -115,7 +115,10 @@ A task-specific Rust 1.85.1 toolchain builds the probe; the global default is un
 
 Plan review required explicit cleanup budget, exact ownership, process-death and
 foreign-VM controls, bounded input/retry, resource inventory and honest proof scope.
-Those requirements are now included above.
+Those requirements are now included above. Review also added regressions proving
+final cleanup failure cannot report success and preparation failure cancels a
+still-open upload before its deadline. Documentation reflects completed
+qualification while retaining the production integration boundary.
 
 Preparation must not occupy the existing single connection handler while waiting
 for upload; no private material grants may be issued before verification. Runtime
@@ -124,7 +127,7 @@ ownership must survive process death and cleanup must never sweep foreign VMs.
 ## Reconciliation
 
 - Current-source reconciliation: origin/main `7f6a71a69`; the Terminal Systems worktree has unrelated changes and is left untouched.
-- Next usable boundary: qualify live Smol lifecycle, then implement the production adapter and upload overlap in one reviewed bounded change.
+- Next usable boundary: preserve resource/ART/auth contracts while implementing the production adapter and upload overlap; durable host/service restart reconciliation and creation-race proof remain required.
 - Remaining risks: resource-enforcement parity, host-reboot/creation-race recovery and production integration remain unqualified.
 
 Roadmap assessment: this opt-in experiment changes no publicly exposed or deployed

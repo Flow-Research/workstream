@@ -16,18 +16,19 @@ a separately owned control VM, which the harness then deleted explicitly.
 | Trial | Preparation | Stage/check | Cleanup | Outcome |
 |---|---:|---:|---:|---|
 | First run, cache cold | 17.101 s | 0.326 s | 0.081 s | Passed; VM absent |
-| Cached image, upload held open | 0.625 s | 0.316 s | 0.081 s | Passed; zero post-upload VM wait |
-| Missing required file | 0.645 s | 0.325 s | 0.081 s | Work failed with actionable `instruction.md` finding |
-| Truncated/oversized stream | 0.625–0.665 s | No execution | 0.081 s | Upload rejected; no checker result |
-| Abandoned stream | 0.625 s | No execution | 0.071 s | Five-second work deadline; cleanup confirmed |
-| Sleeping checker | 0.625 s | Deadline interrupted | 0.081 s | Infrastructure failure; no work verdict |
+| Cached image, upload held open | 0.645 s | 0.325 s | 0.081 s | Passed; zero post-upload VM wait |
+| Missing required file | 0.635 s | 0.326 s | 0.081 s | Work failed with actionable `instruction.md` finding |
+| Truncated/oversized stream | 0.624–0.625 s | No execution | 0.081 s | Upload rejected; no checker result |
+| Abandoned stream | 0.646 s | No execution | 0.081 s | Five-second work deadline; cleanup confirmed |
+| Sleeping checker | 0.635 s | Deadline interrupted | 0.081 s | Infrastructure failure; no work verdict |
 | Request process killed | Running VM observed | No submitted material staged | Watcher at expiry | Owned VM removed; control survived |
 
 These are individual runs on one host, not latency percentiles or throughput
 measurements. The first cold run excludes image build/download time. Warm trials
 reuse the trusted image cache, never a previous submission's VM. The cold receipt
 was collected during initial bring-up; the JSON matrix records the later warm
-candidate. Report timing starts after preflight. Whole-process timing in the JSON
+candidate built from `04faf7fc7d1cb32334d1abfc37a098253c2caa4f`; subsequent
+review repairs add regression tests and update documentation only. Report timing starts after preflight. Whole-process timing in the JSON
 also includes roughly one second to hash the image archive; it includes
 the harness's deliberate upload delays. Production image verification belongs at
 trusted cache provisioning, not on each upload.
@@ -38,7 +39,7 @@ trusted cache provisioning, not on each upload.
 - Distribution SHA-256: `b5eac8d2643aed414e4557dfd67df73be033d2c915848c3deb59c99802da2cf6`.
 - Launcher SHA-256: `b67b25f363403e19deceb6897e5a4d94be30a079f8cb751372782f17fc99003a`.
 - ELF binary SHA-256: `bde76030c7f6dcfbc2da730c6c51a46eea0ba51124c07ed50fcf9e21184797a3`.
-- Live matrix probe SHA-256: `6ef428f4d02d829db83ec8fc0ebb51a499019eee9399ff935159d12bf50d768e`.
+- Live matrix probe SHA-256: `62e70d4599210c3e71a49d3038d98764093c9b8bd7c4b442d7d5a1012365e0d3`.
 - Image source: existing `pilots/terminal_systems/checkers/pre/Dockerfile` and `checker.py` from base `7f6a71a69daf563742b72c706e6d09aa742ac25e`, built separately and exported with `docker save`.
 - Archive SHA-256: `83952c661d5bbbcedda082f683e402cf7e9ac0cb1448783cd174e4b1625aefd7`.
 - Embedded Linux/amd64 image config: `sha256:7fd64da84293336bcf24ccae10577d6fd8ac03c85ef760eb9ed5b20161ec5470`; Docker image index: `sha256:3bde4c6d7de386c2e5c6ed47b64a4b223047be4d3cc703609189a60332311e54`.

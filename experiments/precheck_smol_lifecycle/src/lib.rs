@@ -312,6 +312,48 @@ mod tests {
     }
 
     #[test]
+    fn successful_check_is_not_success_when_final_cleanup_fails() {
+        let mut r = TestRuntime::new();
+        r.fail_cleanup = true;
+        let report = run(
+            &r,
+            Control::new(Duration::from_secs(2)),
+            Duration::from_secs(1),
+            |c| upload(&r, c),
+        );
+        assert_eq!(report.outcome, "infrastructure_failed");
+        assert_eq!(report.failure, Some("cleanup_unconfirmed"));
+        assert!(!report.cleanup_confirmed);
+        assert_eq!(*r.events.lock().unwrap(), ["prepare", "execute", "cleanup"]);
+    }
+
+    #[test]
+    fn failed_preparation_cancels_upload_before_its_deadline() {
+        let mut r = TestRuntime::new();
+        r.fail_always = true;
+        let report = run(
+            &r,
+            Control::new(Duration::from_secs(2)),
+            Duration::from_secs(1),
+            |c| {
+                r.uploading.store(true, Ordering::SeqCst);
+                loop {
+                    if let Err(error) = c.remaining() {
+                        // Deadline expiry would mask a missing peer cancellation.
+                        assert_eq!(error, "cancelled");
+                        return Err(error);
+                    }
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            },
+        );
+        assert_eq!(report.failure, Some("preparation_unavailable"));
+        assert_eq!(report.preparation_attempts, 3);
+        assert!(report.cleanup_confirmed);
+        assert!(!r.events.lock().unwrap().contains(&"execute"));
+    }
+
+    #[test]
     fn abandoned_upload_and_preparation_share_one_deadline() {
         let mut r = TestRuntime::new();
         r.wait_until_cancelled = true;
