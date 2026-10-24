@@ -94,7 +94,7 @@ docker compose up --wait checker-registry
 ```
 
 Build and publish the proof checker, then write the checker-service
-configuration and the two registry bodies. Run this on the Docker host from the
+configuration and the post-submission registry body. Run this on the Docker host from the
 repository root:
 
 ```bash
@@ -120,9 +120,9 @@ with an empty client configuration, for example
 
 Rebuilding the proof checker changes its digest. The registry holds one
 immutable entry per phase, capability and version, so rerun `publish_local.py`
-with a new `--capability-version` (for example `v2`), recreate the checker with
-`docker compose up --wait --force-recreate checker`, and register the two new
-bodies. Registering a new digest under an existing version returns
+with a new `--capability-version` (the default is `v2`; use, for example, `v3`), recreate the checker with
+`docker compose up --wait --force-recreate checker`, and register the new
+body. Registering a new digest under an existing version returns
 `external_checker_registry_conflict`.
 
 ## Create operators and service identities
@@ -195,16 +195,14 @@ docker compose exec -T backend python scripts/provision_local_service_actors.py 
 
 ## Register the proof checker
 
-Registration needs a current system `operator` grant. Each body is an
-`ExternalCheckerRegistrySpec` for one phase with the exact platform-manifest
-digest. Keep each key with its file; replaying the same key and body returns the
-same immutable entry:
+Registration needs a current system `operator` grant. The body is an
+`ExternalCheckerRegistrySpec` for the post-submission phase with the exact
+platform-manifest digest. The checker needs GitHub facts, which pre-submission
+checking never has, so it is not registered for PRE. Keep the key with its file;
+replaying the same key and body returns the same immutable entry:
 
 ```bash
-PRE_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
 POST_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
-ws_as local-operator operations checker registry register \
-  --input .local-agent-loop/registry-pre.json --idempotency-key "$PRE_KEY" -o json
 ws_as local-operator operations checker registry register \
   --input .local-agent-loop/registry-post.json --idempotency-key "$POST_KEY" -o json
 ```
@@ -218,27 +216,99 @@ run the checker for any project.
 
 ### What the proof checker checks
 
-`external_checkers/harnessy_proof/checker.py` reads `proof.json` at the root of
-the submitted ZIP and returns `external_checker_result.v1`. Each failed rule is
-one `error` finding on `proof.json`, and the verdict is `failed` exactly when an
-error finding exists:
+`external_checkers/harnessy_proof/checker.py` (capability version `v2`,
+[WS-GHPROOF-001](../../.commitrail/initiatives/WS-GHPROOF-001/OVERVIEW.md)) is a
+post-submission checker with one mode, and it fails closed. It reads
+`proof.json` at the root of the submitted ZIP, compares it with GitHub facts
+that WorkStream read with its read-only GitHub App, and returns
+`external_checker_result.v1`. The checker has no network access and no
+credential. Every failed rule is one `error` finding on `proof.json`, and the
+verdict is `failed` exactly when an error finding exists. A proof never passes
+on its own claims.
 
-| Field | Rule |
+The POST binding configuration must name the repository and base branch, and
+may set integrity options whose defaults are the safe ones:
+
+```json
+{"github_repository": "Flow-Research/harnessy-v2", "base_branch": "main"}
+```
+
+| Option | Default | Effect |
+|---|---|---|
+| `allow_unbound_required_checks` | `false` | When false, a required check that accepts any source is an error |
+| `protected_paths` | `[]` | Globs added to `.github/**`, `**/CODEOWNERS`, `.gitlab-ci.yml`, `.circleci/**` |
+| `required_independent_approvals` | `1` | Independent approvals needed on the head commit (1 to 10) |
+| `operator_logins` | `[]` | Logins whose approval alone adds the `harnessy.operator_approved` warning |
+
+WorkStream places the facts in the request `input` under `github_facts`, so the
+request digest binds them. The facts are bound to one pull-request state
+(`head_sha`, `merge_commit_sha`):
+
+```json
+{
+  "github_facts": {
+    "schema_version": "workstream.github_facts.v1",
+    "repository": "Flow-Research/harnessy-v2",
+    "pull_request_number": 12,
+    "html_url": "https://github.com/Flow-Research/harnessy-v2/pull/12",
+    "state": "closed",
+    "merged": true,
+    "merge_commit_sha": "<40 lowercase hex, or null unless merged>",
+    "base_ref": "main",
+    "head_sha": "<40 lowercase hex>",
+    "author": {"login": "agent-bot", "id": 501, "type": "Bot"},
+    "reviews": [{"id": 61, "reviewer": {"login": "reviewer", "id": 7, "type": "User"},
+                 "state": "APPROVED", "commit_id": "<head sha>", "submitted_at": "..."}],
+    "changed_files_count": 1,
+    "changed_files": [{"filename": "src/app.py", "previous_filename": null, "status": "modified"}],
+    "required_checks": [{"name": "backend", "app_id": 15368, "app_bound": true,
+                         "conclusion": "success", "check_run_app_id": 15368,
+                         "check_run_head_sha": "<head sha>",
+                         "check_run_html_url": "...", "check_run_details_url": "...",
+                         "workflow_run_id": 345, "commit_status_judged": false,
+                         "commit_status_sha": null}],
+    "fetched_at": "2026-10-24T12:00:00Z",
+    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"}]
+  }
+}
+```
+
+Rules on the claims themselves (`harnessy.proof.*`): `schema` equals
+`harnessy.work.proof.v1`; `commit_sha` is 40 hexadecimal characters;
+`ci_conclusion` equals `success`; `merged` is the JSON value `true`. Rules
+against the facts (`harnessy.proof.github.*`):
+
+| Code | Fails when |
 |---|---|
-| `schema` | equals `harnessy.work.proof.v1` |
-| `commit_sha` | 40 hexadecimal characters |
-| `pr_url`, `ci_run_url` | `https://github.com/...` without credentials or port |
-| `ci_conclusion` | equals `success` |
-| `merged` | the JSON value `true` |
+| `configuration` | the configuration is missing, lacks either required key, or has an invalid option |
+| `facts_missing` | the input has no facts |
+| `facts_invalid` | the facts do not have the exact `workstream.github_facts.v1` shape |
+| `facts_binding` | a required-check entry names a commit other than `head_sha` |
+| `repository` | the facts' repository is not `github_repository` (case-insensitive) |
+| `base_branch` | the pull request's base branch is not `base_branch` |
+| `pr_url` | `pr_url` is not exactly `https://github.com/{repository}/pull/{number}` built from the facts, or GitHub's `html_url` differs from it |
+| `ci_run` | `ci_run_url` is not exactly `https://github.com/{repository}/actions/runs/{id}` for the workflow run of a judged required check |
+| `merged` | GitHub reports the pull request as not merged |
+| `merge_commit_sha` | `commit_sha` is not the merge commit (case-insensitive) |
+| `required_check` | one finding per required check whose result is not `success` |
+| `unbound_required_check` | a required check accepts any source and `allow_unbound_required_checks` is false |
+| `protected_path_changed` | a changed file, or a rename's previous name, matches a protected glob; the work needs explicit human acceptance and cannot be auto-accepted |
+| `independent_approval_missing` | fewer than `required_independent_approvals` reviewers approve the head commit, counting each reviewer's latest approve, request-changes or dismissed review, and excluding the author and non-`User` accounts |
 
-**Trust caveat.** The checker has no network access. It checks only what
-`proof.json` claims. It does not confirm that the pull request, commit or CI
-run exist, that the CI run belongs to the commit, or that the pull request was
-merged. A passing verdict means well-formed claims, not independently verified
-work. With `human_review_required:false`, a well-formed but false proof
-would reach automatic FinalAcceptance. Do not use this checker alone to gate
-acceptance that leads to compensation; pair it with human review, or with a
-checker that has trusted access to the evidence, when the claim must be true.
+URL comparison is exact and case-sensitive against the repository name GitHub
+returns. A trailing slash, query, fragment, port, user information, percent
+encoding, backslash or non-ASCII character fails. The canonical CI run form is
+the workflow run URL without `/job/{id}`.
+
+When every qualifying approval comes from `operator_logins`, the checker adds a
+non-blocking `warning` finding with code `harnessy.operator_approved`: the work
+may earn points but may not be paid in money until an independent reviewer
+confirms it. The verdict does not change.
+
+**Until facts are wired.** WorkStream's POST evaluation does not yet supply
+facts (initiative chunk 04). Until it does, every evaluation with this checker
+fails with `facts_missing`, so this stack cannot reach automatic
+FinalAcceptance through it. There is deliberately no shape-only mode.
 
 ## Create the manager project and the agent submitter
 
@@ -377,8 +447,8 @@ version that selects the new published policy is activated.
 ## Placeholder: compile, approve and activate the guide rules
 
 > **Not covered here.** Selecting `harnessy.work_proof` into the locked
-> pre-submission and post-submission policies is guide compilation, followed by
-> the manager's separate PRE and POST approvals and guide activation. How rule
+> post-submission policy is guide compilation, followed by the manager's
+> separate PRE and POST approvals and guide activation. How rule
 > setup works for this stack is being decided separately. Until it is, no task
 > can be created for the project, and the contributor flow below cannot run.
 > Provider-backed compilation needs `OPENROUTER_API_KEY` (for the default OpenRouter provider); see the
