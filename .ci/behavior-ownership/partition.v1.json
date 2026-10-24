@@ -54,6 +54,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/adapters/github/app_facts.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/adapters/guide_document_tools/child.py"
     },
     {
@@ -383,6 +387,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/interfaces/external_services.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/interfaces/github_facts.py"
     },
     {
       "group": "shared",
@@ -2377,7 +2385,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "8a42d5c62f07ce625a6f837dddeb7ae6e0f1c159bb74d81cb5f9820bf03c333f",
+  "authority_digest": "f90219378a47878660e3a30ae85c30fc2df8b6eef1d04d414a75ca2bc927f7d0",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

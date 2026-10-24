@@ -97,6 +97,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_checker_image.py",
     "tests/test_checker_smol_cache.py",
     "tests/checkers/external/test_harnessy_proof_checker.py",
+    "tests/test_github_facts_adapter.py",
     "tests/test_api_controls.py",
     "tests/test_identifiers.py",
     "tests/test_identifier_schema.py",

@@ -33,6 +33,7 @@ CHECKER_COMPOSITION_ROOT = APP_ROOT / "adapters" / "checkers" / "__init__.py"
 AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
 GUIDE_PARSER_COMPOSITION_ROOT = APP_ROOT / "adapters/guide_document_tools/__init__.py"
 OBSERVABILITY_COMPOSITION_ROOT = APP_ROOT / "adapters" / "observability.py"
+GITHUB_COMPOSITION_ROOT = APP_ROOT / "adapters" / "github" / "__init__.py"
 AGENT_ADAPTER_MODULES = {
     "app.adapters.project_agents.manager_authored",
     "app.adapters.project_agents.omnicore_agent",
@@ -377,6 +378,7 @@ def _assert_concrete_adapter_composition(
         AGENT_COMPOSITION_ROOT: 2,
         OBSERVABILITY_COMPOSITION_ROOT: 1,
         GUIDE_PARSER_COMPOSITION_ROOT: 1,
+        GITHUB_COMPOSITION_ROOT: 1,
     }
     assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE, CHECKER_COMPOSITION_ROOT]
     assert set(concrete_imports) == {
