@@ -1,5 +1,8 @@
 """Command recovery distinguishes checked failure, unavailable custody and authority."""
 
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -30,7 +33,7 @@ from app.modules.artifacts.submission_admission import (
     PreparedSubmissionBundlePreparationCommand,
     SubmissionBundlePreparationRuntime,
 )
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveFailureCode,
     SubmissionArchiveRejectedError,
 )
@@ -192,7 +195,7 @@ def _post_reservation_runtime_case():
         inspect=AsyncMock(return_value=object()),
         close=AsyncMock(),
     )
-    policy = object()
+    policy = SimpleNamespace(policy_sha256="sha256:" + "a" * 64)
     selected = SimpleNamespace(
         policy=policy,
         default_input=object(),
@@ -219,7 +222,7 @@ def _post_reservation_runtime_case():
     )
     runtime = SubmissionBundlePreparationRuntime(
         preparation=SimpleNamespace(prepare=AsyncMock(return_value=prepared)),
-        inspector=object(),
+        intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(),
         materialization=materialization,
         durable_put=durable_put,
         selected_coordinator=coordinator,
@@ -354,6 +357,11 @@ async def test_post_reservation_archive_failure_remains_recoverable(
             ),
             503,
             "pre_submission_attempt_outcome_unresolved",
+        ),
+        (
+            SubmissionBundlePreparationInfrastructureUnavailable("deadline_exceeded"),
+            503,
+            "deadline_exceeded",
         ),
     ),
 )

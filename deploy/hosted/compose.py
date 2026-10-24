@@ -18,6 +18,7 @@ from preflight import (
     validate_checker_config,
     validate_compose,
     validate_docker_runtime,
+    validate_trusted_intake,
     validate_environment,
     validate_private_host_inputs,
     run_proof_group,
@@ -45,6 +46,7 @@ def main() -> int:
             validate_checker_config(checker_config, values)
             validate_private_host_inputs(values)
             validate_docker_runtime(checker_config, values)
+            validate_trusted_intake(values)
         if args.compose_arguments and args.compose_arguments[0] == "proof":
             if (
                 len(args.compose_arguments) != 3

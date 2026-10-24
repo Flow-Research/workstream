@@ -5,14 +5,12 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 
-from app.core.cancellation import await_cancellation_resistant
-from app.interfaces.artifacts import ArtifactScratchIntegrityError
 from app.interfaces.external_checker_execution import ExternalCheckerExecutionAdapter
 from app.interfaces.external_services import (
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,
 )
-from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerInput
+from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerInput, WorkstreamDefaultCheckerResult
 from app.modules.checkers.api.external import (
     PreSubmitExternalCheckerIdentity,
     PreSubmitExternalCheckerMaterial,
@@ -20,54 +18,14 @@ from app.modules.checkers.api.external import (
     make_external_checker_execution_request,
 )
 from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
-from app.modules.checkers.api.materialization import SubmissionMaterialEntry
+from app.modules.checkers.api.materialization import PreSubmitMaterialView
 from app.modules.checkers.api.selected_pre_submit import (
     ExternalPreSubmitIsolationFacts,
     ExternalPreSubmitMemberFacts,
     SelectedPreSubmitExecutionFacts,
     SelectedPreSubmitInfrastructureUnavailable,
 )
-from app.modules.checkers.default_checker import (
-    WorkstreamDefaultCheckerUnavailable,
-    evaluate_verified_archive,
-)
 
-
-class _PreSubmitMaterialView:
-    """Keep verified reads and the opaque PRE grant inside one ART callback."""
-
-    def __init__(self, tree, *, grants, workspace) -> None:
-        self._tree, self._grants, self._workspace = tree, grants, workspace
-        self._closed = False
-
-    def close(self) -> None:
-        self._closed = True
-
-    def _require_open(self) -> None:
-        if self._closed:
-            raise RuntimeError("pre-submit material view is closed")
-
-    @property
-    def entries(self) -> tuple[SubmissionMaterialEntry, ...]:
-        self._require_open()
-        return tuple(
-            SubmissionMaterialEntry(
-                item.normalized_path,
-                item.entry_type.value,
-                item.byte_count,
-                item.sha256,
-                item.executable,
-            )
-            for item in self._tree.entries
-        )
-
-    def read_file(self, normalized_path: str, *, maximum_bytes: int) -> bytes:
-        self._require_open()
-        return self._tree.read_file(normalized_path, maximum_bytes=maximum_bytes)
-
-    def external_checker_grant(self, request):
-        self._require_open()
-        return self._grants.issue(request, self._workspace)
 
 
 def _input_body(
@@ -101,49 +59,31 @@ class SelectedPreSubmitProcessor:
     def __init__(
         self,
         *,
-        archive_inspector,
-        inspection,
         policy: LockedExternalPreSubmitPolicy,
         default_input: WorkstreamDefaultCheckerInput,
         identity: PreSubmitExternalCheckerIdentity,
         material: PreSubmitExternalCheckerMaterial,
-        grants,
         execution: ExternalCheckerExecutionAdapter,
     ) -> None:
-        self._inspector, self._inspection = archive_inspector, inspection
         self._policy, self._default_input = policy, default_input
         self._identity, self._material = identity, material
-        self._grants, self._execution = grants, execution
+        self._execution = execution
         self._aborted = False
         self._active: asyncio.Task | None = None
-        self._view: _PreSubmitMaterialView | None = None
 
     def abort(self) -> None:
         """Revoke callback access and cancel the active default/image invocation."""
         self._aborted = True
-        if self._view is not None:
-            self._view.close()
         if self._active is not None:
             self._active.cancel()
 
-    async def process(self, reader, workspace) -> SelectedPreSubmitExecutionFacts:
-        """Project once, execute outside DB, and drain ART cleanup before return."""
-        projection = self._inspector._projected_tree(
-            reader, workspace, expected=self._inspection
-        )
-        tree = await asyncio.to_thread(projection.__enter__)
+    async def process(
+        self, material: PreSubmitMaterialView, default: WorkstreamDefaultCheckerResult,
+    ) -> SelectedPreSubmitExecutionFacts:
+        """Consume ART's verified export/default after confirmed intake cleanup."""
         try:
             if self._aborted:
                 raise asyncio.CancelledError
-            self._view = _PreSubmitMaterialView(
-                tree, grants=self._grants, workspace=workspace
-            )
-            self._active = asyncio.create_task(
-                asyncio.to_thread(
-                    evaluate_verified_archive, self._default_input, self._view
-                )
-            )
-            default = await self._active
             members: list[ExternalPreSubmitMemberFacts] = []
             if default.eligible:
                 for order, binding in enumerate(self._policy.entries):
@@ -164,7 +104,7 @@ class SelectedPreSubmitProcessor:
                         input_sha256=external_checker_json_hash(input_value),
                         materials=(self._material,),
                     )
-                    with self._view.external_checker_grant(request) as grant:
+                    with material.external_checker_grant(request) as grant:
                         self._active = asyncio.create_task(
                             self._execution.execute(request, grant)
                         )
@@ -200,8 +140,6 @@ class SelectedPreSubmitProcessor:
                 external_members=tuple(members),
                 eligible=eligible,
             )
-        except WorkstreamDefaultCheckerUnavailable as exc:
-            raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable") from exc
         except ExternalServiceUnavailableError as exc:
             raise SelectedPreSubmitInfrastructureUnavailable(
                 "implementation_unavailable"
@@ -209,19 +147,7 @@ class SelectedPreSubmitProcessor:
         except ExternalServiceProtocolError as exc:
             raise SelectedPreSubmitInfrastructureUnavailable("invalid_output") from exc
         finally:
-            if self._view is not None:
-                self._view.close()
             self._active = None
-            try:
-                await await_cancellation_resistant(
-                    asyncio.to_thread(projection.__exit__, None, None, None)
-                )
-            except ArtifactScratchIntegrityError:
-                raise
-            except Exception:
-                raise ArtifactScratchIntegrityError(
-                    "pre_submit_projection_cleanup_unconfirmed"
-                ) from None
 
 
 __all__ = ("SelectedPreSubmitProcessor",)

@@ -10,10 +10,12 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_admission import SubmissionBundleFile
 from app.modules.artifacts.sources import ArtifactCommitment
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveEntry,
     SubmissionArchiveEntryType,
     SubmissionArchiveInspectionResult,
+)
+from app.modules.artifacts.submission_archive import (
     normalize_submission_archive_path,
     validate_submission_archive_inventory,
 )

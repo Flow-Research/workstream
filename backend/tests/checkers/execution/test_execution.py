@@ -433,7 +433,8 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
                 await original_close(prepared)
                 raise ArtifactScratchIntegrityError("controlled close failure")
 
-            async def fail_inspect(prepared, inspector):
+            async def fail_inspect(prepared, inspector, *, on_cancel=None):
+                assert callable(on_cancel)
                 raise PostSubmissionMaterializationFailure("post_submit_material_manifest_mismatch")
 
             monkeypatch.setattr(PreparedArtifact, "inspect", fail_inspect)

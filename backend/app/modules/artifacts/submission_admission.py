@@ -8,6 +8,8 @@ from dataclasses import dataclass, field, replace
 import re
 from uuid import UUID
 from app.core.hashing import canonical_json_hash
+from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter, TrustedIntakePreparation
+from app.interfaces.external_services import ExternalServiceAdapterError
 from app.core.identifiers import new_record_id
 
 from sqlalchemy import func, select
@@ -34,7 +36,7 @@ from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
     SubmissionBundleDurableIntent,
 )
-from app.modules.artifacts.preparation import ArtifactPreparationService
+from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactPreparationDeadlineError
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
     ArtifactAuthorityDeniedError,
@@ -48,9 +50,10 @@ from app.modules.artifacts.service import (
     ArtifactStorageOrchestrator,
 )
 from app.modules.artifacts.sources import PreparedArtifact
-from app.modules.artifacts.submission_archive import (
-    SubmissionArchiveInspector,
+from app.modules.artifacts.trusted_intake import prepared_trusted_intake, TrustedArchiveInspector, prepare_bytes_with_intake
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveRejectedError,
+    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_authorization import (
     SubmissionBundlePreparationAuthorization,
@@ -627,7 +630,8 @@ async def current_submission_bundle_admission_id(
 @dataclass(frozen=True, slots=True)
 class SubmissionBundlePreparationRuntime:
     preparation: ArtifactPreparationService
-    inspector: SubmissionArchiveInspector
+    intake: TrustedSubmissionIntakeAdapter
+    archive_limits: SubmissionArchiveLimits
     materialization: PreparedBundleMaterializationService
     durable_put: SubmissionBundleDurablePutService
     selected_coordinator: SelectedPreSubmitCoordinationPort | None = None
@@ -681,9 +685,17 @@ class PreparedSubmissionBundlePreparationCommand:
                     predecessor = await self._load_predecessor(task_context)
                     predecessor_rules_sha256 = await self._load_predecessor_rules(task_context)
                     remediation_manifest_id = task_context.checker_remediation_manifest_id
-                prepared = await runtime.preparation.prepare(
-                    request.byte_source,
-                    media_type="application/zip",
+                early_policy = LockedExternalCheckerPolicies.model_validate_json(
+                    project_context.external_checker_policies.value
+                ).pre_submit
+                pending_intake = await scratch_cleanup.enter_async_context(prepared_trusted_intake(
+                    runtime.intake, TrustedIntakePreparation(
+                        phase="pre_submit", policy_sha256=early_policy.policy_sha256,
+                        limits=runtime.archive_limits, deadline_ms=runtime.artifact_deadline_ms,
+                    ),
+                ))
+                prepared, intake = await prepare_bytes_with_intake(pending_intake,
+                    runtime.preparation.prepare(request.byte_source, media_type="application/zip"),
                 )
                 scratch_cleanup.push_async_callback(prepared.close)
                 async with self._session.begin():
@@ -695,6 +707,8 @@ class PreparedSubmissionBundlePreparationCommand:
                     policies = LockedExternalCheckerPolicies.model_validate_json(
                         project_context.external_checker_policies.value
                     )
+                    if policies.pre_submit.policy_sha256 != early_policy.policy_sha256:
+                        raise SubmissionBundlePreparationRejected("submission_bundle_preparation_context_changed")
                     materialization_handle = (
                         await runtime.materialization.prepare_selected_authorization(
                             task=task_context,
@@ -705,7 +719,9 @@ class PreparedSubmissionBundlePreparationCommand:
                         )
                     )
                     try:
-                        inspection = await prepared.inspect(runtime.inspector)
+                        inspection = await prepared.inspect(
+                            TrustedArchiveInspector(intake, prepared.commitment), on_cancel=intake.abort,
+                        )
                     except SubmissionArchiveRejectedError as exc:
                         raise SubmissionBundlePreparationRejected(exc.code.value) from exc
                     manifest = build_submission_manifest(inspection)
@@ -783,6 +799,7 @@ class PreparedSubmissionBundlePreparationCommand:
                         external_policy=selected.policy,
                         default_checker_input=selected.default_input,
                         selected_reservation=reservation,
+                        intake=intake,
                     )
                     current = await runtime.selected_coordinator.read_current(reservation)
                     if current is None:
@@ -845,6 +862,14 @@ class PreparedSubmissionBundlePreparationCommand:
                     durable,
                 )
                 return self._result(result, terminal.execution)
+        except ArtifactPreparationDeadlineError as exc:
+            # No terminal claim is made when intake cleanup was not confirmed.
+            # The existing lease recovery owner resolves an already reserved run.
+            raise SubmissionBundlePreparationInfrastructureUnavailable(
+                "pre_submission_attempt_outcome_unresolved"
+            ) from exc
+        except ExternalServiceAdapterError as exc:
+            raise SubmissionBundlePreparationInfrastructureUnavailable("implementation_unavailable") from exc
         except SelectedPreSubmitRequestConflict as exc:
             raise SubmissionBundlePreparationRejected(
                 "submission_bundle_preparation_request_conflict"

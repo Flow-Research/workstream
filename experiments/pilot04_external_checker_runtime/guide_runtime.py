@@ -16,7 +16,7 @@ from app.interfaces.project_agents import (  # noqa: E402
 )
 from app.modules.projects.api.task_examples import validate_task_examples  # noqa: E402
 from experiments.pilot04_external_checker_runtime.guide_inputs import (  # noqa: E402
-    GUIDE_BYTES, TASK_EXAMPLES, CORRECTION_REASON,
+    guide_bytes, TASK_EXAMPLES, CORRECTION_REASON,
 )
 
 
@@ -30,9 +30,11 @@ class RecordedGuideRuntime(E2EProjectGuideRuntime):
         if context.correction_feedback is not None:
             if context.correction_feedback.reason != CORRECTION_REASON:
                 raise AssertionError("worker did not receive exact manager correction")
-        digest = "sha256:" + hashlib.sha256(GUIDE_BYTES).hexdigest()
-        if len(context.material.documents) != 1 or context.material.documents[0].sha256 != digest:
+        variants = {"sha256:" + hashlib.sha256(guide_bytes(count)).hexdigest(): count
+                    for count in (0, 1, 2)}
+        if len(context.material.documents) != 1 or context.material.documents[0].sha256 not in variants:
             raise AssertionError("worker did not receive the uploaded original")
+        pre_requirements = variants[context.material.documents[0].sha256]
         base = await super().compile_project_guide(context, capabilities)
         refs = base.findings[0].evidence_refs
         requirements, pre, post = [], [], []
@@ -45,17 +47,19 @@ class RecordedGuideRuntime(E2EProjectGuideRuntime):
             if len(entries) != 1:
                 raise AssertionError("recorded guide requires one registered image per stage")
             entry = entries[0]
-            key = "project." + stage
-            requirements.append(AtomicGuideRequirement(
-                requirement_id=key, statement="Apply the registered project image rules.",
-                disposition="supported_" + stage, evidence_refs=refs,
-                classification_rationale="The recorded fixture has a registered image for this stage.",
-                check_specification=_recorded_specification(stage),
-            ))
-            target.append(binding_type(
-                requirement_id=key, capability_id=entry.capability_id,
-                capability_version=entry.capability_version, stage=stage,
-            ))
+            count = pre_requirements if stage == "pre_submit" else 1
+            for index in range(count):
+                key = "project." + stage + (f".{index + 1:02d}" if count == 2 else "")
+                requirements.append(AtomicGuideRequirement(
+                    requirement_id=key, statement="Apply the registered project image rules.",
+                    disposition="supported_" + stage, evidence_refs=refs,
+                    classification_rationale="The recorded fixture has a registered image for this stage.",
+                    check_specification=_recorded_specification(stage, index=index),
+                ))
+                target.append(binding_type(
+                    requirement_id=key, capability_id=entry.capability_id,
+                    capability_version=entry.capability_version, stage=stage,
+                ))
         value = base.model_dump(mode="json", exclude={"setup_notes"})
         value.update(
             submission_artifact_policy=SubmissionArtifactPolicyProposal(
@@ -71,10 +75,10 @@ class RecordedGuideRuntime(E2EProjectGuideRuntime):
 
 
 
-def _recorded_specification(stage):
+def _recorded_specification(stage, *, index=0):
     """Describe the negative-trial marker, not a general code-quality evaluator."""
     pre = stage == "pre_submit"
-    marker = "project-rejected.txt" if pre else "post-rejected.txt"
+    marker = ("project-rejected.txt" if index == 0 else "second-pre-rejected.txt") if pre else "post-rejected.txt"
     code = "probe.project_rule_failed" if pre else "probe.post_rule_failed"
     return CheckSpecification.model_validate({
         "evaluation_method": "static_inspection",

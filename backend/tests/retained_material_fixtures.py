@@ -4,6 +4,8 @@ These prerequisites exercise canonical storage guards, not deployment/provider
 conformance. Local/MinIO execution has its own focused integration proof.
 """
 
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
@@ -50,9 +52,11 @@ from app.modules.artifacts.submission_admission import (
     SubmissionBundlePreparationRuntime,
 )
 from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
-    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_materialization import PreparedBundleMaterializationService
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
@@ -168,7 +172,7 @@ def _runtime_factory(
         try:
             yield SubmissionBundlePreparationRuntime(
                 preparation=preparation,
-                inspector=inspector,
+                intake=LocalIntakeAdapter(inspector), archive_limits=SubmissionArchiveLimits(),
                 materialization=materialization,
                 durable_put=SubmissionBundleDurablePutService(
                     session=session,
@@ -285,10 +289,9 @@ async def retained_admission(
                     authorization=materialization_authority,
                     preparation=preparation,
                     checker_execution=SelectedPreSubmitCheckerExecutionAdapter(
-                        archive_inspector=inspector,
                         external_execution=external_execution or _ForbiddenExternalExecution(),
                     ),
-                    storage_scheme="s3",
+                    storage_scheme="s3", archive_limits=SubmissionArchiveLimits(),
                 )
                 storage = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()

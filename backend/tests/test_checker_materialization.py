@@ -17,12 +17,14 @@ from app.modules.artifacts.preparation import (
     ArtifactScratchCapacityError,
     ArtifactScratchManager,
 )
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveEntryType,
     SubmissionArchiveFailureCode,
-    SubmissionArchiveInspector,
     SubmissionArchiveLimits,
     SubmissionArchiveRejectedError,
+)
+from app.modules.artifacts.submission_archive import (
+    SubmissionArchiveInspector,
 )
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 

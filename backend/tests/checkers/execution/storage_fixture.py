@@ -1,5 +1,7 @@
 """Closed history with canonical stored ART lineage and real fixed-service phase authority."""
 
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from app.modules.checkers.api.selected_post_submit import make_selected_post_submit_request
 from uuid import UUID
 
@@ -48,7 +50,9 @@ async def seed_storage_run(factory, submission_id, *, verdict="passed", state="c
     from app.modules.artifacts.models import ArtifactStorageNamespace
     from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
     from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
-    from app.modules.artifacts.submission_archive import SubmissionArchiveInspector, SubmissionArchiveLimits
+    from app.modules.artifacts.api.submission_archive import (
+        SubmissionArchiveLimits,
+    )
     from tests.checkers.execution.support import ControlledSelectedExecution
     from tests.retained_material_fixtures import retained_archive_store
     from tests.test_checker_materialization import _limits
@@ -86,7 +90,7 @@ async def seed_storage_run(factory, submission_id, *, verdict="passed", state="c
             materialization = post_submission_materialization(
                 sessions=factory, store=store, namespace=namespace,
                 preparation=ArtifactPreparationService(manager),
-                inspector=SubmissionArchiveInspector(SubmissionArchiveLimits()),
+                intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=180_000,
             )
             executor = live_executor(
                 SimpleNamespace(factory=factory, service=materialization),

@@ -280,6 +280,9 @@ class Settings(BaseSettings):
         gt=0,
         le=86_400,
     )
+    artifact_intake_service_socket: Path | None = None
+    artifact_intake_image_digest: str | None = None
+    artifact_intake_config_digest: str | None = None
     external_checker_service_socket: Path | None = None
     external_checker_material_root: Path | None = None
     external_checker_service_timeout_seconds: float = Field(

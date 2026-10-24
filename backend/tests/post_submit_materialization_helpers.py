@@ -1,5 +1,7 @@
 """Real verified admission/Submission fixtures and controlled post-submit authority."""
 
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from contextlib import asynccontextmanager
 from io import BytesIO
 from types import SimpleNamespace
@@ -21,9 +23,11 @@ from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
 from app.modules.artifacts.service import artifact_storage_namespace_spec
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
-    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
@@ -304,7 +308,7 @@ async def _material_fixture(
             store=counted,
             namespace=namespace,
             preparation=preparation,
-            inspector=inspector,
+            intake=LocalIntakeAdapter(inspector), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=120_000,
         )
         yield SimpleNamespace(
             replica_id=replica_id,

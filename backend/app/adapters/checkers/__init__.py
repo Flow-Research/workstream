@@ -120,10 +120,9 @@ def configured_external_checker_execution(settings) -> ExternalCheckerExecutionA
     return _ConfiguredExternalCheckerExecution(settings)
 
 
-def selected_pre_submit_checker_execution(*, settings, archive_inspector):
+def selected_pre_submit_checker_execution(*, settings):
     """Compose default/PRE checking with deferred project-image transport."""
     return SelectedPreSubmitCheckerExecutionAdapter(
-        archive_inspector=archive_inspector,
         external_execution=configured_external_checker_execution(settings),
     )
 
@@ -214,8 +213,7 @@ class _ExecutionRequest(Protocol):
 class SelectedPreSubmitCheckerExecutionAdapter:
     """Build the selected default-plus-external PRE processor from exact ART facts."""
 
-    def __init__(self, *, archive_inspector, external_execution) -> None:
-        self._archive_inspector = archive_inspector
+    def __init__(self, *, external_execution) -> None:
         self._external_execution = external_execution
 
     def build(self, request: _ExecutionRequest) -> SelectedPreSubmitProcessor:
@@ -224,13 +222,11 @@ class SelectedPreSubmitCheckerExecutionAdapter:
         default_input = getattr(request, "default_checker_input", None)
         attempt_id = getattr(request, "attempt_id", None)
         attempt_request_digest = getattr(request, "attempt_request_digest", None)
-        grants = getattr(request, "external_grants", None)
         if (
             policy is None
             or default_input is None
             or attempt_id is None
             or attempt_request_digest is None
-            or grants is None
         ):
             raise SelectedPreSubmitInfrastructureUnavailable(
                 "material_unavailable"
@@ -255,13 +251,10 @@ class SelectedPreSubmitCheckerExecutionAdapter:
             media_type="application/zip",
         )
         return SelectedPreSubmitProcessor(
-            archive_inspector=self._archive_inspector,
-            inspection=request.inspection,
             policy=policy,
             default_input=default_input,
             identity=identity,
             material=material,
-            grants=grants,
             execution=self._external_execution,
         )
 

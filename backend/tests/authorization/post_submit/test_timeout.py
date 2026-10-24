@@ -103,6 +103,7 @@ def controlled_deadline(monkeypatch, execution):
 async def test_outer_deadline_cannot_hide_failed_scratch_cleanup(tmp_path, isolated_database_env, monkeypatch, failure, cleanup_error):
     import app.modules.checkers.execution as execution
     from app.modules.artifacts.preparation import ArtifactScratchIntegrityError, ArtifactPreparationDeadlineError
+    import app.modules.artifacts.post_submit_materialization as materialization
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
@@ -110,7 +111,7 @@ async def test_outer_deadline_cannot_hide_failed_scratch_cleanup(tmp_path, isola
         error_type = ArtifactScratchIntegrityError if cleanup_error == "integrity" else ArtifactPreparationDeadlineError
         original_release = h.manager.release
         original_workspace = h.manager._cleanup_workspace_sync
-        original_projection = h.inspector._projected_tree
+        original_projection = materialization.exported_submission_tree
         async def failed_release(reservation):
             entered.set()
             await finish.wait()
@@ -133,7 +134,7 @@ async def test_outer_deadline_cannot_hide_failed_scratch_cleanup(tmp_path, isola
             if failure == "workspace":
                 monkeypatch.setattr(h.manager, "_cleanup_workspace_sync", failed_workspace)
             else:
-                monkeypatch.setattr(h.inspector, "_projected_tree", failed_projection)
+                monkeypatch.setattr(materialization, "exported_submission_tree", failed_projection)
         deadlines = controlled_deadline(monkeypatch, execution)
         task = asyncio.create_task(live_executor(h).evaluate_post_submission(h.request))
         try:
@@ -168,7 +169,7 @@ async def test_outer_deadline_cannot_hide_failed_scratch_cleanup(tmp_path, isola
             await asyncio.gather(task, return_exceptions=True)
             monkeypatch.setattr(h.manager, "release", original_release)
             monkeypatch.setattr(h.manager, "_cleanup_workspace_sync", original_workspace)
-            monkeypatch.setattr(h.inspector, "_projected_tree", original_projection)
+            monkeypatch.setattr(materialization, "exported_submission_tree", original_projection)
             for binding in list(h.preparation._active):
                 await h.preparation.release_prepared_artifact(binding)
             await h.preparation.retry_pending_cleanup()

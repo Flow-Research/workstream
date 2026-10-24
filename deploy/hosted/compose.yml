@@ -36,6 +36,9 @@ x-backend-environment: &backend-environment
   WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256:?set the exact runtime trust policy digest}
   WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS:?set the measured S3 write timeout}
   WORKSTREAM_ARTIFACT_SCRATCH_ROOT: /var/lib/workstream/scratch
+  WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET: /var/lib/workstream/intake-runtime/checker.sock
+  WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
+  WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
   WORKSTREAM_ARTIFACT_STORE_BACKEND: s3_compatible
   WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS:?set the measured complete-read deadline}
   WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS: ${WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS:?set the measured terminal persistence margin}
@@ -219,6 +222,10 @@ services:
         target: /var/lib/workstream/checker-runtime
         read_only: true
       - type: bind
+        source: /var/lib/workstream/intake-runtime
+        target: /var/lib/workstream/intake-runtime
+        read_only: true
+      - type: bind
         source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime certificate path}
         target: /run/workstream-roles-anywhere/certificate.pem
         read_only: true
@@ -276,6 +283,10 @@ services:
       - type: bind
         source: /var/lib/workstream/checker-runtime
         target: /var/lib/workstream/checker-runtime
+        read_only: true
+      - type: bind
+        source: /var/lib/workstream/intake-runtime
+        target: /var/lib/workstream/intake-runtime
         read_only: true
       - type: bind
         source: /var/lib/workstream/guide-runtime

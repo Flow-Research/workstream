@@ -7,9 +7,11 @@ import zipfile
 import pytest
 
 from app.modules.artifacts.sources import ArtifactCommitment
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
-    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,

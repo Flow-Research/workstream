@@ -91,41 +91,72 @@ and API/worker/Beat processes belong to one disposable local run; the isolated-t
 runner owns database/role/MinIO namespace cleanup. This still does not certify
 hosted gVisor, arbitrary checker quality, live human review, or deployment.
 
-Run from `backend/` with the backend environment installed, disposable PostgreSQL,
-MinIO, Redis and a local digest registry. Build `workstream-checker-service` from
-`external_checkers/Cargo.toml`; build/push this directory's Dockerfile and use its
-registry-resolved digest, not a tag. Set the supported isolated-runner admin URL
-and MinIO endpoint; the runner allocates and removes its own database, role,
-bucket and prefix. Redis and registry must be owned by this drill, and the caller
-must remove those containers after the run. Never use a deployment broker.
+Run from `backend/` on a dedicated Linux x86-64 KVM host with disposable
+PostgreSQL, MinIO and Redis. Provision the [Smol node](../../external_checkers/README.md#smol-microvm-engine)
+with `maximum_parallel=1`, the pinned trusted intake image and this directory's
+project fixture image. Both are operator-provisioned cache entries; no registry
+or Docker socket is needed by the API/worker or running guests. Build the Rust
+service and native guest from this checkout. The probe takes the exact node
+configuration and checks both typed adapter identities before starting services.
+
+The public drill deliberately injects faults. Start `public_node_faults.py` on
+the host against **only the dedicated drill unit**, with `--node-config`, `--unit`
+and `--root <work-dir>/node-control`, plus `--owner-manifest <custody.json>`.
+Run it with the repository root on `PYTHONPATH`. The fresh control directory
+must be mode `0700` with no symlink or writable ancestor; control files are
+mode `0600` and accessed relative to its retained directory descriptor. It installs a pinned test-only Smol wrapper,
+records exact project launch attempts and preserves trusted-intake availability.
+It restores the original config and restarts that same unit on SIGTERM/exit.
+Keep its parent supervisor alive and always terminate/wait for it in a shell
+`trap` after the probe, including failures. Propagate a nonzero supervisor exit;
+require its `supervisor-cleanup.json` receipt, matching original config hash and
+empty owned-resource inventory. The receipt must also confirm the exact foreign
+fixture VM/disk/cgroup/process is gone. The fixture uses exact-name noninteractive
+`--force` deletion only after checking its label. Never target a shared production node.
+The operator supplies a private custody manifest from independently verified
+build/provisioning records. It contains `unit`, absolute `config`, `socket` and
+`executable`, the preserved `owner`, `config_sha256`, the complete original
+`node_config`, `service_sha256`, `smol_sha256`, `guest_sha256`, `wrapper_sha256`
+and the clean `source_tree` commit. The supervisor checks live unit PID/argv,
+delegated cgroup, configuration, owner and binary hashes before changing anything.
+The probe receives that same manifest read-only through `--expected-custody`;
+it permits only the recorded test wrapper substitution and compares the host
+validation receipt. Do not generate expected binary hashes from an unverified
+node and call that independent build custody.
+
+The API proof entry point records genuine intake readiness/cleanup acknowledgements;
+it delegates to the production adapter and is never imported by production.
 
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /tmp/guide-journey-cleanup.json --timeout-seconds 1500 \
   --lane guide_journey -- \
   .venv/bin/python ../experiments/pilot04_external_checker_runtime/run_public_journey_probe.py \
-  --image-reference 'localhost:<port>/<repository>@sha256:<manifest-digest>' \
-  --service-binary /absolute/path/to/workstream-checker-service \
+  --image-reference 'workstream-test/public-journey@sha256:<manifest-digest>' \
+  --node-config /absolute/private-node/service.json \
+  --expected-custody /absolute/private-node/custody.json \
   --broker-url redis://127.0.0.1:<owned-port>/0 \
-  --work-dir /tmp/guide-journey-private-run
+  --work-dir /absolute/private-guide-journey
 ```
 
-Use a new metadata path and work directory for each run. Diagnostics stay in the
-private work directory; the final JSON contains custody identifiers and outcomes,
-not guide contents, tokens or provider credentials. Check `cleanup_complete`,
-`database_cleanup_complete` and `minio_cleanup_complete` in the runner metadata.
-The drill stops owned API, worker, Beat and Rust processes even on failure.
-The removed approved-guide bootstrap mode is not an alternate entry path.
+Use a new metadata path, work directory and private broker for each run. The
+isolated runner owns database/role/bucket/prefix cleanup. The probe stops its API,
+worker and Beat; the host supervisor owns node configuration and restart. Remove
+only the drill's own infrastructure after verifying both cleanup receipts. Do
+not remove retained product evidence or use broad container/volume pruning.
 
-The backend lock and the Rust checker service are Linux-only. On macOS with
-Docker Desktop, run the runner, service and probe inside a Linux container that
-can reach the Docker socket, mounting the repository at its identical host path.
-Three host limits apply there:
+The expanded cases cover authenticated upload readiness before the last byte,
+disconnect cleanup, no unauthenticated allocation, default-only and two ordered
+project PRE bindings, stopping at the first failed binding, bounded pre-launch
+retry/exhaustion, controller loss, same-key infrastructure replay and fresh-request
+recovery. POST outage uses the existing **public Operator discovery/retry routes**
+and observes the next durable generation before governed acceptance. The prior
+non-live routing retry remains a separate trial. Check the final JSON cases and
+`cleanup_complete`, `database_cleanup_complete` and `minio_cleanup_complete`;
+a partial run is not evidence for its unexecuted cases.
 
-- Keep the work directory path short. The checker's Unix socket path must fit
-  the Linux 107-byte limit.
-- Put the work directory on a Docker volume inside the Desktop VM, mounted at
-  its identical path. The host-shared filesystem refuses `chmod` on a Unix
-  socket, and checker containers need a bind source the engine can resolve.
-- On Apple M4 hosts, set `OPENSSL_armcap=0` in the container if importing
-  `cryptography` stops with "Illegal instruction".
+The final JSON records source/image identities, public receipts, exact selected
+attempts and governed outcomes. Private logs contain diagnostic metadata, never
+provider credentials. The Flow signer and guide inference are explicit fixtures;
+this proves self-hosted execution through real API/PG/MinIO/Celery owners, not
+production Flow, live model quality, native AWS S3 activation or hosted deployment.

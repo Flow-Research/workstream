@@ -27,6 +27,7 @@ from app.modules.artifacts.provider_activation import (
 )
 from app.modules.artifacts.models import ArtifactProviderProbeResult
 from tests.artifact_store_helpers import artifact_admission_limit_settings
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -694,6 +695,7 @@ async def _cache_native_aws_worker_runtime(
 ) -> UUID:
     """Initialize once, then leave the process runtime cached outside its loop scope."""
     import app.core.config as config
+    import app.adapters.artifacts as artifact_adapter
     from app.adapters.artifacts import internal_workers
 
     namespace = aws_s3_namespace_fingerprint(settings)
@@ -713,6 +715,7 @@ async def _cache_native_aws_worker_runtime(
         await engine.dispose()
 
     monkeypatch.setattr(config, "get_settings", lambda: settings)
+    monkeypatch.setattr(artifact_adapter, "trusted_submission_intake", lambda _settings: LocalIntakeAdapter())
     monkeypatch.setattr(internal_workers, "get_settings", lambda: settings)
     monkeypatch.setattr(internal_workers, "get_database_url", lambda: database_url)
     assert internal_workers._runtime is None
@@ -880,6 +883,7 @@ async def test_cached_native_aws_worker_consumers_retain_activation_scope_throug
     def compose_materialization(**kwargs):
         assert kwargs["sessions"] is business_sessions
         assert kwargs["store"] is store
+        assert isinstance(kwargs["intake"], LocalIntakeAdapter)
         return Materialization()
 
     monkeypatch.setattr(

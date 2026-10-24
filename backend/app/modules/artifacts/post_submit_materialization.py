@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Callable
-from contextlib import contextmanager
+from contextlib import contextmanager, AsyncExitStack
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -12,6 +12,9 @@ from app.interfaces.artifacts import (
     ArtifactIntegrityError, ArtifactLimitExceededError, ArtifactStoreUnavailableError,
 )
 from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
+from app.interfaces.trusted_submission_intake import TrustedIntakePreparation, TrustedSubmissionIntakeAdapter
+from app.interfaces.external_services import ExternalServiceAdapterError
+from app.modules.artifacts.trusted_intake import prepared_trusted_intake, TrustedArchiveInspector, prepare_bytes_with_intake
 from app.modules.checkers.api.materialization import (
     PostSubmissionMaterialConsumer, PostSubmissionMaterializationResult,
     PostSubmissionMaterializationUnavailable, PostSubmissionMaterializationFailure,
@@ -26,8 +29,13 @@ from app.modules.artifacts.preparation import (
     PostExternalMaterialGrantRequest,
 )
 from app.modules.artifacts.service import ArtifactStorageNamespaceError, ArtifactStorageNamespaceSpec
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveRejectedError,
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
-    SealedSubmissionTree, SubmissionArchiveInspector, SubmissionArchiveRejectedError,
+    SealedSubmissionTree,
+    exported_submission_tree,
 )
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.evaluation_contract import (
@@ -195,11 +203,11 @@ class _MaterialView:
 class _MaterialProcessor:
     """Keep async evaluation inside the shared projection and scratch lifetime."""
     def __init__(
-        self, inspector, inspection, request, consumer, *, preparation, prepared,
+        self, intake, inspection, request, consumer, *, preparation, prepared, limits,
         execution, materialization, media_type,
     ) -> None:
         """Bind one inspection, request and consumer for preparation-owned execution."""
-        self._inspector, self._inspection = inspector, inspection
+        self._intake, self._inspection, self._limits = intake, inspection, limits
         self._request, self._consumer = request, consumer
         self._preparation, self._prepared = preparation, prepared
         self._execution, self._materialization = execution, materialization
@@ -211,6 +219,7 @@ class _MaterialProcessor:
     def abort(self) -> None:
         """Revoke reads and cancel the consumer before preparation drains cleanup."""
         self._aborted = True
+        self._intake.abort()
         if self._view is not None:
             self._view.close()
         if self._consumer_task is not None:
@@ -218,7 +227,9 @@ class _MaterialProcessor:
 
     async def process(self, reader, workspace) -> PostSubmissionExecutionResult:
         """Project off-loop, validate callback output, and drain projection cleanup."""
-        projection = self._inspector._projected_tree(reader, workspace, expected=self._inspection)
+        del reader
+        projection = exported_submission_tree(self._intake.export, workspace,
+                                             expected=self._inspection, limits=self._limits)
         # The preparation owner shields and drains this entire operation, including
         # projection entry, before it releases the reader or workspace.
         tree = await asyncio.to_thread(projection.__enter__)
@@ -230,6 +241,9 @@ class _MaterialProcessor:
                 workspace=workspace, execution=self._execution,
                 materialization=self._materialization, media_type=self._media_type,
             )
+            await self._intake.close()
+            if self._aborted:
+                raise asyncio.CancelledError
             self._consumer_task = asyncio.create_task(self._consumer.evaluate(self._request, self._view))
             result = validate_execution_result(await self._consumer_task)
             result.validate_request(self._request)
@@ -252,14 +266,17 @@ class PostSubmissionMaterializer:
         self, *, sessions: async_sessionmaker[AsyncSession],
         tasks: Callable[[AsyncSession], SubmittedBundlePort], store: ArtifactStore,
         namespace: ArtifactStorageNamespaceSpec, preparation: ArtifactPreparationService,
-        inspector: SubmissionArchiveInspector,
+        intake: TrustedSubmissionIntakeAdapter,
+        archive_limits: SubmissionArchiveLimits,
+        artifact_deadline_ms: int,
         authority: Callable[[AsyncSession], MaterializationAuthorityPort],
         current_execution: Callable[[AsyncSession], CurrentExecutionPort],
     ) -> None:
         """Require explicit owner ports, scratch service and material authority."""
         self._sessions, self._tasks, self._store = sessions, tasks, store
         self._namespace, self._preparation = namespace, preparation
-        self._inspector, self._authority = inspector, authority
+        self._intake, self._authority = intake, authority
+        self._archive_limits, self._artifact_deadline_ms = archive_limits, artifact_deadline_ms
         self._current_execution = current_execution
 
     @staticmethod
@@ -318,26 +335,36 @@ class PostSubmissionMaterializer:
         failure = None
         try:
             try:
-                prepared = await self._preparation.prepare(
-                    self._store.open(selected.provider_object_ref), media_type=selected.media_type,
-                    expected_sha256=selected.sha256, expected_size=selected.byte_count,
-                )
-                inspection = await prepared.inspect(self._inspector)
-                manifest = build_submission_manifest(inspection)
-                if manifest.sha256 != selected.semantic_manifest_sha256:
-                    raise PostSubmissionMaterializationFailure("post_submit_material_manifest_mismatch")
-                materialization_facts = self._authority_facts(facts, selected)
-                evaluation = await self._preparation._process_prepared_submission(
-                    prepared, _MaterialProcessor(
-                        self._inspector, inspection, request, consumer,
-                        preparation=self._preparation, prepared=prepared,
-                        execution=facts, materialization=materialization_facts,
-                        media_type=selected.media_type,
-                    ),
-                    reserved_bytes=manifest.total_expanded_bytes,
-                    # ART's external grant adds one owned mount around the tree.
-                    maximum_entries=manifest.entry_count + 1,
-                )
+                async with AsyncExitStack() as intake_cleanup:
+                    pending_intake = await intake_cleanup.enter_async_context(prepared_trusted_intake(
+                        self._intake, TrustedIntakePreparation(
+                            phase="post_submit", policy_sha256=request.policy.policy_sha256,
+                            limits=self._archive_limits, deadline_ms=self._artifact_deadline_ms,
+                        ),
+                    ))
+                    prepared, intake = await prepare_bytes_with_intake(pending_intake,
+                        self._preparation.prepare(
+                            self._store.open(selected.provider_object_ref), media_type=selected.media_type,
+                            expected_sha256=selected.sha256, expected_size=selected.byte_count,
+                        ),
+                    )
+                    inspection = await prepared.inspect(TrustedArchiveInspector(intake, prepared.commitment),
+                                                        on_cancel=intake.abort)
+                    manifest = build_submission_manifest(inspection)
+                    if manifest.sha256 != selected.semantic_manifest_sha256:
+                        raise PostSubmissionMaterializationFailure("post_submit_material_manifest_mismatch")
+                    materialization_facts = self._authority_facts(facts, selected)
+                    evaluation = await self._preparation._process_prepared_submission(
+                        prepared, _MaterialProcessor(
+                            intake, inspection, request, consumer, limits=self._archive_limits,
+                            preparation=self._preparation, prepared=prepared,
+                            execution=facts, materialization=materialization_facts,
+                            media_type=selected.media_type,
+                        ),
+                        reserved_bytes=manifest.total_expanded_bytes,
+                        # ART's external grant adds one owned mount around the tree.
+                        maximum_entries=manifest.entry_count + 1,
+                    )
             finally:
                 if prepared is not None:
                     try:
@@ -362,6 +389,7 @@ class PostSubmissionMaterializer:
         except (
             ArtifactObjectMissingError, ArtifactInputMismatchError, ArtifactIntegrityError,
             ArtifactLimitExceededError, ArtifactStoreUnavailableError, SubmissionArchiveRejectedError,
+            ExternalServiceAdapterError,
         ):
             failure = PostSubmissionMaterializationFailure("post_submit_material_unavailable")
         await self._select(facts, original=selected, evidence_id=evidence_id)

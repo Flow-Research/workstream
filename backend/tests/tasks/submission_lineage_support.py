@@ -1,5 +1,8 @@
 """Shared real ART preparation and verifier fixture for TASK integration proofs."""
 
+from unittest.mock import patch
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from types import SimpleNamespace
 from uuid import UUID
 from app.core.identifiers import new_record_id
@@ -64,7 +67,7 @@ async def _verified_admission(factory, store, namespace, settings, context, requ
 
 
 async def _prepare_put_attempt(factory, settings, context, request):
-    """Run the real ART preparation command while leaving verification pending."""
+    """Run ART authority/storage with explicit in-process intake; leave verification pending."""
     http = Request(
         {
             "type": "http",
@@ -79,12 +82,13 @@ async def _prepare_put_attempt(factory, settings, context, request):
             request_id=new_record_id(),
             correlation_id=new_record_id(),
         )
-        result = await get_submission_bundle_preparation_command(
-            http,
-            session,
-            put_authority,
-            PreparedSubmissionBundlePreparationAuthorization(session, context),
-        ).prepare(request)
+        with patch("app.adapters.artifacts.trusted_submission_intake", return_value=LocalIntakeAdapter()):
+            result = await get_submission_bundle_preparation_command(
+                http,
+                session,
+                put_authority,
+                PreparedSubmissionBundlePreparationAuthorization(session, context),
+            ).prepare(request)
         assert result.put_attempt_id is not None
     return result.put_attempt_id
 

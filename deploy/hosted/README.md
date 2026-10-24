@@ -3,8 +3,8 @@
 This directory contains the first bounded release composition for the Workstream
 API, durable Celery worker, Beat scheduler, fixed guide-document parser and
 existing Rust external-checker service. It targets one dedicated Linux runner
-host with Docker and gVisor
-`runsc`. PostgreSQL, Redis, AWS S3, Flow identity and the optional OTLP collector
+host with Docker and gVisor `runsc` for project execution, plus a separately
+provisioned KVM/Smol node for trusted ZIP intake. PostgreSQL, Redis, AWS S3, Flow identity and the optional OTLP collector
 are external services managed by the approved environment.
 
 The files prepare a release; they do not provision or deploy one. A successful
@@ -29,9 +29,14 @@ controller container's mount namespace, resolves checker bind sources:
 ```text
 /var/lib/workstream/scratch
 /var/lib/workstream/checker-runtime/checker.sock
+/var/lib/workstream/intake-runtime/checker.sock
 ```
 
-Do not replace either path with a named volume or another in-container path.
+Keep these absolute paths consistent across the host and clients. The intake
+node owns its private socket directory; API and Celery mount it read-only. It
+needs no Docker socket, provider credentials or project model credentials.
+Trusted ZIP inspection and default checks run in its pinned guest image; project
+PRE/POST still use the separately configured execution capability.
 
 Guide parsing uses a separate private Unix socket at
 `/var/lib/workstream/guide-runtime/guide.sock`. The parser uses the immutable
@@ -112,6 +117,7 @@ create the fixed private directories with these exact identities:
 ```sh
 sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/scratch
 sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/checker-runtime
+sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/intake-runtime
 sudo install -d -m 0750 -o 10002 -g 10001 /var/lib/workstream/guide-runtime
 stat -c '%g' /var/run/docker.sock
 ```
@@ -126,6 +132,14 @@ changing or deleting this directory, drain checker work and verify cleanup of
 its exact owned containers. If custody was lost, reconcile independently verified
 container IDs; a new owner will not adopt old containers. See
 [container recovery ownership](../../external_checkers/README.md#container-recovery-ownership).
+
+Provision the [Smol node and pinned trusted image](../../external_checkers/README.md#trusted-submission-intake)
+under UID/GID 10001 before launch. Its socket must be mode `0600` inside the
+`0700` intake directory. Preserve its owner and lease files across restarts. Set
+`WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST` and
+`WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST` to the exact cached manifest/config;
+project registrations cannot select that privileged purpose. Account for its
+2 GiB guest memory plus VMM overhead when setting the delegated node budget.
 
 Copy `release.env.example` to an operator-owned non-secret environment file and
 replace every example identity. The file contains paths and public configuration,
@@ -260,14 +274,16 @@ python3 deploy/hosted/preflight.py \
 The full preflight additionally checks secret/config metadata without reading
 secret contents, validates the private directories and Docker-socket group, and
 requires locally registered runsc plus every exact cached image at that point in
-time:
+time. It also checks the private intake socket and calls the production typed
+intake health adapter from the pinned backend image with no secrets or network.
+Wrong runtime, image/config or default behavior rejects launch:
 
 ```sh
 python3 deploy/hosted/preflight.py --env-file /etc/workstream/release.env
 ```
 
 Preflight cannot attest the active AWS identity, absence of extra IAM
-permissions, Flow token acceptance, external service health, collector delivery,
+permissions, Flow token acceptance, a successful VM boot, collector delivery,
 backup recoverability or a live checker result. Issue #582 and PR #592 own the
 AWS release identity, exact role/policy and bucket-policy proof contract. This
 configuration carries those values into every long-running process environment
@@ -282,7 +298,7 @@ Compose only that parsed allowlist plus fixed process path, operator home and
 local Docker-socket values. Ambient shell values cannot replace an image, Flow
 URL, secret path, Compose selector or Docker daemon selector. Every `up` also
 reloads the current checker configuration and repeats the checker-selector,
-private-host-input and Docker-runtime/cache checks before starting anything.
+private-host-input, Docker-runtime/cache and typed intake readiness checks before starting anything.
 Skipping the separate preflight does not skip these launch checks. `pull`, `ps`
 and `stop` remain available without launch-only checks so an invalid host can
 still be inspected or stopped. Run `up` from the same trusted administrator

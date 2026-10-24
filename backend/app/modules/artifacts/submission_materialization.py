@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -11,18 +12,25 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
+from app.core.cancellation import await_cancellation_resistant
+from app.interfaces.trusted_submission_intake import TrustedIntakeSession, TrustedDefaultBinding
+from app.interfaces.external_services import ExternalServiceAdapterError
+from app.modules.artifacts.submission_archive import exported_submission_tree
+from app.modules.checkers.api.materialization import PreSubmitMaterialView, SubmissionMaterialEntry
 from app.interfaces.external_checker_execution import (
     ExternalCheckerMaterialGrant,
 )
 from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
 from app.modules.artifacts.preparation import (
     ArtifactPreparationService,
+    ArtifactPreparationDeadlineError,
     ExternalMaterialFile,
     ExternalMaterialGrantRequest,
 )
 from app.modules.artifacts.sources import PreparedArtifact
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveInspectionResult,
+    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_manifest import (
     SubmissionChangeGateResult,
@@ -36,6 +44,7 @@ from app.modules.checkers.api.pre_submit_material import (
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     WorkstreamDefaultCheckerInput,
+    WorkstreamDefaultCheckerResult,
     workstream_default_input_body,
 )
 from app.modules.checkers.api.external import (
@@ -74,6 +83,7 @@ class PreparedBundleMaterializationRequest:
     external_policy: LockedExternalPreSubmitPolicy
     default_checker_input: WorkstreamDefaultCheckerInput
     selected_reservation: SelectedPreSubmitReservationFacts
+    intake: TrustedIntakeSession
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +104,6 @@ class PreSubmitCheckerExecutionRequest:
     default_checker_input: WorkstreamDefaultCheckerInput
     attempt_id: UUID
     attempt_request_digest: str
-    external_grants: "PreSubmitExternalGrantPort"
 
 
 class PreSubmitExternalGrantPort(Protocol):
@@ -201,18 +210,111 @@ class _PreSubmitExternalGrantIssuer:
             )
 
 
+class _PreSubmitMaterialView:
+    """Keep verified reads and the opaque PRE grant inside one ART callback."""
+
+    def __init__(self, tree, *, grants, workspace) -> None:
+        self._tree, self._grants, self._workspace = tree, grants, workspace
+        self._closed = False
+
+    def close(self) -> None:
+        self._closed = True
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("pre-submit material view is closed")
+
+    @property
+    def entries(self) -> tuple[SubmissionMaterialEntry, ...]:
+        self._require_open()
+        return tuple(
+            SubmissionMaterialEntry(
+                item.normalized_path,
+                item.entry_type.value,
+                item.byte_count,
+                item.sha256,
+                item.executable,
+            )
+            for item in self._tree.entries
+        )
+
+    def read_file(self, normalized_path: str, *, maximum_bytes: int) -> bytes:
+        self._require_open()
+        return self._tree.read_file(normalized_path, maximum_bytes=maximum_bytes)
+
+    def external_checker_grant(self, request):
+        self._require_open()
+        return self._grants.issue(request, self._workspace)
+
+
 class PreSubmitCheckerProcessor(Protocol):
     """Async processor built by the composition-root CHECKER adapter."""
 
     def abort(self) -> None: ...
 
-    async def process(self, reader: object, workspace: object) -> SelectedPreSubmitExecutionFacts: ...
+    async def process(
+        self, material: PreSubmitMaterialView, default: WorkstreamDefaultCheckerResult,
+    ) -> SelectedPreSubmitExecutionFacts: ...
 
 
 class PreSubmitCheckerExecutionFactory(Protocol):
     """Build one process-local CHECKER processor without private imports in ART."""
 
     def build(self, request: PreSubmitCheckerExecutionRequest) -> PreSubmitCheckerProcessor: ...
+
+
+class _TrustedPreSubmitProcessor:
+    """Keep export, default, cleanup and project execution in one ART callback."""
+
+    def __init__(self, *, request, checker, limits, grants) -> None:
+        self._request, self._checker, self._limits, self._grants = request, checker, limits, grants
+        self._aborted = False
+        self._view = None
+        self._active = None
+        self.intake_cleanup_confirmed = False
+
+    def abort(self) -> None:
+        self._aborted = True
+        self._request.intake.abort()
+        self._checker.abort()
+        if self._view is not None:
+            self._view.close()
+        if self._active is not None:
+            self._active.cancel()
+
+    async def process(self, reader, workspace) -> SelectedPreSubmitExecutionFacts:
+        del reader  # The retained ZIP is never parsed by the host projection.
+        request = self._request
+        projection = exported_submission_tree(
+            request.intake.export, workspace, expected=request.inspection, limits=self._limits,
+        )
+        tree = await asyncio.to_thread(projection.__enter__)
+        try:
+            if self._aborted:
+                raise asyncio.CancelledError
+            self._view = _PreSubmitMaterialView(tree, grants=self._grants, workspace=workspace)
+            reservation = request.selected_reservation
+            binding = TrustedDefaultBinding(
+                attempt_id=reservation.attempt_id,
+                attempt_request_digest=reservation.request_digest,
+                policy_sha256=reservation.policy_sha256,
+                semantic_manifest_sha256=reservation.semantic_manifest_sha256,
+                default_input_sha256=reservation.default_input_sha256,
+            )
+            self._active = asyncio.create_task(request.intake.evaluate_default(binding, request.default_checker_input))
+            default = await self._active
+            await request.intake.close()
+            self.intake_cleanup_confirmed = True
+            if self._aborted:
+                raise asyncio.CancelledError
+            return await self._checker.process(self._view, default)
+        except ExternalServiceAdapterError as exc:
+            raise SelectedPreSubmitInfrastructureUnavailable("implementation_unavailable") from exc
+        finally:
+            self._active = None
+            if self._view is not None:
+                self._view.close()
+            await await_cancellation_resistant(asyncio.to_thread(projection.__exit__, None, None, None))
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,6 +432,7 @@ class PreparedBundleMaterializationService:
         preparation: ArtifactPreparationService,
         checker_execution: PreSubmitCheckerExecutionFactory,
         storage_scheme: str,
+        archive_limits: SubmissionArchiveLimits,
     ) -> None:
         """Compose the bounded materializer from its AUTH and ART dependencies."""
         self._session = session
@@ -339,6 +442,7 @@ class PreparedBundleMaterializationService:
         if storage_scheme not in ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES:
             raise ValueError("pre-submit materializer storage scheme is invalid")
         self._storage_scheme = storage_scheme
+        self._archive_limits = archive_limits
 
 
     async def materialize_selected_pre_submit(
@@ -387,23 +491,28 @@ class PreparedBundleMaterializationService:
                 default_checker_input=request.default_checker_input,
                 attempt_id=run_id,
                 attempt_request_digest=reservation.request_digest,
-                external_grants=_PreSubmitExternalGrantIssuer(
-                    preparation=self._preparation,
-                    prepared=request.prepared_artifact,
-                    request=request,
-                    claim=_SelectedGrantClaim(
-                        attempt_id=run_id,
-                        request_digest=reservation.request_digest,
-                    ),
-                ),
             )
         )
-        result = await self._preparation._process_prepared_submission(
-            request.prepared_artifact,
-            processor,
-            reserved_bytes=request.manifest.total_expanded_bytes,
-            maximum_entries=request.manifest.entry_count + 1,
+        trusted_processor = _TrustedPreSubmitProcessor(
+            request=request, checker=processor, limits=self._archive_limits,
+            grants=_PreSubmitExternalGrantIssuer(
+                preparation=self._preparation, prepared=request.prepared_artifact,
+                request=request, claim=_SelectedGrantClaim(run_id, reservation.request_digest),
+            ),
         )
+        try:
+            result = await self._preparation._process_prepared_submission(
+                request.prepared_artifact,
+                trusted_processor,
+                reserved_bytes=request.manifest.total_expanded_bytes,
+                maximum_entries=request.manifest.entry_count + 1,
+            )
+        except ArtifactPreparationDeadlineError as exc:
+            # ART has drained the callback and verified scratch cleanup. Only a
+            # confirmed intake close permits immediate terminal finalization.
+            if not trusted_processor.intake_cleanup_confirmed:
+                raise
+            raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded") from exc
         if type(result) is not SelectedPreSubmitExecutionFacts:
             raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
         return result

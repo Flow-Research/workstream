@@ -89,7 +89,7 @@ class MaterializationAuthorityPort(Protocol):
         ...
 
 
-class SubmissionMaterialView(Protocol):
+class PreSubmitMaterialView(Protocol):
     """Permit bounded reads only during the consumer callback."""
 
     @property
@@ -103,6 +103,11 @@ class SubmissionMaterialView(Protocol):
         self, request: ExternalCheckerExecutionRequest
     ) -> AbstractContextManager["ExternalCheckerGrantReference"]:
         """Issue one request-bound opaque grant for this callback lifetime only."""
+
+
+
+class SubmissionMaterialView(PreSubmitMaterialView, Protocol):
+    """POST adds exact immutable input identity to callback-scoped reads."""
 
     @property
     def external_checker_material(self) -> PostSubmitExternalCheckerMaterial:

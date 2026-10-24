@@ -96,6 +96,12 @@ PILOT_08_REVISION_TARGETS = frozenset({
     "backend/app/modules/tasks/revision/service.py",
     "backend/app/workers/revision_recovery.py",
 })
+TRUSTED_INTAKE_TARGETS = frozenset({
+    "backend/app/adapters/artifacts/trusted_intake.py",
+    "backend/app/interfaces/trusted_submission_intake.py",
+    "backend/app/modules/artifacts/api/submission_archive.py",
+    "backend/app/modules/artifacts/trusted_intake.py",
+})
 CHECKER_IMAGE_PUBLISH_TARGETS = frozenset({
     "backend/scripts/checker_image.py",
     "backend/scripts/checker_image_process.py",
@@ -1052,6 +1058,7 @@ def _validate_additive_partition_transition(
         | AWS_ARTIFACT_ACTIVATION_TARGETS
         | AUTH_ART_OPERATOR_TARGETS
         | CHECKER_IMAGE_PUBLISH_TARGETS
+        | TRUSTED_INTAKE_TARGETS
         | PILOT_READ_2_TARGETS
         | PILOT_READ_3_TARGETS
         | CON_02B_DELIVERY_TARGETS

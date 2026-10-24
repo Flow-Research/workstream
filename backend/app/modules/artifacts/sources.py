@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import BinaryIO, Protocol, TypeVar, final
 from uuid import UUID
@@ -43,6 +43,8 @@ class _PreparedArtifactOwner(Protocol):
         self,
         binding: object,
         inspector: PreparedArtifactInspector[_InspectionResult],
+        *,
+        on_cancel: Callable[[], None] | None = None,
     ) -> _InspectionResult:
         """Run a trusted bounded inspector against the owned scratch reader."""
 
@@ -225,11 +227,15 @@ class PreparedArtifact:
     async def inspect(
         self,
         inspector: PreparedArtifactInspector[_InspectionResult],
+        *,
+        on_cancel: Callable[[], None] | None = None,
     ) -> _InspectionResult:
         """Inspect read-only scratch bytes without exposing a path or handle."""
         if self._closed:
             raise RuntimeError("prepared artifact is closed")
-        return await self._owner.inspect_prepared_artifact(self._binding, inspector)
+        return await self._owner.inspect_prepared_artifact(
+            self._binding, inspector, on_cancel=on_cancel,
+        )
 
     async def __aenter__(self) -> CommittedArtifactSource:
         """Enter the bounded provider-I/O lifetime."""

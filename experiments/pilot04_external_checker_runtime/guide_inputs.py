@@ -19,3 +19,17 @@ Project managers separately approve the proposed pre- and post-submit rules.
 The locked review policy determines whether passing work needs human review.
 """
 CORRECTION_REASON = "Confirm that both task examples use the same project artifact and evidence rules."
+
+
+def guide_bytes(pre_requirements: int = 1) -> bytes:
+    """Three explicit recorded guide variants, selected by immutable source bytes."""
+    if pre_requirements not in (0, 1, 2):
+        raise ValueError("unsupported recorded PRE requirement count")
+    if pre_requirements == 1:
+        return GUIDE_BYTES
+    return GUIDE_BYTES + (
+        f"\nRecorded intake variant: {pre_requirements} project PRE requirements.\n"
+        "Workstream default intake remains required.\n"
+        + ("Two project requirements use distinct ordered IDs; the rejection marker applies only to the first.\n"
+           if pre_requirements == 2 else "No project PRE image is required.\n")
+    ).encode()

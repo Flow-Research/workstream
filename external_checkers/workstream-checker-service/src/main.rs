@@ -46,6 +46,8 @@ struct ServiceConfig {
     docker_binary: PathBuf,
     #[serde(default)]
     smol: Option<smol::SmolConfig>,
+    #[serde(default)]
+    trusted_intake: Option<smol::IntakeConfig>,
     runtime: String,
     isolation_mode: String,
     operating_system: String,
@@ -552,8 +554,21 @@ fn serve_connection(
     if stream.set_nonblocking(true).is_err() {
         return Ok(());
     }
-    let response = read_frame_until(&mut stream, MAX_ENVELOPE_BYTES, Instant::now() + timeout)
-        .and_then(|bytes| handle_frame(config, &stream, &bytes));
+    let frame = read_frame_until(&mut stream, MAX_ENVELOPE_BYTES, Instant::now() + timeout);
+    if let Ok(bytes) = &frame {
+        if serde_json::from_slice::<Value>(bytes)
+            .ok()
+            .and_then(|v| v["protocol_version"].as_str().map(str::to_owned))
+            .as_deref()
+            == Some("trusted_submission_intake.v1")
+        {
+            return match smol::serve_intake(config, stream, bytes) {
+                Err(error) if error == UNSETTLED_RESOURCE_ERROR => Err(error),
+                _ => Ok(()),
+            };
+        }
+    }
+    let response = frame.and_then(|bytes| handle_frame(config, &stream, &bytes));
     if let Err(error) = &response {
         eprintln!("checker request rejected: {error}");
     }
@@ -2219,6 +2234,7 @@ mod tests {
         let sandbox_gid = owner.gid();
         let config = ServiceConfig {
             smol: None,
+            trusted_intake: None,
             smol_admission: None,
             container_owner: Some(
                 load_container_owner(&File::open(&socket_root).unwrap()).unwrap(),

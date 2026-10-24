@@ -7,9 +7,11 @@ import zipfile
 
 import pytest
 
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
-    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_manifest import SubmissionManifest, build_submission_manifest
 from app.core.hashing import canonical_json_hash
@@ -180,7 +182,9 @@ def test_recovered_manifest_accepts_supported_configured_long_path():
     ('STRASSE', 'Straße'), ('Σ', 'ς'), ('İ', 'i\u0307'),
 ])
 def test_manifest_and_zip_reject_cross_entry_collisions(paths):
-    from app.modules.artifacts.submission_archive import SubmissionArchiveRejectedError
+    from app.modules.artifacts.api.submission_archive import (
+        SubmissionArchiveRejectedError,
+    )
 
     body = _manifest(_archive([('safe', b'x')])).as_dict()
     entry = body['entries'][0]
@@ -196,7 +200,9 @@ def test_manifest_and_zip_reject_cross_entry_collisions(paths):
 
 @pytest.mark.parametrize('paths', [('Dir/a', 'dir/'), ('Dir/a', 'dir/b')])
 def test_inspector_rejects_case_aliases_of_implicit_directories(paths):
-    from app.modules.artifacts.submission_archive import SubmissionArchiveRejectedError
+    from app.modules.artifacts.api.submission_archive import (
+        SubmissionArchiveRejectedError,
+    )
 
     with pytest.raises(SubmissionArchiveRejectedError, match='submission_archive_collision'):
         _manifest(_archive([(path, b'' if path.endswith('/') else b'x') for path in paths]))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterable, AsyncIterator, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
@@ -752,20 +752,7 @@ class ArtifactScratchManager:
                 for name in names:
                     if name in {".", ".."} or "/" in name or "\x00" in name:
                         raise ArtifactScratchIntegrityError("external material path is invalid")
-                    metadata = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
-                    if stat_module.S_ISDIR(metadata.st_mode):
-                        child_fd = os.open(
-                            name,
-                            os.O_RDONLY
-                            | getattr(os, "O_DIRECTORY", 0)
-                            | getattr(os, "O_NOFOLLOW", 0),
-                            dir_fd=root_fd,
-                        )
-                        try:
-                            os.fchmod(child_fd, 0o700)
-                        finally:
-                            os.close(child_fd)
-                    os.rename(name, name, src_dir_fd=root_fd, dst_dir_fd=workspace_fd)
+                    self._move_external_entry(name, root_fd, workspace_fd)
                 observed_files, observed_directories = self._seal_external_tree(workspace_fd)
                 observed = tuple(observed_files)
                 expected = tuple(
@@ -899,7 +886,7 @@ class ArtifactScratchManager:
         return entries, directories
 
     def _revoke_external_grant_sync(self, grant_id: str) -> None:
-        """Remove the published manifest before outer workspace cleanup begins."""
+        """Revoke the exact grant and restore sealed material for the next binding."""
         if _WORKSPACE_ID.fullmatch(grant_id) is None:
             raise ArtifactScratchIntegrityError("external material grant is invalid")
         root_fd = os.open(
@@ -909,11 +896,54 @@ class ArtifactScratchManager:
         )
         try:
             os.unlink(_EXTERNAL_GRANT_MANIFEST, dir_fd=root_fd)
+            self._restore_external_tree(root_fd, grant_id)
             os.fsync(root_fd)
         except FileNotFoundError as exc:
             raise ArtifactScratchIntegrityError("external material grant changed") from exc
         finally:
             os.close(root_fd)
+
+    @staticmethod
+    def _move_external_entry(name: str, source_fd: int, target_fd: int) -> None:
+        """Permit a directory parent change while retaining its sealed access mode."""
+        metadata = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        directory_fd = -1
+        try:
+            if stat_module.S_ISDIR(metadata.st_mode):
+                directory_fd = os.open(
+                    name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd,
+                )
+                os.fchmod(directory_fd, 0o700)
+            os.rename(name, name, src_dir_fd=source_fd, dst_dir_fd=target_fd)
+        finally:
+            if directory_fd >= 0:
+                try:
+                    os.fchmod(directory_fd, stat_module.S_IMODE(metadata.st_mode))
+                finally:
+                    os.close(directory_fd)
+
+    @staticmethod
+    def _restore_external_tree(root_fd: int, grant_id: str) -> None:
+        """Undo the fixed mount projection without copying files or widening child modes."""
+        staging = f".external-material-{grant_id}"
+        if set(os.listdir(root_fd)) != {"workspace"}:
+            raise ArtifactScratchIntegrityError("external material grant changed")
+        workspace_fd = os.open(
+            "workspace", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd,
+        )
+        try:
+            os.fchmod(workspace_fd, 0o700)
+            # Move the fixed mount aside first: submitted top-level names may
+            # themselves include workspace or the service manifest filename.
+            os.rename("workspace", staging, src_dir_fd=root_fd, dst_dir_fd=root_fd)
+            for name in os.listdir(workspace_fd):
+                if name == staging:
+                    raise ArtifactScratchIntegrityError("external material path is invalid")
+                ArtifactScratchManager._move_external_entry(name, workspace_fd, root_fd)
+            os.rmdir(staging, dir_fd=root_fd)
+            os.fchmod(root_fd, 0o500)
+        finally:
+            os.close(workspace_fd)
 
     async def retry_pending_cleanup(self) -> int:
         """Retry manager-owned cleanup retained before service handoff."""
@@ -2035,6 +2065,8 @@ class ArtifactPreparationService:
         self,
         binding: object,
         inspector: PreparedArtifactInspector[_InspectionResult],
+        *,
+        on_cancel: Callable[[], None] | None = None,
     ) -> _InspectionResult:
         """Run one trusted inspector while retaining scratch lifecycle custody."""
         active = self._active.get(binding)
@@ -2048,10 +2080,23 @@ class ArtifactPreparationService:
             finally:
                 active.reader.seek(0)
 
+        operation = asyncio.create_task(self._run_io(inspect_and_rewind))
         try:
             async with asyncio.timeout_at(active.deadline):
-                return await self._run_io(inspect_and_rewind)
-        except TimeoutError:
+                return await asyncio.shield(operation)
+        except (TimeoutError, asyncio.CancelledError) as failure:
+            # Interrupt socket I/O before draining the retained reader. Merely
+            # cancelling a thread await cannot release its guest or scratch.
+            try:
+                if on_cancel is not None:
+                    on_cancel()
+            finally:
+                try:
+                    await await_cancellation_resistant(operation)
+                except BaseException:
+                    pass
+            if isinstance(failure, asyncio.CancelledError):
+                raise failure from None
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"
             ) from None

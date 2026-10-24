@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from tests.trusted_intake_fixtures import LocalIntakeSession
+from app.modules.artifacts.trusted_intake import TrustedArchiveInspector
+from app.modules.artifacts.submission_materialization import _TrustedPreSubmitProcessor
+
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -71,9 +75,11 @@ from app.modules.artifacts.submission_admission import (
     require_revision_preparation_acknowledgement,
 )
 from app.modules.artifacts.api import SubmissionBundlePreparationRejected
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveLimits,
+)
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
-    SubmissionArchiveLimits,
 )
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,
@@ -365,7 +371,8 @@ async def _request(
     prepared = await preparation.prepare(
         _bytes(_archive(primary_bytes)), media_type="application/zip"
     )
-    inspection = await prepared.inspect(inspector)
+    intake = LocalIntakeSession(inspector)
+    inspection = await prepared.inspect(TrustedArchiveInspector(intake, prepared.commitment))
     manifest = build_submission_manifest(inspection)
     policy = _policy()
     packet = SubmissionPacketView(
@@ -412,9 +419,24 @@ async def _request(
             predecessor=None, predecessor_exists=False,
         ),
         packet=packet, external_policy=policy, default_checker_input=default_input,
-        selected_reservation=reservation,
+        selected_reservation=reservation, intake=intake,
     )
     return request, inspector, manager, preparation
+
+
+def _processor(*, request, policy, default_input, identity, material, grants, execution):
+    checker = SelectedPreSubmitProcessor(
+        policy=policy, default_input=default_input, identity=identity,
+        material=material, execution=execution,
+    )
+    request = replace(request, default_checker_input=default_input, external_policy=policy,
+                      selected_reservation=replace(request.selected_reservation,
+                          policy_sha256=policy.policy_sha256,
+                          admission_lineage=replace(request.selected_reservation.admission_lineage,
+                              effective_plan_sha256=policy.policy_sha256, packet_sha256=default_input.packet.sha256),
+                          default_input_sha256=workstream_default_input_sha256(default_input)))
+    return _TrustedPreSubmitProcessor(request=request, checker=checker,
+                                      limits=SubmissionArchiveLimits(), grants=grants)
 
 
 def _open_input_schema() -> ExternalCheckerSchema:
@@ -663,9 +685,8 @@ async def test_selected_pre_runs_default_then_locked_external_image(
     policy = _policy()
     identity, material, default_input = _execution_context(request, policy)
     grants, execution = _GrantIssuer(), _Execution(verdict)
-    processor = SelectedPreSubmitProcessor(
-        archive_inspector=inspector,
-        inspection=request.inspection,
+    processor = _processor(
+        request=request,
         policy=policy,
         default_input=default_input,
         identity=identity,
@@ -699,16 +720,15 @@ async def test_selected_pre_runs_default_then_locked_external_image(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("external", [False, True])
-async def test_selected_pre_only_requires_runtime_for_locked_external_images(
+async def test_selected_pre_only_requires_project_runtime_for_locked_external_images(
     tmp_path, external: bool
 ) -> None:
     request, inspector, manager, preparation = await _request(tmp_path)
     policy = _policy() if external else _empty_policy()
     identity, material, default_input = _execution_context(request, policy)
     grants = _GrantIssuer()
-    processor = SelectedPreSubmitProcessor(
-        archive_inspector=inspector,
-        inspection=request.inspection,
+    processor = _processor(
+        request=request,
         policy=policy,
         default_input=default_input,
         identity=identity,
@@ -907,9 +927,8 @@ async def test_selected_pre_default_secret_blocker_precedes_external_image(
     )
     execution = _Execution("passed")
     grants = _GrantIssuer()
-    processor = SelectedPreSubmitProcessor(
-        archive_inspector=inspector,
-        inspection=request.inspection,
+    processor = _processor(
+        request=request,
         policy=policy,
         default_input=WorkstreamDefaultCheckerInput(
             archive_sha256=material.archive_sha256,
@@ -1055,30 +1074,6 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules(
 @pytest.mark.asyncio
 async def test_selected_factory_uses_request_bound_art_grant(tmp_path) -> None:
     request, inspector, manager, preparation = await _request(tmp_path)
-    policy = request.external_policy
-    entries = tuple(
-        SubmissionMaterialEntry(
-            item.normalized_path,
-            item.entry_type.value,
-            item.byte_count,
-            item.sha256,
-            item.executable,
-        )
-        for item in request.manifest.entries
-    )
-    request = replace(
-        request, external_policy=policy,
-        default_checker_input=WorkstreamDefaultCheckerInput(
-            archive_sha256=request.prepared_artifact.commitment.sha256,
-            archive_byte_count=request.prepared_artifact.commitment.byte_count,
-            archive_media_type="application/zip",
-            semantic_manifest_sha256=request.manifest.sha256,
-            entries=entries, predecessor=None, predecessor_exists=False,
-            current_predecessor=None,
-            current_rules_sha256=request.selected_reservation.admission_lineage.rules_sha256,
-            predecessor_rules_sha256=None, packet=request.packet,
-        ),
-    )
     reservation = request.selected_reservation
     lease = SelectedPreSubmitLeaseFacts(
         reservation=reservation, lease_id=new_record_id(), lease_generation=1,
@@ -1099,6 +1094,24 @@ async def test_selected_factory_uses_request_bound_art_grant(tmp_path) -> None:
             self.calls += 1
             return lease
 
+    from app.interfaces.trusted_submission_intake import TrustedDefaultBinding
+    expected_binding = TrustedDefaultBinding(
+        attempt_id=reservation.attempt_id,
+        attempt_request_digest=reservation.request_digest,
+        policy_sha256=reservation.policy_sha256,
+        semantic_manifest_sha256=reservation.semantic_manifest_sha256,
+        default_input_sha256=reservation.default_input_sha256,
+    )
+    evaluate_default = request.intake.evaluate_default
+
+    async def bound_default(binding, value):
+        # The fake is an assertion oracle at the committed owner seam. The
+        # guest itself has no independent access to the reservation database.
+        assert binding == expected_binding
+        assert execution.requests == []
+        return await evaluate_default(binding, value)
+
+    request.intake.evaluate_default = bound_default
     expected_lease = lease
     committed = CommittedAuthority()
     execution = _Execution("passed")
@@ -1111,10 +1124,9 @@ async def test_selected_factory_uses_request_bound_art_grant(tmp_path) -> None:
         authorization=authority,
         preparation=preparation,
         checker_execution=SelectedPreSubmitCheckerExecutionAdapter(
-            archive_inspector=inspector,
             external_execution=execution,
         ),
-        storage_scheme="s3",
+        storage_scheme="s3", archive_limits=SubmissionArchiveLimits(),
     )
     try:
         await service.authorize_inspected(request)
@@ -1141,11 +1153,26 @@ async def test_selected_factory_uses_request_bound_art_grant(tmp_path) -> None:
             assert refusal.value.code == "material_unavailable"
             process.assert_not_awaited()
             assert execution.requests == []
+            for changed_reservation in (
+                replace(reservation, attempt_id=new_record_id()),
+                replace(reservation, attempt_request_digest="sha256:" + "f" * 64),
+            ):
+                with pytest.raises(SelectedPreSubmitInfrastructureUnavailable) as refusal:
+                    await service.materialize_selected_pre_submit(
+                        replace(request, selected_reservation=changed_reservation),
+                        run_id=reservation.attempt_id, lease=lease,
+                        execution_authority=CommittedAuthority(),
+                    )
+                assert refusal.value.code == "material_unavailable"
+                process.assert_not_awaited()
+                assert request.intake.default_bindings == []
+                assert execution.requests == []
         result = await service.materialize_selected_pre_submit(
             replace(request, prepared_authorization=None),
             run_id=reservation.attempt_id, lease=lease, execution_authority=committed,
         )
         assert result.eligible is True
+        assert request.intake.default_bindings == [expected_binding]
         assert committed.calls == 1
         assert len(execution.requests) == 1
         assert execution.requests[0].identity.attempt_id == reservation.attempt_id

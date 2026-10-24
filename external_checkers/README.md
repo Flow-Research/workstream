@@ -157,7 +157,60 @@ FinalAcceptance evidence. The [recovery proof](workstream-checker-service/tests/
 requires an isolated test unit: it kills the controller and injects a deletion
 failure while checking foreign VM/cgroup survival, bounded cleanup and closed
 readiness. Never run it against a shared production node.
-Same-request upload preparation and trusted guest ZIP/
-default processing are the next boundary in
-[WS-EXEC-001](../.commitrail/initiatives/WS-EXEC-001/OVERVIEW.md). Existing hosted
-Docker/runsc release composition remains a distinct deployment configuration.
+## Trusted submission intake
+
+ART uses the separate typed `trusted_submission_intake/unix_socket` capability.
+After task/project authorization, the upload request starts one trusted VM while
+receiving the ZIP. The sealed artifact reader streams the exact bytes into that
+VM for canonical inspection and extraction. ART verifies every exported path,
+size, mode and hash in quota-owned scratch. The default PRE checker runs inside
+the trusted VM only after the selected PRE reservation commits. Cleanup must be
+acknowledged before project checker execution, including on a one-slot node.
+POST uses the same intake capability during authorized artifact download and
+retains its existing lease and material revalidation.
+
+Build `intake/Dockerfile` from the repository root, pin its platform manifest and
+config, and provision it with the same cache command. Configure the node's
+`trusted_intake` object with `platform_manifest_digest` and
+`default_behavior_sha256` (the canonical `WORKSTREAM_DEFAULT_BEHAVIOR_SHA256` from
+`app.modules.checkers.api.default_checker`). The node selects this image; project
+registrations cannot select the trusted intake mode. The trusted guest uses
+1 CPU, 2 GiB memory and 3 GiB private disk; aggregate node capacity must include
+virtualization overhead. Its private writable scratch is bounded processing
+space, never artifact storage.
+
+Backend API and durable workers require all three settings:
+
+- `WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET`: private absolute Unix socket path.
+- `WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST`: exact trusted platform manifest digest.
+- `WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST`: exact image config digest.
+
+The configured socket must serve Smol with the expected trusted image and default
+behavior. A Docker/runsc project node can remain separate, but cannot satisfy ART
+intake readiness. Missing or mismatched configuration fails closed; there is no
+host ZIP/default fallback. Existing Docker-only deployment compositions therefore
+need a separately provisioned Smol intake node before accepting uploads or POST.
+
+The original artifact deadline bounds upload and intake preparation together.
+Only known pre-launch infrastructure failures permit at most three preparation
+attempts, after confirmed cleanup, with 100/200 ms backoff inside that deadline.
+No retry occurs after archive bytes are accepted. Upload failure, cancellation,
+EOF or expiry closes the lease; capacity remains reserved until guardian cleanup.
+A lost cleanup acknowledgment is an infrastructure failure, never evidence that
+resources were released. Used VMs are destroyed; only capacity is reused.
+
+The opt-in [intake proof](workstream-checker-service/tests/trusted_intake.py) uses
+backend dependencies and an isolated `maximum_parallel=1` node. It exercises
+retained ART inspection/export/grant custody, poisons host ZIP/default execution,
+and checks cancellation, abandoned uploads and idle expiry. Run with
+
+```bash
+PYTHONPATH=backend python external_checkers/workstream-checker-service/tests/trusted_intake.py \
+  --socket /absolute/node.sock --image sha256:... --config sha256:...
+```
+
+This matrix proves the adapter/ART boundary. The separate
+[public lifecycle drill](../experiments/pilot04_external_checker_runtime/README.md)
+connects the same node to API uploads and durable workers, including the public
+Operator retry and both governed policy branches. Its recorded Flow/inference
+fixtures do not certify production identity, live models or hosted deployment.

@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from collections.abc import Iterator
-from dataclasses import dataclass
-from enum import StrEnum
 import hashlib
-import math
 from pathlib import PurePosixPath
 from pathlib import Path
 import os
@@ -20,46 +17,18 @@ import zipfile
 import zlib
 
 from app.core.zip_safety import zip_directory_layout
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveEntry,
+    SubmissionArchiveEntryType,
+    SubmissionArchiveFailureCode,
+    SubmissionArchiveInspectionResult,
+    SubmissionArchiveLimits,
+    SubmissionArchiveRejectedError,
+)
 
 
 _READ_BYTES = 1024 * 1024
 _ProjectionResult = TypeVar("_ProjectionResult")
-
-
-class SubmissionArchiveFailureCode(StrEnum):
-    """Stable, non-sensitive outer-ZIP rejection categories."""
-
-    MALFORMED = "submission_archive_malformed"
-    LIMIT_EXCEEDED = "submission_archive_limit_exceeded"
-    UNSAFE_ENTRY = "submission_archive_unsafe_entry"
-    COLLISION = "submission_archive_collision"
-    ENCRYPTED = "submission_archive_encrypted"
-    INTEGRITY_FAILURE = "submission_archive_integrity_failure"
-    TIMEOUT = "submission_archive_timeout"
-
-
-class SubmissionArchiveRejectedError(ValueError):
-    """Reject an archive without exposing attacker-controlled metadata."""
-
-    def __init__(self, code: SubmissionArchiveFailureCode) -> None:
-        self.code = code
-        super().__init__(code.value)
-
-
-class SubmissionArchiveEntryType(StrEnum):
-    FILE = "file"
-    DIRECTORY = "directory"
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionArchiveEntry:
-    """One normalized structural entry; no scratch or ZIP handles escape."""
-
-    normalized_path: str
-    entry_type: SubmissionArchiveEntryType
-    byte_count: int
-    sha256: str | None
-    executable: bool | None
 
 
 def normalize_submission_archive_path(
@@ -92,17 +61,6 @@ def validate_submission_archive_inventory(entries: tuple[SubmissionArchiveEntry,
         for depth in range(1, len(parts)):
             if kinds.get("/".join(parts[:depth])) is not SubmissionArchiveEntryType.DIRECTORY:
                 raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionArchiveInspectionResult:
-    """Non-durable structural facts for the later semantic-manifest chunk."""
-
-    entries: tuple[SubmissionArchiveEntry, ...]
-    entry_count: int
-    file_count: int
-    directory_count: int
-    total_expanded_bytes: int
 
 
 def _read_projected_file(
@@ -218,43 +176,6 @@ class SealedSubmissionTree:
 
     def __repr__(self) -> str:
         return f"SealedSubmissionTree(entries={len(self._entries)}, closed={self._closed})"
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionArchiveLimits:
-    """Startup-fixed limits for one outer ZIP inspection."""
-
-    maximum_entries: int = 2_000
-    maximum_path_bytes: int = 1024
-    maximum_path_depth: int = 32
-    maximum_central_directory_bytes: int = 8 * 1024 * 1024
-    maximum_entry_bytes: int = 128 * 1024 * 1024
-    maximum_expanded_bytes: int = 512 * 1024 * 1024
-    maximum_compression_ratio: int = 100
-    maximum_inspection_seconds: float = 300.0
-
-    def __post_init__(self) -> None:
-        integers = (
-            self.maximum_entries,
-            self.maximum_path_bytes,
-            self.maximum_path_depth,
-            self.maximum_central_directory_bytes,
-            self.maximum_entry_bytes,
-            self.maximum_expanded_bytes,
-            self.maximum_compression_ratio,
-        )
-        if any(type(value) is not int or value <= 0 for value in integers):
-            raise ValueError("submission archive limits are invalid")
-        if self.maximum_entries > 100_000 or self.maximum_path_depth > 256:
-            raise ValueError("submission archive inventory limits are invalid")
-        if self.maximum_expanded_bytes > 512 * 1024 * 1024:
-            raise ValueError("submission archive expansion exceeds 512 MiB")
-        if self.maximum_entry_bytes > self.maximum_expanded_bytes:
-            raise ValueError("submission archive entry limit exceeds total limit")
-        if not isinstance(self.maximum_inspection_seconds, (int, float)) or isinstance(
-            self.maximum_inspection_seconds, bool
-        ) or not math.isfinite(self.maximum_inspection_seconds) or self.maximum_inspection_seconds <= 0:
-            raise ValueError("submission archive deadline is invalid")
 
 
 class SubmissionArchiveInspector:
@@ -798,3 +719,90 @@ def _mkdir_beneath(root_fd: int, normalized_path: str) -> None:
         os.fsync(parent_fd)
     finally:
         os.close(parent_fd)
+
+
+@contextmanager
+def exported_submission_tree(
+    export: Callable[[Callable[[SubmissionArchiveEntry, bytes], None]], None],
+    workspace: Path,
+    *,
+    expected: SubmissionArchiveInspectionResult,
+    limits: SubmissionArchiveLimits,
+) -> Iterator[SealedSubmissionTree]:
+    """Verify raw guest files in ART quota scratch without opening a host ZIP."""
+    validate_submission_archive_inventory(expected.entries)
+    for entry in expected.entries:
+        if (normalize_submission_archive_path(
+                entry.normalized_path, maximum_path_bytes=limits.maximum_path_bytes,
+                maximum_path_depth=limits.maximum_path_depth) != entry.normalized_path
+                or entry.byte_count > limits.maximum_entry_bytes):
+            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+    if (expected.entry_count > limits.maximum_entries
+            or expected.total_expanded_bytes > limits.maximum_expanded_bytes):
+        raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.LIMIT_EXCEEDED)
+    # ART supplies a retained /proc/self/fd directory capability here. Child
+    # traversal remains descriptor-relative with O_NOFOLLOW at every component.
+    root = os.open(workspace, os.O_RDONLY | os.O_DIRECTORY)
+    descriptor: int | None = None
+    tree: SealedSubmissionTree | None = None
+    files = tuple(entry for entry in expected.entries if entry.entry_type is SubmissionArchiveEntryType.FILE)
+    directories = sorted((entry for entry in expected.entries if entry.entry_type is SubmissionArchiveEntryType.DIRECTORY),
+                         key=lambda entry: (entry.normalized_path.count("/"), entry.normalized_path))
+    position, written = 0, 0
+    try:
+        details = os.fstat(root)
+        if not stat.S_ISDIR(details.st_mode) or details.st_mode & 0o077:
+            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+        for entry in directories:
+            _mkdir_beneath(root, entry.normalized_path)
+
+        def receive(entry: SubmissionArchiveEntry, content: bytes) -> None:
+            nonlocal descriptor, position, written
+            if position >= len(files) or entry != files[position] or type(content) is not bytes:
+                raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+            if descriptor is None:
+                parent, name = _open_parent_beneath(root, entry.normalized_path)
+                try:
+                    descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                         0o500 if entry.executable else 0o400, dir_fd=parent)
+                finally:
+                    os.close(parent)
+            if written + len(content) > entry.byte_count or (not content and entry.byte_count):
+                raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+            view = memoryview(content)
+            while view:
+                count = os.write(descriptor, view)
+                if count <= 0:
+                    raise OSError("raw material write failed")
+                view = view[count:]
+            written += len(content)
+            if written == entry.byte_count:
+                os.fsync(descriptor)
+                os.close(descriptor)
+                descriptor = None
+                position += 1
+                written = 0
+
+        export(receive)
+        if position != len(files) or descriptor is not None:
+            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.INTEGRITY_FAILURE)
+        for entry in reversed(directories):
+            directory = _open_beneath(root, entry.normalized_path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fchmod(directory, 0o500)
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        os.fchmod(root, 0o500)
+        os.fsync(root)
+        tree = SealedSubmissionTree(entries=expected.entries, content={
+            entry.normalized_path: _read_projected_file(root, expected.entries, entry.normalized_path, entry.byte_count)
+            for entry in files
+        })
+        yield tree
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if tree is not None:
+            tree._close()
+        os.close(root)

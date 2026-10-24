@@ -10,11 +10,9 @@ import argparse
 import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import nullcontext
-from datetime import UTC, datetime
 from decimal import Decimal
 import hashlib
 import hmac
-from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -24,7 +22,6 @@ import sys
 import tempfile
 import time
 from uuid import UUID, uuid4
-from zipfile import ZipFile, ZipInfo
 
 import httpx
 from sqlalchemy import func, select, text
@@ -35,7 +32,6 @@ from app.adapters.artifacts import (
 )
 from app.core.config import get_settings
 from app.core.identifiers import new_record_id
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.actors.api.service_identities import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.models import (
@@ -46,15 +42,12 @@ from app.modules.checkers.execution_repository import stored_result
 from app.modules.checkers.api.default_checker import WORKSTREAM_DEFAULT_CHECK_IDS
 from app.modules.outbox.models import OutboxDeliveryAttempt, OutboxEvent
 from app.modules.artifacts.service import artifact_storage_namespace_spec
-from app.modules.projects.models import ProjectGuide
-from app.modules.tasks.models import AuditEvent, Submission, SubmissionDispatch, WorkstreamTask
-from experiments.pilot04_external_checker_runtime.run_probe import _image_identity
+from app.modules.tasks.models import Submission, SubmissionDispatch, WorkstreamTask
+from app.adapters.artifacts import trusted_submission_intake
+from app.adapters.checkers import configured_external_checker_execution
 from experiments.pilot04_external_checker_runtime.run_selected_end_to_end_probe import (
     _locked_spec,
     _secret_archive,
-    _start_service,
-    _stop_service,
-    _wait_service,
 )
 from tests.authorization.post_submit_routing.support import provision_router
 from tests.post_submit_materialization_helpers import (
@@ -64,20 +57,21 @@ from tests.post_submit_materialization_helpers import (
 from tests.tasks.post_submit_routing.support import revision_archive
 from tests.projects.guide_activation.source_fixtures import _register_external_checker_fixture
 from tests.projects.guide_compilation.proposals.pg_support import seed_review_actor
-from experiments.pilot04_external_checker_runtime.public_guide_setup import public_guide_setup
 from tests.tasks.invalidation_support import provision_reconciler
 from tests.test_s3_artifact_store import minio_settings
 
 BACKEND = Path(__file__).resolve().parents[2] / "backend"
 sys.path.insert(0, str(BACKEND / "scripts"))
 from api_contract_e2e import (  # noqa: E402
-    api_environment, find_free_port, flow_settings, issue_flow_token,
+    api_environment, find_free_port, flow_settings,
 )
 
 
-def _require(condition: bool, message: str) -> None:
-    if not condition:
-        raise RuntimeError(message)
+from experiments.pilot04_external_checker_runtime.public_probe_support import (  # noqa: E402
+    _assert_outbox_worker_custody, _assert_task_has_no_effects, _json, _public_project,
+    _require, _started_public_task, _token, _wait_outbox_acknowledged,
+    _with_fixture_file, _GOVERNED_TABLES, _fixture_hashes, _assert_input_hashes,
+)
 
 
 def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
@@ -250,38 +244,6 @@ async def _wait_beat_scan(factory, process: subprocess.Popen, before: int) -> No
     raise RuntimeError("Celery Beat did not dispatch an authorized artifact scan")
 
 
-def _token(env: dict[str, str], actor) -> str:
-    issuer, audience, secret = flow_settings(env)
-    return issue_flow_token(
-        str(actor.actor_profile_id), [], issuer=issuer, audience=audience, secret=secret
-    )
-
-
-def _with_fixture_file(archive: bytes, name: str) -> bytes:
-    """Add a deterministic project-rule marker without changing valid packet members."""
-    output = BytesIO(archive)
-    with ZipFile(output, "a") as target:
-        target.writestr(
-            ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0)),
-            b"sample project rule marker\n",
-        )
-    return output.getvalue()
-
-
-async def _json(client: httpx.AsyncClient, method: str, path: str, token: str,
-                expected: int, **options) -> dict:
-    headers = {"Authorization": "Bearer " + token, **options.pop("headers", {})}
-    response = await client.request(method, path, headers=headers, **options)
-    if response.status_code != expected:
-        # Public error codes are enough to diagnose without printing guide bytes or tokens.
-        try:
-            error = response.json().get("error", {}).get("code")
-        except ValueError:
-            error = None
-        raise RuntimeError(f"{method} {path} returned {response.status_code}/{error}; expected {expected}")
-    return response.json()
-
-
 async def _provision_runtime_services(factory) -> None:
     async with factory() as session, session.begin():
         for identity in (ServiceIdentity.OUTBOX_DISPATCHER,
@@ -306,70 +268,6 @@ async def _provision_runtime_services(factory) -> None:
             ))
 
 
-async def _seed_contributor(factory) -> ActorIdentityFacts:
-    """Create a Flow-linked human without an administrator role grant."""
-    actor = ActorIdentityFacts(new_record_id(), new_record_id(), ActorKind.HUMAN)
-    async with factory() as session, session.begin():
-        session.add(ActorProfile(
-            id=str(actor.actor_profile_id), actor_kind="human", status="active",
-            provisioning_method="automatic_first_access", created_by="public-probe-fixture",
-        ))
-        await session.flush()
-        session.add(ActorIdentityLink(
-            id=str(actor.identity_link_id), actor_profile_id=str(actor.actor_profile_id),
-            issuer="https://identity.flowresearch.tech",
-            subject=str(actor.actor_profile_id), subject_kind="human",
-            status="active", linked_by="public-probe-fixture",
-            last_verified_at=datetime.now(UTC),
-        ))
-    return actor
-
-
-async def _assert_outbox_worker_custody(session, event: OutboxEvent,
-                                        project_id: UUID) -> None:
-    """Bind the observed worker attempts to this event and project authority."""
-    _require(event.project_id == str(project_id) and event.attempt_count > 0,
-             "OUTBOX completion lacks this project's worker attempt")
-    actor_id = await session.scalar(select(ActorProfile.id).where(
-        ActorProfile.service_identity == ServiceIdentity.OUTBOX_DISPATCHER.value
-    ))
-    _require(actor_id is not None, "OUTBOX dispatcher actor is absent")
-    attempts = (await session.scalars(select(OutboxDeliveryAttempt).where(
-        OutboxDeliveryAttempt.event_id == event.event_id
-    ).order_by(OutboxDeliveryAttempt.claim_generation))).all()
-    _require(len(attempts) == event.attempt_count,
-             "OUTBOX worker attempt history is incomplete")
-    for generation, attempt in enumerate(attempts, 1):
-        ids = (attempt.claim_decision_event_id, attempt.invoke_decision_event_id,
-               attempt.finalize_decision_event_id)
-        _require(attempt.claim_generation == generation
-                 and attempt.project_id == str(project_id)
-                 and attempt.payload_digest == event.payload_digest
-                 and attempt.claim_owner.startswith("celery:")
-                 and attempt.stage == "completed"
-                 and all(ids) and len(set(ids)) == 3,
-                 "OUTBOX worker attempt lacks exact completed phase custody")
-        decisions = (await session.scalars(select(AuditEvent).where(
-            AuditEvent.id.in_(ids)
-        ))).all()
-        _require(len(decisions) == 3 and {decision.id for decision in decisions} == set(ids),
-                 "OUTBOX dispatch decisions are incomplete")
-        for decision in decisions:
-            _require(decision.actor_id == actor_id
-                     and decision.event_type == "SensitiveAuthorizationAllowed"
-                     and decision.action_id == decision.permission_id == "outbox.dispatch"
-                     and decision.project_id == str(project_id)
-                     and decision.resource_type == "outbox_event"
-                     and decision.resource_id == str(event.event_id),
-                     "OUTBOX phase decision differs from registered project dispatcher")
-
-
-_GOVERNED_TABLES = (
-    "task_post_submit_routing_requests", "task_post_submit_routing_manifests",
-    "final_acceptances", "contribution_records", "compensation_awards", "reviews",
-)
-
-
 async def _project_effects_snapshot(session, project_id: UUID) -> dict[str, tuple[str, ...]]:
     """Compare complete retained owner facts without logging their private contents."""
     rows = {}
@@ -379,38 +277,6 @@ async def _project_effects_snapshot(session, project_id: UUID) -> dict[str, tupl
         ), {"project": str(project_id)})).all()
         rows[table] = tuple(sorted(json.dumps(value, sort_keys=True) for value in values))
     return rows
-
-
-async def _assert_task_has_no_effects(session, task_id: str) -> None:
-    """A second task cannot borrow its first task's accepted project evidence."""
-    for table in _GOVERNED_TABLES:
-        query = (
-            "SELECT count(*) FROM public.compensation_awards a "
-            "JOIN public.contribution_records c ON c.id=a.contribution_record_id "
-            "WHERE c.task_id=:task"
-            if table == "compensation_awards" else
-            f"SELECT count(*) FROM public.{table} WHERE task_id=:task"
-        )
-        _require(await session.scalar(text(query), {"task": task_id}) == 0,
-                 "late-refusal task committed governed effects")
-
-
-async def _wait_outbox_acknowledged(factory, event_id: UUID, project_id: UUID) -> None:
-    """Observe ordinary Beat-discovered delivery by the real prefork worker."""
-    async with factory() as session:
-        current = await session.get(OutboxEvent, event_id)
-        _require(current is not None, "expected outbox event is missing")
-    deadline = time.monotonic() + 240
-    while time.monotonic() < deadline:
-        async with factory() as session:
-            event = await session.get(OutboxEvent, event_id)
-            if event.delivery_state == "acknowledged":
-                await _assert_outbox_worker_custody(session, event, project_id)
-                return
-            if event.delivery_state in {"dead_letter", "cancelled"}:
-                raise RuntimeError(f"outbox event ended {event.delivery_state}")
-        await asyncio.sleep(0.3)
-    raise RuntimeError("Beat-discovered outbox event was not acknowledged by prefork worker")
 
 
 async def _wait_known_retry(factory, event_id: UUID, project_id: UUID,
@@ -549,6 +415,7 @@ async def _ready_admission(client, factory, task_id: str, assignment_id: str,
                            attestation: str, predecessor_id: str | None = None) -> str:
     from app.workers.artifacts import verify_object
 
+    expected_input = _fixture_hashes(archive)
     key = str(uuid4())
     headers = {
         "Content-Type": "application/zip",
@@ -581,6 +448,11 @@ async def _ready_admission(client, factory, task_id: str, assignment_id: str,
         if status == "ready":
             _require(result["admission_id"] is not None, "ready intake omitted admission")
             if await _scan_audit_count(factory) > scans_before:
+                async with factory() as session:
+                    admission = await session.get(SubmissionBundleAdmission, result["admission_id"])
+                    _assert_input_hashes(admission, expected_input)
+                    selected = await session.get(SelectedPreSubmitRun, admission.selected_pre_submit_run_id)
+                    _assert_input_hashes(selected, expected_input)
                 return result["admission_id"]
             await asyncio.sleep(1)
             continue
@@ -625,11 +497,13 @@ async def _ready_admission(client, factory, task_id: str, assignment_id: str,
 
 async def _submit(client, factory, *, task_id: str, assignment_id: str,
                   contributor_token: str, archive: bytes, summary: str,
-                  attestation: str, predecessor_id: str | None) -> dict:
+                  attestation: str, predecessor_id: str | None, before_create=None) -> dict:
     admission_id = await _ready_admission(
         client, factory, task_id, assignment_id, contributor_token,
         archive, summary, attestation, predecessor_id,
     )
+    if before_create is not None:
+        await before_create()
     route = f"/api/v1/tasks/{task_id}/submissions"
     packet = {
         "assignment_id": assignment_id,
@@ -646,49 +520,17 @@ async def _submit(client, factory, *, task_id: str, assignment_id: str,
     return saved
 
 
-async def _started_public_task(client, *, project_id: str, manager_token: str,
-                               contributor_token: str, source_ref: str) -> tuple[str, str]:
-    """Use the same public task, claim and start path for both project tasks."""
-    from tests.test_tasks import complete_task_payload
-
-    payload = complete_task_payload()
-    payload["source_ref"] = source_ref
-    created = await _json(
-        client, "POST", f"/api/v1/projects/{project_id}/tasks", manager_token, 201,
-        headers={"Idempotency-Key": str(uuid4())}, json=payload,
-    )
-    task_id = created["id"]
-    for operation in ("screen", "release"):
-        await _json(
-            client, "POST", f"/api/v1/tasks/{task_id}/{operation}",
-            manager_token, 200, headers={"Idempotency-Key": str(uuid4())},
-            json={"reason": "Public first journey"},
-        )
-    claimed = await _json(
-        client, "POST", f"/api/v1/tasks/{task_id}/claim", contributor_token,
-        200, headers={"Idempotency-Key": str(uuid4())},
-    )
-    assignment_id = claimed["assignment"]["id"]
-    await _json(
-        client, "POST", f"/api/v1/tasks/{task_id}/start", contributor_token,
-        200, headers={"Idempotency-Key": str(uuid4())},
-    )
-    await _json(
-        client, "GET", f"/api/v1/tasks/{task_id}/submission-requirements",
-        contributor_token, 200,
-    )
-    return task_id, assignment_id
-
-
 async def _complete_post(factory, *, submission_id: str,
                          project_id: UUID, recommendation: str,
                          finding_code: str | None = None,
-                         deliver_completion: bool = True) -> tuple[str, UUID]:
+                         deliver_completion: bool = True, successor=None) -> tuple[str, UUID]:
     async with factory() as session:
         dispatch = await session.get(SubmissionDispatch, submission_id)
         _require(dispatch is not None, "atomic Submission dispatch is absent")
         request_event_id = dispatch.evaluation_event_id
         attempt_id = dispatch.evaluation_attempt_id
+    if successor is not None:
+        request_event_id, attempt_id = successor.event_id, successor.run_id
     await _wait_outbox_acknowledged(factory, request_event_id, project_id)
     async with factory() as session:
         run = await session.get(CheckerRun, attempt_id)
@@ -742,7 +584,7 @@ async def _assert_outcome(factory, *, guide_source, project_id: UUID, task_id: s
                           submission_id: str, initial_submission_id: str,
                           contributor_id: UUID,
                           human_review_required: bool, expected_awards: int,
-                          expected_submissions: int) -> dict:
+                          expected_submissions: int, expected_inputs: dict) -> dict:
     async with factory() as session:
         task = await session.get(WorkstreamTask, task_id)
         submission = await session.get(Submission, submission_id)
@@ -798,6 +640,10 @@ async def _assert_outcome(factory, *, guide_source, project_id: UUID, task_id: s
         _require(admission is not None and admission.status == "consumed"
                  and admission.consumed_by_submission_id == submission_id,
                  "governed Submission lost its consumed admission")
+        for identifier, expected in expected_inputs.items():
+            retained = await session.get(Submission, identifier)
+            retained_admission = await session.get(SubmissionBundleAdmission, retained.submission_bundle_admission_id)
+            _assert_input_hashes(retained_admission, expected)
         counts = {}
         for name in ("submissions", "final_acceptances", "contribution_records",
                      "compensation_awards", "reviews"):
@@ -942,67 +788,14 @@ async def _late_revocation_trial(client, factory, env, *, project_id: UUID,
 async def _one_mode(client, factory, env, *,
                     human_review_required: bool, operator_id: UUID | None,
                     stop_worker: Callable[[], None] | None = None,
-                    start_worker: Callable[[], Awaitable[None]] | None = None) -> dict:
+                    start_worker: Callable[[], Awaitable[None]] | None = None, fault_root=None, operator_token=None) -> dict:
     awards = () if human_review_required else ("project_points",)
-    compilation = await public_guide_setup(
-        client, factory, human_review_required, _json, lambda actor: _token(env, actor),
-    )
-    manager = compilation.manager
-    guide_id = str(compilation.guide_id)
-    contributor = await _seed_contributor(factory)
     from app.workers.outbox import deliver_event
 
-    manager_token, contributor_token = _token(env, manager), _token(env, contributor)
+    compilation, contributor, manager_token, contributor_token = await _public_project(
+        client, factory, env, human_review_required=human_review_required,
+    )
     project_id = str(compilation.project_id)
-    activation_path = f"/api/v1/projects/{project_id}/guides/{guide_id}/activate"
-    body = compilation.activation
-    activation_headers = {"Idempotency-Key": str(uuid4())}
-    activated = await _json(
-        client, "POST", activation_path, manager_token, 200,
-        headers=activation_headers, json=body,
-    )
-    _require(activated["prior_project_status"] == "draft"
-             and activated["command"]["target"]["proposal"]["guide_id"] == guide_id,
-             "public activation receipt lacks the draft guide lineage")
-    async with factory() as session:
-        bound = await session.get(ProjectGuide, guide_id)
-        _require(bound is not None and bound.status == "active"
-                 and str(bound.activation_operation_id) == activated["operation_id"],
-                 "public activation did not bind the guide")
-    replay = await _json(
-        client, "POST", activation_path, manager_token, 200,
-        headers=activation_headers, json=body,
-    )
-    _require(replay == activated, "public activation replay changed receipt")
-
-    admitted = await _json(client, "GET", "/api/v1/actors/me", contributor_token, 200)
-    _require(admitted["actor_profile_id"] == str(contributor.actor_profile_id),
-             "Flow-linked contributor did not resolve to the stored human")
-    role_grant = await _json(
-        client, "POST", f"/api/v1/projects/{project_id}/role-grants",
-        manager_token, 201,
-        headers={"Idempotency-Key": str(uuid4())},
-        json={
-            "target_actor_profile_id": str(contributor.actor_profile_id),
-            "role": "submitter",
-            "qualification": {
-                "skills_snapshot": {
-                    "availability": "unavailable", "reference_ids": [],
-                    "unavailable_reason": "no_record",
-                },
-                "reputation_snapshot": {
-                    "availability": "unavailable", "reference_ids": [],
-                    "unavailable_reason": "no_record",
-                },
-                "prior_project_work_refs": [], "external_expertise_refs": [],
-            },
-            "reason": "Assign this contributor to the public first-journey task",
-        },
-    )
-    _require(role_grant["role"] == "submitter"
-             and role_grant["actor_profile_id"] == str(contributor.actor_profile_id),
-             "public project submitter grant names another actor or role")
-
     task_id, assignment_id = await _started_public_task(
         client, project_id=project_id, manager_token=manager_token,
         contributor_token=contributor_token, source_ref="local-ticket-1",
@@ -1073,24 +866,36 @@ async def _one_mode(client, factory, env, *,
             Submission.task_id == task_id
         )) == 0, "failed intake created a Submission")
 
+    async def fail_post_launch():
+        from experiments.pilot04_external_checker_runtime.public_node_faults import node_command
+        await node_command(fault_root, "project_fail_all")
+
     first_archive = (_with_fixture_file(archive, "post-rejected.txt")
                      if human_review_required else archive)
     saved = await _submit(
         client, factory, task_id=task_id, assignment_id=assignment_id,
         contributor_token=contributor_token, archive=first_archive,
         summary=summary, attestation=attestation, predecessor_id=None,
+        before_create=fail_post_launch if not human_review_required and fault_root else None,
     )
     submission_path = f"/api/v1/tasks/{task_id}/submissions"
     history = await _json(client, "GET", submission_path, contributor_token, 200)
     _require([item["id"] for item in history["items"]] == [saved["submission_id"]],
              "public submission history differs")
     first_submission_id = saved["submission_id"]
+    expected_inputs = {first_submission_id: _fixture_hashes(first_archive)}
+    successor = post_retry = None
+    if not human_review_required and fault_root:
+        from experiments.pilot04_external_checker_runtime.public_runtime_trials import retry_post_outage
+        successor, post_retry = await retry_post_outage(
+            client, factory, first_submission_id, compilation.project_id, operator_token, fault_root,
+        )
     first_attempt_id, completion_id = await _complete_post(
         factory, submission_id=first_submission_id,
         project_id=compilation.project_id,
         recommendation="needs_revision" if human_review_required else "allow_review",
         finding_code="probe.post_rule_failed" if human_review_required else None,
-        deliver_completion=human_review_required,
+        deliver_completion=human_review_required, successor=successor,
     )
     attempt_id = first_attempt_id
     if human_review_required:
@@ -1099,12 +904,14 @@ async def _one_mode(client, factory, env, *,
             task_id=task_id, submission_id=first_submission_id,
             attempt_id=first_attempt_id,
         )
+        replacement_archive = revision_archive(archive)
         saved = await _submit(
             client, factory, task_id=task_id, assignment_id=assignment_id,
             contributor_token=contributor_token,
-            archive=revision_archive(archive), summary=summary,
+            archive=replacement_archive, summary=summary,
             attestation=attestation, predecessor_id=first_submission_id,
         )
+        expected_inputs[saved["submission_id"]] = _fixture_hashes(replacement_archive)
         _require(saved["submission_version"] == 2,
                  "public checker remediation did not create version 2")
         history = await _json(client, "GET", submission_path, contributor_token, 200)
@@ -1140,7 +947,7 @@ async def _one_mode(client, factory, env, *,
         contributor_id=contributor.actor_profile_id,
         human_review_required=human_review_required,
         expected_awards=len(awards),
-        expected_submissions=2 if human_review_required else 1,
+        expected_submissions=2 if human_review_required else 1, expected_inputs=expected_inputs,
     )
     if not human_review_required:
         exported = await _json(
@@ -1179,7 +986,7 @@ async def _one_mode(client, factory, env, *,
         contributor_id=contributor.actor_profile_id,
         human_review_required=human_review_required,
         expected_awards=len(awards),
-        expected_submissions=2 if human_review_required else 1,
+        expected_submissions=2 if human_review_required else 1, expected_inputs=expected_inputs,
     )
     _require(again == outcome, "duplicate completion changed governed outcome")
     late_revocation = None
@@ -1201,10 +1008,12 @@ async def _one_mode(client, factory, env, *,
         "intake_failure_code": bad["error"]["code"],
         "external_pre_failure_code": "probe.project_rule_failed",
         "selected_pre_runs": await _pre_runs(factory, task_id),
+        "post_runtime_retry": post_retry,
         "selected_post_attempt_ids": (
             [first_attempt_id, attempt_id] if human_review_required else [attempt_id]
         ),
         "outcome": outcome,
+        "submitted_inputs": expected_inputs,
         "late_revocation": late_revocation,
     }
 
@@ -1216,17 +1025,42 @@ async def _pre_runs(factory, task_id: str) -> list[str]:
         ).order_by(SelectedPreSubmitRun.queued_at)))
 
 
-async def run(database_url: str, image_reference: str, service_binary: Path,
-              broker_url: str, root: Path) -> dict:
+async def run(database_url: str, image_reference: str, node_config: Path,
+              broker_url: str, root: Path, expected_custody: Path) -> dict:
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
-    image = _image_identity(image_reference)
+    custody = json.loads(expected_custody.read_text())
+    _require(custody['source_tree'] == subprocess.check_output(
+        ['git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip(), 'custody source differs')
+    service_config = json.loads(node_config.read_text())
+    _require(service_config["smol"].get("maximum_parallel") == 1,
+             "public proof requires a one-slot node")
+    original_config = json.loads(json.dumps(service_config))
+    wrapper = root / 'node-control/runtime-wrapper'
+    _require(service_config['smol']['binary'] == str(wrapper)
+             and service_config['smol']['binary_sha256'] == custody['wrapper_sha256']
+             and 'sha256:' + hashlib.sha256(wrapper.read_bytes()).hexdigest() == custody['wrapper_sha256'],
+             'fault wrapper differs from independently supplied source custody')
+    original_config['smol']['binary'] = custody['node_config']['smol']['binary']
+    original_config['smol']['binary_sha256'] = custody['node_config']['smol']['binary_sha256']
+    _require(original_config == custody['node_config'], 'node configuration differs from expected custody')
+    _require(json.loads((root / 'node-control/node-binding.json').read_text()) == custody,
+             'host binary/config validation receipt differs from expected custody')
+    _require((service_config["runtime"], service_config["isolation_mode"])
+             == ("smolvm", "smol-microvm"), "public drill requires the provisioned Smol node")
+    repository, digest = image_reference.rsplit("@", 1)
+    images = [entry for entry in service_config["cache"]
+              if entry["repository"] == repository and entry["platform_manifest_digest"] == digest]
+    _require(len(images) == 1, "project image is absent or ambiguous in node cache")
+    image = images[0]
     bucket = os.environ["WORKSTREAM_TEST_MINIO_BUCKET"]
     prefix = os.environ["WORKSTREAM_TEST_MINIO_PREFIX"]
-    scratch = root / "scratch"
-    socket_root = root / "service"
-    scratch.mkdir(mode=0o700)
-    socket_root.mkdir(mode=0o700)
-    socket_path = socket_root / "checker.sock"
+    scratch = Path(service_config["material_root"])
+    socket_path = Path(service_config["socket_path"])
+    intake_images = [entry for entry in service_config["cache"]
+                     if entry["platform_manifest_digest"]
+                     == service_config["trusted_intake"]["platform_manifest_digest"]]
+    _require(len(intake_images) == 1, "trusted intake image is absent or ambiguous")
+    intake_image = intake_images[0]
     settings = minio_settings(private_prefix=prefix).model_copy(update={
         "artifact_s3_bucket": bucket,
         "artifact_scratch_root": scratch,
@@ -1234,24 +1068,18 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
         "external_checker_service_socket": socket_path,
         "external_checker_material_root": scratch,
         "external_checker_service_timeout_seconds": 90.0,
+        "artifact_intake_service_socket": socket_path,
+        "artifact_intake_image_digest": intake_image["platform_manifest_digest"],
+        "artifact_intake_config_digest": intake_image["config_image_id"],
     })
     bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     bootstrap.close()
-    service_config = {
-        "socket_path": str(socket_path), "material_root": str(scratch),
-        "docker_binary": "/usr/bin/docker", "runtime": "runc",
-        "isolation_mode": "docker-dev", "operating_system": image["operating_system"],
-        "architecture": image["architecture"], "sandbox_uid": os.getuid(),
-        "sandbox_gid": os.getgid(), "cache": [image],
-    }
-    config_path = socket_root / "service.json"
-    config_path.write_text(json.dumps(service_config, separators=(",", ":")))
-
     os.environ["WORKSTREAM_E2E_FLOW_ISSUER"] = "https://identity.flowresearch.tech"
     env = api_environment()
     env.update({
         "WORKSTREAM_DATABASE_URL": database_url,
+        "WORKSTREAM_PROBE_INTAKE_TRACE": str(root / "intake-trace.jsonl"),
         "WORKSTREAM_E2E_FLOW_ISSUER": "https://identity.flowresearch.tech",
         "WORKSTREAM_FLOW_AUTH_ISSUER": "https://identity.flowresearch.tech",
         "WORKSTREAM_CELERY_BROKER_URL": broker_url,
@@ -1263,6 +1091,9 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
         "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(socket_path),
         "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(scratch),
         "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_TIMEOUT_SECONDS": "90",
+        "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET": str(socket_path),
+        "WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST": intake_image["platform_manifest_digest"],
+        "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST": intake_image["config_image_id"],
         "PYTHONPATH": os.pathsep.join(map(str, (BACKEND, BACKEND / "tests", BACKEND.parent))),
     })
     env.pop("OPENAI_API_KEY", None)
@@ -1319,7 +1150,7 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
 
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    rust = api = worker = beat = None
+    api = worker = beat = None
     worker_generation = 0
 
     def stop_owned_worker() -> None:
@@ -1349,12 +1180,16 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
         from tests.reviews.lifecycle.transition_support import command_for, transition
         await transition(await command_for(operator.actor_profile_id, "shadow"))
 
-        rust = _start_service(service_binary, config_path, socket_path)
-        await _wait_service(rust, socket_path)
+        intake_health = await trusted_submission_intake(runtime_settings).health()
+        execution_health = await configured_external_checker_execution(runtime_settings).health()
+        _require((execution_health.runtime, execution_health.isolation_mode)
+                 == (intake_health.runtime, intake_health.isolation_mode)
+                 == ("smolvm", "smol-microvm"), "typed capability health identities disagree")
         port = find_free_port()
         origin = f"http://127.0.0.1:{port}"
         api = _process([
-            sys.executable, "-m", "uvicorn", "app.main:app",
+            sys.executable, "-m", "uvicorn",
+            "experiments.pilot04_external_checker_runtime.public_intake_observer:app",
             "--host", "127.0.0.1", "--port", str(port),
             "--log-level", "error", "--no-access-log",
         ], env=env, log=root / "api.log")
@@ -1368,6 +1203,13 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
         ], env=env, log=root / "beat.log")
         await _wait_beat_scan(factory, beat, scans_before_beat)
         async with httpx.AsyncClient(base_url=origin, timeout=90) as client:
+            from experiments.pilot04_external_checker_runtime.public_intake_trials import public_intake_trials
+            intake_trials = await public_intake_trials(
+                client, factory, env, root / "intake-trace.jsonl", root / "node-control")
+            from experiments.pilot04_external_checker_runtime.public_runtime_trials import public_runtime_trials
+            fault_root = root / "node-control"
+            _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
+            runtime_trials = await public_runtime_trials(client, factory, env, fault_root)
             true = await _one_mode(client, factory, env,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id)
@@ -1375,25 +1217,28 @@ async def run(database_url: str, image_reference: str, service_binary: Path,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
                                     stop_worker=stop_owned_worker,
-                                    start_worker=start_owned_worker)
+                                    start_worker=start_owned_worker, fault_root=fault_root,
+                                    operator_token=_token(env, operator))
         _require(api.poll() is None and worker.poll() is None and beat.poll() is None,
                  "API, prefork worker, or Beat exited during public journey")
         return {"tree_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, cwd=BACKEND
-        ).strip(), "runtime": "runc/docker-dev", "image_digest": image["platform_manifest_digest"],
-                "public_api": True, "prefork_worker": True,
+        ).strip(), "runtime": "smolvm/smol-microvm", "image_digest": image["platform_manifest_digest"],
+                "trusted_intake_image_digest": intake_health.image_digest,
+                "trusted_intake_config_digest": intake_health.config_digest,
+                "public_api": True, "prefork_worker": True, "maximum_parallel": 1,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
                 "recorded_inference": True,
-                "human": true, "automatic": false}
+                "custody": {key: custody[key] for key in (
+                    'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256', 'wrapper_sha256')},
+                "runtime_trials": runtime_trials, "intake_trials": intake_trials, "human": true, "automatic": false}
     finally:
         _stop_process(beat)
         for schedule_file in root.glob("beat-schedule*"):
             schedule_file.unlink()
         _stop_process(worker)
         _stop_process(api)
-        if rust is not None:
-            _stop_service(rust)
         await engine.dispose()
 
 
@@ -1401,21 +1246,22 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--database-url", default=os.environ.get("WORKSTREAM_TEST_DATABASE_URL"))
     parser.add_argument("--image-reference")
-    parser.add_argument("--service-binary", type=Path)
+    parser.add_argument("--node-config", type=Path, help="Owned provisioned Smol node configuration")
     parser.add_argument("--broker-url")
+    parser.add_argument("--expected-custody", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path,
                         help="Unique private directory retaining API and worker diagnostics")
     args = parser.parse_args()
     if not args.database_url:
         parser.error("isolated --database-url or WORKSTREAM_TEST_DATABASE_URL is required")
-    if not args.image_reference or not args.service_binary or not args.broker_url:
-        parser.error("full drill requires image, service binary, and broker URL")
+    if not args.image_reference or not args.node_config or not args.broker_url:
+        parser.error("full drill requires image, node config, and broker URL")
     workspace = (nullcontext(args.work_dir) if args.work_dir else
                  tempfile.TemporaryDirectory(prefix="ws-pilot04-public-"))
     with workspace as directory:
         value = asyncio.run(run(
-            args.database_url, args.image_reference, args.service_binary,
-            args.broker_url, Path(directory),
+            args.database_url, args.image_reference, args.node_config,
+            args.broker_url, Path(directory), args.expected_custody,
         ))
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0

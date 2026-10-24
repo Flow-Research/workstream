@@ -10,9 +10,12 @@ from app.core.identifiers import new_record_id
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected, SubmissionBundlePreparationRequest,
 )
+from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_admission import PreparedSubmissionBundlePreparationCommand
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.tasks.api import TaskSubmissionContextUnavailable
+from tests.checkers.external.test_selected_pre_submit import _policies
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 
 @pytest.mark.asyncio
@@ -29,7 +32,10 @@ async def test_stale_task_relock_denies_before_selected_execution_or_admission()
     tasks = SimpleNamespace(lock_submission_context=AsyncMock(side_effect=[
         task, TaskSubmissionContextUnavailable("task_submission_context_invalid"),
     ]))
-    projects = SimpleNamespace(lock_locked_policy_context=AsyncMock(return_value=object()))
+    project = SimpleNamespace(external_checker_policies=SimpleNamespace(
+        value=_policies().model_dump_json(),
+    ))
+    projects = SimpleNamespace(lock_locked_policy_context=AsyncMock(return_value=project))
     authority = SimpleNamespace(preflight=AsyncMock(), lock_actor=AsyncMock(),
                                 revalidate=AsyncMock(), close=Mock())
     prepared = SimpleNamespace(close=AsyncMock())
@@ -38,6 +44,8 @@ async def test_stale_task_relock_denies_before_selected_execution_or_admission()
     durable = SimpleNamespace(admit_in_transaction=AsyncMock(), publish_after_commit=AsyncMock())
     runtime = SimpleNamespace(
         selected_coordinator=coordinator, selected_execution=executor, storage_scheme="s3",
+        intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(),
+        artifact_deadline_ms=60_000,
         preparation=SimpleNamespace(prepare=AsyncMock(return_value=prepared)), durable_put=durable,
     )
 
@@ -73,4 +81,6 @@ async def test_stale_task_relock_denies_before_selected_execution_or_admission()
     durable.admit_in_transaction.assert_not_awaited()
     durable.publish_after_commit.assert_not_awaited()
     prepared.close.assert_awaited_once()
+    assert len(runtime.intake.sessions) == 1
+    assert runtime.intake.sessions[0].events == ["close"]
     authority.close.assert_called_once_with()

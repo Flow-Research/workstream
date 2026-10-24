@@ -29,6 +29,8 @@ def main() -> int:
     if mode == "output_overflow":
         sys.stdout.write("x" * (request["registry"]["resources"]["maximum_output_bytes"] + 1))
         return 0
+    if Path("/work/input/runtime-wait.txt").exists():
+        time.sleep(30)
     failures: list[str] = []
     manifest = request["input"].get("manifest")
     if manifest is None:
@@ -60,11 +62,16 @@ def main() -> int:
         pass
     else:
         failures.append("network")
-    memory_max = Path("/sys/fs/cgroup/memory.max").read_text().strip()
-    if memory_max != str(request["registry"]["resources"]["memory_bytes"]):
-        failures.append("memory_limit")
-    if Path("/sys/fs/cgroup/pids.max").read_text().strip() == "max":
-        failures.append("pids_limit")
+    controls = Path("/sys/fs/cgroup")
+    if controls.exists():
+        if (controls / "memory.max").read_text().strip() != str(request["registry"]["resources"]["memory_bytes"]):
+            failures.append("memory_limit")
+        if (controls / "pids.max").read_text().strip() == "max":
+            failures.append("pids_limit")
+    elif list(Path("/sys").iterdir()):
+        failures.append("management_filesystem")
+    # Smol hides the management filesystem. Memory/PID enforcement is proved by
+    # the runtime's adversarial allocation/fork trials, not by project testimony.
     findings = [
         {
             "check_id": "probe.isolation",
@@ -76,13 +83,15 @@ def main() -> int:
         }
         for item in failures
     ]
-    if Path("/work/input/project-rejected.txt").exists():
+    requirement = request["input"].get("requirement_id", "")
+    pre_marker = "second-pre-rejected.txt" if requirement.endswith(".02") else "project-rejected.txt"
+    if Path("/work/input", pre_marker).exists():
         findings.append({
             "check_id": "probe.project_rule",
             "code": "probe.project_rule_failed",
             "level": "error",
             "message": "The sample project rejects this fixture file.",
-            "path": "project-rejected.txt",
+            "path": pre_marker,
             "line": None,
         })
     if (request["identity"]["phase"] == "post_submit"

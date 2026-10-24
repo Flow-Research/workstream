@@ -25,6 +25,10 @@
       "target": "backend/app/adapters/artifacts/s3_compatible.py"
     },
     {
+      "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/trusted_intake.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/adapters/auth/adapter_bindings.py"
     },
@@ -401,6 +405,10 @@
       "target": "backend/app/interfaces/project_guide_runtime.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/interfaces/trusted_submission_intake.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/main.py"
     },
@@ -467,6 +475,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/api/submission_admission.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_archive.py"
     },
     {
       "group": "artifacts",
@@ -599,6 +611,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/task_import_sources.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/trusted_intake.py"
     },
     {
       "group": "shared",
@@ -2377,7 +2393,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "8a42d5c62f07ce625a6f837dddeb7ae6e0f1c159bb74d81cb5f9820bf03c333f",
+  "authority_digest": "baf2d4f184415c4e789a37c40541aa1879347a9c71f24f2afe58ffbd8888958e",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

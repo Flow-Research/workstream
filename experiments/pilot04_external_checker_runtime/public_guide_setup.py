@@ -13,7 +13,7 @@ from tests.projects.guide_compilation.proposals.pg_support import seed_review_ac
 from experiments.pilot04_external_checker_runtime.guide_evidence import verify_source_commitment
 from experiments.pilot04_external_checker_runtime.guide_polling import wait_for_guide_read
 from experiments.pilot04_external_checker_runtime.guide_inputs import (
-    GUIDE_BYTES, TASK_EXAMPLES, CORRECTION_REASON,
+    guide_bytes, TASK_EXAMPLES, CORRECTION_REASON,
 )
 
 
@@ -130,7 +130,7 @@ async def _approve_policies(client, compilation_root, token, call):
     return await call(client, "GET", post_root, token, 200)
 
 
-async def _source_evidence(factory, guide, setup, package):
+async def _source_evidence(factory, guide, setup, package, original):
     expected_examples = [x.model_dump(mode="json") for x in validate_task_examples(TASK_EXAMPLES)]
     examples_hash = task_examples_hash(validate_task_examples(TASK_EXAMPLES))
     async with factory() as session:
@@ -156,7 +156,7 @@ async def _source_evidence(factory, guide, setup, package):
         source._mapping, attempt._mapping, examples=expected_examples,
         examples_hash=examples_hash, source_hash=package["target"]["source_snapshot_hash"],
         source_id=setup["source_snapshot_id"], accesses=accesses,
-        original_sha256="sha256:" + hashlib.sha256(GUIDE_BYTES).hexdigest(),
+        original_sha256="sha256:" + hashlib.sha256(original).hexdigest(),
     )
     return {"guide_id": guide["id"], "setup_run_id": setup["id"],
             "setup_generation": setup["setup_generation"],
@@ -164,10 +164,11 @@ async def _source_evidence(factory, guide, setup, package):
             "source_snapshot_hash": source.bundle_hash,
             "task_examples_hash": examples_hash,
             "canonical_input_hash": attempt.canonical_input_hash,
-            "uploaded_sha256": "sha256:" + hashlib.sha256(GUIDE_BYTES).hexdigest()}
+            "uploaded_sha256": "sha256:" + hashlib.sha256(original).hexdigest()}
 
 
-async def public_guide_setup(client, factory, human_review_required, call, token_for):
+async def public_guide_setup(client, factory, human_review_required, call, token_for, *, pre_requirements=1):
+    original = guide_bytes(pre_requirements)
     manager, _ = await seed_review_actor(factory, None, scope="system")
     token = token_for(manager)
     project = await call(client, "POST", "/api/v1/projects", token, 201,
@@ -188,7 +189,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     upload = root + f"/documents/{guide['documents'][0]['document_id']}/content"
     await call(client, "POST", upload, token, 202,
                headers={"Idempotency-Key": str(uuid4()), "Content-Type": "text/markdown"},
-               content=GUIDE_BYTES)
+               content=original)
     setup = await wait_for_guide_read(client, root + "/setup-runs/latest", token,
                              lambda v: v["status"] == "policy_draft_ready", call)
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
@@ -219,7 +220,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         "post_approval_operation_id", "post_approval_output_digest", "guide_mutation_generation",
         "review", "revision", "expected_previous_active_guide_id", "expected_previous_active_guide_generation",
     )}, **context["contribution"]}
-    evidence = await _source_evidence(factory, guide, setup, post["proposal"])
+    evidence = await _source_evidence(factory, guide, setup, post["proposal"], original)
     target, upstream = post["target"], post["target"]["upstream"]
     evidence["locked_context"] = {
         "locked_guide_version": guide["version"],

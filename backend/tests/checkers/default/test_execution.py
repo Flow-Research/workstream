@@ -13,10 +13,12 @@ import pytest
 
 from app.core.identifiers import new_record_id
 from app.modules.artifacts.sources import ArtifactCommitment
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveFailureCode,
-    SubmissionArchiveInspector,
     SubmissionArchiveLimits,
+)
+from app.modules.artifacts.submission_archive import (
+    SubmissionArchiveInspector,
 )
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.default_checker import (

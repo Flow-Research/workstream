@@ -15,6 +15,7 @@ from app.modules.checkers.api.execution import REQUEST_EVENT
 from app.modules.outbox.models import OutboxEvent
 from tests.checkers.execution.support import material_execution
 from tests.post_submit_materialization_helpers import material_fixture
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
 from tests.test_post_submit_materialization import Consumer
 from tests.test_s3_artifact_store import provision_minio_bucket
 from .support import delivery_fixture, outcome, state
@@ -26,6 +27,7 @@ def _worker_port(h, monkeypatch):
     import app.core.config as config
 
     assert internal_workers._runtime is None
+    monkeypatch.setattr(artifact_adapter, "trusted_submission_intake", lambda settings: LocalIntakeAdapter())
     monkeypatch.setattr(config, "get_settings", lambda: h.settings)
     monkeypatch.setattr(internal_workers, "get_settings", lambda: h.settings)
     h.worker_scratch_managers = []

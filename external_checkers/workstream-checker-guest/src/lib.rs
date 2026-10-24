@@ -15,8 +15,16 @@ pub struct MaterialFile {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GuestPurpose {
+    Project,
+    TrustedIntake { cpu_millis: u64, memory_bytes: u64 },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GuestJob {
+    pub purpose: GuestPurpose,
     pub request: serde_json::Value,
     pub command: Vec<String>,
     pub environment: Vec<String>,

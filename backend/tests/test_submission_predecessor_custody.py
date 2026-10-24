@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import patch
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from dataclasses import replace
 from io import BytesIO
 import json
@@ -126,12 +129,13 @@ async def _prepare(h, request: SubmissionBundlePreparationRequest):
             request_id=new_record_id(),
             correlation_id=new_record_id(),
         )
-        return await get_submission_bundle_preparation_command(
-            http,
-            session,
-            internal,
-            PreparedSubmissionBundlePreparationAuthorization(session, h.actor_context),
-        ).prepare(request)
+        with patch("app.adapters.artifacts.trusted_submission_intake", return_value=LocalIntakeAdapter()):
+            return await get_submission_bundle_preparation_command(
+                http,
+                session,
+                internal,
+                PreparedSubmissionBundlePreparationAuthorization(session, h.actor_context),
+            ).prepare(request)
 
 
 async def _fixture_revision_context(h):

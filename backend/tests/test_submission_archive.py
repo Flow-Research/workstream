@@ -12,12 +12,14 @@ import zipfile
 import pytest
 
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
-from app.modules.artifacts.submission_archive import (
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveEntryType,
     SubmissionArchiveFailureCode,
-    SubmissionArchiveInspector,
     SubmissionArchiveLimits,
     SubmissionArchiveRejectedError,
+)
+from app.modules.artifacts.submission_archive import (
+    SubmissionArchiveInspector,
 )
 from app.core.zip_safety import zip_directory_facts
 from tests.artifact_store_helpers import artifact_byte_stream, artifact_preparation_limits
@@ -417,5 +419,37 @@ async def test_cancelled_prepared_inspection_finishes_then_releases_scratch(
         release.set()
         with pytest.raises(asyncio.CancelledError):
             await task
+    assert (await manager.usage()).reservation_count == 0
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_remote_inspection_interrupts_io_before_draining_reader(tmp_path: Path) -> None:
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=artifact_preparation_limits())
+    prepared = await ArtifactPreparationService(manager).prepare(
+        artifact_byte_stream(archive_bytes({"work.txt": b"complete"})), media_type="application/zip",
+    )
+    entered = threading.Event()
+    interrupted = threading.Event()
+    drained = threading.Event()
+
+    class RemoteInspector:
+        def inspect(self, reader: BinaryIO) -> None:
+            entered.set()
+            # The only release is the explicit cancellation hook. Without it,
+            # the retained reader/VM would remain blocked until its deadline.
+            if not interrupted.wait(3):
+                raise AssertionError("remote inspection was not interrupted")
+            reader.read()
+            drained.set()
+            raise OSError("socket interrupted")
+
+    async with prepared:
+        operation = asyncio.create_task(prepared.inspect(RemoteInspector(), on_cancel=interrupted.set))
+        assert await asyncio.to_thread(entered.wait, 3)
+        operation.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(operation, 2)
+        assert interrupted.is_set() and drained.is_set()
     assert (await manager.usage()).reservation_count == 0
     manager.close()

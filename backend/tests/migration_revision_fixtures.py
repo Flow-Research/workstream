@@ -1,6 +1,8 @@
 """Checksum-bound historical revision inputs and guarded 0047 writers."""
 
 import base64
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from functools import lru_cache
@@ -21,8 +23,7 @@ from app.interfaces.artifacts import ArtifactStoreNamespaceClaim, ArtifactStoreN
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
-from app.modules.artifacts.submission_archive import (
-    SubmissionArchiveInspector,
+from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveLimits,
 )
 from app.modules.authorization.runtime import HumanAuthorizationContext
@@ -138,7 +139,7 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
             store=store,
             namespace=namespace,
             preparation=preparation,
-            inspector=SubmissionArchiveInspector(SubmissionArchiveLimits()),
+            intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=180_000,
         )
 
         def archived_bootstrap(_settings, *, activation_guard):
