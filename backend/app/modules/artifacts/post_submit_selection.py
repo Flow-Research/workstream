@@ -24,6 +24,10 @@ from app.modules.checkers.api.evaluation_contract import (
 from app.modules.tasks.api.submitted_bundle import (
     SubmittedBundleFacts, SubmittedBundlePort, SubmittedBundleRequest,
 )
+from app.modules.tasks.api.evaluation_revision import (
+    TaskEvaluationRevisionContext, TaskEvaluationRevisionRequest,
+)
+from app.modules.checkers.api.external_policy import validate_stored_external_post_policy
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,14 +49,14 @@ class PostSubmissionMaterialSelection:
     media_type: str
     semantic_manifest_id: UUID
     semantic_manifest_sha256: str
+    revision_preparation_id: UUID | None
+    revision_preparation_sha256: str | None
 
 
-async def select_post_submission_material(
-    session: AsyncSession, *, tasks: SubmittedBundlePort,
-    request: PostSubmissionExecutionRequest, namespace: ArtifactStorageNamespaceSpec,
-    store: ArtifactStore,
-) -> PostSubmissionMaterialSelection:
-    """Read fresh exact owner facts in one short caller-owned transaction."""
+async def read_post_submission_facts(
+    tasks: SubmittedBundlePort, request: PostSubmissionExecutionRequest,
+) -> SubmittedBundleFacts:
+    """Read and validate immutable TASK facts before acquiring CHECKERS custody."""
     facts = await tasks.read(SubmittedBundleRequest(
         project_id=request.project_id, task_id=request.task_id, submission_id=request.submission_id,
     ))
@@ -93,6 +97,73 @@ async def select_post_submission_material(
         or not context_matches
     ):
         raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    return facts
+
+
+async def read_consumed_revision_selector(
+    session: AsyncSession, facts: SubmittedBundleFacts,
+) -> TaskEvaluationRevisionRequest:
+    """Project only ART's consumed preparation pointer, without locks or byte authority."""
+    admission = await session.scalar(select(SubmissionBundleAdmission).where(
+        SubmissionBundleAdmission.id == str(facts.admission_id),
+        SubmissionBundleAdmission.project_id == str(facts.project_id),
+        SubmissionBundleAdmission.task_id == str(facts.task_id),
+        SubmissionBundleAdmission.assignment_id == str(facts.assignment_id),
+        SubmissionBundleAdmission.actor_profile_id == str(facts.contributor_id),
+        SubmissionBundleAdmission.status == "consumed",
+        SubmissionBundleAdmission.consumed_by_submission_id == str(facts.submission_id),
+        SubmissionBundleAdmission.consumed_by_submission_version == facts.submission_version,
+        SubmissionBundleAdmission.artifact_content_id == str(facts.content_id),
+    ).execution_options(populate_existing=True))
+    if admission is None:
+        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    return TaskEvaluationRevisionRequest(
+        project_id=facts.project_id, task_id=facts.task_id, assignment_id=facts.assignment_id,
+        submission_id=facts.submission_id, submission_version=facts.submission_version,
+        admission_id=facts.admission_id, preparation_id=admission.revision_preparation_id,
+        preparation_sha256=admission.revision_preparation_sha256,
+    )
+
+
+async def select_post_submission_material(
+    session: AsyncSession, *, tasks: SubmittedBundlePort,
+    request: PostSubmissionExecutionRequest, namespace: ArtifactStorageNamespaceSpec,
+    store: ArtifactStore,
+) -> PostSubmissionMaterialSelection:
+    """Resolve one current input through the same admitted-material selector as prior work."""
+    facts = await read_post_submission_facts(tasks, request)
+    selected = await select_admitted_post_material(session, facts=facts, namespace=namespace, store=store)
+    if (selected.sha256, selected.byte_count) != (request.content_sha256, request.byte_count):
+        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    return selected
+
+
+async def select_predecessor_material(
+    session: AsyncSession, *, facts: SubmittedBundleFacts, context: TaskEvaluationRevisionContext,
+    namespace: ArtifactStorageNamespaceSpec, store: ArtifactStore,
+) -> PostSubmissionMaterialSelection:
+    """Resolve only the predecessor whose same-assignment revision TASK already proved."""
+    context = TaskEvaluationRevisionContext.model_validate(context)
+    reference = context.predecessor
+    if context.kind != "checker_remediation" or reference is None:
+        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    if facts.status != "submitted" or any(
+        getattr(facts, name) != getattr(reference, name) for name in type(reference).model_fields
+    ):
+        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    return await select_admitted_post_material(session, facts=facts, namespace=namespace, store=store)
+
+
+async def select_admitted_post_material(
+    session: AsyncSession, *, facts: SubmittedBundleFacts,
+    namespace: ArtifactStorageNamespaceSpec, store: ArtifactStore,
+) -> PostSubmissionMaterialSelection:
+    """Validate complete consumed ART custody against the Submission's own locked policy."""
+    policy = validate_stored_external_post_policy(facts.context.selected_post_policy_body)
+    if facts.status != "submitted" or policy.policy_sha256 != facts.context.selected_post_policy_hash or (
+        policy.policy_sha256 != facts.context.post_policy_hash
+    ):
+        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
     row = (await session.execute(
         select(SubmissionBundleAdmission, ArtifactBinding,
                ArtifactContent, ArtifactReplica, ArtifactVerificationReceipt,
@@ -105,8 +176,8 @@ async def select_post_submission_material(
         .join(ArtifactVerificationJob, ArtifactVerificationJob.id == ArtifactVerificationReceipt.verification_job_id)
         .join(ArtifactStorageNamespace, ArtifactStorageNamespace.id == ArtifactReplica.storage_namespace_id)
         .where(SubmissionBundleAdmission.id == str(facts.admission_id),
-               SubmissionBundleAdmission.project_id == str(request.project_id),
-               SubmissionBundleAdmission.task_id == str(request.task_id))
+               SubmissionBundleAdmission.project_id == str(facts.project_id),
+               SubmissionBundleAdmission.task_id == str(facts.task_id))
         .execution_options(populate_existing=True)
     )).one_or_none()
     if row is None:
@@ -116,9 +187,9 @@ async def select_post_submission_material(
         admission.selected_pre_submit_run_id is not None
         and admission.pre_submit_evidence_set_id is None
         and admission.selected_post_submit_policy_sha256
-        == request.policy.policy_sha256
+        == policy.policy_sha256
         and admission.selected_post_submit_policy_body
-        == request.policy.model_dump(mode="json")
+        == policy.model_dump(mode="json")
     )
     if not (
         SubmissionAdmissionConsumptionService._art_lineage_is_intact(admission, content)
@@ -137,8 +208,6 @@ async def select_post_submission_material(
         and binding.content_id == content.id == str(facts.content_id)
         and selected_lineage
         and content.media_type == "application/zip"
-        and content.sha256 == request.content_sha256
-        and content.byte_count == request.byte_count
         and replica.content_id == content.id
         and (replica.verification_state, replica.availability_state, replica.integrity_state)
         == ("verified", "available", "valid")
@@ -166,4 +235,6 @@ async def select_post_submission_material(
         sha256=content.sha256, byte_count=content.byte_count, media_type=content.media_type,
         semantic_manifest_id=UUID(admission.semantic_manifest_id),
         semantic_manifest_sha256=admission.semantic_manifest_sha256,
+        revision_preparation_id=admission.revision_preparation_id,
+        revision_preparation_sha256=admission.revision_preparation_sha256,
     )

@@ -812,6 +812,61 @@ def test_proposal_rejects_pre_model_evaluation_and_validates_post_runtime_gaps(c
         assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
+@pytest.mark.parametrize("stage", ["pre_submit", "post_submit"])
+def test_proposal_trial_proxy_and_offline_material_are_post_only(cli, stage):
+    from app.modules.projects.api.guide_proposal_package import (
+        GuideProposalReviewPackage,
+    )
+
+    with http_fixture() as (origin, response, _):
+        value = proposal()
+        index = 0 if stage == "pre_submit" else 1
+        requirement = value["result"]["requirements"][index]
+        specification = deepcopy(requirement["check_specification"])
+        requirement["check_specification"] = specification
+        dependencies = specification["runtime_dependencies"]
+        dependencies.extend(
+            [
+                {
+                    "dependency_id": "isolated_trial",
+                    "kind": "nested_sandbox",
+                    "provisioning": "trial_proxy",
+                    "purpose": "Run the submitted environment.",
+                    "unavailable_code": "implementation_unavailable",
+                },
+                {
+                    "dependency_id": "offline_cache",
+                    "kind": "prepared_material",
+                    "provisioning": "trial_proxy",
+                    "purpose": "Use the approved offline cache.",
+                    "unavailable_code": "material_unavailable",
+                },
+            ]
+        )
+        specification["inputs"].append(
+            {
+                "input_id": "offline_cache",
+                "kind": "prepared_material",
+                "purpose": "Supply the profile-pinned offline base to the trial tool.",
+            }
+        )
+        GuideProposalReviewPackage.model_validate(value)
+        response["body"] = json.dumps(value).encode()
+        if stage == "pre_submit":
+            assert_failure(invoke(cli, origin), "invalid_api_response")
+            return
+        accepted = invoke(cli, origin)
+        assert accepted.returncode == 0 and json.loads(accepted.stdout) == value
+
+        nested = dependencies.pop(-2)
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+        dependencies.append(nested)
+        nested["provisioning"] = "runtime_gap"
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
 def test_proposal_accepts_supported_execution_with_model_proxy(cli):
     from app.modules.projects.api.guide_proposal_package import (
         GuideProposalReviewPackage,

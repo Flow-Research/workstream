@@ -249,6 +249,7 @@ async def _material_fixture(
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
     post_submit_binding_setup=None,
+    post_submit_bindings_setup=None,
     post_submit_specification=None,
     post_scratch_root=None,
 ):
@@ -267,6 +268,7 @@ async def _material_fixture(
             pre_submit_registry_spec=pre_submit_registry_spec,
             post_submit_registry_spec=post_submit_registry_spec,
             post_submit_binding_setup=post_submit_binding_setup,
+            post_submit_bindings_setup=post_submit_bindings_setup,
             post_submit_specification=post_submit_specification,
         )
         context, task_id, data, admission_id, creation_request, created = await _create_material_submission(

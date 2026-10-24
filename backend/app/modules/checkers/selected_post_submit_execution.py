@@ -14,10 +14,13 @@ from app.modules.checkers.api.external import (
     external_checker_json_hash,
     make_external_checker_execution_request,
 )
-from app.modules.checkers.api.external_policy import LockedExternalPostSubmitPolicy
+from app.modules.checkers.api.external_policy import (
+    LockedExternalPostSubmitPolicy, selected_evaluation_context_roles,
+)
 from app.modules.checkers.api.selected_post_submit import (
     ExternalPostSubmitIsolationFacts,
     ExternalPostSubmitMemberFacts,
+    ExternalPostSubmitInputReceipt,
     SelectedPostSubmitExecutionFacts,
     SelectedPostSubmitInfrastructureUnavailable,
 )
@@ -66,6 +69,10 @@ class SelectedPostSubmitProcessor:
                     material=material,
                     entries=material_view.entries,
                 )
+                context, materials = None, (material,)
+                if selected_evaluation_context_roles(binding.configuration, binding.stage) is not None:
+                    context, materials = material_view.evaluation_material(binding)
+                    input_value["evaluation_context"] = context.model_dump(mode="json")
                 request = make_external_checker_execution_request(
                     registry=binding.registry,
                     identity=self._identity,
@@ -73,7 +80,7 @@ class SelectedPostSubmitProcessor:
                     configuration_sha256=binding.configuration_sha256,
                     input=input_value,
                     input_sha256=external_checker_json_hash(input_value),
-                    materials=(material,),
+                    materials=materials,
                 )
                 with material_view.external_checker_grant(request) as grant:
                     response = await self._execution.execute(request, grant)
@@ -95,6 +102,14 @@ class SelectedPostSubmitProcessor:
                         isolation=ExternalPostSubmitIsolationFacts(
                             **asdict(response.isolation)
                         ),
+                        input_receipt=ExternalPostSubmitInputReceipt(
+                            configuration_sha256=binding.configuration_sha256,
+                            input_sha256=request.input_sha256,
+                            evaluation_context_sha256=external_checker_json_hash(
+                                context.model_dump(mode="json")
+                            ),
+                            materials=materials,
+                        ) if context is not None else None,
                     )
                 )
         except ExternalServiceUnavailableError as exc:

@@ -7,6 +7,10 @@ on:
       - 'scripts/checker-image'
       - 'backend/scripts/checker_image*.py'
       - 'backend/app/modules/checkers/api/external.py'
+      - 'external_checkers/workstream-checker-sdk/**'
+      - 'external_checkers/workstream-checker-service/src/model_relay.rs'
+      - 'external_checkers/workstream-checker-service/src/trial_relay.rs'
+      - 'external_checkers/workstream-checker-service/src/proxy_transport.rs'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
       - '.github/workflows/terminal-systems-checkers.yml'
@@ -17,6 +21,10 @@ on:
       - 'scripts/checker-image'
       - 'backend/scripts/checker_image*.py'
       - 'backend/app/modules/checkers/api/external.py'
+      - 'external_checkers/workstream-checker-sdk/**'
+      - 'external_checkers/workstream-checker-service/src/model_relay.rs'
+      - 'external_checkers/workstream-checker-service/src/trial_relay.rs'
+      - 'external_checkers/workstream-checker-service/src/proxy_transport.rs'
       - 'backend/pyproject.toml'
       - 'backend/uv.lock'
       - '.github/workflows/terminal-systems-checkers.yml'
@@ -41,3 +49,30 @@ jobs:
         run: python -m unittest discover -s pilots/terminal_systems/checkers/pre -p 'test_*.py' -v
       - name: Build and test the actual networkless image
         run: ./scripts/checker-image pilots/terminal_systems/checkers/pre
+
+  post-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Check guide-derived POST rules and protocols
+        run: |
+          python -m unittest discover -s pilots/terminal_systems/checkers/post/model -p 'test_*.py' -v
+          python -m unittest discover -s pilots/terminal_systems/checkers/post/qualification -p 'test_*.py' -v
+      - name: Fetch the digest-pinned POST base
+        run: docker pull python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
+      - name: Build the POST image without build-network access
+        run: >-
+          docker build --pull=false --network=none
+          --tag workstream-terminal-systems-post:ci
+          --file pilots/terminal_systems/checkers/post/model/Dockerfile
+          pilots/terminal_systems/checkers/post/model
+      - name: Smoke the actual image with a controlled model session
+        run: >-
+          python pilots/terminal_systems/checkers/post/qualify_image.py
+          --image workstream-terminal-systems-post:ci

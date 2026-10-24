@@ -571,6 +571,7 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 
 	dependencyKinds := make(map[string]bool)
 	dependencyIDs := make(map[string]bool)
+	usesTrial := false
 	dependencyMembers, err := proposalObjectMembers(fields["runtime_dependencies"], 0, 10)
 	if err != nil {
 		return err
@@ -595,10 +596,17 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 			valid = item.UnavailableCode == "implementation_unavailable" &&
 				(item.Provisioning == "model_proxy" || (!supported && item.Provisioning == "runtime_gap"))
 		}
+		if (item.Kind == "nested_sandbox" || item.Kind == "prepared_material") && item.Provisioning == "trial_proxy" {
+			valid = stage == "post_submit" && item.UnavailableCode == expected[1]
+			usesTrial = true
+		}
 		if !valid || (supported && item.Provisioning == "runtime_gap") {
 			return errors.New("invalid runtime dependency provisioning")
 		}
 		dependencyIDs[item.DependencyID], dependencyKinds[item.Kind] = true, true
+	}
+	if usesTrial && !dependencyKinds["nested_sandbox"] {
+		return errors.New("trial material requires an isolated trial dependency")
 	}
 	for _, kind := range []string{"task_context", "guide_context", "prepared_material"} {
 		if inputKinds[kind] != dependencyKinds[kind] {

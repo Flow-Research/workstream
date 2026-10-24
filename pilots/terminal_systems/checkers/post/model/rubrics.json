@@ -1,0 +1,576 @@
+{
+  "source": {
+    "guide_sha256": "13d789d4b8df5d6b310d844c622336f265d53d2ddc38e8aa101b67765f9f7183",
+    "compilation_id": "01a165a2-7cde-7277-b789-7013d7a2088d",
+    "result_hash": "sha256:523356e72f2f4ac2541f3eb74b5939b67fd2e24af421458ac966ed2aef5f65a3"
+  },
+  "requirements": [
+    {
+      "requirement_id": "solver_brief_and_extension_disclosure",
+      "statement": "Solver instructions completely state the task, including every supported command and visible evaluation rule, and optional metadata extensions are explained without introducing undocumented grading rules.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "brief and metadata disclosures"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies submitted task materials."
+          },
+          {
+            "input_id": "instruction",
+            "kind": "relative_file",
+            "relative_path": "instruction.md",
+            "purpose": "Supplies solver facing requirements, supported commands, and visible example disclosures."
+          },
+          {
+            "input_id": "task_metadata",
+            "kind": "relative_file",
+            "relative_path": "task.toml",
+            "purpose": "Supplies metadata extensions and execution declarations."
+          },
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies extension explanations and task rationale."
+          },
+          {
+            "input_id": "workspace",
+            "kind": "relative_directory",
+            "relative_path": "workspace",
+            "purpose": "Supplies solver visible starting materials."
+          },
+          {
+            "input_id": "tests",
+            "kind": "relative_directory",
+            "relative_path": "tests",
+            "purpose": "Supplies verification materials for comparison."
+          }
+        ],
+        "check_steps": [
+          "Assess whether instructions state starting behavior, required result, every supported command, inputs, outputs, failure behavior, preservation rules, boundary rules, execution method, and solver visible checks.",
+          "Assess whether result affecting rules are stated, examples are distinguished from general requirements, and permitted implementation variation is accepted unless a narrower constraint is justified.",
+          "Identify every solver visible example and assess whether instructions explicitly identify it as an example.",
+          "Compare optional metadata extensions with author note explanations, instructions, and verification materials.",
+          "Identify grading constraints dependent on unstated wording, internal details, or incidental directory order."
+        ],
+        "pass_conditions": [
+          "Instructions provide all required solver facing information, including every supported command.",
+          "Every result affecting rule is stated without hidden or incidental grading constraints.",
+          "Every solver visible example is identified as an example in instructions.",
+          "Permitted implementation variation is accepted unless instructions justify a narrower constraint.",
+          "Each optional metadata extension is explained in author notes and does not introduce an undocumented grading rule."
+        ],
+        "failure_findings": [
+          {
+            "code": "brief_incomplete",
+            "level": "error",
+            "condition": "Instructions omit a required behavior, supported command, interface, preservation rule, boundary rule, execution method, or visible check.",
+            "message": "Solver instructions are incomplete."
+          },
+          {
+            "code": "brief_hidden_constraint",
+            "level": "error",
+            "condition": "A grading constraint is undocumented or depends on incidental wording, internal details, or directory order.",
+            "message": "The task has an undocumented or incidental grading constraint."
+          },
+          {
+            "code": "visible_example_undisclosed",
+            "level": "error",
+            "condition": "Solver visible material functions as an example but instructions do not identify it as an example.",
+            "message": "A solver visible example must be identified as an example."
+          },
+          {
+            "code": "extension_explanation_missing",
+            "level": "error",
+            "condition": "An optional metadata extension lacks an author note explanation.",
+            "message": "Optional metadata extensions must be explained in author notes."
+          },
+          {
+            "code": "extension_adds_undocumented_grading",
+            "level": "error",
+            "condition": "An optional metadata extension introduces a grading rule not stated in solver instructions.",
+            "message": "Optional metadata extensions cannot add undocumented grading rules."
+          }
+        ]
+      }
+    },
+    {
+      "requirement_id": "materials_reproducibility_and_notes",
+      "statement": "Package material is appropriate and redistributable, author notes contain required documentary evidence including exact reproduction commands with necessary arguments, and dependency, offline preparation, pinning, and reproducibility disclosures are complete.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "package materials reproducibility and author notes"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies package materials and additional directories."
+          },
+          {
+            "input_id": "instruction",
+            "kind": "relative_file",
+            "relative_path": "instruction.md",
+            "purpose": "Supplies visible example disclosures and reproducibility requirements."
+          },
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies required rationale, decisions, mapping, exact reproduction commands with necessary arguments, provenance, licensing, inventory, preparation procedure, measurements, and limitations."
+          },
+          {
+            "input_id": "environment",
+            "kind": "relative_directory",
+            "relative_path": "environment",
+            "purpose": "Supplies environment declarations, base image references, dependency locks, and build inputs."
+          },
+          {
+            "input_id": "workspace",
+            "kind": "relative_directory",
+            "relative_path": "workspace",
+            "purpose": "Supplies solver visible starting materials."
+          },
+          {
+            "input_id": "solution",
+            "kind": "relative_directory",
+            "relative_path": "solution",
+            "purpose": "Supplies author reference material for custody assessment."
+          },
+          {
+            "input_id": "tests",
+            "kind": "relative_directory",
+            "relative_path": "tests",
+            "purpose": "Supplies verification material and protected fixtures for custody assessment."
+          }
+        ],
+        "check_steps": [
+          "Require author notes to contain a defect or missing capability rationale, important reference decisions, a complete requirement to verification case map, exact reproduction commands including necessary arguments, trial outcomes, measured resource use, and known limitations.",
+          "Require author notes to provide a reproducible author only incomplete repair method and explain why its rejection demonstrates a named incomplete behavior.",
+          "Assess supplied origin and licensing information for nonoriginal included material.",
+          "Assess whether package evidence indicates credentials, personal records, copied private work, a disguised organizational task, caches, development history, unrelated output, or nonredistributable material.",
+          "Assess whether each additional directory has an explained task role.",
+          "Assess whether solver visible examples are identified in instructions and are distinct from the reference solution, hidden fixtures, expected results, author notes, and the author only incomplete repair method.",
+          "Require dependency inventory disclosures for source, version or digest, license, and purpose, plus an offline preparation procedure.",
+          "Assess whether base images are digest pinned and dependencies use exact versions or lockfiles.",
+          "Assess disclosures for fresh state, randomness, time inputs, timezone, numeric tolerance, performance treatment, home state, credentials, machine cache, and platform specific filesystem ordering where relevant."
+        ],
+        "pass_conditions": [
+          "Author notes contain every required documentary statement, including exact reproduction commands with necessary arguments.",
+          "Author notes provide an author only reproducible incomplete repair method and explain the significance of its rejection.",
+          "Nonoriginal included material has supplied origin and licensing evidence sufficient for the guide.",
+          "No supplied package evidence indicates prohibited material or inappropriate retained records.",
+          "Each additional directory has an explained task role.",
+          "Solver visible examples are identified and do not relabel reference solutions, hidden fixtures, expected results, author notes, or the author only incomplete repair method.",
+          "The dependency inventory, offline preparation procedure, digest pinned base image disclosure, and exact dependency version or lockfile disclosure are complete.",
+          "Relevant reproducibility conditions consistently address fresh state, randomness, time, tolerance, performance, home state, credentials, cache state, timezone, and filesystem ordering."
+        ],
+        "failure_findings": [
+          {
+            "code": "notes_rationale_missing",
+            "level": "error",
+            "condition": "Author notes omit the explanation of the defect or missing capability.",
+            "message": "Author notes must explain the defect or missing capability."
+          },
+          {
+            "code": "notes_reference_decisions_missing",
+            "level": "error",
+            "condition": "Author notes omit important reference decisions.",
+            "message": "Author notes must explain important reference decisions."
+          },
+          {
+            "code": "notes_requirement_map_missing",
+            "level": "error",
+            "condition": "Author notes omit a complete requirement to verification case map.",
+            "message": "Author notes must map every requirement to verification cases."
+          },
+          {
+            "code": "notes_reproduction_missing",
+            "level": "error",
+            "condition": "Author notes omit exact reproduction commands or necessary command arguments.",
+            "message": "Author notes must include exact reproduction commands with necessary arguments."
+          },
+          {
+            "code": "notes_trial_outcomes_missing",
+            "level": "error",
+            "condition": "Author notes omit trial outcomes.",
+            "message": "Author notes must include trial outcomes."
+          },
+          {
+            "code": "notes_resource_use_missing",
+            "level": "error",
+            "condition": "Author notes omit measured resource use.",
+            "message": "Author notes must include measured resource use."
+          },
+          {
+            "code": "notes_limitations_missing",
+            "level": "error",
+            "condition": "Author notes omit known limitations.",
+            "message": "Author notes must include known limitations."
+          },
+          {
+            "code": "notes_incomplete_repair_method_missing",
+            "level": "error",
+            "condition": "Author notes omit a reproducible author only incomplete repair method.",
+            "message": "Author notes must provide an author only incomplete repair method."
+          },
+          {
+            "code": "notes_incomplete_repair_rejection_explanation_missing",
+            "level": "error",
+            "condition": "Author notes omit an explanation of why the incomplete repair rejection matters.",
+            "message": "Author notes must explain why incomplete repair rejection matters."
+          },
+          {
+            "code": "materials_provenance_incomplete",
+            "level": "error",
+            "condition": "Included nonoriginal material lacks supplied origin or licensing evidence sufficient for the guide.",
+            "message": "Material provenance or licensing evidence is incomplete."
+          },
+          {
+            "code": "prohibited_material_observed",
+            "level": "error",
+            "condition": "Supplied package evidence indicates prohibited material, copied private work, caches, development history, unrelated output, personal records, or a disguised organizational task.",
+            "message": "The package contains prohibited material."
+          },
+          {
+            "code": "additional_directory_unexplained",
+            "level": "error",
+            "condition": "An additional package directory lacks an explained task role in author notes.",
+            "message": "Additional directories must be explained in author notes."
+          },
+          {
+            "code": "author_only_material_relabelled",
+            "level": "error",
+            "condition": "A reference solution, hidden fixture, expected result, author note, or author only incomplete repair method is relabelled as a visible example.",
+            "message": "Author only material cannot be exposed by relabelling it as a visible example."
+          },
+          {
+            "code": "dependency_inventory_incomplete",
+            "level": "error",
+            "condition": "Required dependency source, version or digest, license, purpose, or offline preparation disclosure is absent.",
+            "message": "Dependency and offline preparation evidence is incomplete."
+          },
+          {
+            "code": "unpinned_reproducibility_input",
+            "level": "error",
+            "condition": "A base image lacks a digest pin or a dependency lacks an exact version or lockfile.",
+            "message": "Reproducibility inputs must be digest pinned or exactly versioned."
+          },
+          {
+            "code": "reproducibility_condition_incomplete",
+            "level": "error",
+            "condition": "A relevant fresh state, randomness, time, tolerance, performance, home, credential, cache, timezone, or filesystem ordering condition is absent or inconsistent.",
+            "message": "A required reproducibility condition is incomplete."
+          }
+        ]
+      }
+    },
+    {
+      "requirement_id": "verification_independence",
+      "statement": "Verification derives expected results independently from written rules, checks every documented command, accepts every permitted implementation, preserves assertions despite reference disagreement, and avoids undocumented or implementation specific grading.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "reference and independent verification"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "instruction",
+            "kind": "relative_file",
+            "relative_path": "instruction.md",
+            "purpose": "Supplies written rules, every documented command, and permitted implementation variation."
+          },
+          {
+            "input_id": "task_metadata",
+            "kind": "relative_file",
+            "relative_path": "task.toml",
+            "purpose": "Supplies the authoritative reference and verification command selectors and working directories."
+          },
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies expected result derivation and coverage explanations."
+          },
+          {
+            "input_id": "reference_material",
+            "kind": "relative_directory",
+            "relative_path": "solution",
+            "purpose": "Supplies reference material for independence comparison."
+          },
+          {
+            "input_id": "tests",
+            "kind": "relative_directory",
+            "relative_path": "tests",
+            "purpose": "Supplies verification, expected results, and fixtures."
+          },
+          {
+            "input_id": "workspace",
+            "kind": "relative_directory",
+            "relative_path": "workspace",
+            "purpose": "Supplies the initial implementation context."
+          }
+        ],
+        "check_steps": [
+          "Review the stated independent method used to derive expected results from written rules.",
+          "Compare expected results and verification assertions with reference material to identify sole generation by graded code.",
+          "Review whether verification accepts implementations permitted by instructions.",
+          "Review whether tests grade undocumented wording, internal details, or incidental directory order.",
+          "Review whether an assertion was weakened to accommodate reference behavior rather than resolved against the specification.",
+          "Review stated coverage for every documented command, documented operations, effects, boundaries, interactions, failure behavior, and inputs distinct from visible examples."
+        ],
+        "pass_conditions": [
+          "Expected results have an independently explained derivation from written rules.",
+          "The graded implementation is not the sole source of expected output.",
+          "Verification accepts every implementation permitted by instructions.",
+          "Verification does not grade undocumented wording, internal details, or incidental directory order.",
+          "Assertions are not weakened merely to suit the reference.",
+          "Coverage of every documented command and other documented behavior is explained, including meaningful interactions and nonexample inputs."
+        ],
+        "failure_findings": [
+          {
+            "code": "expected_result_derivation_not_independent",
+            "level": "error",
+            "condition": "Expected results lack an independent derivation from written rules or are generated only by graded code.",
+            "message": "Expected results must be independently derived from written rules."
+          },
+          {
+            "code": "permitted_implementation_rejected",
+            "level": "error",
+            "condition": "Verification rejects an implementation allowed by solver instructions.",
+            "message": "Verification must accept every permitted implementation."
+          },
+          {
+            "code": "undocumented_verification_constraint",
+            "level": "error",
+            "condition": "Verification grades unstated wording, internal details, or incidental directory order.",
+            "message": "Verification contains an undocumented implementation specific constraint."
+          },
+          {
+            "code": "assertion_weakened_for_reference",
+            "level": "error",
+            "condition": "An assertion was weakened to accommodate reference behavior instead of resolving the discrepancy against the specification.",
+            "message": "Assertions must not be weakened to suit the reference."
+          },
+          {
+            "code": "verification_coverage_unexplained",
+            "level": "error",
+            "condition": "Documentation does not explain coverage of every documented command, required behavior, boundary, interaction, failure behavior, or nonexample input.",
+            "message": "Verification coverage is incomplete or unexplained."
+          }
+        ]
+      }
+    },
+    {
+      "requirement_id": "author_evidence_accuracy",
+      "statement": "Author notes accurately distinguish executed and expected material and accurately report exact reproduction commands, trial outcomes, revision reruns, and measured whole process resource use.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "author evidence and measured observations"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies exact reproduction commands with necessary arguments, executed and expected labels, trial outcomes, measurements, limitations, and revision claims."
+          },
+          {
+            "input_id": "task_metadata",
+            "kind": "relative_file",
+            "relative_path": "task.toml",
+            "purpose": "Supplies declared resource limits and execution context."
+          },
+          {
+            "input_id": "authenticated_trial_records",
+            "kind": "prepared_material",
+            "purpose": "Supplies authenticated isolated observations of exact reproduction commands, outcomes, revision reruns, and whole process measurements."
+          }
+        ],
+        "check_steps": [
+          "Identify statements presented as executed observations, measurements, expectations, or estimates.",
+          "Compare declared exact reproduction commands and necessary arguments with authenticated isolated trial commands. Prose alone is not a substitute.",
+          "Compare claimed trial outcomes and executed versus expected labels with observed outcomes.",
+          "Compare claimed resource measurements with authenticated whole process measurements.",
+          "Compare claimed revision reruns with authenticated observed rerun outcomes.",
+          "Distinguish a contributor work discrepancy from execution infrastructure unavailability."
+        ],
+        "pass_conditions": [
+          "Author notes distinguish executed observations and measurements from estimates and expectations.",
+          "Declared exact reproduction commands including necessary arguments correspond to authenticated isolated trial commands.",
+          "Claimed trial outcomes and revision reruns correspond to authenticated observed outcomes.",
+          "Claimed measured resource use corresponds to authenticated whole process measurements.",
+          "Unavailable execution infrastructure is reported as infrastructure unavailability rather than a contributor work defect."
+        ],
+        "failure_findings": [
+          {
+            "code": "notes_observation_misrepresented",
+            "level": "error",
+            "condition": "An estimate or expectation is presented as an executed observation or measurement.",
+            "message": "Author notes must distinguish observations from estimates and expectations."
+          },
+          {
+            "code": "reproduction_procedure_discrepant",
+            "level": "error",
+            "condition": "A declared exact reproduction command or necessary argument materially differs from an authenticated isolated trial command.",
+            "message": "Author notes must accurately state the exact reproduction commands used by observed trials."
+          },
+          {
+            "code": "reproduction_procedure_unavailable",
+            "level": "error",
+            "condition": "An exact procedure needed to compare author claims with authenticated trials is absent or ambiguous, so accuracy cannot be established.",
+            "message": "Author evidence cannot be established without an exact reproducible procedure."
+          },
+          {
+            "code": "trial_outcome_discrepant",
+            "level": "error",
+            "condition": "A claimed trial outcome or revision rerun conflicts with an authenticated observed outcome.",
+            "message": "Author notes must accurately report observed trial outcomes."
+          },
+          {
+            "code": "resource_measurement_discrepant",
+            "level": "error",
+            "condition": "A claimed resource measurement conflicts with authenticated whole process measurements.",
+            "message": "Author notes must accurately report measured resource use."
+          }
+        ]
+      }
+    },
+    {
+      "requirement_id": "revision_objective_and_explanation",
+      "statement": "When feedback leads to a revision, the package explains the change, addresses relevant feedback, and preserves the original task objective rather than narrowing it to fit an implementation.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "revisions and task objective"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies the revised package."
+          },
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies the revision explanation and feedback mapping."
+          },
+          {
+            "input_id": "revision_context",
+            "kind": "task_context",
+            "purpose": "Supplies authenticated submission state identifying a first submission or supplying prior package material and feedback."
+          }
+        ],
+        "check_steps": [
+          "Determine from authenticated submission state whether revision context exists.",
+          "When revision context exists, compare the revised package and explanation with prior package material and feedback.",
+          "Assess whether the explanation identifies the change and addresses relevant feedback.",
+          "Assess whether the revised task objective remains materially equivalent to the original objective.",
+          "Pass without asserting revision work when authenticated submission state identifies a first submission."
+        ],
+        "pass_conditions": [
+          "When revision context exists, author notes explain the change.",
+          "When revision context exists, the revision addresses relevant feedback without narrowing the original task objective.",
+          "When authenticated submission state identifies a first submission, the conditional requirement passes without asserting revision work."
+        ],
+        "failure_findings": [
+          {
+            "code": "revision_change_unexplained",
+            "level": "error",
+            "condition": "Revision context exists and author notes do not explain the change.",
+            "message": "A revision must explain its change."
+          },
+          {
+            "code": "revision_feedback_unaddressed",
+            "level": "error",
+            "condition": "Revision context exists and the change does not address relevant feedback without a justified explanation.",
+            "message": "A revision must address relevant feedback."
+          },
+          {
+            "code": "revision_objective_not_preserved",
+            "level": "error",
+            "condition": "Revision context exists and the revised package narrows or changes the original objective to accommodate an implementation.",
+            "message": "A revision must preserve the original task objective."
+          }
+        ]
+      }
+    },
+    {
+      "requirement_id": "difficulty_claim_evidence",
+      "statement": "A claimed measured task difficulty is supported by supplied solver evaluation evidence, while a package making no such claim is accepted without a fresh solver evaluation.",
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "independent verification evidence"
+        }
+      ],
+      "check_specification": {
+        "inputs": [
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies difficulty claims and references to supporting evaluation evidence."
+          },
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies included supporting evaluation records and provenance disclosures."
+          }
+        ],
+        "check_steps": [
+          "Identify statements that present task difficulty as measured.",
+          "Pass when no measured difficulty claim is present.",
+          "When a claim is present, review supplied solver evaluation records, stated provenance, and consistency with the claim.",
+          "Do not infer ownership or authenticity beyond supplied evidence and do not require a new solver trial."
+        ],
+        "pass_conditions": [
+          "No measured difficulty claim is made, or each measured difficulty claim is supported by supplied solver evaluation evidence with stated provenance and consistent results."
+        ],
+        "failure_findings": [
+          {
+            "code": "difficulty_claim_unsupported",
+            "level": "error",
+            "condition": "A measured difficulty claim lacks supplied solver evaluation evidence or stated provenance.",
+            "message": "Measured task difficulty claims require supplied solver evaluation evidence."
+          },
+          {
+            "code": "difficulty_evidence_inconsistent",
+            "level": "error",
+            "condition": "Supplied solver evaluation evidence materially conflicts with the measured difficulty claim.",
+            "message": "Difficulty claims must be consistent with supplied evaluation evidence."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -45,7 +45,7 @@ class GuideArtifactAdmissionRequest:
 @final
 @dataclass(frozen=True, slots=True)
 class CheckerOutputArtifactAdmissionRequest:
-    """One prepared model transcript admitted under its exact durable call effect."""
+    """One prepared model or trial output admitted under its exact durable owner."""
 
     reservation: GeneratedOutputReservation
     slot_key: str

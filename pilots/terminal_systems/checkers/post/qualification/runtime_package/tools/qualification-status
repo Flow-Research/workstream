@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+if [ -f workspace/result.txt ]; then
+  printf 'present\n'
+else
+  printf 'absent\n'
+fi

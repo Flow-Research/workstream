@@ -382,6 +382,8 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0063_checker_revision_input",
+        "0062_model_usage",
         "0061_project_catalogue_read",
         "0060_audit_restore_path",
         "0059_neutral_guide_runtime",
@@ -600,6 +602,8 @@ def test_repeated_upgrade_head_preserves_current_database(
         "0059_neutral_guide_runtime",
         "0060_audit_restore_path",
         "0061_project_catalogue_read",
+        "0062_model_usage",
+        "0063_checker_revision_input",
     ],
 )
 def test_preceding_head_upgrades_to_current_without_recreation(
@@ -660,6 +664,183 @@ def test_preceding_head_upgrades_to_current_without_recreation(
     assert after["versions"] == [HEAD_REVISION]
     assert after["reference_rows"] == before["reference_rows"]
     assert repeated == after
+
+
+def test_checker_revision_input_upgrade_preserves_null_digest_and_retained_schema(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0062 adds selected context without rewriting old result authority."""
+    config = _alembic_config()
+
+    async def probe() -> dict[str, object]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            column = await connection.fetchrow(
+                "select data_type,is_nullable from information_schema.columns "
+                "where table_schema='public' and table_name='checker_runs' "
+                "and column_name='input_context_custody'"
+            )
+            trigger = await connection.fetchrow(
+                "select tgdeferrable,tginitdeferred from pg_trigger "
+                "where tgrelid='public.checker_runs'::regclass "
+                "and tgname='checker_input_context_custody' and not tgisinternal"
+            )
+            return {
+                "revision": await connection.fetchval(
+                    "select version_num from public.alembic_version"
+                ),
+                "sentinel": await connection.fetchval(
+                    "select value from migration_revision_input_sentinel where id=1"
+                ),
+                "column": tuple(column.values()) if column else None,
+                "trigger": tuple(trigger.values()) if trigger else None,
+                "null_digest": await connection.fetchval(
+                    "select public.checker_post_submit_authority_digest("
+                    "pg_catalog.jsonb_populate_record(null::public.checker_runs,'{}'::jsonb),"
+                    "'finalize')"
+                ),
+                "context_digest": await connection.fetchval(
+                    "select public.checker_post_submit_authority_digest("
+                    "pg_catalog.jsonb_populate_record(null::public.checker_runs,"
+                    "'{\"input_context_custody\":{\"probe\":true}}'::jsonb),'finalize')"
+                ),
+                "validity_function": await connection.fetchval(
+                    "select to_regprocedure("
+                    "'public.checker_input_context_valid(public.checker_runs)') is not null"
+                ),
+            }
+        finally:
+            await connection.close()
+
+    async def pre_upgrade_digest() -> str:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            return await connection.fetchval(
+                "select public.checker_post_submit_authority_digest("
+                "pg_catalog.jsonb_populate_record(null::public.checker_runs,'{}'::jsonb),"
+                "'finalize')"
+            )
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0062_model_usage")
+        before_digest = asyncio.run(pre_upgrade_digest())
+        asyncio.run(
+            _execute(
+                isolated_database_env,
+                "create table migration_revision_input_sentinel("
+                "id integer primary key,value text not null);"
+                "insert into migration_revision_input_sentinel values(1,'preserve-me')",
+            )
+        )
+        command.upgrade(config, HEAD_REVISION)
+        after = asyncio.run(probe())
+        asyncio.run(
+            _execute(
+                isolated_database_env,
+                "drop table migration_revision_input_sentinel",
+            )
+        )
+
+    assert after["revision"] == HEAD_REVISION
+    assert after["sentinel"] == "preserve-me"
+    assert after["column"] == ("jsonb", "YES")
+    assert after["trigger"] == (True, True)
+    assert after["null_digest"] == before_digest
+    assert after["validity_function"] is True
+    assert after["context_digest"] != before_digest
+
+
+def test_checker_trial_evidence_upgrade_preserves_existing_art_lineages(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0063 adds one closed trial lineage without rewriting model/legacy outputs."""
+    config = _alembic_config()
+
+    async def probe() -> dict[str, object]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            constraints = await connection.fetch(
+                "select conname,pg_get_constraintdef(oid) definition from pg_constraint "
+                "where conname in ('ck_artifact_put_attempts_producer_reference',"
+                "'ck_artifact_operation_receipts_contract_producer_reference',"
+                "'ck_artifact_bindings_checker_output_lineage') order by conname"
+            )
+            columns = await connection.fetch(
+                "select table_name,data_type,is_nullable from information_schema.columns "
+                "where table_schema='public' and column_name='checker_trial_evidence_id' "
+                "order by table_name"
+            )
+            triggers = await connection.fetch(
+                "select tgname,tgdeferrable,tginitdeferred from pg_trigger "
+                "where tgrelid in ('public.checker_trial_evidence'::regclass,"
+                "'public.artifact_put_attempts'::regclass) and not tgisinternal order by tgname"
+            )
+            return {
+                "revision": await connection.fetchval(
+                    "select version_num from public.alembic_version"
+                ),
+                "sentinel": await connection.fetchval(
+                    "select value from migration_trial_evidence_sentinel where id=1"
+                ),
+                "columns": [tuple(row.values()) for row in columns],
+                "constraints": {row["conname"]: row["definition"] for row in constraints},
+                "triggers": {row["tgname"]: tuple(row.values())[1:] for row in triggers},
+                "table": await connection.fetchval(
+                    "select to_regclass('public.checker_trial_evidence') is not null"
+                ),
+            }
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0063_checker_revision_input")
+        asyncio.run(
+            _execute(
+                isolated_database_env,
+                "create table migration_trial_evidence_sentinel("
+                "id integer primary key,value text not null);"
+                "insert into migration_trial_evidence_sentinel values(1,'preserve-me')",
+            )
+        )
+        command.upgrade(config, HEAD_REVISION)
+        after = asyncio.run(probe())
+        asyncio.run(_execute(isolated_database_env, "drop table migration_trial_evidence_sentinel"))
+
+    assert after["revision"] == HEAD_REVISION
+    assert after["sentinel"] == "preserve-me"
+    assert after["table"] is True
+    assert after["columns"] == [
+        ("artifact_operation_receipts", "uuid", "YES"),
+        ("artifact_put_attempts", "uuid", "YES"),
+    ]
+    definitions = " ".join(after["constraints"].values())
+    assert all(
+        value in definitions
+        for value in (
+            "checker_run",
+            "checker_model_call",
+            "setup_model_call",
+            "model_request",
+            "model_response",
+            "checker_trial_evidence",
+            "trial_receipt",
+        )
+    )
+    expected_triggers = {
+        "checker_trial_artifact_ancestry": (False, False),
+        "checker_trial_content_custody": (True, True),
+        "checker_trial_evidence_guard": (False, False),
+        "checker_trial_evidence_no_truncate": (False, False),
+    }
+    assert all(after["triggers"].get(name) == value for name, value in expected_triggers.items())
 
 
 def test_neutral_runtime_upgrade_preserves_retained_provider_facts(

@@ -46,6 +46,7 @@ from app.modules.checkers.api.output_custody import (
     GeneratedOutputSelector,
     CheckerOutputUnavailable,
 )
+from app.modules.checkers.api.trial_evidence import TrialEvidenceUnavailable
 from app.modules.model_usage.api import ModelCallUnavailable
 
 
@@ -196,7 +197,13 @@ class PreparedCheckerOutputWriteAuthorization(
         try:
             reservation = GENERATED_OUTPUT_RESERVATION.validate_python(facts.reservation)
             slot = reservation.select(selector)
-        except (CheckerOutputUnavailable, ModelCallUnavailable, TypeError, ValueError) as error:
+        except (
+            CheckerOutputUnavailable,
+            ModelCallUnavailable,
+            TrialEvidenceUnavailable,
+            TypeError,
+            ValueError,
+        ) as error:
             self.discard()
             raise CheckerOutputUnavailable("checker_output_authority_unavailable") from error
         if facts.slot_key != slot.key:

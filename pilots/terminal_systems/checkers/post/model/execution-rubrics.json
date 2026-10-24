@@ -1,0 +1,415 @@
+{
+  "source": {
+    "guide_sha256": "13d789d4b8df5d6b310d844c622336f265d53d2ddc38e8aa101b67765f9f7183",
+    "compilation_id": "01a165a2-7cde-7277-b789-7013d7a2088d",
+    "result_hash": "sha256:523356e72f2f4ac2541f3eb74b5939b67fd2e24af421458ac966ed2aef5f65a3"
+  },
+  "requirements": [
+    {
+      "requirement_id": "runtime_environment_and_verification_trials",
+      "statement": "Actual isolated build and runtime trials demonstrate offline reproducibility, required isolation, author only material exclusion, reference integrity, independent verifier behavior, substantive starter rejection, incomplete repair rejection, three fresh reference passes, execution of every documented command, and the declared runtime contract.",
+      "disposition": "post_submit_capability_gap",
+      "platform_coverage": null,
+      "classification_rationale": "These are actual build, layer, permission, visibility, workspace effect, verifier, interruption, and whole process resource outcomes. They require isolated execution in a nested submitted environment and prepared offline materials, not source review or documentary claims.",
+      "check_specification": {
+        "evaluation_method": "isolated_execution",
+        "execution_mode": "background",
+        "maximum_duration_seconds": 720,
+        "stage_rationale": "Building the declared environment, inspecting layers and runtime conditions, executing repeated fresh trials, and observing complete process trees require background execution.",
+        "inputs": [
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies the complete task package."
+          },
+          {
+            "input_id": "task_metadata",
+            "kind": "relative_file",
+            "relative_path": "task.toml",
+            "purpose": "Supplies declared environment, workspace, execution, and resource conditions."
+          },
+          {
+            "input_id": "instruction",
+            "kind": "relative_file",
+            "relative_path": "instruction.md",
+            "purpose": "Supplies every documented command, behavior, isolation conditions, and failure semantics."
+          },
+          {
+            "input_id": "author_notes",
+            "kind": "relative_file",
+            "relative_path": "AUTHOR_NOTES.md",
+            "purpose": "Supplies incomplete repair procedure, trial claims, and coverage mapping."
+          },
+          {
+            "input_id": "workspace",
+            "kind": "relative_directory",
+            "relative_path": "workspace",
+            "purpose": "Supplies starting workspace trials."
+          },
+          {
+            "input_id": "reference_material",
+            "kind": "relative_directory",
+            "relative_path": "solution",
+            "purpose": "Supplies the reference repair."
+          },
+          {
+            "input_id": "tests",
+            "kind": "relative_directory",
+            "relative_path": "tests",
+            "purpose": "Supplies verification material and protected expected inputs."
+          },
+          {
+            "input_id": "prepared_execution_material",
+            "kind": "prepared_material",
+            "purpose": "Supplies approved offline images, dependency cache material, layer inspection tooling, and process observation tooling."
+          }
+        ],
+        "check_steps": [
+          "Build the declared environment using only prepared offline material.",
+          "Inspect built layers and solver visible runtime material for reference code, hidden fixtures, expected results, author notes, and the author only incomplete repair method.",
+          "Allow solver visible examples only when instructions identify them as examples and they are not any author only material category.",
+          "Create independent fresh copies of the starting workspace.",
+          "Run solver, reference, and verifier without administrator privileges and observe writable workspace and temporary locations.",
+          "Observe absence of network access, host socket access, device access, elevated privileges, author specific home reliance, credential reliance, undeclared cache reliance, and reliance on platform specific filesystem ordering.",
+          "Apply the reference from starting state and run protected verification.",
+          "Run the same verifier and protected expected inputs against a fresh untouched workspace, a reproducibly applied incomplete repair, and workspaces with missing or fabricated required output.",
+          "Confirm the untouched starter fails a substantive documented requirement rather than an infrastructure condition.",
+          "Confirm the incomplete repair handles an ordinary case but fails a named requirement, and confirm the author only reproduction method is not exposed to solvers.",
+          "Run the reference and full verification in three independently prepared workspaces.",
+          "Exercise every documented command, documented operations, main behavior, boundaries, interactions, failure behavior, nonexample inputs, promised records, artifacts, interruption effects, and restart effects.",
+          "Confirm verification neither repairs the workspace nor selects results based on actor role.",
+          "Observe unattended completion, exit semantics, diagnostics, conditional randomness and time behavior, tolerance consistency, and whole process resource use."
+        ],
+        "pass_conditions": [
+          "The environment builds and runs using prepared offline material.",
+          "Built layers and solver view exclude reference material, hidden fixtures, expected results, author notes, and the author only incomplete repair method.",
+          "Solver visible examples are identified in instructions and are not relabelled author only material.",
+          "Solver, reference, and verifier operate unprivileged with writable work locations and without prohibited network, host, device, credential, home, cache, or filesystem order reliance.",
+          "The reference performs requested work from starting state without reading protected verification material or installing precomputed answers.",
+          "The reference passes full verification in three independent fresh workspaces.",
+          "The unchanged starter demonstrates a substantive documented task failure.",
+          "A reproducibly applied plausible incomplete repair that handles an ordinary case fails a named requirement, and its reproduction method remains author only.",
+          "Verification rejects missing and fabricated required output without altering the workspace to make it correct.",
+          "The same verifier and protected expected inputs are used across workspace states, with workspace state as the only differing condition.",
+          "Every documented command and documented behavior is exercised and runs complete unattended with correct exit behavior, useful diagnostics, relevant reproducibility treatment, and whole process use within declared allowances."
+        ],
+        "failure_findings": [
+          {
+            "code": "offline_build_or_runtime_failure",
+            "level": "error",
+            "condition": "The environment cannot build or run from prepared offline materials.",
+            "message": "The task environment must build and run offline from prepared materials."
+          },
+          {
+            "code": "author_only_material_exposed",
+            "level": "error",
+            "condition": "Reference material, hidden fixtures, expected results, author notes, or the author only incomplete repair method are present in built layers or solver visible runtime material.",
+            "message": "Author only material is exposed to the solver."
+          },
+          {
+            "code": "runtime_isolation_failure",
+            "level": "error",
+            "condition": "A solver, reference, or verifier run uses prohibited privileges, network, host socket, device, author home, credentials, undeclared cache state, or platform specific filesystem ordering.",
+            "message": "The runtime environment violates required isolation conditions."
+          },
+          {
+            "code": "reference_not_from_starting_state",
+            "level": "error",
+            "condition": "The reference reads protected verification material, installs precomputed answers, or fails to perform requested work from starting state.",
+            "message": "The reference must perform requested work from the starting state."
+          },
+          {
+            "code": "reference_trial_failure",
+            "level": "error",
+            "condition": "The reference or full verification fails in any of three independently prepared workspaces.",
+            "message": "The reference must pass full verification in three fresh workspaces."
+          },
+          {
+            "code": "starter_not_substantively_rejected",
+            "level": "error",
+            "condition": "The unchanged starter does not fail a substantive documented requirement or fails only because of infrastructure.",
+            "message": "The unchanged starter must demonstrate a substantive task failure."
+          },
+          {
+            "code": "incomplete_repair_not_rejected",
+            "level": "error",
+            "condition": "No reproducible plausible incomplete repair is rejected for a named requirement after handling an ordinary case, or its author only reproduction method is solver visible.",
+            "message": "A plausible incomplete repair must fail a named requirement and remain author only."
+          },
+          {
+            "code": "verification_accepts_invalid_output",
+            "level": "error",
+            "condition": "Verification accepts missing or fabricated required output or modifies the workspace before producing its verdict.",
+            "message": "Verification must reject invalid output without repairing the workspace."
+          },
+          {
+            "code": "verification_role_dependent",
+            "level": "error",
+            "condition": "Verification behavior or protected expected inputs differ by actor role rather than workspace state.",
+            "message": "Verification must use the same protected inputs across workspace states."
+          },
+          {
+            "code": "behavioral_coverage_incomplete",
+            "level": "error",
+            "condition": "A documented command, operation, effect, boundary, interaction, failure behavior, nonexample input, interruption effect, or restart effect is not exercised.",
+            "message": "Verification does not exercise every required documented command and behavior."
+          },
+          {
+            "code": "execution_contract_failure",
+            "level": "error",
+            "condition": "A demonstrated run fails unattended completion, exit semantics, diagnostics, a relevant reproducibility condition, or a declared whole process allowance.",
+            "message": "Execution does not meet the declared runtime contract."
+          }
+        ],
+        "positive_tests": [
+          "A task with offline isolated execution, protected author only materials, three successful fresh reference trials, meaningful incomplete repair rejection, exercised documented commands, and a verifier that rejects prescribed invalid states passes."
+        ],
+        "negative_tests": [
+          {
+            "name": "hidden_expected_result_in_layer",
+            "scenario": "A built environment layer exposes protected expected results to the solver.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "author_only_material_exposed"
+            ]
+          },
+          {
+            "name": "starter_accepted",
+            "scenario": "The unchanged starter is accepted even though it lacks a substantive documented behavior.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "starter_not_substantively_rejected"
+            ]
+          },
+          {
+            "name": "incomplete_repair_accepted",
+            "scenario": "A reproducible incomplete repair handles an ordinary case but is accepted despite violating a named boundary rule.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "incomplete_repair_not_rejected"
+            ]
+          },
+          {
+            "name": "documented_command_not_exercised",
+            "scenario": "A documented command is not executed in the observed trial set.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "behavioral_coverage_incomplete"
+            ]
+          },
+          {
+            "name": "missing_output_accepted",
+            "scenario": "A workspace with missing required output is accepted or altered by verification before verdict.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "verification_accepts_invalid_output"
+            ]
+          },
+          {
+            "name": "fabricated_output_accepted",
+            "scenario": "A workspace with fabricated required output is accepted or altered by verification before verdict.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "verification_accepts_invalid_output"
+            ]
+          }
+        ],
+        "runtime_dependencies": [
+          {
+            "dependency_id": "isolated_runner",
+            "kind": "isolated_execution",
+            "provisioning": "current_runner",
+            "purpose": "Orchestrates trials and records observed outcomes.",
+            "unavailable_code": "implementation_unavailable"
+          },
+          {
+            "dependency_id": "nested_task_environment",
+            "kind": "nested_sandbox",
+            "provisioning": "runtime_gap",
+            "purpose": "Builds and runs the submitted environment independently of the checker image.",
+            "unavailable_code": "implementation_unavailable"
+          },
+          {
+            "dependency_id": "offline_execution_material",
+            "kind": "prepared_material",
+            "provisioning": "runtime_gap",
+            "purpose": "Provides approved offline images, caches, inspection tooling, and process observation tooling.",
+            "unavailable_code": "material_unavailable"
+          }
+        ],
+        "infrastructure_failures": [
+          {
+            "code": "implementation_unavailable",
+            "condition": "The isolated runner or nested task environment is unavailable."
+          },
+          {
+            "code": "material_unavailable",
+            "condition": "Required prepared offline material or inspection tooling is unavailable."
+          }
+        ]
+      },
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "execution environment and verification trials"
+        }
+      ]
+    },
+    {
+      "requirement_id": "revision_rerun_evidence",
+      "statement": "When feedback leads to a revision, the complete declared verification suite is rerun in the submitted environment and produces observed rerun evidence.",
+      "disposition": "post_submit_capability_gap",
+      "platform_coverage": null,
+      "classification_rationale": "Actual revision reruns require execution in the submitted task environment. Conservatively rerunning the complete declared verification suite avoids inferring an affected check set from free form changes and feedback.",
+      "check_specification": {
+        "evaluation_method": "isolated_execution",
+        "execution_mode": "background",
+        "maximum_duration_seconds": 540,
+        "stage_rationale": "A fresh writable workspace, reference application, and complete verification suite execution in the submitted environment require background isolated execution.",
+        "inputs": [
+          {
+            "input_id": "package",
+            "kind": "package",
+            "purpose": "Supplies the revised package and declared verification suite."
+          },
+          {
+            "input_id": "task_metadata",
+            "kind": "relative_file",
+            "relative_path": "task.toml",
+            "purpose": "Supplies declared reference and verification execution context."
+          },
+          {
+            "input_id": "workspace",
+            "kind": "relative_directory",
+            "relative_path": "workspace",
+            "purpose": "Supplies the starting workspace used to stage a fresh writable revision trial."
+          },
+          {
+            "input_id": "reference_material",
+            "kind": "relative_directory",
+            "relative_path": "solution",
+            "purpose": "Supplies the reference material applied during the revision trial."
+          },
+          {
+            "input_id": "tests",
+            "kind": "relative_directory",
+            "relative_path": "tests",
+            "purpose": "Supplies the complete declared verification suite and protected expected inputs."
+          },
+          {
+            "input_id": "revision_context",
+            "kind": "task_context",
+            "purpose": "Supplies authenticated submission state identifying a first submission or supplying prior state and feedback."
+          },
+          {
+            "input_id": "prepared_execution_material",
+            "kind": "prepared_material",
+            "purpose": "Supplies approved offline material for complete suite reruns."
+          }
+        ],
+        "check_steps": [
+          "Determine from authenticated submission state whether revision context exists.",
+          "When revision context exists, stage a fresh writable workspace from the submitted starting workspace.",
+          "Apply reference.command from reference.working_directory in that fresh workspace.",
+          "After reference application, run the complete verification.command suite from verification.working_directory in that same fresh workspace.",
+          "Record observed outcomes for the complete suite.",
+          "Pass without asserting rerun work when authenticated submission state identifies a first submission.",
+          "Do not treat the untouched starter as a successful revision proof.",
+          "Do not derive an executable affected check set from free form feedback or changes."
+        ],
+        "pass_conditions": [
+          "When revision context exists, a fresh writable workspace is staged before reference application.",
+          "When revision context exists, reference.command is applied from reference.working_directory before the complete verification.command suite runs from verification.working_directory.",
+          "When revision context exists, the complete declared verification suite has observed successful outcomes.",
+          "When authenticated submission state identifies a first submission, the conditional requirement passes without asserting a rerun."
+        ],
+        "failure_findings": [
+          {
+            "code": "revision_rerun_missing",
+            "level": "error",
+            "condition": "Revision context exists and observed execution of reference application followed by the complete verification suite in a fresh writable workspace is absent.",
+            "message": "A revision must have observed complete suite rerun evidence."
+          },
+          {
+            "code": "revision_rerun_failure",
+            "level": "error",
+            "condition": "Observed execution shows that reference application or the complete verification suite fails for the revised package.",
+            "message": "The revised package fails the complete verification rerun."
+          }
+        ],
+        "positive_tests": [
+          "A revision with observed successful reference application and complete verification rerun in a fresh writable workspace passes.",
+          "A first submission identified by authenticated submission state passes this conditional requirement."
+        ],
+        "negative_tests": [
+          {
+            "name": "revision_without_complete_rerun",
+            "scenario": "Feedback leads to a revision but no observed complete verification suite rerun is available.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "revision_rerun_missing"
+            ]
+          },
+          {
+            "name": "revision_suite_failure",
+            "scenario": "Reference application completes in a fresh workspace but the observed complete verification suite fails.",
+            "expected_verdict": "failed",
+            "expected_finding_codes": [
+              "revision_rerun_failure"
+            ]
+          }
+        ],
+        "runtime_dependencies": [
+          {
+            "dependency_id": "isolated_runner",
+            "kind": "isolated_execution",
+            "provisioning": "current_runner",
+            "purpose": "Orchestrates actual complete suite execution.",
+            "unavailable_code": "implementation_unavailable"
+          },
+          {
+            "dependency_id": "nested_task_environment",
+            "kind": "nested_sandbox",
+            "provisioning": "runtime_gap",
+            "purpose": "Runs reference application and the complete verification suite in the submitted task environment.",
+            "unavailable_code": "implementation_unavailable"
+          },
+          {
+            "dependency_id": "revision_context",
+            "kind": "task_context",
+            "provisioning": "runtime_gap",
+            "purpose": "Provides authenticated prior state and feedback or identifies a first submission.",
+            "unavailable_code": "material_unavailable"
+          },
+          {
+            "dependency_id": "offline_execution_material",
+            "kind": "prepared_material",
+            "provisioning": "runtime_gap",
+            "purpose": "Provides approved offline materials for complete suite reruns.",
+            "unavailable_code": "material_unavailable"
+          }
+        ],
+        "infrastructure_failures": [
+          {
+            "code": "implementation_unavailable",
+            "condition": "The isolated runner or nested task environment is unavailable."
+          },
+          {
+            "code": "material_unavailable",
+            "condition": "Authenticated submission state, prior revision material, feedback, or prepared offline material is unavailable."
+          }
+        ]
+      },
+      "evidence_refs": [
+        {
+          "document_number": 1,
+          "start_page": null,
+          "end_page": null,
+          "section": "revisions and affected checks"
+        }
+      ]
+    }
+  ]
+}

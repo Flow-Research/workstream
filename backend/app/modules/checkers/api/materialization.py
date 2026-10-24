@@ -7,9 +7,18 @@ from typing import Protocol
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
-from app.modules.checkers.api.execution import ExecuteFacts, execution_authority_digest, VerifiedMaterialFacts
+from app.modules.checkers.api.execution import (
+    ExecuteFacts,
+    execution_authority_digest,
+    VerifiedMaterialFacts,
+)
 from app.modules.checkers.api.material import SubmissionMaterialEntry
-from app.modules.checkers.api.canonical_values import CheckerValue, ResourceId, Sha256, VersionNumber
+from app.modules.checkers.api.canonical_values import (
+    CheckerValue,
+    ResourceId,
+    Sha256,
+    VersionNumber,
+)
 
 from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionRequest,
@@ -18,6 +27,13 @@ from app.modules.checkers.api.evaluation_contract import (
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
     PostSubmitExternalCheckerMaterial,
+)
+from app.modules.checkers.api.evaluation_context import (
+    PostSubmitEvaluationContext, PostSubmitInputContextCustody, PostSubmitPredecessorCustody,
+    validate_input_context_custody,
+)
+from app.modules.checkers.api.external_policy import (
+    LockedExternalCheckerBinding,
 )
 
 
@@ -29,10 +45,9 @@ class PostSubmissionMaterializationFailure(RuntimeError):
     """Retain a known post-authorization material failure after successful cleanup."""
 
 
-class MaterializationFacts(CheckerValue):
+class MaterializationMaterialFacts(CheckerValue):
     """Exact selected ancestry without provider coordinates or scratch authority."""
 
-    execution: ExecuteFacts
     material: VerifiedMaterialFacts
     evidence_id: ResourceId
     verification_receipt_id: ResourceId
@@ -42,29 +57,72 @@ class MaterializationFacts(CheckerValue):
     semantic_manifest_id: ResourceId
 
 
+class MaterializationFacts(MaterializationMaterialFacts):
+    """One current execution and the complete policy-selected historical input custody."""
+
+    execution: ExecuteFacts
+    evaluation_context: PostSubmitEvaluationContext | None = None
+    predecessor: MaterializationMaterialFacts | None = None
+
+
+def materialization_input_context(facts: MaterializationFacts) -> PostSubmitInputContextCustody | None:
+    """Use one closed witness for authorization, terminal publication and replay."""
+    custody = None
+    if facts.evaluation_context is not None:
+        prior = facts.predecessor
+        custody = PostSubmitInputContextCustody(
+            evaluation_context=facts.evaluation_context,
+            predecessor=PostSubmitPredecessorCustody(
+                **prior.material.model_dump(), **prior.model_dump(exclude={"material"}),
+            ) if prior is not None else None,
+        )
+    elif facts.predecessor is not None:
+        raise ValueError("prior material requires selected context")
+    validate_input_context_custody(facts.execution.request, custody)
+    return custody
+
+
 def materialization_authority_digest(facts: MaterializationFacts) -> str:
     """Bind exact read custody without storing its raw facts in an audit payload."""
     if type(facts) is not MaterializationFacts:
         raise ValueError("invalid materialization authority facts")
     facts = MaterializationFacts.model_validate_json(facts.model_dump_json())
     request, material = facts.execution.request, facts.material
-    if (material.submission_id, material.submission_version, material.binding_id,
-        material.content_id, material.content_sha256, material.byte_count) != (
-        request.submission_id, request.submission_version, request.binding_id,
-        request.content_id, request.content_sha256, request.byte_count,
+    if (
+        material.submission_id,
+        material.submission_version,
+        material.binding_id,
+        material.content_id,
+        material.content_sha256,
+        material.byte_count,
+    ) != (
+        request.submission_id,
+        request.submission_version,
+        request.binding_id,
+        request.content_id,
+        request.content_sha256,
+        request.byte_count,
     ):
         raise ValueError("materialization authority identity mismatch")
-    return canonical_json_hash({
-        "domain": "workstream.authorization.post_submit_materialization",
-        "action_id": "artifact.post_submit.checker_input.materialize",
-        "permission_id": "artifact.checker_input.materialize",
-        "service_identity": "workstream.artifact.materializer",
-        "resource_type": "checker_run",
-        "resource_id": str(facts.execution.lease.reservation.attempt_id),
-        "scope_project_id": str(request.project_id),
-        "execution_digest": execution_authority_digest(facts.execution),
-        "material": facts.model_dump(mode="json", exclude={"execution"}),
-    })
+    input_context = materialization_input_context(facts)
+    retained = facts.model_dump(
+        mode="json", exclude={"execution", "evaluation_context", "predecessor"}
+    )
+    if input_context is not None:
+        retained["input_context_custody"] = input_context.model_dump(mode="json")
+    return canonical_json_hash(
+        {
+            "domain": "workstream.authorization.post_submit_materialization",
+            "action_id": "artifact.post_submit.checker_input.materialize",
+            "permission_id": "artifact.checker_input.materialize",
+            "service_identity": "workstream.artifact.materializer",
+            "resource_type": "checker_run",
+            "resource_id": str(facts.execution.lease.reservation.attempt_id),
+            "scope_project_id": str(request.project_id),
+            "execution_digest": execution_authority_digest(facts.execution),
+            "material": retained,
+        }
+    )
 
 
 class PreparedMaterialization(ABC):
@@ -84,7 +142,9 @@ class PreparedMaterialization(ABC):
 class MaterializationAuthorityPort(Protocol):
     """Prepare before CHECKERS currentness and ART selection in one short transaction."""
 
-    def prepare_materialization(self, facts: ExecuteFacts) -> AbstractAsyncContextManager[PreparedMaterialization]:
+    def prepare_materialization(
+        self, facts: ExecuteFacts
+    ) -> AbstractAsyncContextManager[PreparedMaterialization]:
         """Hold the materializer principal until exact facts are consumed or revalidated."""
         ...
 
@@ -108,6 +168,12 @@ class SubmissionMaterialView(Protocol):
     def external_checker_material(self) -> PostSubmitExternalCheckerMaterial:
         """Return detached exact POST custody without provider or path coordinates."""
 
+    def evaluation_material(
+        self,
+        binding: LockedExternalCheckerBinding,
+    ) -> tuple[PostSubmitEvaluationContext, tuple[PostSubmitExternalCheckerMaterial, ...]]:
+        """Project only the historical roles selected by this exact approved binding."""
+
 
 class ExternalCheckerGrantReference(Protocol):
     """Opaque ART grant identity accepted by the trusted service adapter."""
@@ -118,8 +184,11 @@ class ExternalCheckerGrantReference(Protocol):
 
 class PostSubmissionMaterialConsumer(Protocol):
     """Evaluate scoped input asynchronously and return detached phase facts."""
+
     async def evaluate(
-        self, request: PostSubmissionExecutionRequest, material: SubmissionMaterialView,
+        self,
+        request: PostSubmissionExecutionRequest,
+        material: SubmissionMaterialView,
     ) -> PostSubmissionExecutionResult:
         """Return detached closed phase facts before ART revokes material access."""
 
@@ -139,11 +208,15 @@ class PostSubmissionMaterializationResult:
     semantic_manifest_sha256: str
     evaluation: PostSubmissionExecutionResult
     input_materialization_evidence_id: UUID
+    input_context_custody: PostSubmitInputContextCustody | None = None
 
 
 class PostSubmissionMaterializationPort(Protocol):
     """Verify and scope exact input without publishing durable checker results."""
+
     async def materialize(
-        self, facts: ExecuteFacts, consumer: PostSubmissionMaterialConsumer,
+        self,
+        facts: ExecuteFacts,
+        consumer: PostSubmissionMaterialConsumer,
     ) -> PostSubmissionMaterializationResult:
         """Verify exact stored bytes and finish cleanup before returning phase facts."""

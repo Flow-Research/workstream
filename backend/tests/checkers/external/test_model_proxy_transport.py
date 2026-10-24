@@ -366,3 +366,88 @@ async def test_cleanup_refuses_replaced_socket_and_leaves_it_in_place(tmp_path):
 def test_reply_rejects_invalid_closed_outcomes(reply):
     with pytest.raises(ValueError, match="reply is invalid"):
         ModelProxyReply(*reply)
+
+
+async def test_trial_protocol_shares_listener_without_enlarging_model_limit(tmp_path):
+    """A large trial callback cannot enlarge the model protocol's allowance."""
+    from app.interfaces.checker_trial_proxy import TRIAL_PROXY_PROTOCOL
+
+    path = private_socket_path(tmp_path)
+    model_requests, trial_requests = [], []
+
+    async def model(request):
+        model_requests.append(request)
+        return ModelProxyReply("completed", "ok", RECEIPT_DIGEST, None, 0, False)
+
+    async def trial(request):
+        trial_requests.append(request)
+        return {
+            "protocol_version": TRIAL_PROXY_PROTOCOL,
+            "operation": "publish",
+            "outcome": "unavailable",
+            "failure_code": "trial_request_invalid",
+        }
+
+    async with ModelProxyTransport(socket_path=path, handler=model, trial_handler=trial):
+        # Framing owns a separate trial ceiling; its typed handler owns its body.
+        value = {
+            "protocol_version": TRIAL_PROXY_PROTOCOL,
+            "padding": "x" * (MODEL_PROXY_MAXIMUM_FRAME_BYTES + 1),
+        }
+        async with connection(path) as (reader, writer):
+            writer.write(frame(value))
+            await writer.drain()
+            assert (await read_frame(reader))["failure_code"] == "trial_request_invalid"
+        async with connection(path) as (reader, writer):
+            writer.write(frame(request_value(prompt="x" * MODEL_PROXY_MAXIMUM_FRAME_BYTES)))
+            await writer.drain()
+            assert await reader.read() == b""
+        # A duplicate protocol tag is denied before either handler can act.
+        raw = (
+            '{"protocol_version":"'
+            + MODEL_PROXY_PROTOCOL
+            + '","protocol_version":"'
+            + TRIAL_PROXY_PROTOCOL
+            + '"}'
+        ).encode()
+        async with connection(path) as (reader, writer):
+            writer.write(struct.pack(">I", len(raw)) + raw)
+            await writer.drain()
+            assert await reader.read() == b""
+        async with connection(path) as (reader, writer):
+            writer.write(frame(request_value()))
+            await writer.drain()
+            assert (await read_frame(reader))["output"] == "ok"
+    assert len(trial_requests) == len(model_requests) == 1
+    assert not path.exists()
+
+
+def test_trial_manifest_configuration_requires_exact_pair_and_private_proxy(tmp_path):
+    """Selected authority is explicit and never falls back to a guessed profile."""
+    from pydantic import ValidationError
+    from app.core.config import Settings
+    from tests.test_s3_artifact_store import minio_settings
+
+    original = minio_settings(private_prefix="trial-config")
+    base = original.model_dump() | {
+        # Settings deliberately excludes credentials from model_dump.
+        "artifact_s3_access_key_id": original.artifact_s3_access_key_id.get_secret_value(),
+        "artifact_s3_secret_access_key": original.artifact_s3_secret_access_key.get_secret_value(),
+    }
+    selected = {
+        "checker_trial_authority_manifest_path": tmp_path / "trial-authority.json",
+        "checker_trial_authority_manifest_digest": "sha256:" + "a" * 64,
+        "checker_model_proxy_socket": tmp_path / "proxy.sock",
+    }
+    assert Settings.model_validate(base | selected).checker_trial_authority_manifest_path == selected[
+        "checker_trial_authority_manifest_path"
+    ]
+    for field, value in (
+        ("checker_trial_authority_manifest_path", None),
+        ("checker_trial_authority_manifest_digest", None),
+        ("checker_trial_authority_manifest_digest", "latest"),
+        ("checker_trial_authority_manifest_path", Path("relative.json")),
+        ("checker_model_proxy_socket", None),
+    ):
+        with pytest.raises(ValidationError):
+            Settings.model_validate(base | selected | {field: value})

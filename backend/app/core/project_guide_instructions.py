@@ -317,19 +317,21 @@ Keep infrastructure failures separate from work failures: missing support/materi
 capacity, deadline, provider failure and invalid output cannot consume revision rounds.
 
 DEPENDENCIES
-Specs give no access. Images get verified material, manifest, config and
-request, not guide prose, provider keys or nested environments. POST
-model_evaluation requires model_service/model_proxy, implementation_unavailable,
-a registered project image and its exact approved profile; else stays unbound.
-Declare unavailable needs explicitly;
-a supported binding cannot depend on runtime_gap. current_runner isolates the
-checker image only; it supplies no container engine, second sandbox or host socket.
-Follow the schema's exact dependency kind/provisioning/unavailable_code pairs.
-nested_sandbox is required to build/run submitted environments or
-independently isolate trials. task_context, guide_context and prepared_material
-must occur in both inputs and runtime_dependencies. External caches are prepared
-material. Include each dependency failure code once in infrastructure_failures.
-execution_capacity is only for a demonstrated aggregate stage shortfall.
+Specifications grant no access. Images receive verified material and approved
+metadata, never provider keys or host sockets. current_runner isolates the image.
+POST model_evaluation requires model_service/model_proxy and implementation_unavailable.
+Model-assisted trials declare the same dependency. Both require a registered project
+image and its exact approved profile.
+Building submitted environments or isolating trials declares nested_sandbox/trial_proxy
+with implementation_unavailable and selects exact trial profile and projection pins.
+Only the invocation-local trial tool receives runtime authority. Its prepared offline
+cache declares prepared_material/trial_proxy with material_unavailable; this does
+not provide arbitrary external data. Model and trial tools may serve the same check.
+Missing registered image or profile means an unbound capability suggestion.
+Supported bindings cannot depend on runtime_gap. task_context, guide_context and
+prepared_material require matching inputs and dependencies. Unavailable task/guide
+prose or external data remains a runtime_gap. Include each dependency failure code
+once in infrastructure_failures. execution_capacity requires an actual stage shortfall.
 
 OUTPUT AND VALIDATION
 Return exactly one JSON object matching the supplied strict schema. No Markdown
@@ -365,19 +367,15 @@ and version are synthetic. Never copy them into the actual proposal.
 """
 
 PROJECT_GUIDE_INSTRUCTIONS += (
-    "\nAggregate execution capacity is checked separately by stage. PRE permits "
-    f"{MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS} milliseconds, including "
-    f"{WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS} milliseconds for the Workstream default. "
-    f"POST permits {MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS} milliseconds, including "
-    f"{SELECTED_POST_MATERIALIZATION_BUDGET_MS} milliseconds for materialization. "
-    "Add each entry's full registered deadline (or proposed duration for a missing "
-    f"implementation) plus {EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS} milliseconds "
-    "cleanup per entry. Requirements execute as separate entries, without overlap. "
-    "If and only if a proposed stage exceeds its aggregate allowance, attach an "
-    "execution_capacity runtime_gap to an affected requirement of that stage and "
-    "explain the shortfall. Use exact stage arithmetic; the trusted validator checks the totals. "
-    "Trusted validation computes stage totals. Describe capacity gaps in the typed specification. "
-    "This neither changes runtime limits nor grants capacity.\n"
+    f"\nStage budgets: PRE {MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS} milliseconds "
+    f"including default {WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS}; "
+    f"POST {MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS} milliseconds including "
+    f"materialization {SELECTED_POST_MATERIALIZATION_BUDGET_MS}. "
+    "Add every separate entry's registered deadline (or proposed duration for a missing "
+    f"image) plus {EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS} milliseconds cleanup, "
+    "without overlap. Only a stage exceeding its total may declare execution_capacity/"
+    "runtime_gap; explain the exact shortfall in its specification. Validation checks "
+    "the totals. A proposal grants no extra capacity.\n"
 )
 
 

@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.core.api_controls import request_ids
 from app.api.deps.authorization import get_authorization_actor_identity
-from app.adapters.checkers import checker_output_reservations
 from app.adapters.projects import project_locked_policy_context_port
 from app.adapters.tasks import task_submission_context_port
 from app.db.session import get_db_session, get_session_factory
@@ -610,10 +609,10 @@ def post_submission_materialization(
     *, sessions, store, namespace, preparation, inspector
 ) -> PostSubmissionMaterializationPort:
     """Compose exact input with fresh materializer authority and CHECKERS lease custody."""
-    from app.adapters.tasks import submitted_bundle_port
+    from app.adapters.tasks import submitted_bundle_port, task_evaluation_revision_port
     from app.modules.artifacts.post_submit_materialization import PostSubmissionMaterializer
     from app.adapters.auth import post_submit_materialization_authority
-    from app.adapters.checkers import current_post_submit_execution
+    from app.adapters.checkers import current_post_submit_execution, revision_feedback_port
 
     return PostSubmissionMaterializer(
         sessions=sessions,
@@ -624,6 +623,8 @@ def post_submission_materialization(
         inspector=inspector,
         authority=post_submit_materialization_authority,
         current_execution=current_post_submit_execution,
+        revision_tasks=task_evaluation_revision_port,
+        revision_feedback=revision_feedback_port,
     )
 
 
@@ -687,8 +688,7 @@ def worker_post_submission_materialization(*, sessions) -> PostSubmissionMateria
 
 
 def checker_output_storage(
-    *, sessions, store, namespace, preparation, settings,
-    reservations=checker_output_reservations,
+    *, sessions, store, namespace, preparation, settings, reservations
 ) -> CheckerArtifactOutputPort:
     """Compose private call evidence through canonical admission and verification."""
     from app.adapters.auth import checker_output_write_authorization
@@ -721,9 +721,7 @@ def checker_output_storage(
     )
 
 
-def checker_output_binding(
-    session, *, namespace, reservations=None
-) -> CheckerOutputBindingPort:
+def checker_output_binding(session, *, namespace, reservations) -> CheckerOutputBindingPort:
     """Bind one exact private call effect to independently verified ART bytes."""
     from app.adapters.auth import checker_output_binding_authorization
     from app.modules.artifacts.checker_output_bindings import CheckerOutputBindingService
@@ -731,7 +729,7 @@ def checker_output_binding(
     return CheckerOutputBindingService(
         session,
         namespace_fingerprint=namespace.namespace_fingerprint,
-        reservations=reservations or checker_output_reservations(session),
+        reservations=reservations,
         authority=checker_output_binding_authorization(session),
     )
 

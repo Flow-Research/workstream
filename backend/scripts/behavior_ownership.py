@@ -152,6 +152,19 @@ CHECKER_MODEL_RUNTIME_TARGETS = frozenset({
     "backend/app/modules/projects/guide_compilation/model_usage.py",
     "backend/app/workers/checker_model_proxy.py",
 })
+CHECKER_TRIAL_RUNTIME_TARGETS = frozenset({
+    "backend/app/adapters/checkers/trial_proxy.py",
+    "backend/app/interfaces/checker_trial_proxy.py",
+    "backend/app/interfaces/trial_execution.py",
+    "backend/app/modules/checkers/api/evaluation_context.py",
+    "backend/app/modules/checkers/api/revision_feedback.py",
+    "backend/app/modules/checkers/api/trial_evidence.py",
+    "backend/app/modules/checkers/api/trial_profiles.py",
+    "backend/app/modules/checkers/revision_feedback.py",
+    "backend/app/modules/checkers/trial_evidence.py",
+    "backend/app/modules/tasks/api/evaluation_revision.py",
+    "backend/app/modules/tasks/evaluation_revision.py",
+})
 PILOT_READ_1_TARGETS = frozenset({
     "backend/app/modules/tasks/submission_attempts.py",
 })
@@ -1087,6 +1100,7 @@ def _validate_additive_partition_transition(
         | AWS_ARTIFACT_ACTIVATION_TARGETS
         | AUTH_ART_OPERATOR_TARGETS
         | CHECKER_MODEL_RUNTIME_TARGETS
+        | CHECKER_TRIAL_RUNTIME_TARGETS
         | CHECKER_IMAGE_PUBLISH_TARGETS
         | PILOT_READ_2_TARGETS
         | PILOT_READ_3_TARGETS

@@ -2,6 +2,7 @@
 
 from app.modules.tasks.api.submission_history import SubmissionHistoryReadPort
 from app.modules.tasks.api.submitted_bundle import SubmittedBundlePort
+from app.modules.tasks.api.evaluation_revision import TaskEvaluationRevisionPort
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 from app.core.config import Settings
@@ -478,6 +479,13 @@ def contributor_work_reader(session: AsyncSession):
         session, compensation_terms=locked_compensation_terms_port(session),
         finding_counts=checker_history_repository(session),
     )
+
+
+def task_evaluation_revision_port(session: AsyncSession) -> TaskEvaluationRevisionPort:
+    """Compose the exact immutable revision read under the caller's transaction."""
+    from app.modules.tasks.evaluation_revision import TaskEvaluationRevisionReader
+
+    return TaskEvaluationRevisionReader(session)
 
 
 def submitted_bundle_port(session: AsyncSession) -> SubmittedBundlePort:

@@ -16,6 +16,9 @@ from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionResult,
 )
 from app.modules.checkers.api.selected_post_submit import SelectedPostSubmitCurrentResultReference
+from app.modules.checkers.api.evaluation_context import (
+    PostSubmitInputContextCustody, validate_input_context_custody,
+)
 from app.modules.checkers.api.canonical_values import (
     CheckerValue,
     ResourceId,
@@ -373,12 +376,18 @@ class FinalizeFacts(ExecuteFacts):
     material: VerifiedMaterialFacts | None
     input_materialization_evidence_id: ResourceId | None
     output_binding_ids: tuple[ResourceId, ...] = Field(max_length=0)
+    input_context_custody: PostSubmitInputContextCustody | None = None
 
     @model_validator(mode="after")
     def material_receipt_required(self):
         """No material-bearing result may discard its actual input authority."""
         if (self.material is None) != (self.input_materialization_evidence_id is None):
             raise ValueError("checker material and input authorization must occur together")
+        if self.material is None:
+            if self.input_context_custody is not None:
+                raise ValueError("checker input context requires material custody")
+        else:
+            validate_input_context_custody(self.request, self.input_context_custody)
         return self
 
 
@@ -427,6 +436,8 @@ def execution_authority_values(facts: ExecuteFacts | FinalizeAuthorityFacts) -> 
             material=facts.material.model_dump(mode="json") if facts.material else None,
             output_binding_ids=[],
         )
+        if facts.input_context_custody is not None:
+            values["input_context_custody"] = facts.input_context_custody.model_dump(mode="json")
     return {
         "domain": "workstream.authorization.checker_post_submit", "phase": phase,
         "action_id": action, "permission_id": action,

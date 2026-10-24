@@ -10,6 +10,14 @@ pub const REQUEST_SCHEMA_VERSION: &str = "external_checker_request.v1";
 pub const RESULT_SCHEMA_VERSION: &str = "external_checker_result.v1";
 pub const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_RESULT_BYTES: usize = 65_536;
+const EVALUATION_CONTEXT_VERSION: &str = "v1";
+const EVALUATION_CONTEXT_SCHEMA_VERSION: &str = "workstream.post_submit_evaluation_context.v1";
+const EVALUATION_CONTEXT_VERSION_KEY: &str = "workstream_evaluation_context_version";
+const EVALUATION_CONTEXT_ROLES_KEY: &str = "workstream_evaluation_context_roles";
+const PREDECESSOR_ARCHIVE_ROLE: &str = "predecessor_submission_archive";
+const PREDECESSOR_FINDINGS_ROLE: &str = "predecessor_findings";
+const CURRENT_ARCHIVE_ROLE: &str = "submission_archive";
+const MAX_REVISION_FEEDBACK_BYTES: usize = 524_288;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractError(&'static str);
@@ -31,10 +39,23 @@ pub struct ValidatedRequest {
     pub image_digest: String,
     pub configuration_digest: String,
     pub phase: String,
+    pub post_material_roles: Vec<String>,
+    pub evaluation_context_sha256: Option<String>,
     pub cpu_millis: u64,
     pub memory_bytes: u64,
     pub deadline_ms: u64,
     pub maximum_output_bytes: usize,
+}
+
+#[derive(Debug)]
+struct PostEvaluationContext {
+    sha256: String,
+    kind: String,
+    predecessor_submission_id: Option<String>,
+    predecessor_submission_version: Option<u64>,
+    predecessor_content_sha256: Option<String>,
+    predecessor_byte_count: Option<u64>,
+    predecessor_semantic_manifest_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -151,6 +172,17 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
     }
     validate_registry(registry, &phase)?;
     validate_identity(identity, &phase)?;
+    let configuration = object
+        .get("configuration")
+        .and_then(Value::as_object)
+        .ok_or(ContractError("configuration is invalid"))?;
+    let input = object
+        .get("input")
+        .and_then(Value::as_object)
+        .ok_or(ContractError("input is invalid"))?;
+    let context_roles = evaluation_context_roles(configuration, &phase, registry)?;
+    let evaluation_context =
+        validate_post_evaluation_context(input, identity, context_roles.as_ref())?;
     let materials = object
         .get("materials")
         .and_then(Value::as_array)
@@ -229,12 +261,55 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
             digest(material, "content_sha256")?;
             digest(material, "namespace_fingerprint")?;
             digest(material, "semantic_manifest_sha256")?;
-            if string(material, "submission_id")? != string(identity, "submission_id")?
-                || unsigned(material, "submission_version")?
-                    != unsigned(identity, "submission_version")?
-            {
-                return Err(ContractError("request material identity differs"));
+            let role = string(material, "role")?;
+            match role {
+                CURRENT_ARCHIVE_ROLE => {
+                    if string(material, "submission_id")? != string(identity, "submission_id")?
+                        || unsigned(material, "submission_version")?
+                            != unsigned(identity, "submission_version")?
+                    {
+                        return Err(ContractError("request material identity differs"));
+                    }
+                }
+                PREDECESSOR_ARCHIVE_ROLE => {
+                    let context = evaluation_context.as_ref().ok_or(ContractError(
+                        "request predecessor material is unauthorized",
+                    ))?;
+                    if !context_roles
+                        .as_ref()
+                        .is_some_and(|selected| selected.contains(PREDECESSOR_ARCHIVE_ROLE))
+                        || context.kind != "checker_remediation"
+                        || Some(string(material, "submission_id")?)
+                            != context.predecessor_submission_id.as_deref()
+                        || Some(unsigned(material, "submission_version")?)
+                            != context.predecessor_submission_version
+                        || Some(digest(material, "content_sha256")?)
+                            != context.predecessor_content_sha256.as_deref()
+                        || Some(unsigned(material, "byte_count")?) != context.predecessor_byte_count
+                        || Some(digest(material, "semantic_manifest_sha256")?)
+                            != context.predecessor_semantic_manifest_sha256.as_deref()
+                    {
+                        return Err(ContractError("request predecessor material differs"));
+                    }
+                }
+                _ => return Err(ContractError("request material role is invalid")),
             }
+        }
+    }
+    if phase == "post_submit" {
+        if !roles.contains(CURRENT_ARCHIVE_ROLE) {
+            return Err(ContractError("request current material is missing"));
+        }
+        let predecessor_required = context_roles
+            .as_ref()
+            .is_some_and(|selected| selected.contains(PREDECESSOR_ARCHIVE_ROLE))
+            && evaluation_context
+                .as_ref()
+                .is_some_and(|context| context.kind == "checker_remediation");
+        if roles.contains(PREDECESSOR_ARCHIVE_ROLE) != predecessor_required {
+            return Err(ContractError(
+                "request predecessor material selection differs",
+            ));
         }
     }
     let resources = registry
@@ -258,6 +333,21 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
     let registry_entry_digest = digest(registry, "entry_digest")?.to_owned();
     let image_digest = digest(registry, "image_digest")?.to_owned();
     let configuration_digest = digest(object, "configuration_sha256")?.to_owned();
+    let post_submit = phase == "post_submit";
+    let post_material_roles = if post_submit {
+        materials
+            .iter()
+            .map(|material| {
+                material
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .ok_or(ContractError("request material role is invalid"))
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
     Ok(ValidatedRequest {
         value,
         request_digest,
@@ -266,6 +356,8 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
         image_digest,
         configuration_digest,
         phase,
+        post_material_roles,
+        evaluation_context_sha256: evaluation_context.map(|context| context.sha256),
         cpu_millis: limits.0,
         memory_bytes: limits.1,
         deadline_ms: limits.2,
@@ -448,6 +540,353 @@ fn validate_identity(identity: &Map<String, Value>, phase: &str) -> Result<(), C
     Ok(())
 }
 
+fn evaluation_context_roles(
+    configuration: &Map<String, Value>,
+    phase: &str,
+    registry: &Map<String, Value>,
+) -> Result<Option<BTreeSet<String>>, ContractError> {
+    let version = configuration.get(EVALUATION_CONTEXT_VERSION_KEY);
+    let roles = configuration.get(EVALUATION_CONTEXT_ROLES_KEY);
+    if configuration.keys().any(|key| {
+        key.starts_with("workstream_evaluation_context_")
+            && !matches!(
+                key.as_str(),
+                EVALUATION_CONTEXT_VERSION_KEY | EVALUATION_CONTEXT_ROLES_KEY
+            )
+    }) {
+        return Err(ContractError("evaluation context configuration is invalid"));
+    }
+    if version.is_none() && roles.is_none() {
+        return Ok(None);
+    }
+    if phase != "post_submit" || version.and_then(Value::as_str) != Some(EVALUATION_CONTEXT_VERSION)
+    {
+        return Err(ContractError("evaluation context configuration is invalid"));
+    }
+    let declared = registry
+        .get("configuration_schema")
+        .and_then(Value::as_object)
+        .and_then(|schema| schema.get("document"))
+        .and_then(Value::as_object)
+        .and_then(|document| document.get("properties"))
+        .and_then(Value::as_object)
+        .is_some_and(|properties| {
+            properties.contains_key(EVALUATION_CONTEXT_VERSION_KEY)
+                && properties.contains_key(EVALUATION_CONTEXT_ROLES_KEY)
+        });
+    if !declared {
+        return Err(ContractError(
+            "evaluation context configuration is undeclared",
+        ));
+    }
+    let values = roles
+        .and_then(Value::as_array)
+        .ok_or(ContractError("evaluation context roles are invalid"))?;
+    let mut selected = BTreeSet::new();
+    let mut previous: Option<&str> = None;
+    for value in values {
+        let role = value
+            .as_str()
+            .ok_or(ContractError("evaluation context roles are invalid"))?;
+        if !matches!(role, PREDECESSOR_ARCHIVE_ROLE | PREDECESSOR_FINDINGS_ROLE)
+            || previous.is_some_and(|item| item >= role)
+            || !selected.insert(role.to_owned())
+        {
+            return Err(ContractError("evaluation context roles are invalid"));
+        }
+        previous = Some(role);
+    }
+    Ok(Some(selected))
+}
+
+fn validate_post_evaluation_context(
+    input: &Map<String, Value>,
+    identity: &Map<String, Value>,
+    selected_roles: Option<&BTreeSet<String>>,
+) -> Result<Option<PostEvaluationContext>, ContractError> {
+    let context = input.get("evaluation_context");
+    let Some(selected_roles) = selected_roles else {
+        if context.is_some() {
+            return Err(ContractError("evaluation context is unauthorized"));
+        }
+        return Ok(None);
+    };
+    let value = context.ok_or(ContractError("evaluation context is missing"))?;
+    let context = exact_object(
+        value,
+        &[
+            "schema_version",
+            "kind",
+            "source",
+            "predecessor",
+            "feedback",
+        ],
+    )?;
+    if string(context, "schema_version")? != EVALUATION_CONTEXT_SCHEMA_VERSION {
+        return Err(ContractError("evaluation context schema is invalid"));
+    }
+    let kind = string(context, "kind")?;
+    let source_value = context
+        .get("source")
+        .ok_or(ContractError("source is missing"))?;
+    let predecessor_value = context
+        .get("predecessor")
+        .ok_or(ContractError("predecessor is missing"))?;
+    let feedback_value = context
+        .get("feedback")
+        .ok_or(ContractError("feedback is missing"))?;
+    if kind == "initial" {
+        if !source_value.is_null() || !predecessor_value.is_null() || !feedback_value.is_null() {
+            return Err(ContractError("initial evaluation context is invalid"));
+        }
+        return Ok(Some(PostEvaluationContext {
+            sha256: canonical_hash(value)?,
+            kind: kind.into(),
+            predecessor_submission_id: None,
+            predecessor_submission_version: None,
+            predecessor_content_sha256: None,
+            predecessor_byte_count: None,
+            predecessor_semantic_manifest_sha256: None,
+        }));
+    }
+    if kind != "checker_remediation" {
+        return Err(ContractError("evaluation context kind is invalid"));
+    }
+    let source = exact_object(
+        source_value,
+        &[
+            "preparation_id",
+            "preparation_sha256",
+            "routing_manifest_id",
+            "revision_round",
+            "evaluation",
+        ],
+    )?;
+    string(source, "preparation_id")?;
+    digest(source, "preparation_sha256")?;
+    string(source, "routing_manifest_id")?;
+    unsigned(source, "revision_round")?;
+    let evaluation = exact_object(
+        source
+            .get("evaluation")
+            .ok_or(ContractError("source evaluation is missing"))?,
+        &[
+            "project_id",
+            "task_id",
+            "submission_id",
+            "submission_version",
+            "checker_run_id",
+            "evaluation_request_id",
+            "evaluation_request_digest",
+            "evaluation_generation",
+            "result_id",
+            "result_digest",
+            "completion_event_id",
+            "routing_recommendation",
+        ],
+    )?;
+    let predecessor = exact_object(
+        predecessor_value,
+        &[
+            "submission_id",
+            "submission_version",
+            "content_sha256",
+            "byte_count",
+            "semantic_manifest_sha256",
+        ],
+    )?;
+    let predecessor_id = string(predecessor, "submission_id")?;
+    let predecessor_version = unsigned(predecessor, "submission_version")?;
+    if predecessor_version == 0
+        || unsigned(predecessor, "byte_count")? > i64::MAX as u64
+        || string(evaluation, "project_id")? != string(identity, "project_id")?
+        || string(evaluation, "task_id")? != string(identity, "task_id")?
+        || string(evaluation, "submission_id")? != predecessor_id
+        || unsigned(evaluation, "submission_version")? != predecessor_version
+        || predecessor_id == string(identity, "submission_id")?
+        || predecessor_version.checked_add(1) != Some(unsigned(identity, "submission_version")?)
+        || unsigned(evaluation, "evaluation_generation")? == 0
+        || string(evaluation, "routing_recommendation")? != "needs_revision"
+    {
+        return Err(ContractError("evaluation context source differs"));
+    }
+    for field in [
+        "checker_run_id",
+        "evaluation_request_id",
+        "result_id",
+        "completion_event_id",
+    ] {
+        if string(evaluation, field)?.is_empty() {
+            return Err(ContractError("evaluation context source is invalid"));
+        }
+    }
+    digest(evaluation, "evaluation_request_digest")?;
+    digest(evaluation, "result_digest")?;
+    let predecessor_content_sha256 = digest(predecessor, "content_sha256")?;
+    let predecessor_semantic_manifest_sha256 = digest(predecessor, "semantic_manifest_sha256")?;
+    let feedback_required = selected_roles.contains(PREDECESSOR_FINDINGS_ROLE);
+    if feedback_required {
+        let feedback = feedback_value
+            .as_object()
+            .ok_or(ContractError("revision feedback is missing"))?;
+        validate_revision_feedback(feedback, identity, evaluation)?;
+    } else if !feedback_value.is_null() {
+        return Err(ContractError("revision feedback is unauthorized"));
+    }
+    Ok(Some(PostEvaluationContext {
+        sha256: canonical_hash(value)?,
+        kind: kind.into(),
+        predecessor_submission_id: Some(predecessor_id.into()),
+        predecessor_submission_version: Some(predecessor_version),
+        predecessor_content_sha256: Some(predecessor_content_sha256.into()),
+        predecessor_byte_count: Some(unsigned(predecessor, "byte_count")?),
+        predecessor_semantic_manifest_sha256: Some(predecessor_semantic_manifest_sha256.into()),
+    }))
+}
+
+fn validate_revision_feedback(
+    feedback: &Map<String, Value>,
+    identity: &Map<String, Value>,
+    evaluation: &Map<String, Value>,
+) -> Result<(), ContractError> {
+    exact_map(feedback, &["source", "policy_sha256", "members"])?;
+    digest(feedback, "policy_sha256")?;
+    if canonical_json(&Value::Object(feedback.clone()))?.len() > MAX_REVISION_FEEDBACK_BYTES {
+        return Err(ContractError("revision feedback is unbounded"));
+    }
+    let source = exact_object(
+        feedback
+            .get("source")
+            .ok_or(ContractError("revision feedback source is missing"))?,
+        &[
+            "project_id",
+            "task_id",
+            "assignment_id",
+            "submission_id",
+            "submission_version",
+            "completion_event_id",
+            "result",
+        ],
+    )?;
+    let result = exact_object(
+        source
+            .get("result")
+            .ok_or(ContractError("revision feedback result is missing"))?,
+        &[
+            "schema_version",
+            "request_id",
+            "request_digest",
+            "attempt_id",
+            "evaluation_generation",
+            "result_id",
+            "result_digest",
+        ],
+    )?;
+    if string(source, "project_id")? != string(identity, "project_id")?
+        || string(source, "task_id")? != string(identity, "task_id")?
+        || string(source, "assignment_id")? != string(identity, "assignment_id")?
+        || string(source, "submission_id")? != string(evaluation, "submission_id")?
+        || unsigned(source, "submission_version")? != unsigned(evaluation, "submission_version")?
+        || string(source, "completion_event_id")? != string(evaluation, "completion_event_id")?
+        || string(result, "schema_version")? != "post_submit_current_result_reference"
+        || string(result, "request_id")? != string(evaluation, "evaluation_request_id")?
+        || digest(result, "request_digest")? != digest(evaluation, "evaluation_request_digest")?
+        || string(result, "attempt_id")? != string(evaluation, "checker_run_id")?
+        || unsigned(result, "evaluation_generation")?
+            != unsigned(evaluation, "evaluation_generation")?
+        || string(result, "result_id")? != string(evaluation, "result_id")?
+        || digest(result, "result_digest")? != digest(evaluation, "result_digest")?
+    {
+        return Err(ContractError("revision feedback source differs"));
+    }
+    let members = feedback
+        .get("members")
+        .and_then(Value::as_array)
+        .ok_or(ContractError("revision feedback members are invalid"))?;
+    let mut requirements = BTreeSet::new();
+    for (order, member) in members.iter().enumerate() {
+        let member = exact_object(
+            member,
+            &[
+                "order",
+                "requirement_id",
+                "registry_entry_id",
+                "registry_entry_digest",
+                "configuration_sha256",
+                "request_digest",
+                "result_digest",
+                "verdict",
+                "findings",
+            ],
+        )?;
+        let requirement = string(member, "requirement_id")?;
+        if unsigned(member, "order")? != order as u64
+            || requirement.is_empty()
+            || requirement.chars().count() > 100
+            || !requirements.insert(requirement)
+        {
+            return Err(ContractError("revision feedback member order is invalid"));
+        }
+        string(member, "registry_entry_id")?;
+        for field in [
+            "registry_entry_digest",
+            "configuration_sha256",
+            "request_digest",
+            "result_digest",
+        ] {
+            digest(member, field)?;
+        }
+        let verdict = string(member, "verdict")?;
+        if !matches!(verdict, "passed" | "failed") {
+            return Err(ContractError("revision feedback verdict is invalid"));
+        }
+        let findings = member
+            .get("findings")
+            .and_then(Value::as_array)
+            .ok_or(ContractError("revision feedback findings are invalid"))?;
+        if findings.len() > 256 {
+            return Err(ContractError("revision feedback findings are unbounded"));
+        }
+        let has_error = findings.iter().try_fold(false, |found, finding| {
+            Ok(found || validate_finding(finding)?)
+        })?;
+        if (verdict == "failed") != has_error {
+            return Err(ContractError("revision feedback verdict differs"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_finding(value: &Value) -> Result<bool, ContractError> {
+    let keys = exact_object(
+        value,
+        &["check_id", "code", "level", "message", "path", "line"],
+    )?;
+    let finding: Finding =
+        serde_json::from_value(value.clone()).map_err(|_| ContractError("finding is invalid"))?;
+    if !keys.contains_key("path")
+        || !keys.contains_key("line")
+        || !is_identifier(&finding.check_id)
+        || !is_identifier(&finding.code)
+        || finding.message.is_empty()
+        || finding.message.chars().count() > 4096
+        || !matches!(
+            finding.level.as_str(),
+            "info" | "warning" | "error" | "coverage_incomplete"
+        )
+        || finding
+            .path
+            .as_ref()
+            .is_some_and(|path| !is_safe_finding_path(path))
+        || finding
+            .line
+            .is_some_and(|line| finding.path.is_none() || !(1..=10_000_000).contains(&line))
+    {
+        return Err(ContractError("finding is invalid"));
+    }
+    Ok(finding.level == "error")
+}
+
 pub fn validate_result(value: &Value, request: &ValidatedRequest) -> Result<(), ContractError> {
     let object = exact_object(
         value,
@@ -516,36 +955,9 @@ pub fn validate_result(value: &Value, request: &ValidatedRequest) -> Result<(), 
         if !failure.is_null() || !matches!(passed, "passed" | "failed") {
             return Err(ContractError("completed result is invalid"));
         }
-        let has_error = findings.iter().try_fold(false, |found, item| {
-            // Python always serializes both optional location keys before hashing.
-            let keys = item
-                .as_object()
-                .ok_or(ContractError("finding is invalid"))?;
-            if !keys.contains_key("path") || !keys.contains_key("line") {
-                return Err(ContractError("finding is invalid"));
-            }
-            let finding: Finding = serde_json::from_value(item.clone())
-                .map_err(|_| ContractError("finding is invalid"))?;
-            if !is_identifier(&finding.check_id)
-                || !is_identifier(&finding.code)
-                || finding.message.is_empty()
-                || finding.message.chars().count() > 4096
-                || !matches!(
-                    finding.level.as_str(),
-                    "info" | "warning" | "error" | "coverage_incomplete"
-                )
-                || finding
-                    .path
-                    .as_ref()
-                    .is_some_and(|path| !is_safe_finding_path(path))
-                || finding
-                    .line
-                    .is_some_and(|line| finding.path.is_none() || !(1..=10_000_000).contains(&line))
-            {
-                return Err(ContractError("finding is invalid"));
-            }
-            Ok(found || finding.level == "error")
-        })?;
+        let has_error = findings
+            .iter()
+            .try_fold(false, |found, item| Ok(found || validate_finding(item)?))?;
         if (passed == "failed") != has_error {
             return Err(ContractError("result verdict differs"));
         }
@@ -771,6 +1183,149 @@ fn unsigned(object: &Map<String, Value>, key: &str) -> Result<u64, ContractError
 mod tests {
     use super::*;
 
+    fn resign_request(mut request: Value) -> Value {
+        request["configuration_sha256"] =
+            Value::String(canonical_hash(&request["configuration"]).unwrap());
+        request["input_sha256"] = Value::String(canonical_hash(&request["input"]).unwrap());
+        let registry = request["registry"].as_object_mut().unwrap();
+        for name in ["configuration_schema", "input_schema"] {
+            let document = registry[name]["document"].clone();
+            registry[name]["schema_sha256"] = Value::String(canonical_hash(&document).unwrap());
+        }
+        let mut spec = registry.clone();
+        for field in [
+            "registry_entry_id",
+            "entry_digest",
+            "registration_operation_id",
+            "registered_by_actor_profile_id",
+            "authorization_decision_event_id",
+            "created_at",
+        ] {
+            spec.remove(field);
+        }
+        registry.insert(
+            "entry_digest".into(),
+            Value::String(canonical_hash(&Value::Object(spec)).unwrap()),
+        );
+        let mut body = request.as_object().unwrap().clone();
+        body.remove("request_digest");
+        request["request_digest"] = Value::String(canonical_hash(&Value::Object(body)).unwrap());
+        request
+    }
+
+    fn post_context_request(kind: &str, selected_roles: &[&str]) -> Value {
+        let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
+        let id = |byte: char| format!("{0}{0}{0}{0}{0}{0}{0}{0}-0000-4000-8000-000000000000", byte);
+        let mut request: Value =
+            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
+        request["registry"]["phase"] = Value::String("post_submit".into());
+        request["registry"]["input_schema"]["schema_id"] =
+            Value::String("external_checker_post_submit_input".into());
+        request["registry"]["configuration_schema"]["document"]["properties"]
+            [EVALUATION_CONTEXT_VERSION_KEY] =
+            serde_json::json!({"type": "string", "const": EVALUATION_CONTEXT_VERSION});
+        request["registry"]["configuration_schema"]["document"]["properties"]
+            [EVALUATION_CONTEXT_ROLES_KEY] = serde_json::json!({
+            "type": "array",
+            "items": {"type": "string", "enum": [
+                PREDECESSOR_FINDINGS_ROLE, PREDECESSOR_ARCHIVE_ROLE
+            ]},
+            "uniqueItems": true
+        });
+        request["identity"] = serde_json::json!({
+            "phase": "post_submit", "project_id": id('1'), "task_id": id('2'),
+            "assignment_id": id('3'), "submission_id": id('4'), "submission_version": 2,
+            "evaluation_request_id": id('5'), "evaluation_request_digest": digest('5'),
+            "evaluation_generation": 3, "attempt_id": id('6'), "result_id": id('7'),
+            "lease_id": id('8'), "lease_generation": 4,
+            "lease_expires_at": "2026-10-11T12:00:00+00:00"
+        });
+        request["configuration"] = serde_json::json!({
+            EVALUATION_CONTEXT_VERSION_KEY: EVALUATION_CONTEXT_VERSION,
+            EVALUATION_CONTEXT_ROLES_KEY: selected_roles,
+        });
+        let prior_id = id('0');
+        let evaluation = serde_json::json!({
+            "project_id": id('1'), "task_id": id('2'), "submission_id": prior_id,
+            "submission_version": 1, "checker_run_id": id('9'),
+            "evaluation_request_id": id('a'), "evaluation_request_digest": digest('a'),
+            "evaluation_generation": 1, "result_id": id('b'), "result_digest": digest('b'),
+            "completion_event_id": id('c'), "routing_recommendation": "needs_revision"
+        });
+        let result_reference = serde_json::json!({
+            "schema_version": "post_submit_current_result_reference",
+            "request_id": evaluation["evaluation_request_id"],
+            "request_digest": evaluation["evaluation_request_digest"],
+            "attempt_id": evaluation["checker_run_id"],
+            "evaluation_generation": 1, "result_id": evaluation["result_id"],
+            "result_digest": evaluation["result_digest"],
+        });
+        let feedback = serde_json::json!({
+            "source": {
+                "project_id": id('1'), "task_id": id('2'), "assignment_id": id('3'),
+                "submission_id": prior_id, "submission_version": 1,
+                "completion_event_id": evaluation["completion_event_id"],
+                "result": result_reference,
+            },
+            "policy_sha256": digest('c'),
+            "members": [],
+        });
+        let context = if kind == "initial" {
+            serde_json::json!({
+                "schema_version": EVALUATION_CONTEXT_SCHEMA_VERSION, "kind": "initial",
+                "source": null, "predecessor": null, "feedback": null,
+            })
+        } else {
+            serde_json::json!({
+                "schema_version": EVALUATION_CONTEXT_SCHEMA_VERSION,
+                "kind": "checker_remediation",
+                "source": {
+                    "preparation_id": id('d'), "preparation_sha256": digest('d'),
+                    "routing_manifest_id": id('e'), "revision_round": 1,
+                    "evaluation": evaluation,
+                },
+                "predecessor": {
+                    "submission_id": prior_id, "submission_version": 1,
+                    "content_sha256": digest('e'), "byte_count": 0,
+                    "semantic_manifest_sha256": digest('f'),
+                },
+                "feedback": if selected_roles.contains(&PREDECESSOR_FINDINGS_ROLE) {
+                    feedback
+                } else {
+                    Value::Null
+                },
+            })
+        };
+        request["input"] = serde_json::json!({
+            "task_version": "v1", "evaluation_context": context,
+        });
+        let current = serde_json::json!({
+            "phase": "post_submit", "role": CURRENT_ARCHIVE_ROLE,
+            "submission_id": id('4'), "submission_version": 2,
+            "binding_id": id('1'), "content_id": id('2'), "replica_id": id('3'),
+            "content_sha256": digest('1'), "byte_count": 0, "media_type": "application/zip",
+            "evidence_id": id('4'), "verification_receipt_id": id('5'),
+            "verification_job_id": id('6'), "verification_generation": 1,
+            "namespace_fingerprint": digest('2'), "semantic_manifest_sha256": digest('3'),
+        });
+        let prior = serde_json::json!({
+            "phase": "post_submit", "role": PREDECESSOR_ARCHIVE_ROLE,
+            "submission_id": id('0'), "submission_version": 1,
+            "binding_id": id('7'), "content_id": id('8'), "replica_id": id('9'),
+            "content_sha256": digest('e'), "byte_count": 0, "media_type": "application/zip",
+            "evidence_id": id('a'), "verification_receipt_id": id('b'),
+            "verification_job_id": id('c'), "verification_generation": 1,
+            "namespace_fingerprint": digest('4'), "semantic_manifest_sha256": digest('f'),
+        });
+        request["materials"] =
+            if kind != "initial" && selected_roles.contains(&PREDECESSOR_ARCHIVE_ROLE) {
+                serde_json::json!([current, prior])
+            } else {
+                serde_json::json!([current])
+            };
+        resign_request(request)
+    }
+
     #[test]
     fn canonical_numeric_encoding_matches_python_contract() {
         let value: Value = serde_json::from_str(r#"{"minimum":1e-6}"#).unwrap();
@@ -893,5 +1448,57 @@ mod tests {
         let mut uppercase_check = coverage;
         uppercase_check["findings"][0]["check_id"] = Value::String("Coverage".into());
         assert!(validate_result(&resign(uppercase_check), &request).is_err());
+    }
+
+    #[test]
+    fn post_context_closes_roles_source_feedback_and_predecessor_material() {
+        let request = post_context_request(
+            "checker_remediation",
+            &[PREDECESSOR_FINDINGS_ROLE, PREDECESSOR_ARCHIVE_ROLE],
+        );
+        let checked = parse_request(&serde_json::to_vec(&request).unwrap()).unwrap();
+        assert_eq!(
+            checked.post_material_roles,
+            [CURRENT_ARCHIVE_ROLE, PREDECESSOR_ARCHIVE_ROLE]
+        );
+        assert_eq!(
+            checked.evaluation_context_sha256.as_deref(),
+            Some(
+                canonical_hash(&request["input"]["evaluation_context"])
+                    .unwrap()
+                    .as_str()
+            )
+        );
+
+        let mut missing_prior = request.clone();
+        missing_prior["materials"].as_array_mut().unwrap().pop();
+        assert!(
+            parse_request(&serde_json::to_vec(&resign_request(missing_prior)).unwrap()).is_err()
+        );
+
+        let mut substituted_result = request.clone();
+        substituted_result["input"]["evaluation_context"]["feedback"]["source"]["result"]
+            ["result_digest"] = Value::String(format!("sha256:{}", "0".repeat(64)));
+        assert!(
+            parse_request(&serde_json::to_vec(&resign_request(substituted_result)).unwrap())
+                .is_err()
+        );
+        let mut undeclared = request.clone();
+        undeclared["registry"]["configuration_schema"]["document"]["properties"]
+            .as_object_mut()
+            .unwrap()
+            .remove(EVALUATION_CONTEXT_ROLES_KEY);
+        assert!(parse_request(&serde_json::to_vec(&resign_request(undeclared)).unwrap()).is_err());
+
+        let initial = post_context_request(
+            "initial",
+            &[PREDECESSOR_FINDINGS_ROLE, PREDECESSOR_ARCHIVE_ROLE],
+        );
+        let initial = parse_request(&serde_json::to_vec(&initial).unwrap()).unwrap();
+        assert_eq!(initial.post_material_roles, [CURRENT_ARCHIVE_ROLE]);
+
+        let mut unknown = request;
+        unknown["configuration"]["workstream_evaluation_context_unknown"] = Value::Bool(true);
+        assert!(parse_request(&serde_json::to_vec(&resign_request(unknown)).unwrap()).is_err());
     }
 }

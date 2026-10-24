@@ -35,7 +35,10 @@ def compile_saved_post_policy(
             entry.registry.capability_id != binding.capability_id
             or entry.registry.capability_version != binding.capability_version
             or entry.stage != binding.stage.value
-            or entry.configuration != {item.name: item.value for item in binding.parameters}
+            or entry.configuration != {
+                item.name: item.model_dump(mode="json")["value"]
+                for item in binding.parameters
+            }
         ):
             raise ValueError("approved post-submit policy changes a required binding")
     return policies.post_submit

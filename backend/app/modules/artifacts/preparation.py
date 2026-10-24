@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterable, AsyncIterator, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 import errno
 import fcntl
 import hashlib
@@ -18,8 +18,8 @@ import stat as stat_module
 import threading
 import time
 from typing import Any, BinaryIO, Protocol, TypeVar, cast
-from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
+from app.core.identifiers import new_record_id
 
 from app.interfaces.artifacts import (
     ArtifactInputMismatchError,
@@ -56,6 +56,48 @@ _ROOT_MARKER = ".workstream-artifact-scratch-v1"
 _ROOT_MARKER_PREFIX = b"workstream-artifact-scratch-v1:"
 _EXTERNAL_GRANT_MANIFEST = ".external-checker-grant.json"
 _EXTERNAL_GRANT_PROTOCOL = "workstream.external_checker_material_grant.v1"
+_POST_EXTERNAL_GRANT_PROTOCOL = "workstream.external_checker_material_grant.v2"
+_EXTERNAL_GRANT_MAXIMUM_BYTES = 2 * 1024 * 1024
+_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RESOURCE_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+_POST_IDENTITY_FIELDS = frozenset(
+    {
+        "phase",
+        "project_id",
+        "task_id",
+        "assignment_id",
+        "submission_id",
+        "submission_version",
+        "evaluation_request_id",
+        "evaluation_request_digest",
+        "evaluation_generation",
+        "attempt_id",
+        "result_id",
+        "lease_id",
+        "lease_generation",
+        "lease_expires_at",
+    }
+)
+_POST_MATERIAL_FIELDS = frozenset(
+    {
+        "phase",
+        "role",
+        "submission_id",
+        "submission_version",
+        "binding_id",
+        "content_id",
+        "replica_id",
+        "content_sha256",
+        "byte_count",
+        "media_type",
+        "evidence_id",
+        "verification_receipt_id",
+        "verification_job_id",
+        "verification_generation",
+        "namespace_fingerprint",
+        "semantic_manifest_sha256",
+    }
+)
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
@@ -66,6 +108,23 @@ class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
 
     def abort(self) -> None:
         """Deny checker access after cancellation or deadline expiry."""
+
+
+class PreparedPostSubmissionProcessor(Protocol[_InspectionResultCo]):
+    """Project every authorized role inside one aggregate workspace reservation."""
+
+    async def process(self, readers: dict[str, BinaryIO], workspace: Path) -> _InspectionResultCo:
+        """Consume the exact prepared role readers without separate scratch allowances."""
+
+    def abort(self) -> None:
+        """Revoke all role views before cancellation cleanup drains."""
+
+
+class ExternalGrantJsonValue(Protocol):
+    """Public owner value that can supply one immutable JSON-mode snapshot."""
+
+    def model_dump(self, *, mode: str) -> dict[str, Any]:
+        """Return the owner's normalized public value without storage coordinates."""
 
 
 class ArtifactScratchCapacityError(ArtifactStoreUnavailableError):
@@ -129,6 +188,33 @@ def _validate_external_material_tree(
         raise ValueError("external material tree is invalid")
 
 
+def _external_grant_json(
+    value: ExternalGrantJsonValue,
+    *,
+    expected_fields: frozenset[str],
+    label: str,
+) -> dict[str, object]:
+    """Snapshot one owner-validated public value without importing its subsystem."""
+    serializer = getattr(value, "model_dump", None)
+    if not callable(serializer):
+        raise ValueError(f"external POST {label} is invalid")
+    try:
+        serialized = serializer(mode="json")
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"external POST {label} is invalid") from exc
+    if type(serialized) is not dict or set(serialized) != expected_fields:
+        raise ValueError(f"external POST {label} is invalid")
+    return cast(dict[str, object], serialized)
+
+
+def _valid_resource_id(value: object) -> bool:
+    return type(value) is str and _RESOURCE_ID.fullmatch(value) is not None
+
+
+def _valid_sha256(value: object) -> bool:
+    return type(value) is str and _SHA256.fullmatch(value) is not None
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalMaterialGrantRequest:
     """Exact pre-admission facts bound to one callback-scoped material grant."""
@@ -178,107 +264,164 @@ class ExternalMaterialGrantRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class PostExternalMaterialGrantRequest:
-    """Exact verified Submission, ART and lease facts for one POST callback."""
+class PostExternalMaterialGrantItem:
+    """One verified role and complete private inventory in an aggregate POST workspace."""
 
-    request_digest: str
-    submission_id: str
-    submission_version: int
-    evaluation_request_id: str
-    evaluation_request_digest: str
-    evaluation_generation: int
-    attempt_id: str
-    result_id: str
-    lease_id: str
-    lease_generation: int
-    lease_expires_at: str
-    binding_id: str
-    content_id: str
-    replica_id: str
-    content_sha256: str
-    byte_count: int
-    evidence_id: str
-    verification_receipt_id: str
-    verification_job_id: str
-    verification_generation: int
-    namespace_fingerprint: str
-    semantic_manifest_sha256: str
+    material: ExternalGrantJsonValue
     directories: tuple[str, ...]
     files: tuple[ExternalMaterialFile, ...]
+    _material_json: dict[str, object] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Reject a partial POST lineage before publishing any scratch path."""
-        digests = (
-            self.request_digest,
-            self.evaluation_request_digest,
-            self.content_sha256,
-            self.namespace_fingerprint,
-            self.semantic_manifest_sha256,
+        """Validate canonical role custody and the inventory before grant publication."""
+        material = _external_grant_json(
+            self.material,
+            expected_fields=_POST_MATERIAL_FIELDS,
+            label="material",
         )
         identifiers = (
-            self.submission_id,
-            self.evaluation_request_id,
-            self.attempt_id,
-            self.result_id,
-            self.lease_id,
-            self.binding_id,
-            self.content_id,
-            self.replica_id,
-            self.evidence_id,
-            self.verification_receipt_id,
-            self.verification_job_id,
+            "submission_id",
+            "binding_id",
+            "content_id",
+            "replica_id",
+            "evidence_id",
+            "verification_receipt_id",
+            "verification_job_id",
         )
         if (
-            any(not re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in digests)
+            material["phase"] != "post_submit"
+            or material["role"] not in {"submission_archive", "predecessor_submission_archive"}
+            or any(not _valid_resource_id(material[field]) for field in identifiers)
+            or type(material["submission_version"]) is not int
+            or material["submission_version"] <= 0
+            or type(material["verification_generation"]) is not int
+            or material["verification_generation"] <= 0
+            or type(material["byte_count"]) is not int
+            or not 0 <= material["byte_count"] <= HARD_MAXIMUM_ARTIFACT_BYTES
+            or type(material["media_type"]) is not str
+            or "/" not in material["media_type"]
             or any(
-                not re.fullmatch(
-                    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
-                    value,
-                )
-                for value in identifiers
-            )
-            or any(
-                type(value) is not int or value <= 0
-                for value in (
-                    self.submission_version,
-                    self.evaluation_generation,
-                    self.lease_generation,
-                    self.verification_generation,
+                not _valid_sha256(material[field])
+                for field in (
+                    "content_sha256",
+                    "namespace_fingerprint",
+                    "semantic_manifest_sha256",
                 )
             )
-            or type(self.byte_count) is not int
-            or not 0 <= self.byte_count <= HARD_MAXIMUM_ARTIFACT_BYTES
-            or not self.lease_expires_at.endswith(("Z", "+00:00"))
         ):
-            raise ValueError("external POST material grant request is invalid")
+            raise ValueError("external POST material role is invalid")
         _validate_external_material_tree(self.directories, self.files)
+        object.__setattr__(self, "_material_json", material)
 
-    def manifest_identity(self) -> dict[str, object]:
-        """Return complete POST custody without storage-provider coordinates."""
-        return {
-            "phase": "post_submit",
-            "submission_id": self.submission_id,
-            "submission_version": self.submission_version,
-            "evaluation_request_id": self.evaluation_request_id,
-            "evaluation_request_digest": self.evaluation_request_digest,
-            "evaluation_generation": self.evaluation_generation,
-            "attempt_id": self.attempt_id,
-            "result_id": self.result_id,
-            "lease_id": self.lease_id,
-            "lease_generation": self.lease_generation,
-            "lease_expires_at": self.lease_expires_at,
-            "binding_id": self.binding_id,
-            "content_id": self.content_id,
-            "replica_id": self.replica_id,
-            "content_sha256": self.content_sha256,
-            "byte_count": self.byte_count,
-            "evidence_id": self.evidence_id,
-            "verification_receipt_id": self.verification_receipt_id,
-            "verification_job_id": self.verification_job_id,
-            "verification_generation": self.verification_generation,
-            "namespace_fingerprint": self.namespace_fingerprint,
-            "semantic_manifest_sha256": self.semantic_manifest_sha256,
-        }
+    @property
+    def role(self) -> str:
+        """Return the validated canonical role."""
+        return cast(str, self._material_json["role"])
+
+    @property
+    def content_sha256(self) -> str:
+        """Return the prepared source digest bound to this role."""
+        return cast(str, self._material_json["content_sha256"])
+
+    @property
+    def byte_count(self) -> int:
+        """Return the prepared source byte count bound to this role."""
+        return cast(int, self._material_json["byte_count"])
+
+    @property
+    def semantic_manifest_sha256(self) -> str:
+        """Return the verified projected-tree manifest digest."""
+        return cast(str, self._material_json["semantic_manifest_sha256"])
+
+
+@dataclass(frozen=True, slots=True)
+class PostExternalMaterialGrantRequest:
+    """Exact execution, available roles and selected mounts for one POST invocation."""
+
+    request_digest: str
+    identity: ExternalGrantJsonValue
+    evaluation_context_sha256: str | None
+    materials: tuple[PostExternalMaterialGrantItem, ...]
+    visible_roles: tuple[str, ...]
+    _identity_json: dict[str, object] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Reject partial or substituted roles before publishing a private manifest."""
+        identity = _external_grant_json(
+            self.identity,
+            expected_fields=_POST_IDENTITY_FIELDS,
+            label="identity",
+        )
+        identifiers = (
+            "project_id",
+            "task_id",
+            "assignment_id",
+            "submission_id",
+            "evaluation_request_id",
+            "attempt_id",
+            "result_id",
+            "lease_id",
+        )
+        if (
+            identity["phase"] != "post_submit"
+            or any(not _valid_resource_id(identity[field]) for field in identifiers)
+            or any(
+                type(identity[field]) is not int or identity[field] <= 0
+                for field in (
+                    "submission_version",
+                    "evaluation_generation",
+                    "lease_generation",
+                )
+            )
+            or not _valid_sha256(identity["evaluation_request_digest"])
+            or type(identity["lease_expires_at"]) is not str
+            or not identity["lease_expires_at"]
+        ):
+            raise ValueError("external POST material grant identity is invalid")
+        if type(self.materials) is not tuple or any(
+            type(item) is not PostExternalMaterialGrantItem for item in self.materials
+        ):
+            raise ValueError("external POST material grant items are invalid")
+        if (
+            type(self.request_digest) is not str
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", self.request_digest)
+            or self.evaluation_context_sha256 is not None
+            and (
+                type(self.evaluation_context_sha256) is not str
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", self.evaluation_context_sha256)
+            )
+        ):
+            raise ValueError("external POST material grant digest is invalid")
+        available = tuple(item.role for item in self.materials)
+        valid_roles = (
+            ("submission_archive",),
+            ("submission_archive", "predecessor_submission_archive"),
+        )
+        if (
+            available not in valid_roles
+            or self.visible_roles not in valid_roles
+            or not set(self.visible_roles) <= set(available)
+        ):
+            raise ValueError("external POST material grant roles are invalid")
+        current = self.materials[0]._material_json
+        if (current["submission_id"], current["submission_version"]) != (
+            identity["submission_id"],
+            identity["submission_version"],
+        ):
+            raise ValueError("external POST current material differs")
+        if len(self.materials) == 2:
+            prior = self.materials[1]._material_json
+            if (
+                prior["submission_id"] == current["submission_id"]
+                or cast(int, prior["submission_version"]) + 1 != current["submission_version"]
+            ):
+                raise ValueError("external POST prior material differs")
+        if (
+            "predecessor_submission_archive" in self.visible_roles
+            and self.evaluation_context_sha256 is None
+        ):
+            raise ValueError("external POST prior material lacks context")
+        object.__setattr__(self, "_identity_json", identity)
 
 
 @dataclass(frozen=True, slots=True)
@@ -610,7 +753,7 @@ class ArtifactScratchManager:
         if (
             type(reserved_bytes) is not int
             or reserved_bytes < 0
-            or reserved_bytes > HARD_MAXIMUM_ARTIFACT_BYTES
+            or reserved_bytes > self._limits.aggregate_reserved_bytes
             or type(maximum_entries) is not int
             or maximum_entries < 0
             or maximum_entries > self._limits.maximum_workspace_entries
@@ -719,7 +862,9 @@ class ArtifactScratchManager:
         workspace: Path,
         request: ExternalMaterialGrantRequest | PostExternalMaterialGrantRequest,
     ) -> ExternalMaterialGrant:
-        """Move the projected tree below a fixed mount and seal its exact manifest."""
+        """Publish the phase-specific fixed layout and seal its exact manifest."""
+        if type(request) is PostExternalMaterialGrantRequest:
+            return self._publish_external_post_grant_sync(workspace, request)
         try:
             resolved = workspace.resolve(strict=True)
             expected_parent = (self._root / "workspaces").resolve(strict=True)
@@ -845,6 +990,125 @@ class ArtifactScratchManager:
         finally:
             os.close(root_fd)
         return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+
+    def _publish_external_post_grant_sync(
+        self,
+        workspace: Path,
+        request: PostExternalMaterialGrantRequest,
+    ) -> ExternalMaterialGrant:
+        """Publish one reusable POST manifest without moving the verified role trees."""
+        try:
+            resolved = workspace.resolve(strict=True)
+            expected_parent = (self._root / "workspaces").resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ArtifactScratchIntegrityError("external POST workspace is unavailable") from exc
+        grant_id = resolved.name
+        if resolved.parent != expected_parent or _WORKSPACE_ID.fullmatch(grant_id) is None:
+            raise ArtifactScratchIntegrityError("external POST workspace is invalid")
+        root_fd = os.open(
+            grant_id,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=self._workspaces_fd,
+        )
+        try:
+            if set(os.listdir(root_fd)) != {"materials"}:
+                raise ArtifactScratchIntegrityError("external POST workspace inventory differs")
+            materials_fd = os.open(
+                "materials",
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=root_fd,
+            )
+            try:
+                if set(os.listdir(materials_fd)) != {item.role for item in request.materials}:
+                    raise ArtifactScratchIntegrityError("external POST role inventory differs")
+                values: list[dict[str, object]] = []
+                for item in request.materials:
+                    role_fd = os.open(
+                        item.role,
+                        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                        dir_fd=materials_fd,
+                    )
+                    try:
+                        observed, directories = self._seal_external_tree(role_fd)
+                        if (
+                            observed != [asdict(entry) for entry in item.files]
+                            or tuple(directories) != item.directories
+                        ):
+                            raise ArtifactScratchIntegrityError(
+                                "external POST material inventory differs"
+                            )
+                        semantic_body = {
+                            "schema_version": "workstream.submission_bundle_manifest.v1",
+                            "entries": sorted(
+                                [
+                                    {
+                                        "normalized_path": path,
+                                        "entry_type": "directory",
+                                    }
+                                    for path in directories
+                                ]
+                                + [{**entry, "entry_type": "file"} for entry in observed],
+                                key=lambda entry: entry["normalized_path"],
+                            ),
+                        }
+                        SubmissionManifest.from_dict(
+                            semantic_body,
+                            sha256=item.semantic_manifest_sha256,
+                        )
+                        values.append(
+                            {
+                                "material": dict(item._material_json),
+                                "directories": directories,
+                                "files": observed,
+                            }
+                        )
+                        os.fchmod(role_fd, 0o500)
+                    finally:
+                        os.close(role_fd)
+                os.fchmod(materials_fd, 0o500)
+            finally:
+                os.close(materials_fd)
+            body = {
+                "protocol_version": _POST_EXTERNAL_GRANT_PROTOCOL,
+                "grant_id": grant_id,
+                "request_digest": request.request_digest,
+                "phase": "post_submit",
+                "identity": dict(request._identity_json),
+                "evaluation_context_sha256": request.evaluation_context_sha256,
+                "materials": values,
+                "visible_roles": list(request.visible_roles),
+            }
+            binding_digest = canonical_json_hash(body)
+            payload = json.dumps(
+                {**body, "binding_digest": binding_digest},
+                ensure_ascii=False,
+                allow_nan=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if len(payload) > _EXTERNAL_GRANT_MAXIMUM_BYTES:
+                raise ArtifactLimitExceededError(
+                    "external POST grant exceeds service manifest limit"
+                )
+            descriptor = os.open(
+                _EXTERNAL_GRANT_MANIFEST,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
+                0o400,
+                dir_fd=root_fd,
+            )
+            try:
+                self._write_all(descriptor, payload)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.fsync(root_fd)
+            return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+        except (OSError, ValueError) as exc:
+            raise ArtifactScratchIntegrityError(
+                "external POST material publication failed"
+            ) from exc
+        finally:
+            os.close(root_fd)
 
     def _seal_external_tree(
         self, directory_fd: int, prefix: str = ""
@@ -1210,7 +1474,6 @@ class ArtifactScratchManager:
             sort_keys=True,
         ).encode("utf-8")
         return _ROOT_MARKER_PREFIX + hashlib.sha256(canonical).hexdigest().encode("ascii") + b"\n"
-
 
     @staticmethod
     def _validate_layout_entries(
@@ -1747,7 +2010,7 @@ class ArtifactScratchManager:
                 or _WORKSPACE_ID.fullmatch(workspace_name) is None
                 or workspace_name in seen_workspaces
                 or any(type(value) is not int or value < 0 for value in integer_values)
-                or entry["reserved_bytes"] > HARD_MAXIMUM_ARTIFACT_BYTES
+                or entry["reserved_bytes"] > self._limits.aggregate_reserved_bytes
                 or entry["maximum_entries"] > self._limits.maximum_workspace_entries
                 or entry["expires_at_unix_ns"] <= entry["created_at_unix_ns"]
                 or entry["owner_pid"] <= 0
@@ -2061,9 +2324,9 @@ class ArtifactPreparationService:
         self,
         prepared: PreparedArtifact,
         workspace: Path,
-        request: ExternalMaterialGrantRequest | PostExternalMaterialGrantRequest,
+        request: ExternalMaterialGrantRequest,
     ) -> Iterator[ExternalMaterialGrant]:
-        """Issue one grant from the live prepared source and current callback only."""
+        """Issue one PRE grant from the live prepared source and current callback only."""
         if type(prepared) is not PreparedArtifact or prepared._owner is not self:
             raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
         binding = prepared._binding
@@ -2080,15 +2343,43 @@ class ArtifactPreparationService:
             or request.archive_sha256 != active.commitment.sha256
             or request.archive_byte_count != active.commitment.byte_count
         )
-        post_mismatch = type(request) is PostExternalMaterialGrantRequest and (
-            request.content_sha256 != active.commitment.sha256
-            or request.byte_count != active.commitment.byte_count
-        )
-        if (
-            pre_mismatch
-            or post_mismatch
-        ):
+        if type(request) is not ExternalMaterialGrantRequest or pre_mismatch:
             raise ArtifactScratchIntegrityError("external material provenance differs")
+        with self._manager._external_material_grant(workspace, request) as grant:
+            yield grant
+
+    @contextmanager
+    def post_external_material_grant(
+        self,
+        sources: tuple[tuple[str, PreparedArtifact], ...],
+        workspace: Path,
+        request: PostExternalMaterialGrantRequest,
+    ) -> Iterator[ExternalMaterialGrant]:
+        """Bind every grant role to its live prepared commitment in this aggregate callback."""
+        if (
+            type(request) is not PostExternalMaterialGrantRequest
+            or type(sources) is not tuple
+            or any(type(source) is not tuple or len(source) != 2 for source in sources)
+            or tuple(role for role, _ in sources) != tuple(item.role for item in request.materials)
+        ):
+            raise ArtifactScratchIntegrityError("external POST prepared roles differ")
+        seen_bindings: set[object] = set()
+        for (_, prepared), item in zip(sources, request.materials, strict=True):
+            if type(prepared) is not PreparedArtifact or prepared._owner is not self:
+                raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+            binding = prepared._binding
+            active = self._active.get(binding)
+            if (
+                binding in seen_bindings
+                or active is None
+                or not active.handle_issued
+                or active.stream_claimed
+                or self._external_grant_workspaces.get(binding) != workspace
+                or active.commitment.sha256 != item.content_sha256
+                or active.commitment.byte_count != item.byte_count
+            ):
+                raise ArtifactScratchIntegrityError("external POST material provenance differs")
+            seen_bindings.add(binding)
         with self._manager._external_material_grant(workspace, request) as grant:
             yield grant
 
@@ -2100,13 +2391,84 @@ class ArtifactPreparationService:
         reserved_bytes: int,
         maximum_entries: int,
     ) -> _InspectionResult:
-        """Serve authority-gated pre- and post-submit materializers through one scratch lifetime."""
-        if type(prepared) is not PreparedArtifact or prepared._owner is not self:
-            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
-        binding = prepared._binding
-        active = self._active.get(binding)
-        if active is None or not active.handle_issued or active.stream_claimed:
-            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+        """Serve one PRE source through the shared aggregate scratch lifetime."""
+
+        class SingleSourceProcessor:
+            async def process(
+                self, readers: dict[str, BinaryIO], workspace: Path
+            ) -> _InspectionResult:
+                return await processor.process(readers["submission_archive"], workspace)
+
+            def abort(self) -> None:
+                processor.abort()
+
+        return await self._process_prepared_artifacts(
+            (("submission_archive", prepared),),
+            SingleSourceProcessor(),
+            reserved_bytes=reserved_bytes,
+            maximum_entries=maximum_entries,
+        )
+
+    async def _process_prepared_post_submission(
+        self,
+        sources: tuple[tuple[str, PreparedArtifact], ...],
+        processor: PreparedPostSubmissionProcessor[_InspectionResult],
+        *,
+        reserved_bytes: int,
+        maximum_entries: int,
+    ) -> _InspectionResult:
+        """Process one current tree and at most its exact authorized predecessor together."""
+        if (
+            type(sources) is not tuple
+            or any(type(source) is not tuple or len(source) != 2 for source in sources)
+            or tuple(role for role, _ in sources)
+            not in (
+                ("submission_archive",),
+                ("submission_archive", "predecessor_submission_archive"),
+            )
+        ):
+            raise ArtifactScratchIntegrityError("external POST prepared roles differ")
+        return await self._process_prepared_artifacts(
+            sources,
+            processor,
+            reserved_bytes=reserved_bytes,
+            maximum_entries=maximum_entries,
+        )
+
+    async def _process_prepared_artifacts(
+        self,
+        sources: tuple[tuple[str, PreparedArtifact], ...],
+        processor: PreparedPostSubmissionProcessor[_InspectionResult],
+        *,
+        reserved_bytes: int,
+        maximum_entries: int,
+    ) -> _InspectionResult:
+        """Use one quota-owned workspace and cancellation lifetime for every input."""
+        if (
+            type(sources) is not tuple
+            or not sources
+            or any(
+                type(source) is not tuple or len(source) != 2 or type(source[0]) is not str
+                for source in sources
+            )
+        ):
+            raise ArtifactScratchIntegrityError("prepared artifact sources are invalid")
+        active_sources: dict[str, tuple[object, _ActivePreparation]] = {}
+        seen_bindings: set[object] = set()
+        for role, prepared in sources:
+            if type(prepared) is not PreparedArtifact or prepared._owner is not self:
+                raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+            binding = prepared._binding
+            active = self._active.get(binding)
+            if active is None or not active.handle_issued or active.stream_claimed:
+                raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+            if role in active_sources or binding in seen_bindings:
+                raise ArtifactScratchIntegrityError("prepared artifact sources are duplicated")
+            active_sources[role] = (binding, active)
+            seen_bindings.add(binding)
+        if not active_sources:
+            raise ArtifactScratchIntegrityError("prepared artifact sources are absent")
+        deadline = min(active.deadline for _, active in active_sources.values())
 
         async def process_and_cleanup() -> tuple[_InspectionResult | None, BaseException | None]:
             workspace_entered = False
@@ -2116,24 +2478,41 @@ class ArtifactPreparationService:
                     maximum_entries=maximum_entries,
                 ) as workspace:
                     workspace_entered = True
-                    if binding in self._external_grant_workspaces:
+                    if any(
+                        binding in self._external_grant_workspaces
+                        for binding, _ in active_sources.values()
+                    ):
                         raise ArtifactScratchIntegrityError(
                             "external material callback is already active"
                         )
-                    self._external_grant_workspaces[binding] = workspace
-                    active.reader.seek(0)
+                    registered: list[tuple[object, _ActivePreparation]] = []
                     try:
+                        for binding, active in active_sources.values():
+                            self._external_grant_workspaces[binding] = workspace
+                            registered.append((binding, active))
+                            active.reader.seek(0)
                         # Keep callback failure distinct from the owner's cleanup.
                         # A cancelled caller drains cleanup, not the aborted result.
                         try:
-                            return await processor.process(active.reader, workspace), None
+                            readers = {
+                                role: active.reader for role, (_, active) in active_sources.items()
+                            }
+                            return await processor.process(readers, workspace), None
                         except ArtifactScratchIntegrityError:
                             raise
                         except BaseException as error:
                             return None, error
                     finally:
-                        self._external_grant_workspaces.pop(binding, None)
-                        active.reader.seek(0)
+                        rewind_error: BaseException | None = None
+                        for binding, active in registered:
+                            self._external_grant_workspaces.pop(binding, None)
+                            try:
+                                active.reader.seek(0)
+                            except BaseException as error:
+                                if rewind_error is None:
+                                    rewind_error = error
+                        if rewind_error is not None:
+                            raise rewind_error
             except ArtifactScratchIntegrityError:
                 raise
             except Exception:
@@ -2145,7 +2524,7 @@ class ArtifactPreparationService:
 
         operation = asyncio.create_task(process_and_cleanup())
         try:
-            async with asyncio.timeout_at(active.deadline):
+            async with asyncio.timeout_at(deadline):
                 result, error = await asyncio.shield(operation)
                 if error is not None:
                     raise error

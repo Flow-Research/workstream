@@ -3,10 +3,16 @@
 mod model_relay;
 mod proxy_transport;
 mod smol;
+mod trial_docker;
+mod trial_engine;
+mod trial_evidence_proxy;
+mod trial_profiles;
+mod trial_relay;
 
 use model_relay::{
     deserialize_required_model_grant, valid_model_grant, validate_proxy_socket,
-    validate_relay_root, InvocationRelay, ModelGrant, RequiredModelGrant,
+    validate_relay_root, InvocationReceiptRegistry, InvocationRelay, ModelGrant,
+    ModelReceiptResolver, RequiredModelGrant,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,15 +26,27 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use trial_docker::DockerRuntimeControl;
+use trial_docker::{DockerTrialBackend, DockerTrialConfiguration};
+use trial_engine::{GenericTrialEngine, SandboxBackendIdentity};
+use trial_evidence_proxy::{
+    DurableTrialReceiptPublisher, InvocationReceiptRegistrar, TrialEvidenceProxyClient,
+};
+use trial_profiles::TrialProfileCatalog;
+use trial_relay::{TrialEngine, TrialProfile, TrialRelay, TrialRequestIdentity};
 use workstream_checker_sdk::{
     canonical_hash, infrastructure_result, parse_request, validate_result, ValidatedRequest,
     MAX_REQUEST_BYTES,
 };
 
 const PROTOCOL: &str = "external_checker_service.v1";
-const GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v1";
+const PRE_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v1";
+const POST_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v2";
+const CURRENT_ARCHIVE_ROLE: &str = "submission_archive";
+const PREDECESSOR_ARCHIVE_ROLE: &str = "predecessor_submission_archive";
 const MAX_ENVELOPE_BYTES: usize = MAX_REQUEST_BYTES + 16_384;
 const MAX_RESPONSE_BYTES: usize = 65_536 + 16_384;
 const SOCKET_IO_TIMEOUT: Duration = Duration::from_secs(2);
@@ -49,6 +67,16 @@ struct ServiceConfig {
     socket_path: PathBuf,
     model_proxy_socket: Option<PathBuf>,
     model_relay_root: Option<PathBuf>,
+    #[serde(default)]
+    trial_authority_manifest_path: Option<PathBuf>,
+    #[serde(default)]
+    trial_authority_manifest_digest: Option<String>,
+    #[serde(skip)]
+    trial_profiles: Option<TrialProfileCatalog>,
+    #[serde(default)]
+    trial_runtime: Option<TrialRuntimeConfiguration>,
+    #[serde(skip)]
+    trial_control: Option<Arc<DockerRuntimeControl>>,
     material_root: PathBuf,
     #[serde(default)]
     docker_binary: PathBuf,
@@ -61,6 +89,41 @@ struct ServiceConfig {
     sandbox_uid: u32,
     sandbox_gid: u32,
     cache: Vec<CacheEntry>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrialRuntimeConfiguration {
+    relay_root: PathBuf,
+    scratch_root: PathBuf,
+    runtime_root: PathBuf,
+    runtime_configuration: PathBuf,
+    outer_runtime_config_digest: String,
+    offline_cache_root: PathBuf,
+    deployment_owner: String,
+    runtime_key: String,
+    builder_image_id: String,
+    trusted_launcher_path: PathBuf,
+    trusted_launcher_digest: String,
+    maximum_candidate_archive_bytes: u64,
+}
+
+impl InvocationReceiptRegistrar for InvocationReceiptRegistry {
+    fn register(
+        &self,
+        request_digest: &str,
+        canonical_receipt_utf8: String,
+        receipt_sha256: String,
+        _custody: &trial_relay::TrialReceiptCustodyAck,
+    ) -> Result<String, ()> {
+        InvocationReceiptRegistry::register(
+            self,
+            request_digest,
+            &canonical_receipt_utf8,
+            &receipt_sha256,
+        )
+        .map_err(|_| ())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,7 +178,11 @@ struct GrantManifest {
 }
 
 struct VerifiedGrant {
-    workspace: PathBuf,
+    binding_digest: String,
+    input: PathBuf,
+    input_inventory: WorkspaceInventory,
+    predecessor: Option<PathBuf>,
+    predecessor_inventory: Option<WorkspaceInventory>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -135,30 +202,28 @@ enum GrantIdentity {
         archive_byte_count: u64,
         semantic_manifest_sha256: String,
     },
-    #[serde(rename = "post_submit")]
-    PostSubmit {
-        submission_id: String,
-        submission_version: u64,
-        evaluation_request_id: String,
-        evaluation_request_digest: String,
-        evaluation_generation: u64,
-        attempt_id: String,
-        result_id: String,
-        lease_id: String,
-        lease_generation: u64,
-        lease_expires_at: String,
-        binding_id: String,
-        content_id: String,
-        replica_id: String,
-        content_sha256: String,
-        byte_count: u64,
-        evidence_id: String,
-        verification_receipt_id: String,
-        verification_job_id: String,
-        verification_generation: u64,
-        namespace_fingerprint: String,
-        semantic_manifest_sha256: String,
-    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PostGrantManifest {
+    protocol_version: String,
+    grant_id: String,
+    request_digest: String,
+    phase: String,
+    identity: Value,
+    evaluation_context_sha256: Option<String>,
+    materials: Vec<PostGrantMaterial>,
+    visible_roles: Vec<String>,
+    binding_digest: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PostGrantMaterial {
+    material: Value,
+    directories: Vec<String>,
+    files: Vec<GrantFile>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -444,12 +509,237 @@ fn run() -> Result<(), String> {
     let bytes = fs::read(path).map_err(|_| "configuration unavailable")?;
     let mut config: ServiceConfig =
         serde_json::from_slice(&bytes).map_err(|_| "configuration invalid")?;
+    load_trial_profiles(&mut config)?;
     let listener = prepare_listener(&mut config)?;
     if config.runtime == "smolvm" {
         smol::serve(&config, listener.incoming())
     } else {
         serve_connections(&config, listener.incoming(), SOCKET_IO_TIMEOUT)
     }
+}
+
+fn load_trial_runtime(config: &mut ServiceConfig) -> Result<(), String> {
+    match (&config.trial_profiles, &config.trial_runtime) {
+        (None, None) => Ok(()),
+        (Some(_), Some(runtime)) => {
+            if runtime.maximum_candidate_archive_bytes == 0
+                || !valid_digest(&runtime.outer_runtime_config_digest)
+                || !valid_digest(&runtime.trusted_launcher_digest)
+                || !runtime.trusted_launcher_path.is_absolute()
+                || config.runtime != "runsc"
+                || config.isolation_mode != "gvisor"
+                || config.model_proxy_socket.is_none()
+            {
+                return Err("trial runtime configuration invalid".into());
+            }
+            let control = DockerRuntimeControl::new(
+                config.docker_binary.clone(),
+                runtime.runtime_root.clone(),
+                runtime.runtime_configuration.clone(),
+            )
+            .map_err(|_| "trial runtime configuration invalid")?;
+            control
+                .recover_deployment(&runtime.deployment_owner, Instant::now() + CLEANUP_TIMEOUT)
+                .map_err(|_| UNSETTLED_RESOURCE_ERROR.to_owned())?;
+            config.trial_control = Some(Arc::new(control));
+            Ok(())
+        }
+        _ => Err("trial authority/runtime configuration incomplete".into()),
+    }
+}
+
+fn trial_engine(
+    config: &ServiceConfig,
+    request: &ValidatedRequest,
+    profile: &TrialProfile,
+) -> Result<Arc<dyn TrialEngine>, String> {
+    // SAFETY: effective process IDs are read-only process attributes and name
+    // the service account that owns all engine-created export directories.
+    let (export_uid, export_gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+    let runtime = config
+        .trial_runtime
+        .as_ref()
+        .ok_or("trial runtime unavailable")?;
+    let control = config
+        .trial_control
+        .as_ref()
+        .ok_or("trial runtime unavailable")?
+        .clone();
+    if runtime.outer_runtime_config_digest != profile.outer_runtime_config_digest {
+        return Err("trial outer runtime identity invalid".into());
+    }
+    let identity = request
+        .value
+        .get("identity")
+        .and_then(Value::as_object)
+        .ok_or("trial request identity invalid")?;
+    let attempt_id = identity
+        .get("attempt_id")
+        .and_then(Value::as_str)
+        .ok_or("trial request identity invalid")?;
+    let backend = DockerTrialBackend::new(
+        DockerTrialConfiguration {
+            identity: SandboxBackendIdentity {
+                engine_identity_digest: profile.engine_identity_digest.clone(),
+                child_runtime: profile.child_runtime.clone(),
+                child_runtime_config_digest: profile.child_runtime_config_digest.clone(),
+                child_host_uds: profile.child_host_uds.clone(),
+                platform: profile.platform.clone(),
+                platform_identity_digest: profile.platform_identity_digest.clone(),
+                builder_image_digest: profile.builder_image_digest.clone(),
+                trusted_launcher_digest: profile.trusted_launcher_digest.clone(),
+                offline_cache_digest: profile.offline_cache_digest.clone(),
+                approved_base_digests: profile.approved_base_digests.clone(),
+            },
+            deployment_owner: runtime.deployment_owner.clone(),
+            request_digest: request.request_digest.clone(),
+            attempt_id: attempt_id.to_owned(),
+            runtime_key: runtime.runtime_key.clone(),
+            builder_image_id: runtime.builder_image_id.clone(),
+            trusted_launcher_path: runtime.trusted_launcher_path.clone(),
+            trusted_launcher_digest: runtime.trusted_launcher_digest.clone(),
+            offline_cache_root: runtime.offline_cache_root.clone(),
+            maximum_candidate_archive_bytes: runtime.maximum_candidate_archive_bytes,
+            candidate_uid: config.sandbox_uid,
+            candidate_gid: config.sandbox_gid,
+            export_uid,
+            export_gid,
+        },
+        control,
+    )
+    .map_err(|_| "trial runtime unavailable")?;
+    Ok(Arc::new(GenericTrialEngine::new(backend)))
+}
+
+fn trial_request_identity(
+    request: &ValidatedRequest,
+    material_binding_digest: &str,
+) -> Result<TrialRequestIdentity, String> {
+    let identity = request
+        .value
+        .get("identity")
+        .and_then(Value::as_object)
+        .ok_or("trial request identity invalid")?;
+    let string = |name: &str| {
+        identity
+            .get(name)
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or("trial request identity invalid")
+    };
+    let number = |name: &str| {
+        identity
+            .get(name)
+            .and_then(Value::as_u64)
+            .ok_or("trial request identity invalid")
+    };
+    let requirement_id = request
+        .value
+        .pointer("/input/requirement_id")
+        .and_then(Value::as_str)
+        .ok_or("trial requirement invalid")?;
+    let input_digest = request
+        .value
+        .get("input_sha256")
+        .and_then(Value::as_str)
+        .ok_or("trial input digest invalid")?;
+    let materials = request
+        .value
+        .get("materials")
+        .ok_or("trial materials invalid")?;
+    Ok(TrialRequestIdentity {
+        request_digest: request.request_digest.clone(),
+        material_binding_digest: material_binding_digest.to_owned(),
+        input_digest: input_digest.to_owned(),
+        materials_digest: canonical_hash(materials).map_err(|_| "trial materials invalid")?,
+        project_id: string("project_id")?,
+        task_id: string("task_id")?,
+        assignment_id: string("assignment_id")?,
+        submission_id: string("submission_id")?,
+        submission_version: number("submission_version")?,
+        requirement_id: requirement_id.to_owned(),
+        registry_entry_id: request.registry_entry_id.clone(),
+        registry_entry_digest: request.registry_entry_digest.clone(),
+        checker_image_digest: request.image_digest.clone(),
+        configuration_sha256: request.configuration_digest.clone(),
+        evaluation_request_id: string("evaluation_request_id")?,
+        evaluation_generation: number("evaluation_generation")?,
+        checker_run_id: string("attempt_id")?,
+        attempt_id: string("attempt_id")?,
+        result_id: string("result_id")?,
+        worker_lease_id: string("lease_id")?,
+        worker_lease_generation: number("lease_generation")?,
+        worker_lease_expires_at: string("lease_expires_at")?,
+    })
+}
+
+fn load_trial_profiles(config: &mut ServiceConfig) -> Result<(), String> {
+    match (
+        config.trial_authority_manifest_path.as_deref(),
+        config.trial_authority_manifest_digest.as_deref(),
+    ) {
+        (None, None) => Ok(()),
+        (Some(path), Some(digest)) => {
+            let bytes = read_trial_authority_manifest(path)?;
+            config.trial_profiles = Some(
+                TrialProfileCatalog::from_bytes(&bytes, digest)
+                    .map_err(|error| error.to_owned())?,
+            );
+            Ok(())
+        }
+        _ => Err("trial authority manifest configuration incomplete".into()),
+    }
+}
+
+fn read_trial_authority_manifest(path: &Path) -> Result<Vec<u8>, String> {
+    read_trial_authority_manifest_after_open(path, || {})
+}
+
+fn read_trial_authority_manifest_after_open(
+    path: &Path,
+    after_open: impl FnOnce(),
+) -> Result<Vec<u8>, String> {
+    const MAXIMUM_BYTES: u64 = 4 * 1024 * 1024;
+    if !path.is_absolute()
+        || fs::canonicalize(path).map_err(|_| "trial authority manifest unavailable")? != path
+    {
+        return Err("trial authority manifest path invalid".into());
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|_| "trial authority manifest unavailable")?;
+    let before = file
+        .metadata()
+        .map_err(|_| "trial authority manifest unavailable")?;
+    if !before.file_type().is_file()
+        || before.file_type().is_symlink()
+        || before.nlink() != 1
+        || before.len() == 0
+        || before.len() > MAXIMUM_BYTES
+    {
+        return Err("trial authority manifest path invalid".into());
+    }
+    after_open();
+    let mut bytes = Vec::with_capacity(before.len() as usize);
+    Read::by_ref(&mut file)
+        .take(MAXIMUM_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "trial authority manifest unavailable")?;
+    let after = file
+        .metadata()
+        .map_err(|_| "trial authority manifest unavailable")?;
+    let current = fs::symlink_metadata(path).map_err(|_| "trial authority manifest unavailable")?;
+    if bytes.len() as u64 != before.len()
+        || bytes.len() as u64 > MAXIMUM_BYTES
+        || (after.dev(), after.ino(), after.len()) != (before.dev(), before.ino(), before.len())
+        || (current.dev(), current.ino(), current.len())
+            != (before.dev(), before.ino(), before.len())
+    {
+        return Err("trial authority manifest changed".into());
+    }
+    Ok(bytes)
 }
 
 fn serve_connections<I>(
@@ -482,6 +772,9 @@ fn prepare_listener(config: &mut ServiceConfig) -> Result<OwnedSocketListener, S
     } else {
         cleanup_stale_checker_containers(config)?;
     }
+    // Trial recovery uses the same settled socket-parent custody. Smol nodes
+    // cannot admit trial configuration through this Docker/runsc capability.
+    load_trial_runtime(config)?;
     Ok(listener)
 }
 
@@ -781,7 +1074,7 @@ fn handle_frame(
                 config,
                 cache,
                 &request,
-                &grant.workspace,
+                &grant,
                 envelope.model_grant.0.as_ref(),
                 stream,
                 &mut budget,
@@ -1082,27 +1375,46 @@ fn verify_grant(
     if raw.contains(&0) {
         return Err("grant manifest invalid".into());
     }
-    let manifest: GrantManifest =
-        serde_json::from_slice(&raw).map_err(|_| "grant manifest invalid")?;
     let value: Value = serde_json::from_slice(&raw).map_err(|_| "grant manifest invalid")?;
     let mut body = value.as_object().cloned().ok_or("grant manifest invalid")?;
     body.remove("binding_digest");
     let binding = canonical_hash(&Value::Object(body)).map_err(|_| "grant binding invalid")?;
-    if manifest.protocol_version != GRANT_PROTOCOL
-        || manifest.grant_id != reference.grant_id
-        || manifest.request_digest != request.request_digest
-        || manifest.binding_digest != binding
-        || manifest.binding_digest != reference.binding_digest
-        || !grant_matches_request(&manifest, request)
+    if value.get("binding_digest").and_then(Value::as_str) != Some(binding.as_str())
+        || binding != reference.binding_digest
     {
         return Err("grant binding differs".into());
     }
-    let workspace = grant_root.join("workspace");
-    let observed = inspect_workspace(&workspace, config.sandbox_uid, config.sandbox_gid)?;
-    if observed.files != manifest.files || observed.directories != manifest.directories {
-        return Err("grant material differs".into());
+    match value.get("protocol_version").and_then(Value::as_str) {
+        Some(PRE_GRANT_PROTOCOL) => {
+            let manifest: GrantManifest =
+                serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
+            if manifest.grant_id != reference.grant_id
+                || manifest.request_digest != request.request_digest
+                || manifest.binding_digest != reference.binding_digest
+                || !grant_matches_request(&manifest, request)
+            {
+                return Err("grant binding differs".into());
+            }
+            let input = grant_root.join("workspace");
+            let observed = inspect_workspace(&input, config.sandbox_uid, config.sandbox_gid)?;
+            if observed.files != manifest.files || observed.directories != manifest.directories {
+                return Err("grant material differs".into());
+            }
+            Ok(VerifiedGrant {
+                binding_digest: reference.binding_digest.clone(),
+                input,
+                input_inventory: observed,
+                predecessor: None,
+                predecessor_inventory: None,
+            })
+        }
+        Some(POST_GRANT_PROTOCOL) => {
+            let manifest: PostGrantManifest =
+                serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
+            verify_post_grant(config, request, reference, &grant_root, &manifest)
+        }
+        _ => Err("grant protocol invalid".into()),
     }
-    Ok(VerifiedGrant { workspace })
 }
 
 fn grant_matches_request(manifest: &GrantManifest, request: &ValidatedRequest) -> bool {
@@ -1158,91 +1470,303 @@ fn grant_matches_request(manifest: &GrantManifest, request: &ValidatedRequest) -
                     == Some(expected_manifest)
                 && semantic_manifest_sha256.as_deref() == Some(expected_manifest)
         }
-        GrantIdentity::PostSubmit {
-            submission_id,
-            submission_version,
-            evaluation_request_id,
-            evaluation_request_digest,
-            evaluation_generation,
-            attempt_id,
-            result_id,
-            lease_id,
-            lease_generation,
-            lease_expires_at,
-            binding_id,
-            content_id,
-            replica_id,
-            content_sha256,
-            byte_count,
-            evidence_id,
-            verification_receipt_id,
-            verification_job_id,
-            verification_generation,
-            namespace_fingerprint,
-            semantic_manifest_sha256: expected_manifest,
-        } => {
-            request.phase == "post_submit"
-                && identity.get("submission_id").and_then(Value::as_str) == Some(submission_id)
-                && identity.get("submission_version").and_then(Value::as_u64)
-                    == Some(*submission_version)
-                && identity
-                    .get("evaluation_request_id")
-                    .and_then(Value::as_str)
-                    == Some(evaluation_request_id)
-                && identity
-                    .get("evaluation_request_digest")
-                    .and_then(Value::as_str)
-                    == Some(evaluation_request_digest)
-                && identity
-                    .get("evaluation_generation")
-                    .and_then(Value::as_u64)
-                    == Some(*evaluation_generation)
-                && identity.get("attempt_id").and_then(Value::as_str) == Some(attempt_id)
-                && identity.get("result_id").and_then(Value::as_str) == Some(result_id)
-                && identity.get("lease_id").and_then(Value::as_str) == Some(lease_id)
-                && identity.get("lease_generation").and_then(Value::as_u64)
-                    == Some(*lease_generation)
-                && identity.get("lease_expires_at").and_then(Value::as_str)
-                    == Some(lease_expires_at)
-                && archive.get("submission_id").and_then(Value::as_str) == Some(submission_id)
-                && archive.get("submission_version").and_then(Value::as_u64)
-                    == Some(*submission_version)
-                && archive.get("binding_id").and_then(Value::as_str) == Some(binding_id)
-                && archive.get("content_id").and_then(Value::as_str) == Some(content_id)
-                && archive.get("replica_id").and_then(Value::as_str) == Some(replica_id)
-                && archive.get("content_sha256").and_then(Value::as_str) == Some(content_sha256)
-                && archive.get("byte_count").and_then(Value::as_u64) == Some(*byte_count)
-                && archive.get("evidence_id").and_then(Value::as_str) == Some(evidence_id)
-                && archive
-                    .get("verification_receipt_id")
-                    .and_then(Value::as_str)
-                    == Some(verification_receipt_id)
-                && archive.get("verification_job_id").and_then(Value::as_str)
-                    == Some(verification_job_id)
-                && archive
-                    .get("verification_generation")
-                    .and_then(Value::as_u64)
-                    == Some(*verification_generation)
-                && archive.get("namespace_fingerprint").and_then(Value::as_str)
-                    == Some(namespace_fingerprint)
-                && archive
-                    .get("semantic_manifest_sha256")
-                    .and_then(Value::as_str)
-                    == Some(expected_manifest)
-                && semantic_manifest_sha256.as_deref() == Some(expected_manifest)
-        }
     }
 }
 
+fn verify_post_grant(
+    config: &ServiceConfig,
+    request: &ValidatedRequest,
+    reference: &GrantReference,
+    grant_root: &Path,
+    manifest: &PostGrantManifest,
+) -> Result<VerifiedGrant, String> {
+    if request.phase != "post_submit"
+        || manifest.protocol_version != POST_GRANT_PROTOCOL
+        || manifest.grant_id != reference.grant_id
+        || manifest.request_digest != request.request_digest
+        || manifest.binding_digest != reference.binding_digest
+        || manifest.phase != "post_submit"
+        || manifest.identity != request.value["identity"]
+        || manifest.evaluation_context_sha256 != request.evaluation_context_sha256
+        || manifest.visible_roles != request.post_material_roles
+    {
+        return Err("POST grant binding differs".into());
+    }
+    let requested = request
+        .value
+        .get("materials")
+        .and_then(Value::as_array)
+        .ok_or("request materials missing")?;
+    if requested.len() != manifest.visible_roles.len() || manifest.materials.is_empty() {
+        return Err("POST grant material selection differs".into());
+    }
+    let mut available = std::collections::BTreeMap::new();
+    let mut available_roles = Vec::with_capacity(manifest.materials.len());
+    for item in &manifest.materials {
+        let role = validate_post_grant_material(item)?;
+        available_roles.push(role);
+        if available.insert(role.to_owned(), item).is_some() {
+            return Err("POST grant material role duplicated".into());
+        }
+    }
+    if !matches!(
+        available_roles.as_slice(),
+        [CURRENT_ARCHIVE_ROLE] | [CURRENT_ARCHIVE_ROLE, PREDECESSOR_ARCHIVE_ROLE]
+    ) || !available.contains_key(CURRENT_ARCHIVE_ROLE)
+        || available.len() > 2
+        || !manifest
+            .visible_roles
+            .iter()
+            .all(|role| available.contains_key(role))
+    {
+        return Err("POST grant material roles invalid".into());
+    }
+    if let Some(prior) = available.get(PREDECESSOR_ARCHIVE_ROLE) {
+        let actual = prior
+            .material
+            .as_object()
+            .ok_or("POST grant predecessor material invalid")?;
+        let current = available[CURRENT_ARCHIVE_ROLE]
+            .material
+            .as_object()
+            .ok_or("POST grant current material invalid")?;
+        if actual.get("submission_id") == current.get("submission_id")
+            || actual
+                .get("submission_version")
+                .and_then(Value::as_u64)
+                .and_then(|version| version.checked_add(1))
+                != current.get("submission_version").and_then(Value::as_u64)
+        {
+            return Err("POST grant predecessor lineage differs".into());
+        }
+        if manifest
+            .visible_roles
+            .iter()
+            .any(|role| role == PREDECESSOR_ARCHIVE_ROLE)
+        {
+            let expected = request
+                .value
+                .pointer("/input/evaluation_context/predecessor")
+                .and_then(Value::as_object)
+                .ok_or("POST grant predecessor context missing")?;
+            if [
+                "submission_id",
+                "submission_version",
+                "content_sha256",
+                "byte_count",
+                "semantic_manifest_sha256",
+            ]
+            .iter()
+            .any(|field| actual.get(*field) != expected.get(*field))
+            {
+                return Err("POST grant predecessor context differs".into());
+            }
+        }
+    }
+    for material in requested {
+        let role = material
+            .get("role")
+            .and_then(Value::as_str)
+            .ok_or("request material role missing")?;
+        if available.get(role).map(|item| &item.material) != Some(material) {
+            return Err("POST grant visible material differs".into());
+        }
+    }
+    let materials_root = grant_root.join("materials");
+    verify_materials_root(
+        &materials_root,
+        available.keys().map(String::as_str),
+        config.sandbox_uid,
+        config.sandbox_gid,
+    )?;
+    let mut inventories = std::collections::BTreeMap::new();
+    for (role, item) in &available {
+        let root = materials_root.join(role);
+        let observed = inspect_workspace(&root, config.sandbox_uid, config.sandbox_gid)?;
+        if observed.files != item.files || observed.directories != item.directories {
+            return Err("POST grant material inventory differs".into());
+        }
+        inventories.insert(role.to_owned(), observed);
+    }
+    let input = materials_root.join(CURRENT_ARCHIVE_ROLE);
+    let input_inventory = inventories
+        .remove(CURRENT_ARCHIVE_ROLE)
+        .ok_or("POST grant current inventory missing")?;
+    let predecessor = manifest
+        .visible_roles
+        .iter()
+        .any(|role| role == PREDECESSOR_ARCHIVE_ROLE)
+        .then(|| materials_root.join(PREDECESSOR_ARCHIVE_ROLE));
+    let predecessor_inventory = predecessor
+        .as_ref()
+        .and_then(|_| inventories.remove(PREDECESSOR_ARCHIVE_ROLE));
+    if predecessor.is_some() != predecessor_inventory.is_some() {
+        return Err("POST grant predecessor inventory missing".into());
+    }
+    Ok(VerifiedGrant {
+        binding_digest: reference.binding_digest.clone(),
+        input,
+        input_inventory,
+        predecessor,
+        predecessor_inventory,
+    })
+}
+
+fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String> {
+    let material = item
+        .material
+        .as_object()
+        .ok_or("POST grant material invalid")?;
+    let expected: std::collections::BTreeSet<_> = [
+        "phase",
+        "role",
+        "submission_id",
+        "submission_version",
+        "binding_id",
+        "content_id",
+        "replica_id",
+        "content_sha256",
+        "byte_count",
+        "media_type",
+        "evidence_id",
+        "verification_receipt_id",
+        "verification_job_id",
+        "verification_generation",
+        "namespace_fingerprint",
+        "semantic_manifest_sha256",
+    ]
+    .into_iter()
+    .collect();
+    if material
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected
+        || material.get("phase").and_then(Value::as_str) != Some("post_submit")
+    {
+        return Err("POST grant material invalid".into());
+    }
+    let role = material
+        .get("role")
+        .and_then(Value::as_str)
+        .ok_or("POST grant material role invalid")?;
+    if !matches!(role, CURRENT_ARCHIVE_ROLE | PREDECESSOR_ARCHIVE_ROLE)
+        || material.get("submission_version").and_then(Value::as_u64) == Some(0)
+        || material
+            .get("verification_generation")
+            .and_then(Value::as_u64)
+            == Some(0)
+        || !material
+            .get("byte_count")
+            .and_then(Value::as_u64)
+            .is_some_and(|value| value <= i64::MAX as u64)
+        || !material
+            .get("media_type")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value.contains('/'))
+    {
+        return Err("POST grant material invalid".into());
+    }
+    for field in [
+        "submission_id",
+        "binding_id",
+        "content_id",
+        "replica_id",
+        "evidence_id",
+        "verification_receipt_id",
+        "verification_job_id",
+    ] {
+        if !material
+            .get(field)
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty())
+        {
+            return Err("POST grant material identity invalid".into());
+        }
+    }
+    for field in [
+        "content_sha256",
+        "namespace_fingerprint",
+        "semantic_manifest_sha256",
+    ] {
+        if !material
+            .get(field)
+            .and_then(Value::as_str)
+            .is_some_and(valid_digest)
+        {
+            return Err("POST grant material digest invalid".into());
+        }
+    }
+    if semantic_manifest_hash_parts(&item.directories, &item.files)
+        .ok()
+        .as_deref()
+        != material
+            .get("semantic_manifest_sha256")
+            .and_then(Value::as_str)
+    {
+        return Err("POST grant semantic manifest differs".into());
+    }
+    Ok(role)
+}
+
+fn verify_materials_root<'a>(
+    root: &Path,
+    expected_roles: impl Iterator<Item = &'a str>,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<(), String> {
+    if fs::canonicalize(root).map_err(|_| "POST grant materials missing")? != root {
+        return Err("POST grant materials path differs".into());
+    }
+    let metadata = fs::symlink_metadata(root).map_err(|_| "POST grant materials missing")?;
+    if !metadata.file_type().is_dir()
+        || metadata.file_type().is_symlink()
+        || metadata.mode() & 0o077 != 0
+        || metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+    {
+        return Err("POST grant materials identity differs".into());
+    }
+    let expected: std::collections::BTreeSet<_> = expected_roles.collect();
+    let actual: std::collections::BTreeSet<_> = fs::read_dir(root)
+        .map_err(|_| "POST grant materials unreadable")?
+        .map(|entry| {
+            entry
+                .map_err(|_| "POST grant materials unreadable".to_owned())?
+                .file_name()
+                .into_string()
+                .map_err(|_| "POST grant material role invalid".to_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .collect();
+    if actual
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected
+    {
+        return Err("POST grant material roots differ".into());
+    }
+    Ok(())
+}
+
 fn semantic_manifest_hash(manifest: &GrantManifest) -> Result<String, String> {
-    let mut entries = Vec::with_capacity(manifest.directories.len() + manifest.files.len());
-    for path in &manifest.directories {
+    semantic_manifest_hash_parts(&manifest.directories, &manifest.files)
+}
+
+fn semantic_manifest_hash_parts(
+    directories: &[String],
+    files: &[GrantFile],
+) -> Result<String, String> {
+    let mut entries = Vec::with_capacity(directories.len() + files.len());
+    for path in directories {
         entries.push(serde_json::json!({
             "normalized_path": path,
             "entry_type": "directory",
         }));
     }
-    for file in &manifest.files {
+    for file in files {
         entries.push(serde_json::json!({
             "normalized_path": file.normalized_path,
             "entry_type": "file",
@@ -1446,16 +1970,88 @@ fn execute_container(
     config: &ServiceConfig,
     cache: &CacheEntry,
     request: &ValidatedRequest,
-    workspace: &Path,
+    grant: &VerifiedGrant,
     model_grant: Option<&ModelGrant>,
     client: &UnixStream,
     budget: &mut RequestExecutionBudget,
 ) -> Result<ExecutedChecker, ExecutionFailure> {
     container_owner(config)
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
-    inspect_workspace(workspace, config.sandbox_uid, config.sandbox_gid)
-        .map_err(|_| ExecutionFailure::ordinary("material_unavailable", false))?;
-    let relay = match model_grant {
+    let selected_trial = match config.trial_profiles.as_ref() {
+        Some(catalog) => catalog
+            .resolve(request)
+            .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?,
+        None => {
+            let has_trial_selector = request
+                .value
+                .get("configuration")
+                .and_then(Value::as_object)
+                .is_some_and(|configuration| {
+                    configuration.keys().any(|key| key.starts_with("trial_"))
+                });
+            if has_trial_selector {
+                return Err(ExecutionFailure::ordinary(
+                    "implementation_unavailable",
+                    false,
+                ));
+            }
+            None
+        }
+    };
+    let receipt_registry = Arc::new(InvocationReceiptRegistry::default());
+    let invocation_cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut trial_relay =
+        match selected_trial {
+            Some(profile) => {
+                let runtime = config.trial_runtime.as_ref().ok_or_else(|| {
+                    ExecutionFailure::ordinary("implementation_unavailable", false)
+                })?;
+                let proxy_path = config.model_proxy_socket.as_ref().ok_or_else(|| {
+                    ExecutionFailure::ordinary("implementation_unavailable", false)
+                })?;
+                let identity = trial_request_identity(request, &grant.binding_digest)
+                    .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
+                let engine = trial_engine(config, request, profile)
+                    .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
+                let publisher = DurableTrialReceiptPublisher::new(
+                    TrialEvidenceProxyClient::new(proxy_path.clone(), request.value.clone()),
+                    Arc::clone(&receipt_registry),
+                    request.request_digest.clone(),
+                    profile.maximum_receipt_bytes,
+                    budget.deadline,
+                    Arc::clone(&invocation_cancelled),
+                )
+                .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
+                let material_root = grant
+                    .input
+                    .parent()
+                    .ok_or_else(|| ExecutionFailure::ordinary("material_unavailable", false))?;
+                Some(
+                    TrialRelay::start(
+                        &runtime.relay_root,
+                        material_root,
+                        &runtime.scratch_root,
+                        &identity,
+                        profile,
+                        Arc::new(publisher),
+                        engine,
+                        config.sandbox_uid,
+                        config.sandbox_gid,
+                        budget.deadline,
+                        Arc::clone(&invocation_cancelled),
+                    )
+                    .map_err(|failure| {
+                        if failure.cleanup_unsettled {
+                            ExecutionFailure::unsettled(false)
+                        } else {
+                            ExecutionFailure::ordinary("implementation_unavailable", false)
+                        }
+                    })?,
+                )
+            }
+            None => None,
+        };
+    let model_relay = match model_grant {
         Some(grant) => {
             let Some(proxy_path) = config.model_proxy_socket.as_deref() else {
                 return Err(ExecutionFailure::ordinary(
@@ -1469,49 +2065,63 @@ fn execute_container(
                     false,
                 ));
             };
-            Some(
-                InvocationRelay::start(
-                    relay_root,
-                    proxy_path,
-                    grant,
-                    &request.request_digest,
-                    config.sandbox_uid,
-                    config.sandbox_gid,
-                    budget.deadline,
-                )
-                .map_err(|failure| {
-                    if failure.cleanup_unsettled {
+            match InvocationRelay::start_with_resolver(
+                relay_root,
+                proxy_path,
+                grant,
+                &request.request_digest,
+                Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
+                config.sandbox_uid,
+                config.sandbox_gid,
+                budget.deadline,
+            ) {
+                Ok(relay) => Some(relay),
+                Err(failure) => {
+                    let trial_cleanup_unsettled = trial_relay
+                        .take()
+                        .is_some_and(|relay| relay.finish().cleanup_unsettled);
+                    return Err(if failure.cleanup_unsettled || trial_cleanup_unsettled {
                         ExecutionFailure::unsettled(false)
                     } else {
                         ExecutionFailure::ordinary("implementation_unavailable", false)
-                    }
-                })?,
-            )
+                    });
+                }
+            }
         }
         None => None,
     };
-    let model_mount = relay.as_ref().map(InvocationRelay::mount_spec);
+    let model_mount = model_relay.as_ref().map(InvocationRelay::mount_spec);
+    let trial_mount = trial_relay.as_ref().map(TrialRelay::mount_spec);
     let result = execute_container_inner(
         config,
         cache,
         request,
-        workspace,
+        grant,
         model_mount.as_deref(),
+        trial_mount.as_deref(),
         client,
         budget,
     );
-    let Some(relay) = relay else {
-        return result;
-    };
-    let relay_result = relay.finish();
     let launched = match &result {
         Ok(_) => true,
         Err(failure) => failure.launched,
     };
-    if relay_result.cleanup_unsettled {
+    let model_finish = model_relay.map(InvocationRelay::finish);
+    let trial_finish = trial_relay.map(TrialRelay::finish);
+    if model_finish
+        .as_ref()
+        .is_some_and(|finish| finish.cleanup_unsettled)
+        || trial_finish
+            .as_ref()
+            .is_some_and(|finish| finish.cleanup_unsettled)
+    {
         return Err(ExecutionFailure::unsettled(launched));
     }
-    if relay_result.failed {
+    if model_finish.as_ref().is_some_and(|finish| finish.failed)
+        || trial_finish
+            .as_ref()
+            .is_some_and(|finish| finish.failure.is_some())
+    {
         return Err(ExecutionFailure::ordinary(
             "implementation_unavailable",
             launched,
@@ -1524,19 +2134,39 @@ fn execute_container_inner(
     config: &ServiceConfig,
     cache: &CacheEntry,
     request: &ValidatedRequest,
-    workspace: &Path,
+    grant: &VerifiedGrant,
     model_mount: Option<&str>,
+    trial_mount: Option<&str>,
     client: &UnixStream,
     budget: &mut RequestExecutionBudget,
 ) -> Result<ExecutedChecker, ExecutionFailure> {
-    if config.runtime == "smolvm" {
-        return smol::execute(config, cache, request, workspace, client, budget);
-    }
     let owner = container_owner(config)
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
     // Revalidate immediately before handing the path to Docker.
-    inspect_workspace(workspace, config.sandbox_uid, config.sandbox_gid)
+    let observed_input = inspect_workspace(&grant.input, config.sandbox_uid, config.sandbox_gid)
         .map_err(|_| ExecutionFailure::ordinary("material_unavailable", false))?;
+    if observed_input != grant.input_inventory {
+        return Err(ExecutionFailure::ordinary("material_unavailable", false));
+    }
+    if config.runtime == "smolvm" {
+        if grant.predecessor.is_some() || model_mount.is_some() || trial_mount.is_some() {
+            return Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false,
+            ));
+        }
+        return smol::execute(config, cache, request, &grant.input, client, budget);
+    }
+    if let (Some(predecessor), Some(expected)) = (&grant.predecessor, &grant.predecessor_inventory)
+    {
+        let observed = inspect_workspace(predecessor, config.sandbox_uid, config.sandbox_gid)
+            .map_err(|_| ExecutionFailure::ordinary("material_unavailable", false))?;
+        if observed != *expected {
+            return Err(ExecutionFailure::ordinary("material_unavailable", false));
+        }
+    } else if grant.predecessor.is_some() || grant.predecessor_inventory.is_some() {
+        return Err(ExecutionFailure::ordinary("material_unavailable", false));
+    }
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
@@ -1549,10 +2179,16 @@ fn execute_container_inner(
     let cpus = format!("{:.3}", request.cpu_millis as f64 / 1000.0);
     let memory = request.memory_bytes.to_string();
     let pids = ((request.memory_bytes / (16 * 1024 * 1024)).clamp(16, 256)).to_string();
-    let mount = format!(
+    let input_mount = format!(
         "type=bind,src={},dst=/work/input,readonly",
-        workspace.display()
+        grant.input.display()
     );
+    let predecessor_mount = grant.predecessor.as_ref().map(|path| {
+        format!(
+            "type=bind,src={},dst=/work/context/predecessor,readonly",
+            path.display()
+        )
+    });
     let create_arguments = container_create_arguments(
         &name,
         &attempt_label,
@@ -1562,8 +2198,10 @@ fn execute_container_inner(
         &pids,
         &memory,
         &cpus,
-        &mount,
+        &input_mount,
+        predecessor_mount.as_deref(),
         model_mount,
+        trial_mount,
         &image,
     );
     let create_argument_refs: Vec<_> = create_arguments.iter().map(String::as_str).collect();
@@ -1646,7 +2284,9 @@ fn container_create_arguments(
     memory: &str,
     cpus: &str,
     material_mount: &str,
+    predecessor_mount: Option<&str>,
     model_mount: Option<&str>,
+    trial_mount: Option<&str>,
     image: &str,
 ) -> Vec<String> {
     let mut arguments = vec![
@@ -1681,9 +2321,17 @@ fn container_create_arguments(
         "--mount".into(),
         material_mount.into(),
     ];
+    if let Some(predecessor_mount) = predecessor_mount {
+        arguments.push("--mount".into());
+        arguments.push(predecessor_mount.into());
+    }
     if let Some(model_mount) = model_mount {
         arguments.push("--mount".into());
         arguments.push(model_mount.into());
+    }
+    if let Some(trial_mount) = trial_mount {
+        arguments.push("--mount".into());
+        arguments.push(trial_mount.into());
     }
     arguments.extend(["-i".into(), image.into()]);
     arguments
@@ -2376,6 +3024,11 @@ mod tests {
             socket_path: socket_root.join("checker.sock"),
             model_proxy_socket: None,
             model_relay_root: None,
+            trial_authority_manifest_path: None,
+            trial_authority_manifest_digest: None,
+            trial_profiles: None,
+            trial_runtime: None,
+            trial_control: None,
             material_root,
             docker_binary: docker,
             runtime: "runc".into(),
@@ -2398,12 +3051,83 @@ mod tests {
         (root, config)
     }
 
+    #[test]
+    fn trial_manifest_reader_rejects_growth_and_path_replacement() {
+        let (root, _) = test_config();
+        let path = root.join("trial-authority.json");
+        fs::write(&path, b"{}").unwrap();
+        assert_eq!(
+            read_trial_authority_manifest_after_open(&path, || {
+                let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+                file.write_all(b"x").unwrap();
+            })
+            .unwrap_err(),
+            "trial authority manifest changed"
+        );
+
+        fs::write(&path, b"{}").unwrap();
+        let replacement = root.join("replacement.json");
+        fs::write(&replacement, b"{}").unwrap();
+        assert_eq!(
+            read_trial_authority_manifest_after_open(&path, || {
+                fs::rename(&replacement, &path).unwrap();
+            })
+            .unwrap_err(),
+            "trial authority manifest changed"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn trial_manifest_reader_rejects_fifo_without_blocking() {
+        const CHILD_PATH: &str = "WORKSTREAM_TRIAL_MANIFEST_FIFO_CHILD";
+        if let Some(path) = std::env::var_os(CHILD_PATH) {
+            assert_eq!(
+                read_trial_authority_manifest(Path::new(&path)).unwrap_err(),
+                "trial authority manifest path invalid"
+            );
+            return;
+        }
+
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let (root, _) = test_config();
+        let path = root.join("trial-authority.fifo");
+        let path_bytes = CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: the path is a NUL-free CString beneath this test's private root.
+        assert_eq!(unsafe { libc::mkfifo(path_bytes.as_ptr(), 0o600) }, 0);
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::trial_manifest_reader_rejects_fifo_without_blocking",
+                "--nocapture",
+            ])
+            .env(CHILD_PATH, &path)
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                child.kill().unwrap();
+                let _ = child.wait();
+                panic!("FIFO manifest read blocked");
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert!(status.success());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn pre_submit_envelope_with_grant(config: &ServiceConfig) -> Value {
         let grant_id = "extract_0123456789abcdef0123456789abcdef";
         let mut request: Value =
             serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
         let mut manifest = GrantManifest {
-            protocol_version: GRANT_PROTOCOL.into(),
+            protocol_version: PRE_GRANT_PROTOCOL.into(),
             grant_id: grant_id.into(),
             request_digest: String::new(),
             identity: GrantIdentity::PreSubmit {
@@ -2433,10 +3157,7 @@ mod tests {
         let GrantIdentity::PreSubmit {
             semantic_manifest_sha256,
             ..
-        } = &mut manifest.identity
-        else {
-            unreachable!()
-        };
+        } = &mut manifest.identity;
         *semantic_manifest_sha256 = semantic.clone();
         request["materials"][0]["semantic_manifest_sha256"] = Value::String(semantic);
         let mut request_body = request.as_object().unwrap().clone();
@@ -2594,6 +3315,90 @@ mod tests {
         assert!(!docker_marker.exists());
 
         fs::remove_file(stale_runtime).unwrap();
+        drop(first);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn losing_startup_cannot_recover_live_trial_resources() {
+        let (root, mut config) = test_config();
+        let proxy_root = root.join("proxy");
+        let relay_root = root.join("relay");
+        let runtime_root = root.join("trial-runtime");
+        let trial_relay_root = root.join("trial-relay");
+        let scratch_root = root.join("trial-scratch");
+        let cache_root = root.join("offline-cache");
+        for directory in [
+            &proxy_root,
+            &relay_root,
+            &runtime_root,
+            &trial_relay_root,
+            &scratch_root,
+            &cache_root,
+        ] {
+            fs::create_dir(directory).unwrap();
+            fs::set_permissions(directory, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let proxy_path = proxy_root.join("proxy.sock");
+        let _proxy = UnixListener::bind(&proxy_path).unwrap();
+        fs::set_permissions(&proxy_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let runtime_configuration = root.join("runsc-trial.toml");
+        fs::write(&runtime_configuration, b"rootless = false\n").unwrap();
+        fs::write(
+            &config.docker_binary,
+            b"#!/bin/sh\ncase \"$1 $2\" in\n  \"container ls\") exit 0;;\n  \"info --format\") printf '{\"runsc\":{}}'; exit 0;;\nesac\nexit 2\n",
+        )
+        .unwrap();
+        config.runtime = "runsc".into();
+        config.isolation_mode = "gvisor".into();
+        config.model_proxy_socket = Some(proxy_path);
+        config.model_relay_root = Some(relay_root);
+        config.trial_profiles = Some(TrialProfileCatalog::empty_for_test());
+        config.trial_runtime = Some(TrialRuntimeConfiguration {
+            relay_root: trial_relay_root,
+            scratch_root,
+            runtime_root: runtime_root.clone(),
+            runtime_configuration,
+            outer_runtime_config_digest: format!("sha256:{}", "1".repeat(64)),
+            offline_cache_root: cache_root,
+            deployment_owner: "deployment_a".into(),
+            runtime_key: "runsc-trial".into(),
+            builder_image_id: format!("sha256:{}", "2".repeat(64)),
+            trusted_launcher_path: config.docker_binary.clone(),
+            trusted_launcher_digest: format!("sha256:{}", "3".repeat(64)),
+            maximum_candidate_archive_bytes: 1024,
+        });
+
+        let first = prepare_listener(&mut config).unwrap();
+        let first_control = config.trial_control.as_ref().unwrap().clone();
+        let journal =
+            trial_docker::persist_runtime_journal_for_test(&runtime_root, "deployment_a").unwrap();
+        let journal_before = fs::read(&journal).unwrap();
+        let live_resource = root.join("live-trial-resource");
+        let docker_called = root.join("docker-called-by-loser");
+        fs::write(&live_resource, b"live").unwrap();
+        fs::write(
+            &config.docker_binary,
+            format!(
+                "#!/bin/sh\ntouch '{}'\nrm -f '{}'\nexit 2\n",
+                docker_called.display(),
+                live_resource.display(),
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(
+            prepare_listener(&mut config).unwrap_err(),
+            "socket custody unavailable"
+        );
+        assert!(Arc::ptr_eq(
+            config.trial_control.as_ref().unwrap(),
+            &first_control
+        ));
+        assert!(!docker_called.exists());
+        assert_eq!(fs::read(&journal).unwrap(), journal_before);
+        assert_eq!(fs::read(&live_resource).unwrap(), b"live");
+
         drop(first);
         fs::remove_dir_all(root).unwrap();
     }
@@ -3030,10 +3835,11 @@ exit 2
     }
 
     #[test]
-    fn container_arguments_mount_only_the_invocation_model_socket() {
+    fn container_arguments_mount_only_the_invocation_capability_sockets() {
         let material = "type=bind,src=/private/material,dst=/work/input,readonly";
         let invocation =
             "type=bind,src=/private/runtime/.model-123/model.sock,dst=/work/model.sock,readonly";
+        let trial = "type=bind,src=/private/runtime/.trial-123/execution.sock,dst=/work/execution.sock,readonly";
         let arguments = container_create_arguments(
             "candidate",
             "workstream.external-checker-attempt=a",
@@ -3044,7 +3850,9 @@ exit 2
             "16777216",
             "1.000",
             material,
+            None,
             Some(invocation),
+            Some(trial),
             "registry.example/checker@sha256:123",
         );
         assert!(arguments
@@ -3055,7 +3863,7 @@ exit 2
             .filter(|pair| pair[0] == "--mount")
             .map(|pair| pair[1].as_str())
             .collect();
-        assert_eq!(mounts, [material, invocation]);
+        assert_eq!(mounts, [material, invocation, trial]);
         assert!(!arguments.iter().any(|value| {
             value.contains("proxy.sock")
                 || value.contains("model_0123456789abcdef0123456789abcdef")
@@ -3073,6 +3881,8 @@ exit 2
             "16777216",
             "1.000",
             material,
+            None,
+            None,
             None,
             "registry.example/checker@sha256:123",
         );
@@ -3420,6 +4230,16 @@ exit 2
         fs::create_dir(&workspace).unwrap();
         fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
         let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let grant = VerifiedGrant {
+            binding_digest: request.request_digest.clone(),
+            input: workspace.clone(),
+            input_inventory: WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            },
+            predecessor: None,
+            predecessor_inventory: None,
+        };
         let (_peer, client) = UnixStream::pair().unwrap();
         let mut budget = RequestExecutionBudget::new(Instant::now() + Duration::from_secs(2), 4);
 
@@ -3428,7 +4248,7 @@ exit 2
                 &config,
                 &config.cache[0],
                 &request,
-                &workspace,
+                &grant,
                 None,
                 &client,
                 &mut budget,
@@ -3546,6 +4366,16 @@ exit 2
         fs::create_dir(&workspace).unwrap();
         fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
         let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let grant = VerifiedGrant {
+            binding_digest: request.request_digest.clone(),
+            input: workspace.clone(),
+            input_inventory: WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            },
+            predecessor: None,
+            predecessor_inventory: None,
+        };
         let (_peer, client) = UnixStream::pair().unwrap();
         let mut budget = RequestExecutionBudget::new(
             Instant::now() + Duration::from_secs(2),
@@ -3557,7 +4387,7 @@ exit 2
                 &config,
                 &config.cache[0],
                 &request,
-                &workspace,
+                &grant,
                 None,
                 &client,
                 &mut budget,
@@ -3582,6 +4412,16 @@ exit 2
         fs::create_dir(&workspace).unwrap();
         fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
         let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let grant = VerifiedGrant {
+            binding_digest: request.request_digest.clone(),
+            input: workspace.clone(),
+            input_inventory: WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            },
+            predecessor: None,
+            predecessor_inventory: None,
+        };
         let (_peer, client) = UnixStream::pair().unwrap();
         let mut budget = RequestExecutionBudget::new(
             Instant::now() + Duration::from_secs(2),
@@ -3593,7 +4433,7 @@ exit 2
                 &config,
                 &config.cache[0],
                 &request,
-                &workspace,
+                &grant,
                 None,
                 &client,
                 &mut budget,
@@ -3613,7 +4453,7 @@ exit 2
     fn grant_lineage_matches_the_normalized_pre_submit_request() {
         let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
         let mut manifest = GrantManifest {
-            protocol_version: GRANT_PROTOCOL.into(),
+            protocol_version: PRE_GRANT_PROTOCOL.into(),
             grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
             request_digest: request.request_digest.clone(),
             identity: GrantIdentity::PreSubmit {
@@ -3646,33 +4486,28 @@ exit 2
         let GrantIdentity::PreSubmit {
             semantic_manifest_sha256,
             ..
-        } = &mut manifest.identity
-        else {
-            unreachable!()
-        };
+        } = &mut manifest.identity;
         *semantic_manifest_sha256 = semantic;
         request.value["materials"][0]["semantic_manifest_sha256"] =
             Value::String(semantic_manifest_sha256.clone());
         assert!(grant_matches_request(&manifest, &request));
         for field in 0..6 {
             let original = manifest.identity.clone();
-            if let GrantIdentity::PreSubmit {
+            let GrantIdentity::PreSubmit {
                 prepared_generation_id,
                 attempt_id,
                 attempt_request_digest,
                 archive_sha256,
                 archive_byte_count,
                 semantic_manifest_sha256,
-            } = &mut manifest.identity
-            {
-                match field {
-                    0 => *prepared_generation_id = "00000000-0000-4000-8000-000000000000".into(),
-                    1 => *attempt_id = "00000000-0000-4000-8000-000000000000".into(),
-                    2 => *attempt_request_digest = format!("sha256:{}", "8".repeat(64)),
-                    3 => *archive_sha256 = format!("sha256:{}", "8".repeat(64)),
-                    4 => *archive_byte_count += 1,
-                    _ => *semantic_manifest_sha256 = format!("sha256:{}", "8".repeat(64)),
-                }
+            } = &mut manifest.identity;
+            match field {
+                0 => *prepared_generation_id = "00000000-0000-4000-8000-000000000000".into(),
+                1 => *attempt_id = "00000000-0000-4000-8000-000000000000".into(),
+                2 => *attempt_request_digest = format!("sha256:{}", "8".repeat(64)),
+                3 => *archive_sha256 = format!("sha256:{}", "8".repeat(64)),
+                4 => *archive_byte_count += 1,
+                _ => *semantic_manifest_sha256 = format!("sha256:{}", "8".repeat(64)),
             }
             assert!(!grant_matches_request(&manifest, &request));
             manifest.identity = original;
@@ -3681,8 +4516,11 @@ exit 2
         assert!(!grant_matches_request(&manifest, &request));
     }
 
-    #[test]
-    fn grant_lineage_matches_every_normalized_post_submit_fact() {
+    fn post_grant_fixture(
+        include_prior: bool,
+        prior_visible: bool,
+        context_enabled: bool,
+    ) -> (ValidatedRequest, PostGrantManifest) {
         let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
         let id = |byte: char| format!("{0}{0}{0}{0}{0}{0}{0}{0}-0000-4000-8000-000000000000", byte);
         let identity = serde_json::json!({
@@ -3693,136 +4531,370 @@ exit 2
             "lease_id": id('8'), "lease_generation": 4,
             "lease_expires_at": "2026-10-11T12:00:00+00:00"
         });
-        let material = serde_json::json!({
-            "phase": "post_submit", "role": "submission_archive",
-            "submission_id": identity["submission_id"], "submission_version": 2,
-            "binding_id": id('9'), "content_id": "aaaaaaaa-0000-4000-8000-000000000000",
-            "replica_id": "bbbbbbbb-0000-4000-8000-000000000000",
-            "content_sha256": digest('c'), "byte_count": 0, "media_type": "application/zip",
-            "evidence_id": "cccccccc-0000-4000-8000-000000000000",
-            "verification_receipt_id": "dddddddd-0000-4000-8000-000000000000",
-            "verification_job_id": "eeeeeeee-0000-4000-8000-000000000000",
-            "verification_generation": 5, "namespace_fingerprint": digest('d'),
-            "semantic_manifest_sha256": ""
-        });
-        let mut manifest = GrantManifest {
-            protocol_version: GRANT_PROTOCOL.into(),
-            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
-            request_digest: digest('f'),
-            identity: GrantIdentity::PostSubmit {
-                submission_id: identity["submission_id"].as_str().unwrap().into(),
-                submission_version: 2,
-                evaluation_request_id: identity["evaluation_request_id"].as_str().unwrap().into(),
-                evaluation_request_digest: digest('5'),
-                evaluation_generation: 3,
-                attempt_id: identity["attempt_id"].as_str().unwrap().into(),
-                result_id: identity["result_id"].as_str().unwrap().into(),
-                lease_id: identity["lease_id"].as_str().unwrap().into(),
-                lease_generation: 4,
-                lease_expires_at: identity["lease_expires_at"].as_str().unwrap().into(),
-                binding_id: material["binding_id"].as_str().unwrap().into(),
-                content_id: material["content_id"].as_str().unwrap().into(),
-                replica_id: material["replica_id"].as_str().unwrap().into(),
-                content_sha256: digest('c'),
-                byte_count: 0,
-                evidence_id: material["evidence_id"].as_str().unwrap().into(),
-                verification_receipt_id: material["verification_receipt_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                verification_job_id: material["verification_job_id"].as_str().unwrap().into(),
-                verification_generation: 5,
-                namespace_fingerprint: digest('d'),
-                semantic_manifest_sha256: String::new(),
-            },
+        let semantic = semantic_manifest_hash_parts(&[], &[]).unwrap();
+        let material = |role: &str, submission_id: String, version: u64, marker: char| {
+            serde_json::json!({
+                "phase": "post_submit", "role": role,
+                "submission_id": submission_id, "submission_version": version,
+                "binding_id": id(marker), "content_id": id('a'), "replica_id": id('b'),
+                "content_sha256": digest(marker), "byte_count": 0,
+                "media_type": "application/zip", "evidence_id": id('c'),
+                "verification_receipt_id": id('d'), "verification_job_id": id('e'),
+                "verification_generation": 5, "namespace_fingerprint": digest('d'),
+                "semantic_manifest_sha256": semantic
+            })
+        };
+        let current = material(
+            CURRENT_ARCHIVE_ROLE,
+            identity["submission_id"].as_str().unwrap().into(),
+            2,
+            '9',
+        );
+        let prior = material(PREDECESSOR_ARCHIVE_ROLE, id('0'), 1, '8');
+        let mut requested = vec![current.clone()];
+        let mut visible_roles = vec![CURRENT_ARCHIVE_ROLE.to_owned()];
+        if prior_visible {
+            requested.push(prior.clone());
+            visible_roles.push(PREDECESSOR_ARCHIVE_ROLE.to_owned());
+        }
+        let mut available = vec![PostGrantMaterial {
+            material: current,
             directories: Vec::new(),
             files: Vec::new(),
-            binding_digest: digest('9'),
-        };
-        let semantic = semantic_manifest_hash(&manifest).unwrap();
-        let GrantIdentity::PostSubmit {
-            semantic_manifest_sha256,
-            ..
-        } = &mut manifest.identity
-        else {
-            unreachable!()
-        };
-        *semantic_manifest_sha256 = semantic.clone();
-        let encoded = serde_json::to_vec(&manifest).unwrap();
-        let decoded: GrantManifest = serde_json::from_slice(&encoded).unwrap();
-        assert!(matches!(decoded.identity, GrantIdentity::PostSubmit { .. }));
-        let mut substituted = serde_json::to_value(&manifest).unwrap();
-        substituted["unexpected"] = Value::Bool(true);
-        assert!(serde_json::from_value::<GrantManifest>(substituted).is_err());
-        let mut material = material;
-        material["semantic_manifest_sha256"] = Value::String(semantic);
+        }];
+        if include_prior {
+            available.push(PostGrantMaterial {
+                material: prior,
+                directories: Vec::new(),
+                files: Vec::new(),
+            });
+        }
+        let context = context_enabled.then(|| {
+            serde_json::json!({
+                "schema_version": "workstream.post_submit_evaluation_context.v1",
+                "kind": "checker_remediation",
+                "source": {},
+                "predecessor": {
+                    "submission_id": id('0'), "submission_version": 1,
+                    "content_sha256": digest('8'), "byte_count": 0,
+                    "semantic_manifest_sha256": semantic,
+                },
+                "feedback": null,
+            })
+        });
+        let context_sha256 = context.as_ref().map(|value| canonical_hash(value).unwrap());
+        let request_digest = digest('7');
+        let input = context
+            .as_ref()
+            .map(|value| serde_json::json!({"evaluation_context": value}))
+            .unwrap_or_else(|| serde_json::json!({}));
         let request = ValidatedRequest {
-            value: serde_json::json!({"identity": identity, "materials": [material]}),
-            request_digest: manifest.request_digest.clone(),
+            value: serde_json::json!({
+                "identity": identity, "input": input, "materials": requested
+            }),
+            request_digest: request_digest.clone(),
             registry_entry_id: id('f'),
             registry_entry_digest: digest('1'),
             image_digest: digest('2'),
             configuration_digest: digest('3'),
             phase: "post_submit".into(),
-            cpu_millis: 1,
-            memory_bytes: 1,
+            post_material_roles: visible_roles.clone(),
+            evaluation_context_sha256: context_sha256.clone(),
+            cpu_millis: 100,
+            memory_bytes: 16 * 1024 * 1024,
             deadline_ms: 100,
             maximum_output_bytes: 256,
         };
-        assert!(grant_matches_request(&manifest, &request));
-
-        let (root, config) = test_config();
-        let bind = |manifest: &mut GrantManifest| {
-            let mut binding_body = serde_json::to_value(&*manifest).unwrap();
-            binding_body
-                .as_object_mut()
-                .unwrap()
-                .remove("binding_digest");
-            manifest.binding_digest = canonical_hash(&binding_body).unwrap();
+        let mut manifest = PostGrantManifest {
+            protocol_version: POST_GRANT_PROTOCOL.into(),
+            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
+            request_digest,
+            phase: "post_submit".into(),
+            identity: request.value["identity"].clone(),
+            evaluation_context_sha256: context_sha256,
+            materials: available,
+            visible_roles,
+            binding_digest: digest('0'),
         };
-        let mut conventional_manifest = manifest.clone();
-        bind(&mut conventional_manifest);
+        let mut body = serde_json::to_value(&manifest).unwrap();
+        body.as_object_mut().unwrap().remove("binding_digest");
+        manifest.binding_digest = canonical_hash(&body).unwrap();
+        (request, manifest)
+    }
+
+    fn publish_post_grant(config: &ServiceConfig, manifest: &PostGrantManifest) -> GrantReference {
         let grant_root = config
             .material_root
             .join("workspaces")
-            .join(&conventional_manifest.grant_id);
-        let workspace = grant_root.join("workspace");
-        fs::create_dir_all(&workspace).unwrap();
+            .join(&manifest.grant_id);
+        let materials = grant_root.join("materials");
+        fs::create_dir_all(&materials).unwrap();
+        for item in &manifest.materials {
+            let role = item.material["role"].as_str().unwrap();
+            let root = materials.join(role);
+            if !root.exists() {
+                fs::create_dir(&root).unwrap();
+            }
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o500)).unwrap();
+        }
+        fs::set_permissions(&materials, fs::Permissions::from_mode(0o500)).unwrap();
         fs::set_permissions(&grant_root, fs::Permissions::from_mode(0o700)).unwrap();
-        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
-        let manifest_path = grant_root.join(".external-checker-grant.json");
+        let path = grant_root.join(".external-checker-grant.json");
+        fs::write(&path, serde_json::to_vec(manifest).unwrap()).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
+        GrantReference {
+            grant_id: manifest.grant_id.clone(),
+            binding_digest: manifest.binding_digest.clone(),
+        }
+    }
+
+    #[test]
+    fn post_grant_v2_binds_context_roles_and_all_aggregate_inventories() {
+        let (root, config) = test_config();
+        let (request, manifest) = post_grant_fixture(true, false, false);
+        assert!(request.value["input"].get("evaluation_context").is_none());
+        assert_eq!(request.evaluation_context_sha256, None);
+        assert_eq!(request.post_material_roles, [CURRENT_ARCHIVE_ROLE]);
+        assert_eq!(manifest.materials.len(), 2);
+        let reference = publish_post_grant(&config, &manifest);
+        let verified = verify_grant(&config, &request, &reference).unwrap();
+        assert!(verified.input.ends_with(CURRENT_ARCHIVE_ROLE));
+        assert_eq!(
+            verified.predecessor, None,
+            "hidden prior must not be mounted"
+        );
+        let (unauthorized_request, unauthorized_manifest) = post_grant_fixture(true, true, false);
+        let unauthorized_reference = GrantReference {
+            grant_id: unauthorized_manifest.grant_id.clone(),
+            binding_digest: unauthorized_manifest.binding_digest.clone(),
+        };
+        assert!(verify_post_grant(
+            &config,
+            &unauthorized_request,
+            &unauthorized_reference,
+            &config
+                .material_root
+                .join("workspaces")
+                .join(&unauthorized_manifest.grant_id),
+            &unauthorized_manifest,
+        )
+        .is_err());
+
+        let manifest_path = config
+            .material_root
+            .join("workspaces")
+            .join(&manifest.grant_id)
+            .join(".external-checker-grant.json");
+        fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::remove_file(&manifest_path).unwrap();
+        let (visible_request, visible_manifest) = post_grant_fixture(true, true, true);
+        let visible_reference = publish_post_grant(&config, &visible_manifest);
+        let visible = verify_grant(&config, &visible_request, &visible_reference).unwrap();
+        assert!(visible.predecessor.is_some());
+
+        let mut substituted = visible_manifest.clone();
+        substituted.evaluation_context_sha256 = Some(format!("sha256:{}", "a".repeat(64)));
+        assert!(verify_post_grant(
+            &config,
+            &visible_request,
+            &visible_reference,
+            &config
+                .material_root
+                .join("workspaces")
+                .join(&substituted.grant_id),
+            &substituted,
+        )
+        .is_err());
+        let mut substituted_prior = visible_manifest.clone();
+        substituted_prior.materials[1].material["content_sha256"] =
+            Value::String(format!("sha256:{}", "a".repeat(64)));
+        assert!(verify_post_grant(
+            &config,
+            &visible_request,
+            &visible_reference,
+            &config
+                .material_root
+                .join("workspaces")
+                .join(&substituted_prior.grant_id),
+            &substituted_prior,
+        )
+        .is_err());
+        let mut extra = serde_json::to_value(&visible_manifest).unwrap();
+        extra["unexpected"] = Value::Bool(true);
+        assert!(serde_json::from_value::<PostGrantManifest>(extra).is_err());
+        let mut legacy_shape = serde_json::to_value(&visible_manifest).unwrap();
+        legacy_shape["protocol_version"] = Value::String(PRE_GRANT_PROTOCOL.into());
+        assert!(serde_json::from_value::<GrantManifest>(legacy_shape).is_err());
+        let mut unknown_role = visible_manifest.materials[1].clone();
+        unknown_role.material["role"] = Value::String("foreign_archive".into());
+        assert!(validate_post_grant_material(&unknown_role).is_err());
+        let mut reordered = visible_manifest.clone();
+        reordered.materials.reverse();
+        assert!(verify_post_grant(
+            &config,
+            &visible_request,
+            &visible_reference,
+            &config
+                .material_root
+                .join("workspaces")
+                .join(&reordered.grant_id),
+            &reordered,
+        )
+        .is_err());
+        let substituted_reference = GrantReference {
+            grant_id: visible_reference.grant_id.clone(),
+            binding_digest: format!("sha256:{}", "0".repeat(64)),
+        };
+        assert!(verify_grant(&config, &visible_request, &substituted_reference).is_err());
+        let material_root = config
+            .material_root
+            .join("workspaces")
+            .join(&visible_manifest.grant_id)
+            .join("materials");
+        let current_root = material_root.join(CURRENT_ARCHIVE_ROLE);
+        fs::set_permissions(&current_root, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(current_root.join("drift"), b"changed").unwrap();
+        fs::set_permissions(&current_root, fs::Permissions::from_mode(0o500)).unwrap();
+        assert!(verify_grant(&config, &visible_request, &visible_reference).is_err());
+        fs::set_permissions(&current_root, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::remove_file(current_root.join("drift")).unwrap();
+        for role in [CURRENT_ARCHIVE_ROLE, PREDECESSOR_ARCHIVE_ROLE] {
+            fs::set_permissions(material_root.join(role), fs::Permissions::from_mode(0o700))
+                .unwrap();
+        }
+        fs::set_permissions(&material_root, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn container_mounts_only_server_verified_visible_roles() {
+        let (root, mut config) = test_config();
         fs::write(
-            &manifest_path,
-            serde_json::to_vec(&conventional_manifest).unwrap(),
+            &config.docker_binary,
+            b"#!/bin/sh\nroot=$(dirname \"$0\")\ncase \"$1\" in\n  create) printf '%s\\n' \"$@\" > \"$root/args\"; exit 17;;\n  rm|container) exit 0;;\nesac\nexit 2\n",
         )
         .unwrap();
-        fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o400)).unwrap();
-        let conventional_reference = GrantReference {
-            grant_id: conventional_manifest.grant_id.clone(),
-            binding_digest: conventional_manifest.binding_digest.clone(),
+        fs::set_permissions(&config.docker_binary, fs::Permissions::from_mode(0o700)).unwrap();
+        let current = config.material_root.join("visible-current");
+        let prior = config.material_root.join("hidden-prior");
+        fs::create_dir(&current).unwrap();
+        fs::create_dir(&prior).unwrap();
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o500)).unwrap();
+        fs::set_permissions(&prior, fs::Permissions::from_mode(0o500)).unwrap();
+        let (request, _) = post_grant_fixture(true, false, false);
+        let (_peer, client) = UnixStream::pair().unwrap();
+        let mut budget = RequestExecutionBudget::new(
+            Instant::now() + Duration::from_secs(2),
+            request.maximum_output_bytes,
+        );
+        let hidden = VerifiedGrant {
+            binding_digest: request.request_digest.clone(),
+            input: current.clone(),
+            input_inventory: WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            },
+            predecessor: None,
+            predecessor_inventory: None,
         };
+        assert_eq!(
+            execute_container(
+                &config,
+                &config.cache[0],
+                &request,
+                &hidden,
+                None,
+                &client,
+                &mut budget,
+            ),
+            Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false
+            ))
+        );
+        let arguments = fs::read_to_string(root.join("args")).unwrap();
+        assert!(arguments.contains("dst=/work/input,readonly"));
+        assert!(!arguments.contains("/work/context/predecessor"));
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(current.join("late-drift"), b"changed").unwrap();
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o500)).unwrap();
+        let mut budget = RequestExecutionBudget::new(
+            Instant::now() + Duration::from_secs(2),
+            request.maximum_output_bytes,
+        );
+        assert_eq!(
+            execute_container(
+                &config,
+                &config.cache[0],
+                &request,
+                &hidden,
+                None,
+                &client,
+                &mut budget,
+            ),
+            Err(ExecutionFailure::ordinary("material_unavailable", false))
+        );
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::remove_file(current.join("late-drift")).unwrap();
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o500)).unwrap();
 
-        let verified = verify_grant(&config, &request, &conventional_reference).unwrap();
-        assert_eq!(verified.workspace, workspace);
-        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o700)).unwrap();
+        let visible = VerifiedGrant {
+            binding_digest: request.request_digest.clone(),
+            input: current.clone(),
+            input_inventory: WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            },
+            predecessor: Some(prior.clone()),
+            predecessor_inventory: Some(WorkspaceInventory {
+                directories: Vec::new(),
+                files: Vec::new(),
+            }),
+        };
+        let mut budget = RequestExecutionBudget::new(
+            Instant::now() + Duration::from_secs(2),
+            request.maximum_output_bytes,
+        );
+        assert_eq!(
+            execute_container(
+                &config,
+                &config.cache[0],
+                &request,
+                &visible,
+                None,
+                &client,
+                &mut budget,
+            ),
+            Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false
+            ))
+        );
+        let arguments = fs::read_to_string(root.join("args")).unwrap();
+        assert!(arguments.contains("dst=/work/input,readonly"));
+        assert!(arguments.contains("dst=/work/context/predecessor,readonly"));
+        // Smol has no predecessor projection yet: reject before VM admission.
+        // Without this guard, missing Smol setup reaches Machine::create and
+        // returns cleanup-unsettled, distinguishing a mere incidental failure.
+        config.runtime = "smolvm".into();
+        assert_eq!(
+            execute_container_inner(
+                &config,
+                &config.cache[0],
+                &request,
+                &visible,
+                None,
+                None,
+                &client,
+                &mut budget,
+            ),
+            Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false
+            ))
+        );
+        fs::set_permissions(&current, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::set_permissions(&prior, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
-
-        let original = manifest.identity.clone();
-        if let GrantIdentity::PostSubmit {
-            verification_generation,
-            ..
-        } = &mut manifest.identity
-        {
-            *verification_generation += 1;
-        }
-        assert!(!grant_matches_request(&manifest, &request));
-        manifest.identity = original;
-        manifest.files.push(GrantFile {
-            normalized_path: "foreign.txt".into(),
-            byte_count: 0,
-            sha256: digest('a'),
-            executable: false,
-        });
-        assert!(!grant_matches_request(&manifest, &request));
     }
 }

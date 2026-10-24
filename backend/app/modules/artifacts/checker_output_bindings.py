@@ -17,6 +17,11 @@ from app.modules.checkers.api.output_custody import (
     generated_output_subject,
     CheckerOutputUnavailable,
 )
+from app.modules.checkers.api.trial_evidence import (
+    TrialEvidenceBindingRequest,
+    TrialEvidenceCustodyAck,
+    TrialEvidenceReservationPort,
+)
 from app.modules.model_usage.api import (
     SetupModelOutputBindingRequest,
     SetupModelOutputBindingResult,
@@ -34,7 +39,7 @@ class CheckerOutputBindingService:
         self,
         session: AsyncSession,
         *,
-        reservations: CheckerOutputReservationPort | SetupModelOutputReservationPort,
+        reservations: CheckerOutputReservationPort | TrialEvidenceReservationPort | SetupModelOutputReservationPort,
         authority: CheckerOutputBindingAuthority,
         namespace_fingerprint: str,
     ) -> None:
@@ -44,9 +49,18 @@ class CheckerOutputBindingService:
     async def bind_checker_output(
         self, request: CheckerOutputBindingRequest
     ) -> CheckerOutputBindingResult:
-        """Bind exact checker evidence through the shared publication operation."""
+        """Bind exact model-call evidence through the shared publication operation."""
         if type(request) is not CheckerOutputBindingRequest:
             raise TypeError("invalid checker output binding request")
+        return await self._bind(request)
+
+    async def bind_trial_evidence(
+        self,
+        request: TrialEvidenceBindingRequest,
+    ) -> TrialEvidenceCustodyAck:
+        """Bind exact trial evidence without committing the caller transaction."""
+        if type(request) is not TrialEvidenceBindingRequest:
+            raise TypeError("invalid trial evidence binding request")
         return await self._bind(request)
 
     async def bind_setup_output(
@@ -64,9 +78,10 @@ class CheckerOutputBindingService:
         )
 
     async def _bind(
-        self, request: CheckerOutputBindingRequest | SetupModelOutputBindingRequest
-    ) -> CheckerOutputBindingResult:
-        """Fence owner facts before acquiring ART binding/verification locks."""
+        self,
+        request: CheckerOutputBindingRequest | TrialEvidenceBindingRequest | SetupModelOutputBindingRequest,
+    ) -> CheckerOutputBindingResult | TrialEvidenceCustodyAck:
+        """Fence current worker facts before acquiring ART binding/verification locks."""
         if (
             not self._session.in_transaction()
             or self._session.in_nested_transaction()
@@ -84,7 +99,7 @@ class CheckerOutputBindingService:
             await self._session.execute(
                 text("select pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                 {
-                    "key": f"generated-output:{owner.project_id}:{owner.resource_id}:{owner.logical_role}",
+                    "key": f"checker-output:{owner.project_id}:{owner.resource_id}:{owner.logical_role}",
                 },
             )
             facts = await select_checker_output(
@@ -148,6 +163,18 @@ class CheckerOutputBindingService:
                 )
                 self._session.add(binding)
                 await self._session.flush()
+            if isinstance(request, TrialEvidenceBindingRequest):
+                return TrialEvidenceCustodyAck(
+                    trial_evidence_id=selector.trial_evidence_id,
+                    owner_digest=reservation.owner_digest,
+                    content_sha256=facts.sha256,
+                    byte_count=facts.byte_count,
+                    binding_id=UUID(binding.id),
+                    content_id=UUID(binding.content_id),
+                    put_attempt_id=request.put_attempt_id,
+                    verification_receipt_id=request.verification_receipt_id,
+                    replayed=replayed,
+                )
             return CheckerOutputBindingResult(
                 UUID(binding.id),
                 UUID(binding.content_id),

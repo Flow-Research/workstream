@@ -11,7 +11,13 @@ from pydantic import TypeAdapter, ValidationError
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.actors.api import ServiceIdentity
+from app.modules.artifacts.api.checker_output_authority import (
+    CheckerOutputCommitmentAuthorityFacts,
+)
 from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.authorization.checker_output_authorization import (
+    PreparedCheckerOutputWriteAuthorization,
+)
 from app.modules.authorization.domain.audit import (
     AuthorizationDecisionResourceType,
     CONTEXT_DIGEST_RESOURCE_TYPES,
@@ -59,6 +65,13 @@ from app.modules.checkers.api.output_custody import (
     CheckerOutputSelector,
     CheckerOutputSlot,
     generated_output_subject,
+)
+from app.modules.checkers.api.trial_evidence import (
+    TrialEvidenceOrigin,
+    TrialEvidenceReservation,
+    TrialEvidenceSelector,
+    TrialEvidenceSlot,
+    TrialEvidenceStableSubject,
 )
 
 
@@ -120,6 +133,42 @@ def selector(current: ModelCallExecutionFacts, slot: ModelPaidSlotKey, *, role="
     )
 
 
+def trial_reservation() -> TrialEvidenceReservation:
+    project_id = new_record_id()
+    selected = TrialEvidenceSelector(
+        trial_evidence_id=new_record_id(),
+        project_id=project_id,
+        content_sha256=sha("trial receipt"),
+    )
+    return TrialEvidenceReservation(
+        selector=selected,
+        subject=TrialEvidenceStableSubject(
+            project_id=project_id,
+            task_id=new_record_id(),
+            assignment_id=new_record_id(),
+            submission_id=new_record_id(),
+            submission_version=2,
+            requirement_id="terminal_systems",
+            registry_entry_id=new_record_id(),
+            registry_entry_digest=sha("trial registry"),
+            configuration_sha256=sha("trial configuration"),
+            trial_kind="reference_cases",
+            slot_index=0,
+            plan_sha256=sha("trial plan"),
+            input_digest=sha("trial input"),
+            materials_digest=sha("trial materials"),
+        ),
+        origin=TrialEvidenceOrigin(
+            checker_run_id=new_record_id(),
+            worker_lease_id=new_record_id(),
+            worker_lease_generation=1,
+            worker_lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            external_request_digest=sha("external request"),
+        ),
+        slot=TrialEvidenceSlot(maximum_bytes=2048),
+    )
+
+
 def test_recovery_resource_rejects_substituted_effect_scope() -> None:
     current = execution()
     slot = paid_slot(current)
@@ -162,8 +211,7 @@ def test_output_prepare_accepts_its_json_packet_without_coercing_integers(action
         parse_checker_output_prepare(action, packet, RuntimeError)
     assert isinstance(rejected.value.__cause__, ValidationError)
     assert any(
-        error["loc"][-2:] == ("paid_slot", "submission_version")
-        and error["type"] == "int_type"
+        error["loc"][-1] == "submission_version" and error["type"] == "int_type"
         for error in rejected.value.__cause__.errors()
     )
 
@@ -332,6 +380,91 @@ def test_output_final_facts_cannot_substitute_selector_or_unverified_binding() -
             reservation,
             unverified,
         )
+
+
+def test_trial_output_uses_closed_resource_and_owner_digest() -> None:
+    reservation = trial_reservation()
+    selected = reservation.selector
+    prepared = checker_output_prepare_resource(WRITE, selected)
+    assert (
+        parse_checker_output_prepare(WRITE, prepared.model_dump(mode="json"), RuntimeError)
+        == prepared
+    )
+    stored = SimpleNamespace(
+        put_attempt_id=new_record_id(),
+        checker_request_digest=reservation.owner_digest,
+        sha256=selected.content_sha256,
+        byte_count=100,
+        media_type="application/json",
+        status="verified",
+        content_id=new_record_id(),
+        replica_id=new_record_id(),
+        verification_receipt_id=new_record_id(),
+    )
+    final = checker_output_stored_resource(BIND, selected, reservation, stored)
+
+    assert prepared.resource_type == "checker_trial_evidence"
+    assert prepared.resource_id == selected.trial_evidence_id
+    assert prepared.scope_project_id == selected.project_id
+    assert final.resource_type == "checker_trial_evidence"
+    assert checker_output_prepare_matches(checker_output_prepare_resource(BIND, selected), final)
+    assert (
+        canonical_json_hash(generated_output_subject(reservation).request_digest_facts)
+        == reservation.owner_digest
+    )
+
+    current = execution()
+    model = selector(current, paid_slot(current))
+    with pytest.raises(ValidationError, match="reservation differs"):
+        checker_output_stored_resource(BIND, model, reservation, stored)
+
+
+def test_trial_output_rejects_substituted_project_and_digest() -> None:
+    reservation = trial_reservation()
+    selected = reservation.selector
+    stored = SimpleNamespace(
+        put_attempt_id=new_record_id(),
+        checker_request_digest=sha("substituted owner"),
+        sha256=selected.content_sha256,
+        byte_count=100,
+        media_type="application/json",
+        status="verified",
+        content_id=new_record_id(),
+        replica_id=new_record_id(),
+        verification_receipt_id=new_record_id(),
+    )
+    with pytest.raises(ValidationError, match="differs from its reservation"):
+        checker_output_stored_resource(BIND, selected, reservation, stored)
+
+    substituted = selected.model_copy(update={"project_id": new_record_id()})
+    with pytest.raises(ValidationError, match="reservation differs"):
+        checker_output_stored_resource(BIND, substituted, reservation, stored)
+
+
+@pytest.mark.asyncio
+async def test_trial_write_authority_derives_slot_from_reservation() -> None:
+    reservation = trial_reservation()
+
+    class CapturingAuthority(PreparedCheckerOutputWriteAuthorization):
+        resource = None
+
+        async def _consume(self, resource) -> None:
+            self.resource = resource
+
+    authority = CapturingAuthority(object())
+    authority._selector = reservation.selector
+    await authority.consume(
+        CheckerOutputCommitmentAuthorityFacts(
+            reservation=reservation,
+            slot_key="trial_receipt",
+            sha256=reservation.selector.content_sha256,
+            byte_count=100,
+            media_type="application/json",
+        )
+    )
+
+    assert authority.resource.resource_type == "checker_trial_evidence"
+    assert authority.resource.reservation == reservation
 
 
 class _Prepared:

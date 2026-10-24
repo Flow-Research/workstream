@@ -533,18 +533,6 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
                     raise ExternalCheckerContractError(
                         "external checker prepared material identity mismatch"
                     )
-        else:
-            for material in self.materials:
-                if not isinstance(material, PostSubmitExternalCheckerMaterial) or (
-                    material.submission_id,
-                    material.submission_version,
-                ) != (
-                    self.identity.submission_id,
-                    self.identity.submission_version,
-                ):
-                    raise ExternalCheckerContractError(
-                        "external checker submission material identity mismatch"
-                    )
         if self.configuration_sha256 != external_checker_json_hash(self.configuration):
             raise ExternalCheckerContractError("external checker configuration digest mismatch")
         if self.input_sha256 != external_checker_json_hash(self.input):
@@ -558,6 +546,16 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
         body = self.model_dump(mode="json", exclude={"request_digest"})
         if self.request_digest != external_checker_json_hash(body):
             raise ExternalCheckerContractError("external checker request digest mismatch")
+        # The semantic projection reuses the normalized result contracts, which
+        # depend on this wire module. Import after its definitions are loaded.
+        from app.modules.checkers.api.evaluation_context import validate_post_evaluation_materials
+        from app.modules.checkers.api.external_policy import selected_evaluation_context_roles
+        if self.identity.phase == "post_submit":
+            validate_post_evaluation_materials(self)
+        else:
+            selected_evaluation_context_roles(self.configuration, self.identity.phase)
+            if "evaluation_context" in self.input:
+                raise ExternalCheckerContractError("PRE cannot contain evaluation context")
         return self
 
 

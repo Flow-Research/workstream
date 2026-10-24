@@ -44,13 +44,68 @@ for separate runner provisioning and Operator registration; it changes no policy
   normalized result and settles owned resources.
 - The image evaluates the approved project requirements and returns bounded
   findings. It cannot approve a submission, mutate project policy, select another
-  image, mount another project's files or request a private host-side continuation.
+  image, mount another project's files or request a private host-side continuation
+  through its final output.
+
+POST grants use one aggregate v2 workspace with fixed role roots and a separate
+temporary manifest for each selected binding. Current work mounts at
+`/work/input`. A registry-declared, policy-approved revision-context selection
+may additionally expose the exact prior attempt at `/work/context/predecessor`
+and bounded prior findings in `input.evaluation_context`. Neither a global
+Submission version nor a project image request authorizes historical access.
+Initial attempts carry explicit null prior context, including after another
+contributor releases a task. PRE keeps its distinct pre-admission grant; there
+is no POST fallback to the PRE protocol. See the
+[POST contract](../docs/architecture_checker_framework.md#post-submit-contract)
+for selection, evidence, quota and replay rules.
 
 The service does not interpret project-private build plans. An image that needs
-to compile or test submitted work must implement that behavior within the
-supported isolation and resource contract. Unsupported runtime needs must be
-resolved explicitly before approving that capability; they are not permission
-to add a named-project exception or expose the host Docker socket.
+to compile or test submitted work may use the typed generic invocation-local
+trial tool only when its exact POST binding and administrative profile authorize
+that capability. The image supplies bounded generic operations, safe relative
+selectors and workload argument arrays through `/work/execution.sock`; it never
+selects Docker flags, host paths, mounts, runtime, images, network, devices,
+credentials or resource enlargements. Opaque profile material roles control
+build and runtime visibility. Shared Rust contains no project filenames, task
+allowlists, rubrics or command allowlists.
+
+A visible read-only role occupies one profile-selected top-level workspace
+name. Nested overlay destinations and existing-entry collisions are refused;
+the launcher removes its temporary mountpoint before retaining workspace
+state. Build-context and state-seed selectors may still use safe nested paths.
+
+The service keeps Docker/runsc authority, approved offline material, protected
+role projection, aggregate limits, observation and cleanup custody. Workload
+argv is passed only after the candidate image in the nested sandbox command; it
+is never interpreted as host launcher flags. Trial observations become usable
+only after required operations and cleanup complete. A dependent model call
+resolves server-owned same-invocation receipt facts instead of trusting JSON
+copied by the checker. Unsupported runtime or material remains an explicit gap;
+it is not permission to expose the host Docker socket or add a named-project
+service branch.
+
+Candidate images are checked before Docker loads them: ordered uncompressed
+layer digests must match the image configuration, and streaming expansion plus
+conservative file/directory allocation must fit the invocation's remaining
+byte and entry allowances. Repeated layers consume that allowance again.
+Malformed archives, unsupported sparse/device representations and image-declared
+anonymous volumes are refused; those volumes would be created outside the
+trial filesystem's quota. These are runtime capability limits, not additional
+project requirements. Project checks must report unavailable execution distinctly
+from a verified work failure.
+
+Every completed build or step records `export_outcome` separately from the
+child's exit code or signal. `exported` means the bounded candidate or workspace
+was retained; `capacity_exceeded` means its logical bytes or entries exceed the
+allowance; `invalid` means it cannot be represented by the supported export
+format. The latter two produce `disk_exceeded` or `export_invalid` observations
+while preserving the actual child status. A forced runtime stop records
+`unavailable` and does not invent an exit code or signal. `not_started` covers
+dependency-skipped steps and failed builds that never request candidate export.
+Only an exported workspace whose work outcome the profile permits may feed a
+later step. Host storage or export I/O failures remain infrastructure failures;
+they are not evidence that submitted work exceeded its allowance. Project
+images interpret these execution facts against their own approved requirements.
 
 ## Optional model socket
 
@@ -190,15 +245,19 @@ configuration before starting this version; unknown configuration is rejected.
 Retain registry entries, locked policies, submissions and historical evidence.
 Do not rewrite them to point at replacement images. Any replacement needs the
 normal versioned registration, proposal and approval process. A retained image
-that returns a private plan now produces an invalid-output infrastructure failure,
-not a continuation or a contributor-work failure. Do not blindly retry it as if
-the capability still exists.
+that returns `project_private_plan.v1` or another private plan as its outer
+output still produces an invalid-output infrastructure failure, not a
+continuation or a contributor-work failure. The typed invocation tool does not
+parse an outer result to start host work. Do not blindly retry a retired plan as
+if that capability still exists.
 
 ## Smol microVM engine
 
 The node also accepts the deployment pair `smolvm` / `smol-microvm`. Python still
 uses the single `external_checker_execution/unix_socket` provider; neither a
-project policy nor a checker request can choose the engine. Each execution gets
+project policy nor a checker request can choose the engine. Smol currently
+rejects model/trial callbacks and predecessor-material requests before VM
+admission; those capabilities require the configured Docker/runsc node. Each execution gets
 a fresh VM and the same verified ART grant and JSON result contract. The native
 bootstrap has no Python or shell dependency in a project image.
 

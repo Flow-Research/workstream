@@ -23,7 +23,7 @@ from app.modules.checkers.api.external import (
     external_checker_json_hash,
     make_external_checker_execution_request,
 )
-from tests.checkers.external.support import registry_entry
+from tests.checkers.external.support import post_registry_spec
 
 
 class Consumer:
@@ -33,6 +33,11 @@ class Consumer:
         self.failure = None
 
     async def evaluate(self, request, view):
+        await self.inspect(view)
+        return result(request)
+
+    async def inspect(self, view):
+        """Assert current bytes and lifetime independently of the selected result."""
         self.calls += 1
         self.view = view
         self.entered.set()
@@ -47,7 +52,6 @@ class Consumer:
             await self.release.wait()
         if self.failure:
             raise self.failure
-        return result(request)
 
 
 class ExternalGrantConsumer(Consumer):
@@ -78,21 +82,20 @@ class ExternalGrantConsumer(Consumer):
             lease_generation=lease.lease_generation,
             lease_expires_at=lease.expires_at,
         )
-        registry = registry_entry("post_submit")
+        binding = source.policy.entries[0]
+        input_value = {"requirement_id": binding.requirement_id}
         return make_external_checker_execution_request(
-            registry=registry,
+            registry=binding.registry,
             identity=identity,
-            configuration={},
-            configuration_sha256=external_checker_json_hash({}),
-            input={"task_version": "v1"},
-            input_sha256=external_checker_json_hash({"task_version": "v1"}),
+            configuration=binding.configuration,
+            configuration_sha256=binding.configuration_sha256,
+            input=input_value,
+            input_sha256=external_checker_json_hash(input_value),
             materials=(material,),
         )
 
     async def evaluate(self, request, view):
-        await super().evaluate(request, view)
-        # Publishing a grant moves the projected tree below the fixed mount, so
-        # each materialization callback can publish at most one valid grant.
+        await self.inspect(view)
         external_request = self.external_request(view.external_checker_material)
         with view.external_checker_grant(external_request) as grant:
             self.grant_path = self.scratch / "workspaces" / grant.grant_id
@@ -100,7 +103,7 @@ class ExternalGrantConsumer(Consumer):
                 (self.grant_path / ".external-checker-grant.json").read_text()
             )
             assert self.manifest["phase"] == "post_submit"
-            assert self.manifest["submission_id"] == str(request.submission_id)
+            assert self.manifest["identity"]["submission_id"] == str(request.submission_id)
             assert self.manifest["request_digest"] == external_request.request_digest
             assert self.manifest["binding_digest"] == grant.binding_digest
             assert "runtime_scratch" not in self.manifest
@@ -116,7 +119,12 @@ class ExternalGrantConsumer(Consumer):
         with pytest.raises(ArtifactScratchIntegrityError, match="material identity differs"):
             with view.external_checker_grant(self.external_request(changed)):
                 pytest.fail("substituted material acquired an external grant")
-        return result(request)
+        # The real selected processor issues a second grant over the unchanged
+        # tree. The adapter supplies normalized test results, not sandbox proof.
+        from app.modules.checkers.execution import _SelectedExternalConsumer
+        from tests.checkers.external.test_selected_post_submit import _Execution
+
+        return await _SelectedExternalConsumer(_Execution(), self.execution.lease).evaluate(request, view)
 
 
 def assert_closed(h, consumer):
@@ -165,19 +173,22 @@ async def test_exact_materialization_reads_verified_original_and_revokes_view(tm
         assert set(asdict(material)) == {"submission_id", "submission_version", "admission_id", "binding_id",
                                         "content_id", "replica_id", "content_sha256", "byte_count",
                                         "semantic_manifest_sha256", "evaluation",
-                                        "input_materialization_evidence_id"}
+                                        "input_materialization_evidence_id", "input_context_custody"}
+        assert material.input_context_custody is None
 
 
 async def test_post_external_grant_binds_native_submission_art_and_lease(
     tmp_path, isolated_database_env
 ):
-    async with material_fixture(tmp_path, isolated_database_env) as h:
+    async with material_fixture(
+        tmp_path, isolated_database_env, post_submit_registry_spec=post_registry_spec()
+    ) as h:
         execution = await material_execution(h)
         consumer = ExternalGrantConsumer(h.files, execution, h.scratch)
         material = await h.service.materialize(execution, consumer)
         assert material.evaluation.outcome == "completed"
-        assert consumer.manifest["lease_id"] == str(execution.lease.lease_id)
-        assert consumer.manifest["content_id"] == str(material.content_id)
+        assert consumer.manifest["identity"]["lease_id"] == str(execution.lease.lease_id)
+        assert consumer.manifest["materials"][0]["material"]["content_id"] == str(material.content_id)
         assert consumer.grant_path is not None and not consumer.grant_path.exists()
         assert_closed(h, consumer)
 

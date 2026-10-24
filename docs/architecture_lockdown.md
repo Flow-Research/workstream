@@ -206,6 +206,16 @@ rules changed. Missing summary or attestation produces warnings only. All
 project checks are approved, digest-pinned external images; there is no built-in
 project-rule catalogue or alternate checker runtime.
 
+An approved POST image may use the same Rust service's generic, typed,
+invocation-local isolated-trial tool only under an exact registry/image/
+configuration and administrative-profile binding. ART retains material and
+scratch ownership; the service retains offline builder/cache, Docker/runsc,
+resource, observation and cleanup custody. The image can supply only bounded
+relative workload operations through the request-bound socket. It cannot select
+host Docker arguments, paths, mounts, images, runtime, network or credentials,
+and it cannot trigger host work by returning a private continuation as its final
+result. Shared runtime code contains no project-specific rules or commands.
+
 Blocking pre-submit failures prevent submission creation. The public authorized ZIP preparation route returns
 `pre_submission_checker_failed` with exact ordered bounded results in the same
 request. It is published in OpenAPI alongside admission-backed Submission creation. Failures create no submission

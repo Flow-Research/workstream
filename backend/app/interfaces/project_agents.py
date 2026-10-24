@@ -337,7 +337,7 @@ CheckerDependencyKind = Literal[
     "prepared_material",
 ]
 DependencyProvisioning = Literal[
-    "current_runner", "checker_implementation", "model_proxy", "runtime_gap"
+    "current_runner", "checker_implementation", "model_proxy", "trial_proxy", "runtime_gap"
 ]
 InfrastructureFailureCode = Literal[
     "capacity_exceeded",
@@ -448,10 +448,10 @@ class CheckRuntimeDependency(BaseModel):
         expected = {
             "checker_tool": ("checker_implementation", "implementation_unavailable"),
             "isolated_execution": ("current_runner", "implementation_unavailable"),
-            "nested_sandbox": ("runtime_gap", "implementation_unavailable"),
+            "nested_sandbox": ({"trial_proxy", "runtime_gap"}, "implementation_unavailable"),
             "task_context": ("runtime_gap", "material_unavailable"),
             "guide_context": ("runtime_gap", "material_unavailable"),
-            "prepared_material": ("runtime_gap", "material_unavailable"),
+            "prepared_material": ({"trial_proxy", "runtime_gap"}, "material_unavailable"),
             # runtime_gap remains readable for immutable retained compilations. New
             # generation admission below requires the precise model_proxy owner.
             "model_service": (
@@ -927,6 +927,20 @@ def require_complete_project_guide_compilation_result(
         raise ValueError("compilation result envelope is incomplete")
 
 
+def _require_trial_dependencies(specification: CheckSpecification, stage: CompilationStage) -> None:
+    """Keep the nested runtime tool distinct from ordinary checker isolation."""
+    dependencies = specification.runtime_dependencies
+    nested = any(item.kind == "nested_sandbox" for item in dependencies)
+    if any(item.kind == "nested_sandbox" and item.provisioning != "trial_proxy"
+           for item in dependencies):
+        raise ValueError("nested execution requires trial proxy provisioning")
+    if any(item.provisioning == "trial_proxy" for item in dependencies):
+        if stage is not CompilationStage.POST_SUBMIT:
+            raise ValueError("trial execution requires post-submit background work")
+        if not nested:
+            raise ValueError("trial material requires an isolated trial dependency")
+
+
 def require_complete_generated_specifications(
     context: ProjectGuideCompilationContext,
     result: ProjectGuideCompilationResult,
@@ -986,6 +1000,7 @@ def require_complete_generated_specifications(
             for dependency in specification.runtime_dependencies
         ):
             raise ValueError("model service requires model proxy provisioning")
+        _require_trial_dependencies(specification, expected_stage)
 
     definitions = {
         (definition.phase, definition.capability_id, definition.capability_version): definition

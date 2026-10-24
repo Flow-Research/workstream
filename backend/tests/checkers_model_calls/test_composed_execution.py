@@ -1,5 +1,7 @@
 """Real approval, AUTH, PostgreSQL and ART with an offline provider and image boundary."""
 
+from app.adapters.checkers import checker_output_reservations
+
 from contextlib import asynccontextmanager
 import asyncio
 import os
@@ -260,6 +262,7 @@ async def test_public_profile_to_private_model_call_and_completed_checker(
             yield Provider()
 
         outputs = checker_output_storage(
+            reservations=checker_output_reservations,
             sessions=h.factory,
             store=h.store.wrapped,
             namespace=h.namespace,
@@ -286,7 +289,7 @@ async def test_public_profile_to_private_model_call_and_completed_checker(
             calls=model_call_service,
             profiles=model_profile_reader,
             outputs=outputs,
-            bindings=lambda session: checker_output_binding(session, namespace=h.namespace),
+            bindings=lambda session: checker_output_binding(session, namespace=h.namespace, reservations=checker_output_reservations(session)),
             provider=provider,
         )
 

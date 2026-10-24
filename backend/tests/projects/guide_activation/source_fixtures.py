@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -22,8 +23,7 @@ from app.modules.authorization.runtime import (
 from app.modules.projects.guide_mutation_service import GuideMutationService
 from app.modules.projects.schemas import ProjectGuideCreate
 from app.modules.projects.models import ProjectSetupRun
-from app.interfaces.project_agents import GuideEvidenceRef
-from app.interfaces.project_agents import CapabilityParameter
+from app.interfaces.project_agents import CapabilityParameter, CheckSpecification, GuideEvidenceRef
 from app.modules.checkers.api.external import ExternalCheckerRegistryEntry
 from tests.committed_guide_fixtures import (
     create_committed_document_fixture,
@@ -81,6 +81,23 @@ PostSubmitBindingSetup = Callable[
 ]
 
 
+@dataclass(frozen=True, slots=True)
+class PostSubmitBindingCase:
+    """One test-authored requirement and exact configuration for a real binding."""
+
+    requirement_id: str
+    statement: str
+    classification_rationale: str
+    specification: CheckSpecification
+    parameters: tuple[CapabilityParameter, ...]
+
+
+PostSubmitBindingsSetup = Callable[
+    [async_sessionmaker, UUID, ExternalCheckerRegistryEntry],
+    Awaitable[tuple[PostSubmitBindingCase, ...]],
+]
+
+
 def _external_compilation_outcome(
     outcome,
     registry_entries,
@@ -90,6 +107,7 @@ def _external_compilation_outcome(
     *,
     post_submit_parameters=(),
     post_submit_specification=None,
+    post_submit_cases=(),
 ):
     if not registry_entries:
         return outcome
@@ -121,29 +139,44 @@ def _external_compilation_outcome(
             )
         )
     if post_entry is not None:
-        requirements.append(
-            AtomicGuideRequirement(
+        cases = post_submit_cases or (
+            PostSubmitBindingCase(
                 requirement_id="project.post_evidence",
                 statement="Evaluate the submitted evidence package.",
-                disposition="supported_post_submit",
-                evidence_refs=refs,
                 classification_rationale="Evaluate the submitted work in the background.",
-                check_specification=post_submit_specification or CheckSpecification.model_validate({
-                    **valid_specification().model_dump(mode="json"),
-                    "execution_mode": "background",
-                    "stage_rationale": "The selected registry entry evaluates immutable submitted evidence.",
-                }),
-            )
-        )
-        post_bindings.append(
-            PostSubmissionBindingProposal(
-                requirement_id="project.post_evidence",
-                capability_id=post_entry.capability_id,
-                capability_version=post_entry.capability_version,
-                stage="post_submit",
+                specification=post_submit_specification
+                or CheckSpecification.model_validate(
+                    {
+                        **valid_specification().model_dump(mode="json"),
+                        "execution_mode": "background",
+                        "stage_rationale": (
+                            "The selected registry entry evaluates immutable submitted evidence."
+                        ),
+                    }
+                ),
                 parameters=post_submit_parameters,
-            )
+            ),
         )
+        for case in cases:
+            requirements.append(
+                AtomicGuideRequirement(
+                    requirement_id=case.requirement_id,
+                    statement=case.statement,
+                    disposition="supported_post_submit",
+                    evidence_refs=refs,
+                    classification_rationale=case.classification_rationale,
+                    check_specification=case.specification,
+                )
+            )
+            post_bindings.append(
+                PostSubmissionBindingProposal(
+                    requirement_id=case.requirement_id,
+                    capability_id=post_entry.capability_id,
+                    capability_version=post_entry.capability_version,
+                    stage="post_submit",
+                    parameters=case.parameters,
+                )
+            )
     return outcome.model_copy(
         update={
             "requirements": tuple(requirements),
@@ -164,6 +197,7 @@ async def create_compiled_guide(
     post_submit_registry_entry=None,
     post_submit_parameters=(),
     post_submit_specification=None,
+    post_submit_cases=(),
     compilation_outcome=None,
     configuration=None,
 ):
@@ -226,6 +260,7 @@ async def create_compiled_guide(
         refs,
         post_submit_parameters=post_submit_parameters,
         post_submit_specification=post_submit_specification,
+        post_submit_cases=post_submit_cases,
     )
     url = factory.kw["bind"].url.render_as_string(hide_password=False)
     finalization = await compilation_and_projections(
@@ -249,6 +284,7 @@ async def source_case(
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
     post_submit_binding_setup: PostSubmitBindingSetup | None = None,
+    post_submit_bindings_setup: PostSubmitBindingsSetup | None = None,
     post_submit_specification=None,
     compilation_outcome=None,
     configuration=None,
@@ -304,9 +340,16 @@ async def source_case(
             if post_submit_registry_spec is not None
             else None
         )
+        if post_submit_binding_setup is not None and post_submit_bindings_setup is not None:
+            raise ValueError("post-submit binding setup is ambiguous")
         post_submit_parameters = (
             await post_submit_binding_setup(factory, values["project"], post_registry_entry)
             if post_registry_entry is not None and post_submit_binding_setup is not None
+            else ()
+        )
+        post_submit_cases = (
+            await post_submit_bindings_setup(factory, values["project"], post_registry_entry)
+            if post_registry_entry is not None and post_submit_bindings_setup is not None
             else ()
         )
         values, finalization = await create_compiled_guide(
@@ -319,6 +362,7 @@ async def source_case(
             post_submit_registry_entry=post_registry_entry,
             post_submit_parameters=post_submit_parameters,
             post_submit_specification=post_submit_specification,
+            post_submit_cases=post_submit_cases,
             compilation_outcome=compilation_outcome,
             configuration=configuration,
         )

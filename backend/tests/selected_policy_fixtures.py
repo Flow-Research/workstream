@@ -17,6 +17,7 @@ async def approved_selected_policy_fixture(
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
     post_submit_binding_setup=None,
+    post_submit_bindings_setup=None,
     post_submit_specification=None,
 ):
     """Build an activated guide backed only by immutable external policy custody."""
@@ -41,6 +42,7 @@ async def approved_selected_policy_fixture(
         pre_submit_registry_spec=pre_submit_registry_spec,
         post_submit_registry_spec=post_submit_registry_spec,
         post_submit_binding_setup=post_submit_binding_setup,
+        post_submit_bindings_setup=post_submit_bindings_setup,
         post_submit_specification=post_submit_specification,
     )
     async with factory() as session:

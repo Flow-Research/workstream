@@ -87,6 +87,7 @@ from app.modules.artifacts.authorization import (
     guide_ingest_prepared_request_digest,
 )
 from app.modules.artifacts.preparation import ArtifactPreparationService
+from app.modules.checkers.api.trial_evidence import TrialEvidenceUnavailable
 from app.modules.artifacts.schemas import (
     VERIFICATION_PRODUCERS,
     TaskImportSourceAdmissionRequest,
@@ -204,6 +205,7 @@ class _AdmissionFacts:
     task_import_source_id: str | None = None
     selected_pre_submit_run_id: str | None = None
     model_call_attempt_id: str | None = None
+    checker_trial_evidence_id: str | None = None
 
 
 def artifact_storage_namespace_spec(
@@ -1072,6 +1074,7 @@ class ArtifactStorageOrchestrator:
                         guide_source_item_id=attempt.guide_source_item_id,
                         checker_run_id=attempt.checker_run_id,
                         model_call_attempt_id=attempt.model_call_attempt_id,
+                        checker_trial_evidence_id=attempt.checker_trial_evidence_id,
                         logical_role=attempt.logical_role,
                         replica_id=replica.id,
                         operation="put",
@@ -2408,6 +2411,8 @@ class ArtifactAdmissionService:
                             "submission_version": facts.submission_version,
                             "checker_output_request": facts.checker_request_digest_facts,
                             "model_call_attempt_id": facts.model_call_attempt_id,
+                            **({"checker_trial_evidence_id": facts.checker_trial_evidence_id}
+                               if facts.checker_trial_evidence_id is not None else {}),
                         }
                         if facts.request_type in {"checker_output", "setup_model_output"}
                         else {}
@@ -2477,6 +2482,7 @@ class ArtifactAdmissionService:
                 guide_source_item_id=facts.guide_source_item_id,
                 checker_run_id=facts.checker_run_id,
                 model_call_attempt_id=facts.model_call_attempt_id,
+                checker_trial_evidence_id=facts.checker_trial_evidence_id,
                 logical_role=facts.logical_role,
                 submission_id=facts.submission_id,
                 submission_version=facts.submission_version,
@@ -2565,7 +2571,7 @@ class ArtifactAdmissionService:
                 reservation.select(reservation.selector)
                 if request.slot_key != reservation.slot.key:
                     raise CheckerOutputUnavailable("checker_output_slot_unavailable")
-            except (CheckerOutputUnavailable, ModelCallUnavailable, ValueError) as exc:
+            except (CheckerOutputUnavailable, TrialEvidenceUnavailable, ModelCallUnavailable, ValueError) as exc:
                 raise ArtifactAdmissionRelationshipError(
                     "checker output reservation is unavailable"
                 ) from exc
@@ -2638,7 +2644,7 @@ class ArtifactAdmissionService:
             slot = reservation.select(selector)
             if slot.key != request.slot_key:
                 raise CheckerOutputUnavailable("checker_output_slot_unavailable")
-        except (CheckerOutputUnavailable, ModelCallUnavailable, ValueError) as exc:
+        except (CheckerOutputUnavailable, TrialEvidenceUnavailable, ModelCallUnavailable, ValueError) as exc:
             raise ArtifactAdmissionRelationshipError(
                 "checker output reservation is unavailable"
             ) from exc
@@ -2651,8 +2657,8 @@ class ArtifactAdmissionService:
             raise ArtifactAdmissionRelationshipError(
                 "checker output does not match reserved slot"
             )
-        logical_role = slot.key
         owner = generated_output_subject(reservation)
+        logical_role = slot.key
         operation_identity = owner.operation_identity
         digest_facts = owner.request_digest_facts
         return _AdmissionFacts(
@@ -2665,7 +2671,9 @@ class ArtifactAdmissionService:
             guide_source_item_id=None,
             guide_source_snapshot_id=None,
             checker_run_id=None,
-            model_call_attempt_id=str(owner.resource_id),
+            model_call_attempt_id=str(owner.model_call_attempt_id) if owner.model_call_attempt_id else None,
+            checker_trial_evidence_id=(str(owner.checker_trial_evidence_id)
+                                       if owner.checker_trial_evidence_id else None),
             logical_role=logical_role,
             submission_id=str(owner.submission_id) if owner.submission_id else None,
             submission_version=owner.submission_version,

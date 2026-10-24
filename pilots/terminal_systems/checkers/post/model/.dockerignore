@@ -1,0 +1,7 @@
+*
+!*.py
+test_*.py
+!rubrics.json
+!execution-rubrics.json
+!Dockerfile
+!checker.json

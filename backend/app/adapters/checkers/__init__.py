@@ -29,9 +29,11 @@ from app.modules.checkers.api.selected_post_submit import (
     SelectedPostSubmitLockedContext,
 )
 from app.modules.checkers.api.history import CheckerHistoryReadPort
+from app.modules.checkers.api.revision_feedback import RevisionFeedbackPort
 from app.modules.checkers.api.execution import EvaluationCoordinationPort
 from typing import Any, Protocol
 from pathlib import Path
+
 
 from app.modules.checkers.api.external import (
     ExternalCheckerCapabilityDefinition,
@@ -49,6 +51,13 @@ from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmit
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitInfrastructureUnavailable,
 )
+
+
+def revision_feedback_port(session) -> RevisionFeedbackPort:
+    """Compose the exact immutable feedback read under the caller's transaction."""
+    from app.modules.checkers.revision_feedback import RevisionFeedbackReader
+
+    return RevisionFeedbackReader(session)
 
 
 def external_checker_execution_factory(
@@ -673,3 +682,15 @@ def selected_pre_submit_run_reader(session):
     from app.modules.checkers.selected_pre_submit_reads import SelectedPreSubmitRunReader
 
     return SelectedPreSubmitRunReader(session)
+
+
+def trial_evidence_reservations(session, request, profiles):
+    """Bind trial evidence to the exact current external execution and trusted profile."""
+    from app.adapters.auth import post_submit_execution_authority
+    from app.adapters.tasks import evaluation_task_guard
+    from app.modules.checkers.trial_evidence import TrialEvidenceReservations
+
+    return TrialEvidenceReservations(
+        session, request=request, profiles=profiles,
+        tasks=evaluation_task_guard(session), authority=post_submit_execution_authority(session),
+    )

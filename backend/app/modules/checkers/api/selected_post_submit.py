@@ -6,11 +6,17 @@ from dataclasses import asdict, dataclass
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from app.core.hashing import canonical_json_hash
-from app.modules.checkers.api.external import ExternalCheckerExecutionResult
-from app.modules.checkers.api.external_policy import LockedExternalPostSubmitPolicy
+from app.modules.checkers.api.external import (
+    ExternalCheckerExecutionResult,
+    PostSubmitExternalCheckerMaterial,
+)
+from app.modules.checkers.api.external_policy import (
+    LockedExternalPostSubmitPolicy,
+    selected_evaluation_context_roles,
+)
 from app.modules.checkers.api.canonical_values import (
     ByteCount,
     CheckerValue,
@@ -51,9 +57,7 @@ class SelectedPostSubmissionContent(CheckerValue):
     @model_validator(mode="after")
     def validate_content(self) -> Self:
         """Require the exact approved policy digest stamped on the Submission."""
-        if (
-            self.expected_context.post_policy_hash != self.policy.policy_sha256
-        ):
+        if self.expected_context.post_policy_hash != self.policy.policy_sha256:
             raise ValueError("selected POST locked policy mismatch")
         return self
 
@@ -79,9 +83,7 @@ class SelectedPostSubmissionEvaluationRequest(SelectedPostSubmissionContent):
     @model_validator(mode="after")
     def validate_request(self) -> Self:
         """Bind the entire selected policy and native Submission identity."""
-        expected = canonical_json_hash(
-            self.model_dump(mode="json", exclude={"request_sha256"})
-        )
+        expected = canonical_json_hash(self.model_dump(mode="json", exclude={"request_sha256"}))
         if self.request_sha256 != expected:
             raise ValueError("selected POST request digest mismatch")
         return self
@@ -121,6 +123,33 @@ class ExternalPostSubmitIsolationFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalPostSubmitInputReceipt:
+    """Retained exact context and visible input identities for one selected image."""
+
+    configuration_sha256: str
+    input_sha256: str
+    evaluation_context_sha256: str
+    materials: tuple[PostSubmitExternalCheckerMaterial, ...]
+
+    def __post_init__(self) -> None:
+        """Reject malformed receipts without guessing missing historical evidence."""
+        from pydantic import TypeAdapter
+
+        adapter = TypeAdapter(Sha256)
+        for digest in (
+            self.configuration_sha256,
+            self.input_sha256,
+            self.evaluation_context_sha256,
+        ):
+            adapter.validate_python(digest)
+        if tuple(item.role for item in self.materials) not in (
+            ("submission_archive",),
+            ("submission_archive", "predecessor_submission_archive"),
+        ):
+            raise ValueError("selected POST input receipt material roles differ")
+
+
+@dataclass(frozen=True, slots=True)
 class ExternalPostSubmitMemberFacts:
     """One normalized POST image result in exact locked policy order."""
 
@@ -131,6 +160,15 @@ class ExternalPostSubmitMemberFacts:
     request_digest: str
     result: ExternalCheckerExecutionResult
     isolation: ExternalPostSubmitIsolationFacts
+    input_receipt: ExternalPostSubmitInputReceipt | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_retained_fields(self, handler):
+        """Omit an unselected feature without changing historical result hashes."""
+        values = handler(self)
+        if self.input_receipt is None:
+            values.pop("input_receipt", None)
+        return values
 
     def __post_init__(self) -> None:
         if (
@@ -183,6 +221,21 @@ class SelectedPostSubmitExecutionFacts:
                     "request_digest": member.request_digest,
                     "result": member.result.model_dump(mode="json"),
                     "isolation": asdict(member.isolation),
+                    **(
+                        {
+                            "input_receipt": {
+                                "configuration_sha256": member.input_receipt.configuration_sha256,
+                                "input_sha256": member.input_receipt.input_sha256,
+                                "evaluation_context_sha256": member.input_receipt.evaluation_context_sha256,
+                                "materials": [
+                                    item.model_dump(mode="json")
+                                    for item in member.input_receipt.materials
+                                ],
+                            }
+                        }
+                        if member.input_receipt is not None
+                        else {}
+                    ),
                 }
                 for member in self.external_members
             ],
@@ -233,9 +286,7 @@ class SelectedPostSubmissionEvaluationResult(CheckerValue):
             raise ValueError("selected POST result digest mismatch")
         return self
 
-    def validate_request(
-        self, request: SelectedPostSubmissionEvaluationRequest
-    ) -> None:
+    def validate_request(self, request: SelectedPostSubmissionEvaluationRequest) -> None:
         """Bind result identity and selected policy without claiming currentness."""
         result = SelectedPostSubmissionEvaluationResult.model_validate(self)
         request = SelectedPostSubmissionEvaluationRequest.model_validate(request)
@@ -280,6 +331,40 @@ class SelectedPostSubmissionEvaluationResult(CheckerValue):
             )
         ):
             raise ValueError("selected POST result request mismatch")
+        if result.execution is not None:
+            for binding, member in zip(
+                request.policy.entries, result.execution.external_members, strict=True
+            ):
+                selected = selected_evaluation_context_roles(binding.configuration, binding.stage)
+                receipt = member.input_receipt
+                if (receipt is not None) != (selected is not None):
+                    raise ValueError("selected POST input receipt selection differs")
+                if receipt is not None:
+                    current = receipt.materials[0]
+                    if receipt.configuration_sha256 != binding.configuration_sha256 or (
+                        current.submission_id,
+                        current.submission_version,
+                        current.binding_id,
+                        current.content_id,
+                        current.content_sha256,
+                        current.byte_count,
+                    ) != (
+                        request.submission_id,
+                        request.submission_version,
+                        request.binding_id,
+                        request.content_id,
+                        request.content_sha256,
+                        request.byte_count,
+                    ):
+                        raise ValueError("selected POST input receipt identity differs")
+                    if len(receipt.materials) == 2:
+                        prior = receipt.materials[1]
+                        if (
+                            "predecessor_submission_archive" not in selected
+                            or prior.submission_id == current.submission_id
+                            or prior.submission_version + 1 != current.submission_version
+                        ):
+                            raise ValueError("selected POST predecessor receipt differs")
 
 
 class SelectedPostSubmitCurrentResultReference(CheckerValue):
@@ -300,8 +385,12 @@ class SelectedPostSubmitCurrentResultReference(CheckerValue):
         reference = SelectedPostSubmitCurrentResultReference.model_validate(self)
         selected = SelectedPostSubmissionEvaluationResult.model_validate(result)
         names = (
-            "request_id", "request_digest", "attempt_id",
-            "evaluation_generation", "result_id", "result_digest",
+            "request_id",
+            "request_digest",
+            "attempt_id",
+            "evaluation_generation",
+            "result_id",
+            "result_digest",
         )
         if selected.outcome != "completed" or any(
             getattr(reference, key) != getattr(selected, key) for key in names

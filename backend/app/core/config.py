@@ -283,6 +283,10 @@ class Settings(BaseSettings):
     external_checker_service_socket: Path | None = None
     external_checker_material_root: Path | None = None
     checker_model_proxy_socket: Path | None = None
+    checker_trial_authority_manifest_path: Path | None = None
+    checker_trial_authority_manifest_digest: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$",
+    )
     external_checker_service_timeout_seconds: float = Field(
         default=3660.0,
         gt=0.0,
@@ -676,6 +680,16 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "external checker material root must equal the artifact scratch root"
                 )
+        trial_path, trial_digest = (
+            self.checker_trial_authority_manifest_path,
+            self.checker_trial_authority_manifest_digest,
+        )
+        if (trial_path is None) != (trial_digest is None):
+            raise ValueError("checker trial manifest path and digest must be supplied together")
+        if trial_path is not None and (
+            not trial_path.is_absolute() or self.checker_model_proxy_socket is None
+        ):
+            raise ValueError("checker trial manifest requires an absolute path and private proxy")
         if self.checker_model_proxy_socket is not None:
             if not self.checker_model_proxy_socket.is_absolute():
                 raise ValueError("checker model proxy socket must be absolute")

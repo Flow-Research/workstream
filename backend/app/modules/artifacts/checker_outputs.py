@@ -13,7 +13,7 @@ from app.modules.artifacts.api.checker_output_authority import (
     CheckerOutputWriteAuthority,
 )
 from app.modules.artifacts.checker_output_custody import select_checker_output
-from app.modules.artifacts.models import ArtifactReplica, ArtifactVerificationJob
+from app.modules.artifacts.models import ArtifactBinding, ArtifactReplica, ArtifactVerificationJob
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
     ArtifactInternalAuthority,
@@ -33,6 +33,12 @@ from app.modules.checkers.api.output_custody import (
     CheckerOutputUnavailable,
     GeneratedOutputSelector,
 )
+from app.modules.checkers.api.trial_evidence import (
+    TrialEvidenceArtifactRequest,
+    TrialEvidenceCustodyAck,
+    TrialEvidenceSelector,
+    TrialEvidenceReservationPort,
+)
 from app.modules.model_usage.api import (
     ModelCallEvidence,
     SetupModelOutputArtifactRequest,
@@ -50,7 +56,7 @@ class CheckerArtifactOutputService:
         *,
         sessions: async_sessionmaker[AsyncSession],
         reservations: Callable[
-            [AsyncSession], CheckerOutputReservationPort | SetupModelOutputReservationPort
+            [AsyncSession], CheckerOutputReservationPort | TrialEvidenceReservationPort | SetupModelOutputReservationPort
         ],
         authority: Callable[[AsyncSession], CheckerOutputWriteAuthority],
         internal_authority: Callable[[AsyncSession], ArtifactInternalAuthority],
@@ -69,6 +75,15 @@ class CheckerArtifactOutputService:
         """Commit checked output bytes before I/O, never a CHECKERS completion."""
         if type(request) is not CheckerOutputArtifactRequest:
             raise TypeError("invalid checker output request")
+        return await self._store_output(request)
+
+    async def store_trial_evidence(
+        self,
+        request: TrialEvidenceArtifactRequest,
+    ) -> CheckerOutputArtifactResult:
+        """Use the same bounded put and verification workflow for a trial receipt."""
+        if type(request) is not TrialEvidenceArtifactRequest:
+            raise TypeError("invalid trial evidence artifact request")
         return await self._store_output(request)
 
     async def store_setup_output(
@@ -90,8 +105,9 @@ class CheckerArtifactOutputService:
 
     async def _store_output(
         self,
-        request: CheckerOutputArtifactRequest | SetupModelOutputArtifactRequest,
+        request: CheckerOutputArtifactRequest | TrialEvidenceArtifactRequest | SetupModelOutputArtifactRequest,
     ) -> CheckerOutputArtifactResult:
+        """Prepare outside custody, then atomically admit exact owner content."""
         selector = GENERATED_OUTPUT_SELECTOR.validate_python(request.selector)
         prepared = None
         async with self._sessions() as session:
@@ -110,7 +126,12 @@ class CheckerArtifactOutputService:
                 )
                 async with session.begin():
                     await authority.prepare(selector)
-                    current = await self._reservations(session).resolve(selector)
+                    reservations = self._reservations(session)
+                    current = (
+                        await reservations.pin_content(selector)
+                        if isinstance(selector, TrialEvidenceSelector)
+                        else await reservations.resolve(selector)
+                    )
                     if current.select(selector) != slot:
                         raise CheckerOutputUnavailable("checker_output_slot_changed")
                     admission = await ArtifactAdmissionService(
@@ -149,6 +170,13 @@ class CheckerArtifactOutputService:
         """Recover a lost response by logical identity without regenerating bytes."""
         return await self._recover(CheckerOutputSelector.model_validate(selector))
 
+    async def recover_trial_evidence(
+        self,
+        selector: TrialEvidenceSelector,
+    ) -> CheckerOutputArtifactResult | None:
+        """Recover the original trial put after a lost acknowledgement."""
+        return await self._recover(TrialEvidenceSelector.model_validate(selector))
+
     async def recover_setup_output(
         self, selector: SetupModelOutputSelector
     ) -> SetupModelOutputArtifactResult | None:
@@ -168,8 +196,10 @@ class CheckerArtifactOutputService:
         )
 
     async def _recover(
-        self, selector: GeneratedOutputSelector
+        self,
+        selector: GeneratedOutputSelector,
     ) -> CheckerOutputArtifactResult | None:
+        """Resolve the one retained put through fresh owner and action custody."""
         async with self._sessions() as session:
             authority = self._authority(session)
             try:
@@ -198,12 +228,32 @@ class CheckerArtifactOutputService:
                 authority.discard()
 
     async def read_response(
-        self, selector: CheckerOutputSelector, evidence: ModelCallEvidence,
+        self,
+        selector: CheckerOutputSelector,
+        evidence: ModelCallEvidence,
     ) -> bytes:
         """Read only exact private response evidence, bounded and independently hashed."""
         selector = CheckerOutputSelector.model_validate(selector)
         evidence = ModelCallEvidence.model_validate(evidence)
-        if selector.slot_key != "model_response" or selector.content_sha256 != evidence.content_sha256:
+        if (
+            selector.slot_key != "model_response"
+            or selector.content_sha256 != evidence.content_sha256
+        ):
+            raise CheckerOutputUnavailable("checker_output_response_unavailable")
+        return await self._read(selector, evidence)
+
+    async def read_trial_evidence(
+        self,
+        selector: TrialEvidenceSelector,
+        evidence: TrialEvidenceCustodyAck,
+    ) -> bytes:
+        """Read only the bound original trial receipt under fresh execution custody."""
+        selector = TrialEvidenceSelector.model_validate(selector)
+        evidence = TrialEvidenceCustodyAck.model_validate(evidence)
+        if (selector.trial_evidence_id, selector.content_sha256) != (
+            evidence.trial_evidence_id,
+            evidence.content_sha256,
+        ):
             raise CheckerOutputUnavailable("checker_output_response_unavailable")
         return await self._read(selector, evidence)
 
@@ -217,8 +267,14 @@ class CheckerArtifactOutputService:
         return await self._read(selector, evidence)
 
     async def _read(
-        self, selector: GeneratedOutputSelector, evidence: ModelCallEvidence
+        self,
+        selector: GeneratedOutputSelector,
+        evidence: ModelCallEvidence | TrialEvidenceCustodyAck,
     ) -> bytes:
+        """Recheck exact verified ancestry and bounded bytes before releasing evidence."""
+        media_type = (
+            evidence.media_type if isinstance(evidence, ModelCallEvidence) else "application/json"
+        )
         async with self._sessions() as session:
             authority = self._authority(session)
             try:
@@ -226,47 +282,95 @@ class CheckerArtifactOutputService:
                 async with session.begin():
                     await authority.prepare(selector)
                     reservation = await self._reservations(session).resolve(selector)
+                    if isinstance(evidence, TrialEvidenceCustodyAck):
+                        await self._require_trial_binding(session, reservation, evidence)
                     facts = await select_checker_output(
-                        session, selector=selector, reservation=reservation,
+                        session,
+                        selector=selector,
+                        reservation=reservation,
                         namespace_fingerprint=self._namespace.namespace_fingerprint,
                         put_attempt_id=evidence.put_attempt_id,
                         verification_receipt_id=evidence.verification_receipt_id,
                     )
-                    if facts is None or facts.status != "verified" or (
-                        facts.content_id, facts.sha256, facts.byte_count, facts.media_type,
-                    ) != (
-                        evidence.content_id, evidence.content_sha256,
-                        evidence.byte_count, evidence.media_type,
+                    if (
+                        facts is None
+                        or facts.status != "verified"
+                        or (
+                            facts.content_id,
+                            facts.sha256,
+                            facts.byte_count,
+                            facts.media_type,
+                        )
+                        != (
+                            evidence.content_id,
+                            evidence.content_sha256,
+                            evidence.byte_count,
+                            media_type,
+                        )
                     ):
                         raise CheckerOutputUnavailable("checker_output_response_unavailable")
                     await authority.consume_existing(reservation, facts)
-                    provider_ref = await session.scalar(select(ArtifactReplica.provider_object_ref).where(
-                        ArtifactReplica.id == str(facts.replica_id),
-                        ArtifactReplica.namespace_fingerprint == self._namespace.namespace_fingerprint,
-                    ))
+                    provider_ref = await session.scalar(
+                        select(ArtifactReplica.provider_object_ref).where(
+                            ArtifactReplica.id == str(facts.replica_id),
+                            ArtifactReplica.namespace_fingerprint
+                            == self._namespace.namespace_fingerprint,
+                        )
+                    )
                     if provider_ref is None:
                         raise CheckerOutputUnavailable("checker_output_response_unavailable")
                 authority.discard()
                 data = bytearray()
                 async for chunk in self._store.open(
-                    provider_ref, byte_range=ArtifactByteRange(length=evidence.byte_count + 1),
+                    provider_ref,
+                    byte_range=ArtifactByteRange(length=evidence.byte_count + 1),
                 ):
                     data.extend(chunk)
                     if len(data) > evidence.byte_count:
-                        raise ArtifactIntegrityError("model response evidence length mismatch")
+                        raise ArtifactIntegrityError("checker evidence length mismatch")
                 if len(data) != evidence.byte_count or (
                     "sha256:" + hashlib.sha256(data).hexdigest() != evidence.content_sha256
                 ):
-                    raise ArtifactIntegrityError("model response evidence digest mismatch")
+                    raise ArtifactIntegrityError("checker evidence digest mismatch")
                 # Revocation and owner substitution during provider I/O still deny release.
                 current = await self._result(session, authority, selector, replayed=True)
                 if (current.content_id, current.verification_receipt_id) != (
-                    evidence.content_id, evidence.verification_receipt_id,
+                    evidence.content_id,
+                    evidence.verification_receipt_id,
                 ):
                     raise CheckerOutputUnavailable("checker_output_response_unavailable")
                 return bytes(data)
             finally:
                 authority.discard()
+
+    async def _require_trial_binding(self, session, reservation, evidence) -> None:
+        """Match every immutable binding coordinate and the owner receipt digest."""
+        binding = await session.get(ArtifactBinding, str(evidence.binding_id))
+        if (
+            reservation.owner_digest != evidence.owner_digest
+            or binding is None
+            or (
+                binding.project_id,
+                binding.resource_type,
+                binding.resource_id,
+                binding.logical_role,
+                binding.scope_version,
+                binding.content_id,
+                binding.put_attempt_id,
+                binding.verification_receipt_id,
+            )
+            != (
+                str(reservation.subject.project_id),
+                "checker_trial_evidence",
+                str(evidence.trial_evidence_id),
+                "trial_receipt",
+                1,
+                str(evidence.content_id),
+                str(evidence.put_attempt_id),
+                str(evidence.verification_receipt_id),
+            )
+        ):
+            raise CheckerOutputUnavailable("checker_output_response_unavailable")
 
     def _storage(self, session: AsyncSession) -> ArtifactStorageOrchestrator:
         """Use the shared put, observation and verification implementation."""
@@ -301,7 +405,10 @@ class CheckerArtifactOutputService:
             )
         if job_id is not None:
             verifier = ArtifactStorageOrchestrator(
-                session, self._store, self._namespace, self._settings,
+                session,
+                self._store,
+                self._namespace,
+                self._settings,
                 self._verification_authority(session),
             )
             await verifier.verify_object(UUID(job_id))

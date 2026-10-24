@@ -26,6 +26,7 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
     "checker_history",
     "checker_model_call",
     "checker_model_output",
+    "checker_trial_evidence",
     "setup_model_usage",
     "setup_model_call",
     "project_model_administration",
@@ -90,6 +91,7 @@ AuthorizationDecisionResourceType = Literal[
     "checker_history",
     "checker_model_call",
     "checker_model_output",
+    "checker_trial_evidence",
     "setup_model_usage",
     "setup_model_call",
     "project_model_administration",
@@ -191,6 +193,7 @@ class AuthorizationDenialCode(StrEnum):
 
 class MatchedAuthorityKind(StrEnum):
     """Privacy-bounded authority source classifications."""
+
     ACTOR_SELF = "actor_self"
     ADMIN_ROLE_GRANT = "admin_role_grant"
     PROJECT_ROLE_GRANT = "project_role_grant"
@@ -199,6 +202,7 @@ class MatchedAuthorityKind(StrEnum):
 
 class AuthorizationDecision(BaseModel):
     """Frozen decision safe for feature code, evidence, and error mapping."""
+
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     decision_id: UUID
     action_id: ActionId | None
@@ -282,5 +286,7 @@ class AuthorizationDenied(Exception):
         }:
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED.value
         return denial_code.value
+
+
 class AuthorizationEvidenceUnavailable(RuntimeError):
     pass

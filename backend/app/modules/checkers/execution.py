@@ -33,6 +33,7 @@ from app.modules.checkers.api.evaluation_contract import (
     validate_execution_request,
 )
 from app.modules.checkers.api.external import PostSubmitExternalCheckerIdentity
+from app.modules.checkers.api.evaluation_context import PostSubmitInputContextCustody
 from app.modules.checkers.api.external_policy import (
     SELECTED_POST_FINALIZATION_MARGIN_MS,
     selected_post_submit_execution_budget_ms,
@@ -188,6 +189,9 @@ class PostSubmissionExecutor:
                         )
                         if run.material_custody is not None
                         else None,
+                        input_context_custody=PostSubmitInputContextCustody.model_validate_json(
+                            json.dumps(run.input_context_custody)
+                        ) if run.input_context_custody is not None else None,
                         input_materialization_evidence_id=(
                             UUID(run.input_materialization_evidence_id)
                             if run.input_materialization_evidence_id
@@ -229,6 +233,7 @@ class PostSubmissionExecutor:
             return await self.finalize(replay)
         material = None
         input_materialization_evidence_id = None
+        input_context_custody = None
         try:
             async with asyncio.timeout(self._execution_budget_seconds(request)):
                 materialized = await self._materialization.materialize(
@@ -239,10 +244,11 @@ class PostSubmissionExecutor:
                 **{
                     k: v
                     for k, v in asdict(materialized).items()
-                    if k not in {"evaluation", "input_materialization_evidence_id"}
+                    if k not in {"evaluation", "input_materialization_evidence_id", "input_context_custody"}
                 }
             )
             input_materialization_evidence_id = materialized.input_materialization_evidence_id
+            input_context_custody = materialized.input_context_custody
             result = materialized.evaluation
         except (TimeoutError, PostSubmissionMaterializationFailure) as error:
             values = dict(
@@ -269,6 +275,7 @@ class PostSubmissionExecutor:
                 result=result,
                 material=material,
                 input_materialization_evidence_id=input_materialization_evidence_id,
+                input_context_custody=input_context_custody,
                 output_binding_ids=(),
             )
         )
@@ -333,6 +340,10 @@ class PostSubmissionExecutor:
                         )
                         or run.material_custody
                         != (facts.material.model_dump(mode="json") if facts.material else None)
+                        or run.input_context_custody != (
+                            facts.input_context_custody.model_dump(mode="json")
+                            if facts.input_context_custody else None
+                        )
                     ):
                         raise CheckerExecutionUnavailable("checker_finalization_replay_conflict")
                     await prepared.validate_replay(authority_facts, UUID(run.finalize_evidence_id))
@@ -380,6 +391,10 @@ class PostSubmissionExecutor:
                 run.result_digest = result.result_digest
                 run.material_custody = (
                     facts.material.model_dump(mode="json") if facts.material else None
+                )
+                run.input_context_custody = (
+                    facts.input_context_custody.model_dump(mode="json")
+                    if facts.input_context_custody else None
                 )
                 run.input_materialization_evidence_id = (
                     str(facts.input_materialization_evidence_id)

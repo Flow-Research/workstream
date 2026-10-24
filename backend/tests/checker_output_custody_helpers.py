@@ -638,6 +638,23 @@ async def _ensure_output_actor(factory):
         return actor_id, identity_link_id
 
 
+def _output_storage_settings(tmp_path, provider, storage_settings):
+    """Select the supplied deployment capacity or isolated provider defaults."""
+    if storage_settings is not None:
+        return storage_settings
+    if provider == "minio":
+        from tests.test_s3_artifact_store import minio_settings
+
+        return minio_settings(private_prefix=f"checker-output/{new_record_id()}").model_copy(
+            update={
+                **artifact_admission_limit_settings(1024),
+                "artifact_scratch_root": tmp_path / "configured-scratch",
+                "artifact_scratch_minimum_free_bytes": 0,
+            }
+        )
+    return _settings(tmp_path, maximum_bytes=1024)
+
+
 @asynccontextmanager
 async def output_custody_harness(
     tmp_path: Path,
@@ -646,22 +663,12 @@ async def output_custody_harness(
     admin_access,
     provider: str = "local",
     maximum_bytes: int = 1024,
+    storage_settings=None,
 ) -> AsyncIterator[OutputCustodyHarness]:
     """Compose real Local/MinIO storage and controlled exact output authority."""
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    if provider == "minio":
-        from tests.test_s3_artifact_store import minio_settings
-
-        settings = minio_settings(private_prefix=f"checker-output/{new_record_id()}").model_copy(
-            update={
-                **artifact_admission_limit_settings(1024),
-                "artifact_scratch_root": tmp_path / "configured-scratch",
-                "artifact_scratch_minimum_free_bytes": 0,
-            }
-        )
-    else:
-        settings = _settings(tmp_path, maximum_bytes=1024)
+    settings = _output_storage_settings(tmp_path, provider, storage_settings)
     bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     raw_store = bootstrap.initialize_after_namespace_claim(

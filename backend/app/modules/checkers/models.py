@@ -261,6 +261,7 @@ class CheckerRun(Base):
         ForeignKey("audit_events.id", name="fk_checker_input_materialization_evidence"),
     )
     material_custody: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    input_context_custody: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     completion_event_id: Mapped[UUID | None] = mapped_column(Uuid(), ForeignKey("outbox_events.event_id"))
     supersedes_checker_run_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False),
@@ -294,6 +295,68 @@ class CheckerRun(Base):
     results: Mapped[list[CheckerResult]] = relationship(
         back_populates="checker_run",
         cascade="save-update, merge",
+    )
+
+
+class CheckerTrialEvidence(Base):
+    """One immutable trial address and its first authorized receipt commitment."""
+
+    __tablename__ = "checker_trial_evidence"
+    __table_args__ = (
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and "
+            "(get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7",
+        ),
+        UniqueConstraint("address_digest", name="uq_checker_trial_evidence_address"),
+        ForeignKeyConstraint(
+            ["task_id", "project_id"],
+            ["workstream_tasks.id", "workstream_tasks.project_id"],
+            name="fk_checker_trial_evidence_task_project",
+        ),
+        ForeignKeyConstraint(
+            ["submission_id", "task_id", "submission_version"],
+            ["submissions.id", "submissions.task_id", "submissions.version"],
+            name="fk_checker_trial_evidence_submission",
+        ),
+        ForeignKeyConstraint(
+            ["checker_run_id", "task_id", "submission_id"],
+            ["checker_runs.id", "checker_runs.task_id", "checker_runs.submission_id"],
+            name="fk_checker_trial_evidence_origin",
+        ),
+        CheckConstraint("maximum_bytes between 1 and 1048576", name="bounded_receipt"),
+        CheckConstraint(
+            "jsonb_typeof(subject)='object' and jsonb_typeof(origin)='object'",
+            name="closed_facts",
+        ),
+        CheckConstraint(
+            "address_digest ~ '^sha256:[0-9a-f]{64}$' and "
+            "(content_sha256 is null or content_sha256 ~ '^sha256:[0-9a-f]{64}$')",
+            name="digest_shapes",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    project_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    task_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    assignment_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("task_assignments.id"), nullable=False,
+    )
+    submission_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    submission_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    checker_run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    registry_entry_id: Mapped[UUID] = mapped_column(
+        Uuid(), ForeignKey("external_checker_registry_entries.id"), nullable=False,
+    )
+    address_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    subject: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    origin: Mapped[dict] = mapped_column(JSONB(), nullable=False)
+    maximum_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_sha256: Mapped[str | None] = mapped_column(String(71))
+    execute_evidence_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("audit_events.id"), nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.clock_timestamp(), nullable=False,
     )
 
 

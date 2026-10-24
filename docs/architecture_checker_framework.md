@@ -104,9 +104,10 @@ default or POST materialization and per-entry cleanup. A proposed policy that ca
 fit must expose an `execution_capacity` runtime gap with a `capacity_exceeded`
 infrastructure outcome; supported bindings cannot exceed the actual aggregate
 deadline. A stage that fits must not claim a capacity gap. This does not increase
-runtime capacity. Ordinary checker-image
-isolation also does not supply nested task environments, which remain explicit
-runtime gaps until supported.
+runtime capacity. Ordinary checker-image isolation does not supply nested task
+environments. A POST requirement may claim that support only when its exact
+binding selects the typed generic isolated-trial profile described below and
+every required material and runtime dependency is present.
 
 The trusted compiler binds approved requirement identities to exact immutable
 registry entries, image/configuration/schema digests and ordered PRE/POST
@@ -145,6 +146,48 @@ predecessor and material context before admission or evaluation. Checker results
 supply work evidence and do not grant acceptance authority. Passing required
 POST checks routes through the existing human-review or shared final-acceptance
 branch selected by the locked ReviewPolicy.
+
+A POST binding can explicitly select revision context using the flat approved
+configuration pair `workstream_evaluation_context_version: "v1"` and
+`workstream_evaluation_context_roles`. The latter is a sorted, unique list drawn
+from `predecessor_findings` and `predecessor_submission_archive`. Both properties
+must be declared by the immutable registry configuration schema; permissive
+additional properties do not grant the capability. PRE cannot select it.
+Absent selection means current Submission material only.
+
+Selected images receive a typed `input.evaluation_context` with `kind`, `source`,
+`predecessor` and `feedback`. An initial attempt has null source, predecessor and
+feedback, even when its global Submission version exceeds one after reclaim.
+A checker revision binds the preparation actually consumed by that Submission,
+the exact previous Submission from the same assignment/contributor, and the
+immutable checker completion that requested the revision. It never follows a
+latest preparation or today's policy. Kept and rebased contexts use the same
+owner read; neither alters old attempts. Feedback is complete normalized member
+evidence, bounded at 512 KiB; excess or inconsistent evidence fails closed.
+Contributor identities and provider locations are not included in image context.
+
+ART reads these facts under current materialization authority, verifies each
+selected archive's bytes and semantic manifest, and projects the files once into
+one quota-owned private workspace. Each binding receives its own temporary
+request-bound v2 grant. The current role mounts read-only at `/work/input`; an
+explicitly selected predecessor role mounts read-only at
+`/work/context/predecessor`. A current-only binding in the same aggregate cannot
+see that prior role. Publishing or revoking a grant does not move the files, so
+later selected bindings reuse the verified trees. Combined expanded bytes and
+entries remain subject to the existing ceilings; adding a prior archive does
+not double them. All views and grants close before replay validation or result
+publication.
+
+Context-enabled member results retain the configuration hash, actual input hash,
+context hash and visible material identities. Current-only results omit this
+unselected receipt, preserving immutable historical result hashes. This extends
+the one selected execution contract; it creates no second executor or authority.
+The parent run retains `input_context_custody`: the exact context and any selected
+predecessor verification chain. PostgreSQL reconstructs its consumed preparation,
+same-assignment predecessor and normalized historical findings, and includes the
+extension in materialization and finalization authority digests. Missing or
+substituted custody cannot commit. The current archive's existing custody shape
+and retained current-only receipt digests remain unchanged.
 
 There is no catalogue request/result decoder, generic rule planner, alternate
 phase service or old execution path. Removing those implementations does not
@@ -276,6 +319,94 @@ engineering implements gaps before corrected policy approval and activation.
 The runner's existing sandbox contract does not by itself prove that arbitrary
 submitted environments can be built and tested. Any such requirement must have
 a supported, bounded image implementation before the project can activate.
+
+### Invocation-local isolated trial tool
+
+An approved POST image may use the existing service's typed generic trial tool
+through one request-bound `/work/execution.sock`. This socket is an internal
+capability of the already selected invocation; it is not a second runner,
+provider, host socket or final-result variant. Six flat approved configuration
+values select the exact profile and projection
+by ID, version and digest. A trusted operator manifest resolves those immutable
+values. The backend requires the paired
+`WORKSTREAM_CHECKER_TRIAL_AUTHORITY_MANIFEST_PATH` and
+`WORKSTREAM_CHECKER_TRIAL_AUTHORITY_MANIFEST_DIGEST`; the Rust service loads
+the same canonical manifest and expected digest. Both refuse a missing, changed
+or invalid selected profile. The private backend proxy socket carries the
+closed trial reservation/publication protocol (4 MiB frames) and model sessions
+(1 MiB frames); this host socket is never exposed inside an image.
+The verified ART request binds their configuration to the registry entry,
+checker image, material and current execution. The profile bounds offline
+builder/base/cache and trusted-launcher identities, operations and aggregate resources; the
+projection selects material roles, visibility and finite ordered step templates.
+The image cannot select Docker flags, host paths, mounts, runtime,
+network, devices, credentials or another image. Workload commands remain
+untrusted argument arrays executed only inside the confined candidate image;
+they are never appended as host launcher flags.
+
+ART owns verified read-only inputs and canonical bounded scratch. The service
+projects only profile-authorized build/runtime roles, uses a networkless
+digest-pinned offline builder under the configured sandbox, loads exactly one
+owned candidate image, and runs fresh non-root, capability-free trials with no
+host socket or device. The digest-pinned launcher creates bounded filesystems
+inside the sandbox, then drops mount/chroot authority before running submitted
+commands. Builder code retains only its three required file capabilities;
+trial commands run as nonroot with no capabilities. Neither can reach the
+private bootstrap or host export directory. Exports belong to the nonroot
+service so it can read and remove complete and partial output.
+The candidate's numeric UID/GID must match that service identity so private
+read-only role projections remain readable; mismatched configurations are
+refused before launch. Each workload still runs in its own sandbox.
+
+Each visible `state_overlay` uses one normal, top-level workspace name chosen
+by its approved projection. Nested overlay destinations and collisions with
+existing workspace entries are refused. The launcher creates that mountpoint,
+mounts the protected role read-only, and removes the empty mountpoint after
+stopping descendants and unmounting the role. No protected content or mount
+placeholder enters retained state. Build-context and state-seed projections
+still support safe nested relative paths.
+
+CPU, memory/swap, PID and wall-time bounds include the whole container,
+including the trusted launcher, build and export work. PID limits below two
+are refused before launch. Projected files, retained images and workspaces,
+temporary filesystems and export copies share one invocation byte/entry budget.
+Missing prepared material, launch/cache failure, platform capacity exhaustion,
+cancellation and uncertain cleanup are infrastructure outcomes. An observed
+workload limit or an unsupported generated export is instead a completed
+execution fact: receipts preserve the real child status and a separate
+`export_outcome`. Forced stops never invent an exit code or unobserved signal.
+Only successfully exported state with a profile-permitted work outcome can
+feed another step. Host storage errors remain infrastructure failures even
+when their operating-system error is disk-full. Project images interpret
+these facts against approved requirements; shared runtime code does not grade
+work or decide acceptance.
+
+Completed observations are published only after owned nested resources and
+scratch are settled. An opaque handle resolves to server-owned, request/material/
+profile/plan/engine-bound facts in the same invocation. When a model assessment
+depends on a trial, the model boundary injects the resolved canonical facts; an
+image-authored copy cannot substitute. Every trial that starts must settle its observations and cleanup before
+final result acceptance. A selected capability may remain unused when the
+project check has no applicable trial, such as a revision-only check on the
+initial submission; shared runtime code does not infer project semantics. CHECKERS allocates one stable trial slot for
+the exact Submission and selected binding before execution. The plan and input
+hashes are immutable at that address. ART stores and independently verifies
+the canonical receipt, then binds it to `checker_trial_evidence`. Only that
+verified receipt can produce a handle for model assessment.
+
+A restart after reservation but before a receipt is pinned may execute the
+same plan under fresh current authority; reservation provenance and the actual
+executor remain distinct. After content is pinned, replay recovers those exact
+bytes and issues a fresh local handle without rerunning the trial. A missing or
+uncertain stored receipt fails as infrastructure; it never becomes fabricated
+observations or a work failure. Model request hashing includes the resolved
+canonical evidence, not the invocation-local handle.
+
+This mechanism does not revive the removed output continuation. Shared Rust
+contains no project filename, task identity, rubric, trial sequence or command
+allowlist. Project logic and relative workload commands stay in the approved
+image/profile. An outer `project_private_plan.v1` remains invalid output and
+cannot request host work.
 
 The service holds a nonblocking exclusive lock on the validated private socket
 parent for the listener lifetime. It acquires that custody before Docker
@@ -492,10 +623,14 @@ infrastructure failures. File and directory inputs use canonical relative paths.
 Capacity, deadline, unavailable material or implementation, and invalid output
 remain infrastructure outcomes rather than contributor work findings. Model
 evaluation requires a `model_service` dependency provisioned by the credential-
-isolated `model_proxy`; task or guide context
-and external prepared images or caches require explicit material dependencies.
-`prepared_material` remains a runtime gap with `material_unavailable` handling;
-it is not received package content and its absence is not a work failure. The
+isolated `model_proxy`. An isolated execution check may declare the same dependency
+for model-assisted planning or assessment. Nested builds and trials declare
+`nested_sandbox` through `trial_proxy`, with exact profile and projection selectors
+declared by the registered image's configuration schema. This capability is POST-only.
+Its approved offline cache is `prepared_material` through the same trial tool,
+with `material_unavailable` handling; it is not received package content. Other
+external material and unavailable task/guide context remain explicit runtime gaps.
+An unavailable cache or runtime is an infrastructure failure. The
 ordinary image runner remains networkless. Model access is available only to a
 registered POST image through its exact approved project model profile; a missing
 image or profile remains an unbound capability suggestion that blocks activation.
@@ -558,8 +693,8 @@ The unified output is a constrained proposal. Workstream's trusted compiler owns
 canonical `PostSubmitCheckerPolicy.policy_body`, hash and ordered external
 bindings. Workstream defaults belong to PRE, not a duplicated POST list. Runtime checker execution loads the locked compiled
 policy; it does not call the setup derivation agent to judge a contributor
-submission. A model-based runtime evaluator would be a separate supported,
-registered checker, not an automatic consequence of this setup flow.
+submission. Model-based runtime evaluation uses a separately registered checker
+and approved model profile; setup inference alone grants no runtime access.
 
 The compiled project `PostSubmitCheckerPolicy` is persisted with exact setup
 provenance: guide id, source snapshot id/hash, effective project policy id/hash,
@@ -597,7 +732,7 @@ Examples:
 `PostSubmitCheckerPolicy` is produced by Workstream's trusted post-submit
 compiler by projecting the exact approved external POST policy. The compiler owns the canonical
 runtime body and hash. Setup agents may propose registered checker names and
-routing classifications, but they do not produce executable runtime code and
+PRE/POST classifications, but they do not produce executable runtime code and
 they do not decide submission outcomes at runtime.
 
 Stored pre-cutover bodies preserve their original ordered entries and hashes
