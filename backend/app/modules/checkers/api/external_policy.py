@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Literal, Self
+from typing import Literal, Self, get_args
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -50,7 +50,8 @@ SELECTED_POST_DELIVERY_LEASE_SECONDS = 3_600
 
 EVALUATION_CONTEXT_VERSION_KEY = "workstream_evaluation_context_version"
 EVALUATION_CONTEXT_ROLES_KEY = "workstream_evaluation_context_roles"
-EVALUATION_CONTEXT_ROLES = ("predecessor_findings", "predecessor_submission_archive")
+EvaluationContextRole = Literal["predecessor_findings", "predecessor_submission_archive"]
+EVALUATION_CONTEXT_ROLES = get_args(EvaluationContextRole)
 
 
 class ExternalCheckerPolicyError(ValueError):
@@ -93,6 +94,17 @@ def validated_evaluation_context_roles(
         }.issubset(properties):
             raise ExternalCheckerPolicyError("checker schema does not declare evaluation context")
     return selected
+
+
+def require_evaluation_context_agreement(
+    declared_roles: tuple[EvaluationContextRole, ...] | None,
+    configuration: dict[str, JsonValue],
+    registry: ExternalCheckerRegistryEntry,
+) -> None:
+    """Match descriptive setup inputs to the exact supported registry selection."""
+    selected = validated_evaluation_context_roles(configuration, registry)
+    if declared_roles != selected:
+        raise ExternalCheckerPolicyError("evaluation context declaration and selection disagree")
 
 
 def validated_trial_configuration(configuration, registry):
@@ -368,6 +380,14 @@ async def _resolve(
         }
         trial_selector = validated_trial_configuration(configuration, entry)
         specification = requirement.check_specification
+        require_evaluation_context_agreement(
+            next(
+                (item.evaluation_context_roles for item in specification.inputs
+                 if item.kind == "evaluation_context"), None,
+            ) if specification is not None else None,
+            configuration,
+            entry,
+        )
         trial_required = specification is not None and any(
             dependency.provisioning == "trial_proxy"
             for dependency in specification.runtime_dependencies

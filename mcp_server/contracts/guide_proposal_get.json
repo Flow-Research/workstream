@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "5eebc8ec72a85d86d768e1b88194a09d3376c4672f289f3e792cadc990133fae",
+  "canonical_sha256": "eb6e7176e74d0765b9a657d182611a000f3a2c8b3fc143a38ad36618cd016d94",
   "components": {
     "schemas": {
       "ApiError": {
@@ -176,6 +176,25 @@
         "additionalProperties": false,
         "description": "One exact material or context input needed by a proposed check.",
         "properties": {
+          "evaluation_context_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "predecessor_findings",
+                    "predecessor_submission_archive"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact sorted selected revision material roles, only for evaluation_context."
+          },
           "input_id": {
             "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
             "maxLength": 100,
@@ -191,6 +210,7 @@
               "relative_file",
               "relative_directory",
               "task_context",
+              "evaluation_context",
               "guide_context",
               "prepared_material"
             ],
@@ -285,6 +305,7 @@
               "isolated_execution",
               "nested_sandbox",
               "task_context",
+              "evaluation_context",
               "guide_context",
               "model_service",
               "execution_capacity",
@@ -377,7 +398,7 @@
             "type": "array"
           },
           "inputs": {
-            "description": "All materials needed to observe every pass condition and negative case. Every task_context, guide_context or prepared_material runtime dependency requires an input of that same kind, and vice versa.",
+            "description": "All materials needed to observe every pass condition and negative case. Every task_context, evaluation_context, guide_context or prepared_material runtime dependency requires an input of that same kind, and vice versa.",
             "items": {
               "$ref": "#/components/schemas/CheckInput"
             },
@@ -423,7 +444,7 @@
             "type": "array"
           },
           "runtime_dependencies": {
-            "description": "Declare the evaluation method's required dependency and any task_context, guide_context or prepared_material input dependency. Each of those three kinds must occur in both inputs and runtime_dependencies, never just one. Each unavailable_code must appear in infrastructure_failures.",
+            "description": "Declare the evaluation method's required dependency and any task_context, evaluation_context, guide_context or prepared_material input dependency. Each of those kinds must occur in both inputs and runtime_dependencies, never just one. Each unavailable_code must appear in infrastructure_failures.",
             "items": {
               "$ref": "#/components/schemas/CheckRuntimeDependency"
             },

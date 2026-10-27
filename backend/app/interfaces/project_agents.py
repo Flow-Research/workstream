@@ -35,6 +35,8 @@ from app.modules.checkers.api.external import (
     ExternalCheckerCapabilityProjection,
 )
 from app.modules.checkers.api.external_policy import (
+    EvaluationContextRole,
+    require_evaluation_context_agreement,
     MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
     MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS,
     SELECTED_POST_MATERIALIZATION_BUDGET_MS,
@@ -323,6 +325,7 @@ CheckInputKind = Literal[
     "relative_file",
     "relative_directory",
     "task_context",
+    "evaluation_context",
     "guide_context",
     "prepared_material",
 ]
@@ -331,6 +334,7 @@ CheckerDependencyKind = Literal[
     "isolated_execution",
     "nested_sandbox",
     "task_context",
+    "evaluation_context",
     "guide_context",
     "model_service",
     "execution_capacity",
@@ -375,14 +379,23 @@ class CheckInput(BaseModel):
         ]
         | None
     ) = Field(default=None, exclude_if=lambda value: value is None)
+    evaluation_context_roles: tuple[EvaluationContextRole, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None, max_length=2,
+        description="Exact sorted selected revision material roles, only for evaluation_context.",
+    )
     purpose: ModelProse
 
     _input_id = field_validator("input_id")(_validated_identifier)
     _purpose = field_validator("purpose")(_validated_safe_model_text)
 
     @model_validator(mode="after")
-    def validate_relative_path(self) -> CheckInput:
-        """Require a safe path only for an exact file or directory input."""
+    def validate_material_selection(self) -> CheckInput:
+        """Require paths and revision roles only on their exact material kinds."""
+        roles = self.evaluation_context_roles
+        if (self.kind == "evaluation_context") != (roles is not None):
+            raise ValueError("evaluation context input requires exact roles only on that kind")
+        if roles is not None and roles != tuple(sorted(set(roles))):
+            raise ValueError("evaluation context roles must be unique and sorted")
         path_required = self.kind in {"relative_file", "relative_directory"}
         if path_required != (self.relative_path is not None):
             raise ValueError("check input relative path does not match its kind")
@@ -450,6 +463,7 @@ class CheckRuntimeDependency(BaseModel):
             "isolated_execution": ("current_runner", "implementation_unavailable"),
             "nested_sandbox": ({"trial_proxy", "runtime_gap"}, "implementation_unavailable"),
             "task_context": ("runtime_gap", "material_unavailable"),
+            "evaluation_context": ("current_runner", "material_unavailable"),
             "guide_context": ("runtime_gap", "material_unavailable"),
             "prepared_material": ({"trial_proxy", "runtime_gap"}, "material_unavailable"),
             # runtime_gap remains readable for immutable retained compilations. New
@@ -514,8 +528,8 @@ class CheckSpecification(BaseModel):
         max_length=20,
         description=(
             "All materials needed to observe every pass condition and negative case. "
-            "Every task_context, guide_context or prepared_material runtime dependency "
-            "requires an input of that same kind, and vice versa."
+            "Every task_context, evaluation_context, guide_context or prepared_material "
+            "runtime dependency requires an input of that same kind, and vice versa."
         ),
     )
     check_steps: tuple[ModelProse, ...] = Field(
@@ -546,8 +560,8 @@ class CheckSpecification(BaseModel):
         max_length=10,
         description=(
             "Declare the evaluation method's required dependency and any task_context, "
-            "guide_context or prepared_material input dependency. Each of those three kinds "
-            "must occur in both inputs and runtime_dependencies, never just one. "
+            "evaluation_context, guide_context or prepared_material input dependency. "
+            "Each of those kinds must occur in both inputs and runtime_dependencies, never just one. "
             "Each unavailable_code must appear in "
             "infrastructure_failures."
         ),
@@ -600,7 +614,11 @@ class CheckSpecification(BaseModel):
             if (test.expected_verdict == "failed") != has_error:
                 raise ValueError("negative test verdict disagrees with its findings")
 
+        if sum(item.kind == "evaluation_context" for item in self.inputs) > 1:
+            raise ValueError("check must declare one exact evaluation context input")
         dependency_kinds = {item.kind for item in self.runtime_dependencies}
+        if "evaluation_context" in dependency_kinds and self.execution_mode != "background":
+            raise ValueError("evaluation context requires post-submit background work")
         if self.evaluation_method == "model_evaluation" and "model_service" not in dependency_kinds:
             raise ValueError("model evaluation requires a model service dependency")
         if (
@@ -610,12 +628,12 @@ class CheckSpecification(BaseModel):
             raise ValueError("isolated evaluation requires an execution dependency")
         for item in self.inputs:
             if (
-                item.kind in {"task_context", "guide_context", "prepared_material"}
+                item.kind in {"task_context", "evaluation_context", "guide_context", "prepared_material"}
                 and item.kind not in dependency_kinds
             ):
                 raise ValueError("check context input requires a runtime dependency")
         material_dependencies = dependency_kinds.intersection(
-            {"task_context", "guide_context", "prepared_material"}
+            {"task_context", "evaluation_context", "guide_context", "prepared_material"}
         )
         if material_dependencies - {item.kind for item in self.inputs}:
             raise ValueError("check material dependency requires a declared input")
@@ -976,6 +994,10 @@ def require_complete_generated_specifications(
             continue
         if specification is None:
             raise ValueError("check requirement lacks a check specification")
+        if expected_stage is CompilationStage.PRE_SUBMIT and any(
+            item.kind == "evaluation_context" for item in specification.inputs
+        ):
+            raise ValueError("evaluation context requires post-submit background work")
         if expected_stage is CompilationStage.PRE_SUBMIT:
             if specification.evaluation_method == "model_evaluation" or any(
                 dependency.kind == "model_service"
@@ -1313,8 +1335,18 @@ def _validate_bindings(
             raise ValueError("compilation capability binding is invalid")
         if definition.registry_entry is None:
             raise ValueError("compilation capability binding is invalid")
-        definition.registry_entry.configuration_schema.validate_instance(
-            {item.name: item.model_dump(mode="json")["value"] for item in binding.parameters}
+        configuration = {
+            item.name: item.model_dump(mode="json")["value"] for item in binding.parameters
+        }
+        definition.registry_entry.configuration_schema.validate_instance(configuration)
+        specification = requirement.check_specification
+        require_evaluation_context_agreement(
+            next(
+                (item.evaluation_context_roles for item in specification.inputs
+                 if item.kind == "evaluation_context"), None,
+            ) if specification is not None else None,
+            configuration,
+            definition.registry_entry,
         )
         seen_requirements.add(binding.requirement_id)
     return seen_requirements

@@ -74,6 +74,7 @@ def _provider_payload(value=None):
         if requirement["check_specification"] is not None:
             for item in requirement["check_specification"]["inputs"]:
                 item.setdefault("relative_path", None)
+                item.setdefault("evaluation_context_roles", None)
     return payload
 
 
@@ -82,6 +83,7 @@ def _provider_specification():
     specification = valid_specification().model_dump(mode="json")
     for item in specification["inputs"]:
         item.setdefault("relative_path", None)
+        item.setdefault("evaluation_context_roles", None)
     return specification
 
 
