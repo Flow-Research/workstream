@@ -16,7 +16,11 @@ from assessment import (
 from checker import DEFAULT_LIMITS
 from material import MaterialEvidence, MaterialError, MaterialSnapshot, collect_material
 from model_transport import ModelCallUnavailable, ModelSessionError
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import Rubric, RubricError, load_rubrics
 from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
 from trial_plan import (
@@ -92,13 +96,11 @@ def execute_author_accuracy_check(
 
 
 def _validate_request(request: dict[str, object]) -> None:
+    validate_requirement_identity(request)
     configuration = request["configuration"]
-    input_value = request["input"]
     if (
         type(configuration) is not dict
-        or type(input_value) is not dict
         or configuration.get("check") != AUTHOR_REQUIREMENT
-        or input_value.get("requirement_id") != AUTHOR_REQUIREMENT
     ):
         raise ValueError("invalid_request")
     validate_trial_configuration(configuration)

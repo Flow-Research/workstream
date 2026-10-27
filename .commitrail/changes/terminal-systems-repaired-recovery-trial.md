@@ -258,7 +258,7 @@ The [capability ledger](../../docs/roadmap_status.md) describes implemented guid
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Existing implementation and parent acceptance located | Current roadmap, owner records and #555/#576/#581/#582/#583 inspection | Discovery only | Deployed release fingerprints and real-project execution remain to be recorded |
-| Current rehearsal | Linked report's scenario matrix | NOT RUN | No current-run acceptance or release claim |
+| Current rehearsal | Linked report's scenario matrix | In progress: deployed release, public guide/isolation/replay and registry proofs retained; live setup rejected schema-invalid output | No current-run acceptance or release claim |
 
 ### Reconciliation
 
@@ -314,3 +314,101 @@ adapter and pass after repair before any provider call or model effect. Run
 affected SDK/handler tests and focused security/architecture/QA/test-delta
 review. Preserve the failed attempt; recovery must use an existing authorized
 owner after diagnosis, with no direct row edits or duplicate paid effect.
+
+## Setup instruction example conformance repair
+
+After metered request repair, the real run completed seven paid calls and ended
+with invalid terminal output. Separately, current-head CI and a focused local
+reproduction prove the canonical instruction example is invalid under the
+provider's strict schema: two non-evaluation-context inputs omit its required
+nullable `evaluation_context_roles` member. The accompanying instruction also
+incorrectly tells the model to omit it. The retained live outputs pass structural validation, so this example defect
+is not the demonstrated cause of the live failure. Its final output instead
+uses `checker_tool/current_runner` and `isolated_execution/trial_proxy`, which
+the canonical dependency owner correctly rejects. The prompt omits the exact
+legal provisioning for those kinds.
+
+Allowed: `backend/app/core/project_guide_instructions.py` and the existing
+`backend/tests/test_setup_checker_scope.py` regression if a distinct assertion
+is needed. Supply explicit null for unrelated input roles in provider-facing
+examples and correct the contradictory instruction. Add the exact legal
+`checker_tool/checker_implementation` and `isolated_execution/current_runner`
+guidance, with `implementation_unavailable`, and the required dependency for
+isolated evaluation. Prepared trial material must also declare its isolated
+trial dependency. Preserve model/trial/context guidance. Keep the original 16,000
+character instruction bound, strict parser, evaluation-context guards and
+canonical stored-result omission/hash semantics unchanged. No compatibility
+path or schema relaxation. Preserve the failed actual attempt, all seven paid
+effects and the same project budget. Any further inference uses a supported
+fresh request after diagnosis; never reopen invalid terminal evidence.
+
+Proof: the unchanged complete-example regression fails before repair and must
+pass afterward; run affected instruction/parser/SDK tests, verify prompt bounds,
+and obtain focused QA/test-delta, security/architecture and documentation review
+on the frozen combined candidate. The live attempt and hosted CI failure remain
+explicitly retained evidence, not passing qualification. A private offline
+control may correct only the four provisioning values to identify the exact
+failed invariant; never persist that edited model output as a proposal. Retain a
+small public synthetic regression proving the new guidance and canonical
+validator agree, including missing or substituted guidance probes. The actual
+four-value control exposes a second required invariant: two prepared-material
+specifications lack `nested_sandbox/trial_proxy`. Adding only those required
+dependencies in the private copy passes structural, canonical and actual-context
+validation. This is a diagnostic control, never an approved model result.
+
+## Project POST requirement identity repair
+
+The retained generated output selects all ten intended configured checks and
+exact published registry selectors. Seven POST requirement names differ from
+the configured rubric selector. That is valid under the published input schema
+and Workstream's locked binding contract, but the project image incorrectly
+requires equality and would return infrastructure failure. PRE already keeps
+these identities separate. Do not force the generic setup agent to use this
+project's private rubric names or silently rename retained proposals.
+
+Allowed: `pilots/terminal_systems/checkers/post/model/{checker,runtime_checker,author_checker,revision_checker,result}.py`
+and their existing focused test modules; a focused alias/finding case in the
+existing PRE test module if needed to prove the intentional contract difference.
+Related project-checker README/qualification documentation and this report may
+be reconciled. No generic execution, AUTH, registry, compiler or schema changes.
+
+Keep the configured supported check as the exact rubric selector. Independently
+validate the input's opaque requirement identifier with the published strict
+identifier shape. Reuse one small validator in the existing result module where
+it avoids four duplicate guards. Preserve request-digest/registry/phase binding,
+all model/trial and revision-context controls, and project-local finding check
+IDs, which the canonical output contract permits. Unknown or wrong configured
+checks and malformed requirement identifiers must still fail before model or
+trial effects. No compatibility alias, fallback or alternate result path.
+
+Proof: reproduce a valid alias being rejected on the original image code, then
+exercise generic semantic, runtime, author and revision paths with distinct
+valid requirement IDs. Assert unchanged rubric/trial selection and meaningful
+findings; independently retain malformed-ID and wrong-selector rejection before
+effects. Run affected project suites and focused security/architecture/QA/test-
+delta review. Qualify a new immutable POST image and registry identities before
+use; never rewrite earlier registered entries, retained trial authority or
+locked policy facts. PRE production/image identity remains unchanged.
+
+
+### Additional repair verification
+
+The existing instruction-example regression fails on the prior source and
+passes with explicit nullable provider fields; its typed canonical hash remains
+unchanged. Dependency guidance is checked against the actual typed invariants. All 204
+affected instruction/runtime/specification tests pass, including the unchanged
+16,000-character bound; twelve omission/substitution probes detect the intended
+failures.
+The project POST repair passes 83 tests (plus 99 subtests); unchanged PRE passes
+17 tests (plus 12 subtests), and 30 canonical external-contract cases pass.
+Replaying the alias regressions against the original five owner files fails all
+five execution paths. Removing only the shared ID validation fails malformed-ID
+cases. Separate canonical request/result composition accepts a deliberately
+different requirement/finding identifier and rejects a substituted request digest.
+These are local proofs; they do not qualify the new image or complete journey.
+
+Roadmap reconciliation adds only the affected detailed integration repairs and
+links the actual in-progress report. Executive summary, scoreboard, dependency
+and remaining release gates still require approved policies and the realistic
+public journey; none are marked completed by these repairs. Current main's CLI
+work must be preserved when reconciling the branch before final review.

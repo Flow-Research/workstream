@@ -16,6 +16,14 @@ The external Rust service supplies isolated execution. This project's Python
 POST image decides what to inspect and how to assess it against the project
 requirements. A different project supplies its own rules and image.
 
+`configuration.check` selects the project's fixed evaluator/rubric. The locked
+policy's `input.requirement_id` is a separate opaque identifier: it may name the
+same requirement differently. POST validates that identifier's format without
+using it to select the rubric. Findings retain their project-local `check_id`;
+the result's request digest, registry identity and phase bind them to the exact
+invocation. A new image containing this correction must be registered and
+qualified before use; earlier registry entries and locked bindings are retained.
+
 Here, a **trial** is one isolated execution of submitted code, such as a build
 or test run. The `trial_*` modules implement its transport, limits, execution,
 and evidence handling; they are not separate services or product lifecycles.

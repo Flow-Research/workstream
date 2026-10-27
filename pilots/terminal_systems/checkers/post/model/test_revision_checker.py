@@ -285,6 +285,76 @@ class RevisionCheckerTests(unittest.TestCase):
         self.assertEqual(result["infrastructure_failure_code"], "material_unavailable")
         self.assertEqual(result["findings"], [])
 
+    def test_policy_requirement_alias_preserves_revision_objective_rubric(self):
+        objective = request(REVISION_OBJECTIVE_REQUIREMENT, "checker_remediation")
+        objective["input"]["requirement_id"] = (
+            "revision_explains_and_preserves_objective"
+        )
+        model = RevisionModel()
+        result = execute_revision_objective_check(
+            objective,
+            self.current,
+            model,
+            predecessor_root=self.prior,
+        )
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "passed")
+        )
+        self.assertEqual(model.calls, 1)
+
+    def test_policy_requirement_alias_preserves_failed_revision_rerun(self):
+        rerun = request(REVISION_RERUN_REQUIREMENT, "checker_remediation")
+        rerun["input"]["requirement_id"] = "fresh_revision_verification"
+        plans = []
+
+        def trial(plan):
+            plans.append(plan)
+            return trial_from_plan(plan, verification_fails=True)
+
+        failed = execute_revision_rerun_check(rerun, self.current, trial)
+        self.assertEqual(
+            (failed["outcome"], failed["verdict"]), ("completed", "failed")
+        )
+        self.assertEqual(
+            [step["slot_id"] for step in plans[0]["steps"]],
+            ["revision_reference", "revision_verification"],
+        )
+        self.assertEqual(failed["findings"][0]["check_id"], REVISION_RERUN_REQUIREMENT)
+        self.assertEqual(failed["findings"][0]["code"], "revision_rerun_failure")
+
+    def test_revision_refuses_bad_identity_or_wrong_selector_before_effects(self):
+        for check in (REVISION_OBJECTIVE_REQUIREMENT, REVISION_RERUN_REQUIREMENT):
+            for mutation in (
+                lambda value: value["input"].update(requirement_id="bad identity"),
+                lambda value: value["input"].pop("requirement_id"),
+                lambda value: value["configuration"].update(
+                    check="solver_brief_and_extension_disclosure"
+                ),
+            ):
+                with self.subTest(check=check, mutation=mutation):
+                    selected = request(check, "checker_remediation")
+                    mutation(selected)
+                    model = RevisionModel()
+                    if check == REVISION_OBJECTIVE_REQUIREMENT:
+                        result = execute_revision_objective_check(
+                            selected,
+                            self.current / "missing",
+                            model,
+                            predecessor_root=self.prior,
+                        )
+                    else:
+                        result = execute_revision_rerun_check(
+                            selected,
+                            self.current / "missing",
+                            lambda _plan: self.fail(
+                                "invalid selection must not execute a trial"
+                            ),
+                        )
+                    self.assertEqual(
+                        result["infrastructure_failure_code"], "invalid_output"
+                    )
+                    self.assertEqual(model.calls, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

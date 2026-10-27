@@ -13,7 +13,11 @@ from model_transport import (
     ModelCallUnavailable,
     ModelSessionError,
 )
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import RubricError
 from trial_assessment import (
     TrialAssessmentError,
@@ -115,14 +119,12 @@ def execute_runtime_check(
 
 
 def _validate_request(request: dict[str, object]) -> None:
+    validate_requirement_identity(request)
     try:
         configuration = request["configuration"]
-        input_value = request["input"]
         if (
             type(configuration) is not dict
-            or type(input_value) is not dict
             or configuration.get("check") != RUNTIME_REQUIREMENT
-            or input_value.get("requirement_id") != RUNTIME_REQUIREMENT
         ):
             raise ValueError("invalid_request")
         validate_trial_configuration(configuration)

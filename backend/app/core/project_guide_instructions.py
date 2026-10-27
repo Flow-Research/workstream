@@ -47,6 +47,7 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
+                            "evaluation_context_roles": None,
                             "purpose": "Supplies the report to inspect.",
                         }
                     ],
@@ -116,6 +117,7 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
+                            "evaluation_context_roles": None,
                             "purpose": "Supplies the report to inspect.",
                         }
                     ],
@@ -313,26 +315,27 @@ referenced finding is error. Infrastructure failures (support/material, capacity
 deadline, provider, invalid output) never consume revision rounds or become work failures.
 
 DEPENDENCIES
-Specifications grant no access. Images get verified materials and approved metadata,
-never provider keys or host sockets. current_runner isolates images.
-POST model_evaluation requires model_service/model_proxy and implementation_unavailable.
-Model checks and assisted trials need a registered project image and its exact approved profile.
-Building environments or isolating trials requires nested_sandbox/trial_proxy,
-implementation_unavailable and exact trial profile/projection pins. Only the
-invocation-local trial tool receives authority. Its offline cache
-declares prepared_material/trial_proxy and material_unavailable, not arbitrary
-external data. Model and trial tools may serve the same check. Missing registered
-images/profiles require unbound capability suggestions; supported bindings cannot
-use runtime_gap.
-POST background revision checks use evaluation_context/current_runner and
-material_unavailable. The evaluation_context input's evaluation_context_roles must
-be sorted selections from predecessor_findings and predecessor_submission_archive.
-The registry schema must declare workstream_evaluation_context_version and
-workstream_evaluation_context_roles; select v1 and identical roles in the binding.
-Omit the roles field on other inputs. Model-only checks and trials may use context.
-task_context, evaluation_context, guide_context and prepared_material require
-matching inputs/dependencies. Unavailable task/guide prose or external data remains
-runtime_gap. Include each dependency failure code once in infrastructure_failures.
+Specifications grant no access. Images: verified material/approved metadata;
+no provider keys/host sockets. kind/provisioning; unavailable_code=implementation_unavailable:
+checker_tool/checker_implementation; isolated_execution/current_runner;
+model_service/model_proxy (POST background); nested_sandbox/trial_proxy.
+evaluation_method/kind: isolated_execution requires isolated_execution;
+model_evaluation requires model_service.
+Models/trials need a registered project image and its exact approved profile.
+Builds/trials need nested_sandbox and exact trial profile/projection pins;
+invocation-local trial authority only.
+Cache: prepared_material/trial_proxy/material_unavailable requires nested_sandbox/trial_proxy.
+No arbitrary external data. model+trial=model_service+nested_sandbox;
+nested never replaces isolated_execution.
+Missing images/profiles: unbound suggestions. No supported runtime_gap.
+POST background revision: evaluation_context/current_runner/material_unavailable.
+evaluation_context_roles selects sorted predecessor_findings and/or
+predecessor_submission_archive; null elsewhere. Registry schemas declare
+workstream_evaluation_context_version and workstream_evaluation_context_roles;
+bind v1 and identical roles. Model-only checks/trials may use context.
+Match inputs/dependencies for task_context, evaluation_context, guide_context,
+prepared_material. Unavailable task/guide prose or external data stays runtime_gap.
+List dependency codes once in infrastructure_failures.
 execution_capacity needs a stage shortfall.
 
 OUTPUT AND VALIDATION

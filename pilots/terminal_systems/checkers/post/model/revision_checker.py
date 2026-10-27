@@ -17,7 +17,11 @@ from assessment import (
 )
 from material import MaterialEvidence, MaterialSnapshot
 from model_transport import ModelCallUnavailable, ModelSessionError
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import RubricError, load_rubrics
 from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
 from trial_assessment import load_revision_rerun_rubric
@@ -146,6 +150,7 @@ class MaterialContextError(RuntimeError):
 
 
 def _context(request: dict[str, object], requirement_id: str) -> dict[str, object]:
+    validate_requirement_identity(request)
     configuration = request["configuration"]
     input_value = request["input"]
     context = input_value["evaluation_context"]
@@ -153,7 +158,6 @@ def _context(request: dict[str, object], requirement_id: str) -> dict[str, objec
         type(configuration) is not dict
         or configuration.get("check") != requirement_id
         or type(input_value) is not dict
-        or input_value.get("requirement_id") != requirement_id
         or type(context) is not dict
         or context.get("schema_version")
         != "workstream.post_submit_evaluation_context.v1"

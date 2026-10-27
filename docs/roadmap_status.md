@@ -1728,6 +1728,13 @@ uses retained reference-repaired state for interruption/restart and rejects a
 failed restart verifier despite model approval. Local subprocess proof covers
 that repair; its new immutable image/projection still needs registration,
 approved binding and qualification on the intended runtime.
+The same drill repair makes setup's provider-facing example schema-valid and
+states the existing dependency-owner combinations explicitly. Its project POST
+image also validates opaque policy requirement IDs independently of the configured
+rubric, preserving local finding IDs and exact request binding. These close
+reproduced integration defects; the [current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md)
+retains the rejected setup and accounting evidence. Fresh image qualification,
+manager approvals and the complete real-project contribution outcome remain gates.
 An earlier controlled-provider gVisor qualification applies only to its recorded
 historical implementation; it does not qualify the Smol deployment target.
 Native Smol KVM composition 013 passed on native build `b2ce3fa45`, using the production Rust
