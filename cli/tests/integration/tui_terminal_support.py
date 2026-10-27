@@ -870,8 +870,12 @@ def _conpty_child(receipt_path, redirect, argv):
 
 
 @contextmanager
-def socket_peer(respond):
-    """Threaded hostile HTTP peer: every unexpected request is recorded/fails."""
+def socket_peer(respond, *, capture_post=None):
+    """Threaded hostile HTTP peer: every unexpected request is recorded/fails.
+
+    The optional hook observes the exact POST headers and bytes before the
+    ordinary three-argument responder runs. Existing GET-only peers stay strict.
+    """
     requests = []
     failures = []
 
@@ -880,6 +884,9 @@ def socket_peer(respond):
             request = (self.command, self.path, self.headers.get("Authorization"))
             requests.append(request)
             try:
+                if self.command == "POST" and capture_post is not None:
+                    body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                    capture_post(self.path, dict(self.headers), body)
                 result = respond(*request)
                 status, body = result[:2]
                 media_type = result[2] if len(result) == 3 else "application/json"

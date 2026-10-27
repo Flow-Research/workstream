@@ -31,6 +31,8 @@ type fakeClient struct {
 	intake                           func(context.Context, string) (api.Result[api.SubmissionRequirements], error)
 	findings                         func(context.Context, string, string, int, *string) (api.Result[api.SubmissionFindingsResult], error)
 	download                         func(context.Context, string, api.TaskGuideDocument, io.Writer) error
+	claim                            func(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
+	start                            func(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
 	assignmentQuery, submissionQuery api.PageQuery
 }
 
@@ -110,6 +112,23 @@ func (f *fakeClient) DownloadGuideDocument(ctx context.Context, task string, doc
 	_, err := target.Write([]byte("guide"))
 	return err
 }
+func (f *fakeClient) ClaimTask(ctx context.Context, task, key string, reason *string) (api.Result[api.ClaimedTask], error) {
+	f.calls = append(f.calls, "claim")
+	if f.claim != nil {
+		return f.claim(ctx, task, key, reason)
+	}
+	return api.Result[api.ClaimedTask]{Value: api.ClaimedTask{
+		Task:       api.MutationTask{ID: task, ProjectID: projectID, Status: "claimed"},
+		Assignment: api.TaskAssignment{TaskID: task, ProjectID: projectID, ContributorID: actorID},
+	}}, nil
+}
+func (f *fakeClient) StartTask(ctx context.Context, task, key string, reason *string) (api.Result[api.MutationTask], error) {
+	f.calls = append(f.calls, "start")
+	if f.start != nil {
+		return f.start(ctx, task, key, reason)
+	}
+	return api.Result[api.MutationTask]{Value: api.MutationTask{ID: task, ProjectID: projectID, Status: "in_progress"}}, nil
+}
 
 func apply(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
@@ -133,6 +152,8 @@ func keyMessage(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	case "down":
 		return tea.KeyPressMsg{Code: tea.KeyDown}
 	case "up":

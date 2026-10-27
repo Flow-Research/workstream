@@ -13,6 +13,11 @@ import pytest
 
 from test_contributor_reads_http import ASSIGNMENT_ROW, PROJECT_ROW, SUBMISSION_ROW
 from test_contributor_task_http import CONTRIBUTOR, READY
+from test_contributor_task_mutations import (
+    KEY as CLAIM_KEY,
+    body as mutation_body,
+    canonical_error,
+)
 from test_http_boundary import ACTOR, PROFILE, PROJECT, TOKEN
 from test_submission_http import CHECKER as SUBMISSION_CHECKER
 from test_submission_http import HISTORY, RUN, SUBMISSION
@@ -22,6 +27,7 @@ from tui_terminal_support import Terminal, environment, executable, socket_peer
 
 OTHER_PROJECT = "018f0ebc-7966-7e8d-bc4d-1cae1e000099"
 OTHER_TASK = "018f0ebc-7966-7e8d-bc4d-1cae1e000098"
+START_KEY = "018f0ebc-7966-7e8d-bc4d-1cae1e000097"
 CURSOR = "opaque+/=&?#next"
 CHECKER = deepcopy(SUBMISSION_CHECKER)
 CHECKER["task_id"] = TASK
@@ -112,6 +118,49 @@ class Reads:
         else:
             assert query == {}
         return 200, routes[path]
+
+
+class Writes(Reads):
+    """Opt-in writes for action tests; the ordinary Reads peer remains GET-only."""
+
+    def __init__(self, action="claim"):
+        super().__init__()
+        self.action = action
+        self.replies = [(200, mutation_body(action))]
+        if action == "start":
+            self.task["status"] = "claimed"
+            self.mine = page(
+                ASSIGNMENT_ROW
+                | {"title": "Assigned terminal task", "task_status": "claimed"}
+            )
+
+    def __call__(self, method, target, authorization):
+        if method == "GET":
+            return super().__call__(method, target, authorization)
+        assert method == "POST"
+        assert authorization == "Bearer " + TOKEN
+        assert target == TASK_PATH + "/" + self.action
+        assert self.replies, "unexpected duplicate TUI POST"
+        return self.replies.pop(0)
+
+
+def action_detail(terminal, action):
+    open_ready(terminal)
+    if action == "start":
+        terminal.send("2")
+        terminal.wait("Assigned terminal task")
+    terminal.send("\r")
+    terminal.wait(SECRET)
+
+
+def action_confirm(terminal, action, key):
+    terminal.send("a")
+    terminal.wait("Caller-owned replay key")
+    terminal.send(key)
+    terminal.send("\r")
+    terminal.wait("Confirm " + action)
+    assert TASK in terminal.screen and PROJECT in terminal.screen
+    assert ACTOR in terminal.screen and key in terminal.screen
 
 
 def open_ready(terminal, project_name="Terminal project"):
@@ -280,6 +329,244 @@ def test_hidden_native_confirmation_does_not_download(tmp_path):
         terminal.send("y")
         terminal.wait("Downloaded")
         assert (tmp_path / f"{ACTOR}.md").read_bytes() == GUIDE_BYTES
+        terminal.quit()
+
+
+@pytest.mark.parametrize("action", ["claim", "start"])
+def test_task_action_requires_visible_acknowledged_confirmation_and_exact_wire(action):
+    peer = Writes(action)
+    key = CLAIM_KEY if action == "claim" else START_KEY
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda path, headers, body: posts.append(
+                (path, headers, body)
+            ),
+        ) as (origin, requests),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        action_detail(terminal, action)
+        terminal.send("a")
+        terminal.wait("Caller-owned replay key")
+        terminal.send(key)
+        terminal.send("\r")
+        terminal.wait("Confirm " + action)
+        assert TASK in terminal.screen and PROJECT in terminal.screen
+        assert ACTOR in terminal.screen and key in terminal.screen
+        terminal.send("y")
+        terminal.pump(0.2)
+        assert posts == [], "Enter or unacknowledged y dispatched a write"
+        terminal.resize(30, 8)
+        terminal.wait("Resize")
+        terminal.send("sy")
+        terminal.pump(0.2)
+        assert posts == [], "hidden confirmation dispatched a write"
+        terminal.resize(120, 40)
+        terminal.wait("Confirm " + action)
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait(action.capitalize() + " confirmed")
+        assert len(posts) == 1
+        assert posts[0][0] == TASK_PATH + "/" + action
+        assert posts[0][1]["Authorization"] == "Bearer " + TOKEN
+        assert posts[0][1]["Idempotency-Key"] == key
+        assert posts[0][1]["Content-Type"] == "application/json"
+        assert posts[0][2] == b"{}"
+        terminal.send("y")
+        terminal.pump(0.2)
+        assert len(posts) == 1, "repeated confirmation key dispatched twice"
+        assert [method for method, _, _ in requests].count("POST") == 1
+        terminal.quit()
+
+
+def test_pasted_replay_key_requires_manual_confirmation_and_pasted_commands_are_inert():
+    peer = Writes()
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda path, headers, body: posts.append(
+                (path, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        action_detail(terminal, "claim")
+        terminal.send("a")
+        terminal.wait("Caller-owned replay key")
+        terminal.send("\x1b[200~" + CLAIM_KEY + "\ny\x1b[201~")
+        terminal.wait("Paste one UUID without spaces or control characters")
+        assert posts == []
+        terminal.send("\r")
+        terminal.wait("Enter a caller-owned UUID")
+        assert "Confirm claim" not in terminal.screen
+        terminal.send("\x1b")
+        terminal.wait(SECRET)
+        terminal.send("a")
+        terminal.wait("Caller-owned replay key")
+        terminal.send("\x1b[200~" + CLAIM_KEY + "\x1b[201~")
+        terminal.wait(CLAIM_KEY)
+        assert posts == []
+        terminal.send("\r")
+        terminal.wait("Confirm claim")
+        terminal.send("\x1b[200~sy\x1b[201~")
+        terminal.pump(0.2)
+        assert posts == [], "pasted confirmation keys dispatched a write"
+        terminal.send("y")
+        terminal.pump(0.2)
+        assert posts == [], "pasted acknowledgment was accepted"
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait("Claim confirmed")
+        assert len(posts) == 1 and posts[0][2] == b"{}"
+        terminal.quit()
+
+
+@pytest.mark.parametrize(
+    ("action", "corruption"),
+    [
+        ("claim", "task_project"),
+        ("claim", "assignment_actor"),
+        ("claim", "malformed"),
+        ("start", "task_project"),
+    ],
+)
+def test_task_action_corrupt_success_is_unknown_and_not_retried(action, corruption):
+    peer = Writes(action)
+    value = mutation_body(action)
+    if corruption == "task_project":
+        (value["task"] if action == "claim" else value)["project_id"] = OTHER_PROJECT
+        if action == "claim":
+            value["assignment"]["project_id"] = OTHER_PROJECT
+    elif corruption == "assignment_actor":
+        value["assignment"]["contributor_id"] = OTHER_TASK
+        value["assignment"]["assigned_by"] = OTHER_TASK
+    else:
+        value = b"{"
+    peer.replies = [(200, value)]
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda path, headers, body: posts.append(
+                (path, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        action_detail(terminal, action)
+        action_confirm(terminal, action, CLAIM_KEY)
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait("Outcome unknown")
+        terminal.pump(0.2)
+        assert len(posts) == 1, "malformed success was automatically retried"
+        assert "confirmed" not in terminal.screen.lower()
+        assert TOKEN.encode() not in terminal.raw
+        terminal.quit()
+
+
+def test_pending_claim_consumes_navigation_refresh_replay_and_resize_keys():
+    peer = Writes()
+    posted, release = Event(), Event()
+    posts = []
+
+    def capture(path, headers, body):
+        posts.append((path, headers, body))
+        posted.set()
+        assert release.wait(10), "test did not release pending POST"
+
+    with (
+        socket_peer(peer, capture_post=capture) as (origin, requests),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        try:
+            action_detail(terminal, "claim")
+            action_confirm(terminal, "claim", CLAIM_KEY)
+            terminal.send("s")
+            terminal.send("y")
+            assert posted.wait(5)
+            terminal.wait("Sending claim")
+            terminal.send("r123apy")
+            terminal.resize(30, 8)
+            terminal.wait("Resize")
+            terminal.send("r123apy")
+            terminal.resize(120, 40)
+            terminal.wait("Sending claim")
+            assert len(posts) == 1
+            release.set()
+            terminal.wait("Claim confirmed")
+            assert len(posts) == 1
+            assert [method for method, _, _ in requests].count("POST") == 1
+            assert TASK in terminal.screen and CLAIM_KEY in terminal.screen
+            terminal.quit()
+        finally:
+            release.set()
+
+
+def test_unknown_replay_denial_preserves_original_unknown_packet():
+    peer = Writes()
+    peer.replies = [
+        (200, b"{"),
+        (403, canonical_error()),
+    ]
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda path, headers, body: posts.append(
+                (path, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        action_detail(terminal, "claim")
+        action_confirm(terminal, "claim", CLAIM_KEY)
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait("Outcome unknown")
+        assert len(posts) == 1
+        terminal.send("p")
+        terminal.wait("Confirm claim")
+        assert CLAIM_KEY in terminal.screen
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait("Request denied")
+        assert len(posts) == 2
+        assert [
+            (path, headers["Idempotency-Key"], body) for path, headers, body in posts
+        ] == [
+            (TASK_PATH + "/claim", CLAIM_KEY, b"{}"),
+            (TASK_PATH + "/claim", CLAIM_KEY, b"{}"),
+        ]
+        assert "Outcome unknown" in terminal.screen
+        terminal.quit()
+
+
+def test_confirmed_claim_survives_separate_read_failure_without_restoring_text():
+    peer = Writes()
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda path, headers, body: posts.append(
+                (path, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain") as terminal,
+    ):
+        action_detail(terminal, "claim")
+        action_confirm(terminal, "claim", CLAIM_KEY)
+        terminal.send("s")
+        terminal.send("y")
+        terminal.wait("Claim confirmed")
+        peer.overrides[TASK_PATH] = lambda _: denial(404)
+        terminal.send("r")
+        terminal.wait("Denied")
+        assert "Claim confirmed" in terminal.screen
+        assert SECRET not in terminal.screen
+        assert len(posts) == 1
         terminal.quit()
 
 

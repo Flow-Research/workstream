@@ -16,7 +16,7 @@ import (
 
 func addTUI(root *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer, getenv environment) {
 	var plain bool
-	cmd := &cobra.Command{Use: "tui", Short: "Open the opt-in read-only contributor workbench", Args: cobra.NoArgs,
+	cmd := &cobra.Command{Use: "tui", Short: "Open the opt-in contributor workbench", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if *output != "text" {
 				return commandError{"invalid_output", "tui requires text output; use ordinary commands with --output json"}
@@ -36,7 +36,7 @@ func addTUI(root *cobra.Command, client func() (*api.Client, error), output *str
 	root.AddCommand(cmd)
 }
 
-func runTUI(ctx context.Context, client tui.ReadClient, input io.Reader, output io.Writer, getenv environment, plain bool) (err error) {
+func runTUI(ctx context.Context, client tui.Client, input io.Reader, output io.Writer, getenv environment, plain bool) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	observed := &terminalOutput{destination: output, cancel: cancel}

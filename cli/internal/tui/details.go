@@ -124,7 +124,9 @@ func (m *Model) taskText() string {
 		}
 	}
 	d.note("Terms are potential earned terms, not acceptance or fulfillment.")
-	d.note("No action can be sent from this workbench.")
+	if m.canOpenAction() {
+		d.note("a actions opens the deliberate " + m.actionName() + " flow; server authorization is checked again on write.")
+	}
 	d.heading("References")
 	d.line("Task", v.TaskID)
 	d.line("Project", v.ProjectID)

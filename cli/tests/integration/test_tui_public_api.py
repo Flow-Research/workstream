@@ -1,9 +1,10 @@
 """Built native PTY/ConPTY -> real socket/Flow verifier -> isolated PostgreSQL.
 
 Canonical fixtures arrange an approved guide, started work and a retained
-immutable attempt. This is read/navigation/reauthorization proof, not a public
-intake or external artifact-provider journey. No AUTH/TASK read port is replaced;
-only the signed fixture issuer's JWKS transport is local.
+immutable attempt. The original test remains GET-only; the separate action
+test proves claim/start through the native UI. Neither is a public intake or
+external artifact-provider journey. No AUTH/TASK port is replaced; only the
+signed fixture issuer's JWKS transport is local.
 """
 
 import asyncio
@@ -219,3 +220,151 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
         )
         assert ("GET", paths["submission"], b"") in requests
         assert await counts() == before, "read-only TUI mutated product records"
+
+
+@pytest.mark.asyncio
+async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
+    tmp_path, auth_database_env, admin_access
+):
+    signed = admin_access.signed
+    async with _prepared_packet(auth_database_env, tmp_path) as h:
+        subject = f"human-{h.context.actor_profile_id}"
+        owner = SignedActor(
+            h.context.actor_profile_id,
+            subject,
+            issue_asymmetric_token(
+                signed.private_key,
+                claims={"sub": subject, "jti": str(uuid4()), "roles": []},
+            ),
+        )
+        client = signed.client
+        profile = await client.get("/api/v1/actors/me", headers=owner.headers)
+        assert profile.status_code == 200, profile.text
+        assert profile.json()["actor_profile_id"] == str(owner.id)
+        access = SimpleNamespace(signed=signed)
+        ready_id = await create_task(access, h.project_id, owner)
+        project, task = str(h.project_id), str(ready_id)
+        detail_path = f"/api/v1/tasks/{task}"
+        ready = await client.get(detail_path, headers=owner.headers)
+        assert ready.status_code == 200, ready.text
+        assert ready.json()["status"] == "ready"
+        projects = await client.get(
+            "/api/v1/actors/me/projects?limit=50", headers=owner.headers
+        )
+        assert projects.status_code == 200, projects.text
+        project_name = projects.json()["items"][0]["name"]
+        manager = await project_manager(admin_access, h.project_id)
+        claim_key, start_key = str(uuid4()), str(uuid4())
+        writes = []
+        app = client._transport.app
+        assert not app.dependency_overrides, (
+            "public proof cannot replace AUTH/TASK owners"
+        )
+
+        async def observed(scope, receive, send):
+            if scope["type"] == "http" and scope["method"] == "POST":
+                writes.append(
+                    (
+                        scope["path"],
+                        dict(scope["headers"]).get(b"idempotency-key", b"").decode(),
+                    )
+                )
+            await app(scope, receive, send)
+
+        async with socket_api(observed) as origin:
+            with Terminal(origin, owner.token, "--plain") as terminal:
+
+                async def wait(text):
+                    return await asyncio.to_thread(terminal.wait, text)
+
+                async def confirm(action, key):
+                    terminal.send("a")
+                    await wait("Caller-owned replay key")
+                    terminal.send(key)
+                    terminal.send("\r")
+                    await wait("Confirm " + action)
+                    assert task in terminal.screen and key in terminal.screen
+                    assert (
+                        project in terminal.screen and str(owner.id) in terminal.screen
+                    )
+                    terminal.send("s")
+                    terminal.send("y")
+                    await wait(action.capitalize() + " confirmed")
+
+                async def replay(action):
+                    terminal.send("p")
+                    await wait("Confirm " + action)
+                    terminal.send("s")
+                    terminal.send("y")
+                    await wait(action.capitalize() + " confirmed")
+
+                await wait(project_name)
+                terminal.send("\r")
+                await wait("Evaluate proof")
+                terminal.send("\r")
+                await wait(task)
+                await confirm("claim", claim_key)
+                await replay("claim")
+                # Claim does not implicitly start. A fresh Mine read and exact
+                # task detail are required before opening the second action.
+                terminal.send("\x1b")
+                await wait(ready.json()["description"])
+                terminal.send("2")
+                await wait("Evaluate proof")
+                terminal.send("/Evaluate proof\r")
+                await wait("local filter: Evaluate proof")
+                terminal.send("\r")
+                await wait(task)
+                await confirm("start", start_key)
+                await replay("start")
+                current = await client.get(detail_path, headers=owner.headers)
+                assert current.status_code == 200, current.text
+                assert current.json()["status"] == "in_progress"
+                async with h.factory() as session:
+                    assignments = (
+                        await session.scalars(
+                            select(TaskAssignment).where(TaskAssignment.task_id == task)
+                        )
+                    ).all()
+                    assert len(assignments) == 1
+                    assert assignments[0].contributor_id == str(owner.id)
+                    grant_id = await session.scalar(
+                        select(ProjectRoleGrant.id).where(
+                            ProjectRoleGrant.actor_profile_id == str(owner.id),
+                            ProjectRoleGrant.project_id == project,
+                            ProjectRoleGrant.role == "submitter",
+                            ProjectRoleGrant.status == "active",
+                        )
+                    )
+                assert grant_id is not None
+                revoked = await client.post(
+                    f"/api/v1/projects/{project}/role-grants/{grant_id}/revoke",
+                    headers=manager.headers | {"Idempotency-Key": str(uuid4())},
+                    json={"reason": "Prove fresh authority after native TUI replay"},
+                )
+                assert revoked.status_code == 200, revoked.text
+                terminal.send("p")
+                await wait("Confirm start")
+                terminal.send("s")
+                terminal.send("y")
+                await wait("Request denied")
+                assert "Start confirmed" in terminal.screen
+                assert ready.json()["description"] not in terminal.screen
+                await asyncio.to_thread(terminal.quit)
+                assert owner.token.encode() not in terminal.raw
+
+        assert writes == [
+            (detail_path + "/claim", claim_key),
+            (detail_path + "/claim", claim_key),
+            (detail_path + "/start", start_key),
+            (detail_path + "/start", start_key),
+            (detail_path + "/start", start_key),
+        ]
+        for denied_key in (start_key, str(uuid4())):
+            denied = await client.post(
+                detail_path + "/start",
+                headers=owner.headers | {"Idempotency-Key": denied_key},
+                json={},
+            )
+            assert denied.status_code == 403, denied.text
+        assert (await client.get(detail_path, headers=owner.headers)).status_code == 404

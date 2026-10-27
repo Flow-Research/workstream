@@ -36,7 +36,7 @@ const (
 
 // Model owns one fetched page and one exact detail, never an authority cache.
 type Model struct {
-	client                                            ReadClient
+	client                                            Client
 	ctx                                               context.Context
 	stop                                              context.CancelFunc
 	cancel                                            context.CancelFunc
@@ -70,10 +70,11 @@ type Model struct {
 	guideDirectory, guideNotice                       string
 	download                                          *guideDownload
 	viewport                                          viewport.Model
+	write                                             writeState
 }
 
 // New has no I/O; the first adequately sized terminal event starts actor binding.
-func New(ctx context.Context, client ReadClient, token string, plain, noColor bool) *Model {
+func New(ctx context.Context, client Client, token string, plain, noColor bool) *Model {
 	ctx, stop := context.WithCancel(ctx)
 	return &Model{ctx: ctx, stop: stop, client: client, token: token, plain: plain,
 		noColor: noColor || plain, picker: true, page: 1, viewport: viewport.New()}
@@ -105,6 +106,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.backgroundKnown, m.darkBackground = true, msg.IsDark()
 	case response:
 		return m, m.receive(msg)
+	case writeResponse:
+		m.receiveWrite(msg)
+		return m, nil
+	case tea.PasteMsg:
+		m.paste(msg.Content)
+		return m, nil
 	case tea.KeyPressMsg:
 		return m, m.key(msg)
 	}
@@ -168,11 +175,20 @@ func (m *Model) selectedRow() (row, bool) {
 
 func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 	k := key.String()
-	if k == "ctrl+c" || (!m.filtering && m.guideMode != guideDestination && k == "q") {
+	if k == "ctrl+c" || (!m.filtering && m.guideMode != guideDestination && m.write.mode != writeKeyEntry && k == "q") {
 		m.closed = true
 		m.invalidate()
 		m.stop()
 		return tea.Quit
+	}
+	if m.write.mode == writePending {
+		return nil
+	}
+	if m.write.mode == writeKeyEntry || m.write.mode == writeConfirm || m.write.mode == writeOutcome {
+		if m.tooSmall() {
+			return nil
+		}
+		return m.writeKey(key)
 	}
 	if m.filtering {
 		switch k {
@@ -242,13 +258,6 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 	if m.blocked || m.tooSmall() {
 		return nil
 	}
-	if k == "g" && m.actor != "" {
-		m.invalidate()
-		m.clearPage()
-		m.picker = true
-		m.project, m.projectName = "", ""
-		return m.begin(projectsRead)
-	}
 	if k == "c" {
 		m.handoff = !m.handoff
 		m.viewport.GotoTop()
@@ -256,6 +265,31 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.handoff {
 		return m.scroll(k)
+	}
+	if k == "g" && m.actor != "" {
+		m.invalidate()
+		m.clearPage()
+		m.picker = true
+		m.project, m.projectName = "", ""
+		return m.begin(projectsRead)
+	}
+	if k == "p" && m.canReplay() {
+		m.write.mode, m.write.acknowledged, m.write.replay = writeConfirm, false, true
+		return nil
+	}
+	if k == "a" && m.canOpenAction() {
+		m.openAction()
+		return nil
+	}
+	if !m.picker && (k == "1" || k == "2" || k == "3") {
+		target := tab(int(k[0] - '1'))
+		if target != m.tab || m.detail {
+			m.invalidate()
+			m.clearPage()
+			m.tab = target
+			return m.begin(pageRead)
+		}
+		return nil
 	}
 	if k == "esc" && m.detail {
 		if m.tab == submissions && m.section == 1 {
@@ -270,10 +304,14 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 		m.failure = ""
 		return nil
 	}
-	if k == "tab" && !m.picker && !m.detail {
+	if (k == "tab" || k == "shift+tab") && !m.picker && !m.detail {
 		m.invalidate()
 		m.clearPage()
-		m.tab = (m.tab + 1) % 3
+		if k == "tab" {
+			m.tab = (m.tab + 1) % 3
+		} else {
+			m.tab = (m.tab + 2) % 3
+		}
 		return m.begin(pageRead)
 	}
 	if k == "r" {
@@ -299,8 +337,12 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.detail {
-		if k == "tab" && m.tab == mine {
-			m.section = (m.section + 1) % 4
+		if (k == "tab" || k == "shift+tab") && m.tab == mine {
+			if k == "tab" {
+				m.section = (m.section + 1) % 4
+			} else {
+				m.section = (m.section + 3) % 4
+			}
 			m.viewport.GotoTop()
 			switch m.section {
 			case 1:
@@ -311,7 +353,7 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 				return m.begin(contextRead)
 			}
 		}
-		if k == "tab" && m.tab == submissions {
+		if (k == "tab" || k == "shift+tab") && m.tab == submissions {
 			m.invalidate()
 			m.section = (m.section + 1) % 2
 			m.viewport.GotoTop()

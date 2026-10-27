@@ -46,16 +46,35 @@ terms remain available separately. Workstream rechecks each public read.
 |---|---|
 | Arrows / Enter | Select a row or scroll detail; Enter inspects freshly |
 | Tab / Esc | Change section / go back or cancel |
+| Shift+Tab | Previous collection or detail section |
+| `1` / `2` / `3` | Go directly to Ready / Mine / Submissions from ordinary views |
+| `a` in task Overview | Open Claim or Start when the freshly inspected task supports that action |
 | `g` | Fetch the project picker again |
 | `n` / `r` | Fetch the next page / refresh the current view |
 | `/` | Filter loaded names/titles locally; Enter finishes and Esc cancels |
 | `c` / `?` | Show inert CLI arguments / keyboard help |
 | `d` in Guide | Enter an existing download directory; Enter reviews the scrollable exact target, `y` confirms |
-| `q` / Ctrl+C | Quit and cancel outstanding client reads; `q` is text during text entry, Ctrl+C always quits |
+| `q` / Ctrl+C | Quit and cancel outstanding client requests, not committed server effects; `q` is text during text entry, Ctrl+C always quits |
 
-The workspace makes no product mutation requests: it does not claim/start work,
-prepare or submit ZIPs, export records, poll, acquire tokens or save local
-history. Guide metadata is not proof of downloaded-byte integrity. In Guide,
+Claim and Start are separate deliberate actions through the existing public
+API. Inspect an exact Ready task to claim it; inspect a claimed Mine task to
+start it. Supply a UUID key you have saved outside this session, review the
+exact action/actor/project/task/key, press `s` to acknowledge the save warning,
+then `y` to confirm. Enter alone never sends the action. The workbench does not generate or persist these keys. Save the
+action, task ID and key together for recovery; this slice omits the optional
+reason. A read or displayed action is not write authority.
+
+There is no automatic retry or claim-to-start chain. A lost response means
+unknown outcome, not rollback. Explicit replay uses the unchanged action, task
+and key (`p`, then review and acknowledge with `s` and confirm with `y`);
+a later denial cannot prove the earlier request failed. Quit cancels
+the client request, not any committed server effect. After restarting, use the
+explicit CLI with your saved inputs and the same API origin and actor. Do not
+substitute a fresh key or infer success from a refreshed list. Automatic
+crash-safe recovery is not implemented.
+
+The workspace does not prepare or submit ZIPs, export records, poll, acquire
+tokens or save local history. Guide metadata is not proof of downloaded-byte integrity. In Guide,
 select one document, enter an existing real directory and confirm its label,
 document/task IDs, path, UUID filename, byte count and hash. Verified bytes are
 published under that filename without overwriting an existing file. Cancelled
@@ -72,11 +91,12 @@ automatically.
 A denial clears affected content; expired authentication clears the session's
 work data. A failed current read clears its content and continuation and is
 shown as unavailable, never as an empty queue or successful operation. Refresh
-is deliberate. No background request retries or write recovery occur. The
+is deliberate. A confirmed write receipt remains distinct from a failed refresh;
+minimal inert replay references do not restore protected task content. The
 profile read may perform Workstream's existing actor
-admission, last-seen and audit effects; “read-only” does not mean no server-side
-effects. This local interface does not establish a deployed service, payment,
-or future write/management workflows. See the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
+admission, last-seen and audit effects. This local interface does not establish
+a deployed service, payment or complete submission/management workflows. See
+the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 
 ## Explicit commands
 
@@ -375,8 +395,9 @@ and contribution evidence with PostgreSQL, MinIO and Celery; see
 [the journey evidence](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-43.md).
 That proof is not hosted deployment verification or proof of human review.
 The [capability ledger](../docs/roadmap_status.md) identifies those remaining
-product boundaries. The interactive workspace above is still read-only;
-explicit commands remain the interface for supported mutations.
+product boundaries. The interactive workspace exposes claim/start alongside
+contributor reads and guide downloads; explicit commands remain the interface
+for preparation, submission and the other supported mutations.
 
 ### Download and install
 

@@ -14,8 +14,8 @@ import (
 	"github.com/Flow-Research/workstream/cli/internal/download"
 )
 
-// ReadClient is the bounded public read surface, satisfied directly by api.Client.
-type ReadClient interface {
+// Client is the bounded contributor surface, satisfied directly by api.Client.
+type Client interface {
 	Profile(context.Context) (api.Result[api.Profile], error)
 	MyProjects(context.Context, api.PageQuery) (api.Result[api.ActorProjectPage], error)
 	ReadyTasks(context.Context, string, int, *string) (api.Result[api.ReadyTaskPage], error)
@@ -27,9 +27,11 @@ type ReadClient interface {
 	Submission(context.Context, string) (api.Result[api.SubmissionHistory], error)
 	SubmissionFindings(context.Context, string, string, int, *string) (api.Result[api.SubmissionFindingsResult], error)
 	DownloadGuideDocument(context.Context, string, api.TaskGuideDocument, io.Writer) error
+	ClaimTask(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
+	StartTask(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
 }
 
-var _ ReadClient = (*api.Client)(nil)
+var _ Client = (*api.Client)(nil)
 
 type readKind int
 
@@ -376,8 +378,18 @@ func (m *Model) failed(err error, actorRead bool) {
 	m.invalidate()
 	m.clearPage()
 	m.projectName = ""
+	if m.write.mode == writeConfirm || m.write.mode == writeKeyEntry {
+		if m.write.outcome == outcomeNone {
+			m.write = writeState{}
+		} else {
+			m.write.mode, m.write.acknowledged, m.write.replay = writeIdle, false, false
+		}
+	}
 	var failure *api.Failure
 	if errors.As(err, &failure) {
+		if failure.Status == 401 || failure.Status == 403 || failure.Status == 404 {
+			m.write.replayDisabled = true
+		}
 		if failure.Status == 401 || (actorRead && failure.Status == 403) {
 			m.blocked = true
 			m.actor = ""

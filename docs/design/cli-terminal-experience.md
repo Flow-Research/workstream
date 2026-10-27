@@ -1,7 +1,8 @@
 # Workstream contributor terminal workbench
 
 This is the presentation contract for the opt-in `workstream tui` contributor
-workbench after [WS-CLI-001-50](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md).
+workbench after [WS-CLI-001-51](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md),
+extending the presentation established by [WS-CLI-001-50](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md).
 It describes the intended merged interface, not a new API, deployed service,
 published binary, or completed product journey. The existing read and download
 boundaries are recorded in [WS-CLI-001-48](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-48.md)
@@ -20,16 +21,47 @@ offers `Overview` and paged `Findings`. Contribution Evidence is an inert CLI
 handoff, not a fourth fetched collection. The project picker uses `me projects`;
 the separate system-reader `project list` does not feed this workbench.
 
-The workbench makes no product mutation request: no claim, start, preparation,
-Submission, Review, policy, management, payment, or recovery action. Its only
+The workbench exposes deliberate exact-task Claim and Start. It exposes no
+preparation, Submission, Review, policy, management or payment mutation. Its only
 local file write is an explicitly confirmed, verified single-guide-document
 download. It does not poll, automatically retry, cache stale authority, store
 credentials or history, acquire tokens, launch a shell or viewer, or copy a
 command to the clipboard. It uses the existing typed public client and the
 supplied `WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN`; there is no Workstream
 login. A profile read may have the backend's existing actor admission,
-last-seen and audit effects, so “read-only” describes product operations, not
-an unaudited server interaction.
+last-seen and audit effects; reads are not unaudited server interactions.
+
+## Claim, start and uncertain outcomes
+
+`a actions` is available on an exact freshly inspected Ready task with `ready`
+status, or Mine Overview with `claimed` task status. Assignment status on a Mine
+row is not task status and cannot select Start. Each action requires a caller-
+supplied UUID and confirmation of the exact actor/project/task/action/key and
+available locked terms. Explain and acknowledge saving the action, task and key
+outside this session before dispatch; the application cannot verify that external
+save. It generates no fallback key and stores no operation history. Reason is
+omitted consistently through the existing typed client.
+
+Enter advances from key entry to confirmation; `s` acknowledges the external-save
+warning. Confirmation is not dispatch until explicit `y` at a usable size. `p`
+opens explicit same-packet replay, with the same acknowledgment and confirmation.
+Text entry,
+confirmation and pending-write states consume their own keys; navigation,
+refresh and repeated keys cannot duplicate or replace a pending POST. Claim
+never automatically starts work. Backend authorization remains fresh on every
+call, including exact replay. Validate selected-project and claim actor binding
+in addition to the typed client's task/receipt checks.
+
+Unknown outcome retains the exact packet and requires explicit unchanged replay.
+Transport loss, cancellation or a malformed success is not rejection or rollback.
+A canonical denied replay does not erase earlier uncertainty. A confirmed receipt
+is independent of a subsequent read failure; no failed refresh undoes a confirmed
+write. Clear protected descriptions and terms on denial and disable in-session
+replay after session failure. Retained recovery references are minimal and inert.
+Quit cancels the request, not server effects. On restart the caller must use their
+saved action/task/key with the explicit CLI, same API origin and actor; there is
+no automatic crash-recovery claim. Claim replay after advancing to start may
+validly conflict because backend replay is state-dependent.
 
 Every displayed fact belongs to its returned scope. List rows are observations,
 not reservations, current eligibility, or authority for a later command.
@@ -146,8 +178,9 @@ stored Submission outcome. `n` fetches only the returned findings continuation;
 `?` groups help by Navigate (arrows, `Tab`, `Esc`), Inspect (`Enter`, `r`, `g`,
 `/`), Pages (`n`), Guide downloads (`d`, destination `Enter`, confirmation
 `y`/`Esc`), and Exit (`c`, `q`, Ctrl+C). There are no independent pane-focus
-keys. Show only applicable
-keys in the contextual footer. `q` is ordinary text inside filter or directory
+keys. `1`, `2`, `3` directly select Ready, Mine and Submissions from ordinary
+views; Shift+Tab reverses collection/section navigation. Show only applicable
+keys in the contextual footer. `q` is ordinary text inside filter, replay-key or directory
 entry; Ctrl+C always exits. Help and inert handoff may scroll without changing
 selection or sending a request. `c` shows the equivalent existing CLI command
 as separate, inert argv arguments, never an executable shell string, and never
@@ -176,21 +209,22 @@ percentage.
 ## Future boundary, not current behavior
 
 The broader [WS-CLI-001 initiative](../../.commitrail/initiatives/WS-CLI-001/OVERVIEW.md)
-retains separate in-TUI Contribution Evidence, product-write and management
+retains separate in-TUI Contribution Evidence, preparation/submission and management
 boundaries. Evidence first needs a shared typed single-page contribution port;
 the complete explicit CLI export is not a TUI page source. Human Review and
 fulfillment are separate product gaps, not empty workbench screens. A later
 system-reader picker may consume the distinct authorized project catalogue;
 it must not turn exact-grant contributor membership into system discovery.
 
-Before any later TUI write ships, its specific public operation needs an
-authorized, deliberate confirmation and durable private receipt of exact
-unchanged inputs before one request, including actor/API origin and any
+Before generated-key or automatic restart recovery ships, its specific public
+operation needs durable private custody of exact unchanged inputs before one
+request, including actor/API origin and any
 caller-owned key, admission, lineage acknowledgement or source-file digest.
 An unknown response requires operation-specific recovery, never automatic
 retry or inference from an empty history page. Claim/start keys, preparation's
 ZIP/packet/key, Submission's admission/packet, guide correction receipts, and
 Operator retry/reconciliation selectors are not interchangeable. Design and
 prove each flow at its own boundary; do not add a generic write journal or
-silent handoff to the current read workbench. The historical design decisions
+silent handoff. Claim/start currently use externally saved caller-owned keys,
+matching the explicit CLI, not automatic custody. The historical design decisions
 and separate operation records remain in the [initiative overview](../../.commitrail/initiatives/WS-CLI-001/OVERVIEW.md).

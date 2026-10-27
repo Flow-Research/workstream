@@ -43,7 +43,14 @@ func (m *Model) collectionText() string {
 		}
 		parts = append(parts, label)
 	}
-	return strings.Join(parts, "  ")
+	if m.width < 60 {
+		return strings.Join(parts, " ") + " 1/2/3"
+	}
+	result := strings.Join(parts, "  ")
+	if m.width >= 60 {
+		result += "  1/2/3 select"
+	}
+	return result
 }
 
 func (m *Model) sectionText() string {
@@ -92,6 +99,30 @@ func (m *Model) renderFooter() string {
 }
 
 func (m *Model) footerText() string {
+	if m.write.mode == writeKeyEntry {
+		return "Enter review  Esc cancel  Ctrl+C quit"
+	}
+	if m.write.mode == writeConfirm {
+		if m.width < 70 {
+			return "s saved  y send  up/down inspect\nEsc cancel  q quit"
+		}
+		return "s saved  y send  arrows/PgUp/PgDn inspect  Esc cancel  q quit"
+	}
+	if m.write.mode == writePending {
+		return "Sending one request...  q quit"
+	}
+	if m.write.mode == writeOutcome {
+		if m.blocked {
+			return "up/down inspect  Esc return  q quit"
+		}
+		if m.canReplay() && m.width < 65 {
+			return "p replay  r read  up/down inspect\nEsc return  q quit"
+		}
+		if m.canReplay() {
+			return "p replay  r read  arrows/PgUp/PgDn inspect  Esc return  q quit"
+		}
+		return "r read  arrows/PgUp/PgDn inspect  Esc return  q quit"
+	}
 	if m.guideMode == guideDestination {
 		return "Enter review  Esc cancel  Ctrl+C quit"
 	}
@@ -124,6 +155,15 @@ func (m *Model) footerText() string {
 	}
 	if m.loading {
 		return "Loading...  r refresh  ? help  q quit"
+	}
+	if m.canOpenAction() {
+		if m.width < 60 {
+			return "a actions  1/2/3 collections\nEsc back  r refresh  q quit"
+		}
+		if m.width < 90 {
+			return "a actions  1/2/3 collections  Shift+Tab back\nr refresh  Esc back  q quit"
+		}
+		return "a actions  1 Ready  2 Mine  3 Submissions  Shift+Tab back  r refresh  Esc back  q quit"
 	}
 	if !m.detail && len(m.visible()) == 0 {
 		navigation := "/ filter  r refresh"
@@ -263,7 +303,7 @@ func (m *Model) View() tea.View {
 	}
 	if m.tooSmall() {
 		guidance := "Resize to at least 40x10. q quit"
-		if m.filtering || m.guideMode == guideDestination {
+		if m.filtering || m.guideMode == guideDestination || m.write.mode == writeKeyEntry {
 			guidance = "Resize to at least 40x10. Ctrl+C quit"
 		}
 		v := tea.NewView(lipgloss.Wrap(guidance, max(1, m.width), ""))
@@ -300,7 +340,7 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) showPanes() bool {
-	return m.widePanes() && m.guideMode == guideBrowse && !m.help && !m.handoff && m.failure == "" && !m.loading && m.started
+	return m.widePanes() && m.guideMode == guideBrowse && m.write.mode == writeIdle && !m.help && !m.handoff && m.failure == "" && !m.loading && m.started
 }
 
 func (m *Model) dividerText() string {
@@ -329,14 +369,17 @@ func (m *Model) reflow() {
 }
 
 func (m *Model) body() string {
+	if m.write.mode != writeIdle {
+		return m.writeText()
+	}
 	if m.help {
-		return "KEYBOARD HELP\n\nNavigate\nArrows select a row/document or scroll detail. Tab changes collections or visible detail sections. Esc returns.\n\nInspect\nEnter reads one exact selected resource. r explicitly refreshes; g opens a fresh project picker. / filters only the loaded page.\n\nPages\nn requests exactly one next list or findings page. No polling or project-wide count is implied.\n\nGuide downloads\nd enters a destination for the selected guide original; Enter reviews and y confirms. Esc cancels without downloading.\n\nExit\nc shows inert CLI arguments. q or Ctrl+C quits. ? or Esc closes help.\n\nChecker evidence is not acceptance. A read is not a reservation or authority."
+		return "KEYBOARD HELP\n\nNavigate\nArrows select a row/document or scroll detail. 1 Ready, 2 Mine, 3 Submissions select collections. Tab advances and Shift+Tab reverses collections or visible detail sections. Esc returns.\n\nInspect\nEnter reads one exact selected resource. r explicitly refreshes; g opens a fresh project picker. / filters only the loaded page.\n\nActions\na on an inspected Ready task or claimed Mine Overview opens Claim or Start. Enter reviews your externally saved UUID; s acknowledges the save warning and y sends one POST. p explicitly replays the exact prior packet when offered. No automatic retry or chained start.\n\nPages\nn requests exactly one next list or findings page. No polling or project-wide count is implied.\n\nGuide downloads\nd enters a destination for the selected guide original; Enter reviews and y confirms. Esc cancels without downloading.\n\nExit\nc shows inert CLI arguments. q or Ctrl+C quits. ? or Esc closes help.\n\nChecker evidence is not acceptance. A read is not a reservation or authority."
 	}
 	if m.handoff {
 		return m.handoffText()
 	}
 	if m.failure != "" {
-		return m.styles().error.Render(m.failure) + "\nNo retained page or detail is available.\n" + m.failureHelp()
+		return m.writeBanner() + m.styles().error.Render(m.failure) + "\nNo retained page or detail is available. A failed read does not change a prior write outcome.\n" + m.failureHelp()
 	}
 	if m.loading {
 		return m.loadingText()
@@ -345,12 +388,12 @@ func (m *Model) body() string {
 		return "Waiting for terminal size..."
 	}
 	if m.detail {
-		return m.detailText()
+		return m.writeBanner() + m.detailText()
 	}
 	if m.widePanes() {
-		return m.previewText()
+		return m.writeBanner() + m.previewText()
 	}
-	return m.listText(m.width)
+	return m.writeBanner() + m.listText(m.width)
 }
 
 func (m *Model) loadingText() string {
