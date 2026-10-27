@@ -8,7 +8,7 @@ The target is original project guide -> approved locked policies -> released tas
 
 | Required binding | Current-run value |
 |---|---|
-| Executed source commit and exact review/CI evidence | `0659c749`; focused implementation reviews passed. Canonical image verification, fresh AWS proof, preflight and five-service health passed. Current PR adds a documentation-only correction; fresh full CI and complete journey qualification remain pending. |
+| Executed source commit and exact review/CI evidence | `0659c749`; focused implementation reviews passed. Canonical image verification, fresh AWS proof, preflight and five-service health passed. The current PR also repairs instruction guidance and POST requirement identity; those new repairs still need image/runtime qualification, fresh full CI and the complete journey. |
 | Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | All five use verified agents derivative `sha256:feeaf0935bc283f29e898821acddcb12de904cf4a4880f75b9743ef9f48ee96c`; public fixture CA is the only derivative change. OmniCore image construction also verified, but this run uses the OpenAI Agents SDK. |
 | Native service, Smol, guest and configured cache/archive/config digests | Smol 1.31.4; service `sha256:5e5760b898017453feb821a24066dc78201249ce39a1eb2f3eb27fffef100ba0`; exact four cache entries and three trial bindings pass preflight. No live task trial yet. |
 | Migration head; non-secret release/configuration fingerprints; Celery worker topology | `0064_checker_trial_evidence`; one prefork worker with concurrency 2 and one Beat; native config `sha256:de1ea6de41d14887c600ed938f8757ffbfb110056089459bd20384983af15e8d`. |
@@ -87,8 +87,9 @@ Public guide creation returned `awaiting_documents`. Upload then stored the
 unchanged 12,110-byte guide; the authorized public download matched every byte
 and SHA-256 `13d789d4b8df5d6b310d844c622336f265d53d2ddc38e8aa101b67765f9f7183`.
 The automatic durable setup delivery created attempt
-`01a17caa-e435-7105-a56e-9d0c1ed29468`, which remains provider-unresolved without
-a compilation result. The retained setup row's queued fields alone are not the
+`01a17caa-e435-7105-a56e-9d0c1ed29468`, initially observed as provider-unresolved
+without a compilation result. Its subsequent metered recovery ended
+`compilation_invalid_terminal`, as recorded below. The retained setup row's queued fields alone are not the
 execution outcome: the public read correctly projects the compilation attempt.
 
 Read-only accounting observed no setup effects and zero reserved/settled charge.
