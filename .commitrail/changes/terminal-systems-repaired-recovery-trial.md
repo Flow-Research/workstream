@@ -25,6 +25,7 @@ state, so they need no change.
 
 - `pilots/terminal_systems/checkers/post/model/{trial_plan,trial_assessment,test_trial_plan,test_trial_assessment,test_runtime_checker}.py`.
 - Focused local subprocess recovery proof under the existing model test suite.
+- `scripts/test_public_hosted_model_post.py`: repair its qualified-image unit fixture and explicitly prove changed source trees remain rejected; do not relabel historical image qualification.
 - Checker README, qualification fixture README/author notes, affected capability wording in `docs/roadmap_status.md`, and this record.
 
 ### Trial repair exclusions
@@ -264,3 +265,17 @@ The [capability ledger](../../docs/roadmap_status.md) describes implemented guid
 - Historical issue text describes gVisor and earlier branches. Current merged hosted composition selects native Smol. Project onboarding prose also understates implemented POST capabilities; the report distinguishes these implementations from missing real-project approval/activation proof without changing those files here.
 - Roadmap assessment: an unexecuted report adds no capability or exposure claim. Actual results may change remaining release gates; the lead must amend allowed documentation scope and reconcile affected roadmap claims in the same PR before readiness.
 - Next usable boundary: execute the authorized rehearsal, retain failures, repair demonstrated defects through bounded owners and report current evidence. No complete disposition is asserted.
+
+
+## Hosted-image guard fixture reconciliation
+
+The combined branch activates the release-image workflow. Its cache unit test
+assumed that the current checkout always matched the separately qualified old
+image source tree. The trial repair intentionally changes that tree, so the
+existing production guard correctly refuses it. The positive unit fixture must
+supply the exact qualified tree through the existing command boundary, while a
+separate negative proves a different tree is rejected before checkpointing.
+Keep image/archive substitution assertions and all production pins/guards.
+This is test-fixture reconciliation, not qualification of a new image or a
+compatibility path. Run the full affected hosted attachment/model test modules
+and a guard-removal probe; QA/test-delta review covers this added file.
