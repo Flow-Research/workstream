@@ -289,7 +289,7 @@ def build_plan_prompt(
             "incomplete_repair": "fresh",
             "missing_output_mutation": "reference_baseline",
             "fabricated_output_mutation": "reference_baseline",
-            "controlled_interruption": "fresh",
+            "controlled_interruption": "reference_baseline",
             "restart": "the controlled_interruption procedure_id",
         },
         "maximum_procedures": MAXIMUM_PROCEDURES,
@@ -471,7 +471,7 @@ def validate_plan_proposal(
             if item["purpose"] == "fabricated_output_mutation"
         )["state_source"]
         != "reference_baseline"
-        or interrupted["state_source"] != "fresh"
+        or interrupted["state_source"] != "reference_baseline"
     ):
         raise TrialPlanError("invalid_output")
     earlier_documented: set[str] = set()
@@ -486,13 +486,15 @@ def validate_plan_proposal(
             raise TrialPlanError("invalid_output")
         if purpose == "documented_command":
             earlier_documented.add(item["procedure_id"])
-        elif (
-            purpose in {"incomplete_repair", "controlled_interruption"}
-            and source != "fresh"
-        ):
+        elif purpose == "incomplete_repair" and source != "fresh":
             raise TrialPlanError("invalid_output")
         elif (
-            purpose in {"missing_output_mutation", "fabricated_output_mutation"}
+            purpose
+            in {
+                "missing_output_mutation",
+                "fabricated_output_mutation",
+                "controlled_interruption",
+            }
             and source != "reference_baseline"
         ):
             raise TrialPlanError("invalid_output")
@@ -753,9 +755,8 @@ def project_slot_templates() -> tuple[dict[str, object], ...]:
             ),
             template(
                 "controlled_interruption",
-                seed=fresh,
                 visible=("verification",),
-                fresh=True,
+                fresh=False,
                 retain=("succeeded", "exit_nonzero", "signalled"),
             ),
             template(

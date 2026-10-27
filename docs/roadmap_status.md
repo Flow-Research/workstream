@@ -1719,6 +1719,11 @@ sessions, generic isolated trials, retained trial receipts and approved exact
 predecessor material. These historical eight specifications are not a platform
 allowlist or a requirement for eight separate images. The implementation and
 its qualification limits are recorded in the [checker README](../pilots/terminal_systems/checkers/README.md).
+The [repaired recovery control](../.commitrail/changes/terminal-systems-repaired-recovery-trial.md)
+uses retained reference-repaired state for interruption/restart and rejects a
+failed restart verifier despite model approval. Local subprocess proof covers
+that repair; its new immutable image/projection still needs registration,
+approved binding and qualification on the intended runtime.
 An earlier controlled-provider gVisor qualification applies only to its recorded
 historical implementation; it does not qualify the Smol deployment target.
 Native Smol KVM composition 013 passed on native build `b2ce3fa45`, using the production Rust

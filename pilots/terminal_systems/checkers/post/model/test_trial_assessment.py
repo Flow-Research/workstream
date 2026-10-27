@@ -247,6 +247,41 @@ class RuntimeAssessmentTests(unittest.TestCase):
         with self.assertRaisesRegex(TrialAssessmentError, "invalid_output"):
             validate_runtime_assessment(self.assessment(), self.prepared, changed)
 
+    def test_failed_restart_verification_cannot_be_voted_pass(self):
+        changed = deepcopy(self.trial)
+        verification = next(
+            item
+            for item in changed.observations["steps"]
+            if item["slot_id"] == "restart_work_verification"
+        )
+        verification.update(outcome="exit_nonzero", exit_code=1)
+        with self.assertRaisesRegex(TrialAssessmentError, "invalid_output"):
+            validate_runtime_assessment(self.assessment(), self.prepared, changed)
+        findings = validate_runtime_assessment(
+            self.assessment(
+                failed_condition=11,
+                finding_code="execution_contract_failure",
+                evidence_id="trial_step.restart_work_verification",
+            ),
+            self.prepared,
+            changed,
+        )
+        self.assertEqual(
+            [item.code for item in findings], ["execution_contract_failure"]
+        )
+
+    def test_documented_signalled_interruption_allows_successful_restart(self):
+        changed = deepcopy(self.trial)
+        interruption = next(
+            item
+            for item in changed.observations["steps"]
+            if item["slot_id"] == "interrupt_work"
+        )
+        interruption.update(outcome="signalled", exit_code=None, signal=15)
+        self.assertEqual(
+            validate_runtime_assessment(self.assessment(), self.prepared, changed), ()
+        )
+
     def test_resource_failure_cannot_pass_execution_contract(self):
         for outcome, export, exit_code in (
             ("deadline_exceeded", "unavailable", None),

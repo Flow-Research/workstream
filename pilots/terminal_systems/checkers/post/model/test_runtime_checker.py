@@ -156,7 +156,7 @@ class FakeModelSession:
                 "interrupt_work",
                 "controlled_interruption",
                 "sh tests/interrupt.sh",
-                "fresh",
+                "reference_baseline",
                 5,
             ),
             (
