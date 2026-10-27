@@ -74,7 +74,10 @@ def test_exact_context_admits_post_model_and_trial_handoffs(method):
     require_complete_generated_specifications(context(ids()), _with_requirement(requirement))
 
 
-@pytest.mark.parametrize("roles", [None, ["unknown"], [False], SELECTED[::-1], SELECTED * 2])
+@pytest.mark.parametrize(
+    "roles",
+    [None, ["unknown"], [False], SELECTED[::-1], ["predecessor_findings", "predecessor_findings"]],
+)
 def test_exact_context_roles_cannot_be_absent_unknown_or_noncanonical(roles):
     with pytest.raises(ValueError):
         specification(roles=roles)
@@ -137,7 +140,15 @@ def policy_case(method="model", *, declared=True, selected=SELECTED, registry_de
     from app.core.identifiers import new_record_id
 
     proposal = _proposal()
-    spec = specification(method) if declared else None
+    spec = (
+        specification(method)
+        if declared
+        else (
+            _model_proposal().requirements[-1].check_specification
+            if method == "model"
+            else trial_specification()
+        )
+    )
     req = proposal.requirements[-1].model_copy(update={"check_specification": spec})
     document = (
         _model_configuration_schema().document.copy()

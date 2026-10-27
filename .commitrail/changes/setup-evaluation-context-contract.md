@@ -18,7 +18,8 @@ Allowed: `backend/app/interfaces/project_agents.py`,
 `backend/app/modules/checkers/api/external_policy.py`,
 `backend/app/core/project_guide_instructions.py`, strict proposal decoding in
 `cli/internal/api/guide_proposal.go`, focused setup/external-policy/CLI tests and the strict provider fixture in
-`backend/tests/test_agent_runtime.py`,
+`backend/tests/test_agent_runtime.py` and the affected approved-binding fixture in
+`backend/tests/checkers/external/test_revision_materialization.py`,
 `mcp_server/contracts/guide_proposal_get.json`,
 `mcp_server/contracts/guide_post_policy_get.json`, `docs/spec_chunk_3_project_guide_foundation.md` and
 `docs/roadmap_status.md`, and this record.
@@ -85,3 +86,13 @@ and public inputs omit absent roles. Existing prompt-rule assertions are retaine
 The exact pinned OpenAI runtime/contract regression suite passes. An isolated
 in-memory removal of both agreement guards makes the named mismatch regression
 fail its expected-exception assertion.
+
+
+Review repairs: QA-EC-001 updates the real PostgreSQL/ART revision fixture to
+pair its selected roles with an exact input/dependency while keeping the copied
+current-only binding's specification unchanged. QA-EC-002 retains a valid model
+specification and profile in the undeclared-context negative, so removing the
+approval guard cannot be masked by unrelated model-profile rejection. Duplicate
+roles now use two identical entries within the field's cardinality limit.
+These repairs consolidate into PR #697; this temporary branch is a work area,
+with no separate push or pull request.
