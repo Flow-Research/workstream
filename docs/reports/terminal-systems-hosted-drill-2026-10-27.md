@@ -8,14 +8,14 @@ The target is original project guide -> approved locked policies -> released tas
 
 | Required binding | Current-run value |
 |---|---|
-| Executed source commit and exact review/CI evidence | NOT RUN |
+| Executed source commit and exact review/CI evidence | `ccf918a7`; focused implementation reviews passed. Current PR adds test-only CI fixes; fresh full CI remains pending. |
 | Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | NOT RUN |
 | Native service, Smol, guest and configured cache/archive/config digests | NOT RUN |
 | Migration head; non-secret release/configuration fingerprints; Celery worker topology | NOT RUN |
 | Identity qualification; issuer/key configuration digest, without subject/token | NOT RUN |
 | AWS candidate activation/freshness and non-secret proof fingerprint | NOT RUN |
 | Original guide/task-example/import/positive/negative package SHA-256 values | NOT RUN |
-| Project/guide/setup/correction/result IDs and requirement mapping | NOT RUN |
+| Project/guide/setup/correction/result IDs and requirement mapping | Project `01a17c77-eb01-7945-8b6d-0fe92c2d4be7`; guide `01a17caa-6fd9-761e-a3b6-4a0cd1623f9f`; setup `01a17caa-7014-7415-a67f-895a1cb54a1f`. No compilation result. |
 | Registry/config/model-profile IDs/digests and exact approved bindings | NOT RUN |
 | PRE/POST approvals; ReviewPolicy, revision and ContributionPolicy versions; activation/LIVE identities | NOT RUN |
 | Task/assignment/Submission/checker/routing/acceptance/contribution/award IDs | NOT RUN |
@@ -73,6 +73,35 @@ Some issue/onboarding prose retains historical gVisor or unavailable-POST descri
   original entries. Complete approved-binding proof remains outstanding;
   publication grants no project acceptance authority.
 
+### First actual guide execution
+
+The combined repaired runtime was deployed under release
+`sha256:382a4215c0ce9a4f82ecc3b6860d74fcf0027bdae890e87c652597a10b036540`,
+with canonical trial authority
+`sha256:9d91c86b76941068ac40b634170056a3ea5dfeef61cb7da8df1766848cb63117`.
+Fresh AWS verification, native/proxy catalog agreement, canonical preflight and
+all five application services passed. The native cache contains the real PRE,
+repaired POST, trusted intake and builder entries. Original bootstrap snapshots
+and business data were preserved.
+
+Public guide creation returned `awaiting_documents`. Upload then stored the
+unchanged 12,110-byte guide; the authorized public download matched every byte
+and SHA-256 `13d789d4b8df5d6b310d844c622336f265d53d2ddc38e8aa101b67765f9f7183`.
+The automatic durable setup delivery created attempt
+`01a17caa-e435-7105-a56e-9d0c1ed29468`, which remains provider-unresolved without
+a compilation result. The retained setup row's queued fields alone are not the
+execution outcome: the public read correctly projects the compilation attempt.
+
+Read-only accounting observed no setup effects and zero reserved/settled charge.
+The actual native OpenAI SDK request omits OpenRouter's required usage-reporting
+field; the trusted handler rejects it before preparing a paid effect. A pure
+probe with the actual published profile and subject confirms that rejection and
+that adding only the missing field passes. Prompt bounds, profile/tool agreement
+and socket custody independently passed. The original exception stack was not
+retained by sanitized runtime logging, so these discriminating boundary proofs
+are distinct from a captured live stack. Repair and safe same-attempt recovery
+remain pending; no direct row reset or blind paid retry occurred.
+
 ### Original queue package: local qualification
 
 The genuinely authored `queue-recovery` package has a functioning buggy starter,
@@ -106,7 +135,7 @@ Every result below starts at `NOT RUN`; this denotes missing current-run evidenc
 | Identity/admission: admit distinct PM, Finance, Operator and contributor humans through the verifier | Identity alone supplies no project authority; explicit grants control actions | NOT RUN | — |
 | Authorization: unrelated actor/project/resource, revoked grant/link and stale replay | Deny without unauthorized effects or private disclosure; replay checks current authority | NOT RUN | — |
 | Guide custody: create/upload unchanged original and download through public reads | Exact digest/size/bytes and project isolation; duplicate upload retains original custody | NOT RUN | — |
-| Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | NOT RUN | — |
+| Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | BLOCKED | Durable delivery ran; SDK request misses required OpenRouter usage field. No proposal or paid effect. |
 | PM correction and agreement: inspect current proposal against guide and packages | Supported successor preserves predecessor; required uncovered checks block approval/activation | NOT RUN | — |
 | Registry and model configuration: register/read/replay exact approved capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | NOT RUN | — |
 | Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | NOT RUN | — |
@@ -145,7 +174,7 @@ CLI, MCP and TUI surfaces are implemented separately. Record any exercised clien
 | Original Terminal Systems rehearsal | Earlier uncertain setup spend remains retained separately; do not reset it or mark it free | Unresolved historical spend; no new dispatch against this allowance |
 | Separately authorized model-only qualification | Preserve its existing project/account and US$0.016527 settled ledger. A model-plus-trial continuation reuses that account/headroom; no automatic new allowance or transfer to a fresh real-project account | NOT RUN |
 | New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | Account provisioned through public API; reserved US$0, settled US$0; paid dispatch NOT RUN |
-| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | NOT RUN |
+| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | First setup stopped before a prepared model effect; reserved/settled totals zero. Recovery pending. |
 
 Pinned-rate ledger settlement is not provider-invoice reconciliation. An unresolved paid effect is a held effect, not a free retry. See [shared accounting](../../.commitrail/changes/checker-model-runtime.md) and [the later separate qualification authority](../../.commitrail/changes/hosted-smol-project-execution.md#live-model-qualification-authority).
 

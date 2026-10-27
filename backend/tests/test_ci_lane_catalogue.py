@@ -302,8 +302,8 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
             "76bee594b1d740d89d42fa4bf055eb6057458ca066c97cc793f9896bac67b281",
         ),
         "project": (
-            245,
-            "15981be12ffa9af776ef6e173de92c350452c7f1d622a715579c2325fba93297",
+            246,
+            "a83c6ef574110bd8e51bed91af31a3ea683ae30bf4c491f68324bbd95e324efc",
         ),
         "task": (
             95,
@@ -375,9 +375,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 245
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 246
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "e348b051989c4fa15aa330460b4f598fb1f9f457c9b0b8b5d8513892c7c54c58"
+        "4e4cac255a67a3e0615449878d45757be1c30b4cc51ee769d6fccabb38306504"
     )
 
 
@@ -979,6 +979,7 @@ def test_shared_acceptance_owner_proofs_are_in_partitioned_project_lanes():
 
 def test_evaluation_custody_proofs_use_project_lane_headroom():
     expected = {
+        "tests/projects/guide_compilation/test_evaluation_context_specifications.py",
         "tests/tasks/post_submit_routing/test_evaluation_guard.py",
         "tests/tasks/post_submit_routing/test_evaluation_currentness.py",
         "tests/tasks/post_submit_routing/test_review_admission_currentness.py",

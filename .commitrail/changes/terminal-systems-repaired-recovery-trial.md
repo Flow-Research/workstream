@@ -26,6 +26,7 @@ state, so they need no change.
 - `pilots/terminal_systems/checkers/post/model/{trial_plan,trial_assessment,test_trial_plan,test_trial_assessment,test_runtime_checker}.py`.
 - Focused local subprocess recovery proof under the existing model test suite.
 - `scripts/test_public_hosted_model_post.py`: repair its qualified-image unit fixture and explicitly prove changed source trees remain rejected; do not relabel historical image qualification.
+- `backend/scripts/test_lane_catalogue.py` and its `backend/tests/test_ci_lane_catalogue.py` fingerprints: assign the added setup regression module to its existing semantic lane. Preserve complete selection, counts and rejection of unassigned modules. Format the already-affected CLI regression with the pinned formatter.
 - Checker README, qualification fixture README/author notes, affected capability wording in `docs/roadmap_status.md`, and this record.
 
 ### Trial repair exclusions
@@ -279,3 +280,37 @@ Keep image/archive substitution assertions and all production pins/guards.
 This is test-fixture reconciliation, not qualification of a new image or a
 compatibility path. Run the full affected hosted attachment/model test modules
 and a guard-removal probe; QA/test-delta review covers this added file.
+
+
+## Combined CI inventory reconciliation
+
+Hosted execution found that the added setup regression file lacked an explicit
+entry in the existing lane catalogue, correctly stopping every lane before test
+execution. Add that module to the existing project lane; do not bypass the
+missing-module guard or change completeness requirements. The affected CLI
+fixture also needs canonical formatting. Validate complete collection/allocation
+and the formatted CLI cases, then obtain focused CI-integrity review before the
+next push. Prior component test passes did not establish hosted inventory
+completeness; retain the failed run as evidence.
+
+
+## Real setup request conformance repair
+
+The first actual guide upload/download preserves exact original bytes. Its setup
+attempt becomes provider-unresolved before a model effect is prepared: the
+OpenAI Agents SDK OpenRouter request omits the mandatory usage-reporting field
+that the existing trusted setup handler requires. The OmniCore adapter already
+provides it. Retained observations show zero setup effects, reserved charge or
+settlement; no blind retry is authorized by that observation alone.
+
+Allowed: `backend/app/adapters/project_agents/openai_agent_sdk.py` and its
+existing native runtime/resilience and setup-handler test modules. Add the
+required OpenRouter request field to the existing adapter construction. Keep
+the closed trusted handler, provider/profile/budget rules and Responses
+behavior unchanged; do not add a fallback, new provider path or config option.
+Use the pinned native SDK request serializer with a valid typed profile and
+the actual trusted request validator. The regression must fail on the original
+adapter and pass after repair before any provider call or model effect. Run
+affected SDK/handler tests and focused security/architecture/QA/test-delta
+review. Preserve the failed attempt; recovery must use an existing authorized
+owner after diagnosis, with no direct row edits or duplicate paid effect.

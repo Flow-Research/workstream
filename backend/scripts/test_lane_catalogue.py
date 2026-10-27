@@ -307,6 +307,7 @@ SHARED_FOUNDATION_MODULES = (
 
 PROJECT_MODULES = (
     "tests/projects/guide_compilation/test_trial_specifications.py",
+    "tests/projects/guide_compilation/test_evaluation_context_specifications.py",
     "tests/projects/post_policy/test_compiler.py",
     "tests/tasks/submission_dispatch/test_evaluation_revision.py",
     # Project-bound batch custody stays in the project semantic family.

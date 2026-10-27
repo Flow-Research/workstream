@@ -290,7 +290,7 @@ def test_openai_remote_prompt_and_unpriced_tier_are_rejected(extra):
 
 
 @pytest.mark.parametrize(
-    "mutation", ["reasoning", "web-plugin", "search-options", "server-tool", "model-variant"]
+    "mutation", ["reasoning", "web-plugin", "search-options", "server-tool", "model-variant", "missing-usage"]
 )
 def test_openrouter_requires_locked_settings_and_routing_controls(mutation):
     profile = _profile()
@@ -321,6 +321,8 @@ def test_openrouter_requires_locked_settings_and_routing_controls(mutation):
         body["web_search_options"] = {"search_context_size": "low"}
     elif mutation == "server-tool":
         body["tools"][0] = {"type": "openrouter:web_search"}
+    elif mutation == "missing-usage":
+        body.pop("usage")
     else:
         body["model"] = "openai/model:online"
     request = replace(
@@ -329,6 +331,83 @@ def test_openrouter_requires_locked_settings_and_routing_controls(mutation):
     )
     with pytest.raises(ModelCallUnavailable):
         _validate_request(profile, request, body)
+
+
+
+@pytest.mark.parametrize("provider,api,model", [
+    ("openrouter", "chat_completions", "openai/model"),
+    ("openai", "responses", "gpt-exact"),
+])
+async def test_native_setup_sdk_request_passes_locked_listener_validation_without_provider_reply(
+    provider, api, model,
+):
+    """The actual Runner's serialized request must cross the pre-effect guard."""
+    from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
+    from app.interfaces.project_agents import project_guide_compilation_prompt_bytes
+    from app.interfaces.setup_model_proxy import canonical_provider_json
+    from tests.projects.guide_compilation.helpers import context, ids, runtime_configuration
+
+    profile = _profile(provider=provider, api=api, model=model)
+    # Native SDK requests include the full output schema, unlike the small
+    # hand-written request fixtures elsewhere in this module.
+    spec = type(profile.spec).model_validate(profile.spec.model_dump() | {
+        "maximum_request_bytes": 1_048_576, "maximum_total_request_bytes": 1_048_576,
+    })
+    profile = ProjectModelProfile.model_validate(profile.model_dump() | {
+        "spec": spec, "profile_digest": canonical_json_hash(spec.model_dump(mode="json")),
+    })
+    configuration = runtime_configuration().model_copy(update={
+        "model_provider": provider, "model_api": api, "model": model,
+    })
+    values = ids()
+    values["project"] = profile.spec.project_id
+    compilation = context(values, configuration=configuration)
+    subject = replace(
+        _subject(profile), guide_id=compilation.material.guide_id,
+        source_snapshot_id=compilation.material.source_snapshot_id,
+        setup_run_id=compilation.material.setup_run_id,
+        setup_generation=compilation.material.setup_generation,
+        runtime_configuration_hash=configuration.sha256,
+    )
+    observed = []
+
+    class ListenerBoundaryReached(BaseException):
+        """Stop locally after validation; do not invent a provider response."""
+
+    class DenyingModelCapability:
+        maximum_output_tokens = profile.spec.maximum_output_tokens
+        reasoning_effort = profile.spec.settings.reasoning_effort
+        text_verbosity = profile.spec.settings.text_verbosity
+
+        async def dispatch(self, phase, body):
+            observed.append(body)
+            request = SetupModelProxyRequest(
+                subject=subject, phase=phase, call_index=0,
+                provider_request_json=canonical_provider_json(body),
+            )
+            _validate_request(profile, request, body)
+            raise ListenerBoundaryReached()
+
+    async def no_tool_before_response(*_args, **_kwargs):
+        raise AssertionError("No provider response exists to request document tools")
+
+    runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
+    runtime.admit_execution()
+    try:
+        with pytest.raises(ListenerBoundaryReached):
+            await runtime._run(
+                compilation, project_guide_compilation_prompt_bytes(compilation).decode(),
+                SimpleNamespace(model=DenyingModelCapability(), tools=SimpleNamespace(
+                    read_document=no_tool_before_response,
+                    search_document=no_tool_before_response,
+                    opened_handles=no_tool_before_response,
+                )),
+            )
+    finally:
+        await runtime.aclose()
+    assert len(observed) == 1
+    if provider == "openai":
+        assert "usage" not in observed[0]
 
 
 def test_paid_quote_heavy_response_becomes_bounded_unavailable_reply():
