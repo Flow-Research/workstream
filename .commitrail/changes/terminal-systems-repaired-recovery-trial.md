@@ -64,7 +64,7 @@ locked selectors are not mutated.
 |---|---|---|---|
 | Repaired recovery and failed-verifier guards | `python3 -m unittest discover -s pilots/terminal_systems/checkers/post/model -p 'test_*.py'` | Pass | Local subprocess proof does not qualify Smol, image registration or live model quality |
 | Existing qualification fixture behavior | `python3 -m unittest discover -s pilots/terminal_systems/checkers/post/qualification -p 'test_*.py'` | Pass | Engineering fixture only |
-| Regression sensitivity | In temporary copies, restore original plan; restore fresh seeded interruption projection; remove partial-plan state guard; remove restart-verifier contradiction | Each exact focused regression fails | Scoped manual defect probes, not general mutation coverage |
+| Regression sensitivity | In temporary copies, restore fresh seeded interruption projection; remove partial-plan state guard; remove restart-verifier contradiction | Guard-specific focused regressions fail at their intended assertions | Restoring the whole original plan instead fails setup validation; that separate probe is not runtime recovery proof or general mutation coverage |
 | Project code quality | `ruff check pilots/terminal_systems/checkers/post/model` and `ruff format --check pilots/terminal_systems/checkers/post/model` | Pass | No generic-owner or hosted suite claim |
 | Current documentation | `python3 scripts/check_stale_workstream_wording.py`, `python3 scripts/check_markdown_links.py`, `git diff --check` | Pass | Markdown check covers changed local links |
 
