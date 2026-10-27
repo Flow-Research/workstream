@@ -81,7 +81,7 @@ func submissionFailure(err error, preparation bool) error {
 }
 
 // PrepareSubmission streams one regular ZIP once. A receipt is not a Submission.
-func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File) (Result[PreparationReceipt], error) {
+func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File, expectedSHA256 string) (Result[PreparationReceipt], error) {
 	var result Result[PreparationReceipt]
 	if err := packet.validate(task); err != nil {
 		return result, err
@@ -103,6 +103,14 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 	}
 	expected, err := uploadSourceHash(source, initial.Size())
 	if err != nil {
+		return result, err
+	}
+	// A reviewed fingerprint is checked against this operation's own pre-send
+	// hash, not an earlier independent read. Empty preserves explicit CLI input.
+	if expectedSHA256 != "" && expected != expectedSHA256 {
+		return result, errors.New("reviewed ZIP changed; no preparation request was sent")
+	}
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	headers := http.Header{"X-Task-Assignment-Id": {packet.Assignment}}

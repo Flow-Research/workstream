@@ -109,6 +109,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case writeResponse:
 		m.receiveWrite(msg)
 		return m, nil
+	case preparationHashResponse:
+		m.receivePreparationHash(msg)
+		return m, nil
 	case tea.PasteMsg:
 		m.paste(msg.Content)
 		return m, nil
@@ -175,16 +178,23 @@ func (m *Model) selectedRow() (row, bool) {
 
 func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 	k := key.String()
-	if k == "ctrl+c" || (!m.filtering && m.guideMode != guideDestination && m.write.mode != writeKeyEntry && k == "q") {
+	if k == "ctrl+c" || (!m.filtering && m.guideMode != guideDestination && m.write.mode != writeKeyEntry && !m.preparationEntry() && k == "q") {
 		m.closed = true
 		m.invalidate()
 		m.stop()
 		return tea.Quit
 	}
-	if m.write.mode == writePending {
+	if m.write.mode == writePending || m.write.mode == writePrepareContext {
 		return nil
 	}
-	if m.write.mode == writeKeyEntry || m.write.mode == writeConfirm || m.write.mode == writeOutcome {
+	if m.write.mode == writePrepareHash {
+		if k == "esc" {
+			m.invalidate()
+			m.write = writeState{}
+		}
+		return nil
+	}
+	if m.write.mode == writeKeyEntry || m.write.mode == writeConfirm || m.write.mode == writeOutcome || m.preparationEntry() {
 		if m.tooSmall() {
 			return nil
 		}
@@ -278,8 +288,7 @@ func (m *Model) key(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if k == "a" && m.canOpenAction() {
-		m.openAction()
-		return nil
+		return m.openAction()
 	}
 	if !m.picker && (k == "1" || k == "2" || k == "3") {
 		target := tab(int(k[0] - '1'))

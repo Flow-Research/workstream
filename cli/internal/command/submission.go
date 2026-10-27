@@ -78,7 +78,7 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				return bad
 			}
 			defer file.Close()
-			result, err := c.PrepareSubmission(cmd.Context(), args[0], key, packet, acknowledgement, file)
+			result, err := c.PrepareSubmission(cmd.Context(), args[0], key, packet, acknowledgement, file, "")
 			if err != nil {
 				return err
 			}

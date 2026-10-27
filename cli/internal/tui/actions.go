@@ -21,6 +21,11 @@ const (
 	writeConfirm
 	writePending
 	writeOutcome
+	writePrepareContext
+	writePreparePath
+	writePrepareSummary
+	writePrepareAttestation
+	writePrepareHash
 )
 
 type writeOutcomeKind int
@@ -33,7 +38,9 @@ const (
 )
 
 type writePacket struct {
-	action, actor, project, task, key string
+	action, actor, project, task, key              string
+	assignment, path, summary, attestation, sha256 string
+	bytes                                          int64
 }
 
 type writeState struct {
@@ -46,6 +53,9 @@ type writeState struct {
 	replay         bool
 	replayDisabled bool
 	sequence       uint64
+	input          string
+	preparation    *api.PreparationReceipt
+	feedback       []string
 }
 
 type writeResponse struct {
@@ -54,12 +64,19 @@ type writeResponse struct {
 	sequence   uint64
 	value      any
 	err        error
+	notSent    bool
 }
 
 var replayUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var replayUUIDCharacters = regexp.MustCompile(`(?i)^[0-9a-f-]+$`)
 
 func (m *Model) paste(value string) {
+	if m.preparationEntry() {
+		if !m.closed && !m.tooSmall() {
+			m.appendPreparationInput(value)
+		}
+		return
+	}
 	if m.closed || m.tooSmall() || m.write.mode != writeKeyEntry {
 		return
 	}
@@ -78,6 +95,9 @@ func (m *Model) actionName() string {
 	if m.tab == mine && m.section == 0 && m.task != nil && m.task.Status == "claimed" {
 		return "Start"
 	}
+	if m.tab == mine && m.section == 0 && m.task != nil && m.task.Status == "in_progress" {
+		return "Prepare"
+	}
 	return ""
 }
 
@@ -85,17 +105,24 @@ func (m *Model) canOpenAction() bool {
 	selected, ok := m.selectedRow()
 	return m.detail && !m.loading && m.failure == "" && m.section == 0 &&
 		m.write.outcome != outcomeUnknown && m.actionName() != "" && ok &&
-		!(m.write.outcome == outcomeConfirmed && sameID(m.write.packet.task, m.task.TaskID) && m.write.packet.action == strings.ToLower(m.actionName())) &&
+		!(m.write.outcome == outcomeConfirmed && sameID(m.write.packet.task, m.task.TaskID) && m.write.packet.action == strings.ToLower(m.actionName()) && !m.preparationNeedsNewAttempt()) &&
 		sameID(selected.task, m.task.TaskID) && sameID(selected.project, m.task.ProjectID) &&
 		sameID(m.project, m.task.ProjectID) && m.actor != ""
 }
 
-func (m *Model) openAction() {
+func (m *Model) openAction() tea.Cmd {
 	action := strings.ToLower(m.actionName())
 	m.write = writeState{mode: writeKeyEntry, packet: writePacket{
 		action: action, actor: m.actor, project: m.project, task: m.task.TaskID,
 	}}
 	m.viewport.GotoTop()
+	if action == "prepare" {
+		selected, _ := m.selectedRow()
+		m.write.packet.assignment = selected.id
+		m.write.mode = writePrepareContext
+		return m.begin(contextRead)
+	}
+	return nil
 }
 
 func (m *Model) canReplay() bool {
@@ -104,6 +131,9 @@ func (m *Model) canReplay() bool {
 }
 
 func (m *Model) writeKey(key tea.KeyPressMsg) tea.Cmd {
+	if m.preparationEntry() {
+		return m.preparationKey(key)
+	}
 	k := key.String()
 	switch m.write.mode {
 	case writeKeyEntry:
@@ -114,6 +144,9 @@ func (m *Model) writeKey(key tea.KeyPressMsg) tea.Cmd {
 			if replayUUID.MatchString(m.write.keyInput) {
 				m.write.packet.key = m.write.keyInput
 				m.write.keyInput, m.write.notice = "", ""
+				if m.write.packet.action == "prepare" {
+					return m.beginPreparationHash()
+				}
 				m.write.mode = writeConfirm
 			} else {
 				m.write.notice = "Enter a caller-owned UUID saved outside this session."
@@ -175,7 +208,8 @@ func (m *Model) beginWrite() tea.Cmd {
 	packet := m.write.packet
 	if m.closed || m.ctx.Err() != nil || m.blocked || m.write.replayDisabled || m.loading || m.tooSmall() ||
 		m.write.mode != writeConfirm || !m.write.acknowledged ||
-		(packet.action != "claim" && packet.action != "start") ||
+		(packet.action != "claim" && packet.action != "start" && packet.action != "prepare") ||
+		(packet.action == "prepare" && (!replayUUID.MatchString(packet.assignment) || packet.sha256 == "" || packet.path == "")) ||
 		!replayUUID.MatchString(packet.key) || !sameID(packet.actor, m.actor) {
 		if m.write.mode == writeConfirm {
 			m.write.mode, m.write.acknowledged, m.write.replay = writeOutcome, false, false
@@ -192,6 +226,9 @@ func (m *Model) beginWrite() tea.Cmd {
 	client := m.client
 	return func() (message tea.Msg) {
 		if ctx.Err() != nil {
+			if packet.action == "prepare" {
+				return writeResponse{packet: packet, generation: generation, sequence: sequence, notSent: true}
+			}
 			return writeResponse{packet: packet, generation: generation, sequence: sequence,
 				err: &api.Failure{Code: "request_failed", OutcomeUnknown: true}}
 		}
@@ -207,10 +244,12 @@ func (m *Model) beginWrite() tea.Cmd {
 			var result api.Result[api.ClaimedTask]
 			result, err = client.ClaimTask(ctx, packet.task, packet.key, nil)
 			value = result.Value
-		} else {
+		} else if packet.action == "start" {
 			var result api.Result[api.MutationTask]
 			result, err = client.StartTask(ctx, packet.task, packet.key, nil)
 			value = result.Value
+		} else {
+			return prepareWrite(ctx, client, packet, generation, sequence)
 		}
 		return writeResponse{packet: packet, generation: generation, sequence: sequence, value: value, err: err}
 	}
@@ -228,6 +267,13 @@ func (m *Model) receiveWrite(msg writeResponse) {
 	m.write.mode = writeOutcome
 	m.write.acknowledged = false
 	packet := msg.packet
+	if packet.action == "prepare" && msg.notSent {
+		m.write.notice = "Not sent: ZIP unavailable, changed or cancelled before dispatch. No POST was dispatched."
+		if m.write.outcome == outcomeUnknown {
+			m.write.notice += " Earlier outcome remains unknown; restore the original ZIP bytes for exact replay."
+		}
+		return
+	}
 	if msg.err == nil {
 		valid := false
 		switch v := msg.value.(type) {
@@ -239,6 +285,14 @@ func (m *Model) receiveWrite(msg writeResponse) {
 		case api.MutationTask:
 			valid = packet.action == "start" && sameID(v.ID, packet.task) &&
 				sameID(v.ProjectID, packet.project) && v.Status == "in_progress"
+		case api.PreparationReceipt:
+			// The shared client owns receipt/status/feedback validation. The
+			// response identity above binds that receipt to this frozen packet.
+			valid = packet.action == "prepare"
+			if valid {
+				m.write.preparation = &v
+				m.write.feedback = preparationFeedbackLines(v.Feedback)
+			}
 		}
 		if valid {
 			m.write.outcome, m.write.notice = outcomeConfirmed, "Validated receipt. A later read is a separate observation."
@@ -255,6 +309,9 @@ func (m *Model) receiveWrite(msg writeResponse) {
 			m.write.outcome = outcomeDenied
 		}
 		m.write.notice = "Request denied: " + m.clean(failure.Code) + fmt.Sprintf(" (HTTP %d).", failure.Status)
+		if packet.action == "prepare" && failure.Status == 422 && failure.Code == "pre_submission_checker_failed" {
+			m.write.feedback = blockedPreparationFeedback(failure.Details)
+		}
 		if m.write.outcome == outcomeUnknown {
 			m.write.notice += " Earlier outcome remains unknown."
 		}
@@ -273,6 +330,7 @@ func (m *Model) receiveWrite(msg writeResponse) {
 		m.clearPage()
 		m.projectName = ""
 		m.write.replayDisabled = true
+		m.clearPreparationText()
 		if failure.Status == 401 {
 			m.blocked = true
 			m.actor, m.project = "", ""
@@ -285,6 +343,9 @@ func (m *Model) writeText() string {
 	w := m.write
 	p := w.packet
 	d := detailWriter{m: m}
+	if p.action == "prepare" {
+		return m.preparationText()
+	}
 	switch w.mode {
 	case writeKeyEntry:
 		d.heading("Caller-owned replay key")
@@ -367,6 +428,12 @@ func (m *Model) writeSummary() string {
 	case outcomeNone:
 		return "Not sent"
 	case outcomeConfirmed:
+		if m.write.packet.action == "prepare" {
+			if m.write.preparation != nil && m.write.preparation.Status == "ready" {
+				return "Preparation ready (not a Submission)"
+			}
+			return "Preparation confirmed; not ready"
+		}
 		if m.write.packet.action == "claim" {
 			return "Claim confirmed"
 		}

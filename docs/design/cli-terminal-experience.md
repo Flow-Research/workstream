@@ -1,7 +1,7 @@
 # Workstream contributor terminal workbench
 
 This is the presentation contract for the opt-in `workstream tui` contributor
-workbench after [WS-CLI-001-51](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md),
+workbench after [WS-CLI-001-52](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-52.md),
 extending the presentation established by [WS-CLI-001-50](../../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md).
 It describes the intended merged interface, not a new API, deployed service,
 published binary, or completed product journey. The existing read and download
@@ -21,8 +21,9 @@ offers `Overview` and paged `Findings`. Contribution Evidence is an inert CLI
 handoff, not a fourth fetched collection. The project picker uses `me projects`;
 the separate system-reader `project list` does not feed this workbench.
 
-The workbench exposes deliberate exact-task Claim and Start. It exposes no
-preparation, Submission, Review, policy, management or payment mutation. Its only
+The workbench exposes deliberate exact-task Claim, Start and initial ZIP
+preparation. It exposes no immutable Submission, revision-upload, Review,
+policy, management or payment mutation. Its only
 local file write is an explicitly confirmed, verified single-guide-document
 download. It does not poll, automatically retry, cache stale authority, store
 credentials or history, acquire tokens, launch a shell or viewer, or copy a
@@ -71,6 +72,38 @@ Submission outcome can say `evaluation_pending`, `review_pending`, `needs_revisi
 are earned facts, not payment or fulfillment proof. The default locked
 ReviewPolicy requires human review; supported false-policy acceptance is an
 authorized backend operation, never a checker-owned or fabricated Review.
+
+## Initial ZIP preparation
+
+On freshly inspected Mine Overview with `in_progress` task status, `a` requests
+fresh work context before opening preparation. Require exact actor/project/task
+binding, current-actor assignment and no revision context. The exact assignment
+comes from the selected Mine row, not a guessed field in work context. Backend
+authorization still owns every request and replay.
+
+The staged form collects a ZIP path, optional summary, optional attestation and
+externally saved caller UUID. Blank optional values are omitted; nonblank values
+remain exact printable ASCII under the existing header API. Do not silently
+trim, normalize or generate attestation text. Local asynchronous file inspection
+shows path, bytes and SHA-256; it is not an intake check. Final confirmation
+names actor, project, task, assignment, exact packet and key. `s` acknowledges
+external saving and `y` dispatches one upload through the shared typed client.
+No progress percentage, automatic polling or automatic Submission follows.
+
+The shared client compares the confirmed hash with its own pre-send hash and
+retains its post-send source verification. A changed file is not an exact
+replay. Pending requests hold their exact target; selection, resize and repeated
+keys cannot replace it. Cancellation ends the client request, not server effects.
+Unknown results retain their original packet/key/hash; an unsent local refusal
+or a later denied replay cannot erase that earlier uncertainty. Authority loss
+clears private packet/feedback text and disables in-session replay.
+
+Show successful warning/coverage feedback and canonical blocking intake
+findings. A `ready` receipt exposes its admission; all other storage statuses
+remain explicitly not ready. Every result explains that no immutable Submission
+was requested. The ready result provides inert exact CLI handoff values, not a
+shell command to execute. A put-attempt ID is not a preparation-history ID.
+History browsing, revision uploads and automatic restart recovery are not added.
 
 ## Reading and navigation
 
@@ -209,7 +242,7 @@ percentage.
 ## Future boundary, not current behavior
 
 The broader [WS-CLI-001 initiative](../../.commitrail/initiatives/WS-CLI-001/OVERVIEW.md)
-retains separate in-TUI Contribution Evidence, preparation/submission and management
+retains separate in-TUI Contribution Evidence, immutable submission/revision and management
 boundaries. Evidence first needs a shared typed single-page contribution port;
 the complete explicit CLI export is not a TUI page source. Human Review and
 fulfillment are separate product gaps, not empty workbench screens. A later
@@ -225,6 +258,6 @@ retry or inference from an empty history page. Claim/start keys, preparation's
 ZIP/packet/key, Submission's admission/packet, guide correction receipts, and
 Operator retry/reconciliation selectors are not interchangeable. Design and
 prove each flow at its own boundary; do not add a generic write journal or
-silent handoff. Claim/start currently use externally saved caller-owned keys,
+silent handoff. Claim/start and initial preparation use externally saved caller-owned keys,
 matching the explicit CLI, not automatic custody. The historical design decisions
 and separate operation records remain in the [initiative overview](../../.commitrail/initiatives/WS-CLI-001/OVERVIEW.md).

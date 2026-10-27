@@ -1,16 +1,22 @@
 """Built native PTY/ConPTY -> real socket/Flow verifier -> isolated PostgreSQL.
 
 Canonical fixtures arrange an approved guide, started work and a retained
-immutable attempt. The original test remains GET-only; the separate action
-test proves claim/start through the native UI. Neither is a public intake or
-external artifact-provider journey. No AUTH/TASK port is replaced; only the
-signed fixture issuer's JWKS transport is local.
+immutable attempt. The original test remains GET-only; separate tests prove
+claim/start and initial public intake through the native UI. Intake uses the
+fixture's local ART provider and explicit in-process guest rules, not S3 or
+sandbox-execution proof. No DB/AUTH/TASK owner is replaced; the signed fixture
+issuer's JWKS transport is local.
 """
 
 import asyncio
+from io import BytesIO
+import json
 from types import SimpleNamespace
+from unittest.mock import patch
 from uuid import uuid4
+from zipfile import ZipFile
 
+from httpx import ASGITransport, AsyncClient
 import pytest
 import pytest_asyncio
 from sqlalchemy import func, select
@@ -22,9 +28,12 @@ from test_public_self_service import (
 from test_submission_public_api import socket_api
 from tui_terminal_support import Terminal
 from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.adapters.auth.flow import FlowAuthVerifier
 from app.core.identifiers import new_record_id
+from app.main import create_app
+from app.modules.artifacts.models import ArtifactPutAttempt, SubmissionBundleAdmission
 from app.modules.authorization.models import ProjectRoleGrant
-from app.modules.checkers.models import CheckerRun
+from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.contributions.records.models import ContributionRecord
 from app.modules.tasks.models import Submission, TaskAssignment, WorkstreamTask
 from tests.authentication.fixtures import (
@@ -32,7 +41,11 @@ from tests.authentication.fixtures import (
     clear_settings_cache as clear_settings_cache,
     rsa_signing_material as rsa_signing_material,
 )
-from tests.authentication.support import issue_asymmetric_token
+from tests.authentication.support import (
+    issue_asymmetric_token,
+    jwks_transport,
+    production_verifier_settings,
+)
 from tests.authorization.admin_access.fixtures import (
     admin_access as _admin_access,
     signed_access as _signed_access,
@@ -44,10 +57,344 @@ from tests.conftest import (
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.tasks.test_submission_lineage import _prepared_packet
+from tests.tasks.submission_lineage_support import _verify_put_attempt
+from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 signed_access = pytest_asyncio.fixture(_signed_access.__wrapped__)
 admin_access = pytest_asyncio.fixture(_admin_access.__wrapped__)
 auth_database_env = _auth_database_env
+
+
+@pytest.mark.asyncio
+async def test_tui_signed_initial_intake_pending_verification_replay_and_revocation(
+    tmp_path, auth_database_env, admin_access, rsa_signing_material
+):
+    """Native UI and real owners; local ART and in-process guest rules, not S3."""
+    signed = admin_access.signed
+    async with _prepared_packet(auth_database_env, tmp_path) as h:
+        subject = f"human-{h.context.actor_profile_id}"
+        owner = SignedActor(
+            h.context.actor_profile_id,
+            subject,
+            issue_asymmetric_token(
+                signed.private_key,
+                claims={"sub": subject, "jti": str(uuid4()), "roles": []},
+            ),
+        )
+        manager = await project_manager(admin_access, h.project_id)
+        # Keep this fixture's exact ART namespace, store and scratch configuration.
+        # Only replace authentication settings with the production Flow verifier
+        # settings; do not inherit admin_access's disabled artifact backend.
+        flow = production_verifier_settings(database_url=auth_database_env)
+        settings = h.settings.model_copy(
+            update={
+                name: getattr(flow, name)
+                for name in type(flow).model_fields
+                if name.startswith(("auth_", "token_"))
+            }
+            | {"database_url": auth_database_env}
+        )
+        app = create_app(settings)
+        jwks_requests = []
+        app.state.auth_verifier = FlowAuthVerifier(
+            settings,
+            jwks_transport=jwks_transport(rsa_signing_material[1], jwks_requests),
+        )
+        assert app.state.auth_configuration_valid
+        assert not app.dependency_overrides, "DB/AUTH/TASK owners must remain real"
+        assert settings.auth_provider == "flow"
+        assert settings.artifact_local_root == h.settings.artifact_local_root
+        assert settings.artifact_scratch_root == h.settings.artifact_scratch_root
+
+        project, task = str(h.project_id), str(h.task_id)
+        route = f"/api/v1/tasks/{task}/submission-bundle-preparations"
+        corrected = tmp_path / "corrected.zip"
+        corrected.write_bytes(h.archive_bytes)
+        blocked_zip = tmp_path / "blocked.zip"
+        archive = BytesIO(h.archive_bytes)
+        with ZipFile(archive, "a") as contents:
+            # Canonical default-checker fixture, not a real private key. Missing
+            # summary/evidence alone must not be invented as a blocking default
+            # check: absent summary is a warning on this locked policy branch.
+            contents.writestr(
+                "synthetic-private-key.txt",
+                b"-----BEGIN OPENSSH PRIVATE KEY-----\nencoded",
+            )
+        blocked_zip.write_bytes(archive.getvalue())
+        failed_key, corrected_key = str(uuid4()), str(uuid4())
+        models = (
+            SelectedPreSubmitRun,
+            ArtifactPutAttempt,
+            SubmissionBundleAdmission,
+            Submission,
+            ContributionRecord,
+        )
+
+        async def counts():
+            async with h.factory() as session:
+                result = {
+                    model.__tablename__: await session.scalar(
+                        select(func.count()).select_from(model)
+                    )
+                    for model in models
+                }
+                assert result[Submission.__tablename__] == 0
+                assert result[ContributionRecord.__tablename__] == 0
+                return result
+
+        # _prepared_packet already created one PRE run and verified ART packet.
+        # Test deltas, not a fictitious empty preparation database.
+        baseline = await counts()
+        requests = []
+        posts = []
+
+        async def observed(scope, receive, send):
+            if scope["type"] != "http":
+                return await app(scope, receive, send)
+            requests.append((scope["method"], scope["path"]))
+            if scope["method"] != "POST":
+                return await app(scope, receive, send)
+            record = {
+                "path": scope["path"],
+                "headers": dict(scope["headers"]),
+                "body": bytearray(),
+                "response_body": bytearray(),
+            }
+            posts.append(record)
+
+            async def observed_receive():
+                message = await receive()
+                if message["type"] == "http.request":
+                    record["body"].extend(message.get("body", b""))
+                    assert len(record["body"]) <= 1024 * 1024
+                return message
+
+            async def observed_send(message):
+                if message["type"] == "http.response.start":
+                    record["status"] = message["status"]
+                elif message["type"] == "http.response.body":
+                    record["response_body"].extend(message.get("body", b""))
+                    assert len(record["response_body"]) <= 1024 * 1024
+                    if not message.get("more_body", False):
+                        record["response"] = json.loads(record["response_body"])
+                await send(message)
+
+            await app(scope, observed_receive, observed_send)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            project_response = await client.get(
+                "/api/v1/actors/me/projects", headers=owner.headers
+            )
+            assert project_response.status_code == 200, project_response.text
+            [project_row] = project_response.json()["items"]
+            task_response = await client.get(
+                f"/api/v1/tasks/{task}", headers=owner.headers
+            )
+            assert task_response.status_code == 200, task_response.text
+            task_body = task_response.json()
+            assert task_body["status"] == "in_progress"
+
+            # This explicitly named fixture executes guest rules in-process.
+            # The production signed verifier, public route, PRE and ART owners,
+            # PostgreSQL and local provider remain real, with no dependency swap.
+            with patch(
+                "app.adapters.artifacts.trusted_submission_intake",
+                return_value=LocalIntakeAdapter(),
+            ):
+                async with socket_api(observed) as origin:
+                    with Terminal(
+                        origin, owner.token, "--plain", columns=180, rows=60
+                    ) as terminal:
+
+                        async def wait(text):
+                            return await asyncio.to_thread(terminal.wait, text, 60)
+
+                        async def confirm(path, key, summary):
+                            terminal.send("a")
+                            for label, value in (
+                                ("ZIP path", str(path)),
+                                ("Summary", summary),
+                                (
+                                    "Attestation",
+                                    h.preparation_request.contributor_attestation,
+                                ),
+                                ("Caller-owned replay key", key),
+                            ):
+                                await wait(label)
+                                if value:
+                                    terminal.send(value)
+                                terminal.send("\r")
+                            await wait("Confirm prepare")
+                            for identity in (
+                                str(owner.id),
+                                project,
+                                task,
+                                str(h.assignment_id),
+                                key,
+                            ):
+                                assert identity in terminal.screen
+                            terminal.send("s")
+                            terminal.send("y")
+
+                        async def replay():
+                            terminal.send("p")
+                            await wait("Confirm prepare")
+                            terminal.send("s")
+                            terminal.send("y")
+
+                        await wait(project_row["name"])
+                        terminal.send("\r")
+                        await wait("[Ready]")
+                        terminal.send("2")
+                        await wait(task_body["title"])
+                        terminal.send("\r")
+                        await wait(task_body["description"])
+                        await confirm(blocked_zip, failed_key, "")
+                        await wait("pre_submission_checker_failed")
+                        await wait("No immutable Submission")
+                        assert len(posts) == 1
+                        failed = posts[0]
+                        assert failed["status"] == 422
+                        failure = failed["response"]["error"]
+                        assert failure["code"] == "pre_submission_checker_failed"
+                        details = failure["details"]
+                        assert details["eligible_to_submit"] is False
+                        assert details["results"]
+                        [blocking] = [
+                            result
+                            for result in details["results"]
+                            if result["status"] == "failed"
+                        ]
+                        assert blocking == {
+                            "source": "workstream_default",
+                            "check_id": "high_confidence_secrets_absent",
+                            "status": "failed",
+                            "failure_code": "high_confidence_secret_detected",
+                            "finding_count": 1,
+                        }
+                        await wait("high_confidence_secret_detected")
+                        assert "synthetic-private-key.txt" not in terminal.screen
+                        assert "BEGIN OPENSSH PRIVATE KEY" not in terminal.screen
+                        failed_counts = await counts()
+                        assert failed_counts == baseline | {
+                            SelectedPreSubmitRun.__tablename__: baseline[
+                                SelectedPreSubmitRun.__tablename__
+                            ]
+                            + 1
+                        }
+                        # A known failed intake can return to Overview and open
+                        # a new, deliberately confirmed corrected packet/key.
+                        terminal.send("\x1b")
+                        await wait(task_body["description"])
+                        await confirm(
+                            corrected, corrected_key, h.preparation_request.summary
+                        )
+                        await wait("stored_pending_verification")
+                        assert len(posts) == 2
+                        pending = posts[1]["response"]
+                        assert posts[1]["status"] == 202
+                        assert pending["submission_bundle_preparation_status"] == (
+                            "stored_pending_verification"
+                        )
+                        assert pending["admission_id"] is None
+                        pending_counts = await counts()
+                        assert pending_counts == failed_counts | {
+                            SelectedPreSubmitRun.__tablename__: failed_counts[
+                                SelectedPreSubmitRun.__tablename__
+                            ]
+                            + 1,
+                            ArtifactPutAttempt.__tablename__: failed_counts[
+                                ArtifactPutAttempt.__tablename__
+                            ]
+                            + 1,
+                        }
+                        # Consume POST's put_attempt_id, never a GET preparation ID.
+                        admission = await _verify_put_attempt(
+                            h.factory,
+                            h.store,
+                            h.namespace,
+                            h.settings,
+                            pending["put_attempt_id"],
+                        )
+                        await replay()
+                        await wait(str(admission))
+                        await wait("ready")
+                        assert len(posts) == 3
+                        assert posts[2]["response"] == pending | {
+                            "submission_bundle_preparation_status": "ready",
+                            "admission_id": str(admission),
+                            "replayed": True,
+                        }
+                        ready_counts = await counts()
+                        assert ready_counts == pending_counts | {
+                            SubmissionBundleAdmission.__tablename__: pending_counts[
+                                SubmissionBundleAdmission.__tablename__
+                            ]
+                            + 1
+                        }
+                        async with h.factory() as session:
+                            grant_id = await session.scalar(
+                                select(ProjectRoleGrant.id).where(
+                                    ProjectRoleGrant.actor_profile_id == str(owner.id),
+                                    ProjectRoleGrant.project_id == project,
+                                    ProjectRoleGrant.role == "submitter",
+                                    ProjectRoleGrant.status == "active",
+                                )
+                            )
+                        assert grant_id is not None
+                        revoked = await signed.client.post(
+                            f"/api/v1/projects/{project}/role-grants/{grant_id}/revoke",
+                            headers=manager.headers | {"Idempotency-Key": str(uuid4())},
+                            json={"reason": "Prove fresh preparation replay denial"},
+                        )
+                        assert revoked.status_code == 200, revoked.text
+                        await replay()
+                        await wait("Protected preparation text cleared")
+                        assert len(posts) == 4 and posts[3]["status"] == 404
+                        for protected in (
+                            task_body["description"],
+                            str(corrected),
+                            h.preparation_request.summary,
+                            h.preparation_request.contributor_attestation,
+                            pending["put_attempt_id"],
+                            str(admission),
+                        ):
+                            assert protected not in terminal.screen
+                        terminal.send("psy")
+                        await asyncio.to_thread(terminal.pump, 0.3)
+                        assert len(posts) == 4, "denial did not disable replay"
+                        await asyncio.to_thread(terminal.quit)
+                        assert owner.token.encode() not in terminal.raw
+                        assert await counts() == ready_counts
+
+        assert jwks_requests, "signed proof never used the real Flow JWKS verifier"
+        assert all(
+            method == "GET" or (method == "POST" and path == route)
+            for method, path in requests
+        )
+        assert [post["path"] for post in posts] == [route] * 4
+        assert bytes(posts[0]["body"]) == blocked_zip.read_bytes()
+        assert posts[0]["headers"][b"idempotency-key"] == failed_key.encode()
+        assert b"x-submission-summary" not in posts[0]["headers"]
+        # This observer records what the real owner consumed. A denied request
+        # may correctly stop before reading bytes; pending/ready exact replay
+        # must both consume the original archive.
+        assert [bytes(post["body"]) for post in posts[1:3]] == [h.archive_bytes] * 2
+        for post in posts[1:]:
+            assert post["headers"][b"idempotency-key"] == corrected_key.encode()
+            assert post["headers"][b"x-task-assignment-id"] == (
+                str(h.assignment_id).encode()
+            )
+            assert post["headers"][b"x-submission-summary"] == (
+                h.preparation_request.summary.encode()
+            )
+            assert post["headers"][b"x-contributor-attestation"] == (
+                h.preparation_request.contributor_attestation.encode()
+            )
+            assert post["headers"][b"content-type"] == b"application/zip"
+        assert await counts() == ready_counts
 
 
 @pytest.mark.asyncio

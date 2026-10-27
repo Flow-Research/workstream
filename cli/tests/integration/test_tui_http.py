@@ -2,16 +2,23 @@
 
 from copy import deepcopy
 import hashlib
+from io import BytesIO
 import os
 import re
 import subprocess
 import time
 from threading import Event
 from urllib.parse import parse_qs, urlsplit
+from zipfile import ZipFile
 
 import pytest
 
-from test_contributor_reads_http import ASSIGNMENT_ROW, PROJECT_ROW, SUBMISSION_ROW
+from test_contributor_reads_http import (
+    ASSIGNMENT as MINE_ASSIGNMENT,
+    ASSIGNMENT_ROW,
+    PROJECT_ROW,
+    SUBMISSION_ROW,
+)
 from test_contributor_task_http import CONTRIBUTOR, READY
 from test_contributor_task_mutations import (
     KEY as CLAIM_KEY,
@@ -21,6 +28,7 @@ from test_contributor_task_mutations import (
 from test_http_boundary import ACTOR, PROFILE, PROJECT, TOKEN
 from test_submission_http import CHECKER as SUBMISSION_CHECKER
 from test_submission_http import HISTORY, RUN, SUBMISSION
+from test_submission_http import ADMISSION, PUT, preparation
 from test_task_context_http import CONTEXT, REQUIREMENTS
 from test_task_http_boundary import TASK
 from tui_terminal_support import Terminal, environment, executable, socket_peer
@@ -144,6 +152,76 @@ class Writes(Reads):
         return self.replies.pop(0)
 
 
+class PreparationWrites(Reads):
+    """Only the initial preparation route is writable; no Submission route exists."""
+
+    def __init__(self, *replies):
+        super().__init__()
+        self.task["status"] = "in_progress"
+        self.mine = page(
+            ASSIGNMENT_ROW
+            | {
+                "title": "Assigned terminal task",
+                "task_status": "in_progress",
+                "latest_submission": None,
+                "revision": None,
+                "next_action": "prepare_submission",
+            }
+        )
+        self.context["lifecycle"] = {
+            "assigned_to_current_actor": True,
+            "next_actions": [],
+        }
+        self.replies = list(replies)
+
+    def __call__(self, method, target, authorization):
+        if method == "GET":
+            return super().__call__(method, target, authorization)
+        assert method == "POST"
+        assert authorization == "Bearer " + TOKEN
+        assert target == TASK_PATH + "/submission-bundle-preparations"
+        assert self.replies, "unexpected duplicate preparation POST"
+        return self.replies.pop(0)
+
+
+def preparation_zip(path):
+    output = BytesIO()
+    with ZipFile(output, "w") as archive:
+        archive.writestr("answer.md", "Exact contributor evidence.\n")
+    path.write_bytes(output.getvalue())
+    return output.getvalue()
+
+
+def preparation_detail(terminal):
+    open_ready(terminal)
+    terminal.send("2")
+    terminal.wait("Assigned terminal task")
+    terminal.send("\r")
+    terminal.wait(SECRET)
+
+
+def preparation_confirm(
+    terminal, path, key=CLAIM_KEY, summary="q", attestation="Exact attestation"
+):
+    terminal.send("a")
+    for label, value in (
+        ("ZIP path", str(path)),
+        ("Summary", summary),
+        ("Attestation", attestation),
+        ("Caller-owned replay key", key),
+    ):
+        terminal.wait(label)
+        if value:
+            terminal.send(value)
+        terminal.send("\r")
+    terminal.wait("Confirm prepare")
+
+
+def preparation_dispatch(terminal):
+    terminal.send("s")
+    terminal.send("y")
+
+
 def action_detail(terminal, action):
     open_ready(terminal)
     if action == "start":
@@ -240,6 +318,238 @@ def reveal_detail(terminal, text):
     assert text in terminal.screen, (
         f"missing {text!r} after scrolling:\n{terminal.screen}"
     )
+
+
+def test_initial_zip_preparation_sends_exact_packet_then_explicit_ready_replay(
+    tmp_path,
+):
+    path = tmp_path / "work.zip"
+    archive = preparation_zip(path)
+    peer = PreparationWrites((202, preparation()), (202, preparation("ready")))
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda route, headers, body: posts.append(
+                (route, headers, body)
+            ),
+        ) as (origin, requests),
+        Terminal(origin, TOKEN, "--plain", rows=50) as terminal,
+    ):
+        preparation_detail(terminal)
+        preparation_confirm(terminal, path)
+        for identity in (TASK, PROJECT, ACTOR, MINE_ASSIGNMENT, CLAIM_KEY):
+            assert identity in terminal.screen
+        assert "sha256:" + hashlib.sha256(archive).hexdigest() in terminal.screen
+        assert str(len(archive)) in terminal.screen
+        # Neither completing the staged form nor an unacknowledged y sends.
+        terminal.send("y")
+        terminal.pump(0.2)
+        assert posts == []
+        terminal.resize(30, 8)
+        terminal.wait("Resize")
+        terminal.send("sy")
+        terminal.pump(0.2)
+        assert posts == []
+        terminal.resize(120, 50)
+        terminal.wait("Confirm prepare")
+        preparation_dispatch(terminal)
+        terminal.wait("stored_pending_verification")
+        terminal.wait("submission_summary_missing")
+        terminal.pump(0.2)
+        assert len(posts) == 1, "pending verification triggered an implicit replay"
+        terminal.send("p")
+        terminal.wait("Confirm prepare")
+        preparation_dispatch(terminal)
+        terminal.wait(ADMISSION)
+        terminal.wait("ready")
+        terminal.wait("No immutable Submission")
+        assert len(posts) == 2
+        for route, headers, body in posts:
+            assert route == TASK_PATH + "/submission-bundle-preparations"
+            assert body == archive
+            assert headers["Content-Type"] == "application/zip"
+            assert headers["Content-Length"] == str(len(archive))
+            assert headers["Authorization"] == "Bearer " + TOKEN
+            assert headers["X-Task-Assignment-Id"] == MINE_ASSIGNMENT
+            assert headers["Idempotency-Key"] == CLAIM_KEY
+            assert headers["X-Submission-Summary"] == "q"
+            assert headers["X-Contributor-Attestation"] == "Exact attestation"
+            assert "X-Predecessor-Submission-Id" not in headers
+        assert sum(method == "POST" for method, _, _ in requests) == 2
+        terminal.quit()
+        assert TOKEN.encode() not in terminal.raw
+
+
+def test_preparation_failed_intake_displays_canonical_blocking_feedback(tmp_path):
+    path = tmp_path / "work.zip"
+    preparation_zip(path)
+    peer = PreparationWrites(
+        (
+            422,
+            {
+                "error": {
+                    "code": "pre_submission_checker_failed",
+                    "message": "blocked",
+                    "details": {
+                        "status": "failed",
+                        "eligible_to_submit": False,
+                        "results": [
+                            {
+                                "source": "project_external_checker",
+                                "requirement_id": "quality",
+                                "registry_entry_id": RUN,
+                                "registry_entry_digest": "sha256:" + "a" * 64,
+                                "status": "failed",
+                                "findings": [
+                                    {
+                                        "check_id": "packet.summary",
+                                        "code": "required_field_missing",
+                                        "level": "error",
+                                        "message": "Supply the required summary.",
+                                        "path": None,
+                                        "line": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    "correlation_id": RUN,
+                    "retryable": False,
+                }
+            },
+        )
+    )
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda route, headers, body: posts.append(
+                (route, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain", rows=50) as terminal,
+    ):
+        preparation_detail(terminal)
+        preparation_confirm(terminal, path, summary="")
+        preparation_dispatch(terminal)
+        terminal.wait("pre_submission_checker_failed")
+        terminal.wait("Intake feedback: error packet.summary")
+        terminal.wait("Supply the required summary.")
+        terminal.wait("No immutable Submission")
+        terminal.pump(0.2)
+        assert len(posts) == 1
+        assert "X-Submission-Summary" not in posts[0][1]
+        terminal.quit()
+
+
+def test_preparation_unknown_result_is_not_automatically_retried(tmp_path):
+    path = tmp_path / "work.zip"
+    archive = preparation_zip(path)
+    peer = PreparationWrites((202, b"{"), (202, preparation("ready")))
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda route, headers, body: posts.append(
+                (route, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain", rows=50) as terminal,
+    ):
+        preparation_detail(terminal)
+        preparation_confirm(terminal, path)
+        preparation_dispatch(terminal)
+        terminal.wait("Outcome unknown")
+        terminal.send("ay")
+        terminal.pump(0.3)
+        assert len(posts) == 1, "unknown outcome dispatched an implicit replacement"
+        assert "Outcome unknown" in terminal.screen
+        terminal.send("\x1b")
+        terminal.wait(SECRET)
+        terminal.send("a")
+        terminal.pump(0.2)
+        assert "Prior operation: Outcome unknown" in terminal.screen
+        assert "No expansion or file execution" not in terminal.screen
+        terminal.send("p")
+        terminal.wait("Confirm prepare")
+        assert CLAIM_KEY in terminal.screen
+        path.write_bytes(archive + b"changed before replay")
+        preparation_dispatch(terminal)
+        terminal.wait("Earlier outcome remains")
+        assert "Outcome unknown" in terminal.screen
+        assert len(posts) == 1, "changed ZIP replaced an uncertain packet"
+        path.write_bytes(archive)
+        terminal.send("p")
+        terminal.wait("Confirm prepare")
+        preparation_dispatch(terminal)
+        terminal.wait(ADMISSION)
+        assert len(posts) == 2
+        assert [body for _, _, body in posts] == [archive, archive]
+        assert [headers["Idempotency-Key"] for _, headers, _ in posts] == [
+            CLAIM_KEY,
+            CLAIM_KEY,
+        ]
+        terminal.quit()
+
+
+def test_preparation_file_changed_after_confirmation_sends_no_post(tmp_path):
+    path = tmp_path / "work.zip"
+    archive = preparation_zip(path)
+    peer = PreparationWrites()
+    with (
+        socket_peer(peer) as (origin, requests),
+        Terminal(origin, TOKEN, "--plain", rows=50) as terminal,
+    ):
+        preparation_detail(terminal)
+        preparation_confirm(terminal, path)
+        path.write_bytes(archive + b"changed after confirmation")
+        preparation_dispatch(terminal)
+        terminal.wait("No POST was dispatched.")
+        terminal.pump(0.2)
+        assert all(method == "GET" for method, _, _ in requests)
+        assert "ready admission" not in terminal.screen.lower()
+        terminal.quit()
+
+
+def test_preparation_replay_denial_clears_packet_and_disables_replay(tmp_path):
+    path = tmp_path / "work.zip"
+    preparation_zip(path)
+    peer = PreparationWrites((202, preparation("ready")), denial())
+    posts = []
+    with (
+        socket_peer(
+            peer,
+            capture_post=lambda route, headers, body: posts.append(
+                (route, headers, body)
+            ),
+        ) as (origin, _),
+        Terminal(origin, TOKEN, "--plain", rows=50) as terminal,
+    ):
+        preparation_detail(terminal)
+        preparation_confirm(terminal, path, summary="PROTECTED_PACKET_SUMMARY")
+        preparation_dispatch(terminal)
+        terminal.wait(ADMISSION)
+        terminal.send("p")
+        terminal.wait("Confirm prepare")
+        preparation_dispatch(terminal)
+        terminal.wait("Protected preparation text cleared")
+        for protected in (
+            SECRET,
+            str(path),
+            "PROTECTED_PACKET_SUMMARY",
+            "Exact attestation",
+            PUT,
+            ADMISSION,
+            "submission_summary_missing",
+        ):
+            assert protected not in terminal.screen
+        terminal.send("psy")
+        terminal.pump(0.2)
+        assert len(posts) == 2
+        assert TOKEN.encode() not in terminal.raw
+        assert b"\x1b]52;" not in terminal.raw
+        terminal.quit()
 
 
 @pytest.mark.parametrize("light", [None, False, True])

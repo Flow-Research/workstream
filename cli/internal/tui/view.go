@@ -99,6 +99,15 @@ func (m *Model) renderFooter() string {
 }
 
 func (m *Model) footerText() string {
+	if m.preparationEntry() {
+		return "Enter next  Esc cancel  Ctrl+C quit"
+	}
+	if m.write.mode == writePrepareContext {
+		return "Checking initial preparation context...  q quit"
+	}
+	if m.write.mode == writePrepareHash {
+		return "Hashing ZIP...  Esc cancel  q quit"
+	}
 	if m.write.mode == writeKeyEntry {
 		return "Enter review  Esc cancel  Ctrl+C quit"
 	}
@@ -303,7 +312,7 @@ func (m *Model) View() tea.View {
 	}
 	if m.tooSmall() {
 		guidance := "Resize to at least 40x10. q quit"
-		if m.filtering || m.guideMode == guideDestination || m.write.mode == writeKeyEntry {
+		if m.filtering || m.guideMode == guideDestination || m.write.mode == writeKeyEntry || m.preparationEntry() {
 			guidance = "Resize to at least 40x10. Ctrl+C quit"
 		}
 		v := tea.NewView(lipgloss.Wrap(guidance, max(1, m.width), ""))
@@ -373,7 +382,7 @@ func (m *Model) body() string {
 		return m.writeText()
 	}
 	if m.help {
-		return "KEYBOARD HELP\n\nNavigate\nArrows select a row/document or scroll detail. 1 Ready, 2 Mine, 3 Submissions select collections. Tab advances and Shift+Tab reverses collections or visible detail sections. Esc returns.\n\nInspect\nEnter reads one exact selected resource. r explicitly refreshes; g opens a fresh project picker. / filters only the loaded page.\n\nActions\na on an inspected Ready task or claimed Mine Overview opens Claim or Start. Enter reviews your externally saved UUID; s acknowledges the save warning and y sends one POST. p explicitly replays the exact prior packet when offered. No automatic retry or chained start.\n\nPages\nn requests exactly one next list or findings page. No polling or project-wide count is implied.\n\nGuide downloads\nd enters a destination for the selected guide original; Enter reviews and y confirms. Esc cancels without downloading.\n\nExit\nc shows inert CLI arguments. q or Ctrl+C quits. ? or Esc closes help.\n\nChecker evidence is not acceptance. A read is not a reservation or authority."
+		return "KEYBOARD HELP\n\nNavigate\nArrows select a row/document or scroll detail. 1 Ready, 2 Mine, 3 Submissions select collections. Tab advances and Shift+Tab reverses collections or visible detail sections. Esc returns.\n\nInspect\nEnter reads one exact selected resource. r explicitly refreshes; g opens a fresh project picker. / filters only the loaded page.\n\nActions\na opens Claim on inspected Ready, Start on claimed Mine Overview, or initial ZIP Prepare on in-progress Mine Overview. Prepare freshly checks WorkContext, then collects ZIP path, exact optional Summary and Attestation, and your externally saved UUID. Enter advances each field and hashes the ZIP for exact review. s acknowledges the save warning and y sends one POST. p explicitly replays the exact prior packet when offered. No automatic retry, chained start or immutable Submission creation.\n\nPages\nn requests exactly one next list or findings page. No polling or project-wide count is implied.\n\nGuide downloads\nd enters a destination for the selected guide original; Enter reviews and y confirms. Esc cancels without downloading.\n\nExit\nc shows inert CLI arguments. q quits outside text fields; Ctrl+C always quits. ? or Esc closes help.\n\nChecker evidence is not acceptance. A read is not a reservation or authority."
 	}
 	if m.handoff {
 		return m.handoffText()
