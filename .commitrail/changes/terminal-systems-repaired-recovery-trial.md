@@ -410,5 +410,5 @@ These are local proofs; they do not qualify the new image or complete journey.
 Roadmap reconciliation adds only the affected detailed integration repairs and
 links the actual in-progress report. Executive summary, scoreboard, dependency
 and remaining release gates still require approved policies and the realistic
-public journey; none are marked completed by these repairs. Current main's CLI
-work must be preserved when reconciling the branch before final review.
+public journey; none are marked completed by these repairs. Main `517fe54c4` was reconciled before review; its CLI action implementation
+and roadmap/navigation changes are preserved alongside these repair claims.
