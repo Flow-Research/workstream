@@ -1716,7 +1716,7 @@ PRE image now implements both PRE specifications, is locally qualified, publishe
 by digest and registered in the local rehearsal, but remains unbound. The eight
 POST specifications have a project-owned implementation using bounded model
 sessions, generic isolated trials, retained trial receipts and approved exact
-predecessor material. The [setup declaration repair](../.commitrail/changes/setup-evaluation-context-contract.md)
+predecessor material. The [setup declaration repair](../.commitrail/changes/terminal-systems-repaired-recovery-trial.md#setup-evaluation-context-declaration-repair)
 lets current specifications name exactly selected predecessor findings/archive roles
 with a matching POST dependency; proposal validation and approval resolve the same
 configuration contract. This does not qualify an approved revision journey or expose
