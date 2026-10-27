@@ -214,7 +214,7 @@ async def test_tui_signed_initial_intake_pending_verification_replay_and_revocat
                         async def confirm(path, key, summary):
                             terminal.send("a")
                             for label, value in (
-                                ("ZIP path", str(path)),
+                                ("One readable, nonempty regular ZIP", str(path)),
                                 ("Summary", summary),
                                 (
                                     "Attestation",

@@ -429,6 +429,9 @@ func (m *Model) writeSummary() string {
 		return "Not sent"
 	case outcomeConfirmed:
 		if m.write.packet.action == "prepare" {
+			if m.write.preparation == nil {
+				return "Preparation receipt confirmed; protected details cleared"
+			}
 			if m.write.preparation != nil && m.write.preparation.Status == "ready" {
 				return "Preparation ready (not a Submission)"
 			}

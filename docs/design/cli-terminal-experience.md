@@ -90,13 +90,16 @@ names actor, project, task, assignment, exact packet and key. `s` acknowledges
 external saving and `y` dispatches one upload through the shared typed client.
 No progress percentage, automatic polling or automatic Submission follows.
 
-The shared client compares the confirmed hash with its own pre-send hash and
-retains its post-send source verification. A changed file is not an exact
+The shared client compares the confirmed hash with its own pre-send hash,
+verifies the actual request stream's complete byte count and digest before
+confirming success, and retains its post-send source verification. A changed file is not an exact
 replay. Pending requests hold their exact target; selection, resize and repeated
 keys cannot replace it. Cancellation ends the client request, not server effects.
 Unknown results retain their original packet/key/hash; an unsent local refusal
 or a later denied replay cannot erase that earlier uncertainty. Authority loss
 clears private packet/feedback text and disables in-session replay.
+Cleared evidence is labelled unavailable, not converted into a new non-ready
+observation when a ready receipt had already been confirmed.
 
 Show successful warning/coverage feedback and canonical blocking intake
 findings. A `ready` receipt exposes its admission; all other storage statuses

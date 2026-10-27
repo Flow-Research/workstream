@@ -81,8 +81,8 @@ the existing TUI and typed API client, not a second client or simulated demo.
 
 1. [WS-CLI-001-51](WS-CLI-001-51.md): direct collection navigation and deliberate
    claim/start using existing public writes, exact confirmation, caller-owned
-   replay keys and uncertain-outcome recovery. This is the current bounded work.
-2. ZIP preparation: explicit local package selection, summary/attestation,
+   replay keys and uncertain-outcome recovery.
+2. [WS-CLI-001-52](WS-CLI-001-52.md): explicit local ZIP selection, summary/attestation,
    actual intake feedback and exact replay. Preparation is not Submission.
 3. Submission and continuation: deliberate immutable creation, current outcome,
    checker remediation and only API-supported human revision responses. No

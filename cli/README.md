@@ -88,8 +88,9 @@ Preparation displays intake feedback, including nonblocking findings. A ready
 admission is **not a Submission**. Non-ready storage states are shown as
 returned, without polling. Explicit replay retains the exact key, assignment,
 packet and file hash; changed bytes are refused before sending. Save all those
-inputs for recovery outside the session. Never replace a key after an unknown
-outcome. The returned admission and packet can be used with the separate
+inputs for recovery outside the session. The client also checks the bytes
+actually streamed before confirming a successful receipt. Never replace a key
+after an unknown outcome. The returned admission and packet can be used with the separate
 `task submit` command; the TUI does not execute that handoff. Revision ZIP
 preparation remains an explicit CLI operation.
 

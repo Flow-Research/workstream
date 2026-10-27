@@ -204,8 +204,12 @@ def preparation_confirm(
     terminal, path, key=CLAIM_KEY, summary="q", attestation="Exact attestation"
 ):
     terminal.send("a")
+    fill_preparation_form(terminal, path, key, summary, attestation)
+
+
+def fill_preparation_form(terminal, path, key, summary, attestation):
     for label, value in (
-        ("ZIP path", str(path)),
+        ("One readable, nonempty regular ZIP", str(path)),
         ("Summary", summary),
         ("Attestation", attestation),
         ("Caller-owned replay key", key),
@@ -381,7 +385,9 @@ def test_initial_zip_preparation_sends_exact_packet_then_explicit_ready_replay(
         assert TOKEN.encode() not in terminal.raw
 
 
-def test_preparation_failed_intake_displays_canonical_blocking_feedback(tmp_path):
+def test_preparation_failed_intake_then_corrected_packet_waits_for_fresh_context(
+    tmp_path,
+):
     path = tmp_path / "work.zip"
     preparation_zip(path)
     peer = PreparationWrites(
@@ -418,7 +424,8 @@ def test_preparation_failed_intake_displays_canonical_blocking_feedback(tmp_path
                     "retryable": False,
                 }
             },
-        )
+        ),
+        (202, preparation()),
     )
     posts = []
     with (
@@ -440,6 +447,53 @@ def test_preparation_failed_intake_displays_canonical_blocking_feedback(tmp_path
         terminal.pump(0.2)
         assert len(posts) == 1
         assert "X-Submission-Summary" not in posts[0][1]
+        entered, release = Event(), Event()
+
+        def delayed_context(query):
+            assert query == {}
+            entered.set()
+            assert release.wait(10), (
+                "test did not release corrected preparation context"
+            )
+            return 200, peer.context
+
+        peer.overrides[TASK_PATH + "/work-context"] = delayed_context
+        try:
+            terminal.send("\x1b")
+            terminal.wait(SECRET)
+            terminal.send("a")
+            assert entered.wait(5), (
+                "corrected operation did not fetch fresh WorkContext"
+            )
+            terminal.wait("Checking initial preparation context")
+            assert "One readable, nonempty regular ZIP" not in terminal.screen
+            # Input while authority context is pending is not a form entry and
+            # cannot be saved for later dispatch or trigger a second POST.
+            terminal.send("ignored-before-fresh-context\rsy")
+            terminal.pump(0.2)
+            assert len(posts) == 1
+            release.set()
+            fill_preparation_form(
+                terminal,
+                path,
+                START_KEY,
+                "Corrected required summary",
+                "Exact attestation",
+            )
+            assert "ignored-before-fresh-context" not in terminal.screen
+            assert len(posts) == 1, (
+                "corrected form sent without deliberate confirmation"
+            )
+            preparation_dispatch(terminal)
+            terminal.wait("stored_pending_verification")
+            assert len(posts) == 2
+            assert posts[1][2] == path.read_bytes()
+            assert posts[1][1]["Idempotency-Key"] == START_KEY
+            assert posts[1][1]["X-Task-Assignment-Id"] == MINE_ASSIGNMENT
+            assert posts[1][1]["X-Submission-Summary"] == "Corrected required summary"
+            assert posts[1][1]["X-Contributor-Attestation"] == "Exact attestation"
+        finally:
+            release.set()
         terminal.quit()
 
 

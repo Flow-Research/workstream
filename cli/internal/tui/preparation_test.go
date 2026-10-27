@@ -329,6 +329,29 @@ func TestPreparationAuthFailureClearsProtectedTextAndRejectsLateResponse(t *test
 	}
 }
 
+func TestPreparationConfirmedReceiptClearingDoesNotInventNotReady(t *testing.T) {
+	for _, status := range []int{401, 403, 404} {
+		f := &fakeClient{}
+		m := preparationDetail(t, f)
+		confirmPreparation(t, m, preparationFile(t), "private summary", "private attestation")
+		press(t, m, "s")
+		press(t, m, "y")
+		if m.write.preparation == nil || m.write.preparation.Status != "ready" {
+			t.Fatal("fixture lacks prior ready receipt")
+		}
+		f.prepare = func(context.Context, string, string, api.SubmissionPacket, *api.RevisionAcknowledgement, *os.File, string) (api.Result[api.PreparationReceipt], error) {
+			return api.Result[api.PreparationReceipt]{}, &api.Failure{Status: status, Code: "permission_denied"}
+		}
+		press(t, m, "p")
+		press(t, m, "s")
+		press(t, m, "y")
+		if m.write.outcome != outcomeConfirmed || m.write.preparation != nil || m.canReplay() || strings.Contains(m.body(), "not ready") ||
+			!strings.Contains(m.body(), "Preparation receipt confirmed; protected details cleared") || strings.Contains(m.body(), "private summary") {
+			t.Fatal("cleared receipt invented a non-ready storage outcome", status, m.body())
+		}
+	}
+}
+
 func TestPreparationConfirmationResponsiveScrollableExactReview(t *testing.T) {
 	for _, size := range [][2]int{{120, 40}, {80, 24}, {40, 10}} {
 		m := preparationDetail(t, &fakeClient{})
