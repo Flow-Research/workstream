@@ -8,7 +8,7 @@ The target is original project guide -> approved locked policies -> released tas
 
 | Required binding | Current-run value |
 |---|---|
-| Executed source commit and exact review/CI evidence | `ccf918a7`; focused implementation reviews passed. Current PR adds test-only CI fixes; fresh full CI remains pending. |
+| Executed source commit and exact review/CI evidence | `ccf918a7`; focused implementation reviews passed. Current candidate adds the SDK request repair and CI fixture fixes; repaired SDK deployment, qualification and fresh full CI remain pending. |
 | Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | NOT RUN |
 | Native service, Smol, guest and configured cache/archive/config digests | NOT RUN |
 | Migration head; non-secret release/configuration fingerprints; Celery worker topology | NOT RUN |
