@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 
 from assessment import ValidatedFinding
 
@@ -21,6 +22,21 @@ INFRASTRUCTURE_FAILURES = frozenset(
 
 class ResultError(ValueError):
     """The external request cannot safely identify a project result."""
+
+
+def validate_requirement_identity(request: dict) -> None:
+    """Validate the selected policy identity independently of the project rubric."""
+    try:
+        inputs = request["input"]
+        requirement_id = inputs["requirement_id"]
+    except (KeyError, TypeError) as exc:
+        raise ResultError("request_invalid") from exc
+    if (
+        type(inputs) is not dict
+        or type(requirement_id) is not str
+        or re.fullmatch(r"[a-z][a-z0-9_.-]{0,99}", requirement_id) is None
+    ):
+        raise ResultError("request_invalid")
 
 
 def canonical(value: object) -> str:
@@ -113,4 +129,5 @@ __all__ = (
     "canonical",
     "completed_result",
     "infrastructure_result",
+    "validate_requirement_identity",
 )

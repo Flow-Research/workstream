@@ -67,6 +67,36 @@ class CheckerCoreTests(unittest.TestCase):
             (result["outcome"], result["verdict"]), ("completed", "passed")
         )
 
+    def test_policy_requirement_alias_keeps_the_configured_rubric_and_findings(self):
+        selected = request("solver_brief_and_extension_disclosure")
+        selected["input"]["requirement_id"] = "solver_brief_complete"
+        rubrics = []
+
+        def assess(prompt):
+            value = json.loads(prompt)
+            rubrics.append(value["rubric"]["requirement_id"])
+            answer = json.loads(self.passing_assessment(prompt))
+            evidence_id = next(
+                item["evidence_id"]
+                for item in value["untrusted_evidence_data"]["evidence"]
+                if item["path"] == "instruction.md"
+            )
+            answer["conditions"][0].update(
+                status="not_satisfied", evidence_ids=[evidence_id], finding_numbers=[1]
+            )
+            answer["findings"] = [
+                {"code": "brief_incomplete", "evidence_id": evidence_id, "line": 1}
+            ]
+            return json.dumps(answer)
+
+        result = execute(selected, self.root, assess)
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "failed")
+        )
+        self.assertEqual(rubrics, ["solver_brief_and_extension_disclosure"])
+        self.assertEqual(result["findings"][0]["check_id"], rubrics[0])
+        self.assertEqual(result["findings"][0]["code"], "brief_incomplete")
+
     def test_schema_only_or_unavailable_model_never_passes(self):
         selected = request("solver_brief_and_extension_disclosure")
         malformed = execute(selected, self.root, lambda _prompt: "{}")
@@ -82,14 +112,47 @@ class CheckerCoreTests(unittest.TestCase):
 
     def test_request_binding_and_agent_only_checks_fail_closed_in_static_core(self):
         selected = request("solver_brief_and_extension_disclosure")
-        selected["input"]["requirement_id"] = "difficulty_claim_evidence"
-        invalid = execute(selected, self.root, self.passing_assessment)
+        selected["configuration"]["check"] = "unknown_check"
+        invalid = execute(
+            selected,
+            self.root / "missing",
+            lambda _prompt: self.fail("an unknown check must not call a model"),
+        )
         self.assertEqual(invalid["infrastructure_failure_code"], "invalid_output")
 
         delegated = execute(
             request("author_evidence_accuracy"), self.root, self.passing_assessment
         )
         self.assertEqual(delegated["infrastructure_failure_code"], "invalid_output")
+
+    def test_malformed_policy_requirement_identity_fails_before_material_or_model(self):
+        for inputs in (
+            {},
+            None,
+            [],
+            {"requirement_id": None},
+            {"requirement_id": True},
+            {"requirement_id": 1},
+            {"requirement_id": ""},
+            {"requirement_id": "Uppercase"},
+            {"requirement_id": "contains space"},
+            {"requirement_id": "a\n"},
+            {"requirement_id": "a" * 101},
+        ):
+            with self.subTest(inputs=inputs):
+                selected = request("solver_brief_and_extension_disclosure")
+                selected["input"] = inputs
+                result = execute(
+                    selected,
+                    self.root / "missing",
+                    lambda _prompt: self.fail(
+                        "an invalid identity must not call a model"
+                    ),
+                )
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "invalid_output"
+                )
 
 
 if __name__ == "__main__":

@@ -156,7 +156,7 @@ class FakeModelSession:
                 "interrupt_work",
                 "controlled_interruption",
                 "sh tests/interrupt.sh",
-                "fresh",
+                "reference_baseline",
                 5,
             ),
             (
@@ -359,15 +359,18 @@ class RuntimeCheckerTests(unittest.TestCase):
             ),
         ):
             selected = deepcopy(request())
+            selected["input"]["requirement_id"] = "reference_and_verifier_trials"
             mutate(selected)
+            session = FakeModelSession()
             result = execute_runtime_check(
                 selected,
                 self.root,
-                FakeModelSession(),
+                session,
                 lambda value: trial_from_plan(value),
             )
             self.assertEqual(result["outcome"], "infrastructure_failed")
             self.assertEqual(result["infrastructure_failure_code"], "invalid_output")
+            self.assertEqual(session.calls, [])
 
     def test_author_accuracy_executes_same_invocation_trial_before_assessment(self):
         session = FakeModelSession()
@@ -399,6 +402,84 @@ class RuntimeCheckerTests(unittest.TestCase):
             [item["code"] for item in result["findings"]],
             ["reproduction_procedure_unavailable"],
         )
+
+    def test_policy_requirement_aliases_preserve_runtime_and_author_trials(self):
+        for check, alias, execute in (
+            (
+                RUNTIME_REQUIREMENT,
+                "reference_and_verifier_trials",
+                execute_runtime_check,
+            ),
+            (
+                AUTHOR_REQUIREMENT,
+                "author_evidence_accurate",
+                execute_author_accuracy_check,
+            ),
+        ):
+            with self.subTest(check=check):
+                selected = request(check)
+                selected["input"]["requirement_id"] = alias
+                session = FakeModelSession()
+                plans = []
+
+                def trial(plan):
+                    plans.append(plan)
+                    return trial_from_plan(plan)
+
+                result = execute(selected, self.root, session, trial)
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(plans), 1)
+                self.assertEqual(len(session.calls), 2)
+                self.assertEqual(
+                    json.loads(session.calls[1][0])["rubric"]["requirement_id"], check
+                )
+                self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
+
+                gap = execute(
+                    selected,
+                    self.root,
+                    FakeModelSession(coverage_complete=False),
+                    lambda _plan: self.fail(
+                        "incomplete coverage must not execute a trial"
+                    ),
+                )
+                self.assertEqual(
+                    (gap["outcome"], gap["verdict"]), ("completed", "failed")
+                )
+                self.assertEqual(gap["findings"][0]["check_id"], check)
+
+    def test_runtime_and_author_refuse_bad_identity_or_wrong_selector_before_effects(
+        self,
+    ):
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            for mutation in (
+                lambda value: value["input"].update(requirement_id="bad identity"),
+                lambda value: value["input"].pop("requirement_id"),
+                lambda value: value["configuration"].update(
+                    check="solver_brief_and_extension_disclosure"
+                ),
+            ):
+                with self.subTest(check=check, mutation=mutation):
+                    selected = request(check)
+                    mutation(selected)
+                    session = FakeModelSession()
+                    result = execute(
+                        selected,
+                        self.root / "missing",
+                        session,
+                        lambda _plan: self.fail(
+                            "invalid selection must not execute a trial"
+                        ),
+                    )
+                    self.assertEqual(
+                        result["infrastructure_failure_code"], "invalid_output"
+                    )
+                    self.assertEqual(session.calls, [])
 
 
 if __name__ == "__main__":

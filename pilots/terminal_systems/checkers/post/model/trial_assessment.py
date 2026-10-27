@@ -314,6 +314,11 @@ def _contradicted_conditions(
         in {"documented_command", "controlled_interruption", "restart"}
     ):
         contradicted.add(11)
+    if any(
+        item["outcome"] != "succeeded"
+        for item in by_kind.get("restart_verification", [])
+    ):
+        contradicted.add(11)
     return frozenset(contradicted)
 
 

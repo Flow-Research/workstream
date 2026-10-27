@@ -6,7 +6,7 @@ import pytest
 
 from app.adapters.checkers import evaluation_coordinator
 from app.core.identifiers import new_record_id
-from app.interfaces.project_agents import CapabilityParameter
+from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.checkers.api.external import ExternalCheckerSchema, external_checker_json_hash
 from app.modules.checkers.api.external_policy import (
@@ -50,11 +50,38 @@ def _approved_context_proposal(monkeypatch, roles):
             CapabilityParameter(name=VERSION, value="v1"),
             CapabilityParameter(name=ROLES, value=tuple(roles)),
         )})
+        # Keep the unselected binding's original specification. Only the image
+        # selecting predecessor material declares that exact runtime input.
+        original_requirement = next(
+            item for item in generated.requirements
+            if item.requirement_id == binding.requirement_id
+        )
+        specification = original_requirement.check_specification.model_dump(mode="json")
+        specification["inputs"].append({
+            "input_id": "revision_context", "kind": "evaluation_context",
+            "evaluation_context_roles": roles,
+            "purpose": "Read exact approved predecessor evidence.",
+        })
+        specification["runtime_dependencies"].append({
+            "dependency_id": "revision_context", "kind": "evaluation_context",
+            "provisioning": "current_runner", "unavailable_code": "material_unavailable",
+            "purpose": "Supply the exact selected predecessor evidence.",
+        })
+        specification["infrastructure_failures"].append({
+            "code": "material_unavailable", "condition": "Selected predecessor evidence is absent.",
+        })
+        selected_requirement = original_requirement.model_copy(update={
+            "check_specification": CheckSpecification.model_validate(specification),
+        })
         # One context-aware image and one current-only binding to the same
         # declared image prove per-binding visibility inside one workspace.
         current_id = "project.z_current_only"
         return generated.model_copy(update={
-            "requirements": (*generated.requirements, generated.requirements[-1].model_copy(update={"requirement_id": current_id})),
+            "requirements": (
+                *(selected_requirement if item.requirement_id == binding.requirement_id else item
+                  for item in generated.requirements),
+                original_requirement.model_copy(update={"requirement_id": current_id}),
+            ),
             "post_submit_bindings": (configured, binding.model_copy(update={"requirement_id": current_id})),
         })
 

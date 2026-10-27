@@ -16,6 +16,14 @@ The external Rust service supplies isolated execution. This project's Python
 POST image decides what to inspect and how to assess it against the project
 requirements. A different project supplies its own rules and image.
 
+`configuration.check` selects the project's fixed evaluator/rubric. The locked
+policy's `input.requirement_id` is a separate opaque identifier: it may name the
+same requirement differently. POST validates that identifier's format without
+using it to select the rubric. Findings retain their project-local `check_id`;
+the result's request digest, registry identity and phase bind them to the exact
+invocation. A new image containing this correction must be registered and
+qualified before use; earlier registry entries and locked bindings are retained.
+
 Here, a **trial** is one isolated execution of submitted code, such as a build
 or test run. The `trial_*` modules implement its transport, limits, execution,
 and evidence handling; they are not separate services or product lifecycles.
@@ -89,7 +97,16 @@ suggestions; those counts describe the historical handoff, not an eligibility
 set or approval. The project agent now has strict material/rubric validation, a
 bounded source-cited plan, invocation-local model-session and execution-socket
 clients, protected build/state projections, and receipt-bound runtime and author
-assessment cores. The shared runner implements generic offline image building
+assessment cores. Controlled interruption now inherits the verified third
+reference workspace; restart inherits its exact retained export, followed by
+the full verifier. These steps expose only protected verification material,
+while incomplete repair still starts fresh. A failed restart verifier contradicts
+an all-pass model assessment; a documented signalled interruption is allowed.
+The [repair record](../../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md)
+records local subprocess and false-pass proof. This changes the projection
+digest: use a new immutable image/projection registration and approved binding
+for runtime qualification; existing locked bindings remain historical.
+The shared runner implements generic offline image building
 and trials in Smol sibling microVMs, with resource, cancellation, cleanup and
 recovery controls. Native build `b2ce3fa45` passed controlled-provider KVM
 composition 013: trusted intake, two verified ART trial receipts of 17 steps,

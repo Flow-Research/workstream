@@ -120,10 +120,11 @@ type ProposalCheckSpecification struct {
 }
 
 type ProposalCheckInput struct {
-	InputID      string  `json:"input_id"`
-	Kind         string  `json:"kind"`
-	RelativePath *string `json:"relative_path"`
-	Purpose      string  `json:"purpose"`
+	InputID                string   `json:"input_id"`
+	Kind                   string   `json:"kind"`
+	RelativePath           *string  `json:"relative_path"`
+	Purpose                string   `json:"purpose"`
+	EvaluationContextRoles []string `json:"evaluation_context_roles,omitempty"`
 }
 
 type ProposalCheckFailureFinding struct {
@@ -510,7 +511,7 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 		}
 		inputIDs[item.InputID] = true
 		switch item.Kind {
-		case "package", "manifest", "request_metadata", "task_context", "guide_context", "prepared_material":
+		case "package", "manifest", "request_metadata", "task_context", "evaluation_context", "guide_context", "prepared_material":
 			if _, hasPath := itemFields["relative_path"]; hasPath {
 				return errors.New("unexpected input path")
 			}
@@ -521,6 +522,25 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 			}
 		default:
 			return errors.New("invalid input kind")
+		}
+		rolesRaw, hasRoles := itemFields["evaluation_context_roles"]
+		if item.Kind == "evaluation_context" {
+			if !hasRoles || string(rolesRaw) == "null" || stage != "post_submit" || inputKinds[item.Kind] {
+				return errors.New("invalid evaluation context input")
+			}
+			var roles []string
+			if err := jsonv2.Unmarshal(rolesRaw, &roles); err != nil || len(roles) > 2 {
+				return errors.New("invalid evaluation context roles")
+			}
+			previous := ""
+			for _, role := range roles {
+				if (role != "predecessor_findings" && role != "predecessor_submission_archive") || role <= previous {
+					return errors.New("invalid evaluation context roles")
+				}
+				previous = role
+			}
+		} else if hasRoles {
+			return errors.New("unexpected evaluation context roles")
 		}
 		inputKinds[item.Kind] = true
 	}
@@ -587,6 +607,7 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 			"isolated_execution": {"current_runner", "implementation_unavailable"},
 			"nested_sandbox":     {"runtime_gap", "implementation_unavailable"},
 			"task_context":       {"runtime_gap", "material_unavailable"},
+			"evaluation_context": {"current_runner", "material_unavailable"},
 			"guide_context":      {"runtime_gap", "material_unavailable"},
 			"execution_capacity": {"runtime_gap", "capacity_exceeded"},
 			"prepared_material":  {"runtime_gap", "material_unavailable"},
@@ -600,7 +621,7 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 			valid = stage == "post_submit" && item.UnavailableCode == expected[1]
 			usesTrial = true
 		}
-		if !valid || (supported && item.Provisioning == "runtime_gap") {
+		if !valid || (supported && item.Provisioning == "runtime_gap") || (item.Kind == "evaluation_context" && stage != "post_submit") {
 			return errors.New("invalid runtime dependency provisioning")
 		}
 		dependencyIDs[item.DependencyID], dependencyKinds[item.Kind] = true, true
@@ -608,7 +629,7 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 	if usesTrial && !dependencyKinds["nested_sandbox"] {
 		return errors.New("trial material requires an isolated trial dependency")
 	}
-	for _, kind := range []string{"task_context", "guide_context", "prepared_material"} {
+	for _, kind := range []string{"task_context", "evaluation_context", "guide_context", "prepared_material"} {
 		if inputKinds[kind] != dependencyKinds[kind] {
 			return errors.New("material inputs and dependencies must match")
 		}

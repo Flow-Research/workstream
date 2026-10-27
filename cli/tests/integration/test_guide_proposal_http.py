@@ -1082,3 +1082,77 @@ def test_proposal_without_project_size_overrides_preserves_nulls(cli):
                 assert result.returncode == 0 and json.loads(result.stdout) == value, (
                     result.stderr
                 )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        None,
+        "pre",
+        "missing_roles",
+        "unknown_roles",
+        "reversed_roles",
+        "duplicate_roles",
+        "misplaced_roles",
+        "missing_input",
+        "missing_dependency",
+    ],
+)
+def test_proposal_exact_evaluation_context_contract(cli, fault):
+    value = proposal()
+    requirement = value["result"]["requirements"][1]
+    specification = deepcopy(requirement["check_specification"])
+    requirement["check_specification"] = specification
+    context_input = {
+        "input_id": "revision_context",
+        "kind": "evaluation_context",
+        "evaluation_context_roles": [
+            "predecessor_findings",
+            "predecessor_submission_archive",
+        ],
+        "purpose": "Read the exact approved predecessor evidence.",
+    }
+    specification["inputs"].append(context_input)
+    specification["runtime_dependencies"].append(
+        {
+            "dependency_id": "revision_context",
+            "kind": "evaluation_context",
+            "provisioning": "current_runner",
+            "purpose": "Provide selected revision evidence.",
+            "unavailable_code": "material_unavailable",
+        }
+    )
+    if not any(
+        item["code"] == "material_unavailable"
+        for item in specification["infrastructure_failures"]
+    ):
+        specification["infrastructure_failures"].append(
+            {
+                "code": "material_unavailable",
+                "condition": "Required revision evidence is absent.",
+            }
+        )
+    if fault == "pre":
+        requirement["disposition"] = "supported_pre_submit"
+        specification["execution_mode"] = "bounded_pre_submit"
+    elif fault == "missing_roles":
+        context_input.pop("evaluation_context_roles")
+    elif fault == "unknown_roles":
+        context_input["evaluation_context_roles"] = ["task_prose"]
+    elif fault == "reversed_roles":
+        context_input["evaluation_context_roles"].reverse()
+    elif fault == "duplicate_roles":
+        context_input["evaluation_context_roles"] = ["predecessor_findings"] * 2
+    elif fault == "misplaced_roles":
+        specification["inputs"][0]["evaluation_context_roles"] = []
+    elif fault == "missing_input":
+        specification["inputs"].pop()
+    elif fault == "missing_dependency":
+        specification["runtime_dependencies"].pop()
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        completed = invoke(cli, origin)
+        if fault is None:
+            assert completed.returncode == 0 and json.loads(completed.stdout) == value
+        else:
+            assert_failure(completed, "invalid_api_response")

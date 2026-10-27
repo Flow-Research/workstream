@@ -6,7 +6,11 @@ from collections.abc import Callable
 
 from assessment import AssessmentError, build_prompt, validate_assessment
 from material import MaterialError, MaterialLimits, collect_material
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import BLOCKED_CHECKS, SUPPORTED_CHECKS, RubricError, load_rubrics
 
 
@@ -22,19 +26,13 @@ class ModelCallUnavailable(RuntimeError):
 
 
 def _selected_check(request: dict) -> str:
+    validate_requirement_identity(request)
     try:
         configuration = request["configuration"]
-        input_value = request["input"]
         check = configuration["check"]
-        requirement = input_value["requirement_id"]
     except (KeyError, TypeError) as exc:
         raise ValueError("invalid_request") from exc
-    if (
-        type(configuration) is not dict
-        or type(input_value) is not dict
-        or type(check) is not str
-        or check != requirement
-    ):
+    if type(configuration) is not dict or type(check) is not str:
         raise ValueError("invalid_request")
     return check
 

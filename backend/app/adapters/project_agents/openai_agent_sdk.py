@@ -317,7 +317,7 @@ class OpenAIAgentSdkProjectGuideRuntime:
 
             extra_body = None
             if configuration.model_provider == "openrouter":
-                extra_body = openrouter_request_options()
+                extra_body = {"usage": {"include": True}, **openrouter_request_options()}
             model_settings = ModelSettings(
                 parallel_tool_calls=False,
                 store=False,

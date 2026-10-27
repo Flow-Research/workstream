@@ -47,6 +47,7 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
+                            "evaluation_context_roles": None,
                             "purpose": "Supplies the report to inspect.",
                         }
                     ],
@@ -116,6 +117,7 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
+                            "evaluation_context_roles": None,
                             "purpose": "Supplies the report to inspect.",
                         }
                     ],
@@ -297,41 +299,44 @@ the registered configuration schema. Use parameters: [] for an empty configurati
 Do not invent checker identities, images, digests or implementations. Missing
 implementations are same-stage capability gaps, each with exactly one suggestion.
 
-Gaps block activation until engineering builds/registers images and the PM approves
-corrected bindings; registration alone does not activate anything.
+Gaps block activation until images are built/registered and corrected bindings
+are PM-approved. Registration alone cannot activate.
 
 SPECIFICATION
-Each requirement needs evidence and classification_rationale. Each supported/gap
-PRE/POST requirement needs the complete typed check_specification; platform coverage
-and blockers have null specification. Specify exact inputs, ordered steps, observable
-pass conditions, findings, tests, dependencies and infrastructure failures.
-Make assertions self-contained: name actual fields, types, ranges and exceptions.
-Put paths in typed inputs, regular files in required_artifacts, directory predicates
-in specifications. Artifact settings do not enforce project checks. Keep image
-parameters in their binding, artifact settings in submission_artifact_policy.
-Every mandatory failure has an error finding. Disclosure does not excuse failure
-unless the guide says it does. Warnings cover nonblocking guidance only.
-Every negative case must name available evidence and reference defined finding codes;
-its expected_verdict is failed iff at least one referenced finding is an error.
-Keep infrastructure failures separate from work failures: missing support/material,
-capacity, deadline, provider failure and invalid output cannot consume revision rounds.
+Require evidence and classification_rationale.
+Each supported/gap PRE/POST requirement needs the complete typed check_specification;
+platform coverage/blockers use null. Specify inputs, ordered steps, observable pass conditions, findings, tests, dependencies and
+infrastructure failures. Name fields, types, ranges and exceptions. Put paths in
+typed inputs, files in required_artifacts and directory predicates in specifications.
+Artifact settings are not checks: use submission_artifact_policy. Bindings carry
+image parameters. Mandatory failures need errors; disclosure excuses failure only if the guide says so. Warnings are nonblocking.
+Negative cases name evidence/finding codes; expected_verdict is failed iff a
+referenced finding is error. Infrastructure failures (support/material, capacity,
+deadline, provider, invalid output) never consume revision rounds or become work failures.
 
 DEPENDENCIES
-Specifications grant no access. Images receive verified material and approved
-metadata, never provider keys or host sockets. current_runner isolates the image.
-POST model_evaluation requires model_service/model_proxy and implementation_unavailable.
-Model-assisted trials declare the same dependency. Both require a registered project
-image and its exact approved profile.
-Building submitted environments or isolating trials declares nested_sandbox/trial_proxy
-with implementation_unavailable and selects exact trial profile and projection pins.
-Only the invocation-local trial tool receives runtime authority. Its prepared offline
-cache declares prepared_material/trial_proxy with material_unavailable; this does
-not provide arbitrary external data. Model and trial tools may serve the same check.
-Missing registered image or profile means an unbound capability suggestion.
-Supported bindings cannot depend on runtime_gap. task_context, guide_context and
-prepared_material require matching inputs and dependencies. Unavailable task/guide
-prose or external data remains a runtime_gap. Include each dependency failure code
-once in infrastructure_failures. execution_capacity requires an actual stage shortfall.
+Specifications grant no access. Images: verified material/approved metadata;
+no provider keys/host sockets. kind/provisioning; unavailable_code=implementation_unavailable:
+checker_tool/checker_implementation; isolated_execution/current_runner;
+model_service/model_proxy (POST background); nested_sandbox/trial_proxy.
+evaluation_method/kind: isolated_execution requires isolated_execution;
+model_evaluation requires model_service.
+Models/trials need a registered project image and its exact approved profile.
+Builds/trials need nested_sandbox and exact trial profile/projection pins;
+invocation-local trial authority only.
+Cache: prepared_material/trial_proxy/material_unavailable requires nested_sandbox/trial_proxy.
+No arbitrary external data. model+trial=model_service+nested_sandbox;
+nested never replaces isolated_execution.
+Missing images/profiles: unbound suggestions. No supported runtime_gap.
+POST background revision: evaluation_context/current_runner/material_unavailable.
+evaluation_context_roles selects sorted predecessor_findings and/or
+predecessor_submission_archive; null elsewhere. Registry schemas declare
+workstream_evaluation_context_version and workstream_evaluation_context_roles;
+bind v1 and identical roles. Model-only checks/trials may use context.
+Match inputs/dependencies for task_context, evaluation_context, guide_context,
+prepared_material. Unavailable task/guide prose or external data stays runtime_gap.
+List dependency codes once in infrastructure_failures.
+execution_capacity needs a stage shortfall.
 
 OUTPUT AND VALIDATION
 Return exactly one JSON object matching the supplied strict schema. No Markdown

@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -124,7 +126,7 @@ class TrialPlanTests(unittest.TestCase):
                 "interrupt_work",
                 "controlled_interruption",
                 "sh tests/interrupt.sh",
-                "fresh",
+                "reference_baseline",
                 "source_2",
                 5,
             ),
@@ -238,6 +240,148 @@ class TrialPlanTests(unittest.TestCase):
         self.assertEqual(
             [item.path for item in evidence], ["instruction.md", "AUTHOR_NOTES.md"]
         )
+
+    def test_interruption_requires_repaired_baseline_even_for_partial_coverage(self):
+        prompt = json.loads(
+            build_plan_prompt(self.metadata, self.material_digest, self.evidence)
+        )
+        self.assertEqual(
+            prompt["state_rules"]["controlled_interruption"], "reference_baseline"
+        )
+        for complete in (True, False):
+            value = self.proposal()
+            value["procedures"][-2]["state_source"] = "fresh"
+            if not complete:
+                value["coverage_complete"] = False
+                value["procedures"].pop(0)
+                value["coverage_gaps"] = [
+                    {
+                        "purpose": "documented_command",
+                        "evidence_id": "source_1",
+                        "start_line": 2,
+                        "end_line": 2,
+                    }
+                ]
+            with (
+                self.subTest(complete=complete),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(value)
+
+    def test_repaired_recovery_uses_retained_code_and_exact_parent_states(self):
+        # Local subprocess semantics only: the shared runtime owns isolation and
+        # authenticated exports. The deliberately broken code cannot recover a
+        # pending commit; the reference changes that code, not expected output.
+        for directory in ("workspace", "solution", "tests"):
+            (self.root / directory).mkdir()
+        worker = """\
+import os
+from pathlib import Path
+import signal
+import sys
+
+state = Path(sys.argv[2])
+state.mkdir(exist_ok=True)
+pending = state / 'pending'
+committed = state / 'committed'
+if sys.argv[1] == 'interrupt':
+    pending.write_text('durable-job-result')
+    os.kill(os.getpid(), signal.SIGTERM)
+elif sys.argv[1] == 'restart' and pending.exists():
+    pass  # broken recovery
+"""
+        repaired = worker.replace(
+            "pass  # broken recovery", "pending.replace(committed)"
+        )
+        (self.root / "workspace/worker.py").write_text(worker)
+        (self.root / "solution/repaired.py").write_text(repaired)
+        (self.root / "solution/apply.sh").write_text(
+            "cp solution/repaired.py workspace/worker.py\n"
+        )
+        (self.root / "tests/interrupt.sh").write_text(
+            f"exec {sys.executable} workspace/worker.py interrupt workspace/state\n"
+        )
+        (self.root / "tests/restart.sh").write_text(
+            f"exec {sys.executable} workspace/worker.py restart workspace/state\n"
+        )
+        (self.root / "tests/verify.py").write_text("""\
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory() as temporary:
+    state = Path(temporary)
+    (state / 'pending').write_text('durable-job-result')
+    subprocess.run([sys.executable, 'workspace/worker.py', 'restart', temporary], check=True)
+    assert (state / 'committed').read_text() == 'durable-job-result'
+state = Path('workspace/state')
+if state.exists():
+    assert not (state / 'pending').exists()
+    assert (state / 'committed').read_text() == 'durable-job-result'
+""")
+        (self.root / "tests/run.sh").write_text(
+            f"exec {sys.executable} tests/verify.py\n"
+        )
+        plan = build_runtime_trial_plan(
+            self.metadata,
+            self.validated(),
+            TrialPlanLimits(maximum_entries=100, pids=16, maximum_steps=35),
+        )
+        steps = {item["slot_id"]: item for item in plan["steps"]}
+        templates = {item["slot_kind"]: item for item in project_slot_templates()}
+        interruption = templates["controlled_interruption"]
+        self.assertFalse(interruption["fresh_workspace"])
+        self.assertEqual(interruption["seed_roles"], [])
+        self.assertTrue(templates["incomplete_repair"]["fresh_workspace"])
+        self.assertEqual(steps["apply_incomplete"]["state_source"], "fresh")
+        self.assertEqual(steps["interrupt_work"]["state_source"], "reference_verify_3")
+        self.assertEqual(steps["restart_work"]["state_source"], "interrupt_work")
+        self.assertEqual(
+            steps["restart_work_verification"]["state_source"], "restart_work"
+        )
+        exports = {}
+        for identifier, expected in (
+            ("starter_verification", 1),
+            ("reference_apply_3", 0),
+            ("reference_verify_3", 0),
+            ("interrupt_work", -15),
+            ("restart_work", 0),
+            ("restart_work_verification", 0),
+        ):
+            step = steps[identifier]
+            template = templates[step["slot_kind"]]
+            state = Path(self.temporary.name) / identifier
+            state.mkdir()
+            source = step["state_source"]
+            if source == "fresh":
+                self.assertIn("workspace_seed", template["seed_roles"])
+                shutil.copytree(self.root / "workspace", state / "workspace")
+            else:
+                self.assertFalse(template["fresh_workspace"])
+                shutil.copytree(exports[source], state / "workspace")
+            for role in step["visible_roles"]:
+                self.assertIn(role, template["visible_roles"])
+                directory = {"verification": "tests", "reference": "solution"}[role]
+                shutil.copytree(self.root / directory, state / directory)
+            if identifier in {
+                "interrupt_work",
+                "restart_work",
+                "restart_work_verification",
+            }:
+                self.assertEqual(step["visible_roles"], ["verification"])
+                self.assertEqual(template["visible_roles"], ["verification"])
+                self.assertFalse((state / "solution").exists())
+            result = subprocess.run(
+                step["command"], cwd=state, capture_output=True, timeout=5
+            )
+            with self.subTest(slot=identifier):
+                if identifier == "starter_verification":
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(b"committed", result.stderr)
+                else:
+                    self.assertEqual(result.returncode, expected, result.stderr)
+            exports[identifier] = state / "workspace"
 
     def test_project_templates_make_all_three_reference_runs_mandatory(self):
         templates = project_slot_templates()

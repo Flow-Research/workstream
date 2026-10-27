@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +17,8 @@ from app.core.project_guide_instructions import (
     PROJECT_GUIDE_OUTPUT_EXAMPLE,
 )
 from app.interfaces.project_agents import (
+    CheckRuntimeDependency,
+    CheckSpecification,
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     require_complete_generated_specifications,
@@ -27,6 +30,7 @@ from tests.projects.guide_compilation.helpers import (
     generated_result,
     ids,
     runtime_configuration,
+    valid_specification,
 )
 from tests.test_agent_runtime import (
     _compile,
@@ -86,6 +90,96 @@ def test_example_is_complete_valid_and_bound_to_instructions():
         set(schema["$defs"]["AtomicGuideRequirement"]["properties"]["disposition"]["enum"])
         == allowed
     )
+
+
+def test_dependency_guidance_matches_canonical_triples_methods_and_nested_material():
+    from tests.projects.guide_compilation.test_check_specifications import (
+        _requirement,
+        _with_requirement,
+    )
+
+    guidance = PROJECT_GUIDE_INSTRUCTIONS.split("DEPENDENCIES\n", 1)[1].split(
+        "OUTPUT AND VALIDATION\n", 1
+    )[0]
+    availability = re.search(
+        r"kind/provisioning; unavailable_code=([a-z_]+):\n(.*?)\.\n", guidance, re.DOTALL
+    )
+    assert availability is not None
+    dependencies = {
+        kind: CheckRuntimeDependency(
+            dependency_id=kind,
+            kind=kind,
+            provisioning=provisioning,
+            unavailable_code=availability[1],
+            purpose="Provide the declared checker support.",
+        )
+        for kind, provisioning in re.findall(r"([a-z_]+)/([a-z_]+)", availability[2])
+    }
+    assert set(dependencies) == {
+        "checker_tool",
+        "isolated_execution",
+        "model_service",
+        "nested_sandbox",
+    }
+
+    def admit(method, selected, *, material=False):
+        body = valid_specification().model_dump(mode="json")
+        body.update(evaluation_method=method, execution_mode="background")
+        body["runtime_dependencies"] = [item.model_dump(mode="json") for item in selected]
+        body["infrastructure_failures"] = [
+            {"code": code, "condition": "Required checker support is unavailable."}
+            for code in sorted({item.unavailable_code for item in selected})
+        ]
+        if material:
+            body["inputs"].append(
+                {"input_id": "cache", "kind": "prepared_material", "purpose": "Offline inputs."}
+            )
+        specification = CheckSpecification.model_validate(body)
+        requirement = _requirement(
+            disposition="post_submit_capability_gap", check_specification=specification
+        )
+        require_complete_generated_specifications(context(ids()), _with_requirement(requirement))
+
+    method_guidance = re.search(r"evaluation_method/kind: (.*?)\.\n", guidance, re.DOTALL)
+    assert method_guidance is not None
+    methods = dict(re.findall(r"([a-z_]+) requires ([a-z_]+)", method_guidance[1]))
+    assert set(methods) == {"isolated_execution", "model_evaluation"}
+    for method, required_kind in methods.items():
+        admit(method, [dependencies[required_kind]])
+
+    cache_guidance = re.search(
+        r"Cache: ([a-z_]+)/([a-z_]+)/([a-z_]+) requires ([a-z_]+)/([a-z_]+)\.", guidance
+    )
+    assert cache_guidance is not None
+    kind, provisioning, code, nested_kind, nested_provisioning = cache_guidance.groups()
+    cache = CheckRuntimeDependency(
+        dependency_id="cache",
+        kind=kind,
+        provisioning=provisioning,
+        unavailable_code=code,
+        purpose="Provide the declared offline inputs.",
+    )
+    assert cache.kind == "prepared_material"
+    nested = dependencies[nested_kind]
+    assert nested.provisioning == nested_provisioning
+    trial_dependencies = {
+        item.dependency_id: item
+        for item in [dependencies[methods["isolated_execution"]], cache, nested]
+    }
+    admit(
+        "isolated_execution",
+        list(trial_dependencies.values()),
+        material=True,
+    )
+
+    combined = re.search(r"model\+trial=([a-z_]+)\+([a-z_]+);", guidance)
+    assert combined is not None
+    admit(
+        "model_evaluation",
+        [dependencies[kind] for kind in combined.groups()] + [cache],
+        material=True,
+    )
+
 
 
 @pytest.mark.parametrize(
