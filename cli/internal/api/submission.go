@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash"
 	"io"
 	"math/big"
 	"mime"
@@ -12,6 +15,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // SubmissionPacket is shared unchanged between explicit preparation and creation.
@@ -80,8 +84,50 @@ func submissionFailure(err error, preparation bool) error {
 	return err
 }
 
+// preparationBody binds the receipt to bytes actually consumed by the HTTP
+// transport, including a transient file change restored before the final hash.
+// RoundTripper may read/close the request asynchronously after returning a
+// response. Sealing shares their lock and prevents any later source reads.
+type preparationBody struct {
+	mu     sync.Mutex
+	source io.Reader
+	digest hash.Hash
+	bytes  int64
+	closed bool
+	failed bool
+}
+
+func (b *preparationBody) Read(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return 0, io.ErrClosedPipe
+	}
+	n, err := b.source.Read(p)
+	_, _ = b.digest.Write(p[:n])
+	b.bytes += int64(n)
+	if err != nil && err != io.EOF {
+		b.failed = true
+	}
+	return n, err
+}
+
+func (b *preparationBody) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	return nil
+}
+
+func (b *preparationBody) matches(expected string, size int64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	return !b.failed && b.bytes == size && "sha256:"+hex.EncodeToString(b.digest.Sum(nil)) == expected
+}
+
 // PrepareSubmission streams one regular ZIP once. A receipt is not a Submission.
-func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File) (Result[PreparationReceipt], error) {
+func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File, expectedSHA256 string) (Result[PreparationReceipt], error) {
 	var result Result[PreparationReceipt]
 	if err := packet.validate(task); err != nil {
 		return result, err
@@ -105,6 +151,14 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 	if err != nil {
 		return result, err
 	}
+	// A reviewed fingerprint is checked against this operation's own pre-send
+	// hash, not an earlier independent read. Empty preserves explicit CLI input.
+	if expectedSHA256 != "" && expected != expectedSHA256 {
+		return result, errors.New("reviewed ZIP changed; no preparation request was sent")
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	headers := http.Header{"X-Task-Assignment-Id": {packet.Assignment}}
 	for name, value := range map[string]*string{
 		"X-Submission-Summary": packet.Summary, "X-Contributor-Attestation": packet.Attestation,
@@ -118,9 +172,11 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 		headers.Set("X-Revision-Preparation-Id", acknowledgement.PreparationID)
 		headers.Set("X-Revision-Preparation-Sha256", acknowledgement.PreparationSHA256)
 	}
+	body := &preparationBody{source: io.NewSectionReader(source, 0, initial.Size()), digest: sha256.New()}
+	defer body.Close()
 	response, err := c.openBodyRequest(ctx, c.guideHTTP, http.MethodPost,
 		"/api/v1/tasks/"+url.PathEscape(task)+"/submission-bundle-preparations", "",
-		io.NewSectionReader(source, 0, initial.Size()), initial.Size(), key, "application/json", "application/zip", headers)
+		body, initial.Size(), key, "application/json", "application/zip", headers)
 	if err != nil {
 		return result, submissionFailure(err, true)
 	}
@@ -168,6 +224,9 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 		}
 	default:
 		return result, submissionFailure(invalid, true)
+	}
+	if !body.matches(expected, initial.Size()) {
+		return result, submissionFailure(&Failure{Code: "submission_source_changed", OutcomeUnknown: true}, true)
 	}
 	finalHash, hashErr := uploadSourceHash(source, initial.Size())
 	final, statErr := source.Stat()

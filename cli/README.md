@@ -48,7 +48,7 @@ terms remain available separately. Workstream rechecks each public read.
 | Tab / Esc | Change section / go back or cancel |
 | Shift+Tab | Previous collection or detail section |
 | `1` / `2` / `3` | Go directly to Ready / Mine / Submissions from ordinary views |
-| `a` in task Overview | Open Claim or Start when the freshly inspected task supports that action |
+| `a` in task Overview | Open Claim, Start or initial ZIP preparation when the freshly inspected task supports that action |
 | `g` | Fetch the project picker again |
 | `n` / `r` | Fetch the next page / refresh the current view |
 | `/` | Filter loaded names/titles locally; Enter finishes and Esc cancels |
@@ -73,7 +73,28 @@ explicit CLI with your saved inputs and the same API origin and actor. Do not
 substitute a fresh key or infer success from a refreshed list. Automatic
 crash-safe recovery is not implemented.
 
-The workspace does not prepare or submit ZIPs, export records, poll, acquire
+For an initial `in_progress` Mine task, `a` opens ZIP preparation after a fresh
+work-context check. Enter the ZIP path, optional summary and attestation, and a
+UUID saved outside this session. Review the exact task/assignment, packet,
+path, byte count and SHA-256; acknowledge saving with `s`, then send with `y`.
+Press Enter after each field; the key field starts local file inspection, not
+the upload. Local paths can contain Unicode; control characters are rejected.
+Summary and attestation must fit the API's printable-ASCII header contract;
+blank fields are omitted, not silently populated. The file must be a nonempty
+regular file of at most 512MiB. Workstream still decides whether its contents
+meet the locked intake requirements.
+
+Preparation displays intake feedback, including nonblocking findings. A ready
+admission is **not a Submission**. Non-ready storage states are shown as
+returned, without polling. Explicit replay retains the exact key, assignment,
+packet and file hash; changed bytes are refused before sending. Save all those
+inputs for recovery outside the session. The client also checks the bytes
+actually streamed before confirming a successful receipt. Never replace a key
+after an unknown outcome. The returned admission and packet can be used with the separate
+`task submit` command; the TUI does not execute that handoff. Revision ZIP
+preparation remains an explicit CLI operation.
+
+The workspace does not create Submissions, export records, poll, acquire
 tokens or save local history. Guide metadata is not proof of downloaded-byte integrity. In Guide,
 select one document, enter an existing real directory and confirm its label,
 document/task IDs, path, UUID filename, byte count and hash. Verified bytes are
@@ -395,9 +416,10 @@ and contribution evidence with PostgreSQL, MinIO and Celery; see
 [the journey evidence](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-43.md).
 That proof is not hosted deployment verification or proof of human review.
 The [capability ledger](../docs/roadmap_status.md) identifies those remaining
-product boundaries. The interactive workspace exposes claim/start alongside
-contributor reads and guide downloads; explicit commands remain the interface
-for preparation, submission and the other supported mutations.
+product boundaries. The interactive workspace exposes claim/start and initial
+ZIP preparation alongside contributor reads and guide downloads. Explicit
+commands remain the interface for revision preparation, immutable submission
+and the other supported mutations.
 
 ### Download and install
 

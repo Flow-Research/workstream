@@ -67,7 +67,8 @@ ordered locked-guide selection with explicit verified single-document download.
 visible collections/sections, readable instructions and truthful page/evidence
 states; it changes no public operation or lifecycle authority.
 Contribution evidence remains an inert CLI handoff. Claim/start is bounded by
--51 below; other product mutations, management screens and their recovery remain
+-51 and initial ZIP preparation by -52 below; other product mutations,
+management screens and their recovery remain
 separate TUI boundaries; this
 interface does not depend on first binary publication or system-wide discovery.
 
@@ -80,8 +81,8 @@ the existing TUI and typed API client, not a second client or simulated demo.
 
 1. [WS-CLI-001-51](WS-CLI-001-51.md): direct collection navigation and deliberate
    claim/start using existing public writes, exact confirmation, caller-owned
-   replay keys and uncertain-outcome recovery. This is the current bounded work.
-2. ZIP preparation: explicit local package selection, summary/attestation,
+   replay keys and uncertain-outcome recovery.
+2. [WS-CLI-001-52](WS-CLI-001-52.md): explicit local ZIP selection, summary/attestation,
    actual intake feedback and exact replay. Preparation is not Submission.
 3. Submission and continuation: deliberate immutable creation, current outcome,
    checker remediation and only API-supported human revision responses. No
@@ -89,7 +90,10 @@ the existing TUI and typed API client, not a second client or simulated demo.
 4. Contribution evidence: inspect the contributor's returned records and awards
    inside the workbench, retaining the distinction from fulfillment.
 
-Only the first boundary is specified for implementation now. Each following
+The initial ZIP preparation boundary is specified by
+[WS-CLI-001-52](WS-CLI-001-52.md): fresh assigned context, exact packet/file hash,
+separate confirmation, intake feedback and explicit unchanged replay. Immutable
+Submission creation and revision uploads are not part of that slice. Each following
 boundary needs inspected API/replay contracts, its own bounded record and native
 public-API proof before starting. A durable automatic recovery design is needed
 before replacing caller-owned saved keys with generated keys; the current CLI
@@ -108,7 +112,7 @@ and separate guide-bound review/revision policy configuration. The commands
 the existing public writes with caller-owned replay keys and policy `If-Match`.
 The backend owns manager authorization for new writes, policy semantics, replay and activation;
 editing/configuring a guide does not approve or activate it. Other public API
-client gaps and the broader TUI beyond -51 remain separate work. Binary distribution's
+client gaps and the broader TUI beyond -52 remain separate work. Binary distribution's
 workflow is prepared by -44; a protected release run and public-asset audit
 remain operational work.
 
@@ -461,7 +465,8 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
 26. **Optional TUI:** -48 supplies contributor navigation through existing typed
    reads; -49 adds findings pages and confirmed verified guide downloads; -50
    redraws this same contributor boundary for readable work and evidence states.
-   In-TUI Evidence, product writes and management remain
+   -51 adds deliberate claim/start; -52 adds initial ZIP preparation.
+   In-TUI Evidence, immutable Submission/revision writes and management remain
    separate boundaries; Evidence first needs a shared typed single-page client
    port without changing complete CLI exports. Never require a TUI for agents
    or scripts.

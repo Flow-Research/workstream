@@ -2,8 +2,10 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -33,7 +35,16 @@ type fakeClient struct {
 	download                         func(context.Context, string, api.TaskGuideDocument, io.Writer) error
 	claim                            func(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
 	start                            func(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
+	prepare                          func(context.Context, string, string, api.SubmissionPacket, *api.RevisionAcknowledgement, *os.File, string) (api.Result[api.PreparationReceipt], error)
 	assignmentQuery, submissionQuery api.PageQuery
+}
+
+func (f *fakeClient) PrepareSubmission(ctx context.Context, task, key string, packet api.SubmissionPacket, ack *api.RevisionAcknowledgement, file *os.File, digest string) (api.Result[api.PreparationReceipt], error) {
+	f.calls = append(f.calls, "prepare")
+	if f.prepare != nil {
+		return f.prepare(ctx, task, key, packet, ack, file, digest)
+	}
+	return api.Result[api.PreparationReceipt]{Value: api.PreparationReceipt{PutAttemptID: runID, AdmissionID: new(submissionID), Status: "ready", Feedback: []json.RawMessage{}}}, nil
 }
 
 func (f *fakeClient) Profile(ctx context.Context) (api.Result[api.Profile], error) {

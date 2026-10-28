@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ type Client interface {
 	DownloadGuideDocument(context.Context, string, api.TaskGuideDocument, io.Writer) error
 	ClaimTask(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
 	StartTask(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
+	PrepareSubmission(context.Context, string, string, api.SubmissionPacket, *api.RevisionAcknowledgement, *os.File, string) (api.Result[api.PreparationReceipt], error)
 }
 
 var _ Client = (*api.Client)(nil)
@@ -345,6 +347,17 @@ func (m *Model) receive(msg response) tea.Cmd {
 			return bad()
 		}
 		m.context = &value
+		if m.write.mode == writePrepareContext {
+			p := m.write.packet
+			if !sameID(p.actor, m.actor) || !sameID(p.project, r.project) || !sameID(p.task, r.task) ||
+				!sameID(p.assignment, r.resource) || value.Task.Status != "in_progress" ||
+				!value.Lifecycle.AssignedToCurrentActor || value.RevisionContext != nil {
+				m.write = writeState{}
+				m.failure = "Unavailable: initial preparation requires your in-progress assignment without revision context."
+				return nil
+			}
+			m.write.mode = writePreparePath
+		}
 		m.guideSelected = max(0, min(m.guideSelected, len(value.GuideDocuments)-1))
 	case api.SubmissionRequirements:
 		if r.kind != intakeRead || !sameID(value.TaskID, r.task) || !sameID(value.ProjectID, r.project) ||
@@ -378,7 +391,7 @@ func (m *Model) failed(err error, actorRead bool) {
 	m.invalidate()
 	m.clearPage()
 	m.projectName = ""
-	if m.write.mode == writeConfirm || m.write.mode == writeKeyEntry {
+	if m.write.mode == writeConfirm || m.write.mode == writeKeyEntry || m.preparationEntry() || m.write.mode == writePrepareContext {
 		if m.write.outcome == outcomeNone {
 			m.write = writeState{}
 		} else {
@@ -389,6 +402,7 @@ func (m *Model) failed(err error, actorRead bool) {
 	if errors.As(err, &failure) {
 		if failure.Status == 401 || failure.Status == 403 || failure.Status == 404 {
 			m.write.replayDisabled = true
+			m.clearPreparationText()
 		}
 		if failure.Status == 401 || (actorRead && failure.Status == 403) {
 			m.blocked = true
