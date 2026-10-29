@@ -1,0 +1,670 @@
+{
+  "canonical_sha256": "25819d4e95153c91411d05d90b3d0fb772452ec3aa4c4f4d5fddb4368fe442ed",
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "ModelGenerationSettings": {
+        "additionalProperties": false,
+        "description": "Closed provider-neutral settings; prompts never belong to a profile.",
+        "properties": {
+          "reasoning_effort": {
+            "enum": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "title": "Reasoning Effort",
+            "type": "string"
+          },
+          "text_verbosity": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Text Verbosity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reasoning_effort",
+          "text_verbosity"
+        ],
+        "title": "ModelGenerationSettings",
+        "type": "object"
+      },
+      "ModelPricing": {
+        "additionalProperties": false,
+        "description": "Exact integer nano-USD rates with no floating-point rounding.",
+        "properties": {
+          "cached_input_nanodollars_per_token": {
+            "maximum": 9e+18,
+            "minimum": 0.0,
+            "title": "Cached Input Nanodollars Per Token",
+            "type": "integer"
+          },
+          "output_nanodollars_per_token": {
+            "maximum": 9e+18,
+            "minimum": 0.0,
+            "title": "Output Nanodollars Per Token",
+            "type": "integer"
+          },
+          "pricing_policy_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Pricing Policy Digest",
+            "type": "string"
+          },
+          "pricing_policy_id": {
+            "format": "uuid",
+            "title": "Pricing Policy Id",
+            "type": "string"
+          },
+          "pricing_policy_version": {
+            "minimum": 1.0,
+            "title": "Pricing Policy Version",
+            "type": "integer"
+          },
+          "uncached_input_nanodollars_per_token": {
+            "maximum": 9e+18,
+            "minimum": 0.0,
+            "title": "Uncached Input Nanodollars Per Token",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pricing_policy_id",
+          "pricing_policy_version",
+          "pricing_policy_digest",
+          "uncached_input_nanodollars_per_token",
+          "cached_input_nanodollars_per_token",
+          "output_nanodollars_per_token"
+        ],
+        "title": "ModelPricing",
+        "type": "object"
+      },
+      "ProjectModelProfile": {
+        "additionalProperties": false,
+        "description": "Published exact profile with its immutable authorization receipt.",
+        "properties": {
+          "actor_profile_id": {
+            "format": "uuid",
+            "title": "Actor Profile Id",
+            "type": "string"
+          },
+          "authorization_evidence_id": {
+            "format": "uuid",
+            "title": "Authorization Evidence Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Profile Digest",
+            "type": "string"
+          },
+          "profile_id": {
+            "format": "uuid",
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/ProjectModelProfileSpec"
+          }
+        },
+        "required": [
+          "operation_id",
+          "actor_profile_id",
+          "spec",
+          "profile_digest",
+          "profile_id",
+          "authorization_evidence_id",
+          "created_at"
+        ],
+        "title": "ProjectModelProfile",
+        "type": "object"
+      },
+      "ProjectModelProfileSpec": {
+        "additionalProperties": false,
+        "description": "Operator-owned provider and pricing profile shared by model-use owners.",
+        "properties": {
+          "allowed_tools": {
+            "default": [],
+            "items": {
+              "maxLength": 100,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_.-]*$",
+              "type": "string"
+            },
+            "title": "Allowed Tools",
+            "type": "array"
+          },
+          "api": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Api",
+            "type": "string"
+          },
+          "deadline_ms": {
+            "maximum": 3600000.0,
+            "minimum": 100.0,
+            "title": "Deadline Ms",
+            "type": "integer"
+          },
+          "maximum_calls": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Maximum Calls",
+            "type": "integer"
+          },
+          "maximum_input_tokens": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Maximum Input Tokens",
+            "type": "integer"
+          },
+          "maximum_output_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 1.0,
+            "title": "Maximum Output Bytes",
+            "type": "integer"
+          },
+          "maximum_output_tokens": {
+            "maximum": 10000000.0,
+            "minimum": 1.0,
+            "title": "Maximum Output Tokens",
+            "type": "integer"
+          },
+          "maximum_request_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 1.0,
+            "title": "Maximum Request Bytes",
+            "type": "integer"
+          },
+          "maximum_response_bytes": {
+            "maximum": 1048576.0,
+            "minimum": 1.0,
+            "title": "Maximum Response Bytes",
+            "type": "integer"
+          },
+          "maximum_tool_calls": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Maximum Tool Calls",
+            "type": "integer"
+          },
+          "maximum_tool_output_bytes": {
+            "maximum": 104857600.0,
+            "minimum": 0.0,
+            "title": "Maximum Tool Output Bytes",
+            "type": "integer"
+          },
+          "maximum_total_input_tokens": {
+            "maximum": 100000000.0,
+            "minimum": 1.0,
+            "title": "Maximum Total Input Tokens",
+            "type": "integer"
+          },
+          "maximum_total_output_tokens": {
+            "maximum": 100000000.0,
+            "minimum": 1.0,
+            "title": "Maximum Total Output Tokens",
+            "type": "integer"
+          },
+          "maximum_total_request_bytes": {
+            "maximum": 104857600.0,
+            "minimum": 1.0,
+            "title": "Maximum Total Request Bytes",
+            "type": "integer"
+          },
+          "maximum_total_response_bytes": {
+            "maximum": 104857600.0,
+            "minimum": 1.0,
+            "title": "Maximum Total Response Bytes",
+            "type": "integer"
+          },
+          "model_snapshot": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Model Snapshot",
+            "type": "string"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/ModelPricing"
+          },
+          "profile_version": {
+            "minimum": 1.0,
+            "title": "Profile Version",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 160,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "title": "Provider",
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ModelGenerationSettings"
+          }
+        },
+        "required": [
+          "project_id",
+          "profile_version",
+          "provider",
+          "api",
+          "model_snapshot",
+          "settings",
+          "maximum_request_bytes",
+          "maximum_output_bytes",
+          "maximum_response_bytes",
+          "maximum_input_tokens",
+          "maximum_output_tokens",
+          "maximum_calls",
+          "maximum_total_request_bytes",
+          "maximum_total_response_bytes",
+          "maximum_total_input_tokens",
+          "maximum_total_output_tokens",
+          "maximum_tool_calls",
+          "maximum_tool_output_bytes",
+          "deadline_ms",
+          "pricing"
+        ],
+        "title": "ProjectModelProfileSpec",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Publish or exactly replay one immutable approved project model profile.",
+    "operationId": "provision_project_model_profile_api_v1_operations_projects__project_id__model_profiles_post",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "Idempotency-Key",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "requestBody": {
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "#/components/schemas/ProjectModelProfileSpec"
+          }
+        }
+      },
+      "required": true
+    },
+    "responses": {
+      "201": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ProjectModelProfile"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Not Found",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "409": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Conflict",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Unprocessable Entity",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Service Unavailable",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Provision Project Model Profile",
+    "tags": [
+      "checkers"
+    ],
+    "x-workstream-action-id": "project.model_profile.provision"
+  },
+  "schema_version": 1,
+  "source": {
+    "method": "POST",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/operations/projects/{project_id}/model-profiles",
+    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+  }
+}

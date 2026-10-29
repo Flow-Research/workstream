@@ -13,7 +13,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -75,7 +75,7 @@ jobs:
               --header 'Content-Type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
               http://127.0.0.1:18080/mcp \
-              | python -c 'import json, sys; tools = [tool["name"] for tool in json.load(sys.stdin)["result"]["tools"]]; assert len(tools) == len(set(tools)) == 108; assert tools[-18:] == ["workstream_preparation_create", "workstream_preparations_list", "workstream_preparation_get", "workstream_task_get", "workstream_task_submission_requirements_get", "workstream_task_screen", "workstream_task_release", "workstream_task_claim", "workstream_task_start", "workstream_task_work_context_get", "workstream_task_guide_document_content_get", "workstream_submission_create", "workstream_task_submissions_list", "workstream_submission_get", "workstream_management_task_submissions_list", "workstream_management_submission_get", "workstream_management_task_work_context_get", "workstream_management_task_submission_requirements_get"]'; then
+              | python -c 'import json, sys; tools = [tool["name"] for tool in json.load(sys.stdin)["result"]["tools"]]; expected = ["workstream_projects_list", "workstream_service_actor_create", "workstream_task_import_batch_create", "workstream_management_tasks_list", "workstream_management_task_create", "workstream_operational_tasks_list", "workstream_task_import_batch_screen", "workstream_task_import_batch_release", "workstream_task_import_batch_get", "workstream_management_task_get", "workstream_management_task_locked_context_get", "workstream_operational_task_locked_context_get", "workstream_audit_task_locked_context_get", "workstream_task_revision_context_repair", "workstream_audit_task_evidence_get", "workstream_operational_task_start_override", "workstream_project_model_profile_provision", "workstream_project_model_budget_configure", "workstream_project_model_usage_effect_get", "workstream_project_model_recovery_child_create", "workstream_task_import_source_declare", "workstream_task_import_source_content_upload", "workstream_task_import_source_content_get", "workstream_task_import_source_get"]; assert len(tools) == len(set(tools)) == 132; assert tools[-24:] == expected'; then
               exit 0
             fi
             sleep 1
@@ -142,7 +142,8 @@ jobs:
           export WORKSTREAM_MCP_OPENAPI_COMMAND="uv run --frozen python -c 'import json; from app.main import app; print(json.dumps(app.openapi()))'"
           uv run --frozen pytest -q tests/test_contract_drift.py \
             tests/test_checker_artifact_contract_drift.py \
-            tests/test_task_execution_contract_drift.py
+            tests/test_task_execution_contract_drift.py \
+            tests/test_task_operation_contract_drift.py
 
       - name: Run real isolated API-to-MCP lifecycle parity
         working-directory: backend

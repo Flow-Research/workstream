@@ -1,0 +1,810 @@
+{
+  "canonical_sha256": "1dbe35531c0c589a8613739ddc38c0005991c2676af6c01e04f28b4c5f730bc4",
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "ModelCallEvidence": {
+        "additionalProperties": false,
+        "description": "Verified private ART identity; transcript bytes never cross this contract.",
+        "properties": {
+          "binding_id": {
+            "format": "uuid",
+            "title": "Binding Id",
+            "type": "string"
+          },
+          "byte_count": {
+            "maximum": 1048576.0,
+            "minimum": 1.0,
+            "title": "Byte Count",
+            "type": "integer"
+          },
+          "content_id": {
+            "format": "uuid",
+            "title": "Content Id",
+            "type": "string"
+          },
+          "content_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Content Sha256",
+            "type": "string"
+          },
+          "media_type": {
+            "const": "application/json",
+            "default": "application/json",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "put_attempt_id": {
+            "format": "uuid",
+            "title": "Put Attempt Id",
+            "type": "string"
+          },
+          "verification_receipt_id": {
+            "format": "uuid",
+            "title": "Verification Receipt Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding_id",
+          "content_id",
+          "put_attempt_id",
+          "verification_receipt_id",
+          "content_sha256",
+          "byte_count"
+        ],
+        "title": "ModelCallEvidence",
+        "type": "object"
+      },
+      "ModelCallUsage": {
+        "additionalProperties": false,
+        "description": "Provider-observed token classes used for exact integer settlement.",
+        "properties": {
+          "cached_input_tokens": {
+            "minimum": 0.0,
+            "title": "Cached Input Tokens",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "minimum": 0.0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "minimum": 0.0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "reasoning_tokens": {
+            "minimum": 0.0,
+            "title": "Reasoning Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_tokens",
+          "cached_input_tokens",
+          "output_tokens",
+          "reasoning_tokens"
+        ],
+        "title": "ModelCallUsage",
+        "type": "object"
+      },
+      "ModelPaidSlotKey": {
+        "additionalProperties": false,
+        "description": "Paid-effect identity stable across checker leases and retry generations.",
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "configuration_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Configuration Sha256",
+            "type": "string"
+          },
+          "profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Profile Digest",
+            "type": "string"
+          },
+          "profile_id": {
+            "format": "uuid",
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "profile_version": {
+            "minimum": 1.0,
+            "title": "Profile Version",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "registry_entry_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Registry Entry Digest",
+            "type": "string"
+          },
+          "requirement_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "slot_index": {
+            "default": 0,
+            "maximum": 99.0,
+            "minimum": 0.0,
+            "title": "Slot Index",
+            "type": "integer"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "title": "Submission Id",
+            "type": "string"
+          },
+          "submission_version": {
+            "minimum": 1.0,
+            "title": "Submission Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "assignment_id",
+          "submission_id",
+          "submission_version",
+          "requirement_id",
+          "registry_entry_digest",
+          "configuration_sha256",
+          "profile_id",
+          "profile_version",
+          "profile_digest"
+        ],
+        "title": "ModelPaidSlotKey",
+        "type": "object"
+      },
+      "ModelUsageEffectInspection": {
+        "additionalProperties": false,
+        "description": "Redacted exact-effect accounting and evidence identities for an Operator.",
+        "properties": {
+          "attempt_number": {
+            "minimum": 1.0,
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "budget_configuration_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Configuration Digest"
+          },
+          "budget_configuration_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Configuration Id"
+          },
+          "budget_configuration_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Configuration Version"
+          },
+          "dispatched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatched At"
+          },
+          "effect_id": {
+            "format": "uuid",
+            "title": "Effect Id",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelPaidSlotKey"
+              },
+              {
+                "$ref": "#/components/schemas/SetupModelUsageSlotKey"
+              }
+            ],
+            "title": "Owner"
+          },
+          "owner_kind": {
+            "enum": [
+              "checker",
+              "setup"
+            ],
+            "title": "Owner Kind",
+            "type": "string"
+          },
+          "prepared_at": {
+            "format": "date-time",
+            "title": "Prepared At",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "provider_response_known": {
+            "title": "Provider Response Known",
+            "type": "boolean"
+          },
+          "request_evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCallEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reserved_nanodollars": {
+            "anyOf": [
+              {
+                "maximum": 9e+18,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserved Nanodollars"
+          },
+          "response_evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCallEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "settled_nanodollars": {
+            "anyOf": [
+              {
+                "maximum": 9e+18,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settled Nanodollars"
+          },
+          "state": {
+            "enum": [
+              "prepared",
+              "dispatching",
+              "uncertain",
+              "completed",
+              "known_failed",
+              "known_no_effect"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "terminal_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal At"
+          },
+          "uncertainty_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncertainty Digest"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelCallUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "project_id",
+          "effect_id",
+          "owner_kind",
+          "owner",
+          "attempt_number",
+          "state",
+          "provider_response_known",
+          "request_evidence",
+          "response_evidence",
+          "usage",
+          "budget_configuration_id",
+          "budget_configuration_digest",
+          "reserved_nanodollars",
+          "settled_nanodollars",
+          "uncertainty_digest",
+          "prepared_at",
+          "dispatched_at",
+          "terminal_at"
+        ],
+        "title": "ModelUsageEffectInspection",
+        "type": "object"
+      },
+      "SetupModelUsageSlotKey": {
+        "additionalProperties": false,
+        "description": "Exact setup-owned provider dispatch identity allocated before I/O.",
+        "properties": {
+          "call_index": {
+            "maximum": 99.0,
+            "minimum": 0.0,
+            "title": "Call Index",
+            "type": "integer"
+          },
+          "compilation_attempt_id": {
+            "format": "uuid",
+            "title": "Compilation Attempt Id",
+            "type": "string"
+          },
+          "guide_id": {
+            "format": "uuid",
+            "title": "Guide Id",
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "draft",
+              "review",
+              "correction"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "profile_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Profile Digest",
+            "type": "string"
+          },
+          "profile_id": {
+            "format": "uuid",
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "profile_version": {
+            "minimum": 1.0,
+            "title": "Profile Version",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "runtime_configuration_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Runtime Configuration Hash",
+            "type": "string"
+          },
+          "setup_generation": {
+            "minimum": 1.0,
+            "title": "Setup Generation",
+            "type": "integer"
+          },
+          "setup_run_id": {
+            "format": "uuid",
+            "title": "Setup Run Id",
+            "type": "string"
+          },
+          "source_snapshot_id": {
+            "format": "uuid",
+            "title": "Source Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "compilation_attempt_id",
+          "project_id",
+          "guide_id",
+          "source_snapshot_id",
+          "setup_run_id",
+          "setup_generation",
+          "runtime_configuration_hash",
+          "profile_id",
+          "profile_version",
+          "profile_digest",
+          "phase",
+          "call_index"
+        ],
+        "title": "SetupModelUsageSlotKey",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Read redacted accounting and evidence identities for one exact paid effect.",
+    "operationId": "read_project_model_usage_effect_api_v1_operations_projects__project_id__model_usage_effects__effect_id__get",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "path",
+        "name": "effect_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Effect Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ModelUsageEffectInspection"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Not Found",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Unprocessable Entity",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Service Unavailable",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Read Project Model Usage Effect",
+    "tags": [
+      "checkers"
+    ],
+    "x-workstream-action-id": "project.model_usage.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/operations/projects/{project_id}/model-usage/effects/{effect_id}",
+    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+  }
+}
