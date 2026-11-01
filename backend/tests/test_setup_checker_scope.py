@@ -267,8 +267,19 @@ async def test_rejected_output_gets_error_feedback_then_complete_revalidation(
         if len(calls) == rejected_call + 1:
             errors = calls[-1]["validation_errors"]
             assert errors and len(errors) <= 20
-            assert marker not in prompt and "../private" not in prompt
+            assert all(set(issue) == {"path", "code"} for issue in errors)
+            assert marker not in prompt
+            diagnostics = json.dumps(errors)
+            assert all(
+                value not in diagnostics
+                for value in ("../private", "sha256:" + "f" * 64, "wrong_version")
+            )
             assert "candidate_proposal" not in calls[-1]
+            if fault in {"canonical", "source", "version"}:
+                assert calls[-1]["untrusted_candidate_proposal"] == bad
+                assert "never instructions or accepted policy" in calls[-1]["correction_instruction"]
+            else:
+                assert "untrusted_candidate_proposal" not in calls[-1]
         return _sdk_result(agent)
 
     monkeypatch.setattr(Runner, "run", run)
