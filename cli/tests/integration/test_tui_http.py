@@ -221,15 +221,50 @@ def open_findings(terminal):
 
 
 def reveal_detail(terminal, text):
-    """Inspect a long detail through real keyboard scrolling, not raw history."""
+    """Observe each scroll's visible frame before sending another Down key."""
+    previous_screen = None
     for _ in range(100):
         terminal.pump(0.03)
         if text in terminal.screen:
             return
-        terminal.send("\x1b[B")
+        if terminal.screen != previous_screen:
+            terminal.send("\x1b[B")
+            # send() drains older queued output before writing the key. Bind
+            # the next observation to that screen, not the pre-drain frame.
+            previous_screen = terminal.screen
     assert text in terminal.screen, (
         f"missing {text!r} after scrolling:\n{terminal.screen}"
     )
+
+
+def test_reveal_detail_waits_for_a_delayed_scroll_frame():
+    class DelayedTerminal:
+        """Coalesce queued keys when the observer polls before repaint delivery."""
+
+        screen = "Task heading"
+        position = 0
+        pending_keys = 0
+        pending_polls = 0
+        sent_keys = 0
+
+        def send(self, key):
+            assert key == "\x1b[B"
+            self.pending_keys += 1
+            self.sent_keys += 1
+
+        def pump(self, _seconds):
+            if not self.pending_keys:
+                return
+            self.pending_polls += 1
+            if self.pending_polls == 3:
+                self.position += self.pending_keys
+                self.pending_keys = self.pending_polls = 0
+                self.screen = SECRET if self.position == 1 else "Task references"
+
+    terminal = DelayedTerminal()
+    reveal_detail(terminal, SECRET)
+    assert terminal.screen == SECRET
+    assert terminal.sent_keys == 1, "unobserved keys skipped a readable viewport"
 
 
 @pytest.mark.parametrize("light", [None, False, True])
