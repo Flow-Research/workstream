@@ -279,6 +279,14 @@ The [capability ledger](../../docs/roadmap_status.md) describes implemented guid
 - This record and `docs/reports/terminal-systems-hosted-drill-2026-10-27.md`.
 - Lead-coordinated execution of the already authorized real-project drill through existing public APIs, durable workers and supported operational procedures; retain exact non-secret provenance and private evidence outside Git.
 - Read-only owner observations to establish exact lineage, atomic outcomes, retained history, accounting and cleanup; existing source-specific recovery only.
+- Repair the observed completed-model-session EOF classification in
+  `external_checkers/workstream-checker-service/src/{model_relay,proxy_transport}.rs`;
+  prove clean closure separately from truncated frames and cancellation, retaining
+  the execution owner's failure precedence. In
+  `pilots/terminal_systems/checkers/post/model/{trial_plan,test_trial_plan}.py`,
+  number the original source lines supplied to the model while preserving exact
+  source identity and strict citation/argv rejection. These repairs remain in
+  this PR; retained model output and locked checker selections are not rewritten.
 - Private operator configuration and scripts for the newly owned EC2 root
   `/var/tmp/workstream-terminal-real-20261027`, original task packages under
   `/tmp/workstream-real-terminal-20261027`, and retained private receipts. Reuse
@@ -311,7 +319,7 @@ The [capability ledger](../../docs/roadmap_status.md) describes implemented guid
 
 - [ ] Report records exact deployed source/image/config/runtime/corpus fingerprints, each scenario's actual outcome, evidence reference and limits; no inherited pass from prior scoped proof.
 - [ ] Original inputs, current proposal fidelity, genuine reference/negative packages, model/material requirements and PM agreement satisfy #576 before policy activation.
-- [ ] Public setup, approval, task release, claim/start, ZIP preparation, immutable Submission and durable POST reach the governed outcome with locked lineage and no hidden fixture shortcut.
+- [ ] Public setup, approval, task release, claim (starts work), ZIP preparation, immutable Submission and durable POST reach the governed outcome with locked lineage and no hidden fixture shortcut.
 - [ ] Positive false-policy outcome has exactly one FinalAcceptance, submitter ContributionRecord and complete applicable frozen award set, without a fabricated Review, reviewer contribution or fulfillment claim.
 - [ ] Intake failure, work failure/remediation, revision limits/windows, infrastructure recovery and request/completion/acceptance interruption retain their distinct state, penalty, history and once-only effects.
 - [ ] Wrong authority, revocation, stale replay, AWS custody, resource limits, diagnostic privacy/outage, drain/restart and final-data restore have exact current-run evidence or explicit unresolved blockers.
