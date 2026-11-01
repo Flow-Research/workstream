@@ -336,15 +336,15 @@ The [capability ledger](../../docs/roadmap_status.md) describes implemented guid
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
-| Existing implementation and parent acceptance located | Current roadmap, owner records and #555/#576/#581/#582/#583 inspection | Discovery only | Deployed release fingerprints and real-project execution remain to be recorded |
-| Current rehearsal | Linked report's scenario matrix | In progress: deployed release, public guide/isolation/replay and registry proofs retained; live setup rejected schema-invalid output | No current-run acceptance or release claim |
+| Existing implementation and parent acceptance located | Current roadmap, owner records and #555/#576/#581/#582/#583 inspection | Historical discovery | The linked report now binds partial hosted execution to exact release fingerprints; complete journey proof remains |
+| Current rehearsal | Linked report's scenario matrix | In progress: earlier schema-invalid setup retained; subsequent setup/correction, approvals, activation, claim, PRE feedback and immutable Submission/replay passed. Automatic POST ended as infrastructure failure | No current-run acceptance or release claim |
 
 ### Reconciliation
 
 - Baseline discovery inspected source `ac637495f`; the report must bind actual execution to its exact deployed release rather than assume that source is running.
-- Historical issue text describes gVisor and earlier branches. Current merged hosted composition selects native Smol. Project onboarding prose also understates implemented POST capabilities; the report distinguishes these implementations from missing real-project approval/activation proof without changing those files here.
-- Roadmap assessment: an unexecuted report adds no capability or exposure claim. Actual results may change remaining release gates; the lead must amend allowed documentation scope and reconcile affected roadmap claims in the same PR before readiness.
-- Next usable boundary: execute the authorized rehearsal, retain failures, repair demonstrated defects through bounded owners and report current evidence. No complete disposition is asserted.
+- Historical issue text describes gVisor and earlier branches. Current merged hosted composition selects native Smol. Project onboarding prose also understates implemented POST capabilities; the report distinguishes implementation from subsequent real-project approval/activation and still-missing complete contribution proof.
+- Roadmap assessment: the initial unexecuted report added no capability claim. The current report and roadmap now record partial hosted setup-to-Submission evidence; POST repair qualification and the complete contribution journey remain gates in this same PR.
+- Next usable boundary: qualify the reviewed native/prompt repairs, retain the failed attempt and locked selections, then continue substantive POST and exact contribution-outcome proof. No complete disposition is asserted.
 
 
 ## Hosted-image guard fixture reconciliation
