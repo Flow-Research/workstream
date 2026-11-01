@@ -806,7 +806,7 @@ async def test_unavailable_authority_returns_only_the_safe_public_code(
         ("schema", {"path": ["status"], "code": "schema_enum"}),
         (
             "unsafe",
-            {"path": ["findings", 0, "message"], "code": "canonical_constraint"},
+            {"path": ["findings", 0, "message"], "code": "unsafe_text"},
         ),
     ],
 )
@@ -844,6 +844,7 @@ async def test_sdk_parser_rejection_persists_terminal_without_reinvocation(
             assert feedback["phase"] == "checker_specification"
             assert feedback["validation_errors"] == [expected_issue]
             assert "token=secret123" not in prompt
+            assert "untrusted_candidate_proposal" not in feedback
         return SimpleNamespace(final_output=agent.output_type.validate_json(raw))
 
     monkeypatch.setattr(Runner, "run", run)
