@@ -280,6 +280,14 @@ real API e2e and the other recorded required workflows passed. This supersedes t
 earlier b5 assertion failure for that tested source, not the missing live outcome.
 Application validation correctly rejected the observed noncompliant outputs.
 
+Offline reproduction then found two correction-diagnostic gaps: the trusted
+unsafe-text and dependency-availability failures both appeared as generic
+`canonical_constraint`. The shared parser now maps those exact causes to closed
+codes at their existing bounded field paths. Unsafe candidates remain omitted;
+no rejected values or exception text are exposed. Both SDK correction paths are
+covered. This diagnostic repair does not relax validation or establish a valid
+live proposal; deployed qualification remains pending.
+
 After guide11, the unchanged account holds **US$5.03423664 settled, zero reserved
 and US$4.96576336 remaining**. Among the profiles examined, only Luna was verified
 affordable within this remainder. The proposed Terra dispatch bound of US$5.839824

@@ -153,6 +153,8 @@ class CompilationDraftParser:
         """Identify failing fields without forwarding rejected values or error messages."""
         self.unsafe_text = False
         codes = {
+            "model-produced text is unsafe": "unsafe_text",
+            "check dependency availability is invalid": "dependency_availability",
             "isolated evaluation requires an execution dependency": "isolated_dependency",
             "model evaluation requires a model service dependency": "model_dependency",
             "check context input requires a runtime dependency": "context_dependency",

@@ -978,12 +978,13 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
             for fault, code in [
                 ("blocked", "blocked_evidence"), ("duplicate", "requirement_ids_unique"),
                 ("isolated", "isolated_dependency"), ("binding", "binding_count"),
+                ("availability", "dependency_availability"),
             ]
         ],
         (
             (json.dumps(_invalid_canonical_payload("unsafe")), _provider_output(), _provider_output()),
             "checker_specification",
-            "canonical_constraint",
+            "unsafe_text",
         ),
     ],
 )
