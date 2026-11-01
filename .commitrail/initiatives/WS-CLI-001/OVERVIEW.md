@@ -40,7 +40,7 @@
   [WS-CLI-001-34](WS-CLI-001-34.md), exact-project task audit context and bounded cursor-based evidence reads;
   [WS-CLI-001-35](WS-CLI-001-35.md), deliberate exact-source manager revision-context repair;
   [WS-CLI-001-36](WS-CLI-001-36.md), status-only Operator task browsing,
-  exact locked-context inspection and explicit reasoned start override;
+  exact locked-context inspection; claim now starts contributor work atomically;
   [WS-CLI-001-38](WS-CLI-001-38.md), keyed human guide sufficiency diagnostics
   and eligible warning acknowledgement through existing public POSTs;
   [WS-CLI-001-41](WS-CLI-001-41.md), explicit manual artifact-policy draft
@@ -216,7 +216,7 @@ revision-context presentation correction.
 | [#606](https://github.com/Flow-Research/workstream/issues/606) | Actor/admin authority inspection — delivered by [WS-CLI-001-28](WS-CLI-001-28.md) | 6 |
 | [#607](https://github.com/Flow-Research/workstream/issues/607) | Actor/identity lifecycle and administrative writes | 8 |
 | [#608](https://github.com/Flow-Research/workstream/issues/608) | External-checker registry and explicit retry, delivered by [WS-CLI-001-29](WS-CLI-001-29.md) | 4 |
-| [#609](https://github.com/Flow-Research/workstream/issues/609) | Operator task inspection/start override, delivered by [WS-CLI-001-36](WS-CLI-001-36.md) | 3 |
+| [#609](https://github.com/Flow-Research/workstream/issues/609) | Operator task inspection, delivered by [WS-CLI-001-36](WS-CLI-001-36.md); the historical baseline included the now-removed start override | 3 historical / 2 current |
 | [#610](https://github.com/Flow-Research/workstream/issues/610) | Task audit context/evidence — delivered by [WS-CLI-001-34](WS-CLI-001-34.md) | 2 |
 | [#611](https://github.com/Flow-Research/workstream/issues/611) | Artifact Operator inspection/recovery CLI in [WS-CLI-001-43](WS-CLI-001-43.md), consuming the exact-authorized backend prerequisite [AUTH-ART-02D-OPERATOR](../WS-AUTH-001/WS-AUTH-001-ART02DOPERATOR.md) | 9 |
 
@@ -386,8 +386,8 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
    detail, passing opaque continuation unchanged without automatic pagination.
 5. **WS-CLI-001-05:** Discover one ready-task page and inspect contributor
    instructions through public reads, without management metadata or task writes.
-6. **WS-CLI-001-06:** Claim ready work and start the caller's assignment through
-   public POSTs with caller-supplied keys, exact response validation and explicit
+6. **WS-CLI-001-06:** Claim ready work through one public POST that assigns
+   and starts work atomically, with caller-supplied keys, exact response validation and explicit
    uncertain outcomes. No local authority decisions or operator override.
 7. **WS-CLI-001-07:** Inspect contributor work context and exact submission
    requirements through public reads. Preserve historical selectors, server
