@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from app.interfaces.project_agents import (
     GENERATED_REQUIREMENT_DISPOSITIONS,
     ProjectGuideCompilationResult,
+    invalid_compilation_failure_code,
 )
 
 
@@ -60,6 +61,13 @@ def contextual_output_issue(error: Exception) -> dict:
         "post-submit check specification is not background work": "post_background",
         "supported check depends on unavailable runtime support": "unavailable_dependency",
         "supported compilation requirements must have one binding": "binding_count",
+        "compilation requirements must be unique": "requirement_ids_unique",
+        "blocked compilation requires blocking evidence": "blocked_evidence",
+        "ready compilation cannot contain blocking evidence": "ready_blocking_evidence",
+        "draft-ready compilation cannot contain warnings": "ready_warnings",
+        "warning-ready compilation requires a warning": "warning_evidence",
+        "blocked guide cannot publish policy proposals": "blocked_artifact_policy",
+        "draft-ready compilation requires artifact policy": "artifact_policy_required",
         "capability gaps must have exactly one suggestion": "suggestion_count",
         "compilation capability suggestion is invalid": "suggestion_reference",
         "compilation capability binding is invalid": "binding_reference",
@@ -97,6 +105,7 @@ class CompilationDraftParser:
                 pending.extend(node)
         self._validator = Draft202012Validator(schema)
         self._maximum_bytes = maximum_bytes
+        self.unsafe_text = False
 
     def _path(self, parts) -> list:
         """Return only trusted schema field names and bounded array ordinals."""
@@ -108,6 +117,7 @@ class CompilationDraftParser:
     def parse(self, raw: str) -> dict | None:
         """Return only bounded structural data; failed parsing exposes no error object."""
         self.issues = [{"path": [], "code": "invalid_json"}]
+        self.unsafe_text = False
         try:
             if len(raw.encode("utf-8")) > self._maximum_bytes:
                 return None
@@ -141,19 +151,31 @@ class CompilationDraftParser:
 
     def canonical_issues(self, candidate: dict) -> list[dict]:
         """Identify failing fields without forwarding rejected values or error messages."""
+        self.unsafe_text = False
+        codes = {
+            "isolated evaluation requires an execution dependency": "isolated_dependency",
+            "model evaluation requires a model service dependency": "model_dependency",
+            "check context input requires a runtime dependency": "context_dependency",
+            "check material dependency requires a declared input": "dependency_input",
+            "check dependency failure is not specified": "dependency_failure",
+        }
         try:
             ProjectGuideCompilationResult.model_validate(candidate)
         except ValidationError as error:
+            self.unsafe_text = invalid_compilation_failure_code(error) == "unsafe_text"
             return [
                 {
                     "path": [
                         part if isinstance(part, int) or part in self._fields else "<field>"
                         for part in item["loc"][:16]
                     ],
-                    "code": "canonical_constraint",
+                    "code": codes.get(
+                        str((item.get("ctx") or {}).get("error")),
+                        "canonical_constraint",
+                    ),
                 }
                 for item in error.errors(
-                    include_input=False, include_context=False, include_url=False
+                    include_input=False, include_context=True, include_url=False
                 )[:20]
             ]
         return []

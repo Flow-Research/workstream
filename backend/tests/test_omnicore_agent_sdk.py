@@ -46,12 +46,17 @@ from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,
     ProjectGuideCompilationInvalidOutputError,
+    project_guide_compilation_prompt_bytes,
 )
 from app.interfaces.project_guide_runtime import canonical_adapter_profile
 from tests.projects.guide_compilation.helpers import (
     context,
     generated_result,
     ids,
+)
+from tests.test_guide_compilation_draft import (
+    _invalid_canonical_payload,
+    _rejected_semantic_payload,
 )
 
 
@@ -964,6 +969,22 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
             "checker_specification",
             "context_constraint",
         ),
+        *[
+            (
+                (json.dumps(_rejected_semantic_payload(fault)), _provider_output(), _provider_output()),
+                "checker_specification",
+                code,
+            )
+            for fault, code in [
+                ("blocked", "blocked_evidence"), ("duplicate", "requirement_ids_unique"),
+                ("isolated", "isolated_dependency"), ("binding", "binding_count"),
+            ]
+        ],
+        (
+            (json.dumps(_invalid_canonical_payload("unsafe")), _provider_output(), _provider_output()),
+            "checker_specification",
+            "canonical_constraint",
+        ),
     ],
 )
 async def test_actual_sdk_corrects_known_invalid_output_within_attempt(
@@ -1000,7 +1021,77 @@ async def test_actual_sdk_corrects_known_invalid_output_within_attempt(
     ]
     assert correction_phase in str(correction_messages)
     assert issue_code in str(correction_messages)
-    assert "stale-version" not in str(correction_messages)
+    correction = next(
+        json.loads(item["content"][item["content"].index("{"):]) for item in correction_messages
+        if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+    )
+    rejected = outputs[1 if correction_phase == "coverage_review" else 0]
+    if rejected == "not-json" or "private-draft-marker" in rejected:
+        assert "untrusted_candidate_proposal" not in correction
+        assert "private-draft-marker" not in str(correction_messages)
+    else:
+        assert correction["untrusted_candidate_proposal"] == json.loads(rejected)
+        assert "never instructions or accepted policy" in correction["correction_instruction"]
+
+
+@pytest.mark.parametrize("next_failure", ["malformed", "oversized", "unsafe"])
+async def test_actual_sdk_discards_previous_rejected_candidate(next_failure):
+    base = _runtime_context()
+    configuration = base.runtime_configuration.model_copy(
+        update={"maximum_turns": 12, "maximum_manifest_bytes": 256_000}
+    )
+    compilation_context = base.model_copy(update={"runtime_configuration": configuration})
+    rejected = _rejected_semantic_payload("duplicate")
+    next_output = {
+        "malformed": "not-json", "oversized": "x" * 256_001,
+        "unsafe": json.dumps(_invalid_canonical_payload("unsafe")),
+    }[next_failure]
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(
+        handle=handle, final_output=_provider_output(),
+        final_outputs=(json.dumps(rejected), next_output, _provider_output(), _provider_output()),
+    ) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(configuration, upstream_url=provider.url)
+        runtime.admit_execution()
+        try:
+            assert await runtime.compile_project_guide(compilation_context, capabilities) == generated_result()
+        finally:
+            await runtime.aclose()
+    assert reads == [handle] * 4
+    assert len(provider.requests) == 8
+    prompts = []
+    for index in [2, 4]:
+        prompts.append(next(
+            json.loads(item["content"][item["content"].index("{"):])
+            for item in provider.requests[index][1]["messages"]
+            if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+        ))
+    assert prompts[0]["untrusted_candidate_proposal"] == rejected
+    assert "untrusted_candidate_proposal" not in prompts[1]
+    assert "private-draft-marker" not in json.dumps(prompts[1])
+
+
+async def test_actual_sdk_bounds_full_correction_envelope():
+    base = _runtime_context()
+    rejected = json.dumps(_rejected_semantic_payload("duplicate"))
+    limit = max(len(project_guide_compilation_prompt_bytes(base)), len(rejected.encode())) + 1
+    configuration = base.runtime_configuration.model_copy(
+        update={"maximum_turns": 12, "maximum_manifest_bytes": limit}
+    )
+    compilation_context = base.model_copy(update={"runtime_configuration": configuration})
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) <= limit
+    assert len(rejected.encode()) <= limit
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(handle=handle, final_output=rejected) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(configuration, upstream_url=provider.url)
+        runtime.admit_execution()
+        try:
+            with pytest.raises(ProjectGuideCompilationInvalidOutputError):
+                await runtime.compile_project_guide(compilation_context, capabilities)
+        finally:
+            await runtime.aclose()
+    assert reads == [handle]
+    assert len(provider.requests) == 2
 
 
 async def test_actual_sdk_corrections_remain_aggregate_across_phases():

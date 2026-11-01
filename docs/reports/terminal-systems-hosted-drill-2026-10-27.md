@@ -1,6 +1,6 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
-**Current rehearsal: IN PROGRESS. No real-project release pass is claimed.** This report implements the evidence structure for [#555](https://github.com/Flow-Research/workstream/issues/555) and the [bounded rehearsal record](../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md#authorized-hosted-drill-and-reporting). On November 1, deployed source `a3fc1f196` completed guide activation, task import and claim that immediately starts work, PRE-negative rejection/recovery, and verified immutable Submission creation/replay. Automatic POST ended as an infrastructure failure before a work verdict. The Submission remains pending; no acceptance or contribution is claimed. The native repair at `4ec4cbb58` is now deployed: authorized retry/replay retained the original paid response and exposed its actual `invalid_output` without a second charge. The revised project image is registered; its new guide setup and remaining qualification are in progress.
+**Current rehearsal: IN PROGRESS. No real-project release pass is claimed.** This report implements the evidence structure for [#555](https://github.com/Flow-Research/workstream/issues/555) and the [bounded rehearsal record](../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md#authorized-hosted-drill-and-reporting). On November 1, deployed source `a3fc1f196` completed guide activation, task import and claim that immediately starts work, PRE-negative rejection/recovery, and verified immutable Submission creation/replay. Automatic POST ended as an infrastructure failure before a work verdict. The Submission remains pending; no acceptance or contribution is claimed. The native repair at `4ec4cbb58` is now deployed: authorized retry/replay retained the original paid response and exposed its actual `invalid_output` without a second charge. Guide6 generation 2 persisted corrected dependencies, but semantic finding-code discrepancies kept approval on hold. Generation 3 remains provider-uncertain with one prepared effect retained. Three Luna profiles and nine new registry versions are published; their runtime rollout is complete. Guide7 setup returned a known invalid result; its six Luna calls settled US$0.0872514. The bounded correction loop is being repaired before another attempt.
 
 The target is original project guide -> approved locked policies -> released task -> claim (starts work) -> ZIP intake feedback or immutable Submission -> durable POST -> governed outcome -> exact contribution evidence. Use explicitly PM-approved `human_review_required=false`. Preserve default-true handoff guards; live human review, payment delivery, reputation, frontend and claim expiry/skip remain deferred. #496 is excluded.
 
@@ -8,15 +8,15 @@ The target is original project guide -> approved locked policies -> released tas
 
 | Required binding | Current-run value |
 |---|---|
-| Executed source commit and exact review/CI evidence | `1e32931b` for setup/approvals; `a3fc1f196` for the November 1 activation/claim/Submission checkpoint. Its required CI passed after one unchanged-head schema-lane rerun. Native recovery ran at `4ec4cbb58`; the revised prompt image still needs governed selection and live qualification. Current PR CI remains pending. |
+| Executed source commit and exact review/CI evidence | `1e32931b` for setup/approvals; `a3fc1f196` for the November 1 activation/claim/Submission checkpoint. Its required CI passed after one unchanged-head schema-lane rerun. Native recovery ran at `4ec4cbb58`. Required CI for `dc15dc828` passed all 11,595 selected nodes across 17 lanes, with zero skips/deselections and complete cleanup. Subsequent changes still need their own checks; live contribution qualification remains incomplete. |
 | Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | November 1 agents derivative `sha256:f72d1f1aa559ef33f6c4a90451b68337e7f87b3131f698321a5789c55803a951` for all five; public fixture CA is the only derivative change. Both SDK image inventories verified; this run uses the OpenAI Agents SDK. |
-| Native service, Smol, guest and configured cache/archive/config digests | Smol 1.31.4; service `sha256:34be988c12481b575467ea4db6eb337711ec3732f8e16121f0485fb86a72c43d`; five original cache entries and three trial bindings remain unchanged. Native-only retry reused the retained model response; no Trial yet. |
-| Migration head; non-secret release/configuration fingerprints; Celery worker topology | `0065_claim_starts_work`; one prefork Celery worker with concurrency 2 and one Beat; native config `sha256:72babee2dcc2773f2968a1f9dbd3c5829385918e278c126bd319d479daf3c208`. |
+| Native service, Smol, guest and configured cache/archive/config digests | Smol 1.31.4; service `sha256:34be988c12481b575467ea4db6eb337711ec3732f8e16121f0485fb86a72c43d`; native-only retry reused the retained model response; no Trial yet. The completed Luna rollout preserves six retained cache entries and extends six existing authority contexts to nine; substantive Trial qualification remains pending. |
+| Migration head; non-secret release/configuration fingerprints; Celery worker topology | `0065_claim_starts_work`; one prefork Celery worker with concurrency 2 and one Beat; native-only checkpoint config `sha256:72babee2dcc2773f2968a1f9dbd3c5829385918e278c126bd319d479daf3c208`; active Luna config `sha256:570f17c44fccfdb8f413e41ad85fc0e9a72637379ed45777d07d8896e7e937fe`. |
 | Identity qualification; issuer/key configuration digest, without subject/token | Authorized simulated HTTPS/JWKS issuer through the actual verifier; six distinct admitted actors. JWKS digest `sha256:70718dcfcb5c4052d01764b05a73e1eada122d945f88f4342395f27e23be1ded`. No production Flow issuer certification. |
-| AWS candidate activation/freshness and non-secret proof fingerprint | Current release `sha256:2e85ec00cfa905f13bfb11a89d8d196e0c71a17d2b3d549e7389aa9dce43af8b` passed canonical readiness, runtime immutability and negative-access probes. Namespace remains `sha256:cf487c3b9b8ae93579939f80cb245ca79c25a5641fb3d5ce461abc16f0f4bad7`; freshness is time-bounded. |
+| AWS candidate activation/freshness and non-secret proof fingerprint | Native-recovery release `sha256:2e85ec00cfa905f13bfb11a89d8d196e0c71a17d2b3d549e7389aa9dce43af8b` passed canonical readiness, runtime immutability and negative-access probes. Subsequent candidate `sha256:964222c127cea848d8c35571a4592b5f7d7202bb7acb8d22c8d9267c506f260f` completed after the retained transient one-off inspection failure was resolved; exact application container health and canonical proof receipts were verified. Namespace remains `sha256:cf487c3b9b8ae93579939f80cb245ca79c25a5641fb3d5ce461abc16f0f4bad7`; freshness is time-bounded. |
 | Original guide/task-example/import/positive/negative package SHA-256 values | Guide/ZIP fingerprints below. Public task import consumed 14,710 verified bytes, SHA-256 `a719390aebd455d64e3f519c5a3c5fe110f147135623247844dd846041179849`, creating five tasks. |
 | Project/guide/setup/correction/result IDs and requirement mapping | Project `01a17c77-eb01-7945-8b6d-0fe92c2d4be7`; current guide `01a17d0a-cec1-786f-bf90-594f9dec5c82`; corrected compilation `01a17d13-d490-7ec8-b403-dfb17d3c3f3e`. Earlier failed guide remains retained. |
-| Registry/config/model-profile IDs/digests and exact approved bindings | Original PRE and eight updated POST entries registered/read/replayed; updated receipt manifest `sha256:c99e833020d68f6f5e7a142afe9014b634a311fa3324e7e01a1cab6e5f9c2a9b`. Corrected proposal bindings independently inspected and approved. |
+| Registry/config/model-profile IDs/digests and exact approved bindings | Original PRE and eight updated POST entries registered/read/replayed; updated receipt manifest `sha256:c99e833020d68f6f5e7a142afe9014b634a311fa3324e7e01a1cab6e5f9c2a9b`. Those bindings belong to the approved original guide. Nine new `drill-4ec4b` registry versions carry actual emitted finding-code descriptions and exact Luna model selectors; they are published/read/replayed, not approved project bindings. |
 | PRE/POST approvals; ReviewPolicy, revision and ContributionPolicy versions; activation/LIVE identities | Guide activation `01a196fa-6693-7fd4-ab90-59a59b7b440d`; unpaid ContributionPolicy version `01a196f9-8924-7c6a-ab78-6aefa0eeb1e6`. Existing AUTH-gated Operator tool committed shadow generation 1, then live generation 2. |
 | Task/assignment/Submission/checker/routing/acceptance/contribution/award IDs | Task `01a196fd-4957-751a-b0c2-dd70e71ffe7a`; assignment `01a196fe-6a94-7490-a624-9959109b54fa`; Submission `01a19703-0398-7d55-a33d-58658c9b0a50`; failed POST run `01a19703-07d0-7cc9-8cec-1e1da215c121`. Retry successor `01a19736-93a2-71b5-8cf0-913cbd25aec1`; no routing, acceptance, contribution or award row at the bounded snapshots below. |
 | Private evidence manifest fingerprint, observation interval and cleanup inventory | November 1 progress manifest `sha256:341717bb2e746475ea083034078f77d54f406b5d3acc9c55cfe29ecd5d1c0c1d` binds 60 local operation logs; server journals and later independent observations are retained separately. Final journey/cleanup manifest remains pending. |
@@ -137,6 +137,69 @@ still running; it was not a terminal failure. By 13:10:32 UTC compilation
 US$0.6535634; independent custody and later public reads confirmed success. The
 account total is US$2.6751144 settled, zero reserved, and US$7.3248856 remaining.
 Approval, additive runtime binding and the substantive journey remain pending.
+
+### Further correction and Luna preparation — November 1
+
+Guide6 generation 2 completed public manager correction and persisted compilation
+`01a19746-cdda-760d-93b9-7e5119e71ed8`. Its dependencies were corrected, but
+comparison with the project image found semantic finding-code discrepancies;
+approval was withheld. A further public correction created generation 3, whose
+attempt remains `compilation_provider_uncertain`: five model effects completed
+and one effect remains prepared. No compilation or approval is claimed for that
+generation, and the retained effect has not been blindly redispatched.
+
+Before Luna dispatch, the account recorded US$4.4888454 settled, zero reserved and US$5.5111546
+remaining under the unchanged US$10 cap. The Terra profile's next maximum
+reservation is US$5.544912, exceeding this remaining allowance. That comparison
+establishes the current reservation limit; it does not establish the sole cause
+of the initial provider-uncertain transition.
+
+Three actual OpenRouter `openai/gpt-5.6-luna` profiles were published, read and
+replayed: semantic version 4 (`01a19765-4b3e-7d3b-89b8-2798362ce041`), trial
+assessment version 5 (`01a19765-ba30-7c2b-94d9-f09ef6d87d88`) and setup version 6
+(`01a19765-bb85-7f8f-a66e-8fa856684bef`). Nine new `drill-4ec4b` registry versions
+publish the actual project finding-code descriptions and pin the exact model
+selectors. Registration does not approve a guide, replace an old locked binding
+or demonstrate Luna grading quality.
+
+The additive runtime candidate retains the backend/native pins and all six cache
+entries, preserving the six existing authority contexts while adding three Luna
+contexts. During rollout, database reconstruction matched the original retained
+rows after accounting for the exact canonical AWS probe/activation groups and
+eight ordinary scheduled scanner authorization audit appends. These were
+identified append-only facts, not ignored tables or rewritten history. The final
+commit then failed during Docker inspection of a transient one-off container,
+after Beat had resumed. Finalization then verified the five exact retained
+application containers instead of enumerating temporary proof containers. Release
+`sha256:964222c127cea848d8c35571a4592b5f7d7202bb7acb8d22c8d9267c506f260f`
+completed at 14:39 UTC with native PID 450912 and all five services healthy. Its
+receipt binds the successful preservation check before scheduler resumption;
+it does not claim later ordinary audit appends were in that earlier snapshot.
+No database baseline, historical row, budget or original evidence was reset.
+
+Guide7 `01a1978d-7a9b-7c72-bef5-26fb64f45c94` then received the same 12,110 guide
+bytes and task example. Setup attempt `01a1978d-cc63-79c2-bcb1-02234a27edb7`
+ended `compilation_invalid_terminal / schema_invalid`. All six model effects
+completed and settled US$0.0872514; the account now holds US$4.5760968 settled,
+zero reserved and US$5.4239032 remaining. No proposal or approval was created.
+
+Forensic reads through the configured ArtifactStore and canonical ART ancestry
+checks recovered all twelve retained request/response objects and verified their
+exact hashes and lengths. Offline replay used the actual request schemas and
+256,000-byte limit. The three final replies were complete, not truncated: the
+first claimed blocked status without blocking evidence; the second omitted an
+isolation dependency; the third reused a requirement ID. The correction prompts
+supplied generic error codes without the prior candidate, so indexed errors did
+not identify a proposal available in the new conversation. The same-PR repair
+keeps a bounded rejected candidate as untrusted correction data and supplies
+closed, trusted diagnostics; canonical validation and all attempt/budget bounds
+remain required. This repair and its next live qualification are in progress.
+The existing public correction operation requires a finalized proposal target.
+A known-invalid setup has no such target, and its replay cannot invoke again under
+changed runtime code. The next qualification uses an explicit fresh draft guide
+with the original bytes; guide7 and its terminal evidence remain retained. A
+same-guide retry for this terminal state is not claimed as an available API.
+No substantive POST verdict, acceptance or contribution is claimed.
 
 ### Bootstrap observations (October 27)
 
@@ -334,7 +397,7 @@ unproven. Earlier packages and observations are retained as superseded evidence.
 | Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | NOT RUN | — |
 | Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | IN PROGRESS | Missing-instruction ZIP rejected without admission/Submission; public discovery and same-key replay recovered a lost response. POST-negative ZIP passed PRE. Other negatives remain. |
 | Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | PASS | Public preparation/discovery/replay and Submission/replay passed. Independent exact admission/replica/hash/size/lineage snapshot corroborated the durable worker verification; no separate reviewer object fetch claimed. |
-| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | BLOCKED | Automatic POST ran but first resource ended as infrastructure failure. Native recovery now exposes the retained invalid plan correctly. The new numbered-source image requires approved selection and substantive qualification before a work verdict. |
+| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | BLOCKED | Automatic POST ran but first resource ended as infrastructure failure. Native recovery exposes the retained invalid plan correctly. Guide6 corrections remain unapproved; Luna setup returned an invalid result; correction-loop repair and exact governed image/model selection remain before substantive qualification. |
 | Model/trial/material custody: approved profile, real assessment and isolated reference/verifier execution | Correct exact material roles, verified trial receipts and private ART call evidence; no passing substitutes | IN PROGRESS | First model effect completed with retained request/response and charge. No Trial or final assessment was created; required nested execution remains unproven. |
 | Model replay/recovery: duplicate delivery or permitted successor uses retained effect | No second paid create; immutable slots and once-only settlement; ambiguous effect remains held | IN PROGRESS | Native-only checker retry reattached the original completed effect without another charge; unresolved/known-no-effect recovery variants remain. |
 | False-policy success: governed acceptance and applicable conditional awards | One shared FinalAcceptance, exact submitter ContributionRecord and frozen award set atomically; no Review/reviewer contribution | NOT RUN | — |
@@ -363,8 +426,8 @@ CLI, MCP and TUI surfaces are implemented separately. Record any exercised clien
 |---|---|---|
 | Original Terminal Systems rehearsal | Earlier uncertain setup spend remains retained separately; do not reset it or mark it free | Unresolved historical spend; no new dispatch against this allowance |
 | Separately authorized model-only qualification | Preserve its existing project/account and US$0.016527 settled ledger. A model-plus-trial continuation reuses that account/headroom; no automatic new allowance or transfer to a fresh real-project account | NOT RUN |
-| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | November 1, 13:08:42 UTC, after native retry and before guide6 upload: US$2.021551 settled, US$0 reserved, US$7.978449 remaining; later guide6 observation: US$2.6751144 settled, zero reserved, US$7.3248856 remaining |
-| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Earlier failure retained. Setup/correction and one POST model effect completed in the same account; POST added US$0.043729. Native retry reused that effect without another charge. Guide6 setup later completed with four model calls and added US$0.6535634 settled. An intermediate unresolved read preceded successful persistence; no retry was needed. No budget reset. |
+| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | November 1: US$2.021551 after native retry, then US$2.6751144 after guide6 generation 1. After guide7: US$4.5760968 settled, zero reserved, US$5.4239032 remaining against the unchanged cap |
+| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Earlier failure retained. Setup/correction and one POST model effect completed in the same account; POST added US$0.043729. Native retry reused that effect without another charge. Guide6 generation 1 completed with four model calls and added US$0.6535634; its intermediate unresolved read preceded successful persistence. Generation 2 then persisted a correction, while generation 3 remains provider-uncertain with five completed effects and one prepared effect. Guide7 subsequently used six Luna calls costing US$0.0872514 and ended known-invalid. No budget reset or blind retry occurred. |
 
 Pinned-rate ledger settlement is not provider-invoice reconciliation. An unresolved paid effect is a held effect, not a free retry. See [shared accounting](../../.commitrail/changes/checker-model-runtime.md) and [the later separate qualification authority](../../.commitrail/changes/hosted-smol-project-execution.md#live-model-qualification-authority).
 
@@ -374,12 +437,12 @@ Keep keys, JWTs, subjects, request headers, credentials, connection/provider coo
 
 | Gate | Current-run disposition |
 |---|---|
-| #576: actual PM agreement, fresh proposal and independently checked packages/material | IN PROGRESS — original guide agreement/activation completed; repaired checker selection and complete native package qualification remain. |
+| #576: actual PM agreement, fresh proposal and independently checked packages/material | IN PROGRESS — original guide agreement/activation completed; guide6 semantic discrepancies held approval and generation 3 remains unresolved. Guide7 correction-loop repair, approved selection and complete native package qualification remain. |
 | #581: terminal retry and full request/completion/acceptance interruption matrix | IN PROGRESS — claim/Submission replay and lost PRE-response recovery passed; governed POST retry/replay reused completed evidence; later interruption cases remain. |
 | #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — current release probes and verified immutable Submission passed; wider failure/restore matrix remains. |
-| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — native EOF repair passed live retry; representative Trial, limits and operations qualification remain. |
+| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — native EOF repair passed live retry; Luna rollout completed after preserving and diagnosing two private-helper failures. Representative Trial, limits and operations qualification remain. |
 | #555: connected real-project public/durable journey and exact final facts | BLOCKED — first POST ended as infrastructure failure; no final contribution outcome. |
-| Exact candidate's required CI, focused defect regressions and applicable internal reviews | IN PROGRESS — a3fc1f196 required CI passed; 4ec4cbb58 native repair has focused reviews and live recovery proof; revised image journey and final-head CI remain pending. |
+| Exact candidate's required CI, focused defect regressions and applicable internal reviews | IN PROGRESS — dc15dc828 required CI passed: 17 lanes, 11,595 exact completions, zero skips/deselections and complete cleanup. Native recovery has live proof; revised model/image journey and checks for the subsequent adapter correction remain pending. |
 | Stale wording/Markdown links, affected roadmap reconciliation and local sheet constraints if exports exist | NOT RUN |
 
 No issue is closed by this draft or by a child implementation merge. Complete release reporting requires every applicable outcome above to have current evidence, no unresolved journey blocker, and documented operating/recovery limits. Unimplemented/deferred human review, payment fulfillment and reputation must remain clearly identified; they are not silently certified by the automated contribution path.
