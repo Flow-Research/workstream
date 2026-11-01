@@ -260,7 +260,16 @@ async def test_release_receipt_rejects_substitution(task_client, monkeypatch):
             TaskAssignment.id == s.assignment["id"]
         ))).mappings().one())
         alternate["id"] = str(new_record_id())
+        # This terminal reference does not assert a second start of the original work.
+        # The unchanged insertion guard requires every new row's start stamp absent.
+        alternate["started_at"] = None
         await session.execute(insert(TaskAssignment).values(**alternate))
+        assert await session.scalar(select(TaskAssignment.id).where(
+            TaskAssignment.id == alternate["id"],
+            TaskAssignment.task_id == alternate["task_id"],
+            TaskAssignment.project_id == alternate["project_id"],
+            TaskAssignment.contributor_id == alternate["contributor_id"],
+        )) == alternate["id"]
         for field in ("decision", "missing_decision", "actor", "project", "task", "assignment", "valid_assignment", "cause", "digest", "extra"):
             changed = deepcopy(receipt)
             changed["id"] = str(new_record_id())
