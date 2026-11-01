@@ -51,11 +51,8 @@ def _require_inspectable_material(snapshot: MaterialSnapshot) -> None:
         raise AssessmentError("material_unavailable")
 
 
-def validate_assessment(
-    raw: str, rubric: Rubric, snapshot: MaterialSnapshot
-) -> tuple[ValidatedFinding, ...]:
-    """Accept only a complete rubric decision citing mounted material evidence."""
-    _require_inspectable_material(snapshot)
+def decode_assessment(raw: str) -> object:
+    """Decode once without losing duplicate-member or numeric-constant guards."""
     try:
         value = json.loads(
             raw,
@@ -64,6 +61,15 @@ def validate_assessment(
         )
     except (UnicodeError, json.JSONDecodeError, AssessmentError) as exc:
         raise AssessmentError("invalid_output") from exc
+    return value
+
+
+def validate_assessment(
+    raw: str, rubric: Rubric, snapshot: MaterialSnapshot
+) -> tuple[ValidatedFinding, ...]:
+    """Accept only a complete rubric decision citing mounted material evidence."""
+    _require_inspectable_material(snapshot)
+    value = decode_assessment(raw)
     if type(value) is not dict or set(value) != {
         "schema_version",
         "requirement_id",

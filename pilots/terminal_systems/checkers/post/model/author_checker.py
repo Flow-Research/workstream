@@ -35,6 +35,10 @@ from trial_plan import (
     validate_plan_proposal,
 )
 from trial_transport import CompletedTrial, TrialTransportError, TrialUnavailable
+from trial_assessment import (
+    add_recovery_assessment_contract,
+    decode_recovery_assessment,
+)
 
 
 AUTHOR_REQUIREMENT = "author_evidence_accuracy"
@@ -68,11 +72,14 @@ def execute_author_accuracy_check(
         trial = trial_execute(plan)
         source, rubrics = load_rubrics()
         rubric = rubrics[AUTHOR_REQUIREMENT]
-        prepared = _prepare_assessment(source, rubric, material_root, trial)
+        prepared = _prepare_assessment(source, rubric, material_root, trial, sources)
         assessed = model_session.call(
             prepared[0], required_receipt_handles=(trial.receipt_handle,)
         )
-        findings = validate_assessment(assessed.output, rubric, prepared[1])
+        raw, independent_recovery = decode_recovery_assessment(assessed.output, sources)
+        if independent_recovery != proposal.recovery_applicability["required"]:
+            raise AssessmentError("invalid_output")
+        findings = validate_assessment(raw, rubric, prepared[1])
         return completed_result(request, AUTHOR_REQUIREMENT, findings)
     except TrialPlanError as exc:
         return infrastructure_result(request, _plan_failure(str(exc)))
@@ -111,6 +118,7 @@ def _prepare_assessment(
     rubric: Rubric,
     material_root: Path,
     trial: CompletedTrial,
+    sources: tuple,
 ) -> tuple[str, MaterialSnapshot]:
     material_rubric = Rubric(
         requirement_id=rubric.requirement_id,
@@ -140,7 +148,17 @@ def _prepare_assessment(
         content_utf8=receipt_bytes.decode("utf-8"),
         line_count=None,
     )
-    evidence = (*base.evidence, receipt)
+    instruction = next(item for item in sources if item.path == "instruction.md")
+    scope = MaterialEvidence(
+        evidence_id=instruction.evidence_id,
+        path=instruction.path,
+        kind="file",
+        byte_count=len(instruction.content.encode("utf-8")),
+        sha256=instruction.sha256,
+        content_utf8=instruction.content,
+        line_count=instruction.line_count,
+    )
+    evidence = (*base.evidence, scope, receipt)
     snapshot = MaterialSnapshot(
         digest=_digest(_canonical([item.prompt_value() for item in evidence])),
         evidence=evidence,
@@ -157,6 +175,7 @@ def _prepare_assessment(
         "observation_digest": trial.observations["observation_digest"],
         "required_receipt_count": 1,
     }
+    add_recovery_assessment_contract(prompt)
     encoded = _canonical(prompt)
     if len(encoded) > MAXIMUM_MODEL_PROMPT_BYTES:
         raise MaterialError("capacity_exceeded")

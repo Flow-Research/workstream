@@ -6,3 +6,6 @@ require the exact line `qualified-result` in `workspace/result.txt`. The image-i
 
 This package exists only to exercise the bounded checker runtime; it is not a
 contributor task or a substitute for a real Terminal Systems authored package.
+
+The qualification workflow promises retained output after its documented controlled
+interruption and restart. Exercise those operations on the repaired reference state.

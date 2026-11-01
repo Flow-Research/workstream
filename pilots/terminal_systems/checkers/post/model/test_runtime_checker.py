@@ -43,7 +43,7 @@ build_timeout_seconds = 30
 reference_timeout_seconds = 20
 verification_timeout_seconds = 10
 """
-INSTRUCTION = "# Task\nInspect status with `queue status`.\n"
+INSTRUCTION = "# Task\nInspect status with `queue status`.\nRecover interrupted work without duplicate effects.\n"
 AUTHOR_NOTES = """\
 # Reproduction
 Apply incomplete with `sh solution/incomplete.sh`.
@@ -96,8 +96,19 @@ def procedure(
 
 class FakeModelSession:
     def __init__(
-        self, *, coverage_complete: bool = True, exhausted: bool = False
+        self,
+        *,
+        coverage_complete: bool = True,
+        exhausted: bool = False,
+        recovery_required: bool = True,
+        assessed_recovery_required: bool | None = None,
     ) -> None:
+        self.recovery_required = recovery_required
+        self.assessed_recovery_required = (
+            recovery_required
+            if assessed_recovery_required is None
+            else assessed_recovery_required
+        )
         self.coverage_complete = coverage_complete
         self.exhausted = exhausted
         self.calls: list[tuple[str, tuple[str, ...]]] = []
@@ -167,6 +178,8 @@ class FakeModelSession:
                 6,
             ),
         ]
+        if not self.recovery_required:
+            remaining = remaining[:-2]
         if self.coverage_complete:
             procedures.extend(
                 procedure(identifier, purpose, command, state, "source_2", line)
@@ -184,16 +197,25 @@ class FakeModelSession:
                 for _, purpose, _, _, _ in remaining
             ]
         return {
-            "schema_version": "terminal_systems.trial_plan_proposal.v1",
+            "schema_version": "terminal_systems.trial_plan_proposal.v2",
             "material_digest": prompt["material_digest"],
+            "recovery_applicability": {
+                "required": self.recovery_required,
+                "evidence_id": "source_1",
+                "start_line": 1,
+                "end_line": next(
+                    item["line_count"]
+                    for item in prompt["untrusted_source_evidence"]
+                    if item["path"] == "instruction.md"
+                ),
+            },
             "coverage_complete": self.coverage_complete,
             "procedures": procedures,
             "coverage_gaps": gaps,
         }
 
-    @staticmethod
-    def _assessment(prompt: dict[str, object]) -> dict[str, object]:
-        return {
+    def _assessment(self, prompt: dict[str, object]) -> dict[str, object]:
+        assessment = {
             "schema_version": "terminal_systems.model_assessment.v1",
             "requirement_id": prompt["rubric"]["requirement_id"],
             "material_digest": prompt["untrusted_evidence_data"]["material_digest"],
@@ -207,6 +229,20 @@ class FakeModelSession:
                 for item in prompt["rubric"]["pass_conditions"]
             ],
             "findings": [],
+        }
+        instruction = next(
+            item
+            for item in prompt["untrusted_evidence_data"]["evidence"]
+            if item["path"] == "instruction.md"
+        )
+        return {
+            "recovery_applicability": {
+                "required": self.assessed_recovery_required,
+                "evidence_id": instruction["evidence_id"],
+                "start_line": 1,
+                "end_line": instruction["line_count"],
+            },
+            "assessment": assessment,
         }
 
 
@@ -371,6 +407,99 @@ class RuntimeCheckerTests(unittest.TestCase):
             self.assertEqual(result["outcome"], "infrastructure_failed")
             self.assertEqual(result["infrastructure_failure_code"], "invalid_output")
             self.assertEqual(session.calls, [])
+
+    def test_non_recovery_runtime_and_author_use_four_purpose_trial_and_independent_scope(
+        self,
+    ):
+        (self.root / "instruction.md").write_text(
+            "# Event correlation\nInspect output with `queue status`.\n"
+            "Normalize timestamps, deduplicate event identities and emit deterministic summaries.\n"
+        )
+        (self.root / "AUTHOR_NOTES.md").write_text(
+            "\n".join(AUTHOR_NOTES.splitlines()[:4]) + "\n"
+        )
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            session = FakeModelSession(recovery_required=False)
+            plans = []
+
+            def run(plan):
+                plans.append(plan)
+                return trial_from_plan(plan)
+
+            result = execute(request(check), self.root, session, run)
+            with self.subTest(check=check):
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(session.calls), 2)
+                self.assertFalse(
+                    any(
+                        step["slot_kind"]
+                        in {
+                            "controlled_interruption",
+                            "restart",
+                            "restart_verification",
+                        }
+                        for step in plans[0]["steps"]
+                    )
+                )
+                self.assertNotIn(
+                    "recovery_applicability",
+                    json.loads(session.calls[1][0])["untrusted_evidence_data"],
+                )
+
+    def test_false_cited_planner_scope_cannot_get_all_pass_from_independent_required_scope(
+        self,
+    ):
+        # The source still explicitly promises recovery; citation validity does
+        # not make the planner's false classification trusted.
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            session = FakeModelSession(
+                recovery_required=False, assessed_recovery_required=True
+            )
+            result = execute(request(check), self.root, session, trial_from_plan)
+            with self.subTest(check=check):
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "invalid_output"
+                )
+                self.assertEqual(len(session.calls), 2)
+
+    def test_independently_observed_missing_promised_recovery_is_a_work_finding(self):
+        class MissingRecovery(FakeModelSession):
+            def _assessment(self, prompt):
+                value = super()._assessment(prompt)
+                value["assessment"]["conditions"][10].update(
+                    status="not_satisfied",
+                    evidence_ids=["source_1"],
+                    finding_numbers=[1],
+                )
+                value["assessment"]["findings"] = [
+                    {
+                        "code": "behavioral_coverage_incomplete",
+                        "evidence_id": "source_1",
+                        "line": None,
+                    }
+                ]
+                return value
+
+        session = MissingRecovery(
+            recovery_required=False, assessed_recovery_required=True
+        )
+        result = execute_runtime_check(request(), self.root, session, trial_from_plan)
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "failed")
+        )
+        self.assertEqual(
+            [item["code"] for item in result["findings"]],
+            ["behavioral_coverage_incomplete"],
+        )
 
     def test_author_accuracy_executes_same_invocation_trial_before_assessment(self):
         session = FakeModelSession()

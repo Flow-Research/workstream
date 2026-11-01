@@ -11,11 +11,18 @@ from assessment import (
     AssessmentError,
     ValidatedFinding,
     build_prompt,
+    decode_assessment,
     validate_assessment,
 )
 from material import MaterialEvidence, MaterialSnapshot
 from rubric import FindingRule, Rubric, RubricError
-from trial_plan import MAXIMUM_MODEL_PROMPT_BYTES, SourceEvidence
+from trial_plan import (
+    MAXIMUM_MODEL_PROMPT_BYTES,
+    SourceEvidence,
+    TrialPlanError,
+    recovery_applicability_contract,
+    validate_recovery_applicability,
+)
 from trial_transport import CompletedTrial
 
 
@@ -70,6 +77,8 @@ class RuntimeAssessmentInput:
     prompt: str
     required_receipt_handles: tuple[str, ...]
     slot_kinds: tuple[tuple[str, str], ...]
+    sources: tuple[SourceEvidence, ...]
+    recovery_required: bool
 
 
 def load_runtime_rubric(path: Path = HANDOFF_PATH) -> tuple[dict[str, str], Rubric]:
@@ -160,13 +169,52 @@ def _load_execution_rubric(
     )
 
 
+def add_recovery_assessment_contract(prompt: dict) -> None:
+    """Judge the complete solver scope independently, without the planner's flag."""
+    prompt["security"].append(
+        "Independently read the complete instruction.md contract to decide whether recovery "
+        "across interruption and restart is promised. Do not infer non-applicability from "
+        "missing commands, missing trial steps, task names, metadata flags, or author opt-outs. "
+        "For runtime condition 11, interruption and restart are required only when promised; "
+        "if promised but absent from authenticated trials, mark condition 11 not_satisfied "
+        "with behavioral_coverage_incomplete. A citation establishes custody, not correctness."
+    )
+    prompt["output_contract"] = {
+        "recovery_applicability": recovery_applicability_contract(),
+        "assessment": prompt["output_contract"],
+    }
+
+
+def decode_recovery_assessment(
+    raw: str, sources: tuple[SourceEvidence, ...]
+) -> tuple[str, bool]:
+    """Validate the independent scope decision and retain the strict inner assessment."""
+    value = decode_assessment(raw)
+    if type(value) is not dict or set(value) != {
+        "recovery_applicability",
+        "assessment",
+    }:
+        raise TrialAssessmentError("invalid_output")
+    try:
+        recovery = validate_recovery_applicability(
+            value["recovery_applicability"], sources
+        )
+    except TrialPlanError as exc:
+        raise TrialAssessmentError("invalid_output") from exc
+    return _canonical(value["assessment"]).decode("utf-8"), recovery["required"]
+
+
 def prepare_runtime_assessment(
     metadata: dict[str, object],
     material_digest: str,
     sources: tuple[SourceEvidence, ...],
     plan: dict[str, object],
     trial: CompletedTrial,
+    *,
+    recovery_required: bool,
 ) -> RuntimeAssessmentInput:
+    if type(recovery_required) is not bool:
+        raise TrialAssessmentError("invalid_output")
     source, rubric = load_runtime_rubric()
     evidence = [
         MaterialEvidence(
@@ -242,6 +290,7 @@ def prepare_runtime_assessment(
         "observation_digest": trial.observations["observation_digest"],
         "required_receipt_count": 1,
     }
+    add_recovery_assessment_contract(prompt)
     encoded_prompt = _canonical(prompt)
     if len(encoded_prompt) > MAXIMUM_MODEL_PROMPT_BYTES:
         raise TrialAssessmentError("capacity_exceeded")
@@ -253,6 +302,8 @@ def prepare_runtime_assessment(
         slot_kinds=tuple(
             (step["slot_id"], step["slot_kind"]) for step in plan["steps"]
         ),
+        sources=sources,
+        recovery_required=recovery_required,
     )
 
 
@@ -262,6 +313,9 @@ def validate_runtime_assessment(
     trial: CompletedTrial,
 ) -> tuple[ValidatedFinding, ...]:
     """Reject model passes contradicted by closed runner outcomes."""
+    raw, independent_recovery = decode_recovery_assessment(raw, prepared.sources)
+    if prepared.recovery_required and not independent_recovery:
+        raise TrialAssessmentError("invalid_output")
     try:
         value = json.loads(raw)
         conditions = value["conditions"]
@@ -277,6 +331,11 @@ def validate_runtime_assessment(
     contradicted = _contradicted_conditions(
         trial.observations, dict(prepared.slot_kinds)
     )
+    if independent_recovery and any(
+        sum(kind == required for _, kind in prepared.slot_kinds) != 1
+        for required in ("controlled_interruption", "restart", "restart_verification")
+    ):
+        contradicted = contradicted | {11}
     if any(statuses.get(number) != "not_satisfied" for number in contradicted):
         raise TrialAssessmentError("invalid_output")
     return validate_assessment(raw, prepared.rubric, prepared.snapshot)

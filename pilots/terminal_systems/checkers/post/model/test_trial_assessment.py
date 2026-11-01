@@ -121,7 +121,13 @@ class RuntimeAssessmentTests(unittest.TestCase):
         self.plan = plan()
         self.trial = completed_trial()
         self.sources = (
-            SourceEvidence("source_1", "instruction.md", DIGEST, "Task rules.\n", 1),
+            SourceEvidence(
+                "source_1",
+                "instruction.md",
+                DIGEST,
+                "Recover interrupted work without duplicate effects.\n",
+                1,
+            ),
             SourceEvidence("source_2", "AUTHOR_NOTES.md", DIGEST, "Trial notes.\n", 1),
         )
         self.prepared = prepare_runtime_assessment(
@@ -134,6 +140,7 @@ class RuntimeAssessmentTests(unittest.TestCase):
             self.sources,
             self.plan,
             self.trial,
+            recovery_required=True,
         )
 
     def assessment(
@@ -161,11 +168,19 @@ class RuntimeAssessmentTests(unittest.TestCase):
             )
         return json.dumps(
             {
-                "schema_version": "terminal_systems.model_assessment.v1",
-                "requirement_id": RUNTIME_REQUIREMENT,
-                "material_digest": self.prepared.snapshot.digest,
-                "conditions": conditions,
-                "findings": findings,
+                "recovery_applicability": {
+                    "required": True,
+                    "evidence_id": "source_1",
+                    "start_line": 1,
+                    "end_line": 1,
+                },
+                "assessment": {
+                    "schema_version": "terminal_systems.model_assessment.v1",
+                    "requirement_id": RUNTIME_REQUIREMENT,
+                    "material_digest": self.prepared.snapshot.digest,
+                    "conditions": conditions,
+                    "findings": findings,
+                },
             }
         )
 
@@ -202,10 +217,64 @@ class RuntimeAssessmentTests(unittest.TestCase):
         self.assertNotIn(
             self.prepared.required_receipt_handles[0], self.prepared.prompt
         )
+        self.assertIn("recovery_applicability", prompt["output_contract"])
+        self.assertNotIn("recovery_required", prompt)
         self.assertEqual(
             prompt["authenticated_trial_binding"]["receipt_digest"],
             self.trial.receipt_digest,
         )
+
+    def test_independent_recovery_scope_rejects_false_planner_opt_out(self):
+        absent = deepcopy(self.prepared)
+        object.__setattr__(absent, "recovery_required", False)
+        object.__setattr__(
+            absent,
+            "slot_kinds",
+            tuple(
+                item
+                for item in absent.slot_kinds
+                if item[1]
+                not in {"controlled_interruption", "restart", "restart_verification"}
+            ),
+        )
+        trial = deepcopy(self.trial)
+        trial.observations["steps"] = [
+            item
+            for item in trial.observations["steps"]
+            if item["slot_id"] in dict(absent.slot_kinds)
+        ]
+        # The independent decision reads the recovery promise and requires it.
+        with self.assertRaisesRegex(TrialAssessmentError, "invalid_output"):
+            validate_runtime_assessment(self.assessment(), absent, trial)
+        findings = validate_runtime_assessment(
+            self.assessment(
+                failed_condition=11, finding_code="behavioral_coverage_incomplete"
+            ),
+            absent,
+            trial,
+        )
+        self.assertEqual(
+            [finding.code for finding in findings], ["behavioral_coverage_incomplete"]
+        )
+
+    def test_independent_false_scope_cannot_silently_override_required_planning(self):
+        value = json.loads(self.assessment())
+        value["recovery_applicability"]["required"] = False
+        with self.assertRaisesRegex(TrialAssessmentError, "invalid_output"):
+            validate_runtime_assessment(json.dumps(value), self.prepared, self.trial)
+
+    def test_recovery_scope_wrapper_preserves_strict_duplicate_and_unknown_guards(self):
+        raw = self.assessment()
+        with self.assertRaises(ValueError):
+            validate_runtime_assessment(
+                raw.replace('"required": true', '"required": true, "required": false'),
+                self.prepared,
+                self.trial,
+            )
+        value = json.loads(raw)
+        value["extra"] = True
+        with self.assertRaisesRegex(TrialAssessmentError, "invalid_output"):
+            validate_runtime_assessment(json.dumps(value), self.prepared, self.trial)
 
     def test_all_observed_controls_allow_a_complete_semantic_pass(self):
         findings = validate_runtime_assessment(

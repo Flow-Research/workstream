@@ -63,7 +63,7 @@ verification_timeout_seconds = 10
 INSTRUCTION = """\
 # Queue task
 Inspect status with `queue status`.
-The exact output contract is documented here.
+The exact output contract includes recovery after interruption without duplicate effects.
 """
 
 AUTHOR_NOTES = """\
@@ -75,7 +75,9 @@ Stop at the commit boundary with `sh tests/interrupt.sh`.
 Restart retained work with `sh tests/restart.sh`.
 """
 
-INSTRUCTION_WITH_BLANK_LINES = "\n# Queue task\n\nInspect status with `queue status`.\n\n"
+INSTRUCTION_WITH_BLANK_LINES = (
+    "\n# Queue task\n\nInspect status with `queue status`.\n\n"
+)
 
 
 class TrialPlanTests(unittest.TestCase):
@@ -143,8 +145,18 @@ class TrialPlanTests(unittest.TestCase):
             ),
         ]
         return {
-            "schema_version": "terminal_systems.trial_plan_proposal.v1",
+            "schema_version": "terminal_systems.trial_plan_proposal.v2",
             "material_digest": self.material_digest,
+            "recovery_applicability": {
+                "required": True,
+                "evidence_id": "source_1",
+                "start_line": 1,
+                "end_line": next(
+                    item.line_count
+                    for item in self.evidence
+                    if item.path == "instruction.md"
+                ),
+            },
             "coverage_complete": True,
             "procedures": procedures,
             "coverage_gaps": [],
@@ -178,13 +190,75 @@ class TrialPlanTests(unittest.TestCase):
             self.evidence,
         )
 
+    def test_non_recovery_scope_allows_four_purposes_without_recovery_steps(self):
+        """A controlled batch-correlation contract, not a live qualified package."""
+        (self.root / "instruction.md").write_text(
+            "# Deterministic event correlation\nInspect output with `queue status`.\n"
+            "Correlate shuffled events using their identities and normalized timestamps.\n"
+        )
+        self.material_digest, self.evidence = collect_plan_sources(self.root)
+        value = self.proposal()
+        value["recovery_applicability"]["required"] = False
+        value["procedures"] = value["procedures"][:-2]
+        proposal = self.validated(value)
+        plan = build_runtime_trial_plan(
+            self.metadata, proposal, TrialPlanLimits(10000, 64, 35)
+        )
+        kinds = [step["slot_kind"] for step in plan["steps"]]
+        self.assertNotIn("controlled_interruption", kinds)
+        self.assertNotIn("restart", kinds)
+        self.assertNotIn("restart_verification", kinds)
+        self.assertEqual(kinds.count("reference_verify_3"), 1)
+
+    def test_required_recovery_cannot_be_omitted_or_only_half_declared(self):
+        # A real submitted metadata extension is not authority to opt out of
+        # the instruction's recovery promise.
+        (self.root / "task.toml").write_text(
+            TASK_METADATA + "\n[extensions]\nrecovery_required = false\n"
+        )
+        self.metadata = parse_task_metadata(self.root)
+        self.material_digest, self.evidence = collect_plan_sources(self.root)
+        for remove in (1, 2):
+            value = self.proposal()
+            value["procedures"] = value["procedures"][:-remove]
+            with (
+                self.subTest(remove=remove),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(value)
+        value = self.proposal()
+        value["recovery_applicability"]["required"] = False
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            self.validated(
+                value
+            )  # non-applicability cannot also authorize recovery procedures
+
+    def test_scope_citation_is_complete_instruction_not_notes_or_metadata(self):
+        for key, bad in (
+            ("required", 0),
+            ("evidence_id", "source_2"),
+            ("start_line", 2),
+            ("end_line", 1),
+        ):
+            value = self.proposal()
+            value["recovery_applicability"][key] = bad
+            with (
+                self.subTest(key=key),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(value)
+        value = self.proposal()
+        del value["recovery_applicability"]
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            self.validated(value)
+
     def test_source_cited_plan_preserves_exact_metadata_and_three_fresh_references(
         self,
     ):
         prompt = json.loads(
             build_plan_prompt(self.metadata, self.material_digest, self.evidence)
         )
-        self.assertEqual(prompt["required_purpose_order"], list(PURPOSE_ORDER))
+        self.assertEqual(prompt["purpose_order"], list(PURPOSE_ORDER))
         self.assertEqual(
             prompt["maximum_documented_commands"], MAXIMUM_DOCUMENTED_COMMANDS
         )
@@ -442,6 +516,9 @@ if state.exists():
                 item = by_kind[f"{prefix}_{number}"]
                 self.assertEqual(item["minimum_occurrences"], 1)
                 self.assertEqual(item["maximum_occurrences"], 1)
+        for kind in ("controlled_interruption", "restart", "restart_verification"):
+            self.assertEqual(by_kind[kind]["minimum_occurrences"], 0)
+            self.assertEqual(by_kind[kind]["maximum_occurrences"], 1)
         self.assertEqual(
             by_kind["documented_command"]["maximum_occurrences"],
             MAXIMUM_DOCUMENTED_COMMANDS,

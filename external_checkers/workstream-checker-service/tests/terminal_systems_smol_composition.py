@@ -633,7 +633,7 @@ def _procedure(identifier, purpose, command, state_source, evidence_id, line):
 
 def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
     value = json.loads(prompt)
-    if value.get("schema_version") == "terminal_systems.trial_plan_proposal.v1":
+    if value.get("schema_version") == "terminal_systems.trial_plan_proposal.v2":
         observations.append({"planner_prompt": value})
         procedures = [
             _procedure(
@@ -672,7 +672,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 "interrupt_work",
                 "controlled_interruption",
                 ["sh", "tests/interrupt.sh"],
-                "fresh",
+                "reference_baseline",
                 "source_2",
                 6,
             ),
@@ -687,8 +687,18 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
         ]
         return json.dumps(
             {
-                "schema_version": "terminal_systems.trial_plan_proposal.v1",
+                "schema_version": "terminal_systems.trial_plan_proposal.v2",
                 "material_digest": value["material_digest"],
+                "recovery_applicability": {
+                    "required": True,
+                    "evidence_id": "source_1",
+                    "start_line": 1,
+                    "end_line": next(
+                        item["line_count"]
+                        for item in value["untrusted_source_evidence"]
+                        if item["path"] == "instruction.md"
+                    ),
+                },
                 "coverage_complete": True,
                 "procedures": procedures,
                 "coverage_gaps": [],
@@ -701,21 +711,35 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
     receipt = value["trusted_receipts"][0]["receipt"]
     observations.append({"receipt": receipt})
     assessment = json.loads(value["prompt"])
+    result = {
+        "schema_version": "terminal_systems.model_assessment.v1",
+        "requirement_id": assessment["rubric"]["requirement_id"],
+        "material_digest": assessment["untrusted_evidence_data"]["material_digest"],
+        "conditions": [
+            {
+                "condition_number": item["condition_number"],
+                "status": "satisfied",
+                "evidence_ids": ["trial_receipt"],
+                "finding_numbers": [],
+            }
+            for item in assessment["rubric"]["pass_conditions"]
+        ],
+        "findings": [],
+    }
+    instruction = next(
+        item
+        for item in assessment["untrusted_evidence_data"]["evidence"]
+        if item["path"] == "instruction.md"
+    )
     return json.dumps(
         {
-            "schema_version": "terminal_systems.model_assessment.v1",
-            "requirement_id": assessment["rubric"]["requirement_id"],
-            "material_digest": assessment["untrusted_evidence_data"]["material_digest"],
-            "conditions": [
-                {
-                    "condition_number": item["condition_number"],
-                    "status": "satisfied",
-                    "evidence_ids": ["trial_receipt"],
-                    "finding_numbers": [],
-                }
-                for item in assessment["rubric"]["pass_conditions"]
-            ],
-            "findings": [],
+            "recovery_applicability": {
+                "required": True,
+                "evidence_id": instruction["evidence_id"],
+                "start_line": 1,
+                "end_line": instruction["line_count"],
+            },
+            "assessment": result,
         },
         sort_keys=True,
         separators=(",", ":"),

@@ -84,6 +84,7 @@ def execute_runtime_check(
             sources,
             plan,
             trial,
+            recovery_required=proposal.recovery_applicability["required"],
         )
         assessed = model_session.call(
             prepared.prompt,

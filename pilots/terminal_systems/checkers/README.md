@@ -106,6 +106,25 @@ The [repair record](../../../.commitrail/changes/terminal-systems-repaired-recov
 records local subprocess and false-pass proof. This changes the projection
 digest: use a new immutable image/projection registration and approved binding
 for runtime qualification; existing locked bindings remain historical.
+The prospective project planner now distinguishes tasks that promise recovery from
+ordinary tasks. Its current proposal contract requires a source-cited applicability
+decision over the complete solver instruction. The independent receipt assessment
+reads that instruction again without the planner's flag: a citation alone does not
+make an opt-out trustworthy. Promised recovery still requires the verified
+reference → interruption → restart → full-verifier sequence; ordinary tasks retain
+the other required trials. Missing promised recovery produces a coverage finding
+when the independent assessment identifies it. An all-pass assessment contradicted
+by its own recovery decision, or conflicting author-assessment scope decisions,
+is invalid model output and remains an infrastructure outcome.
+
+This change advances the private plan contract to version 2 and the runtime trial
+projection to version 2; the separate revision projection remains unchanged. It
+requires a new immutable POST image, matching projection/configuration registration
+and exact-image qualification before prospective bindings can use it. Previously
+registered images, locked bindings and their qualification evidence remain retained.
+Local model-session tests establish the conditional control paths, not live model
+quality or deployment qualification.
+
 The shared runner implements generic offline image building
 and trials in Smol sibling microVMs, with resource, cancellation, cleanup and
 recovery controls. Native build `b2ce3fa45` passed controlled-provider KVM

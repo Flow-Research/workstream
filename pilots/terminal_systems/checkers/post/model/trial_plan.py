@@ -9,10 +9,11 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import tomllib
+from typing import TypedDict
 from uuid import UUID
 
 
-PLAN_SCHEMA_VERSION = "terminal_systems.trial_plan_proposal.v1"
+PLAN_SCHEMA_VERSION = "terminal_systems.trial_plan_proposal.v2"
 TRIAL_SCHEMA_VERSION = "workstream.checker_trial_plan.v1"
 MAXIMUM_SOURCE_BYTES = 2 * 1024 * 1024
 MAXIMUM_MODEL_PROMPT_BYTES = 1_000_000
@@ -27,6 +28,7 @@ PURPOSE_ORDER = (
     "restart",
 )
 PURPOSES = frozenset(PURPOSE_ORDER)
+RECOVERY_PURPOSES = frozenset({"controlled_interruption", "restart"})
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_.-]{0,99}")
 _PLATFORM = re.compile(r"linux/[a-z0-9_.-]{1,32}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -65,12 +67,20 @@ class SourceEvidence:
     line_count: int
 
 
+class RecoveryApplicability(TypedDict):
+    required: bool
+    evidence_id: str
+    start_line: int
+    end_line: int
+
+
 @dataclass(frozen=True, slots=True)
 class TrialPlanProposal:
     material_digest: str
     procedures: tuple[dict[str, object], ...]
     coverage_complete: bool
     coverage_gaps: tuple[dict[str, object], ...]
+    recovery_applicability: RecoveryApplicability
 
 
 def _closed_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -266,6 +276,47 @@ def parse_task_metadata(root: Path) -> dict[str, object]:
     }
 
 
+def recovery_applicability_contract() -> dict[str, str]:
+    """A model decision cites the complete solver contract, not a submitter opt-out."""
+    return {
+        "required": "boolean: whether instruction.md promises recovery across interruption and restart",
+        "evidence_id": "instruction.md evidence identifier",
+        "start_line": "1: cite the entire solver contract",
+        "end_line": "instruction.md line_count: absence cannot be inferred from an isolated excerpt",
+    }
+
+
+def validate_recovery_applicability(
+    value: object, evidence: tuple[SourceEvidence, ...]
+) -> RecoveryApplicability:
+    """Check citation custody only; a second assessment independently judges scope."""
+    if type(value) is not dict or set(value) != {
+        "required",
+        "evidence_id",
+        "start_line",
+        "end_line",
+    }:
+        raise TrialPlanError("invalid_output")
+    source = next((item for item in evidence if item.path == "instruction.md"), None)
+    if (
+        source is None
+        or type(value["required"]) is not bool
+        or value["evidence_id"] != source.evidence_id
+        or type(value["start_line"]) is not int
+        or value["start_line"] != 1
+        or type(value["end_line"]) is not int
+        or source.line_count < 1
+        or value["end_line"] != source.line_count
+    ):
+        raise TrialPlanError("invalid_output")
+    return {
+        "required": value["required"],
+        "evidence_id": source.evidence_id,
+        "start_line": 1,
+        "end_line": source.line_count,
+    }
+
+
 def build_plan_prompt(
     metadata: dict[str, object],
     material_digest: str,
@@ -280,12 +331,19 @@ def build_plan_prompt(
             "numbered_content labels original 1-based source lines, including blank lines, as 'number | text'.",
             "Use those numbers for start_line/end_line; command_text must quote only original text, without the numbering or separator.",
             "Return JSON only. Mark coverage_complete false and cite each gap if an exact procedure is absent or ambiguous.",
-            "Do not change task.toml commands, resource limits, or the required trial count.",
+            "Do not change task.toml commands, resource limits, or the three fresh reference trials.",
+            "Determine recovery applicability from the complete instruction.md contract, never task names, metadata flags, or absent reproduction commands. Interruption and restart are required only when that contract promises recovery. If required procedures are absent, report coverage gaps; do not declare recovery inapplicable.",
         ],
         "schema_version": PLAN_SCHEMA_VERSION,
         "material_digest": material_digest,
         "deterministic_task_metadata": metadata,
-        "required_purpose_order": list(PURPOSE_ORDER),
+        "purpose_order": list(PURPOSE_ORDER),
+        "always_required_purposes": [
+            item for item in PURPOSE_ORDER if item not in RECOVERY_PURPOSES
+        ],
+        "conditional_recovery_purposes": [
+            item for item in PURPOSE_ORDER if item in RECOVERY_PURPOSES
+        ],
         "state_rules": {
             "documented_command": "fresh or an earlier documented_command procedure_id",
             "incomplete_repair": "fresh",
@@ -312,7 +370,8 @@ def build_plan_prompt(
         "output_contract": {
             "schema_version": PLAN_SCHEMA_VERSION,
             "material_digest": material_digest,
-            "coverage_complete": "boolean",
+            "recovery_applicability": recovery_applicability_contract(),
+            "coverage_complete": "boolean: all applicable purposes have exact procedures",
             "procedures": [
                 {
                     "procedure_id": "unique lowercase identifier",
@@ -361,6 +420,7 @@ def validate_plan_proposal(
         "coverage_complete",
         "procedures",
         "coverage_gaps",
+        "recovery_applicability",
     }:
         raise TrialPlanError("invalid_output")
     procedures = value["procedures"]
@@ -375,6 +435,12 @@ def validate_plan_proposal(
         or len(gaps) > len(PURPOSES)
     ):
         raise TrialPlanError("invalid_output")
+    recovery = validate_recovery_applicability(
+        value["recovery_applicability"], evidence
+    )
+    required_purposes = (
+        PURPOSES if recovery["required"] else PURPOSES - RECOVERY_PURPOSES
+    )
     by_id = {item.evidence_id: item for item in evidence}
     ids = set()
     purposes = []
@@ -408,7 +474,7 @@ def validate_plan_proposal(
             or _IDENTIFIER.fullmatch(identifier) is None
             or identifier in ids
             or type(purpose) is not str
-            or purpose not in PURPOSES
+            or purpose not in required_purposes
             or type(command_text) is not str
             or not command_text
             or len(command_text) > 8192
@@ -451,7 +517,10 @@ def validate_plan_proposal(
     complete = value["coverage_complete"]
     if complete and (
         counts["documented_command"] < 1
-        or any(counts[purpose] != 1 for purpose in PURPOSES - {"documented_command"})
+        or any(
+            counts[purpose] != 1
+            for purpose in required_purposes - {"documented_command"}
+        )
     ):
         raise TrialPlanError("invalid_output")
     restart = next((item for item in normalized if item["purpose"] == "restart"), None)
@@ -461,7 +530,8 @@ def validate_plan_proposal(
     )
     if complete and (
         gaps
-        or restart["state_source"] != interrupted["procedure_id"]
+        or recovery["required"]
+        and restart["state_source"] != interrupted["procedure_id"]
         or next(item for item in normalized if item["purpose"] == "incomplete_repair")[
             "state_source"
         ]
@@ -476,7 +546,8 @@ def validate_plan_proposal(
             if item["purpose"] == "fabricated_output_mutation"
         )["state_source"]
         != "reference_baseline"
-        or interrupted["state_source"] != "reference_baseline"
+        or recovery["required"]
+        and interrupted["state_source"] != "reference_baseline"
     ):
         raise TrialPlanError("invalid_output")
     earlier_documented: set[str] = set()
@@ -523,7 +594,7 @@ def validate_plan_proposal(
         end = gap["end_line"]
         if (
             type(purpose) is not str
-            or purpose not in PURPOSES
+            or purpose not in required_purposes
             or cited is None
             or type(start) is not int
             or type(end) is not int
@@ -543,7 +614,8 @@ def validate_plan_proposal(
         [PURPOSE_ORDER.index(item) for item in gap_purposes]
         != sorted(PURPOSE_ORDER.index(item) for item in gap_purposes)
         or not complete
-        and {item["purpose"] for item in normalized} | set(gap_purposes) != PURPOSES
+        and {item["purpose"] for item in normalized} | set(gap_purposes)
+        != required_purposes
     ):
         raise TrialPlanError("invalid_output")
     return TrialPlanProposal(
@@ -551,6 +623,7 @@ def validate_plan_proposal(
         tuple(normalized),
         complete,
         tuple(normalized_gaps),
+        recovery,
     )
 
 
@@ -760,17 +833,20 @@ def project_slot_templates() -> tuple[dict[str, object], ...]:
             ),
             template(
                 "controlled_interruption",
+                minimum=0,
                 visible=("verification",),
                 fresh=False,
                 retain=("succeeded", "exit_nonzero", "signalled"),
             ),
             template(
                 "restart",
+                minimum=0,
                 visible=("verification",),
                 fresh=False,
             ),
             template(
                 "restart_verification",
+                minimum=0,
                 visible=("verification",),
                 fresh=False,
             ),
@@ -863,9 +939,10 @@ def project_trial_projection_selector(*, revision: bool = False) -> dict[str, ob
         else project_trial_execution_projection()
     )
     projection_id = REVISION_PROJECTION_ID if revision else RUNTIME_PROJECTION_ID
+    version = 1 if revision else 2
     canonical = json.dumps(
         {
-            "selector": {"projection_id": projection_id, "projection_version": 1},
+            "selector": {"projection_id": projection_id, "projection_version": version},
             **projection,
         },
         ensure_ascii=False,
@@ -874,7 +951,7 @@ def project_trial_projection_selector(*, revision: bool = False) -> dict[str, ob
     ).encode("utf-8")
     return {
         "trial_projection_id": projection_id,
-        "trial_projection_version": 1,
+        "trial_projection_version": version,
         "trial_projection_digest": "sha256:" + hashlib.sha256(canonical).hexdigest(),
     }
 
