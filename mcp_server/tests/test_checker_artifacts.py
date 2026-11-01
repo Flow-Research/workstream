@@ -16,7 +16,7 @@ from workstream_mcp.schemas import (
     CHECKER_ARTIFACT_CONTRACT_NAMES,
     checker_artifact_input_schema,
 )
-from workstream_mcp.tools import checker_artifacts, task_execution
+from workstream_mcp.tools import checker_artifacts
 
 PROJECT_ID = "019a2a00-0000-7000-8000-000000001001"
 SUBMISSION_ID = "019a2a00-0000-7000-8000-000000001002"
@@ -218,10 +218,8 @@ def test_checker_artifact_catalogue_is_exact_closed_and_does_not_dispatch(
 ) -> None:
     client, received, _ = adapter
     catalogue = _catalogue(client)
-    task_execution_count = len(task_execution.TOOL_NAMES)
-    selected = catalogue[
-        -(len(CHECKER_ARTIFACT_CONTRACT_NAMES) + task_execution_count) : -task_execution_count
-    ]
+    by_name = {tool["name"]: tool for tool in catalogue}
+    selected = [by_name[name] for name in checker_artifacts.TOOL_NAMES]
     assert [tool["name"] for tool in selected] == list(checker_artifacts.TOOL_NAMES)
     for contract_name, tool in zip(CHECKER_ARTIFACT_CONTRACT_NAMES, selected, strict=True):
         assert tool["inputSchema"] == checker_artifact_input_schema(contract_name)

@@ -1,0 +1,993 @@
+{
+  "canonical_sha256": "f8c0684b499f49b53428332dbfb28038bb2dd3c0a4f2495ecb6868307ec760e3",
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "ContributorRevisionContext": {
+        "additionalProperties": false,
+        "description": "Frozen preparation plus an eligibility projection evaluated at database time.",
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionContextChange"
+            },
+            "maxItems": 8,
+            "title": "Changes",
+            "type": "array"
+          },
+          "clock_state": {
+            "enum": [
+              "running",
+              "paused"
+            ],
+            "title": "Clock State",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "kept",
+                  "forward",
+                  "backward"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "disposition": {
+            "enum": [
+              "ready",
+              "context_blocked",
+              "revision_limit_reached",
+              "revision_deadline_expired"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "max_revision_rounds": {
+            "minimum": 0.0,
+            "title": "Max Revision Rounds",
+            "type": "integer"
+          },
+          "next_revision_round": {
+            "minimum": 0.0,
+            "title": "Next Revision Round",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "kept",
+              "rebased",
+              "blocked"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "predecessor_preparation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Preparation Id"
+          },
+          "preparation_id": {
+            "format": "uuid",
+            "title": "Preparation Id",
+            "type": "string"
+          },
+          "preparation_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Preparation Sha256",
+            "type": "string"
+          },
+          "prior": {
+            "$ref": "#/components/schemas/RevisionContextSnapshot"
+          },
+          "remaining_microseconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Microseconds"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "sequence": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_routing_manifest_id": {
+            "format": "uuid",
+            "title": "Source Routing Manifest Id",
+            "type": "string"
+          },
+          "source_submission_id": {
+            "format": "uuid",
+            "title": "Source Submission Id",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionContextSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "preparation_id",
+          "preparation_sha256",
+          "predecessor_preparation_id",
+          "source_submission_id",
+          "source_routing_manifest_id",
+          "sequence",
+          "next_revision_round",
+          "max_revision_rounds",
+          "requested_at",
+          "deadline_at",
+          "clock_state",
+          "remaining_microseconds",
+          "outcome",
+          "disposition",
+          "direction",
+          "prior",
+          "target",
+          "changes"
+        ],
+        "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "detail",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ManagementTaskDetail": {
+        "description": "Management work instructions plus exact source and assignment display facts.",
+        "properties": {
+          "acceptance_criteria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acceptance Criteria"
+          },
+          "assigned_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned To"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "estimated_time_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Time Minutes"
+          },
+          "external_task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Task Id"
+          },
+          "import_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Batch Id"
+          },
+          "last_assignment_outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskAssignmentOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "rejection_criteria": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Criteria"
+          },
+          "revision_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRevisionContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skill_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skill Tags",
+            "type": "array"
+          },
+          "source_payload_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Payload Hash"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Type"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "project_id",
+          "title",
+          "description",
+          "task_type",
+          "difficulty",
+          "skill_tags",
+          "estimated_time_minutes",
+          "status",
+          "acceptance_criteria",
+          "rejection_criteria",
+          "deadline_at",
+          "created_at",
+          "updated_at",
+          "source_type",
+          "source_ref",
+          "source_payload_hash",
+          "import_batch_id",
+          "external_task_id",
+          "created_by",
+          "assigned_to"
+        ],
+        "title": "ManagementTaskDetail",
+        "type": "object"
+      },
+      "RevisionContextChange": {
+        "additionalProperties": false,
+        "description": "One bounded policy identity change, without provider or finance internals.",
+        "properties": {
+          "after": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "After",
+            "type": "string"
+          },
+          "before": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Before",
+            "type": "string"
+          },
+          "component": {
+            "enum": [
+              "guide",
+              "source",
+              "artifact",
+              "pre_submit",
+              "post_submit",
+              "review",
+              "revision",
+              "contribution"
+            ],
+            "title": "Component",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "before",
+          "after"
+        ],
+        "title": "RevisionContextChange",
+        "type": "object"
+      },
+      "RevisionContextSnapshot": {
+        "additionalProperties": false,
+        "description": "One complete activated context, independent of the task's mutable locks.",
+        "properties": {
+          "activated_at": {
+            "format": "date-time",
+            "title": "Activated At",
+            "type": "string"
+          },
+          "activation_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Activation Generation",
+            "type": "integer"
+          },
+          "activation_operation_id": {
+            "format": "uuid",
+            "title": "Activation Operation Id",
+            "type": "string"
+          },
+          "guide_id": {
+            "format": "uuid",
+            "title": "Guide Id",
+            "type": "string"
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/TaskPolicyLineage"
+          }
+        },
+        "required": [
+          "guide_id",
+          "activation_operation_id",
+          "activation_generation",
+          "activated_at",
+          "lineage"
+        ],
+        "title": "RevisionContextSnapshot",
+        "type": "object"
+      },
+      "TaskAssignmentOutcome": {
+        "additionalProperties": false,
+        "description": "An immutable rejected attempt with no remaining action on its assignment.",
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "closed_at": {
+            "format": "date-time",
+            "title": "Closed At",
+            "type": "string"
+          },
+          "next_action": {
+            "const": "none",
+            "default": "none",
+            "title": "Next Action",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "revision_exhausted",
+              "revision_expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "enum": [
+              "revision_limit_reached",
+              "revision_deadline_expired"
+            ],
+            "title": "Status Reason",
+            "type": "string"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "title": "Submission Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "submission_id",
+          "status",
+          "status_reason",
+          "closed_at"
+        ],
+        "title": "TaskAssignmentOutcome",
+        "type": "object"
+      },
+      "TaskPolicyLineage": {
+        "additionalProperties": false,
+        "description": "Complete bounded policy identities; no policy body or arbitrary metadata.",
+        "properties": {
+          "locked_contribution_policy_version_id": {
+            "format": "uuid",
+            "title": "Locked Contribution Policy Version Id",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Effective Project Submission Artifact Policy Hash",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_id": {
+            "format": "uuid",
+            "title": "Locked Effective Project Submission Artifact Policy Id",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Guide Source Snapshot Hash",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_id": {
+            "format": "uuid",
+            "title": "Locked Guide Source Snapshot Id",
+            "type": "string"
+          },
+          "locked_guide_version": {
+            "pattern": "\\S",
+            "title": "Locked Guide Version",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Post Submit Checker Policy Hash",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Post Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_version": {
+            "pattern": "\\S",
+            "title": "Locked Post Submit Checker Policy Version",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_bundle_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Pre Submit Checker Bundle Hash",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Pre Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_review_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Review Policy Generation",
+            "type": "integer"
+          },
+          "locked_review_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Review Policy Hash",
+            "type": "string"
+          },
+          "locked_review_policy_id": {
+            "format": "uuid",
+            "title": "Locked Review Policy Id",
+            "type": "string"
+          },
+          "locked_revision_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Revision Policy Generation",
+            "type": "integer"
+          },
+          "locked_revision_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Revision Policy Hash",
+            "type": "string"
+          },
+          "locked_revision_policy_id": {
+            "format": "uuid",
+            "title": "Locked Revision Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locked_guide_version",
+          "locked_guide_source_snapshot_id",
+          "locked_guide_source_snapshot_hash",
+          "locked_effective_project_submission_artifact_policy_id",
+          "locked_effective_project_submission_artifact_policy_hash",
+          "locked_pre_submit_checker_policy_id",
+          "locked_pre_submit_checker_bundle_hash",
+          "locked_post_submit_checker_policy_id",
+          "locked_post_submit_checker_policy_version",
+          "locked_post_submit_checker_policy_hash",
+          "locked_review_policy_id",
+          "locked_review_policy_generation",
+          "locked_review_policy_hash",
+          "locked_revision_policy_id",
+          "locked_revision_policy_generation",
+          "locked_revision_policy_hash",
+          "locked_contribution_policy_version_id"
+        ],
+        "title": "TaskPolicyLineage",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Read management instructions without requiring policy locks on drafts.",
+    "operationId": "get_management_task_api_v1_projects__project_id__tasks__task_id__get",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "path",
+        "name": "task_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ManagementTaskDetail"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Resource not found.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Identity verification unavailable.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Get Management Task",
+    "tags": [
+      "tasks"
+    ],
+    "x-workstream-action-id": "project.task.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/projects/{project_id}/tasks/{task_id}",
+    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+  }
+}

@@ -12,6 +12,7 @@ from workstream_mcp.limits import (
     GUIDE_DOCUMENT_MAX_BASE64_CHARS,
     GUIDE_DOCUMENT_MEDIA_TYPES,
     SUBMISSION_BUNDLE_MAX_BASE64_CHARS,
+    TASK_IMPORT_SOURCE_MAX_BASE64_CHARS,
 )
 
 EMPTY_INPUT_SCHEMA: dict[str, Any] = {
@@ -1000,6 +1001,33 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 TASK_EXECUTION_CONTRACT_NAMES = tuple(TASK_EXECUTION_INPUT_SCHEMAS)
 
+TASK_OPERATION_CONTRACT_NAMES = (
+    "projects_list",
+    "service_actor_create",
+    "task_import_batch_create",
+    "management_tasks_list",
+    "management_task_create",
+    "operational_tasks_list",
+    "task_import_batch_screen",
+    "task_import_batch_release",
+    "task_import_batch_get",
+    "management_task_get",
+    "management_task_locked_context_get",
+    "operational_task_locked_context_get",
+    "audit_task_locked_context_get",
+    "task_revision_context_repair",
+    "audit_task_evidence_get",
+    "operational_task_start_override",
+    "project_model_profile_provision",
+    "project_model_budget_configure",
+    "project_model_usage_effect_get",
+    "project_model_recovery_child_create",
+    "task_import_source_declare",
+    "task_import_source_content_upload",
+    "task_import_source_content_get",
+    "task_import_source_get",
+)
+
 
 class ContractError(RuntimeError):
     """The reviewed packaged contract is absent or invalid."""
@@ -1485,5 +1513,118 @@ def task_execution_output_validator(name: str) -> Draft202012Validator:
     """Validate one task/submission response projection."""
     return Draft202012Validator(
         task_execution_output_schema(name),
+        format_checker=_OUTPUT_FORMAT_CHECKER,
+    )
+
+
+TASK_IMPORT_SOURCE_CONTENT_OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "media_type": {"const": "application/json"},
+        "content_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": TASK_IMPORT_SOURCE_MAX_BASE64_CHARS,
+        },
+        "byte_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8 * 1024 * 1024,
+        },
+        "sha256": {"type": "string", "pattern": r"^sha256:[0-9a-f]{64}$"},
+    },
+    "required": ["media_type", "content_base64", "byte_count", "sha256"],
+    "additionalProperties": False,
+}
+
+
+@lru_cache(maxsize=32)
+def task_operation_input_schema(name: str) -> dict[str, Any]:
+    """Build a closed input from one reviewed task-operation contract."""
+    if name not in TASK_OPERATION_CONTRACT_NAMES:
+        raise ContractError("unknown task operation contract")
+    document = _contract_document(name)
+    operation = document.get("operation")
+    components = document.get("components")
+    if not isinstance(operation, dict) or not isinstance(components, dict):
+        raise ContractError(f"{name} contract is missing its operation")
+    schemas = components.get("schemas")
+    if not isinstance(schemas, dict):
+        raise ContractError(f"{name} contract is missing schemas")
+
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    parameters = operation.get("parameters", [])
+    if not isinstance(parameters, list):
+        raise ContractError(f"{name} parameters are invalid")
+    for parameter in parameters:
+        if not isinstance(parameter, dict):
+            raise ContractError(f"{name} parameter is invalid")
+        location = parameter.get("in")
+        wire_name = parameter.get("name")
+        if location == "header":
+            if wire_name == "Idempotency-Key":
+                properties["idempotency_key"] = _IDEMPOTENCY_KEY_INPUT
+                if parameter.get("required") is True:
+                    required.append("idempotency_key")
+            continue
+        if location not in {"path", "query"} or not isinstance(wire_name, str):
+            continue
+        raw_schema = parameter.get("schema")
+        if not isinstance(raw_schema, dict):
+            raise ContractError(f"{name} parameter schema is invalid")
+        resolved = _resolve_schema_refs(raw_schema, schemas)
+        if name == "audit_task_evidence_get" and wire_name == "cursor":
+            resolved = {
+                "anyOf": [
+                    {"type": "string", "minLength": 1, "maxLength": 512},
+                    {"type": "null"},
+                ]
+            }
+        properties[wire_name] = resolved
+        if parameter.get("required") is True:
+            required.append(wire_name)
+
+    request_body = operation.get("requestBody")
+    if isinstance(request_body, dict):
+        if name == "task_import_source_content_upload":
+            properties["content_base64"] = {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": TASK_IMPORT_SOURCE_MAX_BASE64_CHARS,
+            }
+            required.append("content_base64")
+        else:
+            content = request_body.get("content")
+            media = content.get("application/json") if isinstance(content, dict) else None
+            raw_schema = media.get("schema") if isinstance(media, dict) else None
+            if not isinstance(raw_schema, dict):
+                raise ContractError(f"{name} request body schema is invalid")
+            properties["body"] = _resolve_schema_refs(raw_schema, schemas)
+            if request_body.get("required") is True:
+                required.append("body")
+
+    result: dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": False,
+    }
+    if required:
+        result["required"] = list(dict.fromkeys(required))
+    Draft202012Validator.check_schema(result)
+    return result
+
+
+def task_operation_output_schema(name: str) -> dict[str, Any]:
+    if name not in TASK_OPERATION_CONTRACT_NAMES:
+        raise ContractError("unknown task operation contract")
+    if name == "task_import_source_content_get":
+        return TASK_IMPORT_SOURCE_CONTENT_OUTPUT_SCHEMA
+    return _contract_output_schema(name)
+
+
+def task_operation_output_validator(name: str) -> Draft202012Validator:
+    return Draft202012Validator(
+        task_operation_output_schema(name),
         format_checker=_OUTPUT_FORMAT_CHECKER,
     )
