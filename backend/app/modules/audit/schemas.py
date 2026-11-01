@@ -459,6 +459,8 @@ class LifecycleAuditEventInput(BaseModel):
     @model_validator(mode="after")
     def validate_lifecycle_shape(self) -> Self:
         """Keep state transitions distinct from immutable fact creation."""
+        if self.event_type in {LifecycleAuditEventType.TASK_STARTED, LifecycleAuditEventType.TASK_START_OVERRIDDEN}:
+            raise ValueError("start events are retained history only")
         manager = self.event_type in {LifecycleAuditEventType.TASK_CREATED, LifecycleAuditEventType.TASK_SCREENED, LifecycleAuditEventType.TASK_RELEASED}
         if manager != (self.manager_authority_facts is not None):
             raise ValueError("manager event requires exact authority facts")
@@ -521,9 +523,7 @@ class LifecycleAuditEventInput(BaseModel):
                 LifecycleAuditEventType.TASK_CREATED: (None, "draft"),
                 LifecycleAuditEventType.TASK_SCREENED: ("draft", "screening"),
                 LifecycleAuditEventType.TASK_RELEASED: ("screening", "ready"),
-                LifecycleAuditEventType.TASK_CLAIMED: ("ready", "claimed"),
-                LifecycleAuditEventType.TASK_STARTED: ("claimed", "in_progress"),
-                LifecycleAuditEventType.TASK_START_OVERRIDDEN: ("claimed", "in_progress"),
+                LifecycleAuditEventType.TASK_CLAIMED: ("ready", "in_progress"),
             }.get(self.event_type)
             if self.event_type is LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED:
                 expected = (
@@ -532,7 +532,7 @@ class LifecycleAuditEventInput(BaseModel):
                     else None
                 )
             if self.event_type is LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED:
-                expected = (self.from_status, "ready") if self.from_status in {"claimed", "in_progress"} else None
+                expected = ("in_progress", "ready")
             if self.event_type in {LifecycleAuditEventType.TASK_REVISION_EXPIRED, LifecycleAuditEventType.TASK_REVISION_EXHAUSTED}:
                 expected = ("needs_revision", "ready")
             if self.event_type is LifecycleAuditEventType.TASK_REVISION_CONTEXT_REPAIRED:
@@ -543,8 +543,8 @@ class LifecycleAuditEventInput(BaseModel):
                 raise ValueError("task event requires its exact transition")
             if self.task_reason is not None and not self.task_reason.strip():
                 raise ValueError("task reason must not be blank")
-            if self.event_type in {LifecycleAuditEventType.TASK_START_OVERRIDDEN, LifecycleAuditEventType.TASK_RELEASED} and self.task_reason is None:
-                raise ValueError("task start override requires a reason")
+            if self.event_type is LifecycleAuditEventType.TASK_RELEASED and self.task_reason is None:
+                raise ValueError("task release requires a reason")
         elif self.task_reason is not None:
             raise ValueError("task reason is restricted to task transitions")
         if self.reason is LifecycleAuditReason.STATE_CHANGED:

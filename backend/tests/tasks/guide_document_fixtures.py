@@ -213,11 +213,6 @@ async def guide_world(task_client, monkeypatch):
         json={"reason": "Read assigned instructions"},
     )
     assert claim.status_code == 200, claim.text
-    start = await task_client.post(
-        f"/api/v1/tasks/{task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "Work from exact guide"},
-    )
-    assert start.status_code == 200, start.text
+    assert claim.json()["task"]["status"] == "in_progress"
     set_dev_actor(monkeypatch, roles="viewer", subject="pilot13-alice")
     return GuideWorld(project, guide, task, grant, originals)

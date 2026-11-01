@@ -62,7 +62,7 @@ func TestClaimRequiresVisibleAcknowledgedConfirmation(t *testing.T) {
 	if m.write.outcome != outcomeConfirmed || strings.Count(strings.Join(f.calls, ","), "claim") != 1 {
 		t.Fatal("deliberate confirmation did not send exactly one POST", f.calls)
 	}
-	if !strings.Contains(m.View().Content, "Claim confirmed") {
+	if !strings.Contains(m.View().Content, "Claim confirmed") || !strings.Contains(m.View().Content, "task in progress") {
 		t.Fatal(m.View().Content)
 	}
 }
@@ -119,7 +119,7 @@ func TestWritePendingConsumesNavigationAndLateResultIsBound(t *testing.T) {
 	// A valid typed receipt substituted from another project is never success.
 	f.claim = func(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error) {
 		return api.Result[api.ClaimedTask]{Value: api.ClaimedTask{
-			Task:       api.MutationTask{ID: taskID, ProjectID: actorID, Status: "claimed"},
+			Task:       api.MutationTask{ID: taskID, ProjectID: actorID, Status: "in_progress"},
 			Assignment: api.TaskAssignment{TaskID: taskID, ProjectID: actorID, ContributorID: actorID},
 		}}, nil
 	}
@@ -139,7 +139,7 @@ func TestClaimActorSubstitutionAndDeniedReplayKeepUncertainty(t *testing.T) {
 		}
 		if strings.Count(strings.Join(f.calls, ","), "claim") == 1 {
 			return api.Result[api.ClaimedTask]{Value: api.ClaimedTask{
-				Task:       api.MutationTask{ID: task, ProjectID: projectID, Status: "claimed"},
+				Task:       api.MutationTask{ID: task, ProjectID: projectID, Status: "in_progress"},
 				Assignment: api.TaskAssignment{TaskID: task, ProjectID: projectID, ContributorID: projectID},
 			}}, nil
 		}
@@ -374,34 +374,21 @@ func TestWriteTransportErrorIsUnknown(t *testing.T) {
 	}
 }
 
-func TestMineStartUsesClaimedDetailNotActiveAssignmentRow(t *testing.T) {
+func TestMineInProgressTaskDoesNotOfferAnotherLifecycleAction(t *testing.T) {
 	f := &fakeClient{task: func(context.Context, string) (api.Result[api.ContributorTaskDetail], error) {
 		v := taskDetail()
-		v.Status = "claimed"
+		v.Status = "in_progress"
 		return api.Result[api.ContributorTaskDetail]{Value: v}, nil
 	}}
 	m := boot(t, f)
 	press(t, m, "enter")
 	press(t, m, "2")
-	if m.rows[0].status != "active" {
-		t.Fatal("fixture does not distinguish assignment and task status")
-	}
-	if m.canOpenAction() {
-		t.Fatal("assignment row alone offered Start")
-	}
 	press(t, m, "enter")
-	if !m.canOpenAction() || m.actionName() != "Start" {
-		t.Fatal("claimed detail did not offer Start")
+	if m.canOpenAction() || m.actionName() != "" {
+		t.Fatal("in-progress task offered an obsolete lifecycle action")
 	}
 	press(t, m, "a")
-	press(t, m, replayKey)
-	press(t, m, "enter")
-	if !strings.Contains(m.View().Content, "Confirm start") {
-		t.Fatal("Start confirmation absent")
-	}
-	press(t, m, "s")
-	press(t, m, "y")
-	if m.write.outcome != outcomeConfirmed || !strings.Contains(m.View().Content, "Start confirmed") || strings.Count(strings.Join(f.calls, ","), "start") != 1 {
-		t.Fatal("Start was not an independent confirmed write", f.calls)
+	if m.write.mode != writeIdle {
+		t.Fatal("in-progress task opened a mutation")
 	}
 }

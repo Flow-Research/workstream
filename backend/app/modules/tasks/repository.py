@@ -200,7 +200,7 @@ class TaskRepository:
                 assignment.status == "active",
                 assignment.released_at.is_(None),
                 assignment.assigned_at <= request.invalidated_at,
-                task.status.in_(("claimed", "in_progress")),
+                task.status == "in_progress",
                 task.assigned_to == assignment.contributor_id,
                 assignment.submitter_contribution_policy_version_id
                 == task.locked_contribution_policy_version_id,

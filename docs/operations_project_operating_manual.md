@@ -554,7 +554,7 @@ and manager task facts, the exact historical guide, review/revision references
 (`policy_id`, `generation`, `policy_hash`), and the locked
 `contribution_policy_version_id`. It omits obsolete payment amounts and
 submission/precheck flags. Contributor `lifecycle.next_actions` contains only
-currently applicable claim/start hints; management has no contributor lifecycle.
+currently applicable claim hints; management has no contributor lifecycle.
 Executing a hint always rechecks authority. Locked policy provenance uses three
 separate reads (all prefixed by `/api/v1`):
 

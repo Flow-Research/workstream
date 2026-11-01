@@ -33,13 +33,10 @@ async def exercise_operator_task_journey(
             "get",
             "operations.task.locked_context.read",
         ),
-        (
-            "/api/v1/operations/tasks/{task_id}/start",
-            "post",
-            "operations.task.start_override",
-        ),
     ):
         assert paths[route][method]["x-workstream-action-id"] == action
+
+    assert "/api/v1/operations/tasks/{task_id}/start" not in paths
 
     issuer, audience, secret = flow_settings(env)
     operator_token = issue_flow_token(
@@ -62,21 +59,8 @@ async def exercise_operator_task_journey(
         assert result.returncode == 0 and result.stderr == "", result.stderr
         return json.loads(result.stdout)
 
-    reason = "Operator verified exact active assignment"
-    key = str(uuid4())
     run("list", project, status=404)
     run("locked-context", project, claimed_task, status=404)
-    run("start", claimed_task, "--reason", reason, "--idempotency-key", key, status=403)
-    run(
-        "start",
-        claimed_task,
-        "--reason",
-        reason,
-        "--idempotency-key",
-        str(uuid4()),
-        token=tokens["cli-manager"],
-        status=403,
-    )
 
     issued = await direct.post(
         "/api/v1/admin-role-grants",
@@ -86,11 +70,21 @@ async def exercise_operator_task_journey(
             "role": "operator",
             "scope_type": "system",
             "scope_project_id": None,
-            "reason": "CLI exact task override proof",
+            "reason": "CLI exact task inspection proof",
         },
     )
     assert issued.status_code == 201, issued.text
     grant_id = issued.json()["resource_id"]
+
+    before = await direct.get(
+        f"/api/v1/projects/{project}/assignments", headers=manager_headers
+    )
+    assert before.status_code == 200, before.text
+    assignment = next(
+        item for item in before.json()["items"] if item["task_id"] == claimed_task
+    )
+    assignment_id = assignment["assignment_id"]
+    assert assignment["contributor_actor_id"] == contributor
 
     first = run("list", project.replace("-", ""), "--limit", "1")
     expected = await direct.get(
@@ -139,40 +133,6 @@ async def exercise_operator_task_journey(
         and "policy_body" not in context
     )
 
-    before = await direct.get(
-        f"/api/v1/projects/{project}/assignments", headers=manager_headers
-    )
-    assert before.status_code == 200, before.text
-    assignment = next(
-        item for item in before.json()["items"] if item["task_id"] == claimed_task
-    )
-    assignment_id = assignment["assignment_id"]
-    assert assignment["contributor_actor_id"] == contributor
-
-    started = run(
-        "start",
-        claimed_task.replace("-", ""),
-        "--reason",
-        reason,
-        "--idempotency-key",
-        key,
-    )
-    assert started["id"] == claimed_task and started["project_id"] == project
-    assert started["status"] == "in_progress" and "assigned_to" not in started
-    replay = run("start", claimed_task, "--reason", reason, "--idempotency-key", key)
-    assert replay == started
-    assert (
-        run(
-            "start",
-            claimed_task,
-            "--reason",
-            "Changed",
-            "--idempotency-key",
-            key,
-            status=409,
-        )["code"]
-        == "idempotency_mismatch"
-    )
     after = await direct.get(
         f"/api/v1/projects/{project}/assignments", headers=manager_headers
     )
@@ -188,24 +148,7 @@ async def exercise_operator_task_journey(
     async with db_session.get_session_factory()() as session:
         row = await session.get(TaskAssignment, assignment_id)
         assert row.contributor_id == contributor and row.task_id == claimed_task
-        event = await session.scalar(
-            select(AuditEvent).where(
-                AuditEvent.entity_id == claimed_task,
-                AuditEvent.event_type == "TaskStartOverridden",
-            )
-        )
-        assert (
-            event is not None
-            and event.actor_id == operator_id
-            and event.reason == reason
-        )
-        decision = await session.get(
-            AuditEvent, event.event_payload["references"]["authorization_decision_id"]
-        )
-        assert (
-            decision.action_id == "operations.task.start_override"
-            and decision.matched_grant_id == grant_id
-        )
+        assert row.started_at == row.assigned_at and row.started_at is not None
         assert (
             await session.scalar(
                 select(func.count())
@@ -215,15 +158,14 @@ async def exercise_operator_task_journey(
                     AuditEvent.event_type == "TaskStartOverridden",
                 )
             )
-            == 1
+            == 0
         )
 
     revoked = await direct.post(
         f"/api/v1/admin-role-grants/{grant_id}/revoke",
         headers=admin_headers | {"Idempotency-Key": str(uuid4())},
-        json={"reason": "Exact replay requires current Operator authority"},
+        json={"reason": "Inspection requires current Operator authority"},
     )
     assert revoked.status_code == 200, revoked.text
     run("list", project, status=404)
     run("locked-context", project, claimed_task, status=404)
-    run("start", claimed_task, "--reason", reason, "--idempotency-key", key, status=403)

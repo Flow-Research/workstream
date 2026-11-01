@@ -56,7 +56,7 @@ def context_values():
     project_id, now = new_record_id(), datetime.now(UTC)
     task = ContributorTaskDetail(
         new_record_id(), project_id, "Title", "Work", None, None, ("tag",), None,
-        "claimed", None, None, None, now, now,
+        "in_progress", None, None, None, now, now,
         TaskCompensationTerms(new_record_id(), "unpaid", "unpaid"),
     )
     selection = GuidePolicySelection(policy_id=new_record_id(), generation=1, policy_hash="sha256:" + "1" * 64)
@@ -73,7 +73,7 @@ def context_values():
 
 def test_work_context_contracts():
     task, manager, values = context_values()
-    lifecycle = ContributorTaskLifecycle(assigned_to_current_actor=True, next_actions=("start",))
+    lifecycle = ContributorTaskLifecycle(assigned_to_current_actor=True, next_actions=())
     for cls, detail, extra in (
         (ContributorTaskWorkContext, task, {"lifecycle": lifecycle, "guide_documents": ()}),
         (ManagementTaskWorkContext, manager, {}),
@@ -108,8 +108,8 @@ def test_work_context_contracts():
             cls(task=subclass(**subclass_values), **values, **extra)
         with pytest.raises(ValidationError, match="extra_forbidden"):
             cls(task=detail, **values, **extra, base_amount=25)
-    for extra in ({"next_actions": ("submit",)}, {"next_actions": ("claim", "start")},
-                  {"assigned_to_current_actor": []}, {"can_submit": True}, {"status": "claimed"}):
+    for extra in ({"next_actions": ("submit",)}, {"next_actions": ("start",)}, {"next_actions": ("claim", "start")},
+                  {"assigned_to_current_actor": []}, {"can_submit": True}, {"status": "in_progress"}):
         with pytest.raises(ValidationError):
             ContributorTaskLifecycle(**(lifecycle.model_dump() | extra))
     with pytest.raises(ValidationError, match="frozen"):
@@ -209,13 +209,13 @@ async def test_work_context_public_projections(task_client, monkeypatch):
         before, previous = await snapshot(factory, task["id"])
         stored = before[0][0]
         assert stored["source_ref"] == "PRIVATE"
-        assert stored["assigned_to"] == grant["actor_profile_id"] and stored["status"] == "claimed"
+        assert stored["assigned_to"] == grant["actor_profile_id"] and stored["status"] == "in_progress"
         response = await task_client.get(f"{path}/tasks/{task['id']}/work-context", headers=auth_headers())
         assert response.status_code == 200, response.text
         body = response.json()
         fields = (COMMON | MANAGEMENT) if management else CONTRIBUTOR
         assert set(body) == CONTEXT | (set() if management else {"lifecycle", "guide_documents"})
-        # Initial claimed work has no revision preparation. The public route
+        # Initial work has no revision preparation. The public route
         # excludes None; prepared revision contexts are covered by their journey.
         assert "revision_context" not in body
         assert set(body["task"]) == fields
@@ -226,7 +226,7 @@ async def test_work_context_public_projections(task_client, monkeypatch):
         if not management:
             assert body["lifecycle"] == {
                 "assigned_to_current_actor": True,
-                "next_actions": ["start"],
+                "next_actions": [],
             }
             assert body["task"]["compensation"] == {
                 "contribution_policy_version_id": str(
@@ -260,7 +260,7 @@ async def test_work_context_owned_state_matrix(task_client, monkeypatch):
     project = await create_active_project(task_client)
     draft = await create_draft_task(task_client, project["id"])
     states = {state for edge in ALLOWED_TASK_TRANSITIONS for state in edge}
-    assert states == {"draft", "screening", "ready", "claimed", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision"}
+    assert states == {"draft", "screening", "ready", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision"}
     tasks = {state: await create_ready_task(task_client, project["id"]) for state in sorted(states)}
     grant = await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "worker-one")
     denied = await task_client.get(f"/api/v1/tasks/{draft['id']}/work-context", headers=auth_headers())
@@ -272,8 +272,7 @@ async def test_work_context_owned_state_matrix(task_client, monkeypatch):
         claim = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
         assert claim.status_code == 200, claim.text
         assignment_id = claim.json()["assignment"]["id"]
-        start = await task_client.post(f"/api/v1/tasks/{task['id']}/start", headers=auth_headers())
-        assert start.status_code == 200, start.text
+        assert claim.json()["task"]["status"] == "in_progress"
         seen_tasks.add(task["id"])
         async with factory() as session, session.begin():
             row = await session.get(WorkstreamTask, task["id"])
@@ -290,9 +289,9 @@ async def test_work_context_owned_state_matrix(task_client, monkeypatch):
         assert response.status_code == 200, (state, response.text)
         body = response.json()
         assert body["task"]["status"] == state
-        assert body["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": ["start"] if state == "claimed" else []}
+        assert body["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": []}
         seen.add(body["task"]["status"])
-    assert seen == states and len(seen_tasks) == len(states) == 9
+    assert seen == states and len(seen_tasks) == len(states) == 8
 
 
 @pytest.mark.parametrize("management", (False, True))

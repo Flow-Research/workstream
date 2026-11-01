@@ -10,7 +10,7 @@ from app.modules.authorization.catalogue import ActionId
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.tasks.api import TaskAuthorityDenied, TaskAuthorityFacts, TaskAuthorityOperation
-from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext, task_resource_guard
+from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -243,20 +243,22 @@ async def test_substituted_final_facts_cannot_consume(field, value):
 
 
 @pytest.mark.asyncio
-async def test_start_requires_exact_assignment_not_only_submitter_grant():
+async def test_claim_replay_requires_exact_assignment_not_only_submitter_grant():
     _, _, prepared, resource, evidence = setup()
     resource = resource.model_copy(
         update={
-            "task_status": "claimed",
+            "task_status": "in_progress",
+            "replay_assignment_id": uuid4(),
+            "idempotency_key": uuid4(),
             "assigned_to": resource.actor_profile_id,
             "assignment_id": uuid4(),
             "assignment_contributor_id": uuid4(),
         }
     )
     try:
-        handle, request = await prepare(prepared, resource, ActionId.TASK_START)
+        handle, request = await prepare(prepared, resource, ActionId.TASK_CLAIM)
         with pytest.raises(AuthorizationDenied):
-            await prepared.consume(handle, ActionId.TASK_START, request, resource)
+            await prepared.consume(handle, ActionId.TASK_CLAIM, request, resource)
         assert len(evidence.events) == 1
         assert evidence.events[0].after_facts["allowed"] is False
     finally:
@@ -294,13 +296,12 @@ async def test_commit_invalidates_prepared_task_authority():
         prepared.close()
 
 
-@pytest.mark.parametrize("action,state", [(ActionId.TASK_CLAIM, "claimed"), (ActionId.TASK_START, "in_progress")])
 @pytest.mark.parametrize("case", ["valid", "wrong_assignment", "foreign_owner", "wrong_state", "missing_key"])
-async def test_replay_authority_requires_exact_current_post_state(action, state, case):
+async def test_replay_authority_requires_exact_current_post_state(case):
     _, _, prepared, resource, evidence = setup()
     assignment_id = uuid4()
     values = {
-        "task_status": state, "assigned_to": resource.actor_profile_id,
+        "task_status": "in_progress", "assigned_to": resource.actor_profile_id,
         "assignment_contributor_id": resource.actor_profile_id,
         "assignment_id": assignment_id, "replay_assignment_id": assignment_id,
         "idempotency_key": uuid4(),
@@ -315,12 +316,12 @@ async def test_replay_authority_requires_exact_current_post_state(action, state,
         values["idempotency_key"] = None
     resource = resource.model_copy(update=values)
     try:
-        handle, request = await prepare(prepared, resource, action)
+        handle, request = await prepare(prepared, resource, ActionId.TASK_CLAIM)
         if case == "valid":
-            assert (await prepared.consume(handle, action, request, resource)).allowed
+            assert (await prepared.consume(handle, ActionId.TASK_CLAIM, request, resource)).allowed
         else:
             with pytest.raises(AuthorizationDenied):
-                await prepared.consume(handle, action, request, resource)
+                await prepared.consume(handle, ActionId.TASK_CLAIM, request, resource)
         assert evidence.events[-1].after_facts["allowed"] is (case == "valid")
     finally:
         prepared.close()
@@ -337,30 +338,6 @@ async def test_task_key_cannot_differ_from_prepared_key():
             ))
     finally:
         prepared.close()
-
-
-@pytest.mark.parametrize("case", [
-    "valid", "wrong_assignment", "missing_key", "self_owner", "inconsistent_owner", "wrong_state", "missing_reason",
-])
-def test_operator_replay_requires_exact_nonself_post_state(case):
-    _, _, _, resource, _ = setup()
-    assignment_id, contributor_id = uuid4(), uuid4()
-    values = dict(task_status="in_progress", assigned_to=contributor_id,
-                  assignment_contributor_id=contributor_id, assignment_id=assignment_id,
-                  replay_assignment_id=assignment_id, idempotency_key=uuid4(), reason="Operator verified work")
-    if case == "wrong_assignment":
-        values["replay_assignment_id"] = uuid4()
-    elif case == "missing_key":
-        values["idempotency_key"] = None
-    elif case == "self_owner":
-        values["assigned_to"] = values["assignment_contributor_id"] = resource.actor_profile_id
-    elif case == "inconsistent_owner":
-        values["assigned_to"] = uuid4()
-    elif case == "wrong_state":
-        values["task_status"] = "claimed"
-    elif case == "missing_reason":
-        values["reason"] = " "
-    assert task_resource_guard(ActionId.OPERATIONS_TASK_START_OVERRIDE, resource.model_copy(update=values)) is (case == "valid")
 
 
 @pytest.mark.parametrize("identity", list(ServiceIdentity))

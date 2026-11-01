@@ -530,16 +530,15 @@ owner's draining path and is not part of this script.
 ## Contributor flow for the agent
 
 After guide activation and task release, the agent works as `agent-claude`.
+Claim assigns and starts the task atomically; no separate start call is needed.
 `TASK_ID`, `ASSIGNMENT_ID`, `READY_ADMISSION_ID` and `SUBMISSION_ID` come from
 the preceding outputs:
 
 ```bash
 CLAIM_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
-START_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
 PREPARE_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
 ws_as agent-claude task ready "$PROJECT_ID" -o json
 ws_as agent-claude task claim TASK_ID --idempotency-key "$CLAIM_KEY" -o json
-ws_as agent-claude task start TASK_ID --idempotency-key "$START_KEY" -o json
 ws_as agent-claude task requirements TASK_ID -o json
 # work.zip contains proof.json at its root, plus whatever the guide requires
 ws_as agent-claude task prepare TASK_ID --assignment ASSIGNMENT_ID \

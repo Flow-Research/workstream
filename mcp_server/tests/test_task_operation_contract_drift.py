@@ -66,7 +66,7 @@ def test_task_operation_contract_is_tamper_evident_and_matches_fixed_route(
 
 
 def test_exact_task_operation_contract_set_is_reviewed() -> None:
-    assert len(TASK_OPERATION_CONTRACT_NAMES) == 24
+    assert len(TASK_OPERATION_CONTRACT_NAMES) == 23
     assert set(TASK_OPERATION_CONTRACT_NAMES) == set(TASK_OPERATIONS)
 
 
@@ -96,7 +96,7 @@ def test_task_operation_contracts_match_backend_openapi_when_configured() -> Non
         if operation[1] in {"/health", "/api/v1/health"}
     }
     assert health_operations == {("GET", "/health"), ("GET", "/api/v1/health")}
-    assert len(all_operations - health_operations) == 132
+    assert len(all_operations - health_operations) == 130
     for name, (method, path, _) in TASK_OPERATIONS.items():
         snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))
         assert snapshot["source"]["openapi_version"] == openapi["openapi"]

@@ -49,7 +49,7 @@ async def lock_project_authority(repository, context, scope, action, locked_cont
     return await lock_project_admin_authority(
         repository, context, scope, action.permission_id, locked_context,
         system_scope_only=action.action_id in {
-            ActionId.OPERATIONS_TASK_START_OVERRIDE, ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
+            ActionId.OPERATIONS_TASK_LOCKED_CONTEXT_READ,
         },
         allowed_roles={
             **{action: frozenset({AdminRole.PROJECT_MANAGER}) for action in TASK_IMPORT_SOURCE_ACTIONS | TASK_IMPORT_BATCH_ACTIONS},

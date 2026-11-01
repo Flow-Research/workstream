@@ -39,7 +39,6 @@ _DESCRIPTIONS = {
     "audit_task_locked_context_get": "Read audit-visible locked task context.",
     "task_revision_context_repair": "Repair one task's contributor revision context.",
     "audit_task_evidence_get": "Read paginated audit evidence for one task.",
-    "operational_task_start_override": "Start one task through the operator override.",
     "project_model_profile_provision": "Provision one immutable project model profile.",
     "project_model_budget_configure": "Create one project model budget configuration.",
     "project_model_usage_effect_get": "Inspect one project model usage effect.",

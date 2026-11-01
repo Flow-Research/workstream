@@ -19,17 +19,14 @@ REMOVED_FIELDS = ("base_amount", "currency", "payout_type", "locked_payment_poli
     (TaskAuthorityOperation.CREATE, "draft"),
     (TaskAuthorityOperation.SCREEN, "screening"),
     (TaskAuthorityOperation.RELEASE, "ready"),
-    (TaskAuthorityOperation.CLAIM, "claimed"),
-    (TaskAuthorityOperation.START, "in_progress"),
-    (TaskAuthorityOperation.START_OVERRIDE, "in_progress"),
+    (TaskAuthorityOperation.CLAIM, "in_progress"),
 ])
 def test_current_command_receipts_replay_without_obsolete_payment_fields(operation, status):
     actor, contributor, task_id, project_id = [new_record_id() for _ in range(4)]
     now = datetime.now(UTC)
     task = WorkstreamTask(id=str(task_id), project_id=str(project_id), title="Task", description="Work",
                          source_type="manual", skill_tags=[], status=status, created_at=now, updated_at=now)
-    uses_assignment = operation in {TaskAuthorityOperation.CLAIM, TaskAuthorityOperation.START,
-                                   TaskAuthorityOperation.START_OVERRIDE}
+    uses_assignment = operation is TaskAuthorityOperation.CLAIM
     assignment = None
     if uses_assignment:
         task.assigned_to = str(contributor)

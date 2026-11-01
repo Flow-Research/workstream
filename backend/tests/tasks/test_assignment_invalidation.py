@@ -34,12 +34,11 @@ from tests.tasks.invalidation_support import (
 )
 
 
-@pytest.mark.parametrize("started", [False, True])
 @pytest.mark.parametrize("kind", ["grant", "suspend", "deactivate", "link"])
 async def test_exact_real_cause_releases_only_pre_submit_assignment(
-    task_client, monkeypatch, started, kind
+    task_client, monkeypatch, kind
 ):
-    s = await setup_assignment(task_client, monkeypatch, started=started)
+    s = await setup_assignment(task_client, monkeypatch)
     await revoke(s, kind)
     target, envelope = await invoked(s)
     before = await snapshot(s)
@@ -261,14 +260,14 @@ async def test_released_work_can_be_claimed_by_another_eligible_contributor(
     claim = await s.client.post(f"/api/v1/tasks/{s.task['id']}/claim", headers=auth_headers())
     assert claim.status_code == 200, claim.text
     task, assignments, _ = await snapshot(s)
-    assert task["assigned_to"] == other["actor_profile_id"] and task["status"] == "claimed"
+    assert task["assigned_to"] == other["actor_profile_id"] and task["status"] == "in_progress"
     assert {row["status"] for row in assignments} == {"active", "authority_revoked"}
 
 
 async def test_existing_submission_and_revision_history_are_never_released(
     task_client, monkeypatch
 ):
-    s = await setup_assignment(task_client, monkeypatch, started=True)
+    s = await setup_assignment(task_client, monkeypatch)
     await revoke(s, "suspend")
     target, envelope = await invoked(s)
     restored = await s.client.post(

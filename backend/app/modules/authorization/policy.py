@@ -42,7 +42,6 @@ ADMIN_ROLE_PERMISSIONS = MappingProxyType(
             PermissionId.OPERATIONS_RECONCILE_RUN,
             PermissionId.OPERATIONS_OUTBOX_RETRY,
             PermissionId.OPERATIONS_PROJECTION_REBUILD,
-            PermissionId.OPERATIONS_TASK_START_OVERRIDE,
             PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
             PermissionId.OPERATIONS_CHECKER_RETRY,
             PermissionId.PROJECT_MODEL_PROFILE_MANAGE,

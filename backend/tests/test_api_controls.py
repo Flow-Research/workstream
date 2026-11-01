@@ -646,22 +646,23 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 134
+    assert len(route_inventory) == 132
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
-        "793237012e9256d308dd5d1e9c1a65e41381cf6306888fdd175dc9794b118444"
+        "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 132
+    assert len(protected_inventory) == 130
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
-        "0953ae6392b81a4a7ba7c9f6b7fccc17768f34cd1f958572fdc553cd204ec82e"
+        "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
     assert "post" in schema["paths"]["/api/v1/tasks/{task_id}/submissions"]
     assert "GET /api/v1/tasks/{task_id}/submissions" in protected_inventory
     assert public_entry_actions.keys() <= set(protected_inventory)
-    assert "POST /api/v1/operations/tasks/{task_id}/start" in protected_inventory
+    assert "POST /api/v1/operations/tasks/{task_id}/start" not in protected_inventory
+    assert "POST /api/v1/tasks/{task_id}/start" not in protected_inventory
     assert "GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context" in protected_inventory
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(schema["paths"]["/api/v1/actors/me"]["get"]["responses"])
@@ -724,9 +725,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "POST /api/v1/tasks/{task_id}/screen": "project.task.screen",
         "POST /api/v1/tasks/{task_id}/release": "project.task.release",
         "POST /api/v1/tasks/{task_id}/claim": "task.claim",
-        "POST /api/v1/tasks/{task_id}/start": "task.start",
         "GET /api/v1/tasks/{task_id}/work-context": "task.work_context.read",
-        "POST /api/v1/operations/tasks/{task_id}/start": "operations.task.start_override",
         "GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context": (
             "project.task.work_context.read"
         ),

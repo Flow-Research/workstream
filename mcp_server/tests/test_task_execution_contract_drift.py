@@ -68,7 +68,7 @@ def test_task_execution_contract_is_tamper_evident_and_matches_fixed_route(
 
 
 def test_exact_task_execution_contract_set_is_reviewed() -> None:
-    assert len(TASK_EXECUTION_CONTRACT_NAMES) == 18
+    assert len(TASK_EXECUTION_CONTRACT_NAMES) == 17
     assert set(TASK_EXECUTION_CONTRACT_NAMES) == set(TASK_EXECUTION_OPERATIONS)
 
 

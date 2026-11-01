@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "60e4a118da27aff0fb92147162e5c5588e8e924673841e2a03893d29f68460e3",
+  "canonical_sha256": "c430757c46cc05fa4af20ac600b875f7bfad7cb8c4461bf505ab3807d51f0102",
   "components": {
     "schemas": {
       "ActionId": {
@@ -23,7 +23,6 @@
           "project.task.release",
           "project.task.revision.repair",
           "task.claim",
-          "task.start",
           "task.read",
           "task.submission_requirements.read",
           "project.task.read",
@@ -114,7 +113,6 @@
           "project.post_submit_checker_policy.derive",
           "project.setup_run.update",
           "project.guide.activate",
-          "operations.task.start_override",
           "operations.submission_gate.repair",
           "operations.checker.retry",
           "operations.checker_retry_source.list",
@@ -583,7 +581,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "6208a1f8152df8de299fa6dd1a6802d9454c9d44",
+    "backend_git_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"

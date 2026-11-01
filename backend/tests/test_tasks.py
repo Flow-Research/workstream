@@ -34,7 +34,6 @@ from projects.guide_fixtures import complete_guide_payload
 from tests.projects.policy_read_faults import corrupt_locked_policy_reads
 from auth_concurrency_support import wait_for_named_database_lock
 from tests.submission_fixtures import seed_retained_submission, route_retained_checker_remediation
-from tests.tasks.post_submit_routing.backfill_support import assert_backfill_matches_live
 
 from app.core.config import get_settings
 from app.db import models as db_models
@@ -804,16 +803,9 @@ async def create_started_task(
         json={"reason": "claim"},
     )
     assert claim.status_code == 200, claim.text
-    start = await client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "start"},
-    )
-    assert start.status_code == 200, start.text
-    # Claim/start above prove grant-only authority. Downstream retained
-    # checker/detail routes still expect this token role until their cutover.
+    assert claim.json()["task"]["status"] == "in_progress"
     set_dev_actor(monkeypatch, roles="worker", subject=subject)
-    return start.json()
+    return claim.json()["task"]
 
 
 async def admit_and_grant_project_submitter(
@@ -1039,8 +1031,6 @@ async def test_task_repository_postgresql_submission_context_state_matrix(
     replacement = await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], replacement_subject)
     claimed = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
-    started = await task_client.post(f"/api/v1/tasks/{task['id']}/start", headers=auth_headers())
-    assert started.status_code == 200, started.text
     replacement_request = await _submission_context_request_for_started_task(task["id"], replacement["actor_profile_id"])
     async with factory() as session:
         fresh, source = await TaskRepository(session).select_submission_context(replacement_request)
@@ -1922,7 +1912,7 @@ async def stored_task_audit_events(task_id: str) -> list[dict]:
         return [{column.name: getattr(row, column.name) for column in AuditEvent.__table__.columns} for row in rows]
 
 
-async def test_full_task_claim_start_flow_writes_audit_events(
+async def test_claim_immediately_starts_work_and_writes_one_audit_event(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1939,16 +1929,8 @@ async def test_full_task_claim_start_flow_writes_audit_events(
         json={"reason": "claiming task"},
     )
     assert claim.status_code == 200, claim.text
-    assert claim.json()["task"]["status"] == "claimed"
+    assert claim.json()["task"]["status"] == "in_progress"
     assert claim.json()["assignment"]["contributor_id"] == worker_actor_id
-
-    start = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "starting work"},
-    )
-    assert start.status_code == 200, start.text
-    assert start.json()["status"] == "in_progress"
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     audit = await stored_task_audit_events(ready_task['id'])
@@ -1957,7 +1939,6 @@ async def test_full_task_claim_start_flow_writes_audit_events(
         "draft",
         "screening",
         "ready",
-        "claimed",
         "in_progress",
     ]
     assert [event["from_status"] for event in events] == [
@@ -1965,14 +1946,12 @@ async def test_full_task_claim_start_flow_writes_audit_events(
         "draft",
         "screening",
         "ready",
-        "claimed",
     ]
     assert [event["reason"] for event in events] == [
         None,
         "screening checklist passed",
         "release decision recorded",
         "claiming task",
-        "starting work",
     ]
     assert all(event["created_at"] for event in events)
     screening_event = next(event for event in events if event["to_status"] == "screening")
@@ -1986,7 +1965,7 @@ async def test_full_task_claim_start_flow_writes_audit_events(
         assert event["event_payload"]["locked_revision_policy_generation"] == 1
         assert event["event_payload"]["locked_revision_policy_hash"].startswith("sha256:")
         assert UUID(event["event_payload"]["locked_contribution_policy_version_id"])
-    claim_event = next(event for event in events if event["to_status"] == "claimed")
+    claim_event = next(event for event in events if event["to_status"] == "in_progress")
     assert claim_event["actor_id"] == worker_actor_id
     assert claim_event["actor_roles"] == []
     assert claim_event["claim_snapshot"] == {}
@@ -1997,20 +1976,15 @@ async def test_full_task_claim_start_flow_writes_audit_events(
     assert references["project_id"] == project["id"]
 
     async with db_session.get_session_factory()() as session:
-        persisted_event = await session.get(AuditEvent, claim_event["id"])
         decision = await session.get(AuditEvent, references["authorization_decision_id"])
         assert decision.action_id == "task.claim"
         assert decision.actor_id == worker_actor_id
         assert decision.after_facts["allowed"] is True
-        start_event = next(event for event in events if event["to_status"] == "in_progress")
         assignment = await session.get(TaskAssignment, claim.json()["assignment"]["id"])
-        # Claim time stays assigned_at; start is stamped once, after the claim.
         assert assignment.started_at is not None
-        assert assignment.assigned_at <= assignment.started_at <= assignment.updated_at
-        assert abs((assignment.started_at - start_event["created_at"]).total_seconds()) < 5
-    assert persisted_event is not None
-    assert persisted_event.claim_snapshot == {}
-    await assert_backfill_matches_live(db_session.get_session_factory(), assignments=True)
+        assert assignment.started_at == assignment.assigned_at
+        assert assignment.assigned_at <= assignment.updated_at
+        assert abs((assignment.started_at - claim_event["created_at"]).total_seconds()) < 5
 
 
 @pytest.mark.parametrize("authority_state", ["absent", "revoked"])
@@ -2052,11 +2026,9 @@ async def test_submitter_without_current_project_grant_cannot_claim(
         assert task.status == "ready" and task.assigned_to is None
 
 
-@pytest.mark.parametrize("state_before_revocation", ["claimed", "in_progress"])
 async def test_revocation_blocks_contributor_commands_without_rewriting_assignment(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
-    state_before_revocation: str,
 ) -> None:
     project = await create_active_project(task_client)
     task = await create_ready_task(task_client, project["id"])
@@ -2068,11 +2040,6 @@ async def test_revocation_blocks_contributor_commands_without_rewriting_assignme
         f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers(),
     )
     assert claimed.status_code == 200, claimed.text
-    if state_before_revocation == "in_progress":
-        started = await task_client.post(
-            f"/api/v1/tasks/{task['id']}/start", headers=auth_headers(),
-        )
-        assert started.status_code == 200, started.text
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     revoked = await task_client.post(
         f"/api/v1/projects/{project['id']}/role-grants/{grant['grant_id']}/revoke",
@@ -2081,7 +2048,7 @@ async def test_revocation_blocks_contributor_commands_without_rewriting_assignme
     assert revoked.status_code == 200, revoked.text
     set_dev_actor(monkeypatch, roles="viewer", subject=subject)
     for method, action, status, code in (
-        ("post", "start", 403, "permission_not_granted"),
+        ("post", "claim", 403, "permission_not_granted"),
         ("get", "work-context", 404, "project_authorization_resource_not_found"),
     ):
         denied = await getattr(task_client, method)(
@@ -2091,7 +2058,7 @@ async def test_revocation_blocks_contributor_commands_without_rewriting_assignme
         assert denied.json()["error"]["code"] == code
     async with db_session.get_session_factory()() as session:
         stored = await session.get(WorkstreamTask, task["id"])
-        assert stored.status == state_before_revocation
+        assert stored.status == "in_progress"
         assert stored.assigned_to == grant["actor_profile_id"]
         assignment = await session.get(TaskAssignment, claimed.json()["assignment"]["id"])
         assert assignment.status == "active"
@@ -2118,7 +2085,7 @@ async def test_project_grant_allows_claim_without_worker_token_role(
         f"/api/v1/tasks/{task['id']}/work-context", headers=auth_headers(),
     )
     assert context.status_code == 200, context.text
-    assert context.json()["lifecycle"]["next_actions"] == ["start"]
+    assert context.json()["lifecycle"]["next_actions"] == []
 
 
 @pytest.mark.parametrize("profile_type", ["admin", "project_manager"])
@@ -2210,7 +2177,7 @@ async def test_second_claim_is_rejected(
     assert second_claim.status_code == 403, second_claim.text
 
 
-async def test_different_worker_cannot_start_or_read_claimed_task(
+async def test_different_worker_cannot_claim_or_read_assigned_task(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2230,7 +2197,7 @@ async def test_different_worker_cannot_start_or_read_claimed_task(
         task_client, monkeypatch, project["id"], "worker-two",
     )
     start = await task_client.post(
-        f"/api/v1/tasks/{ready_task['id']}/start",
+        f"/api/v1/tasks/{ready_task['id']}/claim",
         headers=auth_headers(),
         json={"reason": "start"},
     )
@@ -2663,11 +2630,6 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task
         headers=auth_headers(),
         json={"reason": "try claim"},
     )
-    start = await task_client.post(
-        f"/api/v1/tasks/{started_task['id']}/start",
-        headers=auth_headers(),
-        json={"reason": "try start"},
-    )
     audit_after = await stored_task_audit_events(started_task["id"])
 
     assert screen.status_code == 403
@@ -2677,8 +2639,6 @@ async def test_submitted_task_rejects_earlier_lifecycle_actions_without_new_task
     # Canonical AUTH rejects stale manager and contributor resources before TASK writes.
     assert claim.status_code == 403, claim.text
     assert claim.json()["error"]["code"] == "permission_not_granted"
-    assert start.status_code == 403, start.text
-    assert start.json()["error"]["code"] == "permission_not_granted"
     assert len(audit_after) == len(audit_before)
 
 
@@ -2851,16 +2811,16 @@ async def test_invalid_transitions_are_rejected(
     await admit_and_grant_project_submitter(
         task_client, monkeypatch, project["id"], "draft-task-submitter",
     )
-    start_from_draft = await task_client.post(
-        f"/api/v1/tasks/{task['id']}/start",
+    claim_from_draft = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/claim",
         headers=auth_headers(),
         json={"reason": "start"},
     )
 
     assert release_from_draft.status_code == 403
     assert release_from_draft.json()["error"]["code"] == "permission_not_granted"
-    assert start_from_draft.status_code == 403
-    assert start_from_draft.json()["error"]["code"] == "permission_not_granted"
+    assert claim_from_draft.status_code == 403
+    assert claim_from_draft.json()["error"]["code"] == "permission_not_granted"
     async with db_session.get_session_factory()() as session:
         unchanged = await session.get(WorkstreamTask, task["id"])
         assert unchanged.status == "draft" and unchanged.assigned_to is None

@@ -132,20 +132,20 @@ async def test_requirement_scope_and_assignment_visibility(task_client, monkeypa
     ready = await create_ready_task(task_client, project["id"])
     outsider = await create_ready_task(task_client, foreign["id"])
     draft = await create_draft_task(task_client, project["id"])
-    names = ("claimed", "wrong_contributor", "wrong_assignee", "active_only", "assignee_only", "unrelated", "released", "released_ready")
+    names = ("in_progress", "wrong_contributor", "wrong_assignee", "active_only", "assignee_only", "unrelated", "released", "released_ready")
     tasks = {name: await create_ready_task(task_client, project["id"]) for name in names}
     other = await seed_task_test_actor("requirements-other")
     grant = await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "requirements-owner")
     owner = grant["actor_profile_id"]
-    claimed = await task_client.post(f"/api/v1/tasks/{tasks['claimed']['id']}/claim", headers=auth_headers())
+    claimed = await task_client.post(f"/api/v1/tasks/{tasks['in_progress']['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
     cases = {
-        "wrong_contributor": ("claimed", owner, other, "active"),
-        "wrong_assignee": ("claimed", other, owner, "active"),
+        "wrong_contributor": ("in_progress", owner, other, "active"),
+        "wrong_assignee": ("in_progress", other, owner, "active"),
         "active_only": ("ready", None, owner, "active"),
         "assignee_only": ("ready", owner, None, None),
-        "unrelated": ("claimed", owner, None, None),
-        "released": ("claimed", owner, owner, "released"),
+        "unrelated": ("in_progress", owner, None, None),
+        "released": ("in_progress", owner, owner, "released"),
         "released_ready": ("ready", None, owner, "released"),
     }
     factory = db_session.get_session_factory()
@@ -190,9 +190,9 @@ async def test_requirement_scope_and_assignment_visibility(task_client, monkeypa
             with pytest.raises(TaskNotFound):
                 await read_requirements(service, READS[0][0], project["id"], draft["id"], owner)
             resolve.assert_not_awaited()
-        own = await session.get(WorkstreamTask, tasks["claimed"]["id"])
+        own = await session.get(WorkstreamTask, tasks["in_progress"]["id"])
         assignment = await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == own.id))
-        assert own.status == "claimed" and own.assigned_to == assignment.contributor_id == owner and assignment.status == "active"
+        assert own.status == "in_progress" and own.assigned_to == assignment.contributor_id == owner and assignment.status == "active"
         for method, cls in READS:
             assert type(await read_requirements(service, method, project["id"], own.id, owner)) is cls
         with patch.object(service, "_load_locked_task_context", wraps=service._load_locked_task_context) as resolve:

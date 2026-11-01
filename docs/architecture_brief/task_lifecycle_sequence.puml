@@ -67,7 +67,7 @@ API -> DB : lock guide and policy versions
 API -> DB : DRAFT -> SCREENING -> READY
 
 Contributor -> UI : claim task
-UI -> API : POST claim / start
+UI -> API : POST claim (assign and start atomically)
 API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : resolve actor profile and project grants

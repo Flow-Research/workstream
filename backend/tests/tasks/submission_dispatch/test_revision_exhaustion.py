@@ -157,9 +157,7 @@ async def _submit_initial_after_reclaim(h, client):
     assert claim.status_code == 200, claim.text
     assignment = UUID(claim.json()["assignment"]["id"])
     assert assignment != h.request.assignment_id
-    started = await client.post(f"/api/v1/tasks/{h.request.task_id}/start",
-                                headers={"Idempotency-Key": str(new_record_id())})
-    assert started.status_code == 200, started.text
+    assert claim.json()["task"]["status"] == "in_progress"
     h.data = revision_archive(h.data)
     headers = {"Content-Type": "application/zip", "X-Task-Assignment-Id": str(assignment),
                "Idempotency-Key": str(new_record_id()),

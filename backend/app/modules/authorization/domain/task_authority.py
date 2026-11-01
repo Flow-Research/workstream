@@ -23,7 +23,6 @@ TASK_MANAGER_READ_ACTIONS = frozenset({
 TASK_SUBMITTER_ACTIONS = frozenset(
     {
         ActionId.TASK_CLAIM,
-        ActionId.TASK_START,
         ActionId.TASK_GUIDE_READ,
         ActionId.TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.TASK_WORK_CONTEXT_READ,
@@ -36,7 +35,6 @@ TASK_MANAGER_ACTIONS = frozenset({
 })
 TASK_IMPORT_BATCH_ACTIONS = frozenset({ActionId.PROJECT_TASK_IMPORT, ActionId.PROJECT_TASK_IMPORT_BATCH_READ})
 TASK_ACTIONS = TASK_PROJECT_ROLE_ACTIONS | TASK_MANAGER_ACTIONS | TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {
-    ActionId.OPERATIONS_TASK_START_OVERRIDE,
     ActionId.AUDIT_TASK_EVIDENCE_READ,
 }
 
@@ -195,31 +193,10 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
         ):
             return False
         if action is ActionId.TASK_CLAIM:
-            return resource.task_status == "claimed" and own_assignment
-        if action is ActionId.TASK_START:
             return resource.task_status == "in_progress" and own_assignment
-        if action is ActionId.OPERATIONS_TASK_START_OVERRIDE:
-            return (
-                resource.task_status == "in_progress"
-                and resource.assignment_contributor_id is not None
-                and resource.assignment_contributor_id == resource.assigned_to
-                and resource.assigned_to != resource.actor_profile_id
-                and bool(resource.reason and resource.reason.strip())
-            )
         return False
     if action is ActionId.TASK_CLAIM:
         return unassigned_ready
-    if action is ActionId.TASK_START:
-        return resource.task_status == "claimed" and own_assignment
-    if action is ActionId.OPERATIONS_TASK_START_OVERRIDE:
-        return (
-            resource.task_status == "claimed"
-            and resource.assignment_id is not None
-            and resource.assignment_contributor_id is not None
-            and resource.assignment_contributor_id == resource.assigned_to
-            and resource.assigned_to != resource.actor_profile_id
-            and bool(resource.reason and resource.reason.strip())
-        )
     if action in TASK_CONTRIBUTOR_READ_ACTIONS:
         return unassigned_ready or own_assignment
     if action is ActionId.TASK_GUIDE_READ:

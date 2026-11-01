@@ -16,6 +16,7 @@ from app.modules.authorization.domain.resource_digest import authorization_resou
 from app.modules.authorization.policy import ADMIN_ROLE_PERMISSIONS
 from app.modules.tasks.api.assignment_invalidation import (
     AssignmentInvalidationAuthorityFacts, AssignmentInvalidationTarget, PreparedAssignmentInvalidation,
+    assignment_invalidation_resource_digest,
 )
 
 
@@ -24,7 +25,7 @@ def facts():
         target=AssignmentInvalidationTarget(**{key: uuid4() for key in AssignmentInvalidationTarget.model_fields}),
         cause_event_id=uuid4(), delivery_event_id=uuid4(), delivery_generation=1,
         cause_digest="sha256:" + "a" * 64, invocation_digest="sha256:" + "b" * 64,
-        task_status="claimed", locked_context_hash="sha256:" + "c" * 64,
+        task_status="in_progress", locked_context_hash="sha256:" + "c" * 64,
     )
 
 
@@ -34,7 +35,7 @@ def substitutions(value):
     for key, replacement in {
         "cause_event_id": uuid4(), "delivery_event_id": uuid4(), "delivery_generation": 2,
         "cause_digest": "sha256:" + "d" * 64, "invocation_digest": "sha256:" + "e" * 64,
-        "task_status": "in_progress", "locked_context_hash": "sha256:" + "f" * 64,
+        "locked_context_hash": "sha256:" + "f" * 64,
     }.items():
         yield key, value.model_copy(update={key: replacement})
 
@@ -60,12 +61,16 @@ def test_reconciler_resource_binds_every_fact_and_revalidates_forged_values():
     value = facts()
     resource = assignment_invalidation_resource(value)
     assert resource.resource_type == "task_authority"
+    assert assignment_invalidation_resource_digest(value) != assignment_invalidation_resource_digest(
+        value.model_copy(update={"task_status": "ready"}),
+    )
     digest = authorization_resource_digest(resource)
     for field, changed in substitutions(value):
         assert authorization_resource_digest(assignment_invalidation_resource(changed)) != digest, field
     for changed in (
         value.model_copy(update={"delivery_generation": True}),
-        value.model_copy(update={"task_status": "submitted"}),
+        # Claim starts immediately, so task status has one admitted value.
+        *(value.model_copy(update={"task_status": state}) for state in ("claimed", "ready", "submitted")),
         value.model_copy(update={"target": value.target.model_copy(update={"task_id": "not-uuid"})}),
     ):
         with pytest.raises(ValueError):

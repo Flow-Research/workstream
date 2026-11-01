@@ -52,7 +52,7 @@ def _arguments(name: str) -> dict[str, Any]:
 def _response(name: str) -> dict[str, Any]:
     # Representative entries use the backend's frozen catalogue totals.
     if name == "workstream_permissions_list":
-        return {"items": [{"permission_id": "actor.profile.read_any"}], "total": 95}
+        return {"items": [{"permission_id": "actor.profile.read_any"}], "total": 94}
     if name == "workstream_admin_roles_list":
         return {
             "items": [
@@ -219,7 +219,7 @@ def test_permission_catalogue_drift_still_fails_closed(
             {"permission_id": "task.revision.expire"},
             {"permission_id": "task.revision.recover"},
         ],
-        "total": 95,
+        "total": 94,
     }
     if malformation == "unknown_permission":
         payload["items"][0]["permission_id"] = "task.revision.unknown"

@@ -9,7 +9,7 @@ import (
 )
 
 func addOperatorTasks(operations *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
-	task := &cobra.Command{Use: "task", Short: "System Operator task inspection and explicit start override"}
+	task := &cobra.Command{Use: "task", Short: "System Operator task inspection"}
 	var limit int
 	var cursor string
 	list := &cobra.Command{
@@ -60,32 +60,8 @@ func addOperatorTasks(operations *cobra.Command, client func() (*api.Client, err
 			if *output == "json" {
 				return writeSafeJSON(stdout, result.Raw)
 			}
-			return writeTaskContextFields(stdout, []contextField{{"Operator locked context (references only; not start authority)", result.Raw}})
+			return writeTaskContextFields(stdout, []contextField{{"Operator locked context (references only)", result.Raw}})
 		},
 	})
-	var reason, key string
-	start := &cobra.Command{
-		Use: "start TASK_ID", Short: "Explicitly start an existing assignment under current system Operator authority", Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("reason") || !cmd.Flags().Changed("idempotency-key") {
-				return commandError{"invalid_arguments", "--reason and --idempotency-key are required for Operator start"}
-			}
-			apiClient, err := client()
-			if err != nil {
-				return err
-			}
-			result, err := apiClient.OverrideTaskStart(cmd.Context(), args[0], key, reason)
-			if err != nil {
-				return err
-			}
-			if *output == "json" {
-				return writeSafeJSON(stdout, result.Raw)
-			}
-			return writeMutationTask(stdout, result.Value)
-		},
-	}
-	start.Flags().StringVar(&reason, "reason", "", "Required nonblank Operator explanation (at most 1000 characters)")
-	start.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; unchanged task and reason for manual replay")
-	task.AddCommand(start)
 	operations.AddCommand(task)
 }

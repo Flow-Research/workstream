@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "7274f35298face848233619acb3df63b0a16b6510e5439bd5c5b0b10478fee01",
+  "canonical_sha256": "71a41267cce48ef486d90bae34850659edcde9455a75ffd971fcdcb928f43f95",
   "components": {
     "schemas": {
       "ApiError": {
@@ -437,10 +437,7 @@
           },
           "next_actions": {
             "items": {
-              "enum": [
-                "claim",
-                "start"
-              ],
+              "const": "claim",
               "type": "string"
             },
             "maxItems": 1,
@@ -1242,6 +1239,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/work-context",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

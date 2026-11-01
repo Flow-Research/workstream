@@ -1,6 +1,6 @@
 # Workstream MCP Adapter
 
-An independently installed adapter exposing 132 tools under the caller's authority:
+An independently installed adapter exposing 130 tools under the caller's authority:
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
@@ -61,10 +61,10 @@ An independently installed adapter exposing 132 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Eighteen task-execution tools cover bounded preparation ZIPs, contributor and
-  manager task context, screen/release/claim/start, guide-document reads and
+- Seventeen task-execution tools cover bounded preparation ZIPs, contributor and
+  manager task context, screen/release/claim, guide-document reads and
   admission-backed submission creation/history.
-- Twenty-four project, task-management, import, audit, service-actor and model
+- Twenty-three project, task-management, import, audit, service-actor and model
   operations complete the current public product catalogue. Task-import source
   content uses an 8 MiB exact-byte boundary; health routes remain operational
   liveness rather than user tools.
@@ -208,9 +208,10 @@ binds successful receipts to the requested project, policy, version and
 operation IDs, and reports unverifiable success as uncertain execution.
 
 Task execution uses separate contributor and manager read tools so the adapter
-never chooses an authority path on the caller's behalf. Screen, release, claim
-and start require typed UUID idempotency keys; claim performs only the claim
-request. Submission creation consumes caller-supplied admission and assignment
+never chooses an authority path on the caller's behalf. Screen, release and claim
+require typed UUID idempotency keys. Claim atomically assigns and starts a ready
+task through one request, returning `in_progress` and the started assignment.
+Submission creation consumes caller-supplied admission and assignment
 identifiers and stays unkeyed because that is the current backend contract.
 Preparation accepts a bounded Base64 ZIP, decodes it once and forwards the
 caller's typed assignment/key and optional submission or revision fields as the
@@ -241,7 +242,7 @@ retries. A mutation transport failure, upstream 5xx response, or unexpected
 success/redirect response is reported as non-retryable uncertain execution.
 Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the 132 selected public contracts in `contracts/`; upstream drift
+pinned to the 130 selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 

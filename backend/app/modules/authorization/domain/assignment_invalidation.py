@@ -11,7 +11,7 @@ from app.modules.tasks.api.assignment_invalidation import AssignmentInvalidation
 
 
 class AssignmentInvalidationResourceContext(BaseModel):
-    """Separate service effect facts from human claim/start authorization."""
+    """Separate service effect facts from human claim authorization."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     resource_type: Literal["task_authority"] = "task_authority"
@@ -25,7 +25,7 @@ class AssignmentInvalidationResourceContext(BaseModel):
         if (
             self.resource_id != facts.target.task_id
             or self.scope_project_id != facts.target.project_id
-            or facts.task_status not in {"claimed", "in_progress"}
+            or facts.task_status != "in_progress"
         ):
             raise ValueError("invalid assignment reconciliation facts")
         return self

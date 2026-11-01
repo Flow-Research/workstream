@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "c8b38bbff428dba4fc0eaa7cc2802c65e7f61c3a517bf4b00ab85de944bc57bb",
+  "canonical_sha256": "b6f539d6a0a1f7e6cc559eaf74751f1e5135cec2cbb58b8acea829f4a5e09be4",
   "components": {
     "schemas": {
       "ApiError": {
@@ -185,11 +185,6 @@
             "title": "Accepted",
             "type": "integer"
           },
-          "claimed": {
-            "minimum": 0.0,
-            "title": "Claimed",
-            "type": "integer"
-          },
           "draft": {
             "minimum": 0.0,
             "title": "Draft",
@@ -235,7 +230,6 @@
           "draft",
           "screening",
           "ready",
-          "claimed",
           "in_progress",
           "submitted",
           "evaluation_pending",
@@ -545,6 +539,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/task-import-batches",
-    "repository_sha": "bb39ac10aed24e3484f3155706f7a8902ef97694"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

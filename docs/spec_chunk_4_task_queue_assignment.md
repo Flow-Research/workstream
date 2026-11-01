@@ -30,7 +30,7 @@ TASK and Submission storage do not retain a parallel PaymentPolicy lineage.
   assigned contributor and locked guide/policy references.
 - `TaskAssignment` records the actual contributor and enforces one active
   assignment per task.
-- Shared audit evidence records authorized transitions. Claim/start evidence
+- Shared audit evidence records authorized transitions. Claim evidence
   identifies the canonical actor, assignment and exact authorization decision;
   it does not copy token roles or claim snapshots as authority.
 
@@ -55,11 +55,9 @@ Contributor commands and work context use canonical project authority:
 | `POST /api/v1/tasks/{task_id}/screen` | Covered Project Manager; draft; approved active guide and complete policy lineage |
 | `POST /api/v1/tasks/{task_id}/release` | Covered Project Manager; screening; frozen policy validation and nonblank decision reason |
 | `POST /api/v1/tasks/{task_id}/claim` | Active same-project Submitter; ready, unassigned task |
-| `POST /api/v1/tasks/{task_id}/start` | Active same-project Submitter; exact own active assignment |
 | `GET /api/v1/tasks/{task_id}/work-context` | Active same-project Submitter; ready unassigned task or exact own assignment |
 | `GET /api/v1/tasks/{task_id}/guide/documents/{document_id}/content` | Active exact own assignment and same-project Submitter; document must belong to task's locked snapshot; denied selectors concealed |
 | `GET /api/v1/projects/{project_id}/tasks/{task_id}/work-context` | Covered Project Manager; exact route project and task |
-| `POST /api/v1/operations/tasks/{task_id}/start` | System Operator; another contributor's active assignment and nonblank reason |
 
 ARCH-03C6 delivers the three distinct locked-context reads with exact current
 grants and removes their obsolete wrappers. ARCH-03C7 delivers bounded
@@ -181,21 +179,22 @@ not claim deployment.
 Stored task states use the canonical lowercase tokens:
 
 ```text
-draft -> screening -> ready -> claimed -> in_progress
+draft -> screening -> ready -> in_progress
 ```
 
 - Screening requires the existing project/guide and task-content prerequisites
   and stamps locked policy references; release requires complete locks.
-- Claim validates the task's locked context and creates one active assignment.
-- Normal start cannot borrow another contributor's assignment.
-- Operator start does not reassign ownership or create a contributor grant.
+- Claim validates the task's locked context, creates one active assignment and
+  immediately moves the task to `in_progress` in the same transaction.
+- The database claim time also becomes the assignment start time; no separate
+  contributor or Operator start operation exists.
 - Existing locked context remains tied to the attempt. A later guide or
   policy publication alone is not permission to rewrite that context.
 - The guide's ContributionPolicyVersion is locked before work becomes claimable
   and copied through assignment and admission-backed Submission creation by CP08.
   Claim does not perform a fresh CON lookup.
 
-For claim/start, the actor/action/idempotency-key receipt is reserved first;
+For claim, the actor/action/idempotency-key receipt is reserved first;
 task and assignment are then locked, followed by canonical actor, identity
 link and applicable grant revalidation and locking. This matches
 admission-backed Submission creation's lock order. Authorization consumes the exact locked
@@ -206,14 +205,13 @@ The receipt actor foreign key is checked at commit, after AUTH's actor lock;
 reservation must not take an earlier implicit actor lock that can deadlock
 parallel commands from the same actor. Referential integrity remains enforced.
 
-## Claim and start retries
+## Claim retries
 
-`POST /api/v1/tasks/{task_id}/claim`, `POST /api/v1/tasks/{task_id}/start`, and
-`POST /api/v1/operations/tasks/{task_id}/start` require one UUID `Idempotency-Key`
+`POST /api/v1/tasks/{task_id}/claim` requires one UUID `Idempotency-Key`
 header. Retrying the same actor/action/key and semantic request returns the
 original typed success response only after fresh current authorization and
 exact task, active assignment and locked-context checks. Claim replay requires
-the task still be claimed; start replay requires it still be in progress.
+the task still be in progress with the same active assignment.
 No duplicate assignment or lifecycle success event is created. A fresh AUTH
 decision records the replay's current authority check.
 
@@ -230,7 +228,7 @@ Revocation immediately prevents subsequent contributor commands. Closing an
 existing assignment and returning a task to the ready queue through durable
 invalidation has a hidden ARCH-03B9 operation. ARCH-03C1 supplies real service authority;
 ARCH-03C2 supplies atomic producer wiring and registered delivery. A denied
-start is not proof that the Celery assignment-reconciliation handler has run.
+contributor command is not proof that the Celery assignment-reconciliation handler has run.
 
 ## Work-context hints
 
@@ -238,7 +236,6 @@ Hints describe the current supported contributor command, not permission
 tokens and not the full planned workflow:
 
 - Ready and unassigned: `claim`.
-- Claimed with the caller's exact active assignment: `start`.
 - Otherwise: no contributor command hint.
 - Management context does not advertise contributor commands.
 - No `submit` or pre-submit execution hint is advertised by this work-context
@@ -381,8 +378,7 @@ against the task stamp. New guide activation does not replace an existing
 attempt's policy references. No CON lookup or economic rules are exposed.
 
 Only contributor context has `lifecycle`, with `assigned_to_current_actor` and
-`next_actions`. Unassigned READY advertises `claim`; own CLAIMED advertises
-`start`; other own-active states have no action hint. Task status appears only in
+`next_actions`. Unassigned READY advertises `claim`; own-active states have no action hint. Task status appears only in
 `task.status`. Hints never authorize execution. There is no `can_submit` flag or
 precheck capability; the public submission command performs its own fresh
 authority and admission checks.
@@ -496,9 +492,9 @@ one statement snapshot, not a durable export or current-at-return guarantee.
 
 Items contain event ID/type, optional from/to status, stored actor attribution,
 creation time, and optional assignment/authorization-decision IDs. Canonical
-claim/start events require both references and exact nested project/task IDs;
+claim and retained historical start events require both references and exact nested project/task IDs;
 malformed evidence fails with a sanitized error. SQL selects reference scalars
-only for the typed audit writer and canonical claim/start event types; generic
+only for the typed audit writer and canonical claim and retained historical start event types; generic
 rows cannot acquire canonical provenance by copying their tokens. Other events
 gain no inferred references. SQL extracts only four named JSON scalar references and never loads
 raw claims, roles, external identity, reasons, arbitrary payloads or policy bodies.
@@ -551,7 +547,7 @@ Validity is checked at fence acquisition; this does not freeze wall-clock time.
 No external I/O occurs after the fence. The dispatcher releases its own locks
 before calling the handler and never acquires TASK locks.
 
-Only consistent active claimed/in-progress assignments without any Submission
+Only consistent active in-progress assignments without any Submission
 can become `authority_revoked`, with a release timestamp. TASK becomes `ready`
 and clears `assigned_to`; its policy locks and all prior work remain intact.
 Submitted/evaluation/review/revision work is unchanged. The existing manager
@@ -633,7 +629,7 @@ separate internal audit evidence reader remains for its recovery consumers.
 The ready queue and standalone Contributor detail accept either active
 exact-project Submitter or Reviewer grant so both roles see both contribution
 types before work is claimed. Reviewer authority does not authorize claim,
-start, contributor work context, intake requirements or another contributor's
+contributor work context, intake requirements or another contributor's
 claimed task. Revoked, missing and foreign-project grants retain the same
 concealed response.
 

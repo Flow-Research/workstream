@@ -98,7 +98,7 @@ class AssignmentInvalidationOperation:
                     "assignment reconciliation receipt differs from state"
                 )
             return HandlerOutcome.ACKNOWLEDGE
-        if task.status not in {"claimed", "in_progress"} or await self._repo.has_submission(
+        if task.status != "in_progress" or await self._repo.has_submission(
             target.task_id
         ):
             return HandlerOutcome.ACKNOWLEDGE

@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "e73bd0a8756d4d39a68cb132ab491691f160115a237b17d097efb7dfe877c2c4",
+  "canonical_sha256": "c08ddf466d13a8ac0a3241e2b9beede0cda9eaf798fda8a446036685e25bdc0f",
   "components": {
     "schemas": {
       "AdminRole": {
@@ -213,7 +213,6 @@
           "operations.reconcile.run",
           "operations.outbox.retry",
           "operations.projection.rebuild",
-          "operations.task.start_override",
           "operations.submission_gate.repair",
           "operations.checker.retry",
           "artifact.binding.read",
@@ -443,7 +442,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "authorization.admin_role_definitions.read",
-    "backend_git_sha": "3a1d2b53062c534d199f7d7087832b66d2c0b72a",
+    "backend_git_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/authorization/admin-role-definitions"

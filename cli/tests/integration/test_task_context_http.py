@@ -440,6 +440,7 @@ def test_work_context_rejects_incomplete_nested_or_management_facts(cli):
             ("lifecycle", "next_actions", [None]),
             ("lifecycle", "next_actions", ["accept"]),
             ("lifecycle", "next_actions", ["claim", "start"]),
+            ("lifecycle", "next_actions", ["start"]),
         ):
             value = deepcopy(CONTEXT)
             value[section][field] = wrong

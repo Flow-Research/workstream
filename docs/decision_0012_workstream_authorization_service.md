@@ -87,9 +87,9 @@ background workers are internal services, not human product roles.
 Administrative roles alone do not authorize submission, review, or
 adjudication.
 
-The three additive Operator recovery permissions approved with this ADR are:
-
-- `operations.task.start_override`
+The original ADR also registered `operations.task.start_override`; it is removed
+from the current catalogue because claim starts work atomically. Retained audit
+evidence is unchanged. The remaining recovery permission declarations are:
 - `operations.submission_gate.repair`
 - `operations.checker.retry`
 

@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "7fa83907ecc7340dc78715c05bba3597e7da7b13a80b3223981fb4dcbbd71382",
+  "canonical_sha256": "23488b5ab933184dadb3bcfb7b4b7540b83d43a1c53b3461a2f31bb8bdfda3a5",
   "components": {
     "schemas": {
       "ApiError": {
@@ -100,7 +100,6 @@
           },
           "next_action": {
             "enum": [
-              "start",
               "prepare_submission",
               "awaiting_evaluation",
               "revise",
@@ -162,7 +161,6 @@
                   "draft",
                   "screening",
                   "ready",
-                  "claimed",
                   "in_progress",
                   "submitted",
                   "evaluation_pending",
@@ -1013,6 +1011,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/assignments",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

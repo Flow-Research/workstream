@@ -1,4 +1,4 @@
-"""One real manager preparation journey reused by contributor claim/start proof."""
+"""One real manager preparation journey reused by contributor claim proof."""
 
 import json
 from uuid import uuid4

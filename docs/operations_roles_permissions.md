@@ -62,7 +62,7 @@ mutation action.
 
 | Grant | Scope | Purpose |
 |---|---|---|
-| Submitter | exact project | Minimal project read, ready/detail discovery with locked compensation, claim/start under task guards, own submission creation/read. |
+| Submitter | exact project | Minimal project read, ready/detail discovery with locked compensation, claim under task guards, own submission creation/read. |
 | Reviewer | exact project | Minimal project read, ready/detail discovery with both locked contribution types, and the planned server-selected current-work/claim/release/decision capabilities under exact review guards. |
 
 Contributor is the umbrella human product term. A contributor may hold
@@ -89,7 +89,7 @@ or the exact project; own means record-level ownership still applies.
 | Task management | no | explicit recovery only | covered | no | read covered | no | no |
 | Checker revision-context repair | no | no | covered, exact preparation head | no | no | no | no |
 | Ready task queue/detail | no | no | no | no | no | exact project under guards | exact project under guards |
-| Task claim/start | no | explicit recovery only | no | no | no | exact project under guards | no |
+| Task claim | no | no | no | no | no | exact project under guards | no |
 | Submission create/read | no | operational projection only | management projection only | no | read covered | own assignment | read-for-review only |
 | Own projects, claims, attempts, preparations and totals | own grants only | own grants only | own grants only | own grants only | own grants only | own records, exact project under current grant | own grants only |
 | Project guides, submissions, assignments, summary, import batches and preparations | no | no | covered, including summary award totals | no | no | no | no |
@@ -172,7 +172,6 @@ Recovery is a separate, reasoned, audited path.
 | Operation | Permission | Actor |
 |---|---|---|
 | Normal covered task/setup repair | `project.task.manage` | Covered Project Manager |
-| Task start override | `operations.task.start_override` | Operator |
 | Submission gate repair (planned; unavailable) | `operations.submission_gate.repair` | Operator |
 | Checker recovery-source discovery (active public read) | `operations.status.read` via `operations.checker_retry_source.list` | System Operator for one exact project |
 | Checker terminal-failure retry (active public operation) | `operations.checker.retry` | System Operator under exact terminal-failure guards |

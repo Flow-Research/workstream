@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "5d7bf71b7856e75aa580081db7ef26633ec08f6b0979021372128da6e8729beb",
+  "canonical_sha256": "6fb9be70af4bd548b1e2b432e707df1df5cc2e6b0b26e1cea7cbfd30d0da97a0",
   "components": {
     "schemas": {
       "ApiError": {
@@ -572,6 +572,7 @@
     }
   },
   "operation": {
+    "description": "Claim ready work and atomically enter in_progress with started_at=assigned_at.",
     "operationId": "claim_task_api_v1_tasks__task_id__claim_post",
     "parameters": [
       {
@@ -890,6 +891,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/claim",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

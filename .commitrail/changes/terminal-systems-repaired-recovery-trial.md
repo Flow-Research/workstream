@@ -96,6 +96,77 @@ do not create separate repair PRs. The sections below bound the additional
 demonstrated setup defect and live qualification. Component test passes do not
 constitute a completed hosted journey.
 
+## Claim immediately starts work
+
+### Intent and scope
+
+Claiming is the contributor's decision to start work. A separate start operation
+adds no policy or eligibility gate and unnecessarily blocks ZIP preparation.
+The user requires this correction and its client/storage reconciliation in this
+same drill PR before the first real task claim. No additional repair PR is needed.
+
+Allowed: TASK claim/lifecycle/queue/read contracts, routes and replay validation;
+their AUTH action definitions and audit writers; one additive Alembic migration
+and matching model/environment/fingerprint checks; affected backend fixtures and
+regressions; CLI API/commands/TUI and MCP tools/contracts/tests; current task,
+authorization, CLI/MCP and lifecycle documentation, roadmap and drill report.
+Shared ownership/test inventories may change only to account for those files,
+without weakening boundaries or selection. Historical migrations and retained
+audit/receipt data are not rewritten. Existing history readers must still read
+authentic historical start facts.
+
+Prohibited: claim expiry/skip, human-review activation, changed eligibility,
+authorization shortcuts, lock-order changes unrelated to claim atomicity,
+compatibility start routes/aliases, receipt rewriting, data deletion, payment
+delivery, new subsystems or weakened tests/CI. Earlier section exclusions remain
+applicable to their own repairs; this explicit scope authorizes this migration.
+
+### Implementation sequence
+
+1. Retain the existing claim AUTH, lock order, policy locking and idempotency
+   operation. Insert the assignment, transition directly ready -> in_progress,
+   then stamp started_at from its database-generated assigned_at within that
+   same transaction. Preserve the assignment timestamp guard's insert/update
+   ordering and emit one TaskClaimed audit event with explicit claim provenance.
+2. Remove executable contributor and Operator start actions and all API/CLI/MCP
+   callers. Claim responses and current queues expose in_progress immediately.
+   Preserve immutable historical action/event values and their read validation.
+3. Add a locked, atomic migration for retained claimed tasks: require exact
+   active accepted assignment, project/assignee/locked ContributionPolicy and
+   absence of Submission or contradictory start facts; reject ambiguous data.
+   Convert validated rows to in_progress and stamp an absent started_at from
+   assigned_at. This is a semantics conversion, not newly asserted historical
+   activity. Remove claimed from the current task-state constraint. Preserve
+   stored audit and replay records byte-for-byte; an old captured claim receipt
+   may correctly conflict with changed current state after fresh authorization.
+4. Reconcile current specs/clients and resume the real drill using claim alone.
+
+### Acceptance, risk and verification
+
+Risk: L1 (authorization, transaction, retained data and public contracts).
+Required focused plan/implementation tracks: security, architecture,
+product/operations, QA/test-delta, documentation and CI integrity for inventory
+changes. Human focus: one claim operation, unchanged access/locked rules,
+atomic timestamp/state conversion and preserved historical evidence.
+
+- Public claim immediately returns in_progress and an active assignment whose
+  started_at equals assigned_at; ZIP preparation/submission needs no start call.
+- Exact replay creates no extra assignment/event; concurrent claim, foreign or
+  revoked authority, policy lineage and failure rollback remain protected.
+- A regression fails against the prior claim implementation at the intended
+  immediate-state assertion. Existing timestamp guards still reject premature
+  or inconsistent writes.
+- Real PostgreSQL upgrade tests prove valid conversion, unchanged retained
+  audit/receipts, and atomic refusal of inconsistent lineage. Fresh storage
+  rejects claimed. Historical evidence remains readable; old replay cannot
+  bypass fresh AUTH or silently return rewritten facts.
+- Removed HTTP/CLI/MCP start surfaces have no fallback; affected clients and
+  all meaningful former start/claim tests are reconciled without losing required
+  ownership, locked-lineage, rollback or concurrency proof.
+- Run focused owner/contract/PostgreSQL tests, full hosted selection, boundary,
+  stale-wording and Markdown-link checks, followed by the public hosted drill.
+  Distinguish local tests, hosted CI and live drill evidence in the report.
+
 ## Setup evaluation-context declaration repair
 
 ### Intent

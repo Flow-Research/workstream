@@ -70,7 +70,7 @@ type TaskFilters struct {
 }
 
 var taskStatuses = []string{
-	"draft", "screening", "ready", "claimed", "in_progress", "submitted",
+	"draft", "screening", "ready", "in_progress", "submitted",
 	"evaluation_pending", "review_pending", "needs_revision", "accepted",
 }
 

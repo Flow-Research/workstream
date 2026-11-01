@@ -117,7 +117,7 @@ func TestContextRetainsExactLockedPolicyAndRevisionReferences(t *testing.T) {
 	context := guideContext()
 	context.ReviewPolicy = api.ContextPolicy{PolicyID: runID, Generation: 17, PolicyHash: reviewHash}
 	context.RevisionPolicy = api.ContextPolicy{PolicyID: findingID, Generation: 23, PolicyHash: revisionHash}
-	context.Lifecycle.NextActions = []string{"start"}
+	context.Lifecycle.NextActions = []string{}
 	context.RevisionContext = &api.RevisionContext{
 		PreparationID: actorID, PreparationSHA256: preparationHash,
 		PredecessorPreparationID: &predecessor, SourceSubmissionID: submissionID,
@@ -130,7 +130,7 @@ func TestContextRetainsExactLockedPolicyAndRevisionReferences(t *testing.T) {
 	}
 	m := &Model{context: &context, section: 1, noColor: true}
 	rendered := m.detailText()
-	orderOf(t, rendered, "Assignment", "Task: "+taskID, "Project: "+projectID, "Assigned to current actor: true", "Observed action hints (not authority): start", "Locked rules", "Revision context")
+	orderOf(t, rendered, "Assignment", "Task: "+taskID, "Project: "+projectID, "Assigned to current actor: true", "Observed action hints (not authority): ", "Locked rules", "Revision context")
 	for _, exact := range []string{
 		"Guide: " + actorID, "Locked guide version: locked-v1",
 		"Review policy: " + runID, "Review policy generation: 17", "Review policy hash: " + reviewHash,

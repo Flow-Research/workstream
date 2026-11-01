@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "6618d63d6c584f699a3c0d1fad57a46007d8f511cee16a6f82f4cc03588f2377",
+  "canonical_sha256": "11e4ec9b875137a9c2c256aad0790728a0522d141a6d5056046d703b1def13fc",
   "components": {
     "schemas": {
       "ApiError": {
@@ -216,11 +216,6 @@
             "title": "Accepted",
             "type": "integer"
           },
-          "claimed": {
-            "minimum": 0.0,
-            "title": "Claimed",
-            "type": "integer"
-          },
           "draft": {
             "minimum": 0.0,
             "title": "Draft",
@@ -266,7 +261,6 @@
           "draft",
           "screening",
           "ready",
-          "claimed",
           "in_progress",
           "submitted",
           "evaluation_pending",
@@ -546,6 +540,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/summary",
-    "repository_sha": "bb39ac10aed24e3484f3155706f7a8902ef97694"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

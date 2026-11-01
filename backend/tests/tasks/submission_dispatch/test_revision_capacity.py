@@ -629,11 +629,7 @@ async def test_expiry_allows_new_assignment_initial_at_next_global_version(
             assert claim.status_code == 200, claim.text
             new_assignment_id = UUID(claim.json()["assignment"]["id"])
             assert new_assignment_id != old_assignment_id
-            started = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/start",
-                headers={"Idempotency-Key": str(new_record_id())},
-            )
-            assert started.status_code == 200, started.text
+            assert claim.json()["task"]["status"] == "in_progress"
 
             preparation = SubmissionBundlePreparationRequest(
                 actor=ActorIdentityFacts(

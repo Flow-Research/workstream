@@ -624,7 +624,7 @@ async def test_contributor_operation_commits_before_lifecycle_change(
     assert isinstance(observed_after_task_commit, dict)
     if operation == "claim":
         assert task_result.assignment.contributor_id == race.contributor_id
-        assert observed_after_task_commit["task"] == ("claimed", UUID(race.contributor_id))
+        assert observed_after_task_commit["task"] == ("in_progress", UUID(race.contributor_id))
         assignments = observed_after_task_commit["assignments"]
         assert isinstance(assignments, list)
         assert len(assignments) == 1

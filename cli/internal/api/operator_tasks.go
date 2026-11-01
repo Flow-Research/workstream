@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"unicode/utf8"
 )
 
 // OperationalTaskSummary is the status-only system-Operator queue projection.
@@ -141,30 +140,4 @@ func (c *Client) OperationalTaskLockedContext(ctx context.Context, project, sele
 		}
 	}
 	return Result[OperationalTaskLockedContext]{Raw: raw, Value: value}, nil
-}
-
-func operatorTaskFailure(err error) error {
-	var failure *Failure
-	if errors.As(err, &failure) && failure.OutcomeUnknown {
-		copy := *failure
-		copy.RecoveryHint = "Operator start outcome unknown; inspect the exact task as observation only, then manually replay only the unchanged override action, task, reason and idempotency key; do not use contributor start"
-		return &copy
-	}
-	return err
-}
-
-func (c *Client) OverrideTaskStart(ctx context.Context, selector, key, reason string) (Result[MutationTask], error) {
-	var result Result[MutationTask]
-	if !utf8.ValidString(reason) || strings.TrimSpace(reason) == "" || utf8.RuneCountInString(reason) > 1000 {
-		return result, errors.New("--reason must contain 1–1000 characters and not be blank")
-	}
-	raw, err := c.taskWriteRoute(ctx, "/api/v1/operations/tasks/", selector, "start", key, &reason, maxResponseBytes)
-	if err != nil {
-		return result, operatorTaskFailure(err)
-	}
-	value, err := decodeMutationTask(raw, selector, "in_progress")
-	if err != nil || !c.safeMutationResponse(raw) {
-		return result, operatorTaskFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
-	}
-	return Result[MutationTask]{Raw: raw, Value: value}, nil
 }

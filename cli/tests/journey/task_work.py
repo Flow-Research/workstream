@@ -83,7 +83,8 @@ def claim_and_read(client, tokens, actors, project_id):
             client, tokens["manager"], "project", "task", action, project_id, task_id
         )
     claimed = replay_transition(client, tokens["alice"], "task", "claim", task_id)
-    replay_transition(client, tokens["alice"], "task", "start", task_id)
+    if claimed["task"]["status"] != "in_progress":
+        raise AssertionError("claim did not immediately start work")
     documents = client.call(tokens["alice"], "task", "guide", task_id)
     denied = client.call(tokens["bob"], "task", "guide", task_id, expected_exit=1)
     if denied["error"].get("status") != 404:

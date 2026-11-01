@@ -322,8 +322,8 @@ the caller's current authority, preserving contributor-minimal disclosure.
 provide a paginated manager list-to-detail journey through public reads.
 `workstream task ready PROJECT_ID` and `task show TASK_ID` provide contributor
 discovery and instructions, with live Submitter authority and no task claim.
-`workstream task claim TASK_ID --idempotency-key UUID` and `task start` add
-contributor writes through existing public APIs, with server-owned authority,
+`workstream task claim TASK_ID --idempotency-key UUID` assigns and starts work
+atomically through existing public APIs, with server-owned authority,
 explicit caller retry keys and uncertain-outcome reporting without automatic retries.
 `workstream task context TASK_ID` and `task requirements TASK_ID` inspect the
 governing guide/policy selectors, server action hints and locked intake rules.
@@ -598,7 +598,7 @@ removing their old role/creator wrappers. PILOT-14 adds the task-locked
 ContributionPolicyVersion compensation block to ready summaries and Contributor
 detail for active exact-project Submitters or Reviewers. It exposes only unpaid
 or instrument/unit/exact-quantity terms, never Finance binding or route facts;
-claim/start authority remains Submitter-only. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
+claim authority remains Submitter-only. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
 locked-context reads with exact current grants. ARCH-03C7 exposes bounded task
 history only to covered Audit Authority and removes the old payload-bearing
 task-only audit route. AUTH-18 delivers public manager guide activation;

@@ -68,7 +68,7 @@ async def test_reconciler_lifecycle_denies(task_client, monkeypatch, status):
     if status != "missing":
         await service_status(s, status)
     before = await snapshot(s)
-    assert before[0]["status"] == "claimed" and before[1][0]["status"] == "active"
+    assert before[0]["status"] == "in_progress" and before[1][0]["status"] == "active"
     assert await s.handler(envelope) is HandlerOutcome.REJECT
     assert [stage for stage, _ in s.trace] == ["prepare"]
     assert await snapshot(s) == before

@@ -24,7 +24,7 @@ class ContributorTaskLifecycle(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     assigned_to_current_actor: bool
-    next_actions: tuple[Literal["claim", "start"], ...] = Field(max_length=1)
+    next_actions: tuple[Literal["claim"], ...] = Field(max_length=1)
 
 
 class _TaskWorkContext(BaseModel):

@@ -90,7 +90,7 @@ async def test_two_granted_claimants_have_one_atomic_winner(task_client, monkeyp
         assignments = list(await session.scalars(select(TaskAssignment).where(TaskAssignment.task_id == task["id"])))
         assert len(assignments) == 1 and assignments[0].id == winner.assignment.id
         stored_task = await session.get(WorkstreamTask, task["id"])
-        assert stored_task.status == "claimed" and stored_task.assigned_to == winner.assignment.contributor_id
+        assert stored_task.status == "in_progress" and stored_task.assigned_to == winner.assignment.contributor_id
         decisions = list(await session.scalars(select(AuditEvent).where(AuditEvent.action_id == "task.claim")))
         assert len(decisions) == 1 and decisions[0].after_facts["allowed"] is True
         events = list(await session.scalars(select(AuditEvent).where(
@@ -214,7 +214,7 @@ async def test_project_grant_revocation_serializes_with_claim(
             assert assignments == []
         else:
             assert isinstance(claim_result, TaskWithAssignmentResponse), claim_result
-            assert stored_task.status == "claimed"
+            assert stored_task.status == "in_progress"
             assert stored_task.assigned_to == grant["actor_profile_id"]
             assert len(assignments) == 1
             assert assignments[0].id == claim_result.assignment.id

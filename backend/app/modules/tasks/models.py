@@ -104,7 +104,7 @@ class WorkstreamTask(Base):
     __table_args__ = (
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         CheckConstraint(
-            "status in ('draft','screening','ready','claimed','in_progress','submitted','evaluation_pending','review_pending','needs_revision','accepted')",
+            "status in ('draft','screening','ready','in_progress','submitted','evaluation_pending','review_pending','needs_revision','accepted')",
             name="status",
         ),
         CheckConstraint(
@@ -396,7 +396,7 @@ class TaskAssignment(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="active", index=True)
-    # Set once by the start transition; PostgreSQL guards it against the started task.
+    # Set once when claim starts work; PostgreSQL guards it against the started task.
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # PostgreSQL owns this stamp on every committed change.
     updated_at: Mapped[datetime] = mapped_column(

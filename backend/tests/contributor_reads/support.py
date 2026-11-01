@@ -44,15 +44,15 @@ def preparations_path(task):
 
 
 async def start_another(client, monkeypatch, project, subject=OWNER):
-    """Claim and start one more ready task for an already granted contributor."""
+    """Claim one more ready task for an already granted contributor."""
     from tests.test_tasks import create_ready_task
 
     set_dev_actor(monkeypatch, roles="project_manager", subject=MANAGER)
     task = await create_ready_task(client, project)
     set_dev_actor(monkeypatch, roles="", subject=subject)
-    for action in ("claim", "start"):
-        response = await client.post(f"/api/v1/tasks/{task['id']}/{action}", headers=auth_headers(),
-                                     json={"reason": action})
-        assert response.status_code == 200, response.text
+    response = await client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers(),
+                                 json={"reason": "Claim another task"})
+    assert response.status_code == 200, response.text
+    assert response.json()["task"]["status"] == "in_progress"
     set_dev_actor(monkeypatch, roles="worker", subject=subject)
     return task["id"]

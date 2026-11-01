@@ -1,23 +1,23 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
-**Current rehearsal: IN PROGRESS. No real-project release pass is claimed.** This report implements the evidence structure for [#555](https://github.com/Flow-Research/workstream/issues/555) and the [bounded rehearsal record](../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md#authorized-hosted-drill-and-reporting). Bootstrap deployment used source `ac637495f`; the separately sealed repair release now runs source `0659c749`. Live setup recovery is in progress; no Submission or final contribution outcome is claimed.
+**Current rehearsal: IN PROGRESS. No real-project release pass is claimed.** This report implements the evidence structure for [#555](https://github.com/Flow-Research/workstream/issues/555) and the [bounded rehearsal record](../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md#authorized-hosted-drill-and-reporting). The latest qualified setup release used source `1e32931b`. Real setup, an explicit manager correction, separate PRE/POST approvals and review/revision policy configuration completed. Claim-as-start is being corrected before task intake resumes. No Submission or final contribution outcome is claimed. The host was restarted on November 1; restoring complete service readiness remains separate from the retained setup evidence.
 
-The target is original project guide -> approved locked policies -> released task -> claim/start -> ZIP intake feedback or immutable Submission -> durable POST -> governed outcome -> exact contribution evidence. Use explicitly PM-approved `human_review_required=false`. Preserve default-true handoff guards; live human review, payment delivery, reputation, frontend and claim expiry/skip remain deferred. #496 is excluded.
+The target is original project guide -> approved locked policies -> released task -> claim (starts work) -> ZIP intake feedback or immutable Submission -> durable POST -> governed outcome -> exact contribution evidence. Use explicitly PM-approved `human_review_required=false`. Preserve default-true handoff guards; live human review, payment delivery, reputation, frontend and claim expiry/skip remain deferred. #496 is excluded.
 
 ## Release and project provenance
 
 | Required binding | Current-run value |
 |---|---|
-| Executed source commit and exact review/CI evidence | `0659c749`; focused implementation reviews passed. Canonical image verification, fresh AWS proof, preflight and five-service health passed. The current PR also repairs instruction guidance and POST requirement identity; those new repairs still need image/runtime qualification, fresh full CI and the complete journey. |
-| Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | All five use verified agents derivative `sha256:feeaf0935bc283f29e898821acddcb12de904cf4a4880f75b9743ef9f48ee96c`; public fixture CA is the only derivative change. OmniCore image construction also verified, but this run uses the OpenAI Agents SDK. |
-| Native service, Smol, guest and configured cache/archive/config digests | Smol 1.31.4; service `sha256:5e5760b898017453feb821a24066dc78201249ce39a1eb2f3eb27fffef100ba0`; exact four cache entries and three trial bindings pass preflight. No live task trial yet. |
+| Executed source commit and exact review/CI evidence | `1e32931b` for the completed setup and approvals; exact image/AWS/native qualification passed for that source. Main reconciliation and claim consolidation need fresh release qualification and the remaining journey. |
+| Backend API, Celery worker/Beat, parser and proxy image digests and fixture derivatives | The qualified setup release used verified agents derivative `sha256:3eec6b4d0877e46d09d95645ec73b5733b674b6b6ab7593cbf79cf3f02054c9f` for all five; public fixture CA is the only derivative change. OmniCore image construction also verified, but this run uses the OpenAI Agents SDK. |
+| Native service, Smol, guest and configured cache/archive/config digests | Smol 1.31.4; service `sha256:5e5760b898017453feb821a24066dc78201249ce39a1eb2f3eb27fffef100ba0`; exact five cache entries and three trial bindings passed preflight. No live task trial yet. |
 | Migration head; non-secret release/configuration fingerprints; Celery worker topology | `0064_checker_trial_evidence`; one prefork Celery worker with concurrency 2 and one Beat; native config `sha256:de1ea6de41d14887c600ed938f8757ffbfb110056089459bd20384983af15e8d`. |
 | Identity qualification; issuer/key configuration digest, without subject/token | Authorized simulated HTTPS/JWKS issuer through the actual verifier; six distinct admitted actors. JWKS digest `sha256:70718dcfcb5c4052d01764b05a73e1eada122d945f88f4342395f27e23be1ded`. No production Flow issuer certification. |
 | AWS candidate activation/freshness and non-secret proof fingerprint | Exact release readiness, runtime immutability and negative-access probes passed; namespace `sha256:cf487c3b9b8ae93579939f80cb245ca79c25a5641fb3d5ce461abc16f0f4bad7`. Refresh timer active; evidence freshness is time-bounded. |
 | Original guide/task-example/import/positive/negative package SHA-256 values | Public guide exact-byte proof and three local ZIP fingerprints recorded below. Task import not yet executed. |
-| Project/guide/setup/correction/result IDs and requirement mapping | Project `01a17c77-eb01-7945-8b6d-0fe92c2d4be7`; guide `01a17caa-6fd9-761e-a3b6-4a0cd1623f9f`; setup `01a17caa-7014-7415-a67f-895a1cb54a1f`. No compilation result. |
-| Registry/config/model-profile IDs/digests and exact approved bindings | Nine entries registered/read/replayed; full receipt manifest `sha256:23651b6f563d3415404427958b43f33c3bbc87ab60dcd277e6fdd4b3194984d9`. Project policy approval remains pending. |
-| PRE/POST approvals; ReviewPolicy, revision and ContributionPolicy versions; activation/LIVE identities | NOT RUN |
+| Project/guide/setup/correction/result IDs and requirement mapping | Project `01a17c77-eb01-7945-8b6d-0fe92c2d4be7`; current guide `01a17d0a-cec1-786f-bf90-594f9dec5c82`; corrected compilation `01a17d13-d490-7ec8-b403-dfb17d3c3f3e`. Earlier failed guide remains retained. |
+| Registry/config/model-profile IDs/digests and exact approved bindings | Original PRE and eight updated POST entries registered/read/replayed; updated receipt manifest `sha256:c99e833020d68f6f5e7a142afe9014b634a311fa3324e7e01a1cab6e5f9c2a9b`. Corrected proposal bindings independently inspected and approved. |
+| PRE/POST approvals; ReviewPolicy, revision and ContributionPolicy versions; activation/LIVE identities | Separate approvals and review/revision selections completed as listed below; ContributionPolicy publication, activation and LIVE remain unrun. |
 | Task/assignment/Submission/checker/routing/acceptance/contribution/award IDs | NOT RUN |
 | Private evidence manifest fingerprint, observation interval and cleanup inventory | Deployment snapshot at 10:06 UTC: `sha256:0dea8330260de284fb7e8fbc3916e7e62c260649d2491a1f342bfa5e6a663578`, binding 31 evidence files. Final journey/cleanup manifest pending; retained product data untouched. |
 
@@ -37,7 +37,7 @@ Some issue/onboarding prose retains historical gVisor or unavailable-POST descri
 
 ## Current capability scenarios
 
-### Current observations
+### Bootstrap observations (October 27)
 
 - EC2 is running with approximately 39 GiB free on its root disk. SSH was
   initially unreachable because the operator's network address changed; adding
@@ -153,6 +153,43 @@ the policy requirement identifier independently. It needs a new qualified POST
 image and registrations; PRE production remains unchanged. No real POST run or
 policy approval is claimed from this inspection.
 
+### Corrected setup and manager agreement
+
+Release `sha256:4ba75415370a84bda3c02f097eae53418942bcdddfc023385df9dbe890a649a8`
+qualified the instruction and POST requirement-identity repairs at `1e32931b`.
+The new POST image is
+`sha256:bff40d104b6a3debe1308bd59f00fedfd7be61f83e39c4dcc1fcdf585ee8f9ee`;
+eight new immutable registrations retain the original PRE registrations.
+
+Guide `01a17d0a-cec1-786f-bf90-594f9dec5c82` stored the unchanged original
+and completed real OpenRouter inference through the OpenAI Agents SDK using
+`openai/gpt-5.6-terra`. The initial proposal selected older POST registrations.
+A public manager correction requested the exact new registrations and missing
+model/prepared-context dependencies. Its pending identifiers were rediscovered
+through the public read before dispatch, rather than supplied from the creation
+response. The predecessor and earlier failed attempt remain retained.
+
+Corrected compilation `01a17d13-d490-7ec8-b403-dfb17d3c3f3e` has target digest
+`sha256:25e8463dcd738c19ac0730ce43714f5dcf9a9a9266786aff51733ee47754c291`.
+Independent inspection confirmed two PRE and eight POST checks against the
+original guide, exact registrations, configuration, dependencies and citations.
+A foreign contributor's approval request returned concealed 404 with unchanged
+proposal reads. Manager PRE approval succeeded, the durable worker derived the
+POST policy, and a separate manager POST approval succeeded.
+
+- PRE policy: `01a17d16-90da-7306-b6cb-3472c9b2ccf1`.
+- POST policy: `01a17d16-937f-7499-a32f-05e8490a736a`.
+- Review policy: `01a17d18-46d4-708a-a4f7-ec07da0f30e2`, generation 1,
+  explicitly `human_review_required=false`.
+- Revision policy: `01a17d18-47b9-72ce-a0cc-8a8cba7acfaf`, generation 1,
+  two rounds and a 48-hour revision window.
+
+Public management reads confirmed both selections. Finance publication and
+complete guide activation remain unrun. A November 1 read-only ledger check
+confirmed the corrected compilation is persisted, all four correction effects
+are completed, total settled spend is **US$1.977822**, and reserved spend is zero.
+The same US$10 lifetime cap leaves **US$8.022178**; no budget was reset.
+
 ### Original queue package: local qualification
 
 The genuinely authored `queue-recovery` package has a functioning buggy starter,
@@ -186,12 +223,12 @@ Every result below starts at `NOT RUN`; this denotes missing current-run evidenc
 | Identity/admission: admit distinct PM, Finance, Operator and contributor humans through the verifier | Identity alone supplies no project authority; explicit grants control actions | PASS | Six distinct fixture actors admitted; canonical grants issued through public APIs. Unrelated contributor denied the guide reads below. Simulated issuer only. |
 | Authorization: unrelated actor/project/resource, revoked grant/link and stale replay | Deny without unauthorized effects or private disclosure; replay checks current authority | NOT RUN | — |
 | Guide custody: create/upload unchanged original and download through public reads | Exact digest/size/bytes and unrelated-actor denial; duplicate upload retains original custody | PASS | Manager detail, original download and setup read returned 200; each corresponding unrelated-contributor read returned concealed 404. Same-key upload returned 202, replayed=true, identical document/hash/byte count. |
-| Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | FAIL | The repaired SDK completed seven paid calls, but final setup output was schema-invalid. No compilation/proposal was accepted. Diagnosis in progress before another paid attempt. |
-| PM correction and agreement: inspect current proposal against guide and packages | Supported successor preserves predecessor; required uncovered checks block approval/activation | NOT RUN | — |
-| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Nine public registry registrations, reads and same-key replays retain exact identities. Profiles published against the one project budget. Actual project bindings remain unapproved. |
-| Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | NOT RUN | — |
+| Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | PASS | Earlier schema-invalid attempt retained; fresh guide setup and explicit manager correction produced the persisted, independently inspected compilation above. |
+| PM correction and agreement: inspect current proposal against guide and packages | Supported successor preserves predecessor; required uncovered checks block approval/activation | PASS | Public correction, read-discovered dispatch and exact source/registration inspection completed; predecessor retained. |
+| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Nine public registry registrations, reads and same-key replays retain exact identities. Profiles published against the one project budget. Corrected project bindings received separate PRE/POST approval. |
+| Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | IN PROGRESS | Separate approvals and explicit false review policy/readback passed. Finance publication and guide activation remain. |
 | Task creation/import/screen/release: import original briefs and exercise manager operations | Exact task/source/batch receipts; locks preserved; replay creates no duplicates | NOT RUN | — |
-| Contributor workspace: discover/read task, claim/start and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | NOT RUN | — |
+| Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | NOT RUN | — |
 | Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | NOT RUN | — |
 | Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | NOT RUN | — |
 | Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | NOT RUN | — |
@@ -224,8 +261,8 @@ CLI, MCP and TUI surfaces are implemented separately. Record any exercised clien
 |---|---|---|
 | Original Terminal Systems rehearsal | Earlier uncertain setup spend remains retained separately; do not reset it or mark it free | Unresolved historical spend; no new dispatch against this allowance |
 | Separately authorized model-only qualification | Preserve its existing project/account and US$0.016527 settled ledger. A model-plus-trial continuation reuses that account/headroom; no automatic new allowance or transfer to a fresh real-project account | NOT RUN |
-| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | Account provisioned through public API; at 10:06 UTC seven completed effects settled US$0.7242128 total, reserved US$0, remaining ceiling US$9.2757872 |
-| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Original pre-effect failure retained. Same-attempt recovery settled seven effects and ended schema-invalid; no automatic new paid attempt or budget reset. |
+| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | November 1 read-only account observation: US$1.977822 settled, US$0 reserved, US$8.022178 remaining against the unchanged cap |
+| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Earlier failure retained. Fresh setup and explicit manager correction completed within the same account; no paid POST attempt yet and no budget reset. |
 
 Pinned-rate ledger settlement is not provider-invoice reconciliation. An unresolved paid effect is a held effect, not a free retry. See [shared accounting](../../.commitrail/changes/checker-model-runtime.md) and [the later separate qualification authority](../../.commitrail/changes/hosted-smol-project-execution.md#live-model-qualification-authority).
 

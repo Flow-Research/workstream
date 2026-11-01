@@ -87,7 +87,6 @@ class PermissionId(StrEnum):
     OPERATIONS_RECONCILE_RUN = "operations.reconcile.run"
     OPERATIONS_OUTBOX_RETRY = "operations.outbox.retry"
     OPERATIONS_PROJECTION_REBUILD = "operations.projection.rebuild"
-    OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
     ARTIFACT_BINDING_READ = "artifact.binding.read"
@@ -132,7 +131,6 @@ class ActionId(StrEnum):
     PROJECT_TASK_RELEASE = "project.task.release"
     PROJECT_TASK_REVISION_REPAIR = "project.task.revision.repair"
     TASK_CLAIM = "task.claim"
-    TASK_START = "task.start"
     TASK_READ = "task.read"
     TASK_SUBMISSION_REQUIREMENTS_READ = "task.submission_requirements.read"
     PROJECT_TASK_READ = "project.task.read"
@@ -230,7 +228,6 @@ class ActionId(StrEnum):
     PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE = "project.post_submit_checker_policy.derive"
     PROJECT_SETUP_RUN_UPDATE = "project.setup_run.update"
     PROJECT_GUIDE_ACTIVATE = "project.guide.activate"
-    OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
     OPERATIONS_CHECKER_RETRY_SOURCE_LIST = "operations.checker_retry_source.list"
@@ -539,7 +536,6 @@ NEW_PERMISSION_IDS = frozenset(
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
         PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
-        PermissionId.OPERATIONS_TASK_START_OVERRIDE,
         PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         PermissionId.OPERATIONS_CHECKER_RETRY,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
@@ -567,9 +563,9 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 95 or len(ACTION_IDS) != 192:
+    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 190:
         raise RuntimeError("authorization catalogue count mismatch")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 46:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 45:
         raise RuntimeError("authorization permission boundary mismatch")
 
 
@@ -748,11 +744,9 @@ def _index_actions(
         if definition.availability is ActionAvailability.ACTIVE
     } != _ACTIVE_ACTION_BOUNDARY | CONTRIBUTION_READ_ACTIONS | CONTRIBUTOR_READ_ACTIONS | {
         ActionId.TASK_CLAIM,
-        ActionId.TASK_START,
         ActionId.TASK_WORK_CONTEXT_READ,
         ActionId.TASK_GUIDE_READ,
         ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
-        ActionId.OPERATIONS_TASK_START_OVERRIDE,
         ActionId.PROJECT_TASK_CREATE,
         ActionId.PROJECT_TASK_SCREEN,
         ActionId.PROJECT_TASK_RELEASE,

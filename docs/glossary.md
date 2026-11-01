@@ -540,6 +540,6 @@ The person accountable for a submitted packet, even when agents or external tool
 ## Task Audit Evidence Page
 
 A bounded lifecycle projection for one exact project/task. It contains
-fixed event facts and validated claim/start assignment and authorization-decision
+fixed event facts and validated claim and historical start assignment and authorization-decision
 references. ARCH-03B8 supplies its immutable contract; ARCH-03C7 supplies live
 covered Audit Authority access. It is not a forensic payload export or an authorization token.

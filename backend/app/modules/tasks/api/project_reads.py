@@ -57,7 +57,6 @@ class TaskStatusCounts(BaseModel):
     draft: int = Field(ge=0)
     screening: int = Field(ge=0)
     ready: int = Field(ge=0)
-    claimed: int = Field(ge=0)
     in_progress: int = Field(ge=0)
     submitted: int = Field(ge=0)
     evaluation_pending: int = Field(ge=0)

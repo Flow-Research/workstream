@@ -273,7 +273,6 @@ operations.reconcile.run
 operations.outbox.retry
 outbox.dispatch
 operations.projection.rebuild
-operations.task.start_override
 operations.submission_gate.repair
 operations.checker.retry
 
@@ -390,9 +389,8 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
-other registry rows cover three Operator recovery actions: task start override
-and hidden checker retry are active, while submission-gate repair remains
-planned. The ART
+other registry rows include active checker retry and planned submission-gate
+repair. Claim immediately starts contributor work; Operator start is removed. The ART
 catalogue: 16 planned, three active foundation-service actions, active
 `artifact.guide_source.ingest`, and active fixed-service guide binding/read;
 the remaining rows cover canonical
@@ -852,9 +850,8 @@ for public routes, effect recovery and verification boundaries.
 
 Human task actions and existing permission mappings are enumerated in
 the [ARCH-03C manifest](../.commitrail/initiatives/WS-ARCH-001/planning/chunks/WS-ARCH-001-03C-auth-task-readiness.md#exact-surfaceaction-manifest).
-In particular, `task.start` uses existing `task.claim` entitlement plus exact
-own-assignment guards; Operator recovery remains the distinct
-`operations.task.start_override` permission with a system-scoped human grant.
+`task.claim` creates the exact own assignment and starts work atomically.
+There is no separate contributor or Operator start action.
 Separate management/operational/audit projections preserve their respective
 permissions rather than switching one action's mapping based on token roles.
 ARCH-03C3 activates `project.task.create`, `project.task.screen` and
@@ -1158,8 +1155,7 @@ migration treatment as a permission.
   exists before creation.
 - Administrative roles alone cannot claim contributor work, submit, or review.
 - Operator recovery is distinct from Project Manager management.
-- `operations.task.start_override`,
-  `operations.submission_gate.repair`, and `operations.checker.retry` require an
+- `operations.submission_gate.repair` and `operations.checker.retry` require an
   exact reason, canonical resource scope, matched permission/grant, and
   append-only evidence.
 - Recovery cannot erase checker evidence, mutate immutable submissions, create
@@ -1221,7 +1217,7 @@ component invalidation. That fact describes the profile only: a revoked link,
 missing grant, or unadmitted fixed service can still make the actor ineffective.
 
 Assignment reconciliation preserves immutable work history. A revoked actor's
-ordinary claimed/in-progress assignment without a retained Submission is
+ordinary in-progress assignment without a retained Submission is
 published atomically by ARCH-03C2 and released through the registered handler
 with ARCH-03C1's exact feature authority. A `needs_revision` task retains a
 durable revision obligation and cannot
@@ -1562,9 +1558,8 @@ remain available only through their exact individually authorized read route.
 The task-project-grant authorization change replaces its exclusive write-guard
 wrapper and self-activated eligibility bridge with existing canonical AUTH.
 TASK locks the task and active assignment before AUTH locks the exact current
-profile, identity link and applicable grant. Claim/start/contributor context
-require an active exact-project Submitter grant; manager context and reasoned
-Operator start use their separate canonical permissions. Token role strings
+profile, identity link and applicable grant. Claim and contributor context
+require an active exact-project Submitter grant; manager context uses its separate canonical permission. Token role strings
 do not authorize these operations. Command denials use
 `permission_not_granted`; database unavailability rolls back with retryable
 `task_authority_unavailable`. Identity resolution retains its own earlier
@@ -1769,7 +1764,7 @@ TASK owns the transaction and locks task/assignment before AUTH actor/link and
 grant; historical policy locks follow for requirements. Exact PREP facts and
 matched-grant evidence precede projection; DTO validation/serialization precedes
 commit. Missing and unauthorized reads conceal consistently, without changing
-claim/start command errors. Database migration 0003 admits only these four exact
+claim command errors. Database migration 0003 admits only these four exact
 action/permission pairs after the UUIDv7 baseline and queue migration.
 
 

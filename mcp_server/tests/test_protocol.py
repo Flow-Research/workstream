@@ -19,6 +19,8 @@ from workstream_mcp.tools.profile import PROFILE_UPDATE_TOOL_NAME
     ("name", "arguments"),
     [
         ("unknown", {}),
+        ("workstream_task_start", {}),
+        ("workstream_operational_task_start_override", {}),
         ("workstream_profile_get", {"actor_id": "other"}),
         ("workstream_profile_get", {"authorization": "override"}),
         ("workstream_profile_get", {"url": "https://invalid.example"}),

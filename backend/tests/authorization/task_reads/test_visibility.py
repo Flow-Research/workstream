@@ -22,7 +22,7 @@ async def test_task_read_contributor_visibility(admin_access, kind):
     assert (await request()).status_code == 200
     factory = db_session.get_session_factory()
     states = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
-    assert states == {"draft", "screening", "ready", "claimed", "in_progress", "submitted",
+    assert states == {"draft", "screening", "ready", "in_progress", "submitted",
                       "evaluation_pending", "review_pending", "needs_revision"}
     seen_tasks = set()
     # Adjacent revision/ready cases must not fabricate an expiry transition.
@@ -47,14 +47,14 @@ async def test_task_read_contributor_visibility(admin_access, kind):
         assert response.status_code == 200, (state, response.text)
         if kind.endswith("detail"):
             assert response.json()["status"] == state
-    assert len(seen_tasks) == len(states) == 9
+    assert len(seen_tasks) == len(states) == 8
     other = await admin_access.signed.actor("other-owner")
     cases = {
-        "wrong_contributor": ("claimed", str(actor.id), str(other.id), "active"),
-        "wrong_assignee": ("claimed", str(other.id), str(actor.id), "active"),
+        "wrong_contributor": ("in_progress", str(actor.id), str(other.id), "active"),
+        "wrong_assignee": ("in_progress", str(other.id), str(actor.id), "active"),
         "active_only": ("ready", None, str(actor.id), "active"),
-        "unrelated": ("claimed", str(actor.id), None, None),
-        "released": ("claimed", str(actor.id), str(actor.id), "released"),
+        "unrelated": ("in_progress", str(actor.id), None, None),
+        "released": ("in_progress", str(actor.id), str(actor.id), "released"),
         "assignee_only": ("ready", str(actor.id), None, None),
         "draft": ("draft", None, None, None),
     }

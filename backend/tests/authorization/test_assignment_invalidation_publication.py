@@ -111,11 +111,14 @@ async def _seed_additional_assignments(s, count):
                 **locked, status="screening",
             ))
             await session.execute(update(WorkstreamTask).where(WorkstreamTask.id == task_id).values(
-                status="claimed", assigned_to=assignment["contributor_id"],
+                status="in_progress", assigned_to=assignment["contributor_id"],
             ))
             await session.execute(insert(TaskAssignment).values(**(assignment | {
-                "id": assignment_id, "task_id": task_id,
+                "id": assignment_id, "task_id": task_id, "started_at": None,
             })))
+            await session.execute(update(TaskAssignment).where(TaskAssignment.id == assignment_id).values(
+                started_at=assignment["assigned_at"],
+            ))
             expected.add(assignment_id)
     return expected
 

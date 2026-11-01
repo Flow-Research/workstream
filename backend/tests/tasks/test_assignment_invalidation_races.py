@@ -1,23 +1,16 @@
 """Independent PostgreSQL ordering at the hidden effect and real TASK boundaries."""
 
 import asyncio
-from uuid import UUID
 from app.core.identifiers import new_record_id
 
 import pytest
 from sqlalchemy import select, text
 
 from auth_concurrency_support import wait_for_named_database_lock
-from app.adapters.audit import task_transition_audit
-from app.adapters.tasks import task_commands
-from app.core.config import get_settings
-from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.outbox.api import DeliveryOptions, HandlerOutcome
 from app.modules.outbox.delivery import OutboxDelivery
-from app.modules.tasks.api import TaskAuthorityDenied
 from app.modules.tasks.models import WorkstreamTask
 from app.modules.tasks.repository import TaskRepository
-from tests.authorization.task_authority.test_concurrency import actor_context
 from tests.test_tasks import (
     task_client as task_client,
     task_database_env as task_database_env,
@@ -92,86 +85,29 @@ async def test_concurrent_events_for_same_cause_have_one_effect(task_client, mon
     assert len(s.trace) == 3
 
 
-@pytest.mark.parametrize("winner", ["start", "invalidation"])
-async def test_real_start_and_pending_invalidation_serialize(
-    task_client, task_database_env, monkeypatch, winner
-):
+async def test_restored_authority_does_not_cancel_pending_assignment_release(task_client, monkeypatch):
+    """Restoring access does not revoke an already committed release cause."""
     s = await setup_assignment(task_client, monkeypatch)
     await revoke(s, "suspend")
     _, envelope = await invoked(s)
     restored = await s.client.post(
         f"/api/v1/actors/{s.grant['actor_profile_id']}/reactivate",
         headers=auth_headers(),
-        json={"reason": "Restored authority does not cancel pending release"},
+        json={"reason": "Restored access preserves pending assignment release"},
     )
     assert restored.status_code == 200, restored.text
-    context = await actor_context(s.grant["actor_profile_id"])
-    acquired, release = asyncio.Event(), asyncio.Event()
-    names = {kind: f"assignment-{kind}-{new_record_id().hex}" for kind in ("start", "invalidation")}
-    loser = "invalidation" if winner == "start" else "start"
-    original_get, original_lock = TaskRepository.get_task, TaskRepository.lock_project_task
-
-    async def lock(owner, method, *args, **kwargs):
-        name = asyncio.current_task().get_name()
-        await owner._session.execute(
-            text("select set_config('application_name', :name, true)"), {"name": name}
-        )
-        result = await method(owner, *args, **kwargs)
-        if name == names[winner]:
-            acquired.set()
-            await asyncio.wait_for(release.wait(), 10)
-        return result
-
-    async def get_task(owner, *args, **kwargs):
-        if kwargs.get("for_update"):
-            return await lock(owner, original_get, *args, **kwargs)
-        return await original_get(owner, *args, **kwargs)
-
-    async def project_task(owner, *args, **kwargs):
-        return await lock(owner, original_lock, *args, **kwargs)
-
-    monkeypatch.setattr(TaskRepository, "get_task", get_task)
-    monkeypatch.setattr(TaskRepository, "lock_project_task", project_task)
-
-    async def start():
-        async with s.sessions() as session:
-            command = task_commands(
-                session,
-                authorization=PreparedTaskAuthorization(session, context),
-                audit=task_transition_audit(session),
-                actor_profile_id=context.actor_profile_id,
-                settings=get_settings(),
-            )
-            return await command.start(UUID(s.task["id"]), idempotency_key=new_record_id())
-
-    calls = {"start": start, "invalidation": lambda: s.handler(envelope)}
-    pending = []
-    try:
-        pending.append(asyncio.create_task(calls[winner](), name=names[winner]))
-        await asyncio.wait_for(acquired.wait(), 10)
-        pending.append(asyncio.create_task(calls[loser](), name=names[loser]))
-        await asyncio.wait_for(wait_for_named_database_lock(task_database_env, names[loser]), 10)
-        release.set()
-        results = dict(
-            zip(
-                (winner, loser),
-                await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), 15),
-            )
-        )
-    finally:
-        release.set()
-        await asyncio.gather(*pending, return_exceptions=True)
-    assert results["invalidation"] is HandlerOutcome.ACKNOWLEDGE
-    if winner == "start":
-        assert results["start"].status == "in_progress"
-    else:
-        assert isinstance(results["start"], TaskAuthorityDenied), results
+    before = await snapshot(s)
+    assert before[0]["status"] == "in_progress"
+    assert await s.handler(envelope) is HandlerOutcome.ACKNOWLEDGE
     task, assignments, events = await snapshot(s)
     assert task["status"] == "ready" and task["assigned_to"] is None
     assert assignments[0]["status"] == "authority_revoked"
     releases = [row for row in events if row["event_type"] == "TaskAssignmentAuthorityRevoked"]
-    assert len(releases) == 1
-    assert releases[0]["from_status"] == ("in_progress" if winner == "start" else "claimed")
+    assert len(releases) == 1 and releases[0]["from_status"] == "in_progress"
+    assert len(events) == len(before[2]) + 1
+    after = await snapshot(s)
+    assert await s.handler(envelope) is HandlerOutcome.ACKNOWLEDGE
+    assert await snapshot(s) == after
 
 
 @pytest.mark.parametrize("winner", ["submission", "invalidation"])
@@ -188,7 +124,7 @@ async def test_real_submission_and_invalidation_serialize(
     from tests.test_artifact_admission import _settings
 
     settings = _settings(tmp_path, maximum_bytes=1024 * 1024)
-    s = await setup_assignment(task_client, monkeypatch, started=True, artifact_settings=settings)
+    s = await setup_assignment(task_client, monkeypatch, artifact_settings=settings)
     context, creation = await prepare_submission(s, settings)
     await revoke(s, "suspend")
     restored = await s.client.post(

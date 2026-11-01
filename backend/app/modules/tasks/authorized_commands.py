@@ -70,7 +70,6 @@ from app.modules.tasks.service import (
     TaskProjectNotReady,
     TaskServiceError,
     TaskService,
-    TaskTransitionBlocked,
     TaskValidationError,
 )
 
@@ -789,7 +788,7 @@ class AuthorizedTaskCommands:
                     if not isinstance(replayed, TaskWithAssignmentResponse):
                         raise RuntimeError("invalid claim response")
                     return replayed
-                self._contexts._ensure_transition_allowed(task.status, "claimed")
+                self._contexts._ensure_transition_allowed(task.status, "in_progress")
                 if assignment is not None or task.assigned_to is not None:
                     raise TaskAssignmentConflict("task already has an active assignment")
                 await self._contexts._load_locked_task_context(task)
@@ -809,7 +808,17 @@ class AuthorizedTaskCommands:
                     )
                 )
                 task.assigned_to = str(self._actor_id)
-                await self._transition(task, assignment, "claimed", decision_id.decision_id, reason)
+                task.status = "in_progress"
+                # PostgreSQL requires the task transition before stamping the assignment.
+                await self._session.flush()
+                assignment.started_at = assignment.assigned_at
+                await self._audit.record(TaskTransitionFacts(
+                    operation=TaskAuthorityOperation.CLAIM,
+                    project_id=UUID(task.project_id), task_id=UUID(task.id),
+                    assignment_id=UUID(assignment.id), actor_profile_id=self._actor_id,
+                    authorization_decision_id=decision_id.decision_id,
+                    from_status="ready", to_status="in_progress", reason=reason,
+                ))
                 await self._session.flush()
                 await self._session.refresh(task)
                 response = TaskWithAssignmentResponse(
@@ -823,53 +832,6 @@ class AuthorizedTaskCommands:
             if integrity_constraint_name(exc) == "uq_task_assignments_one_active_per_task":
                 raise TaskAssignmentConflict("task already has an active assignment") from exc
             raise
-
-    async def start(
-        self,
-        task_id: UUID,
-        reason: str | None = None,
-        *,
-        idempotency_key: UUID,
-        operator_override: bool = False,
-    ) -> TaskResponse:
-        if operator_override and not (reason and reason.strip()):
-            raise TaskValidationError("operator start override reason is required")
-        operation = (
-            TaskAuthorityOperation.START_OVERRIDE
-            if operator_override
-            else TaskAuthorityOperation.START
-        )
-        async with self._session.begin():
-            receipt, digest, reserved = await self._replay.reserve(
-                self._actor_id, operation, idempotency_key, task_id, reason,
-            )
-            task, assignment, decision_id = await self._locked_task(
-                task_id, operation, reason, idempotency_key=idempotency_key, receipt=receipt,
-            )
-            facts = self._facts(task, assignment, operation, reason, idempotency_key)
-            replayed = self._replay.recover(receipt, digest, facts, task, assignment, reserved=reserved)
-            if replayed is not None:
-                if not isinstance(replayed, TaskResponse):
-                    raise RuntimeError("invalid start response")
-                return replayed
-            self._contexts._ensure_transition_allowed(task.status, "in_progress")
-            if assignment is None or assignment.contributor_id != task.assigned_to:
-                raise TaskTransitionBlocked("task has no consistent active assignment")
-            await self._contexts._load_locked_task_context(task)
-            await self._transition(
-                task,
-                assignment,
-                "in_progress",
-                decision_id.decision_id,
-                reason,
-                operator_override=operator_override,
-            )
-            await self._session.flush()
-            await self._session.refresh(task)
-            response = self._contexts.task_response_for_authority(task, can_manage=False)
-            self._replay.complete(receipt, assignment, facts, response)
-            await self._session.flush()
-        return response
 
     async def contributor_detail(self, task_id: UUID) -> ContributorTaskDetail:
         return await self._read_task_projection(task_id, TaskAuthorityOperation.READ)
@@ -970,8 +932,6 @@ class AuthorizedTaskCommands:
             actions = ()
             if task.status == "ready" and assignment is None and task.assigned_to is None:
                 actions = ("claim",)
-            elif task.status == "claimed" and own_assignment:
-                actions = ("start",)
             selection = context.facts.activation_receipt.command
             response = ContributorTaskWorkContext(
                 task=detail, project=context.facts.project, guide=context.facts.guide,
@@ -1032,31 +992,3 @@ class AuthorizedTaskCommands:
                 contribution_policy_version_id=selection.contribution_policy_version_id,
             )
         return response
-
-    async def _transition(
-        self,
-        task: WorkstreamTask,
-        assignment: TaskAssignment,
-        status: str,
-        decision_id: UUID,
-        reason: str | None,
-        *,
-        operator_override: bool = False,
-    ) -> None:
-        before = task.status
-        task.status = status
-        if status == "in_progress":
-            # The started task must be visible to PostgreSQL before the assignment stamp.
-            await self._session.flush()
-            assignment.started_at = await self._session.scalar(select(func.clock_timestamp()))
-        await self._audit.record(TaskTransitionFacts(
-            operation=(
-                TaskAuthorityOperation.START_OVERRIDE if operator_override
-                else TaskAuthorityOperation.CLAIM if status == "claimed"
-                else TaskAuthorityOperation.START
-            ),
-            project_id=UUID(task.project_id), task_id=UUID(task.id),
-            assignment_id=UUID(assignment.id), actor_profile_id=self._actor_id,
-            authorization_decision_id=decision_id,
-            from_status=before, to_status=status, reason=reason,
-        ))

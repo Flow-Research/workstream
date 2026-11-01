@@ -74,7 +74,7 @@ async def provision_reconciler(sessions):
     return actor_id, link_id
 
 
-async def setup_assignment(client, monkeypatch, *, started=False, artifact_settings=None, reconciler=True):
+async def setup_assignment(client, monkeypatch, *, artifact_settings=None, reconciler=True):
     if artifact_settings is not None:
         from app.modules.artifacts.repository import ArtifactRepository
         from app.modules.artifacts.service import _claim_and_validate_storage_namespace
@@ -91,9 +91,7 @@ async def setup_assignment(client, monkeypatch, *, started=False, artifact_setti
     )
     claimed = await client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
-    if started:
-        response = await client.post(f"/api/v1/tasks/{task['id']}/start", headers=auth_headers())
-        assert response.status_code == 200, response.text
+    assert claimed.json()["task"]["status"] == "in_progress"
     sessions = db_session.get_session_factory()
     h = Harness(sessions, UUID(project["id"]))
     h.options = DeliveryOptions(lease_seconds=300, handler_timeout_seconds=240)

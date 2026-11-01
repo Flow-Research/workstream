@@ -16,7 +16,7 @@ from app.modules.tasks.api.submission_history import (
 
 AssignmentStatus = Literal["active", "completed", "revision_expired", "revision_exhausted", "authority_revoked"]
 AssignmentState = Literal["active", "closed"]
-NextAction = Literal["start", "prepare_submission", "awaiting_evaluation", "revise", "none"]
+NextAction = Literal["prepare_submission", "awaiting_evaluation", "revise", "none"]
 RevisionDisposition = Literal[
     "ready", "context_blocked", "revision_limit_reached", "revision_deadline_expired",
 ]

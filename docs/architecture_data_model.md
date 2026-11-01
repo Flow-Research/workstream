@@ -361,7 +361,7 @@ guide-policy approval flow before the guide can activate.
 
 Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before contributors see the task.
 
-When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
+When a task is claimed and moves to `in_progress`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
 
 Material changes require a new guide version or policy version. They include
 guide source material, submission artifact policy, pre-submit checker
@@ -885,7 +885,7 @@ policy or newly compiled checker.
 
 ARCH-03B8 adds no storage: its bounded task audit evidence page projects fixed
 shared audit fields with exact project/task scope in one SQL statement. Typed
-claim/start references bind assignment and authorization decision without raw
+claim and retained historical start references bind assignment and authorization decision without raw
 payload exposure. ARCH-03C7 exposes the page to exact covered Audit Authority
 using existing TASK/AUTH locks and atomic ALLOW evidence. Draft and empty history
 need no policy body. Migration 0005 extends only the existing authorization
@@ -1450,7 +1450,6 @@ Status:
 - draft
 - screening
 - ready
-- claimed
 - in_progress
 - submitted
 - evaluation_pending
@@ -1510,9 +1509,10 @@ Fields:
 - `started_at`
 - `updated_at`
 
-`assigned_at` is the claim time. The start transition sets `started_at` once,
-and PostgreSQL refuses it unless the assignment is active and its task is
-`in_progress` for that contributor. `updated_at` on TaskAssignment and
+`assigned_at` is the database claim time. Claim sets `started_at` to that same
+value once, after assigning the task and moving it to `in_progress`, within one
+transaction. PostgreSQL refuses the stamp unless the assignment is active and
+its task is `in_progress` for that contributor. `updated_at` on TaskAssignment and
 WorkstreamTask is PostgreSQL-owned on every committed change, including raw SQL
 updates.
 

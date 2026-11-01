@@ -45,8 +45,6 @@ class _TaskTransitionAudit:
             TaskAuthorityOperation.SCREEN: LifecycleAuditEventType.TASK_SCREENED,
             TaskAuthorityOperation.RELEASE: LifecycleAuditEventType.TASK_RELEASED,
             TaskAuthorityOperation.CLAIM: LifecycleAuditEventType.TASK_CLAIMED,
-            TaskAuthorityOperation.START: LifecycleAuditEventType.TASK_STARTED,
-            TaskAuthorityOperation.START_OVERRIDE: LifecycleAuditEventType.TASK_START_OVERRIDDEN,
         }[facts.operation]
         await self._participant.add_event(LifecycleAuditEventInput(
             event_id=new_record_id(), entity_type=LifecycleAuditEntityType.TASK, entity_id=facts.task_id,

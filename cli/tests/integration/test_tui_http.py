@@ -27,7 +27,6 @@ from tui_terminal_support import Terminal, environment, executable, socket_peer
 
 OTHER_PROJECT = "018f0ebc-7966-7e8d-bc4d-1cae1e000099"
 OTHER_TASK = "018f0ebc-7966-7e8d-bc4d-1cae1e000098"
-START_KEY = "018f0ebc-7966-7e8d-bc4d-1cae1e000097"
 CURSOR = "opaque+/=&?#next"
 CHECKER = deepcopy(SUBMISSION_CHECKER)
 CHECKER["task_id"] = TASK
@@ -127,12 +126,6 @@ class Writes(Reads):
         super().__init__()
         self.action = action
         self.replies = [(200, mutation_body(action))]
-        if action == "start":
-            self.task["status"] = "claimed"
-            self.mine = page(
-                ASSIGNMENT_ROW
-                | {"title": "Assigned terminal task", "task_status": "claimed"}
-            )
 
     def __call__(self, method, target, authorization):
         if method == "GET":
@@ -146,9 +139,6 @@ class Writes(Reads):
 
 def action_detail(terminal, action):
     open_ready(terminal)
-    if action == "start":
-        terminal.send("2")
-        terminal.wait("Assigned terminal task")
     terminal.send("\r")
     terminal.wait(SECRET)
 
@@ -332,10 +322,10 @@ def test_hidden_native_confirmation_does_not_download(tmp_path):
         terminal.quit()
 
 
-@pytest.mark.parametrize("action", ["claim", "start"])
+@pytest.mark.parametrize("action", ["claim"])
 def test_task_action_requires_visible_acknowledged_confirmation_and_exact_wire(action):
     peer = Writes(action)
-    key = CLAIM_KEY if action == "claim" else START_KEY
+    key = CLAIM_KEY
     posts = []
     with (
         socket_peer(
@@ -429,7 +419,6 @@ def test_pasted_replay_key_requires_manual_confirmation_and_pasted_commands_are_
         ("claim", "task_project"),
         ("claim", "assignment_actor"),
         ("claim", "malformed"),
-        ("start", "task_project"),
     ],
 )
 def test_task_action_corrupt_success_is_unknown_and_not_retried(action, corruption):

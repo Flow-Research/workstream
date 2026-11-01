@@ -6,7 +6,7 @@ This runbook assigns ownership and stop conditions for the staged WS-AUTH-001
 authorization rollout. The verified-token configuration and evidence commands
 are executable contracts. Canonical actor resolution, actor-self authorization,
 one-time bootstrap, administrative and project grants, and actor/link lifecycle
-controls are implemented. TASK claim, start and work-context operations use
+controls are implemented. TASK claim and work-context operations use
 canonical project authority. Other feature activations remain operation-specific;
 consult `docs/roadmap_status.md` rather than inferring availability from a grant
 or catalogue entry.
@@ -121,7 +121,7 @@ task change, lifecycle evidence and receipt. Draft creation checks project
 existence without imposing guide readiness. Screening/release retain existing
 approved and frozen policy checks.
 
-Task claim/start/work-context require current canonical authority and the applicable
+Task claim/work-context require current canonical authority and the applicable
 exact project grant. Token claims and eligibility rows are not authority.
 Public ZIP preparation and admission-backed Submission creation extend that
 journey. The bounded local public API and durable-worker drill starts from public guide
@@ -222,9 +222,8 @@ service identity from subject syntax, email, display name, token role, or
 adapter provenance.
 
 The self-activation profile route and TASK eligibility bridge have been
-removed. Claim and start require canonical actor/lifecycle checks and an active
-Submitter grant for the exact project; an authorized Operator start override
-uses its explicit operation and reason. Retained eligibility rows do not grant
+removed. Claim requires canonical actor/lifecycle checks and an active
+Submitter grant for the exact project, then assigns and starts work atomically. Retained eligibility rows do not grant
 TASK authority and have not been deleted. The old public submission-packet POST
 is also removed. ARCH-02I-B exposes canonical admission-backed Submission creation for initial
 work and exact checker remediation. Its command validates current authority,
@@ -261,12 +260,11 @@ rejects a missing profile with SQLSTATE `23503` and a service profile with
 `23514`. Suspended and deactivated human profiles remain valid historical
 references. The v0.1 baseline has no downgrade path.
 
-Claim, start and work-context use canonical AUTH. TASK locks the task and
+Claim and work-context use canonical AUTH. TASK locks the task and
 active assignment before AUTH locks the current ActorProfile, exact identity
 link and applicable grant; mutation locks remain held through the transaction.
 Contributor commands require an active exact-project Submitter grant, not a
-token role or an eligibility row. The separate Operator start override
-requires its explicit permission and a reason. Claim/start AUTH denials return
+token role or an eligibility row. Claim itself starts work; there is no separate Operator start override. Claim AUTH denials return
 HTTP 403 `permission_not_granted`. Contributor work-context and assigned-guide
 document reads conceal denied scope with HTTP 404; database
 failures roll back with retryable HTTP 503
@@ -949,7 +947,6 @@ their canonical 401/503 and 429/503 behavior before private lookup.
 | Operation | Authority | Required controls |
 |---|---|---|
 | Normal covered task/setup repair | Covered Project Manager `project.task.manage` | Exact project, lifecycle guard, reason/evidence where mutation is corrective. |
-| Start override | Operator `operations.task.start_override` | Recovery-only path, exact task/project, reason, matched grant/permission, audit. |
 | Submission gate repair (planned; unavailable) | Operator `operations.submission_gate.repair` | No submission/review rewrite; reason, matched authority, immutable checker evidence. |
 | Checker retry (planned; unavailable) | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
 | Review lease force release | Operator `review.lease.force_release` under WS-REV-001 | Review-owned lease guards and evidence; no review decision. |

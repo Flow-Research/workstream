@@ -377,7 +377,6 @@ TASK_EXECUTION_OPERATIONS = {
     "task_screen": ("POST", "/api/v1/tasks/{task_id}/screen", 200),
     "task_release": ("POST", "/api/v1/tasks/{task_id}/release", 200),
     "task_claim": ("POST", "/api/v1/tasks/{task_id}/claim", 200),
-    "task_start": ("POST", "/api/v1/tasks/{task_id}/start", 200),
     "task_work_context_get": ("GET", "/api/v1/tasks/{task_id}/work-context", 200),
     "task_guide_document_content_get": (
         "GET",
@@ -414,7 +413,6 @@ _TASK_EXECUTION_MUTATIONS = frozenset(
         "task_screen",
         "task_release",
         "task_claim",
-        "task_start",
         "submission_create",
     }
 )
@@ -477,11 +475,6 @@ TASK_OPERATIONS = {
     "audit_task_evidence_get": (
         "GET",
         "/api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence",
-        200,
-    ),
-    "operational_task_start_override": (
-        "POST",
-        "/api/v1/operations/tasks/{task_id}/start",
         200,
     ),
     "project_model_profile_provision": (
@@ -1581,7 +1574,7 @@ class WorkstreamGateway:
             )
         if name in {"task_get", "task_submission_requirements_get"}:
             return cls._same_uuid(data.get("task_id"), task_id)
-        if name in {"task_screen", "task_release", "task_start"}:
+        if name in {"task_screen", "task_release"}:
             return cls._same_uuid(data.get("id"), task_id)
         if name == "task_claim":
             task = data.get("task")
@@ -1807,8 +1800,6 @@ class WorkstreamGateway:
             )
         if name == "audit_task_evidence_get":
             return cls._fields_match(data, {"project_id": project_id, "task_id": task_id})
-        if name == "operational_task_start_override":
-            return cls._same_uuid(data.get("id"), task_id)
         if name in {
             "project_model_profile_provision",
             "project_model_budget_configure",
