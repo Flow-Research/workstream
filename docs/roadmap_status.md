@@ -1075,8 +1075,9 @@ cannot be reused as post-submission review-gate evidence. See the
   document into the same untrusted result; it reads every original through the
   same grant, records those reads without provider resources, and stores
   provider, API and model `none` on the attempt. Known invalid inference output
-  receives at most two value-free corrections across drafting and review within
-  the original execution budget; exhaustion ends terminally. Exact replay never
+  receives at most two corrections across drafting and review within the original
+  execution budget. Corrections carry closed, value-free diagnostics and, when
+  safe, the bounded rejected candidate as untrusted data; exhaustion ends terminally. Exact replay never
   starts a second inference.
   The model-facing default capability names exactly four platform guarantees:
   bounded safe ZIP handling, received-byte/manifest identity, high-confidence
@@ -1720,8 +1721,9 @@ limits null. Typed proposals expose engineering specifications; the final correc
 proposal has passed independent source-to-proposal review. Draft path and material-linkage
 errors exposed a need for bounded output correction. Every draft, review and
 correction now passes strict schema, canonical, context and source checks; only
-the final review can become a proposal. Up to two value-free corrections share
-the original attempt budgets. Each phase must initially read every assigned
+the final review can become a proposal. Up to two corrections share the original
+attempt budgets, using closed, value-free diagnostics and, when safe, the bounded
+rejected candidate as untrusted data. Each phase must initially read every assigned
 original, including for blocked proposals; searches cannot substitute for those
 reads. PM correction now
 supplies the exact hash-verified predecessor as bounded, untrusted context rather
