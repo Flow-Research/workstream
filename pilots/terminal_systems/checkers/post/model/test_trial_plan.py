@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -73,6 +74,8 @@ Fabricate one output with `sh tests/fabricate-output.sh`.
 Stop at the commit boundary with `sh tests/interrupt.sh`.
 Restart retained work with `sh tests/restart.sh`.
 """
+
+INSTRUCTION_WITH_BLANK_LINES = "\n# Queue task\n\nInspect status with `queue status`.\n\n"
 
 
 class TrialPlanTests(unittest.TestCase):
@@ -240,6 +243,54 @@ class TrialPlanTests(unittest.TestCase):
         self.assertEqual(
             [item.path for item in evidence], ["instruction.md", "AUTHOR_NOTES.md"]
         )
+
+    def test_plan_prompt_numbers_original_lines_without_changing_source_identity(self):
+        for newline in ("\n", "\r\n"):
+            with self.subTest(newline=repr(newline)):
+                raw = INSTRUCTION_WITH_BLANK_LINES.replace("\n", newline).encode()
+                path = self.root / "instruction.md"
+                path.write_bytes(raw)
+                digest, sources = collect_plan_sources(self.root)
+                prompt = json.loads(build_plan_prompt(self.metadata, digest, sources))
+                source = prompt["untrusted_source_evidence"][0]
+                self.assertNotIn("content", source)
+                self.assertEqual(
+                    source["numbered_content"],
+                    "1 | \n2 | # Queue task\n3 | \n"
+                    "4 | Inspect status with `queue status`.\n5 | ",
+                )
+                self.assertEqual(source["line_count"], 5)
+                self.assertEqual(
+                    source["sha256"], "sha256:" + hashlib.sha256(raw).hexdigest()
+                )
+                self.assertEqual(prompt["material_digest"], digest)
+                self.assertEqual(sources[0].content.encode(), raw)
+                self.assertEqual(path.read_bytes(), raw)
+                self.assertEqual(collect_plan_sources(self.root), (digest, sources))
+
+    def test_numbered_prompt_preserves_strict_original_line_and_command_citations(self):
+        (self.root / "instruction.md").write_text(INSTRUCTION_WITH_BLANK_LINES)
+        self.material_digest, self.evidence = collect_plan_sources(self.root)
+        wrong_line = self.proposal()
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            self.validated(wrong_line)
+
+        exact = deepcopy(wrong_line)
+        exact["procedures"][0].update(start_line=4, end_line=4)
+        self.assertTrue(self.validated(exact).coverage_complete)
+
+        annotated = deepcopy(exact)
+        annotated["procedures"][0].update(
+            command_text="4 | queue status", command=["4", "|", "queue", "status"]
+        )
+        wrong_argv = deepcopy(exact)
+        wrong_argv["procedures"][0]["command"] = ["queue", "erase-everything"]
+        for value in (annotated, wrong_argv):
+            with (
+                self.subTest(procedure=value["procedures"][0]),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(value)
 
     def test_interruption_requires_repaired_baseline_even_for_partial_coverage(self):
         prompt = json.loads(
