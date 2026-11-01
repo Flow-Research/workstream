@@ -614,7 +614,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | CLI and terminal interface | **Public CLI clients and contributor workbench with deliberate claim** | Explicit commands retain text/JSON/noninteractive behavior. [WS-CLI-001-48](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-48.md) supplies scoped contributor reads; [WS-CLI-001-49](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-49.md) adds verified guide downloads/findings; [WS-CLI-001-50](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md) improves presentation. [WS-CLI-001-51](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md) adds direct navigation and exact confirmed claim with caller-owned saved keys, explicit replay and honest unknown outcomes | ZIP preparation/Submission, automatic crash recovery and management remain separate TUI boundaries. Contribution Evidence remains an inert CLI handoff pending a typed single-page port. Protected publication and hosted journey proof remain separate operational claims |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
 | Runtime diagnostics | **Implemented foundation; release configuration prepared** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional typed OTLP export; hosted composition accepts only an optional HTTPS collector origin and keeps exporter outage outside product correctness | Restrict broker publishers; configure and secure collector/log access, egress, encryption and finite deletion; prove privacy, correlation and collector outage during the deployed release drill; no deployed monitoring claim |
-| Frontend and pilot | **Partial hosted backend journey; POST repair pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. Five tasks were imported; queue recovery was released and claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Qualify the native relay and numbered-source checker repairs without rewriting locked selections, then exercise substantive POST failure/remediation and successful shared acceptance with exact contribution evidence. Complete applicable interruption, runtime-limit, diagnostics and backup/restore proofs. Fixture Flow identity is not production Flow certification. Optional CLI/MCP/TUI surfaces and the separate forge overlay are not additional first-backend-journey prerequisites. |
+| Frontend and pilot | **Partial hosted backend journey; POST repair pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. Five tasks were imported; queue recovery was released and claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Native-only retry now reuses retained paid evidence and exposes the actual invalid plan. Qualify the registered numbered-source checker through a new approved guide/task, then exercise substantive POST failure/remediation and shared acceptance with exact contribution evidence. Complete applicable interruption, runtime-limit, diagnostics and backup/restore proofs. Fixture Flow identity is not production Flow certification. Optional CLI/MCP/TUI surfaces and the separate forge overlay are not additional first-backend-journey prerequisites. |
 
 ## What Has Been Completed
 
@@ -657,7 +657,7 @@ cannot be reused as post-submission review-gate evidence. See the
   private certificate custody and renewal. Real AWS connection diagnostics passed
   immutable upload/readback and role/anonymous isolation. The current hosted
   rehearsal also passed exact-release database activation, public guide custody
-  and worker-verified immutable Submission creation. Broader failure, interruption
+  and immutable Submission creation after artifact verification. Broader failure, interruption
   and final-data restore scenarios remain.
   Proof clients use the configured region;
   settings reserve a fixed 120-second proof sequence, and ART/PostgreSQL reject
@@ -1763,9 +1763,11 @@ reproduced integration defects; the [current drill report](reports/terminal-syst
 retains the rejected setup and accounting evidence. On November 1, source
 `a3fc1f196` completed guide activation, public task import/claim, PRE rejection and
 verified Submission/replay. POST ended as infrastructure failure before a work
-verdict. The native relay EOF repair and numbered-source project prompt have
-focused proof but still require deployment and governed checker selection;
-retained model output and locked rules remain unchanged. The complete real-project
+verdict. The deployed native relay EOF repair now exposes the retained invalid plan
+through authorized retry/replay without another paid effect. The numbered-source
+project image is registered and new guide setup has persisted its proposal.
+Approved selection and substantive Trial qualification remain. Retained output and old locked rules
+remain unchanged. The complete real-project
 contribution outcome remains a gate.
 An earlier controlled-provider gVisor qualification applies only to its recorded
 historical implementation; it does not qualify the Smol deployment target.
