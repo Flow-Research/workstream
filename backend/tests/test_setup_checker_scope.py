@@ -22,9 +22,16 @@ from app.interfaces.project_agents import (
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     require_complete_generated_specifications,
-    validate_project_guide_compilation_result,
 )
 from app.modules.projects.guide_compilation.contracts import accepted_compilation_result
+from app.modules.checkers.api.external import (
+    ExternalCheckerRegistryEntry,
+    ExternalCheckerRegistrySpec,
+    ExternalCheckerSchema,
+    external_checker_json_hash,
+)
+from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
+from tests.checkers.external.support import capability_projection, registry_entry
 from tests.projects.guide_compilation.helpers import (
     context,
     generated_result,
@@ -49,6 +56,58 @@ def _schema():
     )
 
 
+def _example_registry(*, alternate=False):
+    """Declare the hypothetical registry independently of the example's binding."""
+    base = registry_entry("post_submit")
+    properties = {
+        "check": {"const": "report_reasoning"},
+        "model_profile_id": {
+            "const": "00000000-0000-7000-8000-000000000004" if alternate
+            else "00000000-0000-7000-8000-000000000003",
+        },
+        "model_profile_version": {"const": 1},
+        "model_profile_digest": {"const": "sha256:" + "2" * 64},
+    }
+    document = {
+        "type": "object",
+        "properties": {name: {} for name in properties},
+        "additionalProperties": False,
+        "oneOf": [{
+            "type": "object", "properties": properties,
+            "required": sorted(properties), "additionalProperties": False,
+        }],
+    }
+    values = {name: base.model_dump(mode="json")[name]
+              for name in ExternalCheckerRegistrySpec.model_fields}
+    values.update(
+        capability_id="example.report_reasoning",
+        capability_version="example_v2" if alternate else "example_v1",
+        configuration_schema=ExternalCheckerSchema(
+            schema_id="example.report_reasoning.configuration", schema_version="v1",
+            document=document, schema_sha256=external_checker_json_hash(document),
+        ).model_dump(mode="json"),
+    )
+    values["resources"]["deadline_ms"] = 180_000
+    spec = ExternalCheckerRegistrySpec.model_validate_json(json.dumps(values))
+    return ExternalCheckerRegistryEntry.model_validate_json(json.dumps({
+        **base.model_dump(mode="json"), **spec.model_dump(mode="json"),
+        "entry_digest": spec.spec_digest,
+    }))
+
+
+def _example_in_context(*entries):
+    compilation = context(ids(), checker_capabilities=capability_projection(*entries))
+    # Only substitute synthetic example source identities, as in the original proof.
+    payload = copy.deepcopy(PROJECT_GUIDE_OUTPUT_EXAMPLE["result"])
+    actual_ref = generated_result().requirements[0].evidence_refs[0].model_dump(mode="json")
+    for requirement in payload["requirements"]:
+        requirement["evidence_refs"] = [actual_ref]
+    for suggestion in payload["capability_suggestions"]:
+        suggestion["evidence_refs"] = [actual_ref]
+    payload["agent_version"] = compilation.agent_version
+    return compilation, payload
+
+
 def test_example_is_complete_valid_and_bound_to_instructions():
     example = PROJECT_GUIDE_OUTPUT_EXAMPLE
     raw = json.dumps(example["result"])
@@ -58,18 +117,14 @@ def test_example_is_complete_valid_and_bound_to_instructions():
         "bounded_pre_submit",
         "background",
     }
-    compilation = context(ids())
-    # Replace only synthetic source identities for context-dependent validation.
-    payload = copy.deepcopy(example["result"])
-    actual_ref = generated_result().requirements[0].evidence_refs[0].model_dump(mode="json")
-    for requirement in payload["requirements"]:
-        requirement["evidence_refs"] = [actual_ref]
-    for suggestion in payload["capability_suggestions"]:
-        suggestion["evidence_refs"] = [actual_ref]
-    payload["agent_version"] = compilation.agent_version
+    compilation, payload = _example_in_context(_example_registry())
     actual = ProjectGuideCompilationResult.model_validate(payload)
-    require_complete_generated_specifications(compilation, actual)
-    validate_project_guide_compilation_result(compilation, actual)
+    opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
+    assert validate_project_guide_runtime_result(compilation, actual, opened) == actual
+    assert actual.requirements[0].disposition.value == "pre_submit_capability_gap"
+    assert [item.requirement_id for item in actual.capability_suggestions] == ["report_present"]
+    assert actual.requirements[1].disposition.value == "supported_post_submit"
+    assert len(actual.post_submit_bindings) == 1
     displayed = PROJECT_GUIDE_INSTRUCTIONS.split("Complete JSON output example:\n", 1)[1]
     assert CompilationDraftParser(_schema(), 100_000).parse(displayed) == example["result"]
     assert len(PROJECT_GUIDE_INSTRUCTIONS) <= 16_000
@@ -90,6 +145,44 @@ def test_example_is_complete_valid_and_bound_to_instructions():
         set(schema["$defs"]["AtomicGuideRequirement"]["properties"]["disposition"]["enum"])
         == allowed
     )
+
+
+def test_example_cannot_mix_selector_constants_from_another_registry_entry():
+    selected, other = _example_registry(), _example_registry(alternate=True)
+    compilation, payload = _example_in_context(selected, other)
+    parameters = payload["post_submit_bindings"][0]["parameters"]
+    configuration = {item["name"]: item["value"] for item in parameters}
+    foreign = other.configuration_schema.document["oneOf"][0]["properties"]["model_profile_id"]["const"]
+    # The foreign ID is real within this hypothetical catalog, rather than malformed.
+    other.configuration_schema.validate_instance({**configuration, "model_profile_id": foreign})
+    assert configuration["model_profile_id"] != foreign
+    next(item for item in parameters if item["name"] == "model_profile_id")["value"] = foreign
+    opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
+    with pytest.raises(ValueError, match="value is invalid"):
+        validate_project_guide_runtime_result(compilation, payload, opened)
+
+
+@pytest.mark.parametrize("supported", [False, True])
+def test_example_pre_specification_is_required_despite_artifact_path(supported):
+    entries = [_example_registry()]
+    if supported:
+        entries.append(registry_entry("pre_submit"))
+    compilation, payload = _example_in_context(*entries)
+    assert "report.md" in payload["submission_artifact_policy"]["required_artifacts"]
+    if supported:
+        payload["requirements"][0]["disposition"] = "supported_pre_submit"
+        payload["capability_suggestions"] = []
+        payload["status"] = "draft_ready"
+        payload["pre_submit_bindings"] = [{
+            "requirement_id": "report_present", "capability_id": entries[1].capability_id,
+            "capability_version": entries[1].capability_version,
+            "stage": "pre_submit", "parameters": [],
+        }]
+    opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
+    validate_project_guide_runtime_result(compilation, payload, opened)
+    payload["requirements"][0]["check_specification"] = None
+    with pytest.raises(ValueError, match="check requirement lacks a check specification"):
+        validate_project_guide_runtime_result(compilation, payload, opened)
 
 
 def test_dependency_guidance_matches_canonical_triples_methods_and_nested_material():

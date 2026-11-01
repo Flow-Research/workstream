@@ -13,10 +13,9 @@ from app.modules.checkers.api.external_policy import (
 )
 
 PROJECT_GUIDE_OUTPUT_EXAMPLE = {
-    "hypothetical_guide": "Submit a root report file. Its conclusions must follow from its reported "
-    "observations.",
-    "assumption": "No project checkers are registered; model support is unavailable. These synthetic "
-    "identities are not actual source references.",
+    "hypothetical_guide": "Submit a root report file whose conclusions follow its observations.",
+    "assumption": "Hypothetical POST example.report_reasoning/example_v1 requires the shown "
+    "parameters. PRE is unavailable; all identities are synthetic.",
     "result": {
         "status": "draft_ready_with_warnings",
         "findings": [],
@@ -35,35 +34,35 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
         "requirements": [
             {
                 "requirement_id": "report_present",
-                "statement": "The package includes a report as a root regular file.",
+                "statement": "The package includes a root regular report file.",
                 "disposition": "pre_submit_capability_gap",
                 "platform_coverage": None,
-                "classification_rationale": "One exact file type check is bounded.",
+                "classification_rationale": "One file-type check is bounded.",
                 "check_specification": {
                     "evaluation_method": "static_inspection",
                     "execution_mode": "bounded_pre_submit",
                     "maximum_duration_seconds": 10,
-                    "stage_rationale": "One exact file type check is bounded.",
+                    "stage_rationale": "One file-type check is bounded.",
                     "inputs": [
                         {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
                             "evaluation_context_roles": None,
-                            "purpose": "Supplies the report to inspect.",
+                            "purpose": "Supplies the report.",
                         }
                     ],
-                    "check_steps": ["Require the declared root report to be a regular file."],
-                    "pass_conditions": ["The required report exists as a regular file."],
+                    "check_steps": ["Require the root report to be a regular file."],
+                    "pass_conditions": ["The root report is a regular file."],
                     "failure_findings": [
                         {
                             "code": "report_missing",
                             "level": "error",
-                            "condition": "The required report is absent or has the wrong type.",
+                            "condition": "The root report is absent or not a regular file.",
                             "message": "Provide the required report.",
                         }
                     ],
-                    "positive_tests": ["A package with the required report passes."],
+                    "positive_tests": ["A root regular report passes."],
                     "negative_tests": [
                         {
                             "name": "missing_report",
@@ -77,14 +76,14 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "dependency_id": "file_inspection",
                             "kind": "checker_tool",
                             "provisioning": "checker_implementation",
-                            "purpose": "Inspect the required file type.",
+                            "purpose": "Inspect the report file type.",
                             "unavailable_code": "implementation_unavailable",
                         }
                     ],
                     "infrastructure_failures": [
                         {
                             "code": "implementation_unavailable",
-                            "condition": "The required checker implementation is unavailable.",
+                            "condition": "The file checker is unavailable.",
                         }
                     ],
                 },
@@ -95,65 +94,52 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                         "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
                         "start_page": None,
                         "end_page": None,
-                        "section": "Deliverable requirements",
+                        "section": "Report",
                     }
                 ],
             },
             {
                 "requirement_id": "report_reasoning",
-                "statement": "Report conclusions must be supported by reported observations.",
-                "disposition": "post_submit_capability_gap",
+                "statement": "Report conclusions follow reported observations.",
+                "disposition": "supported_post_submit",
                 "platform_coverage": None,
-                "classification_rationale": "Comparing conclusions with observations "
-                "requires qualitative evaluation.",
+                "classification_rationale": "Comparison requires a model.",
                 "check_specification": {
                     "evaluation_method": "model_evaluation",
                     "execution_mode": "background",
                     "maximum_duration_seconds": 120,
-                    "stage_rationale": "Comparing conclusions "
-                    "with observations "
-                    "requires qualitative "
-                    "evaluation.",
+                    "stage_rationale": "Comparison requires a model.",
                     "inputs": [
                         {
                             "input_id": "report",
                             "kind": "relative_file",
                             "relative_path": "report.md",
                             "evaluation_context_roles": None,
-                            "purpose": "Supplies the report to inspect.",
+                            "purpose": "Supplies the report.",
                         }
                     ],
                     "check_steps": [
-                        "Read the reported observations and conclusions.",
-                        "Identify any conclusion "
-                        "that conflicts with or "
-                        "lacks support in the "
-                        "observations.",
+                        "Read observations and conclusions.",
+                        "Find unsupported or contradictory conclusions.",
                     ],
                     "pass_conditions": [
-                        "Every conclusion is supported by the reported observations."
+                        "Every conclusion follows the observations."
                     ],
                     "failure_findings": [
                         {
                             "code": "unsupported_conclusion",
                             "level": "error",
-                            "condition": "A "
-                            "conclusion "
-                            "conflicts "
-                            "with or "
-                            "lacks "
-                            "supporting "
-                            "observations.",
-                            "message": "Support each conclusion with reported observations.",
+                            "condition": "A conclusion contradicts or lacks supporting observations.",
+                            "message": "Support the conclusion with observations.",
                         }
                     ],
                     "positive_tests": [
-                        "A report whose conclusions follow its observations passes."
+                        "Supported conclusions pass."
                     ],
                     "negative_tests": [
                         {
                             "name": "contradictory_report",
-                            "scenario": "The conclusion contradicts a reported observation.",
+                            "scenario": "A conclusion contradicts an observation.",
                             "expected_verdict": "failed",
                             "expected_finding_codes": ["unsupported_conclusion"],
                         }
@@ -163,14 +149,14 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                             "dependency_id": "reasoning_model",
                             "kind": "model_service",
                             "provisioning": "model_proxy",
-                            "purpose": "Apply the qualitative evidence rubric.",
+                            "purpose": "Apply the evidence rubric.",
                             "unavailable_code": "implementation_unavailable",
                         }
                     ],
                     "infrastructure_failures": [
                         {
                             "code": "implementation_unavailable",
-                            "condition": "The required model service is unavailable.",
+                            "condition": "The model service is unavailable.",
                         }
                     ],
                 },
@@ -181,19 +167,32 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                         "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
                         "start_page": None,
                         "end_page": None,
-                        "section": "Deliverable requirements",
+                        "section": "Report",
                     }
                 ],
             },
         ],
         "pre_submit_bindings": [],
-        "post_submit_bindings": [],
+        "post_submit_bindings": [
+            {
+                "requirement_id": "report_reasoning",
+                "capability_id": "example.report_reasoning",
+                "capability_version": "example_v1",
+                "stage": "post_submit",
+                "parameters": [
+                    {"name": "check", "value": "report_reasoning"},
+                    {"name": "model_profile_id", "value": "00000000-0000-7000-8000-000000000003"},
+                    {"name": "model_profile_version", "value": 1},
+                    {"name": "model_profile_digest", "value": "sha256:" + "2" * 64},
+                ],
+            }
+        ],
         "capability_suggestions": [
             {
                 "requirement_id": "report_present",
                 "stage": "pre_submit",
                 "title": "Report file check",
-                "rationale": "Implement the specified file predicate.",
+                "rationale": "Implement the file predicate.",
                 "evidence_refs": [
                     {
                         "source_item_id": "00000000-0000-4000-8000-000000000001",
@@ -201,23 +200,7 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                         "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
                         "start_page": None,
                         "end_page": None,
-                        "section": "Deliverable requirements",
-                    }
-                ],
-            },
-            {
-                "requirement_id": "report_reasoning",
-                "stage": "post_submit",
-                "title": "Report reasoning review",
-                "rationale": "Implement the specified background model rubric.",
-                "evidence_refs": [
-                    {
-                        "source_item_id": "00000000-0000-4000-8000-000000000001",
-                        "document_version_id": "00000000-0000-4000-8000-000000000002",
-                        "sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-                        "start_page": None,
-                        "end_page": None,
-                        "section": "Deliverable requirements",
+                        "section": "Report",
                     }
                 ],
             },
@@ -296,8 +279,11 @@ expanded-total, compressed-ZIP and entry-count limits null. Do not block for abs
 limits, invent numbers or copy platform ceilings into project policy. An explicit
 project limit may tighten, never relax the platform. Keep those four quantities distinct.
 Match only exact enabled selectable capability IDs, versions, stages and schemas.
-A supported requirement has exactly one same-stage binding; parameters must match
-the registered configuration schema. Use parameters: [] for an empty configuration.
+A supported requirement has exactly one same-stage binding. Copy parameters from
+the SELECTED registry entry/version and ONE matching configuration schema branch.
+Copy const values with their JSON types, keeping complete model/trial ID-version-digest
+tuples and role arrays together. Another entry/version, the setup runtime profile,
+default checker or example is no substitute. Use parameters: [] for an empty configuration.
 Do not invent checker identities, images, digests or implementations. Missing
 implementations are same-stage capability gaps, each with exactly one suggestion.
 
@@ -307,7 +293,9 @@ are PM-approved. Registration alone cannot activate.
 SPECIFICATION
 Require evidence and classification_rationale.
 Each supported/gap PRE/POST requirement needs the complete typed check_specification;
-platform coverage/blockers use null. Specify inputs, ordered steps, observable pass conditions, findings, tests, dependencies and
+PRE file/layout checks still need it when required_artifacts lists their files or
+an existing checker is bound. Artifact paths do not replace specifications.
+Platform coverage/blockers use null. Specify inputs, ordered steps, observable pass conditions, findings, tests, dependencies and
 infrastructure failures. Name fields, types, ranges and exceptions. Put paths in
 typed inputs, files in required_artifacts and directory predicates in specifications.
 Artifact settings are not checks: use submission_artifact_policy. Bindings carry
