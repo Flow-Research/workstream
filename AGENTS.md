@@ -101,9 +101,10 @@ definition or ownership boundary of Workstream.
   awards/fulfillment -> contribution evidence for a future reputation
   projection. The immediate delivery priority is the first complete backend
   journey: approved project guide and locked policies -> task creation -> claim
-  and start -> upload ZIP -> actionable pre-check feedback or verified immutable
-  Submission -> automatic post-checking -> governed outcome. For a project with
-  `human_review_required=false`, passing required checks must reach the shared
+  (which immediately starts work) -> upload ZIP -> actionable pre-check feedback
+  or verified immutable Submission -> automatic post-checking -> governed outcome.
+  For a project with `human_review_required=false`, passing required checks must
+  reach the shared
   authorized FinalAcceptance and submitter ContributionRecord, with applicable
   conditional awards committed atomically; never fabricate a Review or reviewer
   contribution. Failed checks and infrastructure failures need distinct,
