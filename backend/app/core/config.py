@@ -35,6 +35,7 @@ from app.core.s3_validation import (
     is_canonical_s3_prefix,
     is_canonical_s3_region,
 )
+from app.interfaces.forge_facts import FORGE_FACTS_MAXIMUM_READ_SECONDS
 from app.interfaces.project_guide_runtime import (
     AdapterProfileValue,
     canonical_adapter_profile,
@@ -302,9 +303,11 @@ class Settings(BaseSettings):
     github_app_installation_id: int | None = Field(default=None, ge=1)
     github_api_base_url: str = "https://api.github.com"
     github_api_request_timeout_seconds: float = Field(default=10.0, gt=0.0, le=30.0)
-    # One facts read, including every retry, stays far inside the selected POST
-    # handler budget (SELECTED_POST_HANDLER_TIMEOUT_SECONDS).
-    github_facts_total_deadline_seconds: float = Field(default=45.0, gt=0.0, le=120.0)
+    # One facts read, including every retry, stays within the time the selected
+    # POST budget reserves for it (FORGE_FACTS_MAXIMUM_READ_SECONDS).
+    github_facts_total_deadline_seconds: float = Field(
+        default=45.0, gt=0.0, le=FORGE_FACTS_MAXIMUM_READ_SECONDS
+    )
     github_facts_maximum_attempts: int = Field(default=3, ge=1, le=5)
 
     @field_validator("checker_model_proxy_socket", mode="before")

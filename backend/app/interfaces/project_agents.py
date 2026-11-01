@@ -37,7 +37,9 @@ from app.modules.checkers.api.external import (
 from app.modules.checkers.api.external_policy import (
     EvaluationContextRole,
     require_evaluation_context_agreement,
+    FORGE_FACTS_VERSION_KEY,
     MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
+    SELECTED_POST_FORGE_FACTS_BUDGET_MS,
     MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS,
     SELECTED_POST_MATERIALIZATION_BUDGET_MS,
     WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS,
@@ -142,14 +144,16 @@ class RequirementDisposition(StrEnum):
     INFORMATIONAL = "informational"
 
 
-GENERATED_REQUIREMENT_DISPOSITIONS = frozenset({
-    RequirementDisposition.PLATFORM_COVERED,
-    RequirementDisposition.SUPPORTED_PRE_SUBMIT,
-    RequirementDisposition.PRE_SUBMIT_CAPABILITY_GAP,
-    RequirementDisposition.SUPPORTED_POST_SUBMIT,
-    RequirementDisposition.POST_SUBMIT_CAPABILITY_GAP,
-    RequirementDisposition.GUIDE_BLOCKER,
-})
+GENERATED_REQUIREMENT_DISPOSITIONS = frozenset(
+    {
+        RequirementDisposition.PLATFORM_COVERED,
+        RequirementDisposition.SUPPORTED_PRE_SUBMIT,
+        RequirementDisposition.PRE_SUBMIT_CAPABILITY_GAP,
+        RequirementDisposition.SUPPORTED_POST_SUBMIT,
+        RequirementDisposition.POST_SUBMIT_CAPABILITY_GAP,
+        RequirementDisposition.GUIDE_BLOCKER,
+    }
+)
 
 
 class GuideEvidenceRef(BaseModel):
@@ -380,7 +384,9 @@ class CheckInput(BaseModel):
         | None
     ) = Field(default=None, exclude_if=lambda value: value is None)
     evaluation_context_roles: tuple[EvaluationContextRole, ...] | None = Field(
-        default=None, exclude_if=lambda value: value is None, max_length=2,
+        default=None,
+        exclude_if=lambda value: value is None,
+        max_length=2,
         description="Exact sorted selected revision material roles, only for evaluation_context.",
     )
     purpose: ModelProse
@@ -628,7 +634,8 @@ class CheckSpecification(BaseModel):
             raise ValueError("isolated evaluation requires an execution dependency")
         for item in self.inputs:
             if (
-                item.kind in {"task_context", "evaluation_context", "guide_context", "prepared_material"}
+                item.kind
+                in {"task_context", "evaluation_context", "guide_context", "prepared_material"}
                 and item.kind not in dependency_kinds
             ):
                 raise ValueError("check context input requires a runtime dependency")
@@ -896,9 +903,11 @@ class ProjectGuideCompilationContext(BaseModel):
         predecessor = self.correction_predecessor
         if (feedback is None) != (predecessor is None):
             raise ValueError("correction feedback and predecessor must be paired")
-        if feedback is not None and canonical_json_hash(
-            predecessor.model_dump(mode="json")
-        ) != feedback.predecessor_result_hash:
+        if (
+            feedback is not None
+            and canonical_json_hash(predecessor.model_dump(mode="json"))
+            != feedback.predecessor_result_hash
+        ):
             raise ValueError("correction predecessor hash mismatch")
 
 
@@ -934,7 +943,9 @@ def project_guide_compilation_prompt_bytes(context: ProjectGuideCompilationConte
     ).encode("utf-8")
 
 
-_COMPLETE_COMPILATION_RESULT_FIELDS = frozenset(ProjectGuideCompilationResult.model_fields) - {"setup_notes"}
+_COMPLETE_COMPILATION_RESULT_FIELDS = frozenset(ProjectGuideCompilationResult.model_fields) - {
+    "setup_notes"
+}
 
 
 def require_complete_project_guide_compilation_result(
@@ -949,8 +960,10 @@ def _require_trial_dependencies(specification: CheckSpecification, stage: Compil
     """Keep the nested runtime tool distinct from ordinary checker isolation."""
     dependencies = specification.runtime_dependencies
     nested = any(item.kind == "nested_sandbox" for item in dependencies)
-    if any(item.kind == "nested_sandbox" and item.provisioning != "trial_proxy"
-           for item in dependencies):
+    if any(
+        item.kind == "nested_sandbox" and item.provisioning != "trial_proxy"
+        for item in dependencies
+    ):
         raise ValueError("nested execution requires trial proxy provisioning")
     if any(item.provisioning == "trial_proxy" for item in dependencies):
         if stage is not CompilationStage.POST_SUBMIT:
@@ -964,8 +977,7 @@ def require_complete_generated_specifications(
     result: ProjectGuideCompilationResult,
 ) -> None:
     """Require an actionable typed handoff on newly generated requirements."""
-    if (context.runtime_configuration.uses_inference
-            and "setup_notes" in result.model_fields_set):
+    if context.runtime_configuration.uses_inference and "setup_notes" in result.model_fields_set:
         raise ValueError("generated setup notes are outside checker specification scope")
 
     specification_stages = {
@@ -979,8 +991,10 @@ def require_complete_generated_specifications(
         RequirementDisposition.SUPPORTED_POST_SUBMIT,
     }
     for requirement in result.requirements:
-        if (context.runtime_configuration.uses_inference
-                and requirement.disposition not in GENERATED_REQUIREMENT_DISPOSITIONS):
+        if (
+            context.runtime_configuration.uses_inference
+            and requirement.disposition not in GENERATED_REQUIREMENT_DISPOSITIONS
+        ):
             raise ValueError("generated requirement is outside PRE and POST checker scope")
         if requirement.classification_rationale is None:
             raise ValueError("generated requirement lacks a classification rationale")
@@ -1017,8 +1031,7 @@ def require_complete_generated_specifications(
         ):
             raise ValueError("supported check depends on unavailable runtime support")
         if any(
-            dependency.kind == "model_service"
-            and dependency.provisioning != "model_proxy"
+            dependency.kind == "model_service" and dependency.provisioning != "model_proxy"
             for dependency in specification.runtime_dependencies
         ):
             raise ValueError("model service requires model proxy provisioning")
@@ -1043,7 +1056,14 @@ def require_complete_generated_specifications(
             raise ValueError("pre-submit checker deadline exceeds the bounded stage")
         if specification.maximum_duration_seconds * 1000 > deadline_ms:
             raise ValueError("check specification exceeds the checker deadline")
-        supported_deadlines[binding.requirement_id] = deadline_ms
+        # A POST binding that selects forge facts also spends the facts read.
+        reads_forge_facts = binding.stage is CompilationStage.POST_SUBMIT and any(
+            parameter.name == FORGE_FACTS_VERSION_KEY
+            for parameter in getattr(binding, "parameters", ())
+        )
+        supported_deadlines[binding.requirement_id] = deadline_ms + (
+            SELECTED_POST_FORGE_FACTS_BUDGET_MS if reads_forge_facts else 0
+        )
 
     for stage, fixed_budget, maximum_budget in (
         (
@@ -1342,9 +1362,15 @@ def _validate_bindings(
         specification = requirement.check_specification
         require_evaluation_context_agreement(
             next(
-                (item.evaluation_context_roles for item in specification.inputs
-                 if item.kind == "evaluation_context"), None,
-            ) if specification is not None else None,
+                (
+                    item.evaluation_context_roles
+                    for item in specification.inputs
+                    if item.kind == "evaluation_context"
+                ),
+                None,
+            )
+            if specification is not None
+            else None,
             configuration,
             definition.registry_entry,
         )

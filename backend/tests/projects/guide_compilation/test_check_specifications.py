@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.interfaces.project_agents import (
     AtomicGuideRequirement,
+    CapabilityParameter,
     CapabilitySuggestion,
     CheckInput,
     CheckRuntimeDependency,
@@ -19,8 +20,15 @@ from app.interfaces.project_agents import (
     validate_project_guide_compilation_result,
 )
 from app.modules.checkers.api.external import (
+    EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS,
     ExternalCheckerRegistryEntry,
     ExternalCheckerRegistrySpec,
+)
+from app.modules.checkers.api.external_policy import (
+    FORGE_FACTS_VERSION_KEY,
+    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
+    SELECTED_POST_FORGE_FACTS_BUDGET_MS,
+    SELECTED_POST_MATERIALIZATION_BUDGET_MS,
 )
 from app.modules.projects.guide_compilation.contracts import accepted_compilation_result
 from tests.checkers.external.support import capability_projection, registry_entry
@@ -510,6 +518,52 @@ def test_supported_capacity_uses_registered_deadlines_not_small_estimates(
     )
     validate_project_guide_compilation_result(compilation_context, proposal)
     with pytest.raises(ValueError, match="supported .* checks exceed"):
+        require_complete_generated_specifications(compilation_context, proposal)
+
+
+@pytest.mark.parametrize("reads_forge_facts", [False, True])
+def test_supported_post_capacity_reserves_a_selected_forge_facts_read(
+    reads_forge_facts: bool,
+) -> None:
+    # The registered deadline fits the stage alone, but not with the facts read.
+    deadline_ms = (
+        MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS
+        - SELECTED_POST_MATERIALIZATION_BUDGET_MS
+        - EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
+        - SELECTED_POST_FORGE_FACTS_BUDGET_MS // 2
+    )
+    entry = _entry_with_deadline(deadline_ms, "post_submit")
+    compilation_context = context(ids(), checker_capabilities=capability_projection(entry))
+    requirement = _requirement(
+        requirement_id="required_item_0",
+        disposition="supported_post_submit",
+        check_specification=_specification(
+            execution_mode="background", maximum_duration_seconds=1
+        ).model_dump(mode="json"),
+    )
+    parameters = (
+        (CapabilityParameter(name=FORGE_FACTS_VERSION_KEY, value="v1"),)
+        if reads_forge_facts
+        else ()
+    )
+    proposal = generated_result().model_copy(
+        update={
+            "requirements": (requirement,),
+            "post_submit_bindings": (
+                PostSubmissionBindingProposal(
+                    requirement_id=requirement.requirement_id,
+                    capability_id=entry.capability_id,
+                    capability_version=entry.capability_version,
+                    stage="post_submit",
+                    parameters=parameters,
+                ),
+            ),
+        }
+    )
+    if reads_forge_facts:
+        with pytest.raises(ValueError, match="supported post-submit checks exceed"):
+            require_complete_generated_specifications(compilation_context, proposal)
+    else:
         require_complete_generated_specifications(compilation_context, proposal)
 
 

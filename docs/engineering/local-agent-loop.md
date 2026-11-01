@@ -94,7 +94,7 @@ docker compose up --wait checker-registry
 ```
 
 Build and publish the proof checker, then write the checker-service
-configuration and the two registry bodies. Run this on the Docker host from the
+configuration and the post-submission registry body. Run this on the Docker host from the
 repository root:
 
 ```bash
@@ -120,9 +120,9 @@ with an empty client configuration, for example
 
 Rebuilding the proof checker changes its digest. The registry holds one
 immutable entry per phase, capability and version, so rerun `publish_local.py`
-with a new `--capability-version` (for example `v2`), recreate the checker with
-`docker compose up --wait --force-recreate checker`, and register the two new
-bodies. Registering a new digest under an existing version returns
+with a new `--capability-version` (the default is `v2`; use, for example, `v3`), recreate the checker with
+`docker compose up --wait --force-recreate checker`, and register the new
+body. Registering a new digest under an existing version returns
 `external_checker_registry_conflict`.
 
 ## Create operators and service identities
@@ -195,16 +195,14 @@ docker compose exec -T backend python scripts/provision_local_service_actors.py 
 
 ## Register the proof checker
 
-Registration needs a current system `operator` grant. Each body is an
-`ExternalCheckerRegistrySpec` for one phase with the exact platform-manifest
-digest. Keep each key with its file; replaying the same key and body returns the
-same immutable entry:
+Registration needs a current system `operator` grant. The body is an
+`ExternalCheckerRegistrySpec` for the post-submission phase with the exact
+platform-manifest digest. The checker needs forge facts, which pre-submission
+checking never has, so it is not registered for PRE. Keep the key with its file;
+replaying the same key and body returns the same immutable entry:
 
 ```bash
-PRE_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
 POST_KEY="$(uuidgen | tr 'A-Z' 'a-z')"
-ws_as local-operator operations checker registry register \
-  --input .local-agent-loop/registry-pre.json --idempotency-key "$PRE_KEY" -o json
 ws_as local-operator operations checker registry register \
   --input .local-agent-loop/registry-post.json --idempotency-key "$POST_KEY" -o json
 ```
@@ -218,27 +216,148 @@ run the checker for any project.
 
 ### What the proof checker checks
 
-`external_checkers/harnessy_proof/checker.py` reads `proof.json` at the root of
-the submitted ZIP and returns `external_checker_result.v1`. Each failed rule is
-one `error` finding on `proof.json`, and the verdict is `failed` exactly when an
-error finding exists:
+`external_checkers/harnessy_proof/checker.py` (capability version `v2`,
+[WS-GHPROOF-001](../../.commitrail/initiatives/WS-GHPROOF-001/OVERVIEW.md)) is a
+post-submission checker with one mode, and it fails closed. It reads
+`proof.json` at the root of the submitted ZIP, compares it with forge facts
+(GitHub today) that WorkStream read from the git host, and returns
+`external_checker_result.v1`. A "forge" is the git host and a "change" is its
+pull or merge request. The checker has no network access and no credential.
+Every failed rule is one `error` finding on `proof.json`, and the verdict is
+`failed` exactly when an error finding exists. A proof never passes on its own
+claims.
 
-| Field | Rule |
+The POST binding configuration must select the forge facts version and name the
+forge, the forge instance's web origin, the repository and the base branch. It
+may set integrity options whose defaults are the safe ones:
+
+```json
+{"workstream_forge_facts_version": "v1", "forge": "github",
+ "forge_origin": "https://github.com",
+ "repository": "Flow-Research/harnessy-v2", "base_branch": "main"}
+```
+
+`forge` accepts only `github` today. `forge_origin` is `https://`, a host and an
+optional port, with no path or trailing slash; it tells GitHub Enterprise or a
+self-hosted GitLab or Forgejo instance apart from `https://github.com`.
+`repository` uses a forge-neutral path grammar: two or more `/`-joined segments
+of `A-Z a-z 0-9 . _ -`, none `.` or `..`, at most 255 characters, so GitLab
+subgroups fit. Each forge provider enforces its own stricter grammar.
+
+| Option | Default | Effect |
+|---|---|---|
+| `allow_unbound_required_checks` | `false` | When false, a required check that accepts any producer is an error |
+| `protected_paths` | `[]` | Globs added to `.github/**`, `**/CODEOWNERS`, `.gitlab-ci.yml`, `.gitlab/**`, `.circleci/**`, `.forgejo/**`, `.gitea/**`, `.woodpecker/**`, `.woodpecker.yml`, `.woodpecker.yaml` |
+| `required_independent_approvals` | `1` | Independent approvals needed on the head commit (1 to 10) |
+| `operator_logins` | `[]` | Logins whose approval alone adds the `harnessy.operator_approved` warning |
+
+WorkStream places the facts in the request `input` under `forge_facts`, so the
+request digest binds them. Each forge provider maps its host into the same
+`workstream.forge_change_facts.v1` facts; anything a provider cannot prove is
+null or absent, and the checker then fails closed. The facts are bound to one
+change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
+(SHA-256) lowercase hexadecimal characters:
+
+```json
+{
+  "forge_facts": {
+    "schema_version": "workstream.forge_change_facts.v1",
+    "forge": "github",
+    "forge_origin": "https://github.com",
+    "repository": "Flow-Research/harnessy-v2",
+    "change_number": 12,
+    "change_url": "https://github.com/Flow-Research/harnessy-v2/pull/12",
+    "state": "closed",
+    "merged": true,
+    "landed_commit_sha": "<commit id; null unless merged>",
+    "base_ref": "main",
+    "head_sha": "<commit id>",
+    "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
+    "reviews": [{"id": "61", "reviewer": {"login": "reviewer", "id": 7, "kind": "user"},
+                 "reviewer_write_access": true,
+                 "state": "approved", "commit_id": "<head sha, or null>",
+                 "submitted_at": "2026-10-24T11:00:00Z"}],
+    "changed_files_count": 1,
+    "changed_files": [{"path": "src/app.py", "previous_path": null, "status": "modified"}],
+    "required_checks": [{"name": "backend", "conclusion": "success",
+                         "required_producer": "github_app:15368",
+                         "judged": [{"producer": "github_app:15368", "sha": "<head sha>"}],
+                         "run_url": "https://github.com/Flow-Research/harnessy-v2/actions/runs/345"}],
+    "fetched_at": "2026-10-24T12:00:00Z",
+    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"}]
+  }
+}
+```
+
+Every object has exactly these keys. `change_number` is the per-repository
+number (a GitLab merge request's `iid`). `landed_commit_sha` is the commit the
+change landed as on the base branch, whether by merge, squash or rebase; it is
+present exactly when `merged` is true, and a merged change must be `closed`.
+`reviews` are in chronological order, oldest first. A review `id` is an opaque
+string of 1 to 100 characters, and the checker never orders review ids.
+`reviewer_write_access` says whether the reviewer currently has write (merge)
+access to the repository; it is null when the forge cannot prove it. An actor
+`kind` is `user`, `bot` or `other`. A review `state` is `approved`, `changes_requested`, `dismissed`,
+`commented`, `pending` or `other`. `judged` lists every result the provider
+judged for the check; its `producer` is null when the forge gives no producer
+identity, such as a GitHub commit status.
+
+Rules on the claims themselves (`harnessy.proof.*`): `schema` equals
+`harnessy.work.proof.v1`; `commit_sha` is 40 or 64 hexadecimal characters;
+`ci_conclusion` equals `success`; `merged` is the JSON value `true`. Rules
+against the facts (`harnessy.proof.forge.*`):
+
+| Code | Fails when |
 |---|---|
-| `schema` | equals `harnessy.work.proof.v1` |
-| `commit_sha` | 40 hexadecimal characters |
-| `pr_url`, `ci_run_url` | `https://github.com/...` without credentials or port |
-| `ci_conclusion` | equals `success` |
-| `merged` | the JSON value `true` |
+| `configuration` | the configuration is missing, lacks a required key, names an unsupported facts version or forge, or has an invalid option |
+| `facts_missing` | the input has no facts; the message names the configured repository and `forge_origin` that `pr_url` must point to |
+| `facts_invalid` | the facts do not have the exact `workstream.forge_change_facts.v1` shape, including `merged` if and only if `landed_commit_sha` is set, and `merged` only when `closed` |
+| `facts_binding` | a judged result names a commit other than `head_sha` |
+| `repository` | the facts' forge is not `forge`, their `forge_origin` is not exactly `forge_origin`, or their repository is not `repository` (case-insensitive) |
+| `base_branch` | the change's base branch is not `base_branch` |
+| `change_url` | `pr_url` is not exactly the facts' `change_url` |
+| `ci_run` | `ci_run_url` is not exactly the `run_url` of a required check |
+| `merged` | the forge reports the change as not merged |
+| `landed_commit_sha` | `commit_sha` is not the commit the change landed as (case-insensitive) |
+| `required_check` | one finding per required check whose result is not `success` |
+| `unbound_required_check` | a required check has no `required_producer` and `allow_unbound_required_checks` is false |
+| `producer_mismatch` | a required check is bound to a producer and one of its judged results comes from another producer or from an unknown one |
+| `protected_path_changed` | a changed file, or a rename's previous path, matches a protected glob; the work needs explicit human acceptance and cannot be auto-accepted |
+| `independent_approval_missing` | fewer than `required_independent_approvals` reviewers approve the head commit. Each reviewer's last `approved`, `changes_requested` or `dismissed` review by list position decides. It counts only from a `user` account that is not the author (id, or login ignoring case) and whose `reviewer_write_access` is `true` |
 
-**Trust caveat.** The checker has no network access. It checks only what
-`proof.json` claims. It does not confirm that the pull request, commit or CI
-run exist, that the CI run belongs to the commit, or that the pull request was
-merged. A passing verdict means well-formed claims, not independently verified
-work. With `human_review_required:false`, a well-formed but false proof
-would reach automatic FinalAcceptance. Do not use this checker alone to gate
-acceptance that leads to compensation; pair it with human review, or with a
-checker that has trusted access to the evidence, when the claim must be true.
+The checker parses no URL and builds no forge URL. URL comparison is exact and
+case-sensitive against the URLs the facts report, so a trailing slash, query,
+fragment, port, user information, percent encoding, backslash, different case or
+non-ASCII character fails. A review whose `commit_id` is null never approves.
+Nor does a review whose `reviewer_write_access` is null or false, so a
+contributor's second account without write access cannot supply the
+independent approval.
+
+When every qualifying approval comes from `operator_logins`, the checker adds a
+non-blocking `warning` finding with code `harnessy.operator_approved`: the work
+may earn points but may not be paid in money until an independent reviewer
+confirms it. The verdict does not change.
+
+**Where the facts come from.** For a POST binding that selects forge facts,
+WorkStream's POST evaluation reads the claimed `pr_url` from `proof.json`,
+and, when it names a change in the configured repository on the configured
+`forge_origin`, reads that change's facts from the forge before running the
+checker (initiative chunk 04). GitHub is read as the read-only GitHub App
+configured by the `WORKSTREAM_GITHUB_APP_*` settings in `backend/.env.example`;
+its web origin follows the API URL (`https://github.com` for the public API,
+the Enterprise host otherwise), and a binding whose `forge_origin` differs ends
+as an infrastructure failure. For reviewers who approved the head commit, the
+App also reads their current repository permission, so an approval counts only
+from someone with write access. A missing, oversized or malformed `proof.json`
+fails with the checker's `missing`, `too_large` or `invalid_json` finding. A
+claim that names another repository, a change the forge does not have, a
+change into another base branch, or one with more changed files, reviews or
+checks than GitHub lists (3000 files) yields no facts, and the checker fails
+with `facts_missing`; so do facts too large for the 1 MiB checker input. If the forge is
+unreachable, refuses the credential, cannot read the configured repository or
+answers outside its protocol, or the App is not configured, the evaluation ends
+as an infrastructure failure that an Operator can retry; it never passes.
+There is deliberately no shape-only mode.
 
 ## Create the manager project and the agent submitter
 
@@ -377,8 +496,8 @@ version that selects the new published policy is activated.
 ## Placeholder: compile, approve and activate the guide rules
 
 > **Not covered here.** Selecting `harnessy.work_proof` into the locked
-> pre-submission and post-submission policies is guide compilation, followed by
-> the manager's separate PRE and POST approvals and guide activation. How rule
+> post-submission policy is guide compilation, followed by the manager's
+> separate PRE and POST approvals and guide activation. How rule
 > setup works for this stack is being decided separately. Until it is, no task
 > can be created for the project, and the contributor flow below cannot run.
 > Provider-backed compilation needs `OPENROUTER_API_KEY` (for the default OpenRouter provider); see the

@@ -518,6 +518,7 @@ def validate_submission_policy_context(
 def evaluation_request_handler(*, sessions, materialization):
     """Compose one hidden TASK request handler; production registration is separate."""
     from app.adapters.checkers import (
+        configured_forge_facts,
         configured_post_submit_external_execution,
         delivery_bound_post_submission_executor,
         evaluation_coordinator,
@@ -534,6 +535,7 @@ def evaluation_request_handler(*, sessions, materialization):
             envelope=envelope,
             request=request,
             selected_execution=selected_execution,
+            forge_facts=configured_forge_facts(get_settings()),
         )
 
     return EvaluationRequestHandler(

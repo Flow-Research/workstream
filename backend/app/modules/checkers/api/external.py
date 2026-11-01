@@ -112,6 +112,11 @@ def _canonical_bytes(value: object) -> bytes:
     return _canonical_json(value).encode("utf-8")
 
 
+def external_checker_input_fits(value: object) -> bool:
+    """Return whether a request input stays within the checker input ceiling."""
+    return len(_canonical_bytes(value)) <= MAX_INPUT_BYTES
+
+
 def external_checker_json_hash(value: object) -> str:
     """Hash the checker-only canonical representation shared with PostgreSQL."""
     return f"sha256:{hashlib.sha256(_canonical_bytes(value)).hexdigest()}"

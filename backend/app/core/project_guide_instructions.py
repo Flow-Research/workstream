@@ -4,8 +4,10 @@ import json
 
 from app.modules.checkers.api.external import EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
 from app.modules.checkers.api.external_policy import (
+    FORGE_FACTS_VERSION_KEY,
     MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
     MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS,
+    SELECTED_POST_FORGE_FACTS_BUDGET_MS,
     SELECTED_POST_MATERIALIZATION_BUDGET_MS,
     WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS,
 )
@@ -372,15 +374,16 @@ and version are synthetic. Never copy them into the actual proposal.
 """
 
 PROJECT_GUIDE_INSTRUCTIONS += (
-    f"\nStage budgets: PRE {MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS} milliseconds "
+    f"\nStage budgets: PRE {MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS} ms "
     f"including default {WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS}; "
-    f"POST {MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS} milliseconds including "
+    f"POST {MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS} ms including "
     f"materialization {SELECTED_POST_MATERIALIZATION_BUDGET_MS}. "
-    "Add every separate entry's registered deadline (or proposed duration for a missing "
-    f"image) plus {EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS} milliseconds cleanup, "
-    "without overlap. Only a stage exceeding its total may declare execution_capacity/"
-    "runtime_gap; explain the exact shortfall in its specification. Validation checks "
-    "the totals. A proposal grants no extra capacity.\n"
+    "Sum each entry's registered deadline (proposed duration if image missing) plus "
+    f"{EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS} ms cleanup; no overlap. "
+    f"Each POST entry selecting {FORGE_FACTS_VERSION_KEY} adds "
+    f"{SELECTED_POST_FORGE_FACTS_BUDGET_MS} ms for forge facts. "
+    "Declare execution_capacity/runtime_gap only for an exact specified stage shortfall. "
+    "Totals are validated; proposals grant no extra capacity.\n"
 )
 
 

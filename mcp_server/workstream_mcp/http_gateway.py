@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -15,7 +15,7 @@ from jsonschema import Draft202012Validator, ValidationError  # type: ignore[imp
 
 from workstream_mcp.config import Settings
 from workstream_mcp.errors import SafeFailure
-from workstream_mcp.limits import GUIDE_DOCUMENT_MEDIA_TYPES
+from workstream_mcp.limits import GUIDE_DOCUMENT_MEDIA_TYPES, TASK_IMPORT_SOURCE_MAX_BYTES
 from workstream_mcp.schemas import (
     access_read_output_validator,
     actor_lifecycle_output_validator,
@@ -31,6 +31,7 @@ from workstream_mcp.schemas import (
     project_grant_output_validator,
     project_output_validator,
     task_execution_output_validator,
+    task_operation_output_validator,
     workspace_read_output_validator,
 )
 
@@ -416,6 +417,117 @@ _TASK_EXECUTION_MUTATIONS = frozenset(
         "task_start",
         "submission_create",
     }
+)
+
+TASK_OPERATIONS = {
+    "projects_list": ("GET", "/api/v1/projects", 200),
+    "service_actor_create": ("POST", "/api/v1/service-actors", 201),
+    "task_import_batch_create": (
+        "POST",
+        "/api/v1/projects/{project_id}/task-import-batches",
+        201,
+    ),
+    "management_tasks_list": ("GET", "/api/v1/projects/{project_id}/tasks", 200),
+    "management_task_create": ("POST", "/api/v1/projects/{project_id}/tasks", 201),
+    "operational_tasks_list": (
+        "GET",
+        "/api/v1/operations/projects/{project_id}/tasks",
+        200,
+    ),
+    "task_import_batch_screen": (
+        "POST",
+        "/api/v1/projects/{project_id}/task-import-batches/{batch_id}/screen",
+        200,
+    ),
+    "task_import_batch_release": (
+        "POST",
+        "/api/v1/projects/{project_id}/task-import-batches/{batch_id}/release",
+        200,
+    ),
+    "task_import_batch_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/task-import-batches/{batch_id}",
+        200,
+    ),
+    "management_task_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/tasks/{task_id}",
+        200,
+    ),
+    "management_task_locked_context_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/tasks/{task_id}/locked-context",
+        200,
+    ),
+    "operational_task_locked_context_get": (
+        "GET",
+        "/api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context",
+        200,
+    ),
+    "audit_task_locked_context_get": (
+        "GET",
+        "/api/v1/audit/projects/{project_id}/tasks/{task_id}/locked-context",
+        200,
+    ),
+    "task_revision_context_repair": (
+        "POST",
+        "/api/v1/projects/{project_id}/tasks/{task_id}/revision-context/repair",
+        200,
+    ),
+    "audit_task_evidence_get": (
+        "GET",
+        "/api/v1/audit/projects/{project_id}/tasks/{task_id}/evidence",
+        200,
+    ),
+    "operational_task_start_override": (
+        "POST",
+        "/api/v1/operations/tasks/{task_id}/start",
+        200,
+    ),
+    "project_model_profile_provision": (
+        "POST",
+        "/api/v1/operations/projects/{project_id}/model-profiles",
+        201,
+    ),
+    "project_model_budget_configure": (
+        "POST",
+        "/api/v1/operations/projects/{project_id}/model-budget-configurations",
+        201,
+    ),
+    "project_model_usage_effect_get": (
+        "GET",
+        "/api/v1/operations/projects/{project_id}/model-usage/effects/{effect_id}",
+        200,
+    ),
+    "project_model_recovery_child_create": (
+        "POST",
+        "/api/v1/operations/projects/{project_id}/model-call-attempts/"
+        "{parent_attempt_id}/recovery-children",
+        201,
+    ),
+    "task_import_source_declare": (
+        "POST",
+        "/api/v1/projects/{project_id}/task-import-sources",
+        201,
+    ),
+    "task_import_source_content_upload": (
+        "PUT",
+        "/api/v1/projects/{project_id}/task-import-sources/{source_id}/content",
+        200,
+    ),
+    "task_import_source_content_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/task-import-sources/{source_id}/content",
+        200,
+    ),
+    "task_import_source_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/task-import-sources/{source_id}",
+        200,
+    ),
+}
+_TASK_OPERATION_MUTATIONS = frozenset(
+    name for name, (method, _, _) in TASK_OPERATIONS.items() if method != "GET"
 )
 
 
@@ -1506,6 +1618,234 @@ class WorkstreamGateway:
             return cls._fields_match(
                 data,
                 {"task_id": task_id, "project_id": project_id},
+            )
+        return False
+
+    async def task_operation(
+        self,
+        name: str,
+        bearer: str,
+        arguments: dict[str, Any],
+        correlation_id: str | None = None,
+        *,
+        upload: bytes | None = None,
+    ) -> GatewayResult:
+        """Dispatch one fixed management, import, audit or model operation."""
+        method, path_template, expected_status = TASK_OPERATIONS[name]
+        selectors = set(re.findall(r"{([a-z_]+)}", path_template))
+        path = path_template
+        for selector in selectors:
+            value = arguments.get(selector)
+            if not isinstance(value, str):
+                return self._invalid_read_response(correlation_id)
+            path = path.replace(f"{{{selector}}}", quote(value, safe=""))
+
+        if name == "task_import_source_content_get":
+            return await self._request_import_source_content(path, bearer, correlation_id)
+        if name == "task_import_source_content_upload" and upload is None:
+            return GatewayResult(failure=SafeFailure("invalid_tool_input", status=400))
+
+        params = {
+            key: str(value)
+            for key, value in arguments.items()
+            if value is not None
+            and key not in selectors
+            and key not in {"body", "content_base64", "idempotency_key"}
+        }
+        mutation = name in _TASK_OPERATION_MUTATIONS
+        outcome = await self._request(
+            method,
+            path,
+            bearer,
+            task_operation_output_validator(name),
+            correlation_id,
+            json_body=arguments.get("body"),
+            params=params or None,
+            idempotency_key=arguments.get("idempotency_key"),
+            expected_status=expected_status,
+            mutation=mutation,
+            raw_body=upload,
+            content_type=(
+                "application/json" if name == "task_import_source_content_upload" else None
+            ),
+        )
+        if outcome.failure is not None:
+            return outcome
+        if self._task_operation_response_matches(name, outcome.data or {}, arguments, upload):
+            return outcome
+        return GatewayResult(
+            failure=SafeFailure(
+                "workstream_execution_uncertain" if mutation else "invalid_api_response",
+                status=502,
+                correlation_id=outcome.correlation_id or correlation_id,
+            )
+        )
+
+    async def _request_import_source_content(
+        self,
+        path: str,
+        bearer: str,
+        correlation_id: str | None,
+    ) -> GatewayResult:
+        request_id = correlation_id or str(uuid4())
+        try:
+            async with asyncio.timeout(self._settings.total_timeout_seconds):
+                async with self._slots:
+                    async with self._client.stream(
+                        "GET",
+                        path,
+                        headers={
+                            "Authorization": bearer,
+                            "Accept": "application/json",
+                            "Accept-Encoding": "identity",
+                            "X-Request-ID": request_id,
+                        },
+                    ) as response:
+                        body = await self._bounded_body(
+                            response,
+                            max_bytes=TASK_IMPORT_SOURCE_MAX_BYTES,
+                        )
+                        response_id = self._correlation_id(response, request_id)
+                        if response.status_code != 200:
+                            return GatewayResult(
+                                failure=self._api_failure(
+                                    response.status_code,
+                                    body,
+                                    response_id,
+                                )
+                            )
+                        media_type = (
+                            response.headers.get("content-type", "")
+                            .split(";", 1)[0]
+                            .strip()
+                            .lower()
+                        )
+                        if media_type != "application/json" or not body:
+                            return self._invalid_read_response(response_id)
+                        data = {
+                            "media_type": media_type,
+                            "content_base64": base64.b64encode(body).decode("ascii"),
+                            "byte_count": len(body),
+                            "sha256": f"sha256:{hashlib.sha256(body).hexdigest()}",
+                        }
+                        task_operation_output_validator(
+                            "task_import_source_content_get"
+                        ).validate(data)
+                        return GatewayResult(data=data, correlation_id=response_id)
+        except asyncio.CancelledError:
+            raise
+        except TimeoutError:
+            return GatewayResult(
+                failure=SafeFailure("workstream_timeout", status=504, retryable=True)
+            )
+        except ResponseTooLarge:
+            return GatewayResult(
+                failure=SafeFailure("workstream_response_too_large", status=502)
+            )
+        except httpx.HTTPError:
+            return GatewayResult(
+                failure=SafeFailure("workstream_unavailable", status=502, retryable=True)
+            )
+        except ValidationError:  # pragma: no cover - static schema is checked at startup
+            return GatewayResult(failure=SafeFailure("adapter_internal_error", status=500))
+        except Exception:  # pragma: no cover - defensive transport boundary
+            return GatewayResult(failure=SafeFailure("adapter_internal_error", status=500))
+
+    @classmethod
+    def _task_operation_response_matches(
+        cls,
+        name: str,
+        data: dict[str, Any],
+        arguments: dict[str, Any],
+        upload: bytes | None,
+    ) -> bool:
+        project_id = cast(str, arguments.get("project_id"))
+        task_id = cast(str, arguments.get("task_id"))
+        batch_id = cast(str, arguments.get("batch_id"))
+        source_id = cast(str | None, arguments.get("source_id"))
+        if name == "projects_list":
+            return cls._unique_uuid_field(data.get("items"), "project_id")
+        if name == "service_actor_create":
+            return cls._payload_contains(
+                data.get("service_identity"),
+                arguments["body"]["service_identity"],
+            )
+        if name == "task_import_batch_create":
+            return cls._fields_match(
+                data,
+                {"project_id": project_id, "source_id": arguments["body"]["source_id"]},
+            )
+        if name in {"management_tasks_list", "operational_tasks_list"}:
+            return cls._same_uuid(data.get("project_id"), project_id) and cls._items_match(
+                data, {"project_id": project_id}, unique="task_id"
+            )
+        if name == "management_task_create":
+            return cls._same_uuid(data.get("project_id"), project_id)
+        if name in {"task_import_batch_screen", "task_import_batch_release"}:
+            return cls._fields_match(
+                data, {"project_id": project_id, "batch_id": batch_id}
+            )
+        if name == "task_import_batch_get":
+            creation = data.get("creation")
+            return isinstance(creation, dict) and cls._fields_match(
+                creation, {"project_id": project_id, "batch_id": batch_id}
+            )
+        if name == "management_task_get":
+            return cls._fields_match(data, {"project_id": project_id, "task_id": task_id})
+        if name in {
+            "management_task_locked_context_get",
+            "operational_task_locked_context_get",
+            "audit_task_locked_context_get",
+        }:
+            return cls._fields_match(data, {"project_id": project_id, "task_id": task_id})
+        if name == "task_revision_context_repair":
+            body = arguments["body"]
+            predecessor_id = body.get("parent_preparation_id")
+            return (
+                predecessor_id is None
+                or cls._same_uuid(data.get("predecessor_preparation_id"), predecessor_id)
+            )
+        if name == "audit_task_evidence_get":
+            return cls._fields_match(data, {"project_id": project_id, "task_id": task_id})
+        if name == "operational_task_start_override":
+            return cls._same_uuid(data.get("id"), task_id)
+        if name in {
+            "project_model_profile_provision",
+            "project_model_budget_configure",
+        }:
+            spec = data.get("spec")
+            return isinstance(spec, dict) and cls._same_uuid(spec.get("project_id"), project_id)
+        if name == "project_model_usage_effect_get":
+            return cls._fields_match(
+                data, {"project_id": project_id, "effect_id": arguments["effect_id"]}
+            )
+        if name == "project_model_recovery_child_create":
+            body = arguments["body"]
+            slot_matches = cls._payload_contains(data.get("slot_key"), body.get("slot"))
+            digest_matches = data.get("request_sha256") == body.get("request_sha256")
+            return bool(slot_matches and digest_matches)
+        if name in {"task_import_source_declare", "task_import_source_get"}:
+            expected: dict[str, str] = {"project_id": project_id}
+            if source_id is not None:
+                expected["source_id"] = source_id
+            matches = cls._fields_match(data, expected)
+            if name == "task_import_source_declare":
+                body = arguments["body"]
+                matches = (
+                    matches
+                    and data.get("sha256") == body.get("sha256")
+                    and data.get("byte_count") == body.get("byte_count")
+                )
+            return matches
+        if name == "task_import_source_content_upload":
+            return (
+                upload is not None
+                and source_id is not None
+                and cls._fields_match(
+                    data, {"project_id": project_id, "source_id": source_id}
+                )
+                and data.get("byte_count") == len(upload)
+                and data.get("sha256") == f"sha256:{hashlib.sha256(upload).hexdigest()}"
             )
         return False
 

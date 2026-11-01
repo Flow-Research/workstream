@@ -1,0 +1,505 @@
+{
+  "canonical_sha256": "59832618f773869a0a84221fb515a14e68a94e678e227a7833c82c1bb4fe5819",
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "detail",
+          "error"
+        ],
+        "type": "object"
+      },
+      "OperationalTaskLockedContext": {
+        "additionalProperties": false,
+        "description": "Operational provenance references; no policy body or private task details.",
+        "properties": {
+          "locked_contribution_policy_version_id": {
+            "format": "uuid",
+            "title": "Locked Contribution Policy Version Id",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Effective Project Submission Artifact Policy Hash",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_id": {
+            "format": "uuid",
+            "title": "Locked Effective Project Submission Artifact Policy Id",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Guide Source Snapshot Hash",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_id": {
+            "format": "uuid",
+            "title": "Locked Guide Source Snapshot Id",
+            "type": "string"
+          },
+          "locked_guide_version": {
+            "pattern": "\\S",
+            "title": "Locked Guide Version",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Post Submit Checker Policy Hash",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Post Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_version": {
+            "pattern": "\\S",
+            "title": "Locked Post Submit Checker Policy Version",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_bundle_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Pre Submit Checker Bundle Hash",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Pre Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_review_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Review Policy Generation",
+            "type": "integer"
+          },
+          "locked_review_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Review Policy Hash",
+            "type": "string"
+          },
+          "locked_review_policy_id": {
+            "format": "uuid",
+            "title": "Locked Review Policy Id",
+            "type": "string"
+          },
+          "locked_revision_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Revision Policy Generation",
+            "type": "integer"
+          },
+          "locked_revision_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Revision Policy Hash",
+            "type": "string"
+          },
+          "locked_revision_policy_id": {
+            "format": "uuid",
+            "title": "Locked Revision Policy Id",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locked_guide_version",
+          "locked_guide_source_snapshot_id",
+          "locked_guide_source_snapshot_hash",
+          "locked_effective_project_submission_artifact_policy_id",
+          "locked_effective_project_submission_artifact_policy_hash",
+          "locked_pre_submit_checker_policy_id",
+          "locked_pre_submit_checker_bundle_hash",
+          "locked_post_submit_checker_policy_id",
+          "locked_post_submit_checker_policy_version",
+          "locked_post_submit_checker_policy_hash",
+          "locked_review_policy_id",
+          "locked_review_policy_generation",
+          "locked_review_policy_hash",
+          "locked_revision_policy_id",
+          "locked_revision_policy_generation",
+          "locked_revision_policy_hash",
+          "locked_contribution_policy_version_id",
+          "task_id",
+          "project_id"
+        ],
+        "title": "OperationalTaskLockedContext",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Read original locked policy provenance under exact operational authority.",
+    "operationId": "get_operational_task_locked_context_api_v1_operations_projects__project_id__tasks__task_id__locked_context_get",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "path",
+        "name": "task_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/OperationalTaskLockedContext"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Resource not found.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/ApiError"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              ]
+            }
+          }
+        },
+        "description": "Locked task context is missing or inconsistent.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Identity verification unavailable.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Get Operational Task Locked Context",
+    "tags": [
+      "tasks"
+    ],
+    "x-workstream-action-id": "operations.task.locked_context.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/operations/projects/{project_id}/tasks/{task_id}/locked-context",
+    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+  }
+}

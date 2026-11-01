@@ -45,6 +45,7 @@ from app.modules.checkers.api.selected_post_submit import (
     make_selected_post_submit_result,
 )
 from app.modules.checkers.selected_post_submit_execution import (
+    ForgeFactsResolver,
     SelectedPostSubmitProcessor,
 )
 from app.interfaces.external_checker_execution import ExternalCheckerExecutionAdapter
@@ -87,9 +88,11 @@ class _SelectedExternalConsumer:
         self,
         execution: ExternalCheckerExecutionAdapter,
         lease: ExecutionLease,
+        forge_facts: ForgeFactsResolver | None = None,
     ) -> None:
         self._execution = execution
         self._lease = lease
+        self._forge_facts = forge_facts
 
     async def evaluate(self, request, material):
         request = SelectedPostSubmissionEvaluationRequest.model_validate(request)
@@ -121,6 +124,7 @@ class _SelectedExternalConsumer:
                 policy=request.policy,
                 identity=identity,
                 execution=self._execution,
+                forge_facts=self._forge_facts,
             ).evaluate(request, material)
             return make_selected_post_submit_result(
                 **values,
@@ -148,6 +152,7 @@ class PostSubmissionExecutor:
         finalize_authority: Callable[[AsyncSession], FinalizationAuthorityPort],
         materialization: PostSubmissionMaterializationPort,
         selected_execution: ExternalCheckerExecutionAdapter | None = None,
+        forge_facts: ForgeFactsResolver | None = None,
         outbox: Callable[[AsyncSession], OutboxAppendPort],
         review_modes: Callable[[AsyncSession], ReviewModePort],
     ):
@@ -157,6 +162,7 @@ class PostSubmissionExecutor:
         self._execute_authority, self._finalize_authority = execute_authority, finalize_authority
         self._materialization, self._outbox = materialization, outbox
         self._selected_execution = selected_execution
+        self._forge_facts = forge_facts
 
     @staticmethod
     def _execution_budget_seconds(request: PostSubmissionExecutionRequest) -> int:
@@ -165,7 +171,7 @@ class PostSubmissionExecutor:
     def _consumer(self, request, lease):
         if self._selected_execution is None:
             raise CheckerExecutionUnavailable("checker_external_execution_unavailable")
-        return _SelectedExternalConsumer(self._selected_execution, lease)
+        return _SelectedExternalConsumer(self._selected_execution, lease, self._forge_facts)
 
     async def _claim(self, request):
         """Authorize replay or acquire the next database-timed lease atomically."""

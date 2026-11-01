@@ -446,7 +446,7 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/interfaces/github_facts.py"
+      "target": "backend/app/interfaces/forge_facts.py"
     },
     {
       "group": "shared",
@@ -2581,7 +2581,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "26fee37a0185e847201fa80d6952664fe8c403e98648b82cab673bcd1d6399c4",
+  "authority_digest": "1b6b2fc869377e7fcc2b65f9981fb4154aa91d2cf69a65ca8c1356f5f16931e7",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -23,12 +23,19 @@ from app.modules.checkers.api.external import (
     external_checker_json_hash,
     ExternalCheckerRegistryUnavailable,
 )
+from app.core.hashing import canonical_json_hash
 from app.modules.checkers.api.external_policy import (
+    FORGE_FACTS_VERSION_KEY,
+    SELECTED_POST_FORGE_FACTS_BUDGET_MS,
     ExternalCheckerPolicyError,
+    ForgeFactsSelection,
+    LockedExternalCheckerBinding,
+    LockedExternalPostSubmitPolicy,
     LockedWorkstreamDefault,
     MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
     SELECTED_POST_MATERIALIZATION_BUDGET_MS,
     compile_external_checker_policies,
+    selected_forge_facts,
     selected_post_submit_execution_budget_ms,
     selected_pre_submit_execution_budget_ms,
 )
@@ -677,3 +684,109 @@ async def test_policy_compilation_refuses_pre_images_exceeding_platform_custody(
     ]
     with pytest.raises(ValueError, match="ART custody deadline"):
         await compile_external_checker_policies(proposal, _Registry(entries))
+
+
+def _forge_binding(configuration, *, declared=True, phase="post_submit"):
+    """A binding over a published schema that does or does not declare forge facts."""
+    properties = {
+        "repository": {"type": "string"},
+        "forge": {"type": "string"},
+        "forge_origin": {"type": "string"},
+    }
+    if declared:
+        properties[FORGE_FACTS_VERSION_KEY] = {"const": "v1"}
+    document = {"type": "object", "properties": properties}
+    schema = ExternalCheckerSchema(
+        schema_id="harnessy_work_proof_config",
+        schema_version="v1",
+        document=document,
+        schema_sha256=external_checker_json_hash(document),
+    )
+    return LockedExternalCheckerBinding(
+        requirement_id="harnessy.work_proof",
+        stage=phase,
+        registry=_entry("harnessy.work_proof", phase, configuration_schema=schema),
+        configuration=configuration,
+        configuration_sha256=external_checker_json_hash(configuration),
+    )
+
+
+_FORGE_SELECTION = {
+    FORGE_FACTS_VERSION_KEY: "v1",
+    "forge": "github",
+    "forge_origin": "https://github.com",
+    "repository": "Flow-Research/harnessy-v2",
+    "base_branch": "dev",
+}
+
+
+def test_forge_facts_are_selected_only_by_an_exact_declared_post_capability():
+    binding = _forge_binding(_FORGE_SELECTION)
+    assert selected_forge_facts(binding.configuration, binding.stage) == ForgeFactsSelection(
+        forge="github",
+        forge_origin="https://github.com",
+        repository="Flow-Research/harnessy-v2",
+        base_branch="dev",
+    )
+    # A neutral path may hold subgroups and a self-hosted instance with a port.
+    assert selected_forge_facts(
+        {
+            **_FORGE_SELECTION,
+            "forge_origin": "https://git.example.org:8443",
+            "repository": "group/subgroup/project",
+        },
+        "post_submit",
+    ) == ForgeFactsSelection(
+        forge="github",
+        forge_origin="https://git.example.org:8443",
+        repository="group/subgroup/project",
+        base_branch="dev",
+    )
+    assert selected_forge_facts({"repository": "a/b"}, "post_submit") is None
+    with pytest.raises(ValueError, match="schema does not declare forge facts"):
+        _forge_binding(_FORGE_SELECTION, declared=False)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {FORGE_FACTS_VERSION_KEY: "v2"},
+        {"forge": "gitlab"},
+        {"forge": None},
+        {"repository": "Flow-Research"},
+        {"repository": "https://github.com/Flow-Research/harnessy-v2"},
+        {"repository": "Flow-Research/.."},
+        {"repository": "a/" + "b" * 254},
+        {"forge_origin": None},
+        {"forge_origin": "http://github.com"},
+        {"forge_origin": "https://github.com/"},
+        {"forge_origin": "https://github.com/Flow-Research"},
+        {"base_branch": ""},
+        {"base_branch": 7},
+    ],
+)
+def test_invalid_forge_facts_selection_never_reads_facts(changes):
+    with pytest.raises(ExternalCheckerPolicyError, match="forge facts selection"):
+        selected_forge_facts({**_FORGE_SELECTION, **changes}, "post_submit")
+
+
+def test_pre_submit_cannot_select_forge_facts():
+    with pytest.raises(ExternalCheckerPolicyError, match="forge facts selection"):
+        selected_forge_facts(_FORGE_SELECTION, "pre_submit")
+
+
+def test_selected_post_budget_reserves_the_forge_facts_read():
+    plain, selected = _forge_binding({}), _forge_binding(_FORGE_SELECTION)
+
+    def budget(binding):
+        body = {
+            "schema_version": "external_post_submit_policy.v1",
+            "entries": [binding.model_dump(mode="json")],
+        }
+        return selected_post_submit_execution_budget_ms(
+            LockedExternalPostSubmitPolicy(
+                entries=(binding,), policy_sha256=canonical_json_hash(body)
+            )
+        )
+
+    assert budget(selected) - budget(plain) == SELECTED_POST_FORGE_FACTS_BUDGET_MS

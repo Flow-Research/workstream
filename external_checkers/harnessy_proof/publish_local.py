@@ -6,8 +6,9 @@ directory's image, pushes it to the loopback registry, resolves the exact
 platform manifest, pulls that digest so the daemon records it, and writes:
 
 - ``checker-service.json``: the Rust checker-service configuration;
-- ``registry-pre.json`` and ``registry-post.json``: ``ExternalCheckerRegistrySpec``
-  bodies for ``POST /api/v1/operations/external-checker-registry``.
+- ``registry-post.json``: the ``ExternalCheckerRegistrySpec`` body for
+  ``POST /api/v1/operations/external-checker-registry``. The checker is
+  post-submission only: it needs forge facts, which PRE never has.
 
 It uses only the Python standard library and the Docker CLI.
 """
@@ -29,10 +30,8 @@ MANIFEST_TYPES = (
     "application/vnd.docker.distribution.manifest.v2+json",
 )
 CAPABILITY_ID = "harnessy.work_proof"
-INPUT_SCHEMA_IDS = {
-    "pre_submit": "external_checker_pre_submit_input",
-    "post_submit": "external_checker_post_submit_input",
-}
+PHASE = "post_submit"
+INPUT_SCHEMA_ID = "external_checker_post_submit_input"
 # The socket stays on a named volume: Docker Desktop host-shared paths refuse
 # chmod on Unix sockets, and AF_UNIX paths must stay within 107 bytes.
 SOCKET_PATH = "/run/ws-checker/checker.sock"
@@ -50,13 +49,69 @@ def model_relay_root(compose_project: str) -> str:
 
 
 def _hash(value: object) -> str:
-    """Canonical JSON digest for the string-only schema documents used here."""
+    """Canonical JSON digest for the string/integer/object schema documents used here."""
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _schema(schema_id: str) -> dict[str, object]:
-    document = {"type": "object"}
+# One fail-closed mode: the forge facts version, forge, forge instance origin,
+# repository and base branch are required. Integrity options are optional and
+# default to the safe values. GitHub is the only supported forge today. The
+# repository uses the forge-neutral path grammar: two or more "/"-joined
+# segments, none "." or ".." (GitLab subgroups allowed).
+CONFIGURATION_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "workstream_forge_facts_version",
+        "forge",
+        "forge_origin",
+        "repository",
+        "base_branch",
+    ],
+    "properties": {
+        "workstream_forge_facts_version": {"const": "v1"},
+        "forge": {"enum": ["github"]},
+        "forge_origin": {
+            "type": "string",
+            "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$",
+        },
+        "repository": {
+            "type": "string",
+            "maxLength": 255,
+            "pattern": r"^(?!(?:.*/)?\.{1,2}(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+$",
+        },
+        "base_branch": {"type": "string", "minLength": 1, "maxLength": 255},
+        "allow_unbound_required_checks": {"type": "boolean"},
+        "protected_paths": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {"type": "string", "minLength": 1, "maxLength": 1000},
+        },
+        "required_independent_approvals": {"type": "integer", "minimum": 1, "maximum": 10},
+        "operator_logins": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {"type": "string", "minLength": 1, "maxLength": 100},
+        },
+    },
+}
+# WorkStream adds forge facts to the normalized POST input. A missing facts
+# object reaches the checker, which reports forge.facts_missing.
+INPUT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "forge_facts": {
+            "type": "object",
+            "required": ["schema_version"],
+            "properties": {"schema_version": {"const": "workstream.forge_change_facts.v1"}},
+        }
+    },
+}
+
+
+def _schema(schema_id: str, document: dict[str, object] | None = None) -> dict[str, object]:
+    document = {"type": "object"} if document is None else document
     return {
         "schema_id": schema_id,
         "schema_version": "v1",
@@ -65,15 +120,17 @@ def _schema(schema_id: str) -> dict[str, object]:
     }
 
 
-def registry_spec(phase: str, image_digest: str, capability_version: str) -> dict[str, object]:
-    """One immutable registry body; PRE and POST share the image and limits."""
+def registry_spec(image_digest: str, capability_version: str) -> dict[str, object]:
+    """The immutable post-submission registry body."""
     return {
         "capability_id": CAPABILITY_ID,
         "capability_version": capability_version,
-        "phase": phase,
+        "phase": PHASE,
         "image_digest": image_digest,
-        "configuration_schema": _schema("harnessy.work_proof.configuration"),
-        "input_schema": _schema(INPUT_SCHEMA_IDS[phase]),
+        "configuration_schema": _schema(
+            "harnessy.work_proof.configuration", CONFIGURATION_SCHEMA
+        ),
+        "input_schema": _schema(INPUT_SCHEMA_ID, INPUT_SCHEMA),
         "output_schema": _schema("external_checker_result"),
         "resources": {
             "cpu_millis": 500,
@@ -177,8 +234,9 @@ def main(argv: list[str] | None = None) -> int:
         help="emit fixed local proxy and daemon-visible relay paths",
     )
     # The registry holds one immutable entry per phase, capability and version,
-    # so a rebuilt image (new digest) needs a new version.
-    parser.add_argument("--capability-version", default="v1")
+    # so a rebuilt image (new digest) needs a new version. v2 compares the
+    # proof with forge facts and is post-submission only.
+    parser.add_argument("--capability-version", default="v2")
     args = parser.parse_args(argv)
     image = publish(args.registry, args.repository)
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -190,11 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             sandbox_gid=args.sandbox_gid,
             enable_model_proxy=args.enable_model_proxy,
         ),
-        "registry-pre.json": registry_spec(
-            "pre_submit", image["platform_manifest_digest"], args.capability_version
-        ),
         "registry-post.json": registry_spec(
-            "post_submit", image["platform_manifest_digest"], args.capability_version
+            image["platform_manifest_digest"], args.capability_version
         ),
     }
     for name, value in outputs.items():

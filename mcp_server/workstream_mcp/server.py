@@ -37,6 +37,7 @@ from workstream_mcp.tools import (
     project_grants,
     projects,
     task_execution,
+    task_operations,
     workspace_reads,
 )
 from workstream_mcp.tools.context import (
@@ -129,6 +130,7 @@ def create_app(settings: Settings) -> Starlette:
     guide_lifecycle_definitions = guide_lifecycle.definitions()
     checker_artifact_definitions = checker_artifacts.definitions()
     task_execution_definitions = task_execution.definitions()
+    task_operation_definitions = task_operations.definitions()
     gateway: WorkstreamGateway | None = None
 
     async def list_tools(
@@ -152,6 +154,7 @@ def create_app(settings: Settings) -> Starlette:
                 *guide_lifecycle_definitions,
                 *checker_artifact_definitions,
                 *task_execution_definitions,
+                *task_operation_definitions,
             ]
         )
 
@@ -174,6 +177,7 @@ def create_app(settings: Settings) -> Starlette:
             *guide_lifecycle.TOOL_NAMES,
             *checker_artifacts.TOOL_NAMES,
             *task_execution.TOOL_NAMES,
+            *task_operations.TOOL_NAMES,
         }:
             return adapter_failure("unknown_tool", status=404)
         arguments = params.arguments if params.arguments is not None else {}
@@ -241,6 +245,10 @@ def create_app(settings: Settings) -> Starlette:
             )
         if params.name in task_execution.TOOL_NAMES:
             return await task_execution.invoke(
+                gateway, params.name, bearer, correlation_id, arguments
+            )
+        if params.name in task_operations.TOOL_NAMES:
+            return await task_operations.invoke(
                 gateway, params.name, bearer, correlation_id, arguments
             )
         return await invoke_context(gateway, bearer, correlation_id, arguments)

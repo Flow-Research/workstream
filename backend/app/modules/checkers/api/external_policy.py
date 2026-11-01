@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from typing import Literal, Self, get_args
 from uuid import UUID
@@ -20,6 +21,12 @@ from app.modules.checkers.api.external import (
     ExternalCheckerRegistryEntry,
     ExternalCheckerRegistryPort,
     external_checker_json_hash,
+)
+from app.interfaces.forge_facts import (
+    FORGE_FACTS_MAXIMUM_READ_MS,
+    SUPPORTED_FORGES,
+    is_forge_origin,
+    is_repository_path,
 )
 from app.modules.model_usage.api import ModelProfileReaderPort
 from app.modules.checkers.api.model_profiles import (
@@ -52,6 +59,13 @@ EVALUATION_CONTEXT_VERSION_KEY = "workstream_evaluation_context_version"
 EVALUATION_CONTEXT_ROLES_KEY = "workstream_evaluation_context_roles"
 EvaluationContextRole = Literal["predecessor_findings", "predecessor_submission_archive"]
 EVALUATION_CONTEXT_ROLES = get_args(EvaluationContextRole)
+FORGE_FACTS_VERSION_KEY = "workstream_forge_facts_version"
+FORGE_FACTS_FORGE_KEY = "forge"
+FORGE_FACTS_ORIGIN_KEY = "forge_origin"
+FORGE_FACTS_REPOSITORY_KEY = "repository"
+FORGE_FACTS_BASE_BRANCH_KEY = "base_branch"
+# Provider settings cap one forge facts read; reserve that maximum per selection.
+SELECTED_POST_FORGE_FACTS_BUDGET_MS = FORGE_FACTS_MAXIMUM_READ_MS
 
 
 class ExternalCheckerPolicyError(ValueError):
@@ -107,6 +121,55 @@ def require_evaluation_context_agreement(
         raise ExternalCheckerPolicyError("evaluation context declaration and selection disagree")
 
 
+@dataclass(frozen=True, slots=True)
+class ForgeFactsSelection:
+    """The forge instance, repository and base branch a POST binding asks WorkStream to read."""
+
+    forge: str
+    forge_origin: str
+    repository: str
+    base_branch: str
+
+
+def selected_forge_facts(
+    configuration: dict[str, JsonValue],
+    phase: ExternalCheckerPhase,
+) -> ForgeFactsSelection | None:
+    """Select forge change facts only through an exact POST capability."""
+    if FORGE_FACTS_VERSION_KEY not in configuration:
+        return None
+    forge = configuration.get(FORGE_FACTS_FORGE_KEY)
+    forge_origin = configuration.get(FORGE_FACTS_ORIGIN_KEY)
+    repository = configuration.get(FORGE_FACTS_REPOSITORY_KEY)
+    base_branch = configuration.get(FORGE_FACTS_BASE_BRANCH_KEY)
+    if (
+        phase != "post_submit"
+        or configuration[FORGE_FACTS_VERSION_KEY] != "v1"
+        or forge not in SUPPORTED_FORGES
+        or not is_forge_origin(forge_origin)
+        or not is_repository_path(repository)
+        or type(base_branch) is not str
+        or not 1 <= len(base_branch) <= 255
+    ):
+        raise ExternalCheckerPolicyError("forge facts selection is invalid")
+    return ForgeFactsSelection(
+        forge=forge, forge_origin=forge_origin, repository=repository, base_branch=base_branch
+    )
+
+
+def validated_forge_facts(
+    configuration: dict[str, JsonValue],
+    registry: ExternalCheckerRegistryEntry,
+) -> ForgeFactsSelection | None:
+    """Require the immutable checker schema to declare any selected facts capability."""
+    selected = selected_forge_facts(configuration, registry.phase)
+    if selected is not None:
+        properties = registry.configuration_schema.document.get("properties")
+        if not isinstance(properties, dict) or FORGE_FACTS_VERSION_KEY not in properties:
+            raise ExternalCheckerPolicyError("checker schema does not declare forge facts")
+    return selected
+
+
 def validated_trial_configuration(configuration, registry):
     """Select only an explicitly declared POST trial capability, never a partial pin."""
     try:
@@ -143,6 +206,7 @@ class LockedExternalCheckerBinding(_PolicyValue):
             raise ExternalCheckerPolicyError("checker binding phase mismatch")
         self.registry.configuration_schema.validate_instance(self.configuration)
         validated_evaluation_context_roles(self.configuration, self.registry)
+        validated_forge_facts(self.configuration, self.registry)
         validated_trial_configuration(self.configuration, self.registry)
         try:
             configured_model_profile_selector(self.configuration, stage=self.stage)
@@ -382,9 +446,15 @@ async def _resolve(
         specification = requirement.check_specification
         require_evaluation_context_agreement(
             next(
-                (item.evaluation_context_roles for item in specification.inputs
-                 if item.kind == "evaluation_context"), None,
-            ) if specification is not None else None,
+                (
+                    item.evaluation_context_roles
+                    for item in specification.inputs
+                    if item.kind == "evaluation_context"
+                ),
+                None,
+            )
+            if specification is not None
+            else None,
             configuration,
             entry,
         )
@@ -505,7 +575,13 @@ def selected_post_submit_execution_budget_ms(
     ):
         raise ExternalCheckerPolicyError("selected POST execution budget is invalid")
     required = SELECTED_POST_MATERIALIZATION_BUDGET_MS + sum(
-        binding.registry.resources.deadline_ms + EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
+        binding.registry.resources.deadline_ms
+        + EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
+        + (
+            SELECTED_POST_FORGE_FACTS_BUDGET_MS
+            if selected_forge_facts(binding.configuration, binding.stage) is not None
+            else 0
+        )
         for binding in policy.entries
     )
     if required > MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS:

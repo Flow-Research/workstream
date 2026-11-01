@@ -1,7 +1,7 @@
-"""Composition root for the read-only GitHub facts capability (ADR 0014).
+"""Composition root for the read-only forge facts capability (ADR 0014).
 
-No production path calls this yet. The selected POST evaluation wiring
-(WS-GHPROOF-001 chunk 04) is its first intended caller.
+GitHub is the only forge provider today. The selected POST evaluation wiring
+(WS-GHPROOF-001 chunk 04) resolves the provider named by a locked binding.
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ from app.interfaces.external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceConfigurationError,
 )
-from app.interfaces.github_facts import (
-    GITHUB_APP_PROVIDER_KEY,
-    GITHUB_FACTS_CAPABILITY_KEY,
-    GitHubFactsAdapter,
+from app.interfaces.forge_facts import (
+    FORGE_FACTS_CAPABILITY_KEY,
+    GITHUB_FORGE,
+    ForgeFactsAdapter,
 )
 
 
@@ -34,7 +34,7 @@ def _github_app_adapter(
     private_key = settings.github_app_private_key
     if app_id is None or private_key is None:
         raise ExternalServiceConfigurationError(
-            ExternalServiceAdapterIdentity(GITHUB_FACTS_CAPABILITY_KEY, GITHUB_APP_PROVIDER_KEY)
+            ExternalServiceAdapterIdentity(FORGE_FACTS_CAPABILITY_KEY, GITHUB_FORGE)
         )
     return GitHubAppFactsAdapter(
         GitHubAppFactsConfiguration(
@@ -50,18 +50,18 @@ def _github_app_adapter(
     )
 
 
-def github_facts_adapter_factory(
+def forge_facts_adapter_factory(
     settings: Settings,
     *,
     transport: httpx.AsyncBaseTransport | None = None,
-) -> ExternalServiceAdapterFactory[GitHubFactsAdapter]:
-    """Register the sole GitHub App provider for the GitHub facts capability."""
-    factory = ExternalServiceAdapterFactory[GitHubFactsAdapter](GITHUB_FACTS_CAPABILITY_KEY)
+) -> ExternalServiceAdapterFactory[ForgeFactsAdapter]:
+    """Register one provider per forge; the provider key is the forge name."""
+    factory = ExternalServiceAdapterFactory[ForgeFactsAdapter](FORGE_FACTS_CAPABILITY_KEY)
     factory.register(
-        GITHUB_APP_PROVIDER_KEY,
+        GITHUB_FORGE,
         lambda: _github_app_adapter(settings, transport),
     )
     return factory
 
 
-__all__ = ("github_facts_adapter_factory",)
+__all__ = ("forge_facts_adapter_factory",)

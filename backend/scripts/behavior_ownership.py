@@ -930,10 +930,12 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/project_catalogue.py",
     "backend/app/modules/authorization/project_catalogue.py",
 })
-GITHUB_PROOF_FACTS_TARGETS = frozenset({
+FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",
-    "backend/app/interfaces/github_facts.py",
+    "backend/app/interfaces/forge_facts.py",
 })
+# WS-GHPROOF-001-04 replaced the GitHub-named port with the forge-neutral one.
+FORGE_PROOF_FACTS_REMOVED_TARGETS = frozenset({"backend/app/interfaces/github_facts.py"})
 
 
 class BehaviorOwnershipError(RuntimeError):
@@ -1107,7 +1109,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS)
+        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
@@ -1215,7 +1217,7 @@ def _validate_additive_partition_transition(
         | PILOT_02B_ATOMIC_IMPORT_TARGETS
         | PILOT_02C_BULK_TRANSITION_TARGETS
         | PROJECT_CATALOGUE_TARGETS
-        | GITHUB_PROOF_FACTS_TARGETS
+        | FORGE_PROOF_FACTS_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:

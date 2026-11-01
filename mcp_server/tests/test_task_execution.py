@@ -127,7 +127,8 @@ def test_task_execution_catalogue_is_exact_closed_and_does_not_dispatch(
     adapter: Adapter,
 ) -> None:
     client, received, _ = adapter
-    selected = _catalogue(client)[-len(TASK_EXECUTION_CONTRACT_NAMES) :]
+    catalogue = {tool["name"]: tool for tool in _catalogue(client)}
+    selected = [catalogue[name] for name in task_execution.TOOL_NAMES]
     assert [tool["name"] for tool in selected] == list(task_execution.TOOL_NAMES)
     for name, tool in zip(TASK_EXECUTION_CONTRACT_NAMES, selected, strict=True):
         assert tool["inputSchema"] == TASK_EXECUTION_INPUT_SCHEMAS[name]

@@ -203,6 +203,18 @@ class _ConfiguredExternalCheckerExecution:
         return await self._resolve().health()
 
 
+def configured_forge_facts(settings):
+    """Resolve the forge facts provider a locked binding names, only when it is used.
+
+    Each evaluation builds its own provider: evaluations may run on separate
+    event loops, so a provider (and its cached installation token) is not
+    shared between them.
+    """
+    from app.adapters.github import forge_facts_adapter_factory
+
+    return forge_facts_adapter_factory(settings).create
+
+
 def configured_external_checker_execution(settings) -> ExternalCheckerExecutionAdapter:
     """Create the lazy fixed-provider adapter for selected execution."""
     return _ConfiguredExternalCheckerExecution(settings)
@@ -586,7 +598,7 @@ def selected_submission_evaluation_content(
 
 
 def delivery_bound_post_submission_executor(
-    *, sessions, materialization, envelope, request, selected_execution=None
+    *, sessions, materialization, envelope, request, forge_facts, selected_execution=None
 ):
     """Add invocation custody to the existing executor without registering delivery."""
     from app.adapters.auth import post_submit_execution_authority
@@ -612,13 +624,22 @@ def delivery_bound_post_submission_executor(
         finalize_authority=authority,
         materialization=materialization,
         selected_execution=selected_execution,
+        forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
     )
 
 
 def reconciliation_bound_post_submission_executor(
-    *, sessions, materialization, child, original, payload, request, selected_execution=None
+    *,
+    sessions,
+    materialization,
+    child,
+    original,
+    payload,
+    request,
+    forge_facts,
+    selected_execution=None,
 ):
     """Run the existing executor behind exact original-and-child recovery custody."""
     from app.adapters.auth import (
@@ -668,6 +689,7 @@ def reconciliation_bound_post_submission_executor(
         finalize_authority=authority,
         materialization=materialization,
         selected_execution=selected_execution,
+        forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
     )
@@ -702,6 +724,7 @@ def post_submit_delivery_reconciliation_handler(*, sessions, materialization):
             selected_execution=configured_post_submit_external_execution(
                 get_settings(), sessions=sessions
             ),
+            forge_facts=configured_forge_facts(get_settings()),
         )
 
     return PostSubmitDeliveryReconciliationHandler(
