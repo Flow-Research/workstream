@@ -82,8 +82,68 @@ experiment only, concatenate the image's existing `certifi.where()` public CA
 bundle with `ca.pem`, then mount that combined public bundle read-only over that
 exact image path. Preserve ordinary roots. Do not change the host trust store,
 disable certificate verification, or alter production verifier code. The TLS CA
-lasts seven days and leaf three days; its signing key is not retained. Recreate
-the isolated fixture after expiry, rather than silently rotating a running one.
+lasts seven days and leaf three days; the CA signing key is not retained.
+
+## Renew HTTPS transport while retaining identities
+
+Expired transport must be renewed explicitly. Keep the original `signer.pem`,
+`jwks.json` and `subjects.json` unchanged: initializing a new issuer would generate
+different subjects and signing material for already admitted identities.
+
+Create a new, exclusive transport directory; its parent must already exist:
+
+```sh
+python experiments/hosted_drill_identity/fixture.py init-transport \
+  --directory /private/drill-transport-2
+```
+
+This writes only `ca.pem`, `tls.pem` and `tls-key.pem`, with the same seven-day CA,
+three-day leaf and private file permissions. It retains no CA signing key and
+refuses an existing target directory. Retain the original transport generation
+as evidence; do not overwrite files in the original issuer directory.
+
+Serve the **original JWKS** through the new certificate and leaf key:
+
+```sh
+python experiments/hosted_drill_identity/fixture.py serve \
+  --jwks /private/drill-issuer/jwks.json \
+  --certificate /private/drill-transport-2/tls.pem \
+  --key /private/drill-transport-2/tls-key.pem --bind 0.0.0.0 --port 8443
+```
+
+For the private server container, update its two individual TLS mounts while
+retaining its original JWKS mount, network alias and issuer URL. Its signing key
+and subject inventory remain outside the server. Continue minting tokens from
+the original directory:
+
+```sh
+python experiments/hosted_drill_identity/fixture.py mint \
+  --directory /private/drill-issuer --identity contributor \
+  --output /private/drill-issuer/contributor-renewed.jwt
+```
+
+Update the application's explicit drill trust to the new CA while preserving
+ordinary public roots. For the hosted drill's CA-only fixture images, rebuild
+that layer over the reviewed canonical backend SDK images with the new `ca.pem`,
+publish new digest pins and run the
+[canonical native-hosted image verifier](../../deploy/hosted/README.md#prepare-source-images)
+against those exact images. Preserve the CA-only recipe and all application
+source and dependency checks. A composition using the read-only combined-bundle
+mount instead requires a new combined bundle containing the new CA and the
+image's ordinary public roots.
+
+Retain old image and trust fingerprints, then qualify and apply the reviewed
+release/trust change through the existing
+[hosted preflight and startup sequence](../../deploy/hosted/README.md#start-and-inspect).
+Do not patch a running container's trust store or disable certificate checks.
+Before resuming the drill, verify HTTPS returns the exact original JWKS and that
+the unchanged production verifier accepts a freshly minted original-identity
+token with the new trust. The old CA must not validate the new transport.
+
+Transport renewal leaves the database, admitted actors, identity links, grants,
+locked policies and model budget intact. It does not repeat first-access
+admission, create replacement identities or establish integration with the
+actual Flow issuer.
 
 ## Verification and evidence boundary
 

@@ -93,7 +93,16 @@ def initialize(directory: Path) -> None:
         directory / "subjects.json",
         json.dumps({name: str(uuid4()) for name in IDENTITIES}).encode(),
     )
+    _write_transport(directory)
 
+
+def initialize_transport(directory: Path) -> None:
+    """Create independent TLS files without reading or changing issuer identity."""
+    directory.mkdir(mode=0o700)
+    _write_transport(directory)
+
+
+def _write_transport(directory: Path) -> None:
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
     leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
     now = datetime.now(UTC)
@@ -140,7 +149,7 @@ def initialize(directory: Path) -> None:
         )
         .sign(ca_key, hashes.SHA256())
     )
-    # CA signing key is deliberately not retained: recreate the isolated fixture when expired.
+    # The CA signer is not retained; renew transport explicitly in a new directory.
     write_private(directory / "ca.pem", ca.public_bytes(serialization.Encoding.PEM))
     write_private(directory / "tls.pem", leaf.public_bytes(serialization.Encoding.PEM))
     write_private(directory / "tls-key.pem", pem_key(leaf_key))
@@ -230,6 +239,8 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init")
     init.add_argument("--directory", type=Path, required=True)
+    transport = commands.add_parser("init-transport")
+    transport.add_argument("--directory", type=Path, required=True)
     issue = commands.add_parser("mint")
     issue.add_argument("--directory", type=Path, required=True)
     issue.add_argument("--identity", choices=IDENTITIES, required=True)
@@ -244,6 +255,8 @@ def main() -> int:
     try:
         if args.command == "init":
             initialize(args.directory)
+        elif args.command == "init-transport":
+            initialize_transport(args.directory)
         elif args.command == "mint":
             mint(args.directory, args.identity, args.output)
         else:

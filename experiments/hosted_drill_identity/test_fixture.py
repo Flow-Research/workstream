@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 import json
 import os
 from pathlib import Path
+import sys
 import threading
 
 import certifi
 import httpx
 import jwt
 import pytest
+from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.adapters.auth.flow import FlowAuthVerifier
@@ -23,6 +26,7 @@ from fixture import (
     ISSUER,
     REASON,
     initialize,
+    main,
     make_server,
     mint,
     read_private,
@@ -259,3 +263,84 @@ def test_private_jwk_is_rejected_before_serving(material, tmp_path):
         make_server(
             path, material / "tls.pem", material / "tls-key.pem", "127.0.0.1", 0
         )
+
+
+def test_transport_command_preserves_identity_and_requires_new_directory(
+    material, tmp_path, monkeypatch, capsys
+):
+    original = {path.name: read_private(path) for path in material.iterdir()}
+    directory = tmp_path / "transport"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["fixture.py", "init-transport", "--directory", str(directory)],
+    )
+    assert main() == 0
+    assert capsys.readouterr() == ("", "")
+    assert {path.name for path in directory.iterdir()} == {
+        "ca.pem",
+        "tls.pem",
+        "tls-key.pem",
+    }
+    assert directory.stat().st_mode & 0o777 == 0o700
+    transport = {path.name: read_private(path) for path in directory.iterdir()}
+    assert all(path.stat().st_mode & 0o777 == 0o400 for path in directory.iterdir())
+    for name, days in (("ca.pem", 7), ("tls.pem", 3)):
+        certificate = x509.load_pem_x509_certificate(transport[name])
+        assert certificate.not_valid_after_utc - certificate.not_valid_before_utc == (
+            timedelta(days=days, minutes=1)
+        )
+    with pytest.raises(SystemExit) as denied:
+        main()
+    assert denied.value.code == 1
+    assert capsys.readouterr() == (
+        "",
+        "Drill fixture failed; inspect private inputs without exposing their contents.\n",
+    )
+    assert {path.name: read_private(path) for path in directory.iterdir()} == transport
+    assert {path.name: read_private(path) for path in material.iterdir()} == original
+
+
+def test_new_transport_serves_original_jwks_with_new_ca_only(
+    material, tmp_path, monkeypatch
+):
+    original = {path.name: read_private(path) for path in material.iterdir()}
+    token = issued(material, tmp_path)
+    transport = tmp_path / "transport"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["fixture.py", "init-transport", "--directory", str(transport)],
+    )
+    assert main() == 0
+    roots = Path(certifi.where()).read_bytes()
+    old_trust, new_trust = tmp_path / "old-trust.pem", tmp_path / "new-trust.pem"
+    old_trust.write_bytes(roots + original["ca.pem"])
+    new_trust.write_bytes(roots + read_private(transport / "ca.pem"))
+    server = make_server(
+        material / "jwks.json",
+        transport / "tls.pem",
+        transport / "tls-key.pem",
+        "127.0.0.1",
+        0,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"https://127.0.0.1:{server.server_port}/jwks.json"
+    try:
+        monkeypatch.setattr(certifi, "where", lambda: str(old_trust))
+        with pytest.raises(AuthVerificationUnavailableError):
+            asyncio.run(verifier(url).verify(token))
+        monkeypatch.setattr(certifi, "where", lambda: str(new_trust))
+        with httpx.Client(trust_env=False) as client:
+            response = client.get(url)
+            assert response.status_code == 200
+            assert response.json() == json.loads(original["jwks.json"])
+        verified = asyncio.run(verifier(url).verify(token)).token
+        assert verified.subject == json.loads(original["subjects.json"])["contributor"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert {path.name: read_private(path) for path in material.iterdir()} == original
