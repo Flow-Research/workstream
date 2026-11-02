@@ -138,14 +138,16 @@ argument array. Coverage gaps and recovery applicability retain their separately
 validated model-supplied citations; purpose, ordering, material, state-source and
 execution-capsule authority checks remain required.
 
-This source-quote implementation and its focused regressions are in the current
-working change. It has not been deployed or qualified as a new registered image.
+The source-quote implementation passed controlled native qualification and was
+registered and deployed as `real-e0b502f9`. This does not establish a successful
+live project POST outcome.
 Guide 17's two completed author-evidence calls still belong to its locked
 `real-26d5977e` image: the corrected proposal cited a closing code fence at line
 103 instead of the command at line 102, and POST stopped as infrastructure
-`invalid_output` before trials. A new immutable image, qualification, registry
-bindings and fresh guide/task are required; retained paid effects and old locked
-policies are not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+`invalid_output` before trials. Fresh guide 18 then failed setup validation before
+approval or task creation. A successful fresh proposal, approved bindings and
+guide/task are still required; retained paid effects and locked policies are
+not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
 
 Each model phase permits one correction only after a completed response fails its
 strict output validator with `invalid_output`. The correction includes the complete
@@ -188,9 +190,10 @@ that owned baseline passed with its disclosed fixture identity. Live-provider/mo
 proof and full project qualification remain separate. The real Terminal Systems
 project now has approved `real-26d5977e` POST bindings and guide 17 activation,
 but its POST run stopped before substantive trials or a work verdict. The new
-source-quote image still needs fresh qualification and bindings. Registration
-and guide authority in a model-only engineering fixture do not establish the
-real project journey.
+source-quote image is qualified, registered and deployed; guide 18 failed setup
+before it could approve those bindings. Successful fresh guide agreement and
+real project POST outcomes remain unproven. Registration and guide authority in
+a model-only engineering fixture do not establish the real project journey.
 
 [`post/model/execution-rubrics.json`](post/model/execution-rubrics.json) is an
 exact semantic projection of that historical handoff. Its
