@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -47,6 +49,39 @@ class RuntimeQualificationPackageTests(unittest.TestCase):
         self.assertEqual(checker.layout(self.root), [])
         self.assertEqual(checker.metadata(self.root), [])
         self.assertFalse(any(path.is_symlink() for path in self.root.rglob("*")))
+
+    def test_smoke_material_is_readable_by_the_image_user_under_private_umask(self) -> None:
+        probe = """
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+
+spec = importlib.util.spec_from_file_location("post_qualifier", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+root = Path(sys.argv[2])
+os.umask(0o077)
+module._write_material(root)
+print(json.dumps({
+    ".": stat.S_IMODE(root.stat().st_mode),
+    **{str(path.relative_to(root)): stat.S_IMODE(path.stat().st_mode)
+       for path in root.iterdir()},
+}))
+"""
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", probe,
+             str(HERE.parent / "qualify_image.py"),
+             str(Path(self.temporary.name) / "smoke-input")],
+            check=True, capture_output=True, text=True, timeout=5,
+        )
+        self.assertEqual(json.loads(result.stdout), {
+            ".": 0o755, "workspace": 0o755, "tests": 0o755,
+            "instruction.md": 0o444, "task.toml": 0o444,
+            "AUTHOR_NOTES.md": 0o444,
+        })
 
     def test_expected_reference_and_negative_states_are_deterministic(self) -> None:
         self.assertNotEqual(self.run_command("sh", "tests/run.sh").returncode, 0)

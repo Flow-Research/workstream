@@ -493,10 +493,11 @@ def _trial_authority(
         child_runs_as_non_root=True,
         limits=limits,
     )
+    selector = project_trial_projection_selector(revision=revision)
     projection = make_trial_execution_projection(
         selector=TrialProjectionSelector(
             UUID(REVISION_PROJECTION_ID if revision else RUNTIME_PROJECTION_ID),
-            1,
+            selector["trial_projection_version"],
             "sha256:" + "0" * 64,
         ),
         trial_kind=projected["trial_kind"],
