@@ -278,14 +278,14 @@ Platform upload limits always apply. Leave unspecified project expanded-file,
 expanded-total, compressed-ZIP and entry-count limits null. Do not block for absent
 limits, invent numbers or copy platform ceilings into project policy. An explicit
 project limit may tighten, never relax the platform. Keep those four quantities distinct.
-Match only exact enabled selectable capability IDs, versions, stages and schemas.
-A supported requirement has exactly one same-stage binding. Copy parameters from
-the SELECTED registry entry/version and ONE matching configuration schema branch.
-Copy const values with their JSON types, keeping complete model/trial ID-version-digest
-tuples and role arrays together. Another entry/version, the setup runtime profile,
-default checker or example is no substitute. Use parameters: [] for an empty configuration.
-Do not invent checker identities, images, digests or implementations. Missing
-implementations are same-stage capability gaps, each with exactly one suggestion.
+Match exact enabled selectable capability IDs, versions, stages and schemas.
+Each supported requirement has exactly one same-stage binding. Copy constants with
+their JSON types from ONE matching schema branch of the SELECTED entry/version.
+Keep complete model/trial ID-version-digest tuples and role arrays together;
+never mix tuple members or edit constants. No other entry/version, setup profile,
+default checker or example is a substitute. Use parameters: [] for empty configuration.
+Never invent checker IDs, images, digests or implementations. Missing implementations
+are same-stage capability gaps, each with exactly one suggestion.
 
 Gaps block activation until images are built/registered and corrected bindings
 are PM-approved. Registration alone cannot activate.
@@ -305,8 +305,8 @@ referenced finding is error. Infrastructure failures (support/material, capacity
 deadline, provider, invalid output) never consume revision rounds or become work failures.
 
 DEPENDENCIES
-Specifications grant no access. Images: verified material/approved metadata;
-no provider keys/host sockets. kind/provisioning; unavailable_code=implementation_unavailable:
+Specifications grant no access. Images receive verified material/approved metadata,
+never provider keys/host sockets. kind/provisioning; unavailable_code=implementation_unavailable:
 checker_tool/checker_implementation; isolated_execution/current_runner;
 model_service/model_proxy (POST background); nested_sandbox/trial_proxy.
 evaluation_method/kind: isolated_execution requires isolated_execution;
@@ -317,6 +317,8 @@ invocation-local trial authority only.
 Cache: prepared_material/trial_proxy/material_unavailable requires nested_sandbox/trial_proxy.
 No arbitrary external data. model+trial=model_service+nested_sandbox;
 nested never replaces isolated_execution.
+guide_context/task_context: runtime_gap/material_unavailable only, never current_runner.
+Original-guide evidence_refs are compile-time citations, not runtime inputs.
 Missing images/profiles: unbound suggestions. No supported runtime_gap.
 POST background revision: evaluation_context/current_runner/material_unavailable.
 evaluation_context_roles selects sorted predecessor_findings and/or
@@ -349,16 +351,14 @@ with source evidence and null artifact policy. PM policy absence is never a bloc
 Blocked binding evidence is not executable.
 
 CORRECTION AND SOURCE REVIEW
-validation_errors gives bounded field paths and error codes,
-never rejected values. Correct the error and return the whole proposal. Reopen the
-assigned originals. At most two invalid-output corrections are allowed across both
-phases within the original timeout and turn/tool budgets. No invalid proposal is saved.
-coverage_review independently rereads originals in a fresh model context, enumerates
-PRE/POST obligations, then checks the untrusted candidate for omissions, unsupported
-claims, missing inputs and incorrect classification. Return a complete corrected
-proposal, not a review report. Without a candidate, derive it again from the originals.
-The example below teaches format only. Its guide, source identities, requirements
-and version are synthetic. Never copy them into the actual proposal.
+validation_errors: bounded paths and closed codes, never values. Reopen originals;
+return the whole proposal. Each phase allows at most two invalid-output corrections
+within the shared attempt, timeout and turn/tool budgets. Invalid proposals are never saved.
+coverage_review rereads originals in a fresh model context; check all PRE/POST obligations,
+omissions, unsupported claims, missing inputs and classification.
+Return the full proposal, not a report; absent a candidate, derive from originals.
+Synthetic example only; never copy its guide, source identities, requirements or
+version into the proposal.
 """
 
 PROJECT_GUIDE_INSTRUCTIONS += (

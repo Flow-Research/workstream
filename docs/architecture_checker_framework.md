@@ -629,7 +629,7 @@ rules preserve their existing read and authority contracts.
 
 Both inference phases require one strict JSON object. Malformed JSON, duplicate
 keys, extra fields and schema/canonical/context failures are rejected before the
-candidate can proceed. Up to two corrections across the entire attempt receive
+candidate can proceed. Up to two corrections per phase receive
 bounded field paths and closed error codes, never rejected values. Corrections share
 the original timeout, model-turn/tool budgets and cleanup. Generic provider errors
 are not treated as proof of invalid output or replay permission. The successful

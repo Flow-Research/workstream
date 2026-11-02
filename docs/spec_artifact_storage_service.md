@@ -1674,7 +1674,7 @@ reads remain audited and budgeted but cannot substitute for initial observation.
 The phase evidence is cleared before each invocation. Validated findings and
 proposals cite exact source versions; ready proposals account for every assigned
 document. Known invalid completed inference output receives at most two corrections
-across draft and review within the original budgets. Corrections carry closed,
+per draft or review phase within the original shared budgets. Corrections carry closed,
 value-free diagnostics and, when safe, the bounded rejected candidate as untrusted
 data. The complete correction envelope remains byte-bounded; unsafe candidates
 are omitted. Correction requests retain the existing private model-request

@@ -388,3 +388,55 @@ async def test_corrected_candidate_still_requires_fresh_source_read(monkeypatch)
     with pytest.raises(ProjectGuideCompilationInvalidOutputError):
         await _compile(OpenAIAgentSdkProjectGuideRuntime(runtime_configuration()), context(ids()))
     assert calls == [1, 1, 1]
+
+
+@pytest.mark.parametrize("last_review_valid", [True, False])
+async def test_actual_openai_sdk_corrections_are_bounded_per_phase(monkeypatch, last_review_valid):
+    """The installed SDK allows two review repairs after one repaired draft."""
+    compilation = context(ids())
+    handle = compilation.material.handle_for(compilation.material.documents[0])
+    good = json.dumps(_provider_payload())
+    outputs = ["not-json", good, "not-json", "not-json", good if last_review_valid else "not-json"]
+    responses = iter(
+        response
+        for index, output in enumerate(outputs)
+        for response in (
+            _chat_tool_call(f"source-read-{index}", "read_document", {"handle": handle}),
+            _chat_text(f"completed-{index}", output),
+        )
+    )
+    requests = []
+
+    async def dispatch(phase, body):
+        requests.append(body)
+        request = httpx2.Request("POST", "https://model-proxy.invalid/v1/chat/completions")
+        return httpx2.Response(200, json=next(responses), request=request)
+
+    _patch_openai_transport(monkeypatch, dispatch)
+    configuration = compilation.runtime_configuration.model_copy(update={
+        "model_provider": "openrouter", "model_api": "chat_completions",
+        "model": "openai/gpt-5.6-terra", "maximum_turns": 12,
+    })
+    compilation = compilation.model_copy(update={"runtime_configuration": configuration})
+    runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
+    if last_review_valid:
+        assert await _compile(
+            runtime, compilation, model=_TestModelSession(dispatch)
+        ) == generated_result()
+    else:
+        with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+            await _compile(runtime, compilation, model=_TestModelSession(dispatch))
+        assert caught.value.failure_code == "schema_invalid"
+    assert len(requests) == 10
+    for index in range(5):
+        # Each completed output follows a successful new original read in that invocation.
+        tool_result = requests[index * 2 + 1]["messages"][-1]
+        assert tool_result["role"] == "tool"
+        assert tool_result["tool_call_id"] == f"source-read-{index}"
+        assert json.loads(tool_result["content"])["handle"] == handle
+    for index, phase in ((2, "checker_specification"), (6, "coverage_review"), (8, "coverage_review")):
+        correction = next(
+            json.loads(item["content"]) for item in requests[index]["messages"]
+            if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+        )
+        assert correction["phase"] == phase

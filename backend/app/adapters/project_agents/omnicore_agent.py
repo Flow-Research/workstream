@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 from app.adapters.project_agents.compilation_draft import (
     CompilationDraftParser,
-    contextual_output_issue,
+    contextual_output_issues,
     generated_compilation_schema,
 )
 from app.adapters.project_agents.omnicore_profile import (
@@ -381,10 +381,9 @@ class OmniCoreAgentProjectGuideRuntime:
 
             schema = generated_compilation_schema(ProjectGuideCompilationResult.model_json_schema())
             draft_parser = CompilationDraftParser(schema, configuration.maximum_manifest_bytes)
-            corrections = 0
 
             async def run_phase(phase: str, phase_prompt: str, turn_ceiling: int) -> dict:
-                nonlocal corrections
+                corrections = 0
                 guard.phase = "draft" if phase == "checker_specification" else "review"
                 guard.phase_turn_ceiling = turn_ceiling
                 while True:
@@ -427,7 +426,9 @@ class OmniCoreAgentProjectGuideRuntime:
                             try:
                                 validate_project_guide_runtime_result(context, candidate, run_opened)
                             except (TypeError, ValueError) as error:
-                                issues = [contextual_output_issue(error)]
+                                issues = contextual_output_issues(
+                                    error, context=context, result=candidate
+                                )
                                 if invalid_compilation_failure_code(error) == "unsafe_text":
                                     candidate = None
                             else:

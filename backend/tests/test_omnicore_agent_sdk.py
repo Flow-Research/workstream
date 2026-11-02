@@ -1095,7 +1095,9 @@ async def test_actual_sdk_bounds_full_correction_envelope():
     assert len(provider.requests) == 2
 
 
-async def test_actual_sdk_corrections_remain_aggregate_across_phases():
+@pytest.mark.parametrize("last_review_valid", [True, False])
+async def test_actual_sdk_corrections_are_bounded_per_phase(last_review_valid):
+    """Draft repair cannot consume either of the review phase's two repairs."""
     base = _runtime_context()
     compilation_context = base.model_copy(
         update={
@@ -1108,7 +1110,10 @@ async def test_actual_sdk_corrections_remain_aggregate_across_phases():
     async with _SyntheticOpenRouter(
         handle=handle,
         final_output=_provider_output(),
-        final_outputs=("not-json", _provider_output(), "not-json", "not-json", _provider_output()),
+        final_outputs=(
+            "not-json", _provider_output(), "not-json", "not-json",
+            _provider_output() if last_review_valid else "not-json",
+        ),
     ) as provider:
         runtime = OmniCoreAgentProjectGuideRuntime._for_test(
             compilation_context.runtime_configuration,
@@ -1116,15 +1121,25 @@ async def test_actual_sdk_corrections_remain_aggregate_across_phases():
         )
         runtime.admit_execution()
         try:
-            with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
-                await runtime.compile_project_guide(compilation_context, capabilities)
+            if last_review_valid:
+                assert await runtime.compile_project_guide(
+                    compilation_context, capabilities
+                ) == generated_result()
+            else:
+                with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+                    await runtime.compile_project_guide(compilation_context, capabilities)
+                assert caught.value.failure_code == "schema_invalid"
         finally:
             await runtime.aclose()
-    assert caught.value.failure_code == "schema_invalid"
-    assert reads == [handle] * 4
-    assert len(provider.requests) == 8
-    assert "correction_instruction" in str(provider.requests[2][1]["messages"])
-    assert "correction_instruction" in str(provider.requests[6][1]["messages"])
+    assert reads == [handle] * 5
+    assert len(provider.requests) == 10
+    for index, phase in ((2, "checker_specification"), (6, "coverage_review"), (8, "coverage_review")):
+        correction = next(
+            json.loads(item["content"][item["content"].index("{"):])
+            for item in provider.requests[index][1]["messages"]
+            if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+        )
+        assert correction["phase"] == phase
 
 
 async def test_actual_sdk_review_correction_keeps_aggregate_turn_ceiling():

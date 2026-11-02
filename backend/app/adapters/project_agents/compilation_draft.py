@@ -10,9 +10,11 @@ from pydantic import ValidationError
 
 from app.interfaces.project_agents import (
     GENERATED_REQUIREMENT_DISPOSITIONS,
+    ProjectGuideCompilationContext,
     ProjectGuideCompilationResult,
     invalid_compilation_failure_code,
 )
+from app.modules.checkers.api.external import ExternalCheckerContractError
 
 
 def _unique_object(pairs):
@@ -51,8 +53,72 @@ def generated_compilation_schema(schema: dict) -> dict:
     return generated
 
 
-def contextual_output_issue(error: Exception) -> dict:
-    """Map trusted invariant failures to closed codes without forwarding error text."""
+def _configuration_const_paths(error: SchemaValidationError):
+    """Locate constants only when the owner reports an unambiguous schema branch."""
+    if error.validator == "const":
+        yield tuple(error.absolute_path)
+    elif error.validator == "oneOf" and len(error.schema["oneOf"]) == 1:
+        for child in error.context:
+            yield from _configuration_const_paths(child)
+
+
+def _binding_configuration_issues(context, result) -> list[dict]:
+    """Reuse registry validation; expose only positions in the proposed output."""
+    result = ProjectGuideCompilationResult.model_validate(result)
+    definitions = {
+        (item.phase, item.capability_id, item.capability_version): item
+        for item in context.checker_capabilities.definitions
+    }
+    issues = []
+    for phase in ("pre_submit", "post_submit"):
+        field = phase + "_bindings"
+        for binding_index, binding in enumerate(getattr(result, field)):
+            definition = definitions.get((phase, binding.capability_id, binding.capability_version))
+            if definition is None or definition.registry_entry is None:
+                continue
+            configuration = {
+                item.name: item.model_dump(mode="json")["value"] for item in binding.parameters
+            }
+            try:
+                definition.registry_entry.configuration_schema.validate_instance(configuration)
+            except ExternalCheckerContractError as error:
+                if not isinstance(error.__cause__, SchemaValidationError):
+                    continue
+                for path in _configuration_const_paths(error.__cause__):
+                    if not path:
+                        continue
+                    for parameter_index, parameter in enumerate(binding.parameters):
+                        if parameter.name == path[0]:
+                            issue = {
+                                "path": [
+                                    field,
+                                    binding_index,
+                                    "parameters",
+                                    parameter_index,
+                                    "value",
+                                ],
+                                "code": "schema_const",
+                            }
+                            if issue not in issues:
+                                issues.append(issue)
+                            if len(issues) == 20:
+                                return issues
+    return issues
+
+
+def contextual_output_issues(
+    error: Exception,
+    *,
+    context: ProjectGuideCompilationContext,
+    result: ProjectGuideCompilationResult | dict,
+) -> list[dict]:
+    """Map owner failures to bounded closed diagnostics, never values or error text."""
+    if isinstance(error, ExternalCheckerContractError) and isinstance(
+        error.__cause__, SchemaValidationError
+    ):
+        issues = _binding_configuration_issues(context, result)
+        if issues:
+            return issues
     codes = {
         "generated requirement is outside PRE and POST checker scope": "checker_scope",
         "generated setup notes are outside checker specification scope": "unknown_field",
@@ -80,7 +146,7 @@ def contextual_output_issue(error: Exception) -> dict:
         "platform coverage does not resolve to canonical truth": "platform_coverage",
         "non-platform requirement cannot claim platform coverage": "platform_coverage",
     }
-    return {"path": [], "code": codes.get(str(error), "context_constraint")}
+    return [{"path": [], "code": codes.get(str(error), "context_constraint")}]
 
 
 class CompilationDraftParser:

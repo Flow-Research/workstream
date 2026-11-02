@@ -404,28 +404,6 @@ async def test_output_correction_exhaustion_never_returns_a_proposal(monkeypatch
 
 
 @pytest.mark.usefixtures("model_credentials")
-async def test_draft_and_review_share_two_corrections(monkeypatch):
-    """A draft repair cannot grant the review a new correction allowance."""
-    from agents import Runner
-
-    calls = []
-
-    async def run(agent, prompt, **kwargs):
-        calls.append(json.loads(prompt))
-        await _open_prompt_documents(agent, prompt)
-        if len(calls) == 2:
-            return _sdk_result(agent)
-        return SimpleNamespace(final_output=agent.output_type.validate_json("not-json"))
-
-    monkeypatch.setattr(Runner, "run", run)
-    with pytest.raises(ProjectGuideCompilationInvalidOutputError):
-        await _compile(OpenAIAgentSdkProjectGuideRuntime(runtime_configuration()), context(ids()))
-    assert len(calls) == 4
-    assert calls[1]["phase"] == "checker_specification"
-    assert calls[2]["phase"] == calls[3]["phase"] == "coverage_review"
-
-
-@pytest.mark.usefixtures("model_credentials")
 async def test_corrections_cannot_reset_model_turn_budget(monkeypatch):
     """Count actual model-boundary calls, including a rejected completed output."""
     from agents import OpenAIResponsesModel, Runner

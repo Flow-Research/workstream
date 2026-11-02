@@ -1075,8 +1075,10 @@ cannot be reused as post-submission review-gate evidence. See the
   document into the same untrusted result; it reads every original through the
   same grant, records those reads without provider resources, and stores
   provider, API and model `none` on the attempt. Known invalid inference output
-  receives at most two corrections across drafting and review within the original
-  execution budget. Corrections carry closed, value-free diagnostics and, when
+  receives at most two corrections per drafting or review phase within the original
+  shared execution budget. Unambiguous registry constant failures identify
+  binding/parameter value positions without exposing constants or exception text.
+  Corrections carry closed, value-free diagnostics and, when
   safe, the bounded rejected candidate as untrusted data; exhaustion ends terminally. Exact replay never
   starts a second inference.
   The model-facing default capability names exactly four platform guarantees:

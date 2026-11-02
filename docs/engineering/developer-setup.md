@@ -251,7 +251,7 @@ The SDK adapter first produces a private structured candidate, then uses a fresh
 to check it against the original documents and return the corrected proposal.
 Every draft, review and correction is checked against the same strict JSON Schema,
 canonical content rules, owner context and source identities. Bounded field paths
-and fixed error codes permit at most two corrections across both phases; rejected
+and fixed error codes permit at most two corrections per phase; rejected
 values and exception messages are never returned. The private draft is never
 persisted, projected or accepted. Only the validated final review can become a
 retained proposal.
@@ -270,6 +270,11 @@ A review failure, cancellation, invalid result or exhausted budget does not publ
 the unchecked draft. This is a bounded phase of the same attempt, not a retry of
 an uncertain or terminal invocation. PM review and approval remain separate.
 
+Registry constant mismatches in an unambiguous schema branch identify the binding
+and parameter-value positions in those diagnostics. Expected constants, rejected
+values and exception text are never returned. The exact registered configuration
+schema remains authoritative.
+
 For a manager correction, both phases receive the exact retained predecessor
 proposal alongside feedback. The server validates its project, guide, source,
 generation, finalization and canonical/component hashes against the saved target.
@@ -286,10 +291,10 @@ cases, runtime dependencies and infrastructure failures must agree. Current
 images are offline and do not implicitly receive task/guide prose or model access.
 Older retained results remain readable with the new fields absent; new results
 cannot use that historical omission. Known invalid inference output receives at
-most two corrections across drafting and review, using bounded field paths and
-error codes within the original execution budget. Exhaustion ends terminally;
-provider uncertainty is never retried as an output correction. Diagnostics never
-log guide or model content.
+most two corrections in each drafting and review phase, using bounded field paths
+and error codes within the original shared execution budget. Exhaustion ends
+terminally; provider uncertainty is never retried as an output correction.
+Diagnostics never log guide or model content.
 
 The Celery worker captures runtime, model provider, model, API, instructions,
 timeout, document limits and tool budgets on the attempt before execution. Credentials stay in

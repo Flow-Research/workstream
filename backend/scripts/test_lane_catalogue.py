@@ -84,6 +84,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_agent_runtime.py",
     "tests/test_omnicore_sdk_unavailable.py",
     "tests/test_guide_compilation_draft.py",
+    "tests/test_guide_configuration_diagnostics.py",
     "tests/guide_document_tools/test_parsing.py",
     "tests/guide_document_tools/test_transport.py",
     "tests/test_guide_coverage_review.py",

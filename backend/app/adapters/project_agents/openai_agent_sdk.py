@@ -7,7 +7,7 @@ import json
 
 from app.adapters.project_agents.compilation_draft import (
     CompilationDraftParser,
-    contextual_output_issue,
+    contextual_output_issues,
     generated_compilation_schema,
 )
 from app.adapters.project_agents.openai_profile import (
@@ -206,7 +206,9 @@ class OpenAIAgentSdkProjectGuideRuntime:
                         result = ProjectGuideCompilationResult.model_validate(candidate)
                         validate_project_guide_runtime_result(context, result, phase_opened)
                     except (TypeError, ValueError) as error:
-                        issues = [contextual_output_issue(error)]
+                        issues = contextual_output_issues(
+                            error, context=context, result=candidate
+                        )
                         if invalid_compilation_failure_code(error) == "unsafe_text":
                             candidate = None
                 if issues:
@@ -348,11 +350,11 @@ class OpenAIAgentSdkProjectGuideRuntime:
                 tracing_disabled=True,
                 trace_include_sensitive_data=False,
             )
-            corrections = 0
 
             async def run_phase(phase, phase_prompt, turn_limit):
                 """Correct known invalid responses without replaying uncertain requests."""
-                nonlocal active_phase, corrections, rejected_candidate
+                nonlocal active_phase, rejected_candidate
+                corrections = 0
                 active_phase = "draft" if phase == "checker_specification" else "review"
                 while True:
                     remaining = turn_limit - agent.model.model_turns
