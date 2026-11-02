@@ -190,6 +190,19 @@ class TrialPlanTests(unittest.TestCase):
             self.evidence,
         )
 
+    def test_command_citation_error_identifies_only_its_procedure_index(self):
+        value = self.proposal()
+        value["procedures"][1].update(start_line=3, end_line=3)
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
+            self.validated(value)
+        self.assertEqual(caught.exception.procedure_index, 1)
+        self.assertEqual(str(caught.exception), "invalid_output")
+        value = self.proposal()
+        value["procedures"][1]["command"] = ["sh", "solution/different.sh"]
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
+            self.validated(value)
+        self.assertIsNone(caught.exception.procedure_index)
+
     def test_non_recovery_scope_allows_four_purposes_without_recovery_steps(self):
         """A controlled batch-correlation contract, not a live qualified package."""
         (self.root / "instruction.md").write_text(

@@ -12,6 +12,7 @@ from model_transport import CompletedModelCall, ModelCallUnavailable, ModelSessi
 import test_trial_plan as plan_tests
 from trial_plan import (
     MAXIMUM_MODEL_PROMPT_BYTES,
+    MAXIMUM_PROCEDURES,
     TrialPlanError,
     build_plan_prompt,
     validate_plan_proposal,
@@ -109,6 +110,97 @@ class ModelPhaseTests(unittest.TestCase):
                 self.assertEqual(correction["untrusted_prior_output"], raw)
                 self.assertEqual(correction["validation_error"], "invalid_output")
                 self.assertNotIn("accepted_candidate", correction)
+
+    def test_citation_correction_identifies_the_offending_procedure(self):
+        # Same defect as the retained live plan: the cited line is a closing
+        # fence immediately after the documented command. Public fixture only.
+        lines = plan_tests.AUTHOR_NOTES.splitlines()
+        notes = (
+            "\n".join(
+                [lines[0], "```sh", "sh solution/incomplete.sh", "```", *lines[2:]]
+            )
+            + "\n"
+        )
+        (self.case.root / "AUTHOR_NOTES.md").write_text(notes, encoding="utf-8")
+        self.case.material_digest, self.case.evidence = plan_tests.collect_plan_sources(
+            self.case.root
+        )
+        value = self.case.proposal()
+        for item in value["procedures"][1:]:
+            item["start_line"] += 1 if item["purpose"] == "incomplete_repair" else 2
+            item["end_line"] = item["start_line"]
+        valid = json.dumps(value)
+        self.assertTrue(self.validate(valid).coverage_complete)
+        value["procedures"][1].update(start_line=4, end_line=4)
+        invalid = json.dumps(value)
+        prompt = build_plan_prompt(
+            self.case.metadata, self.case.material_digest, self.case.evidence
+        )
+        expected = {
+            "reason": "command_text_not_in_cited_source_lines",
+            "procedure_index": 1,
+        }
+
+        class CitationAwareSession(Session):
+            def call(self, prompt, *, required_receipt_handles=()):
+                if self.calls:
+                    correction = json.loads(prompt)
+                    feedback = correction.get("validation_feedback")
+                    zero_based = (
+                        "procedure_index is the zero-based position"
+                        in correction["correction_instruction"]
+                    )
+                    self.outputs = iter(
+                        [valid if feedback == expected and zero_based else invalid]
+                    )
+                return super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+
+        session = CitationAwareSession([invalid])
+        proposal, completed = run_model_phase(session, prompt, self.validate)
+        self.assertTrue(proposal.coverage_complete)
+        self.assertEqual(completed.call_index, 1)
+        self.assertEqual(len(session.calls), 2)
+        correction = json.loads(session.calls[1][0])
+        self.assertEqual(correction["validation_error"], "invalid_output")
+        self.assertEqual(correction["validation_feedback"], expected)
+        self.assertIn(
+            "validation_feedback.procedure_index is the zero-based position in the "
+            "prior procedures array. Recheck that command's exact cited numbered source.",
+            correction["correction_instruction"],
+        )
+        self.assertEqual(correction["original_prompt"], prompt)
+        self.assertEqual(correction["untrusted_prior_output"], invalid)
+        self.assertNotIn("expected_line", correction)
+
+    def test_correction_feedback_copies_only_a_bounded_typed_procedure_index(self):
+        for index in (None, True, -1, MAXIMUM_PROCEDURES, 1.0, "source text", {}, 1):
+            with self.subTest(index_type=type(index).__name__):
+                error = TrialPlanError("invalid_output", procedure_index=index)
+                error.private_detail = "exception attributes must not be serialized"
+                session = Session(["invalid", "valid"])
+
+                def validate(raw):
+                    if raw == "invalid":
+                        raise error
+                    return raw
+
+                value, _ = run_model_phase(session, self.prompt, validate)
+                self.assertEqual(value, "valid")
+                self.assertEqual(len(session.calls), 2)
+                correction = json.loads(session.calls[1][0])
+                if type(index) is int and 0 <= index < MAXIMUM_PROCEDURES:
+                    self.assertEqual(
+                        correction["validation_feedback"],
+                        {
+                            "reason": "command_text_not_in_cited_source_lines",
+                            "procedure_index": index,
+                        },
+                    )
+                else:
+                    self.assertNotIn("validation_feedback", correction)
+                self.assertNotIn(error.private_detail, session.calls[1][0])
 
     def test_second_invalid_output_is_terminal_with_no_third_call(self):
         raw = self.bad_outputs()[0]

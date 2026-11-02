@@ -37,7 +37,11 @@ REVISION_PROJECTION_ID = "019a14ee-5f61-7f21-8dd8-11d4d41a0002"
 
 
 class TrialPlanError(ValueError):
-    """Submitted sources or a model proposal cannot produce a bounded plan."""
+    """A plan failure; only a command-citation mismatch supplies its index."""
+
+    def __init__(self, code: str, *, procedure_index: int | None = None) -> None:
+        super().__init__(code)
+        self.procedure_index = procedure_index
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,7 +449,7 @@ def validate_plan_proposal(
     ids = set()
     purposes = []
     normalized = []
-    for procedure in procedures:
+    for procedure_index, procedure in enumerate(procedures):
         if type(procedure) is not dict or set(procedure) != {
             "procedure_id",
             "purpose",
@@ -505,7 +509,9 @@ def validate_plan_proposal(
             parsed_command = shlex.split(command_text, posix=True)
         except ValueError as exc:
             raise TrialPlanError("invalid_output") from exc
-        if command_text not in cited_text or parsed_command != command:
+        if command_text not in cited_text:
+            raise TrialPlanError("invalid_output", procedure_index=procedure_index)
+        if parsed_command != command:
             raise TrialPlanError("invalid_output")
         ids.add(identifier)
         purposes.append(purpose)
