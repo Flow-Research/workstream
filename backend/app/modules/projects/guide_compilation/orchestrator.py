@@ -58,6 +58,7 @@ from .contracts import (
     CompilationOutcomeReceipt,
     CompilationPersistenceReceipt,
     CompilationRecoveryClassification,
+    uses_metered_setup_model_custody,
 )
 from .repository import GuideCompilationIntegrityError, GuideCompilationStorageError
 from .service import (
@@ -448,14 +449,9 @@ class GuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
 
 def _metered_setup_resume(state: CompilationExecutionState) -> bool:
     """Resume only attempts whose every provider effect is guarded by MODEL-USAGE."""
-    configuration = state.runtime_configuration
     return (
         state.classification is CompilationRecoveryClassification.PROVIDER_UNCERTAIN
-        and configuration is not None
-        and configuration.uses_inference
-        and configuration.model_profile_id is not None
-        and configuration.model_profile_version is not None
-        and configuration.model_profile_digest is not None
+        and uses_metered_setup_model_custody(state.runtime_configuration)
     )
 
 

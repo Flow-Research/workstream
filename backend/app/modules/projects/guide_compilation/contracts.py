@@ -42,6 +42,19 @@ class CompilationRecoveryClassification(StrEnum):
     INVALID_TERMINAL = "compilation_invalid_terminal"
 
 
+def uses_metered_setup_model_custody(
+    configuration: ProjectGuideRuntimeConfiguration | None,
+) -> bool:
+    """Identify inference whose every provider effect is guarded by MODEL-USAGE."""
+    return (
+        configuration is not None
+        and configuration.uses_inference
+        and configuration.model_profile_id is not None
+        and configuration.model_profile_version is not None
+        and configuration.model_profile_digest is not None
+    )
+
+
 class CompilationRequestReceipt(BaseModel):
     """Bounded durable request result safe to return across transactions."""
 

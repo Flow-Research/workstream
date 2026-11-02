@@ -21,10 +21,12 @@ from app.modules.authorization.api import ActorIdentityFacts, ActorKind, Authori
 from app.modules.projects.guide_compilation.contracts import (
     CompilationRecoveryClassification,
 )
+from app.modules.projects.guide_compilation.diagnostics import compilation_setup_response
 from app.modules.projects.guide_compilation.repository import (
     GuideCompilationIntegrityError,
     GuideCompilationRepository,
 )
+from app.modules.projects.models import ProjectSetupRun
 
 from .helpers import context, identity, result, seed_database, service_actor
 from .test_authorized_execution_service import _execution_service, _preflight
@@ -111,6 +113,15 @@ async def test_uncertain_restart_returns_unresolved_without_redispatch(
             "compilation_provider_uncertain",
         )
         assert after_replay == before_replay
+        async with factory() as session:
+            setup = await session.get(ProjectSetupRun, str(values["setup_1"]))
+            diagnostic = await compilation_setup_response(session, setup)
+            assert diagnostic.status == "provider_outcome_unresolved"
+            assert diagnostic.error_code == "provider_outcome_unresolved"
+            assert diagnostic.error_summary == (
+                "The provider outcome is unresolved; no further invocation is permitted."
+            )
+            assert diagnostic.finished_at is None
     finally:
         await engine.dispose()
 

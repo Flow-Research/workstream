@@ -3,9 +3,11 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.modules.projects.models import GuideSourceSnapshot, ProjectGuide, ProjectSetupRun
 from app.modules.projects.api.task_examples import GuideTaskExampleInputError, require_task_example_commitment
 from app.modules.projects.schemas import ProjectSetupRunResponse
+from .contracts import uses_metered_setup_model_custody
 from .models import ProjectGuideCompilationAttempt, ProjectGuideSetupFinalization, ProjectGuideProposalCorrection
 
 
@@ -78,8 +80,16 @@ async def compilation_setup_response(
         response.error_summary = "Guide compilation returned an invalid result."
         response.finished_at = attempt.terminal_at
     elif attempt.status == "compilation_provider_uncertain":
-        response.error_code = "provider_outcome_unresolved"
-        response.error_summary = (
-            "The provider outcome is unresolved; no further invocation is permitted."
+        configuration = (
+            ProjectGuideRuntimeConfiguration.model_validate(attempt.runtime_configuration)
+            if attempt.runtime_configuration is not None
+            else None
         )
+        # A metered fence covers both ongoing execution and an unresolved result.
+        # It alone proves neither failure nor that guarded resumption is forbidden.
+        if not uses_metered_setup_model_custody(configuration):
+            response.error_code = "provider_outcome_unresolved"
+            response.error_summary = (
+                "The provider outcome is unresolved; no further invocation is permitted."
+            )
     return response
