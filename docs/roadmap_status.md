@@ -1655,9 +1655,10 @@ v0.1 is not ready until all of the following are true:
   internally, validates one complete traversal and publishes no partial JSON or
   CSV result. Exported award quantities are earned facts, not proof of external
   payment.
-- Configure secured diagnostic collection with bounded retention and access,
-  and prove API/Celery correlation, privacy and collector-outage behavior in
-  the release drill. Implemented instrumentation alone is not deployed monitoring.
+- Prove API/Celery correlation, privacy, and bounded diagnostic retention and
+  access in the release drill. If telemetry export is enabled, also configure
+  secured collection and prove collector-outage behavior. Implemented
+  instrumentation alone is not deployed monitoring.
 - Public APIs and frontend surfaces expose only the canonical paths, obsolete
   authority and legacy routes are removed, and the full security/operations
   drill plus internal pilot passes without weakening safeguards.
