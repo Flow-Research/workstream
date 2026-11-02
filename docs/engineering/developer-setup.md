@@ -257,9 +257,11 @@ persisted, projected or accepted. Only the validated final review can become a
 retained proposal.
 Both phases share one attempt, trusted document tools, client, overall timeout and
 aggregate model-turn/tool budgets. The draft can use at most half the configured turn
-allowance; review receives the unused remainder. The serialized review input
-(original credential-free context plus candidate) must fit `maximum_manifest_bytes`;
-an oversized candidate is terminal invalid output. Every phase and correction must
+allowance; review receives the unused remainder. Full serialized review and correction
+inputs (original credential-free context, including any retained correction predecessor,
+plus candidate and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
+bytes, configured through `WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES`; an oversized
+envelope is terminal invalid output. Every phase and correction must
 initially read every assigned original, including for blocked proposals. Only a
 read at offset zero returning text, or proving a genuinely empty original, counts
 as initial observation. Search supports revisiting content; it cannot establish

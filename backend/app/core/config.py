@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     project_agent_instructions: str | None = None
     project_agent_instruction_version: str = "v1"
     project_agent_run_timeout_seconds: int = Field(default=1800, ge=1, le=7200)
-    project_agent_max_manifest_bytes: int = Field(default=256_000, ge=1024, le=1_000_000)
+    project_agent_max_manifest_bytes: int = Field(default=512_000, ge=1024, le=1_000_000)
     project_agent_max_documents: int = Field(default=100, ge=1, le=100)
     project_agent_max_document_bytes: int = Field(
         default=64 * 1024 * 1024, ge=1, le=512 * 1024 * 1024
