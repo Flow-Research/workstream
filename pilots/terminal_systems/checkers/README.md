@@ -125,6 +125,23 @@ registered images, locked bindings and their qualification evidence remain retai
 Local model-session tests establish the conditional control paths, not live model
 quality or deployment qualification.
 
+Each model phase permits one correction only after a completed response fails its
+strict output validator with `invalid_output`. The correction includes the complete
+original prompt and exact rejected output as untrusted JSON strings; it does not
+insert missing fields, discard duplicate members, repair citations or truncate
+evidence. The same validators apply again. A second invalid response is terminal.
+Valid coverage gaps and failing assessments remain work findings; provider,
+unknown-delivery, transport, material and capacity failures do not trigger another
+call. All calls share the invocation session and deadline. The full correction
+prompt must fit the existing 1,000,000-byte UTF-8 bound and underlying transport
+limits. An exhausted corrected planner cannot start a trial without capacity for
+assessment. Runtime and author checks need profiles allowing at most four calls
+(two planning, two assessment); semantic and revision-objective checks need at most
+two. Assessment corrections retain the same authenticated receipt handles and
+independent recovery validation, and never execute the trial again. These changed
+semantics require prospective immutable image/profile registrations and exact-image
+qualification; retained failed runs and locked images are unchanged evidence.
+
 The shared runner implements generic offline image building
 and trials in Smol sibling microVMs, with resource, cancellation, cleanup and
 recovery controls. Native build `b2ce3fa45` passed controlled-provider KVM

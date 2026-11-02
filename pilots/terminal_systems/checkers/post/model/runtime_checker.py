@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
 
 from assessment import AssessmentError, ValidatedFinding
 from material import MaterialEvidence
+from model_phase import ModelSessionPort, run_model_phase
 from model_transport import (
-    CompletedModelCall,
     ModelCallUnavailable,
     ModelSessionError,
 )
@@ -46,12 +45,6 @@ DEFAULT_TRIAL_LIMITS = TrialPlanLimits(
 )
 
 
-class ModelSessionPort(Protocol):
-    def call(
-        self, prompt: str, *, required_receipt_handles: tuple[str, ...] = ()
-    ) -> CompletedModelCall: ...
-
-
 def execute_runtime_check(
     request: dict[str, object],
     material_root: Path,
@@ -60,16 +53,16 @@ def execute_runtime_check(
     *,
     limits: TrialPlanLimits = DEFAULT_TRIAL_LIMITS,
 ) -> dict[str, object]:
-    """Run the two-call plan→trial→assessment flow without fabricating evidence."""
+    """Correct known invalid phase output once; never repeat or fabricate a trial."""
     try:
         _validate_request(request)
         metadata = parse_task_metadata(material_root)
         material_digest, sources = collect_plan_sources(material_root)
-        planning = model_session.call(
+        proposal, planning = run_model_phase(
+            model_session,
             build_plan_prompt(metadata, material_digest, sources),
-            required_receipt_handles=(),
+            lambda raw: validate_plan_proposal(raw, material_digest, sources),
         )
-        proposal = validate_plan_proposal(planning.output, material_digest, sources)
         if not proposal.coverage_complete:
             return _coverage_incomplete_result(request, sources, proposal.coverage_gaps)
         if planning.session_exhausted:
@@ -86,11 +79,12 @@ def execute_runtime_check(
             trial,
             recovery_required=proposal.recovery_applicability["required"],
         )
-        assessed = model_session.call(
+        findings, _ = run_model_phase(
+            model_session,
             prepared.prompt,
+            lambda raw: validate_runtime_assessment(raw, prepared, trial),
             required_receipt_handles=prepared.required_receipt_handles,
         )
-        findings = validate_runtime_assessment(assessed.output, prepared, trial)
         return completed_result(request, RUNTIME_REQUIREMENT, findings)
     except TrialPlanError as exc:
         return infrastructure_result(request, _plan_failure(str(exc)))
@@ -109,8 +103,13 @@ def execute_runtime_check(
             if str(exc) == "capacity_exceeded"
             else "invalid_output",
         )
-    except AssessmentError:
-        return infrastructure_result(request, "invalid_output")
+    except AssessmentError as exc:
+        return infrastructure_result(
+            request,
+            "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
+            else "invalid_output",
+        )
     except RubricError:
         return infrastructure_result(request, "implementation_unavailable")
     except (KeyError, TypeError, ValueError):

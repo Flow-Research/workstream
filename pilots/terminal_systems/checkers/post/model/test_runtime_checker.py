@@ -119,7 +119,9 @@ class FakeModelSession:
         self.calls.append((prompt, required_receipt_handles))
         value = json.loads(prompt)
         index = len(self.calls) - 1
-        if index == 0:
+        if "original_prompt" in value:
+            value = json.loads(value["original_prompt"])
+        if "untrusted_source_evidence" in value:
             output = self._plan(value)
         else:
             output = self._assessment(value)
@@ -334,6 +336,98 @@ class RuntimeCheckerTests(unittest.TestCase):
         self.assertEqual(session.calls[0][1], ())
         self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
 
+    def test_corrected_plan_and_assessment_use_four_calls_but_exactly_one_trial(self):
+        class Corrected(FakeModelSession):
+            def call(self, prompt, *, required_receipt_handles=()):
+                completed = super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+                value = json.loads(prompt)
+                raw = completed.output
+                if "original_prompt" not in value:
+                    if "untrusted_source_evidence" in value:
+                        output = json.loads(raw)
+                        del output["schema_version"]
+                        raw = json.dumps(output)
+                    else:
+                        # Raw duplicate members must reach the strict decoder;
+                        # this is not a last-wins Python dictionary fixture.
+                        raw = raw.replace(
+                            '"assessment":', '"assessment": {}, "assessment":', 1
+                        )
+                return CompletedModelCall(
+                    completed.call_index, raw, completed.receipt_digest, False
+                )
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = Corrected()
+                plans = []
+
+                def trial(plan):
+                    plans.append(plan)
+                    return trial_from_plan(plan)
+
+                result = execute(request(check), self.root, session, trial)
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(plans), 1)
+                self.assertEqual(len(session.calls), 4)
+                self.assertEqual(
+                    [h for _, h in session.calls],
+                    [
+                        (),
+                        (),
+                        ("trial_receipt_" + "b" * 32,),
+                        ("trial_receipt_" + "b" * 32,),
+                    ],
+                )
+                for first, correction in ((0, 1), (2, 3)):
+                    envelope = json.loads(session.calls[correction][0])
+                    self.assertEqual(
+                        envelope["original_prompt"], session.calls[first][0]
+                    )
+                    self.assertEqual(envelope["validation_error"], "invalid_output")
+                    self.assertTrue(envelope["untrusted_prior_output"])
+
+    def test_corrected_exhausted_planner_cannot_launch_a_trial(self):
+        class Exhausted(FakeModelSession):
+            def call(self, prompt, *, required_receipt_handles=()):
+                completed = super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+                output = json.loads(completed.output)
+                if len(self.calls) == 1:
+                    del output["schema_version"]
+                return CompletedModelCall(
+                    completed.call_index,
+                    json.dumps(output),
+                    completed.receipt_digest,
+                    len(self.calls) == 2,
+                )
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = Exhausted()
+                result = execute(
+                    request(check),
+                    self.root,
+                    session,
+                    lambda _: self.fail("no remaining assessment call means no trial"),
+                )
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "implementation_unavailable"
+                )
+                self.assertEqual(len(session.calls), 2)
+
     def test_cited_incomplete_coverage_is_a_work_finding_without_execution(self):
         session = FakeModelSession(coverage_complete=False)
 
@@ -469,7 +563,12 @@ class RuntimeCheckerTests(unittest.TestCase):
                 self.assertEqual(
                     result["infrastructure_failure_code"], "invalid_output"
                 )
-                self.assertEqual(len(session.calls), 2)
+                self.assertEqual(len(session.calls), 3)
+                self.assertEqual(
+                    json.loads(session.calls[2][0])["original_prompt"],
+                    session.calls[1][0],
+                )
+                self.assertEqual(session.calls[2][1], session.calls[1][1])
 
     def test_independently_observed_missing_promised_recovery_is_a_work_finding(self):
         class MissingRecovery(FakeModelSession):
@@ -500,6 +599,8 @@ class RuntimeCheckerTests(unittest.TestCase):
             [item["code"] for item in result["findings"]],
             ["behavioral_coverage_incomplete"],
         )
+
+        self.assertEqual(len(session.calls), 2)
 
     def test_author_accuracy_executes_same_invocation_trial_before_assessment(self):
         session = FakeModelSession()

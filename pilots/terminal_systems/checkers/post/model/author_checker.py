@@ -22,7 +22,8 @@ from result import (
     validate_requirement_identity,
 )
 from rubric import Rubric, RubricError, load_rubrics
-from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
+from runtime_checker import DEFAULT_TRIAL_LIMITS
+from model_phase import ModelSessionPort, run_model_phase
 from trial_plan import (
     MAXIMUM_MODEL_PROMPT_BYTES,
     TrialPlanError,
@@ -57,11 +58,11 @@ def execute_author_accuracy_check(
         _validate_request(request)
         metadata = parse_task_metadata(material_root)
         material_digest, sources = collect_plan_sources(material_root)
-        planning = model_session.call(
+        proposal, planning = run_model_phase(
+            model_session,
             build_plan_prompt(metadata, material_digest, sources),
-            required_receipt_handles=(),
+            lambda raw: validate_plan_proposal(raw, material_digest, sources),
         )
-        proposal = validate_plan_proposal(planning.output, material_digest, sources)
         if not proposal.coverage_complete:
             return _procedure_unavailable(request, sources, proposal.coverage_gaps)
         if planning.session_exhausted:
@@ -73,13 +74,19 @@ def execute_author_accuracy_check(
         source, rubrics = load_rubrics()
         rubric = rubrics[AUTHOR_REQUIREMENT]
         prepared = _prepare_assessment(source, rubric, material_root, trial, sources)
-        assessed = model_session.call(
-            prepared[0], required_receipt_handles=(trial.receipt_handle,)
+
+        def validate(raw):
+            inner, independent_recovery = decode_recovery_assessment(raw, sources)
+            if independent_recovery != proposal.recovery_applicability["required"]:
+                raise AssessmentError("invalid_output")
+            return validate_assessment(inner, rubric, prepared[1])
+
+        findings, _ = run_model_phase(
+            model_session,
+            prepared[0],
+            validate,
+            required_receipt_handles=(trial.receipt_handle,),
         )
-        raw, independent_recovery = decode_recovery_assessment(assessed.output, sources)
-        if independent_recovery != proposal.recovery_applicability["required"]:
-            raise AssessmentError("invalid_output")
-        findings = validate_assessment(raw, rubric, prepared[1])
         return completed_result(request, AUTHOR_REQUIREMENT, findings)
     except TrialPlanError as exc:
         return infrastructure_result(request, _plan_failure(str(exc)))
@@ -94,8 +101,13 @@ def execute_author_accuracy_check(
         return infrastructure_result(request, _trial_failure(exc.failure_code))
     except (TrialTransportError, ModelCallUnavailable, ModelSessionError, RubricError):
         return infrastructure_result(request, "implementation_unavailable")
-    except AssessmentError:
-        return infrastructure_result(request, "invalid_output")
+    except AssessmentError as exc:
+        return infrastructure_result(
+            request,
+            "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
+            else "invalid_output",
+        )
     except (KeyError, TypeError, ValueError):
         return infrastructure_result(request, "invalid_output")
     except (MemoryError, RecursionError):

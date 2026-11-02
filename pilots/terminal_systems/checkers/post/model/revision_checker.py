@@ -23,7 +23,8 @@ from result import (
     validate_requirement_identity,
 )
 from rubric import RubricError, load_rubrics
-from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
+from runtime_checker import DEFAULT_TRIAL_LIMITS
+from model_phase import ModelSessionPort, run_model_phase
 from trial_assessment import load_revision_rerun_rubric
 from trial_plan import (
     MAXIMUM_MODEL_PROMPT_BYTES,
@@ -64,16 +65,25 @@ def execute_revision_objective_check(
         prompt = build_prompt(source, rubric, snapshot)
         if len(prompt.encode("utf-8")) > MAXIMUM_MODEL_PROMPT_BYTES:
             return infrastructure_result(request, "capacity_exceeded")
-        assessed = model_session.call(prompt, required_receipt_handles=())
-        findings = validate_assessment(assessed.output, rubric, snapshot)
-        _validate_revision_finding_locations(findings)
+
+        def validate(raw):
+            findings = validate_assessment(raw, rubric, snapshot)
+            _validate_revision_finding_locations(findings)
+            return findings
+
+        findings, _ = run_model_phase(model_session, prompt, validate)
         return completed_result(request, REVISION_OBJECTIVE_REQUIREMENT, findings)
     except MaterialContextError as exc:
         return infrastructure_result(request, str(exc))
     except (ModelCallUnavailable, ModelSessionError, RubricError):
         return infrastructure_result(request, "implementation_unavailable")
-    except AssessmentError:
-        return infrastructure_result(request, "invalid_output")
+    except AssessmentError as exc:
+        return infrastructure_result(
+            request,
+            "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
+            else "invalid_output",
+        )
     except (KeyError, TypeError, ValueError):
         return infrastructure_result(request, "invalid_output")
     except (MemoryError, RecursionError):

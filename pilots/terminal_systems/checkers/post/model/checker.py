@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from assessment import AssessmentError, build_prompt, validate_assessment
 from material import MaterialError, MaterialLimits, collect_material
+from model_phase import ModelSessionPort, run_model_phase
+from model_transport import ModelCallUnavailable, ModelSessionError
 from result import (
     completed_result,
     infrastructure_result,
@@ -19,10 +19,6 @@ DEFAULT_LIMITS = MaterialLimits(
     maximum_file_bytes=2 * 1024 * 1024,
     maximum_total_bytes=32 * 1024 * 1024,
 )
-
-
-class ModelCallUnavailable(RuntimeError):
-    """The trusted model session could not produce an assessed response."""
 
 
 def _selected_check(request: dict) -> str:
@@ -40,7 +36,7 @@ def _selected_check(request: dict) -> str:
 def execute(
     request: dict,
     material_root,
-    model_assess: Callable[[str], str],
+    model_session: ModelSessionPort,
     *,
     limits: MaterialLimits = DEFAULT_LIMITS,
 ) -> dict:
@@ -55,10 +51,11 @@ def execute(
         rubric = rubrics[check]
         snapshot = collect_material(material_root, rubric, limits)
         prompt = build_prompt(source, rubric, snapshot)
-        raw = model_assess(prompt)
-        if type(raw) is not str or not raw:
-            raise ModelCallUnavailable("model_call_unavailable")
-        findings = validate_assessment(raw, rubric, snapshot)
+        findings, _ = run_model_phase(
+            model_session,
+            prompt,
+            lambda raw: validate_assessment(raw, rubric, snapshot),
+        )
         return completed_result(request, check, findings)
     except MaterialError as exc:
         code = str(exc)
@@ -73,12 +70,14 @@ def execute(
             request,
             "material_unavailable"
             if str(exc) == "material_unavailable"
+            else "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
             else "invalid_output",
         )
-    except (ModelCallUnavailable, RubricError):
+    except (ModelCallUnavailable, ModelSessionError, RubricError):
         return infrastructure_result(request, "implementation_unavailable")
     except (KeyError, TypeError, ValueError):
         return infrastructure_result(request, "invalid_output")
 
 
-__all__ = ("DEFAULT_LIMITS", "ModelCallUnavailable", "execute")
+__all__ = ("DEFAULT_LIMITS", "execute")

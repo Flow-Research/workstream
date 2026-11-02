@@ -9,7 +9,6 @@ import sys
 import time
 
 from author_checker import AUTHOR_REQUIREMENT, execute_author_accuracy_check
-from checker import ModelCallUnavailable as CheckerModelUnavailable
 from checker import execute as execute_model_check
 from model_transport import ModelCallUnavailable, ModelSession, ModelSessionError
 from result import canonical, infrastructure_result
@@ -118,14 +117,7 @@ def evaluate(
                     session,
                 )
             if check in SUPPORTED_CHECKS or check in BLOCKED_CHECKS:
-
-                def assess(prompt: str) -> str:
-                    try:
-                        return session.call(prompt, required_receipt_handles=()).output
-                    except (ModelCallUnavailable, ModelSessionError) as exc:
-                        raise CheckerModelUnavailable("model_call_unavailable") from exc
-
-                return execute_model_check(request, material_root, assess)
+                return execute_model_check(request, material_root, session)
         return infrastructure_result(request, "invalid_output")
     except (KeyError, TypeError, ValueError, EntrypointError):
         return infrastructure_result(request, "invalid_output")

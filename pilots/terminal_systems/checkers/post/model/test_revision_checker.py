@@ -222,6 +222,34 @@ class RevisionCheckerTests(unittest.TestCase):
         self.assertEqual((objective["verdict"], rerun["verdict"]), ("passed", "passed"))
         self.assertEqual(model.calls, 0)
 
+    def test_revision_objective_correction_keeps_full_current_prior_and_feedback(self):
+        class Corrected(RevisionModel):
+            def call(self, prompt, *, required_receipt_handles=()):
+                if self.calls == 0:
+                    self.calls += 1
+                    self.original_prompt = prompt
+                    return CompletedModelCall(0, "{}", DIGEST, False)
+                envelope = json.loads(prompt)
+                self.correction = envelope
+                return super().call(
+                    envelope["original_prompt"],
+                    required_receipt_handles=required_receipt_handles,
+                )
+
+        model = Corrected()
+        result = execute_revision_objective_check(
+            request(REVISION_OBJECTIVE_REQUIREMENT, "checker_remediation"),
+            self.current,
+            model,
+            predecessor_root=self.prior,
+        )
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "passed")
+        )
+        self.assertEqual(model.calls, 2)
+        self.assertEqual(model.correction["original_prompt"], model.original_prompt)
+        self.assertEqual(model.correction["untrusted_prior_output"], "{}")
+
     def test_revision_objective_uses_current_prior_and_feedback(self):
         model = RevisionModel()
         result = execute_revision_objective_check(

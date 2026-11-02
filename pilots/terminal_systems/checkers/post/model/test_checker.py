@@ -7,7 +7,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from checker import ModelCallUnavailable, execute
+from checker import execute
+from model_transport import CompletedModelCall, ModelCallUnavailable
 
 
 def request(check: str) -> dict:
@@ -21,6 +22,21 @@ def request(check: str) -> dict:
         "configuration": {"check": check},
         "input": {"requirement_id": check},
     }
+
+
+class Session:
+    def __init__(self, assess):
+        self.assess = assess
+        self.calls = []
+
+    def call(self, prompt, *, required_receipt_handles=()):
+        self.calls.append((prompt, required_receipt_handles))
+        return CompletedModelCall(
+            call_index=len(self.calls) - 1,
+            output=self.assess(prompt),
+            receipt_digest="sha256:" + "3" * 64,
+            session_exhausted=len(self.calls) >= 2,
+        )
 
 
 class CheckerCoreTests(unittest.TestCase):
@@ -61,7 +77,7 @@ class CheckerCoreTests(unittest.TestCase):
         result = execute(
             request("solver_brief_and_extension_disclosure"),
             self.root,
-            self.passing_assessment,
+            Session(self.passing_assessment),
         )
         self.assertEqual(
             (result["outcome"], result["verdict"]), ("completed", "passed")
@@ -89,7 +105,7 @@ class CheckerCoreTests(unittest.TestCase):
             ]
             return json.dumps(answer)
 
-        result = execute(selected, self.root, assess)
+        result = execute(selected, self.root, Session(assess))
         self.assertEqual(
             (result["outcome"], result["verdict"]), ("completed", "failed")
         )
@@ -97,16 +113,37 @@ class CheckerCoreTests(unittest.TestCase):
         self.assertEqual(result["findings"][0]["check_id"], rubrics[0])
         self.assertEqual(result["findings"][0]["code"], "brief_incomplete")
 
+    def test_semantic_known_invalid_output_corrects_without_changing_material(self):
+        raw = '{"schema_version":"wrong","schema_version":"also-wrong"}'
+
+        def assess(prompt):
+            if len(session.calls) == 1:
+                return raw
+            envelope = json.loads(prompt)
+            self.assertEqual(envelope["original_prompt"], session.calls[0][0])
+            self.assertEqual(envelope["untrusted_prior_output"], raw)
+            return self.passing_assessment(envelope["original_prompt"])
+
+        session = Session(assess)
+        result = execute(
+            request("solver_brief_and_extension_disclosure"), self.root, session
+        )
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "passed")
+        )
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual([handles for _, handles in session.calls], [(), ()])
+
     def test_schema_only_or_unavailable_model_never_passes(self):
         selected = request("solver_brief_and_extension_disclosure")
-        malformed = execute(selected, self.root, lambda _prompt: "{}")
+        malformed = execute(selected, self.root, Session(lambda _prompt: "{}"))
         self.assertEqual(malformed["outcome"], "infrastructure_failed")
         self.assertEqual(malformed["infrastructure_failure_code"], "invalid_output")
 
         def unavailable(_prompt):
             raise ModelCallUnavailable("model_call_unavailable")
 
-        missing = execute(selected, self.root, unavailable)
+        missing = execute(selected, self.root, Session(unavailable))
         self.assertEqual(missing["outcome"], "infrastructure_failed")
         self.assertEqual(missing["findings"], [])
 
@@ -116,12 +153,16 @@ class CheckerCoreTests(unittest.TestCase):
         invalid = execute(
             selected,
             self.root / "missing",
-            lambda _prompt: self.fail("an unknown check must not call a model"),
+            Session(
+                lambda _prompt: self.fail("an unknown check must not call a model")
+            ),
         )
         self.assertEqual(invalid["infrastructure_failure_code"], "invalid_output")
 
         delegated = execute(
-            request("author_evidence_accuracy"), self.root, self.passing_assessment
+            request("author_evidence_accuracy"),
+            self.root,
+            Session(self.passing_assessment),
         )
         self.assertEqual(delegated["infrastructure_failure_code"], "invalid_output")
 
@@ -145,8 +186,10 @@ class CheckerCoreTests(unittest.TestCase):
                 result = execute(
                     selected,
                     self.root / "missing",
-                    lambda _prompt: self.fail(
-                        "an invalid identity must not call a model"
+                    Session(
+                        lambda _prompt: self.fail(
+                            "an invalid identity must not call a model"
+                        )
                     ),
                 )
                 self.assertEqual(result["outcome"], "infrastructure_failed")
