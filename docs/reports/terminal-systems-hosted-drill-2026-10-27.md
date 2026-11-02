@@ -370,10 +370,66 @@ unresolved model candidates. The unchanged image was not retried. A bounded
 project-image correction is in progress and unqualified; neither that working
 diff nor source 0040 CI establishes a repaired deployed outcome.
 
-The workspace/isolation helper stopped before HTTP because its required foreign
-project did not exist in the one-project environment. A separate empty-project
-fixture is being prepared through the public API but has not yet been created.
-No workspace/isolation pass is claimed from that harness stop.
+The initial workspace/isolation helper stopped before HTTP because its required
+foreign project did not exist; that harness failure remains retained. After the
+separate fixture was prepared, the bounded source-4e workspace proof passed at
+00:47:29–00:47:33 UTC on November 2: contributor work context, exact original
+content and manager locked context returned 200; two other-actor reads and one
+foreign-project manager read returned concealed 404. The download matched all
+12,110 bytes and SHA-256
+`13d789d4b8df5d6b310d844c622336f265d53d2ddc38e8aa101b67765f9f7183`.
+That first other-actor case followed recorded revocation and did not prove
+same-role assignment isolation.
+
+A separate live same-role proof passed at 01:01:30–01:01:37 UTC. Grant
+`01a199c5-69b5-7785-9fe6-95dd939ee232` remained active at version 1 before,
+through and after the six reads. The assigned contributor's work context and
+original document, plus manager locked context, returned 200/200/200; the other
+same-project Submitter's work-context/document reads and foreign-project manager
+read returned concealed 404/404/404. Exact original bytes/hash and immutable
+lineage were preserved. The new grant was then explicitly revoked through the
+public API with 200/version 2; exact replay retained revoked/version 2. These
+bounded reads and grant cleanup made no paid model or task-lifecycle call.
+
+Separately, source `54ccc01fa` passed all 106 packaged model-image tests. Its
+first controlled smoke stopped on a fixture permission defect under umask 077;
+that failure remains retained. Source `906d04d92` repaired fixture permissions
+and projection selection, and the actual Docker smoke under umask 077 passed.
+The separate controlled POST supplement also passed with receipt SHA-256
+`a4eb6a52af491cff4a1f4860a42faf2e44eebf9215294d29b432efa9e62738fa`,
+zero provider calls and original state preserved. The source-906 native build
+passed without changing the retained deployed binaries or runtime/configuration.
+
+Physical source-906 composition reached four completed controlled model effects,
+two authenticated trials with 17 step outcomes each, and replay without another
+provider call. It then **failed** exact VM-directory inventory because the engine
+had created its cache-lock sentinel; database and MinIO cleanup completed. The
+failed run remains failed. A later read-only probe found the sentinel regular,
+0600, UID/GID 1000, zero bytes, one link and unlocked, with no matching HOME
+process or retained cgroup. Source `8e42648a2` applies strict sentinel validation;
+eleven focused helper tests, mutation probes and independent QA passed. The actual
+source-8e offline native build passed with networking disabled and all retained
+native binary hashes unchanged.
+
+Fresh physical source-8e composition then **passed** with canonical result
+`test_exit_code=0` and exact verified artifact/node-configuration hashes. It used
+a controlled local provider, retained four completed model effects and two
+authenticated nested trials with 17 step outcomes each, and exact replay added
+zero provider calls. Owned runtime resources were removed; database and MinIO
+cleanup completed. Result SHA-256 is
+`344ac05b1ac4b2260246a6756be6b23f8759d56323003691a83b82f105e7e5b1`;
+fixture-summary SHA-256 is
+`532f46ae67c0b34240fddd0f10e512521ad4844f6408fd5dbea6edfa726bef88`.
+This qualifies that controlled physical KVM composition, not a new paid POST or
+real-project acceptance: the evidence explicitly records
+`guide_to_contribution_proven=false` and `predecessor_material_exercised=false`.
+The source-906 failure remains retained, the deployed backend remains source 4e,
+and the final ContributionRecord remains pending.
+
+Immutable Luna profiles semantic v9, trial-assessment v10 and setup v11 were
+actually published. Publication does not replace the active guide/task's locked
+bindings or prove a paid inference outcome. No further model cost was incurred;
+settled spend remains US$5.30734734 under the unchanged US$10 cap.
 
 The latest account observation is **US$5.30734734 settled, zero reserved and
 US$4.69265266 remaining** under the unchanged US$10 cap. The author-evidence call
@@ -579,7 +635,7 @@ unproven. Earlier packages and observations are retained as superseded evidence.
 | Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Nine public registry registrations, reads and same-key replays retain exact identities. Profiles published against the one project budget. Corrected project bindings received separate PRE/POST approval. |
 | Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | PASS | Original approvals/publication/activation passed on a3fc1f196. Current guide12 generation-2 PRE/POST approvals and replays, explicit false review/revision selections, existing unpaid Finance version and activation/readback passed on deployed 4e. |
 | Task creation/import/screen/release: import original briefs and exercise manager operations | Exact task/source/batch receipts; locks preserved; replay creates no duplicates | IN PROGRESS | Five original tasks imported; original queue recovery and current guide12 queue12 were screened/released with their exact locked contexts. Import/release replay remains unexercised. |
-| Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | IN PROGRESS | Original claim/context/replay passed. Current queue12 claim/replay independently verifies one assignment/receipt/event and two exact AUTH decisions, with no Start event. Full contributor document-download/isolation matrix remains. |
+| Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | PASS | Queue12 claim/replay remains exact. Bounded source-4e reads verified original bytes/hash and three authorized 200 versus three concealed 404 responses. The later same-role proof kept the other same-project Submitter grant active at version 1 during all six reads, then explicitly revoked it and replayed revoked/version 2. Earlier harness failure and narrower after-revocation proof remain retained. |
 | Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | IN PROGRESS | Current queue12 unsafe-traversal and high-confidence-secret controls passed with intended 422 feedback, no admissions/Submissions and the assignment retained. Unchanged-work and warning-only controls remain. |
 | Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | IN PROGRESS | Original missing-instruction rejection/replay and POST-negative PRE pass remain retained. Current queue12 defaults passed, then the exact selected PRE prefix returned `metadata_invalid_argument_array`, with no admission/Submission and the assignment retained. The later current POST-negative ZIP passed PRE and reached ready admission/Submission; substantive POST verdict remains unproven. |
 | Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | PASS | Original custody proof remains retained. Current queue12 POST-negative ZIP passed PRE, moved from stored-pending to verified ready admission, and preparation replay read ready. Public Submission/replay retained the same version-1 Submission and evaluation-request IDs. |
