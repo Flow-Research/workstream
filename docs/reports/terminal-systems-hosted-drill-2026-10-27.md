@@ -1,19 +1,27 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
 **Current rehearsal: IN PROGRESS — November 2. No complete hosted journey pass is claimed.**
-Exact deployed source `c96216540e19f888ef482a57779da4d656561895` passed all
-five CI workflows and the complete 11,631-node aggregate. Guide 17 generation 2
-compiled, received separate PRE/POST approvals and exact replays, and activated.
-Its task claim immediately started work; three PRE-negative controls, exact project-PRE replay and
-normal warnings-only verification passed. Immutable POST-negative Submission v1
-and exact replay succeeded, but POST ended `infrastructure_failed / invalid_output`
-after two completed paid model effects, before hosted trials or a work verdict.
-The task remains `evaluation_pending`, with no contributor penalty, governed
-revision, acceptance or ContributionRecord. The account holds **US$6.71360084
-settled, zero reserved and US$3.28639916 remaining** under the unchanged US$10
-cap. The attempted ART fault aborted before cancellation; cleanup restored both
-queues, and failure/recovery is **NOT RUN**. The working source-quote repair needs
-a new qualified registered image and fresh guide/task; it is not deployed.
+Deployed source `e0b502f9bd4ec988c5320e223548e84fba82f573` includes the
+source-quote POST repair. Its exact image passed controlled native qualification,
+new immutable registry publication/read/replay, and the canonical retained-data
+preserving rollout. Backend CI completed all 11,631 nodes after a schema-lane
+timeout rerun; the original timeout remains recorded. This is not a full live
+journey pass.
+
+Fresh guide 18 upload/replay passed, but setup ended
+`compilation_invalid_terminal / schema_invalid` after seven completed model
+calls. Exact retained context replay identifies a proposed 180-second check
+against its registered 120-second deadline. Earlier constant errors masked that
+deadline in the correction feedback. No guide 18 proposal, approval, task or
+Submission was created. The diagnostic repair reports both violations without
+changing either guard, rewriting model output or increasing retry limits; it
+requires fresh verification and live execution.
+
+The account holds **US$6.91674412 settled, zero reserved and US$3.08325588
+remaining** under the unchanged US$10 cap. Guide 17's prior approvals, task and
+invalid-output POST remain retained. Its ART fault aborted before cancellation;
+new fault tooling is preparation, not recovery proof. Shared acceptance and
+ContributionRecord evidence remain outstanding.
 [#555](https://github.com/Flow-Research/workstream/issues/555) and the related
 release scopes remain open.
 
@@ -21,7 +29,22 @@ The target is original project guide -> approved locked policies -> released tas
 
 ## Release and project provenance
 
-| Required binding | Current guide 17 checkpoint |
+### Current guide 18 checkpoint — November 2
+
+| Required binding | Actual retained evidence |
+|---|---|
+| Source and CI | `e0b502f9bd4ec988c5320e223548e84fba82f573`; tested merge `4479bc826e57c316d012310e97f8f86f7188175f`. [Backend attempt 2](https://github.com/Flow-Research/workstream/actions/runs/41412570920) completed 11,631 unique tests, zero skips/deselections and all cleanup checks. The schema lane first exceeded 1,500 seconds, then passed in 1,458.935 seconds without changing its selection or cap. This evidence does not certify the subsequent diagnostic repair. |
+| Qualified POST and publication | Image `sha256:b53763590e5a17b8776ae931498b5e07a0da496cf8d23e21574575607f2bd5cf`, immutable version `real-e0b502f9`; eight registration/read/replay receipts. Controlled physical proof retained four model effects, two 17-step trials and no additional replay calls, with owned cleanup. It is not guide 18's live POST outcome. |
+| Actual deployment | Release `sha256:e8a4a24fbcb12973f692ebf1717ba83c2b3f0e32f85bed879ecdc3debe3c00c3`; marker SHA-256 `13bd48dfd8e2eb1bbd3c6901b5ff44770398c65e55e72d8fc8ff039e85156198`. Both SDK images were built from the exact source; unchanged backend content retained the Agents digest `sha256:9c0e8c35e083992f1fe468fd5f3ffe744cc1d45e938066cc6150a6724ec0da8d`. All five application containers passed health and canonical AWS proof. Nine cache entries, 18 authority contexts and 50 runtime registrations preserve their predecessors. Native binary `sha256:34be988c12481b575467ea4db6eb337711ec3732f8e16121f0485fb86a72c43d` restarted as PID 2351869. |
+| Original guide and setup | Guide `01a19b81-238c-78ed-b57a-4cb8665b689f`; setup `01a19b81-23cb-7660-9cab-c61d47531672`; attempt `01a19b82-60d1-761d-840d-0b01acee4db3`. Create/upload and exact replays passed with unchanged original bytes/examples. Review=false and revision policies were explicitly selected and replayed; neither is a checker approval. Setup ended schema-invalid at 09:14:20 UTC, without a finalized compilation. |
+| Failure diagnosis | Fourteen canonical AWS request/response evidence objects were hash/size/owner verified without reinference. Reconstructed context `sha256:e6a4848c5cf2a75d25420b5e64cc5702dd40f958bb373fe6776cd663a2fe98f4` matches every stored attempt identity and actual prompt. Slot 4 contains two registry-constant violations plus the 180/120-second mismatch; slot 6 repairs constants but still violates the deadline. Its historical checker selections also fail the intended new-image agreement. No retained response was edited. |
+| Accounting and remaining proof | 6,916,744,120 settled nanodollars, zero reserved under the existing 10,000,000,000 cap. New guide agreement, genuine POST findings/correction, ART and delivery recovery, shared acceptance/contribution and final-data restore remain incomplete. Simulated Flow identity is not production Flow certification. |
+
+### Historical guide 17 checkpoint
+
+The following exact facts belong to the preceding deployment and remain retained.
+
+| Required binding | Historical guide 17 checkpoint |
 |---|---|
 | Deployed source and exact CI | `c96216540e19f888ef482a57779da4d656561895`; tested merge `de8d485165c4d3a35737e51dedafca468ea93838` has the same tree. All five workflows, 17 lanes and 11,631 exact completions passed, with zero skips/deselections and complete cleanup. [Backend receipt](https://github.com/Flow-Research/workstream/actions/runs/41399356431). This does not certify the subsequent working source-quote diff or a live journey pass. |
 | Backend release and image | Release `sha256:61e164252356c5545fb477f139ad508c279ccb3e539535679ee0429b82948336`; Agents fixture `sha256:9c0e8c35e083992f1fe468fd5f3ffe744cc1d45e938066cc6150a6724ec0da8d`. Five application containers passed health, canonical AWS proof and retained-data preservation before Beat resumed. Marker SHA-256 `6cf7c11164c8fb33a049b1ad7094cb400446fd46084e85a3cb6c3ec799313710`; selector SHA-256 `dbe358b2f2437a8ba1f562acae78f757d46f60c34382c49fa39d225836092885`. |
@@ -38,7 +61,7 @@ The target is original project guide -> approved locked policies -> released tas
 
 The following bindings describe earlier checkpoints only. Their relative words,
 account balances, pending checks and deployment selections are historical; the
-guide 17 table above supplies the current checkpoint. No retained row or receipt
+guide 18 table above supplies the current checkpoint. No retained row or receipt
 was replaced to advance the drill.
 
 | Required binding | Historical value through guide 12 |
@@ -70,7 +93,7 @@ Record actual immutable identifiers and bounded evidence references, not private
 
 Some issue/onboarding prose retains historical gVisor or unavailable-POST descriptions. Current merged owners and the [capability ledger](../roadmap_status.md) select native Smol and implement those POST capabilities. Implementation and scoped qualification remain distinct from this project's agreement, approved bindings, activation and exercised proof.
 
-## Current capability scenarios
+## Prior connected capability scenarios
 
 ### Guide 17, exact c962 deployment and remaining POST gate — November 2
 
@@ -95,7 +118,7 @@ one generation-1 receipt and ready admission. It created no Submission.
 The ART fault observer rejected its query-shape proof before cancellation. Its
 bounded holder was released and the original `celery` and `workstream.outbox`
 consumers restored. The warning archive then verified normally; that is not an
-ART failure/recovery pass. Source-derived query-prefix and worker/socket custody
+ART failure/recovery pass. Source-derived query-prefix, Celery worker and socket custody
 preparation does not turn an unexecuted fault into hosted evidence.
 
 The distinct POST-negative archive reached ready admission, immutable Submission
@@ -107,16 +130,16 @@ no hosted trial, substantive finding or `needs_revision` work verdict resulted.
 The task remains `evaluation_pending`; this infrastructure outcome imposes no
 contributor penalty and supplies no acceptance or contribution.
 
-The current working change replaces procedure line-number proposals with one
+The subsequent e0b change replaced procedure line-number proposals with one
 private `source_quote` format: an exact unique full-line source window, bounded
 to 16,384 UTF-8 bytes, from which the checker derives procedure bounds. Existing
 command/argument, source, state, material and capsule authority checks remain;
 coverage-gap and recovery-applicability citations retain their own validation.
 See the [checker contract](../../pilots/terminal_systems/checkers/README.md#post-prerequisites).
-All 115 model unit tests passed locally for the working change. This is not a
-new registered image, deployment or fresh project qualification. A new exact image/registry selection
-and fresh guide/task are required because paid effects and locked guide 17 rules
-remain immutable. No unchanged-image model resampling or budget change is claimed.
+All 115 model unit tests passed locally and in the qualified image. The e0b
+publication/deployment above contains this repair; its fresh guide 18 failed
+setup before it could select the new image for work. Guide 17 rules and paid
+effects remain immutable. No unchanged-image resampling or budget change occurred.
 
 Remaining proof is genuine POST/trial work outcomes, actual feedback-governed
 correction and unchanged-ZIP guards, applicable ART and UNKNOWN recovery/replay
@@ -130,7 +153,7 @@ journey and the release scopes below remain open.
 
 All observations below retain their original dates and scope. References to
 "current", "latest", pending checks or balances inside these historical records
-mean that checkpoint, not the current guide 17 run above.
+mean that checkpoint, not the current guide 18 checkpoint above.
 
 ### Initial hosted checkpoint — November 1
 
@@ -732,7 +755,7 @@ missing current-project outcomes.
 | Guide custody: create/upload unchanged original and download through public reads | Exact digest/size/bytes and unrelated-actor denial; duplicate upload retains original custody | PASS | Manager detail, original download and setup read returned 200; each corresponding unrelated-contributor read returned concealed 404. Same-key upload returned 202, replayed=true, identical document/hash/byte count. |
 | Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | PASS | Earlier schema-invalid attempt retained; fresh guide setup and explicit manager correction produced the persisted, independently inspected compilation above. |
 | PM correction and agreement: inspect current proposal against guide and packages | Supported successor preserves predecessor; required uncovered checks block approval/activation | PASS | Guide 17 generation 2 persisted a public correction and received separate PRE/POST approvals with exact receipt replay. Eight POST bindings select real26; substantive package/trial qualification remains separate. |
-| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Retained immutable entries/profiles were registered/read/replayed; guide 17 approved two drill PRE and eight real26 POST selections. The working source-quote implementation still needs a newly qualified immutable image and registry selection. |
+| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Retained immutable entries/profiles were registered/read/replayed; guide 17 approved two drill PRE and eight real26 POST selections. The e0b source-quote image is qualified, registered and deployed; fresh guide agreement remains blocked by guide 18 setup validation. |
 | Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | PASS | Guide 17 generation-2 PRE/POST approvals and replays, explicit false human review, retained revision/unpaid ContributionPolicy versions and activation/readback passed on deployed c962. Earlier approvals remain historical evidence. |
 | Task creation/import/screen/release: import original briefs and exercise manager operations | Exact task/source/batch receipts; locks preserved; replay creates no duplicates | IN PROGRESS | Five original tasks remain retained; the guide 17 queue task was created, screened and released with its exact locked context. Wider current import/batch/release scenarios remain separate. |
 | Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | IN PROGRESS | Guide 17 claim/replay immediately started work and retained one assignment/claim receipt/event with fresh authorization. Earlier source-4e original-byte and same-role/foreign-project isolation proofs remain scoped historical evidence; their full matrix was not rerun for guide 17. |

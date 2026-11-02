@@ -62,13 +62,17 @@ def _configuration_const_paths(error: SchemaValidationError):
             yield from _configuration_const_paths(child)
 
 
-def _binding_configuration_issues(context, result) -> list[dict]:
-    """Reuse registry validation; expose only positions in the proposed output."""
+def _selected_binding_issues(context, result) -> list[dict]:
+    """Report independent selected-check violations with only trusted field metadata."""
     result = ProjectGuideCompilationResult.model_validate(result)
     definitions = {
         (item.phase, item.capability_id, item.capability_version): item
         for item in context.checker_capabilities.definitions
     }
+    requirements = {}
+    for index, requirement in enumerate(result.requirements):
+        key = requirement.requirement_id
+        requirements[key] = None if key in requirements else (index, requirement)
     issues = []
     for phase in ("pre_submit", "post_submit"):
         field = phase + "_bindings"
@@ -82,9 +86,11 @@ def _binding_configuration_issues(context, result) -> list[dict]:
             try:
                 definition.registry_entry.configuration_schema.validate_instance(configuration)
             except ExternalCheckerContractError as error:
-                if not isinstance(error.__cause__, SchemaValidationError):
-                    continue
-                for path in _configuration_const_paths(error.__cause__):
+                paths = (
+                    _configuration_const_paths(error.__cause__)
+                    if isinstance(error.__cause__, SchemaValidationError) else ()
+                )
+                for path in paths:
                     if not path:
                         continue
                     for parameter_index, parameter in enumerate(binding.parameters):
@@ -103,6 +109,32 @@ def _binding_configuration_issues(context, result) -> list[dict]:
                                 issues.append(issue)
                             if len(issues) == 20:
                                 return issues
+            selected = requirements.get(binding.requirement_id)
+            if (
+                selected is None
+                or binding.stage.value != phase
+                or not definition.selectable
+            ):
+                continue
+            requirement_index, requirement = selected
+            specification = requirement.check_specification
+            if (
+                requirement.disposition.value != "supported_" + phase
+                or specification is None
+            ):
+                continue
+            deadline_ms = definition.registry_entry.resources.deadline_ms
+            if specification.maximum_duration_seconds * 1000 > deadline_ms:
+                issues.append({
+                    "path": [
+                        "requirements", requirement_index, "check_specification",
+                        "maximum_duration_seconds",
+                    ],
+                    "code": "checker_deadline",
+                    "checker_deadline_ms": deadline_ms,
+                })
+                if len(issues) == 20:
+                    return issues
     return issues
 
 
@@ -112,11 +144,15 @@ def contextual_output_issues(
     context: ProjectGuideCompilationContext,
     result: ProjectGuideCompilationResult | dict,
 ) -> list[dict]:
-    """Map owner failures to bounded closed diagnostics, never values or error text."""
-    if isinstance(error, ExternalCheckerContractError) and isinstance(
+    """Map owner failures to bounded diagnostics without rejected values or exception text."""
+    configuration_error = isinstance(error, ExternalCheckerContractError) and isinstance(
         error.__cause__, SchemaValidationError
-    ):
-        issues = _binding_configuration_issues(context, result)
+    )
+    deadline_error = isinstance(error, ValueError) and str(error) == (
+        "check specification exceeds the checker deadline"
+    )
+    if configuration_error or deadline_error:
+        issues = _selected_binding_issues(context, result)
         if issues:
             return issues
     codes = {
