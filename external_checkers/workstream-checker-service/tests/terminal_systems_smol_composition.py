@@ -24,6 +24,8 @@ import zipfile
 
 from sqlalchemy import select
 
+from smol_runtime import assert_smol_vm_inventory, smol_vm_inventory
+
 from app.adapters.artifacts import checker_output_binding, checker_output_storage
 from app.adapters.artifacts import post_submission_materialization
 from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
@@ -1080,7 +1082,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
         service_log = (root / "service.stderr").open("w", encoding="utf-8")
         vms_root = Path(node["smol"]["home"]) / ".cache/smolvm/vms"
         cgroup_root = Path(node["smol"]["cgroup_root"])
-        before_vms = _directory_children(vms_root)
+        before_vms = smol_vm_inventory(vms_root)
         before_cgroups = _directory_children(cgroup_root)
         service = None
         try:
@@ -1163,7 +1165,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     )
                     _assert_idle_trial_roots(root, service_root, child_home_root)
                     assert _directory_children(service_root / "smol-leases") == set()
-                    assert _directory_children(vms_root) == before_vms
+                    before_vms = assert_smol_vm_inventory(vms_root, before_vms)
                     assert _directory_children(cgroup_root) == before_cgroups
                     return
                 result = await executor.evaluate_post_submission(h.request)
@@ -1268,7 +1270,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                 ]
             _assert_idle_trial_roots(root, service_root, child_home_root)
             assert _directory_children(service_root / "smol-leases") == set()
-            assert _directory_children(vms_root) == before_vms
+            before_vms = assert_smol_vm_inventory(vms_root, before_vms)
             assert _directory_children(cgroup_root) == before_cgroups
         finally:
             if recovery is not None:
