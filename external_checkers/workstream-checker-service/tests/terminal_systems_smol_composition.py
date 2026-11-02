@@ -620,7 +620,7 @@ def _manifest(bindings, profile, projection) -> dict[str, object]:
     return json.loads(json.dumps(value, default=str))
 
 
-def _procedure(identifier, purpose, command, state_source, evidence_id, line):
+def _procedure(identifier, purpose, command, state_source, evidence_id, source_quote):
     return {
         "procedure_id": identifier,
         "purpose": purpose,
@@ -629,8 +629,7 @@ def _procedure(identifier, purpose, command, state_source, evidence_id, line):
         "working_directory": ".",
         "state_source": state_source,
         "evidence_id": evidence_id,
-        "start_line": line,
-        "end_line": line,
+        "source_quote": source_quote,
     }
 
 
@@ -638,6 +637,13 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
     value = json.loads(prompt)
     if value.get("schema_version") == "terminal_systems.trial_plan_proposal.v2":
         observations.append({"planner_prompt": value})
+        source_lines = {
+            item["evidence_id"]: [
+                line.split(" | ", 1)[1]
+                for line in item["numbered_content"].splitlines()
+            ]
+            for item in value["untrusted_source_evidence"]
+        }
         procedures = [
             _procedure(
                 "qualification_status",
@@ -645,7 +651,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["qualification-status"],
                 "fresh",
                 "source_1",
-                5,
+                source_lines["source_1"][4],
             ),
             _procedure(
                 "apply_incomplete",
@@ -653,7 +659,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "solution/incomplete.sh"],
                 "fresh",
                 "source_2",
-                3,
+                source_lines["source_2"][2],
             ),
             _procedure(
                 "remove_output",
@@ -661,7 +667,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/remove-output.sh"],
                 "reference_baseline",
                 "source_2",
-                4,
+                source_lines["source_2"][3],
             ),
             _procedure(
                 "fabricate_output",
@@ -669,7 +675,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/fabricate-output.sh"],
                 "reference_baseline",
                 "source_2",
-                5,
+                source_lines["source_2"][4],
             ),
             _procedure(
                 "interrupt_work",
@@ -677,7 +683,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/interrupt.sh"],
                 "reference_baseline",
                 "source_2",
-                6,
+                source_lines["source_2"][5],
             ),
             _procedure(
                 "restart_work",
@@ -685,7 +691,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/restart.sh"],
                 "interrupt_work",
                 "source_2",
-                7,
+                source_lines["source_2"][6],
             ),
         ]
         return json.dumps(

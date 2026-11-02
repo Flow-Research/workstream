@@ -6,6 +6,7 @@ from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,7 @@ sys.path.insert(0, str(HERE))
 
 from trial_plan import (  # noqa: E402
     MAXIMUM_DOCUMENTED_COMMANDS,
+    MAXIMUM_SOURCE_QUOTE_BYTES,
     PURPOSE_ORDER,
     TrialPlanError,
     TrialPlanLimits,
@@ -162,8 +164,8 @@ class TrialPlanTests(unittest.TestCase):
             "coverage_gaps": [],
         }
 
-    @staticmethod
     def procedure(
+        self,
         identifier: str,
         purpose: str,
         command_text: str,
@@ -179,8 +181,11 @@ class TrialPlanTests(unittest.TestCase):
             "working_directory": ".",
             "state_source": state_source,
             "evidence_id": evidence_id,
-            "start_line": line,
-            "end_line": line,
+            "source_quote": next(
+                item.content.splitlines()[line - 1]
+                for item in self.evidence
+                if item.evidence_id == evidence_id
+            ),
         }
 
     def validated(self, value: dict[str, object] | None = None):
@@ -192,7 +197,7 @@ class TrialPlanTests(unittest.TestCase):
 
     def test_command_citation_error_identifies_only_its_procedure_index(self):
         value = self.proposal()
-        value["procedures"][1].update(start_line=3, end_line=3)
+        value["procedures"][1]["source_quote"] = "absent exact source line"
         with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
             self.validated(value)
         self.assertEqual(caught.exception.procedure_index, 1)
@@ -355,29 +360,143 @@ class TrialPlanTests(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), raw)
                 self.assertEqual(collect_plan_sources(self.root), (digest, sources))
 
-    def test_numbered_prompt_preserves_strict_original_line_and_command_citations(self):
+    def test_source_quotes_derive_lines_without_model_offsets(self):
         (self.root / "instruction.md").write_text(INSTRUCTION_WITH_BLANK_LINES)
         self.material_digest, self.evidence = collect_plan_sources(self.root)
-        wrong_line = self.proposal()
-        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
-            self.validated(wrong_line)
+        value = self.proposal()
+        value["procedures"][0]["source_quote"] = "Inspect status with `queue status`."
+        proposal = self.validated(value)
+        self.assertEqual(proposal.procedures[0]["start_line"], 4)
+        self.assertEqual(proposal.procedures[0]["end_line"], 4)
+        contract = json.loads(
+            build_plan_prompt(self.metadata, self.material_digest, self.evidence)
+        )["output_contract"]["procedures"][0]
+        self.assertIn("source_quote", contract)
+        self.assertNotIn("start_line", contract)
+        self.assertNotIn("end_line", contract)
 
-        exact = deepcopy(wrong_line)
-        exact["procedures"][0].update(start_line=4, end_line=4)
-        self.assertTrue(self.validated(exact).coverage_complete)
-
-        annotated = deepcopy(exact)
-        annotated["procedures"][0].update(
-            command_text="4 | queue status", command=["4", "|", "queue", "status"]
-        )
-        wrong_argv = deepcopy(exact)
-        wrong_argv["procedures"][0]["command"] = ["queue", "erase-everything"]
-        for value in (annotated, wrong_argv):
+        for field, wrong in (
+            ("source_quote", "queue status"),
+            ("source_quote", "4 | Inspect status with `queue status`."),
+            ("command_text", "4 | queue status"),
+            ("command", ["queue", "erase-everything"]),
+            ("evidence_id", "source_2"),
+        ):
+            invalid = deepcopy(value)
+            invalid["procedures"][0][field] = wrong
             with (
-                self.subTest(procedure=value["procedures"][0]),
+                self.subTest(field=field),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(invalid)
+
+    def test_old_procedure_line_fields_are_rejected(self):
+        for keys in ({"start_line": 2, "end_line": 2}, {"start_line": 2}):
+            value = self.proposal()
+            value["procedures"][0].update(keys)
+            with (
+                self.subTest(keys=keys),
                 self.assertRaisesRegex(TrialPlanError, "invalid_output"),
             ):
                 self.validated(value)
+        value = self.proposal()
+        del value["procedures"][0]["source_quote"]
+        value["procedures"][0].update(start_line=2, end_line=2)
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            self.validated(value)
+
+    def test_ambiguous_quote_requires_unique_surrounding_full_lines(self):
+        text = "# First\nInspect status with `queue status`.\n# Second\nInspect status with `queue status`.\n"
+        (self.root / "instruction.md").write_text(text)
+        self.material_digest, self.evidence = collect_plan_sources(self.root)
+        value = self.proposal()
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
+            self.validated(value)
+        self.assertEqual(caught.exception.procedure_index, 0)
+        value["procedures"][0]["source_quote"] = (
+            "# Second\nInspect status with `queue status`."
+        )
+        procedure = self.validated(value).procedures[0]
+        self.assertEqual((procedure["start_line"], procedure["end_line"]), (3, 4))
+
+    def test_quotes_preserve_multiline_encoding_and_old_source_authority(self):
+        command = "python3 -c 'print(\"café\")\nprint(2)'"
+        instruction = "# Queue task\n\n```sh\n" + command + "\n```\n"
+        for newline in ("\n", "\r\n"):
+            raw = instruction.replace("\n", newline).encode("utf-8")
+            (self.root / "instruction.md").write_bytes(raw)
+            self.material_digest, self.evidence = collect_plan_sources(self.root)
+            value = self.proposal()
+            value["procedures"][0].update(
+                command_text=command, command=shlex.split(command), source_quote=command
+            )
+            proposal = self.validated(value)
+            self.assertEqual(proposal.procedures[0]["start_line"], 4)
+            self.assertEqual(proposal.procedures[0]["end_line"], 5)
+            self.assertEqual(
+                self.evidence[0].sha256, "sha256:" + hashlib.sha256(raw).hexdigest()
+            )
+            for procedure in proposal.procedures:
+                source = next(
+                    item
+                    for item in self.evidence
+                    if item.evidence_id == procedure["evidence_id"]
+                )
+                # Every new accepted quote maps to the previous source/argv
+                # checks with engine-derived bounds; it adds no argv authority.
+                cited = "\n".join(
+                    source.content.splitlines()[
+                        procedure["start_line"] - 1 : procedure["end_line"]
+                    ]
+                )
+                self.assertIn(procedure["command_text"], cited)
+                self.assertEqual(
+                    shlex.split(procedure["command_text"], posix=True),
+                    procedure["command"],
+                )
+            invalid = deepcopy(value)
+            invalid["procedures"][0]["source_quote"] = command.replace("café", "cafe")
+            with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+                self.validated(invalid)
+            if newline == "\r\n":
+                invalid["procedures"][0]["source_quote"] = command.replace("\n", "\r\n")
+                with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+                    self.validated(invalid)
+
+    def test_quote_size_is_utf8_bounded_and_invalid_text_fails_closed(self):
+        prefix = "Inspect `queue status`. "
+        remaining = MAXIMUM_SOURCE_QUOTE_BYTES - len(prefix.encode("utf-8"))
+        exact = prefix + "é" * (remaining // 2) + " " * (remaining % 2)
+        for quote in (exact, exact + "é"):
+            (self.root / "instruction.md").write_text("# Task\n" + quote + "\n")
+            self.material_digest, self.evidence = collect_plan_sources(self.root)
+            value = self.proposal()
+            self.assertEqual(value["procedures"][0]["source_quote"], quote)
+            if len(quote.encode("utf-8")) == MAXIMUM_SOURCE_QUOTE_BYTES:
+                self.assertTrue(self.validated(value).coverage_complete)
+            else:
+                with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+                    self.validated(value)
+        for quote in ("\ud800", "", [], True):
+            value = self.proposal()
+            value["procedures"][0]["source_quote"] = quote
+            with (
+                self.subTest(quote_type=type(quote).__name__),
+                self.assertRaisesRegex(TrialPlanError, "invalid_output"),
+            ):
+                self.validated(value)
+
+    def test_overlapping_source_windows_are_ambiguous_without_context(self):
+        line = "Inspect status with `queue status`."
+        (self.root / "instruction.md").write_text("\n".join([line] * 3))
+        self.material_digest, self.evidence = collect_plan_sources(self.root)
+        value = self.proposal()
+        value["procedures"][0]["source_quote"] = "\n".join([line] * 2)
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            self.validated(value)
+        value["procedures"][0]["source_quote"] = "\n".join([line] * 3)
+        procedure = self.validated(value).procedures[0]
+        self.assertEqual((procedure["start_line"], procedure["end_line"]), (1, 3))
 
     def test_interruption_requires_repaired_baseline_even_for_partial_coverage(self):
         prompt = json.loads(
@@ -535,6 +654,7 @@ if state.exists():
         self.assertEqual(
             by_kind["documented_command"]["maximum_occurrences"],
             MAXIMUM_DOCUMENTED_COMMANDS,
+            MAXIMUM_SOURCE_QUOTE_BYTES,
         )
         self.assertEqual(
             sum(item["maximum_occurrences"] for item in templates),

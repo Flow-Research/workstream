@@ -59,15 +59,14 @@ class ModelPhaseTests(unittest.TestCase):
         # this public controlled fixture's commands and synthetic identities.
         value = deepcopy(self.value)
         del value["schema_version"]
-        value["procedures"][1]["start_line"] += 1
-        value["procedures"][1]["end_line"] += 1
+        value["procedures"][1]["source_quote"] = "absent exact source line"
         item = value["procedures"][3]
         member = json.dumps(item)
         duplicate = (
             member[:-1]
             + "".join(
                 ", " + json.dumps(k) + ": " + json.dumps(item[k])
-                for k in ("evidence_id", "procedure_id", "purpose", "start_line")
+                for k in ("evidence_id", "procedure_id", "purpose", "source_quote")
             )
             + "}"
         )
@@ -75,8 +74,7 @@ class ModelPhaseTests(unittest.TestCase):
         omitted = deepcopy(self.value)
         del omitted["schema_version"]
         bad_citation = deepcopy(self.value)
-        bad_citation["procedures"][1]["start_line"] += 1
-        bad_citation["procedures"][1]["end_line"] += 1
+        bad_citation["procedures"][1]["source_quote"] = "absent exact source line"
         original_item = self.value["procedures"][3]
         original_member = json.dumps(original_item)
         duplicate_only = json.dumps(self.value).replace(
@@ -112,8 +110,8 @@ class ModelPhaseTests(unittest.TestCase):
                 self.assertNotIn("accepted_candidate", correction)
 
     def test_citation_correction_identifies_the_offending_procedure(self):
-        # Same defect as the retained live plan: the cited line is a closing
-        # fence immediately after the documented command. Public fixture only.
+        # A closing fence cannot substitute for the source window containing
+        # the command. This public fixture preserves bounded correction proof.
         lines = plan_tests.AUTHOR_NOTES.splitlines()
         notes = (
             "\n".join(
@@ -126,18 +124,19 @@ class ModelPhaseTests(unittest.TestCase):
             self.case.root
         )
         value = self.case.proposal()
-        for item in value["procedures"][1:]:
-            item["start_line"] += 1 if item["purpose"] == "incomplete_repair" else 2
-            item["end_line"] = item["start_line"]
+        for item, line in zip(value["procedures"][1:], lines[1:], strict=True):
+            item["source_quote"] = (
+                item["command_text"] if item["purpose"] == "incomplete_repair" else line
+            )
         valid = json.dumps(value)
         self.assertTrue(self.validate(valid).coverage_complete)
-        value["procedures"][1].update(start_line=4, end_line=4)
+        value["procedures"][1]["source_quote"] = "```"
         invalid = json.dumps(value)
         prompt = build_plan_prompt(
             self.case.metadata, self.case.material_digest, self.case.evidence
         )
         expected = {
-            "reason": "command_text_not_in_cited_source_lines",
+            "reason": "source_quote_or_command_text_not_in_unique_source_lines",
             "procedure_index": 1,
         }
 
@@ -167,12 +166,60 @@ class ModelPhaseTests(unittest.TestCase):
         self.assertEqual(correction["validation_feedback"], expected)
         self.assertIn(
             "validation_feedback.procedure_index is the zero-based position in the "
-            "prior procedures array. Recheck that command's exact cited numbered source.",
+            "prior procedures array. Recheck that command's verbatim source_quote against "
+            "complete original lines in the identified source, and command_text within that quote.",
             correction["correction_instruction"],
         )
         self.assertEqual(correction["original_prompt"], prompt)
         self.assertEqual(correction["untrusted_prior_output"], invalid)
         self.assertNotIn("expected_line", correction)
+
+    def test_fenced_command_is_resolved_without_model_line_arithmetic(self):
+        lines = plan_tests.AUTHOR_NOTES.splitlines()
+        notes = (
+            "\n".join(
+                [
+                    *(f"Context {number}" for number in range(100)),
+                    "```sh",
+                    "sh solution/incomplete.sh",
+                    "```",
+                    *lines[2:],
+                ]
+            )
+            + "\n"
+        )
+        (self.case.root / "AUTHOR_NOTES.md").write_text(notes, encoding="utf-8")
+        self.case.material_digest, self.case.evidence = plan_tests.collect_plan_sources(
+            self.case.root
+        )
+        value = self.case.proposal()
+        for item, line in zip(value["procedures"][1:], lines[1:], strict=True):
+            item["source_quote"] = (
+                item["command_text"] if item["purpose"] == "incomplete_repair" else line
+            )
+        prompt = build_plan_prompt(
+            self.case.metadata, self.case.material_digest, self.case.evidence
+        )
+        session = Session([json.dumps(value)])
+        proposal, _ = run_model_phase(session, prompt, self.validate)
+        self.assertEqual(len(session.calls), 1)
+        incomplete = proposal.procedures[1]
+        self.assertEqual((incomplete["start_line"], incomplete["end_line"]), (102, 102))
+        # The old response citing closing fence 103 remains invalid. This new
+        # contract neither accepts nor rewrites the retained provider output.
+        obsolete = deepcopy(value)
+        for item, normalized in zip(
+            obsolete["procedures"], proposal.procedures, strict=True
+        ):
+            del item["source_quote"]
+            item.update(
+                start_line=normalized["start_line"], end_line=normalized["end_line"]
+            )
+        obsolete["procedures"][1].update(start_line=103, end_line=103)
+        session = Session([json.dumps(obsolete), json.dumps(obsolete)])
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+            run_model_phase(session, prompt, self.validate)
+        self.assertEqual(len(session.calls), 2)
 
     def test_correction_feedback_copies_only_a_bounded_typed_procedure_index(self):
         for index in (None, True, -1, MAXIMUM_PROCEDURES, 1.0, "source text", {}, 1):
@@ -194,7 +241,7 @@ class ModelPhaseTests(unittest.TestCase):
                     self.assertEqual(
                         correction["validation_feedback"],
                         {
-                            "reason": "command_text_not_in_cited_source_lines",
+                            "reason": "source_quote_or_command_text_not_in_unique_source_lines",
                             "procedure_index": index,
                         },
                     )
@@ -283,8 +330,10 @@ class ModelPhaseTests(unittest.TestCase):
         omitted = value["procedures"].pop()
         value["coverage_gaps"] = [
             {
-                k: omitted[k]
-                for k in ("purpose", "evidence_id", "start_line", "end_line")
+                "purpose": omitted["purpose"],
+                "evidence_id": omitted["evidence_id"],
+                "start_line": 6,
+                "end_line": 6,
             }
         ]
         session = Session([json.dumps(value)])

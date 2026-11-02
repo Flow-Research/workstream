@@ -125,10 +125,32 @@ registered images, locked bindings and their qualification evidence remain retai
 Local model-session tests establish the conditional control paths, not live model
 quality or deployment qualification.
 
+The private procedure proposal has one format: each procedure supplies
+`evidence_id` and `source_quote`, with no model-supplied `start_line` or
+`end_line`. The quote must match exactly one window of complete contiguous lines
+in the selected source's line view, preserving indentation and blank lines,
+joined with `\n` and without an added trailing newline. It is bounded to 16,384
+UTF-8 bytes. The checker derives the procedure's 1-based line bounds from that
+unique match; partial-line, absent, ambiguous or oversized quotes fail closed.
+This uses source-line matching, with no Markdown parser. `command_text` must
+occur verbatim in the matched span and parse with `shlex` into the exact proposed
+argument array. Coverage gaps and recovery applicability retain their separately
+validated model-supplied citations; purpose, ordering, material, state-source and
+execution-capsule authority checks remain required.
+
+This source-quote implementation and its focused regressions are in the current
+working change. It has not been deployed or qualified as a new registered image.
+Guide 17's two completed author-evidence calls still belong to its locked
+`real-26d5977e` image: the corrected proposal cited a closing code fence at line
+103 instead of the command at line 102, and POST stopped as infrastructure
+`invalid_output` before trials. A new immutable image, qualification, registry
+bindings and fresh guide/task are required; retained paid effects and old locked
+policies are not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+
 Each model phase permits one correction only after a completed response fails its
 strict output validator with `invalid_output`. The correction includes the complete
 original prompt and exact rejected output as untrusted JSON strings; it does not
-insert missing fields, discard duplicate members, repair citations or truncate
+insert missing fields, discard duplicate members, alter source quotes or truncate
 evidence. The same validators apply again. A second invalid response is terminal.
 Valid coverage gaps and failing assessments remain work findings; provider,
 unknown-delivery, transport, material and capacity failures do not trigger another
@@ -164,8 +186,11 @@ Terminal Systems contribution journey. Hosted Smol composition and its scoped
 AWS proof are tracked separately in [PR #692](https://github.com/Flow-Research/workstream/pull/692);
 that owned baseline passed with its disclosed fixture identity. Live-provider/model-quality
 proof and full project qualification remain separate. The real Terminal Systems
-project has no qualified POST binding or activation. Registration and guide
-authority in a model-only engineering fixture do not establish that project.
+project now has approved `real-26d5977e` POST bindings and guide 17 activation,
+but its POST run stopped before substantive trials or a work verdict. The new
+source-quote image still needs fresh qualification and bindings. Registration
+and guide authority in a model-only engineering fixture do not establish the
+real project journey.
 
 [`post/model/execution-rubrics.json`](post/model/execution-rubrics.json) is an
 exact semantic projection of that historical handoff. Its

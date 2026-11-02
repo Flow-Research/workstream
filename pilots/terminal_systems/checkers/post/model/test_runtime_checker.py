@@ -79,7 +79,7 @@ def procedure(
     command_text: str,
     state_source: str,
     evidence_id: str,
-    line: int,
+    source_quote: str,
 ) -> dict[str, object]:
     return {
         "procedure_id": identifier,
@@ -89,8 +89,7 @@ def procedure(
         "working_directory": ".",
         "state_source": state_source,
         "evidence_id": evidence_id,
-        "start_line": line,
-        "end_line": line,
+        "source_quote": source_quote,
     }
 
 
@@ -133,6 +132,13 @@ class FakeModelSession:
         )
 
     def _plan(self, prompt: dict[str, object]) -> dict[str, object]:
+        source_lines = {
+            item["evidence_id"]: [
+                line.split(" | ", 1)[1]
+                for line in item["numbered_content"].splitlines()
+            ]
+            for item in prompt["untrusted_source_evidence"]
+        }
         procedures = [
             procedure(
                 "inspect_status",
@@ -140,7 +146,7 @@ class FakeModelSession:
                 "queue status",
                 "fresh",
                 "source_1",
-                2,
+                source_lines["source_1"][1],
             )
         ]
         remaining = [
@@ -184,7 +190,14 @@ class FakeModelSession:
             remaining = remaining[:-2]
         if self.coverage_complete:
             procedures.extend(
-                procedure(identifier, purpose, command, state, "source_2", line)
+                procedure(
+                    identifier,
+                    purpose,
+                    command,
+                    state,
+                    "source_2",
+                    source_lines["source_2"][line - 1],
+                )
                 for identifier, purpose, command, state, line in remaining
             )
             gaps = []
