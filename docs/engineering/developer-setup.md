@@ -270,10 +270,10 @@ A review failure, cancellation, invalid result or exhausted budget does not publ
 the unchecked draft. This is a bounded phase of the same attempt, not a retry of
 an uncertain or terminal invocation. PM review and approval remain separate.
 
-Registry constant mismatches in an unambiguous schema branch identify the binding
-and parameter-value positions in those diagnostics. Expected constants, rejected
-values and exception text are never returned. The exact registered configuration
-schema remains authoritative.
+Direct registry `const` failures and those in a single-branch `oneOf` identify
+binding and parameter-value positions in those diagnostics. Other schema failures
+retain a generic closed code. Expected constants, rejected values and exception
+text are never returned. The exact registered configuration schema remains authoritative.
 
 For a manager correction, both phases receive the exact retained predecessor
 proposal alongside feedback. The server validates its project, guide, source,

@@ -312,7 +312,7 @@ originals in a fresh model context. Every draft, review and correction must pass
 strict schema, canonical, owner-context and source validation. Every phase must
 initially read every assigned original, including for blocked proposals; searches
 alone do not establish that observation. At most two known-invalid-output
-corrections share the original attempt limits. Only the validated final review
+corrections per phase share the original attempt limits. Only the validated final review
 can become a retained proposal; failed review never publishes the private draft.
 This does not replace the PM's review of source coverage and the proposed checks'
 observable evidence.

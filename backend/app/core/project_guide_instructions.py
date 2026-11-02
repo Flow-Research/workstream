@@ -351,9 +351,9 @@ with source evidence and null artifact policy. PM policy absence is never a bloc
 Blocked binding evidence is not executable.
 
 CORRECTION AND SOURCE REVIEW
-validation_errors: bounded paths and closed codes, never values. Reopen originals;
-return the whole proposal. Each phase allows at most two invalid-output corrections
-within the shared attempt, timeout and turn/tool budgets. Invalid proposals are never saved.
+validation_errors: bounded paths and closed codes, never values. Reopen the assigned originals;
+return the whole proposal. At most two invalid-output corrections per phase share
+the original attempt's timeout and turn/tool budgets. Invalid proposals are never saved.
 coverage_review rereads originals in a fresh model context; check all PRE/POST obligations,
 omissions, unsupported claims, missing inputs and classification.
 Return the full proposal, not a report; absent a candidate, derive from originals.

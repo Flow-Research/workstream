@@ -1076,8 +1076,9 @@ cannot be reused as post-submission review-gate evidence. See the
   same grant, records those reads without provider resources, and stores
   provider, API and model `none` on the attempt. Known invalid inference output
   receives at most two corrections per drafting or review phase within the original
-  shared execution budget. Unambiguous registry constant failures identify
-  binding/parameter value positions without exposing constants or exception text.
+  shared execution budget. Direct or single-branch `oneOf` constant failures identify
+  binding/parameter value positions without exposing constants or exception text;
+  other schema failures retain a generic closed code.
   Corrections carry closed, value-free diagnostics and, when
   safe, the bounded rejected candidate as untrusted data; exhaustion ends terminally. Exact replay never
   starts a second inference.
@@ -1724,8 +1725,8 @@ limits null. Typed proposals expose engineering specifications; the final correc
 proposal has passed independent source-to-proposal review. Draft path and material-linkage
 errors exposed a need for bounded output correction. Every draft, review and
 correction now passes strict schema, canonical, context and source checks; only
-the final review can become a proposal. Up to two corrections share the original
-attempt budgets, using closed, value-free diagnostics and, when safe, the bounded
+the final review can become a proposal. Up to two corrections per phase share the
+original attempt budgets, using closed, value-free diagnostics and, when safe, the bounded
 rejected candidate as untrusted data. Each phase must initially read every assigned
 original, including for blocked proposals; searches cannot substitute for those
 reads. PM correction now
