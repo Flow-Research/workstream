@@ -161,7 +161,7 @@ class ModelPhaseTests(unittest.TestCase):
         )
         expected = {
             "reason": "source_quote_or_command_text_not_in_unique_source_lines",
-            "procedure_index": 1,
+            "procedure_indices": [1],
         }
 
         class CitationAwareSession(Session):
@@ -170,7 +170,7 @@ class ModelPhaseTests(unittest.TestCase):
                     correction = json.loads(prompt)
                     feedback = correction.get("validation_feedback")
                     zero_based = (
-                        "procedure_index is the zero-based position"
+                        "procedure_indices lists every zero-based position"
                         in correction["correction_instruction"]
                     )
                     self.outputs = iter(
@@ -189,14 +189,104 @@ class ModelPhaseTests(unittest.TestCase):
         self.assertEqual(correction["validation_error"], "invalid_output")
         self.assertEqual(correction["validation_feedback"], expected)
         self.assertIn(
-            "validation_feedback.procedure_index is the zero-based position in the "
-            "prior procedures array. Recheck that command's verbatim source_quote against "
-            "complete original lines in the identified source, and command_text within that quote.",
+            "validation_feedback.procedure_indices lists every zero-based position with "
+            "a citation failure in the prior procedures array.",
             correction["correction_instruction"],
         )
         self.assertEqual(correction["original_prompt"], prompt)
         self.assertEqual(correction["untrusted_prior_output"], invalid)
         self.assertNotIn("expected_line", correction)
+
+    def test_all_wrapped_quote_failures_are_corrected_in_one_full_response(self):
+        value = deepcopy(self.value)
+        notes = ["# Reproduction"]
+        for index, item in enumerate(value["procedures"][1:], start=1):
+            if index <= 3:
+                notes.extend(
+                    [
+                        "Use this documented",
+                        "procedure without changing the task.",
+                        "```sh",
+                        item["command_text"],
+                        "```",
+                    ]
+                )
+                item["source_quote"] = item["command_text"]
+            else:
+                notes.append(item["source_quote"])
+        (self.case.root / "AUTHOR_NOTES.md").write_text("\n".join(notes) + "\n")
+        self.case.material_digest, self.case.evidence = plan_tests.collect_plan_sources(
+            self.case.root
+        )
+        value["material_digest"] = self.case.material_digest
+        valid = json.dumps(value)
+        self.assertTrue(self.validate(valid).coverage_complete)
+        for item in value["procedures"][1:4]:
+            item["source_quote"] = (
+                "Use this documented procedure without changing the task.\n"
+                "```sh\n" + item["command_text"] + "\n```"
+            )
+        invalid = json.dumps(value)
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validate(invalid)
+        self.assertEqual(caught.exception.procedure_indices, (1, 2, 3))
+        # Reproduces the retained one-correction failure: fixing only the first
+        # reported quote leaves two independent citation failures.
+        first_only = deepcopy(value)
+        first_only["procedures"][1]["source_quote"] = first_only["procedures"][1][
+            "command_text"
+        ]
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validate(json.dumps(first_only))
+        self.assertEqual(caught.exception.procedure_indices, (2, 3))
+        expected = {
+            "reason": "source_quote_or_command_text_not_in_unique_source_lines",
+            "procedure_indices": [1, 2, 3],
+        }
+
+        class CitationAwareSession(Session):
+            def call(self, prompt, *, required_receipt_handles=()):
+                if self.calls:
+                    correction = json.loads(prompt)
+                    self.outputs = iter(
+                        [
+                            valid
+                            if correction.get("validation_feedback") == expected
+                            and "unique complete command line"
+                            in correction["correction_instruction"]
+                            else invalid
+                        ]
+                    )
+                return super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+
+        prompt = build_plan_prompt(
+            self.case.metadata, self.case.material_digest, self.case.evidence
+        )
+        session = CitationAwareSession([invalid])
+        proposal, completed = run_model_phase(session, prompt, self.validate)
+        self.assertEqual(completed.call_index, 1)
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(proposal, self.validate(valid))
+        correction = json.loads(session.calls[1][0])
+        self.assertEqual(correction["validation_feedback"], expected)
+        self.assertEqual(correction["untrusted_prior_output"], invalid)
+        self.assertEqual(correction["original_prompt"], prompt)
+        runtime = plan_tests.build_runtime_trial_plan(
+            self.case.metadata, proposal, plan_tests.TrialPlanLimits(100, 16, 32)
+        )
+        self.assertIsNotNone(runtime)
+        self.assertEqual(
+            len(
+                [
+                    step
+                    for step in runtime["steps"]
+                    if step["slot_kind"].startswith("reference_verify_")
+                ]
+            ),
+            3,
+        )
 
     def test_fenced_command_is_resolved_without_model_line_arithmetic(self):
         lines = plan_tests.AUTHOR_NOTES.splitlines()
@@ -245,10 +335,31 @@ class ModelPhaseTests(unittest.TestCase):
             run_model_phase(session, prompt, self.validate)
         self.assertEqual(len(session.calls), 2)
 
-    def test_correction_feedback_copies_only_a_bounded_typed_procedure_index(self):
-        for index in (None, True, -1, MAXIMUM_PROCEDURES, 1.0, "source text", {}, 1):
-            with self.subTest(index_type=type(index).__name__):
-                error = TrialPlanError("invalid_output", procedure_index=index)
+    def test_correction_feedback_copies_only_bounded_typed_procedure_indices(self):
+        cases = (
+            None,
+            True,
+            1,
+            "source text",
+            {},
+            [],
+            (),
+            (True,),
+            (-1,),
+            (MAXIMUM_PROCEDURES,),
+            (1.0,),
+            ("source text",),
+            ({},),
+            (1, 1),
+            (2, 1),
+            tuple(range(MAXIMUM_PROCEDURES + 1)),
+            (1,),
+            (1, 2, 3),
+            tuple(range(MAXIMUM_PROCEDURES)),
+        )
+        for indices in cases:
+            with self.subTest(indices=indices):
+                error = TrialPlanError("invalid_output", procedure_indices=indices)
                 error.private_detail = "exception attributes must not be serialized"
                 session = Session(["invalid", "valid"])
 
@@ -261,12 +372,16 @@ class ModelPhaseTests(unittest.TestCase):
                 self.assertEqual(value, "valid")
                 self.assertEqual(len(session.calls), 2)
                 correction = json.loads(session.calls[1][0])
-                if type(index) is int and 0 <= index < MAXIMUM_PROCEDURES:
+                if (
+                    type(indices) is tuple
+                    and all(type(index) is int for index in indices)
+                    and indices in ((1,), (1, 2, 3), tuple(range(MAXIMUM_PROCEDURES)))
+                ):
                     self.assertEqual(
                         correction["validation_feedback"],
                         {
                             "reason": "source_quote_or_command_text_not_in_unique_source_lines",
-                            "procedure_index": index,
+                            "procedure_indices": list(indices),
                         },
                     )
                 else:

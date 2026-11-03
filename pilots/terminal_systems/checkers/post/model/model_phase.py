@@ -39,12 +39,17 @@ def run_model_phase(
             raise
         if (
             isinstance(error, TrialPlanError)
-            and type(error.procedure_index) is int
-            and 0 <= error.procedure_index < MAXIMUM_PROCEDURES
+            and type(error.procedure_indices) is tuple
+            and 0 < len(error.procedure_indices) <= MAXIMUM_PROCEDURES
+            and all(
+                type(index) is int and 0 <= index < MAXIMUM_PROCEDURES
+                for index in error.procedure_indices
+            )
+            and tuple(sorted(set(error.procedure_indices))) == error.procedure_indices
         ):
             validation_feedback = {
                 "reason": "source_quote_or_command_text_not_in_unique_source_lines",
-                "procedure_index": error.procedure_index,
+                "procedure_indices": list(error.procedure_indices),
             }
     else:
         return value, completed
@@ -69,9 +74,14 @@ def run_model_phase(
         correction_value["validation_feedback"] = validation_feedback
         correction_value["correction_instruction"] = (
             f"{correction_value['correction_instruction']} "
-            "validation_feedback.procedure_index is the zero-based position in the "
-            "prior procedures array. Recheck that command's verbatim source_quote against "
-            "complete original lines in the identified source, and command_text within that quote."
+            "validation_feedback.procedure_indices lists every zero-based position with "
+            "a citation failure in the prior procedures array. Correct every listed procedure "
+            "in this one complete response. Recheck each verbatim source_quote against "
+            "complete original lines in its identified source, and command_text within that quote. "
+            "Prefer a unique complete command line as source_quote when sufficient; "
+            "otherwise include exact surrounding original lines to resolve ambiguity. "
+            "Never flatten wrapped prose or invent a source line or command. "
+            "command_text and argv must remain verbatim source-authorized commands."
         )
     correction = json.dumps(
         correction_value,

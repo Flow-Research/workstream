@@ -195,18 +195,54 @@ class TrialPlanTests(unittest.TestCase):
             self.evidence,
         )
 
-    def test_command_citation_error_identifies_only_its_procedure_index(self):
+    def test_command_citation_error_identifies_its_procedure_indices(self):
         value = self.proposal()
         value["procedures"][1]["source_quote"] = "absent exact source line"
         with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
             self.validated(value)
-        self.assertEqual(caught.exception.procedure_index, 1)
+        self.assertEqual(caught.exception.procedure_indices, (1,))
         self.assertEqual(str(caught.exception), "invalid_output")
         value = self.proposal()
         value["procedures"][1]["command"] = ["sh", "solution/different.sh"]
         with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
             self.validated(value)
-        self.assertIsNone(caught.exception.procedure_index)
+        self.assertEqual(caught.exception.procedure_indices, ())
+
+    def test_all_independent_citation_failures_are_reported_after_structural_validation(
+        self,
+    ):
+        value = self.proposal()
+        value["procedures"][1]["source_quote"] = "absent exact source line"
+        value["procedures"][2]["source_quote"] = "# Reproduction"
+        value["procedures"][3]["source_quote"] = "flattened source paragraph"
+        with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
+            self.validated(value)
+        self.assertEqual(caught.exception.procedure_indices, (1, 2, 3))
+        for change in (
+            {"evidence_id": "unknown_source"},
+            {"command": ["invented"]},
+            {"source_quote": []},
+            {"extra": "member"},
+            {"procedure_id": "apply_incomplete"},
+        ):
+            invalid = deepcopy(value)
+            invalid["procedures"][4].update(change)
+            with (
+                self.subTest(change=change),
+                self.assertRaises(TrialPlanError) as caught,
+            ):
+                self.validated(invalid)
+            self.assertEqual(caught.exception.procedure_indices, ())
+        invalid = deepcopy(value)
+        invalid["procedures"][4] = None
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validated(invalid)
+        self.assertEqual(caught.exception.procedure_indices, ())
+        invalid = deepcopy(value)
+        invalid["coverage_gaps"] = [{"purpose": "restart", "evidence_id": "unknown"}]
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validated(invalid)
+        self.assertEqual(caught.exception.procedure_indices, ())
 
     def test_non_recovery_scope_allows_four_purposes_without_recovery_steps(self):
         """A controlled batch-correlation contract, not a live qualified package."""
@@ -412,7 +448,7 @@ class TrialPlanTests(unittest.TestCase):
         value = self.proposal()
         with self.assertRaisesRegex(TrialPlanError, "invalid_output") as caught:
             self.validated(value)
-        self.assertEqual(caught.exception.procedure_index, 0)
+        self.assertEqual(caught.exception.procedure_indices, (0,))
         value["procedures"][0]["source_quote"] = (
             "# Second\nInspect status with `queue status`."
         )

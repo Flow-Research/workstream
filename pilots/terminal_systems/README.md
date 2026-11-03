@@ -112,7 +112,7 @@ project rules before the authorized approval locks it.
 The project-owned [checker implementation](checkers/README.md) has qualified
 PRE and POST images, including the registered `real-e49dfcea` POST image.
 Those engineering and registration facts grant no guide policy approval.
-The connected journey requires human image attachments, separate PRE and POST
+The connected journey links human image attachments, separate PRE and POST
 approvals, activation, real work verdicts and exact contribution evidence.
 This input package and its image qualification do not claim a complete hosted
 journey; use the linked report for current results and historical scope.

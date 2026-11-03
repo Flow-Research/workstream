@@ -38,11 +38,11 @@ REVISION_PROJECTION_ID = "019a14ee-5f61-7f21-8dd8-11d4d41a0002"
 
 
 class TrialPlanError(ValueError):
-    """A plan failure; only a source-quote or command-citation failure has an index."""
+    """A plan failure; only structurally valid plans expose citation failure indices."""
 
-    def __init__(self, code: str, *, procedure_index: int | None = None) -> None:
+    def __init__(self, code: str, *, procedure_indices: tuple[int, ...] = ()) -> None:
         super().__init__(code)
-        self.procedure_index = procedure_index
+        self.procedure_indices = procedure_indices
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,6 +468,7 @@ def validate_plan_proposal(
     ids = set()
     purposes = []
     normalized = []
+    citation_failures = []
     for procedure_index, procedure in enumerate(procedures):
         if type(procedure) is not dict or set(procedure) != {
             "procedure_id",
@@ -523,22 +524,25 @@ def validate_plan_proposal(
                 raise TrialPlanError("invalid_output")
         except UnicodeError as exc:
             raise TrialPlanError("invalid_output") from exc
-        span = _source_quote_span(cited, quote)
-        if span is None or span[1] > cited.line_count:
-            raise TrialPlanError("invalid_output", procedure_index=procedure_index)
-        start, end = span
-        cited_text = "\n".join(cited.content.splitlines()[start - 1 : end])
         try:
             parsed_command = shlex.split(command_text, posix=True)
         except ValueError as exc:
             raise TrialPlanError("invalid_output") from exc
-        if command_text not in cited_text:
-            raise TrialPlanError("invalid_output", procedure_index=procedure_index)
         if parsed_command != command:
             raise TrialPlanError("invalid_output")
+        span = _source_quote_span(cited, quote)
+        item = dict(procedure)
+        if span is None or span[1] > cited.line_count:
+            citation_failures.append(procedure_index)
+        else:
+            start, end = span
+            cited_text = "\n".join(cited.content.splitlines()[start - 1 : end])
+            if command_text not in cited_text:
+                citation_failures.append(procedure_index)
+            item.update(start_line=start, end_line=end)
         ids.add(identifier)
         purposes.append(purpose)
-        normalized.append({**procedure, "start_line": start, "end_line": end})
+        normalized.append(item)
     purpose_indices = [PURPOSE_ORDER.index(item) for item in purposes]
     if purpose_indices != sorted(purpose_indices):
         raise TrialPlanError("invalid_output")
@@ -647,6 +651,10 @@ def validate_plan_proposal(
         != required_purposes
     ):
         raise TrialPlanError("invalid_output")
+    if citation_failures:
+        raise TrialPlanError(
+            "invalid_output", procedure_indices=tuple(citation_failures)
+        )
     return TrialPlanProposal(
         material_digest,
         tuple(normalized),
