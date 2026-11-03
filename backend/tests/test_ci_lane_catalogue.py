@@ -247,6 +247,7 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
         "tests/test_alembic.py",
         "tests/test_checker_evidence_migrations.py",
         "tests/migrations/test_project_catalogue_read.py",
+        "tests/migrations/test_guide_check_specification.py",
         "tests/migrations/test_contribution_export_snapshots.py",
         "tests/migrations/test_contribution_read_audit.py",
         "tests/test_database_reset.py",
@@ -298,16 +299,16 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            264,
-            "f28dcdf1363d1f53f69c4d8332c692f03415c7ac2f40a70a3ce7bc653b758cd6",
+            263,
+            "dd4f190833ff4f3cc779db50c5153cb5be66ae7d6ee4509b4eabcb2f2da95b25",
         ),
         "project": (
-            246,
-            "a83c6ef574110bd8e51bed91af31a3ea683ae30bf4c491f68324bbd95e324efc",
+            250,
+            "e62373a9b337788aabd939292b60c51fe4ab9ce323708a140de324a5b7d5c220",
         ),
         "task": (
-            95,
-            "76d96db74da2aecac74466fe118af5ed92ce7d8d9620b68e5790e87c3978aad1",
+            94,
+            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
         ),
     }
     actual = {
@@ -375,9 +376,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 246
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 250
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "4e4cac255a67a3e0615449878d45757be1c30b4cc51ee769d6fccabb38306504"
+        "3a1e22b5465e6c1b469436fd941b7d3227a4388ea859e662ba0ee7b717bec552"
     )
 
 
