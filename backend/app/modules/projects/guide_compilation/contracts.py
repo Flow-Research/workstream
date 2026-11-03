@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import json
-from typing import Any
+from typing import Any, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -96,14 +96,9 @@ class CompilationAttemptIdentity(BaseModel):
     setup_generation: int = Field(ge=1)
     canonical_input_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     guide_material_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    pre_catalogue_id: str = Field(min_length=1, max_length=160)
-    pre_catalogue_version: str = Field(min_length=1, max_length=100)
-    pre_catalogue_schema_version: str = Field(min_length=1, max_length=160)
-    pre_catalogue_manifest_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    post_catalogue_id: str = Field(min_length=1, max_length=160)
-    post_catalogue_version: str = Field(min_length=1, max_length=100)
-    post_catalogue_schema_version: str = Field(min_length=1, max_length=160)
-    post_catalogue_manifest_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    result_schema_version: Literal["project_guide_check_specification.v1"] = (
+        "project_guide_check_specification.v1"
+    )
     agent_identity: str = Field(min_length=1, max_length=100)
     agent_version: str = Field(min_length=1, max_length=100)
     instruction_version: str = Field(min_length=1, max_length=100)
@@ -124,14 +119,6 @@ class CompilationAttemptIdentity(BaseModel):
                 json.loads(canonical_project_guide_compilation_context_bytes(context))
             ),
             guide_material_hash=material.sha256,
-            pre_catalogue_id="workstream.external_checker_capabilities",
-            pre_catalogue_version="v1",
-            pre_catalogue_schema_version=context.checker_capabilities.schema_version,
-            pre_catalogue_manifest_hash=context.checker_capabilities.manifest_sha256,
-            post_catalogue_id="workstream.external_checker_capabilities",
-            post_catalogue_version="v1",
-            post_catalogue_schema_version=context.checker_capabilities.schema_version,
-            post_catalogue_manifest_hash=context.checker_capabilities.manifest_sha256,
             agent_identity=context.agent_identity,
             agent_version=context.agent_version,
             instruction_version=context.instruction_version,
@@ -195,15 +182,13 @@ def accepted_compilation_result(result: ProjectGuideCompilationResult) -> Accept
             artifact_policy_hash=canonical_json_hash(artifact),
             requirement_inventory_hash=canonical_json_hash({"requirements": body["requirements"]}),
             pre_submit_hash=canonical_json_hash(
-                {"pre_submit_bindings": body["pre_submit_bindings"]}
+                {"requirements": [item for item in body["requirements"]
+                                  if item["stage"] == "pre_submit"]}
             ),
             post_submit_hash=canonical_json_hash(
-                {"post_submit_bindings": body["post_submit_bindings"]}
+                {"requirements": [item for item in body["requirements"]
+                                  if item["stage"] == "post_submit"]}
             ),
-            capability_suggestions_hash=canonical_json_hash(
-                {"capability_suggestions": body["capability_suggestions"]}
-            ),
-            setup_notes_hash=canonical_json_hash({"setup_notes": body["setup_notes"]}),
         ),
     )
 
