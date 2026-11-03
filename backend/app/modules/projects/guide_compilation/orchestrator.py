@@ -20,7 +20,6 @@ from app.interfaces.project_agents import (
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     project_guide_compilation_prompt_bytes,
-    require_complete_generated_specifications,
     require_complete_project_guide_compilation_result,
     validate_project_guide_compilation_result,
 )
@@ -456,7 +455,6 @@ def _require_valid_result(
     """Reject incomplete, inconsistent, or wrong-version provider output."""
     require_complete_project_guide_compilation_result(result)
     validate_project_guide_compilation_result(context, result)
-    require_complete_generated_specifications(context, result)
     if result.agent_version != context.agent_version:
         raise ValueError("compilation result agent version is invalid")
 
