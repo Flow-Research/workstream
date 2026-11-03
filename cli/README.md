@@ -963,7 +963,12 @@ live setup-provider execution.
 ## Request an exact evaluation-policy correction
 
 Prepare the public `PostPolicyCorrectionInput` from the inspected `post-policy`
-response: `{"target": <complete displayed target>, "reason": "Manager feedback"}`.
+response: `{"target": <complete displayed target>, "reason": "Explain how the POST check verifies that reported test outcomes match the submitted test evidence."}`.
+
+For both correction commands, the written reason is the only additional model
+input beyond the guide and task examples. Describe or quote the requested change
+fully; the prior proposal, image selections and registry metadata are not sent.
+Do not rely on a suggestion ID alone. See the [manager correction workflow](../docs/operations_project_operating_manual.md).
 
 ```sh
 workstream project guide correct-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID \
@@ -1014,7 +1019,7 @@ the findings:
 
 ```sh
 workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
-jq '{target: .target, reason: "Clarify the evidence requirement"}' proposal.json > correction.json
+jq '{target: .target, reason: "Explain how the PRE check verifies that reports/results.json includes test commands and observed results."}' proposal.json > correction.json
 workstream project guide correct PROJECT_ID GUIDE_ID COMPILATION_ID \
   --input correction.json --idempotency-key CORRECTION_UUID -o json > saved-correction.json
 # Dispatch is a separate, explicit request using the retained receipt.
