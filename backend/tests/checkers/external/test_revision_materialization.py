@@ -1,12 +1,12 @@
 """Approved revision inputs through real TASK/CHECKERS/ART and bounded scratch."""
 
 import json
+from contextlib import asynccontextmanager
 
 import pytest
 
 from app.adapters.checkers import evaluation_coordinator
 from app.core.identifiers import new_record_id
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.checkers.api.external import ExternalCheckerSchema, external_checker_json_hash
 from app.modules.checkers.api.external_policy import (
@@ -25,11 +25,11 @@ from tests.test_checker_materialization import _limits
 
 
 def _approved_context_proposal(monkeypatch, roles):
-    """Script agent output before real compilation/PM approval; no stored-row edits."""
+    """Select exact human-approved revision inputs; proposal output is unchanged."""
     from tests.projects.guide_activation import source_fixtures
     from tests.checkers.execution import completion_fixture
 
-    original = source_fixtures._external_compilation_outcome
+    original = completion_fixture.material_fixture
     document = {
         "type": "object",
         "properties": {VERSION: {"const": "v1"}, ROLES: {"type": "array", "items": {"type": "string"}}},
@@ -43,49 +43,24 @@ def _approved_context_proposal(monkeypatch, roles):
         ),
     }).model_dump())
 
-    def outcome(*args, **kwargs):
-        generated = original(*args, **kwargs)
-        binding = generated.post_submit_bindings[0]
-        configured = binding.model_copy(update={"parameters": (
-            CapabilityParameter(name=VERSION, value="v1"),
-            CapabilityParameter(name=ROLES, value=tuple(roles)),
-        )})
-        # Keep the unselected binding's original specification. Only the image
-        # selecting predecessor material declares that exact runtime input.
-        original_requirement = next(
-            item for item in generated.requirements
-            if item.requirement_id == binding.requirement_id
-        )
-        specification = original_requirement.check_specification.model_dump(mode="json")
-        specification["inputs"].append({
-            "input_id": "revision_context", "kind": "evaluation_context",
-            "evaluation_context_roles": roles,
-            "purpose": "Read exact approved predecessor evidence.",
-        })
-        specification["runtime_dependencies"].append({
-            "dependency_id": "revision_context", "kind": "evaluation_context",
-            "provisioning": "current_runner", "unavailable_code": "material_unavailable",
-            "purpose": "Supply the exact selected predecessor evidence.",
-        })
-        specification["infrastructure_failures"].append({
-            "code": "material_unavailable", "condition": "Selected predecessor evidence is absent.",
-        })
-        selected_requirement = original_requirement.model_copy(update={
-            "check_specification": CheckSpecification.model_validate(specification),
-        })
-        # One context-aware image and one current-only binding to the same
-        # declared image prove per-binding visibility inside one workspace.
-        current_id = "project.z_current_only"
-        return generated.model_copy(update={
-            "requirements": (
-                *(selected_requirement if item.requirement_id == binding.requirement_id else item
-                  for item in generated.requirements),
-                original_requirement.model_copy(update={"requirement_id": current_id}),
+    async def configurations(_factory, _project, _registry):
+        return (
+            source_fixtures.PostSubmitAttachmentCase(
+                requirement_id="project.post_submit",
+                configuration={VERSION: "v1", ROLES: list(roles)},
             ),
-            "post_submit_bindings": (configured, binding.model_copy(update={"requirement_id": current_id})),
-        })
+            source_fixtures.PostSubmitAttachmentCase(
+                requirement_id="project.z_current_only", configuration={},
+            ),
+        )
 
-    monkeypatch.setattr(source_fixtures, "_external_compilation_outcome", outcome)
+    @asynccontextmanager
+    async def selected_material(*args, **kwargs):
+        kwargs["post_submit_configurations_setup"] = configurations
+        async with original(*args, **kwargs) as fixture:
+            yield fixture
+
+    monkeypatch.setattr(completion_fixture, "material_fixture", selected_material)
     monkeypatch.setattr(completion_fixture, "post_registry_spec", lambda: spec)
 
 

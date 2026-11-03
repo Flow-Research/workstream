@@ -26,7 +26,6 @@ from tests.checkers.execution.support import (
     provision_post_submit_service,
 )
 from tests.checkers.external.test_trial_evidence import _owner, _subject, _trial_fixture
-from tests.checkers.external.test_trial_policy import trial_specification
 from tests.checkers.external.test_revision_materialization import DiagnosticMaterialization
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_checker_materialization import _limits
@@ -151,8 +150,7 @@ async def test_trial_bytes_use_real_art_custody_and_recover_exact_original(
         isolated_database_env,
         provider="minio",
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         scratch_limits=_limits(
             # Input material remains reserved while ART prepares the output.
             # Use the production aggregate budget for this composed journey.
@@ -323,8 +321,7 @@ async def test_competing_trial_publication_observes_pin_commit_or_complete_rollb
         isolated_database_env,
         provider="minio",
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         scratch_limits=_limits(
             aggregate_reserved_bytes=4 * HARD_MAXIMUM_ARTIFACT_BYTES,
             maximum_files=4,

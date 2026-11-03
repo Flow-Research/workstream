@@ -38,7 +38,6 @@ from app.interfaces.external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceUnavailableError,
 )
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.artifacts.models import ArtifactBinding
@@ -58,35 +57,6 @@ from tests.checkers.execution.support import (
 from tests.checkers_model_calls.test_public_api import profile_spec
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_checker_materialization import _limits
-from tests.projects.guide_compilation.helpers import valid_specification
-
-
-def model_review_specification():
-    """Declare model review explicitly before the real policy compiler binds it."""
-    specification = valid_specification().model_dump(mode="json")
-    specification.update(
-        evaluation_method="model_evaluation",
-        execution_mode="background",
-        maximum_duration_seconds=120,
-        stage_rationale="Content review runs after immutable submission creation.",
-        runtime_dependencies=[
-            {
-                "dependency_id": "model_runtime",
-                "kind": "model_service",
-                "provisioning": "model_proxy",
-                "purpose": "Evaluate submitted evidence through the budgeted model service.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        ],
-        infrastructure_failures=[
-            *specification["infrastructure_failures"],
-            {
-                "code": "implementation_unavailable",
-                "condition": "The budgeted model service is unavailable.",
-            },
-        ],
-    )
-    return CheckSpecification.model_validate(specification)
 
 
 def model_registry_spec():
@@ -297,22 +267,18 @@ async def test_public_profile_to_private_model_call_and_completed_checker(
             },
         )
         assert budget.status_code == 201, budget.text
-        return tuple(
-            CapabilityParameter(name=key, value=value)
-            for key, value in {
-                "model_profile_id": profile["profile_id"],
-                "model_profile_version": profile["spec"]["profile_version"],
-                "model_profile_digest": profile["profile_digest"],
-            }.items()
-        )
+        return {
+            "model_profile_id": profile["profile_id"],
+            "model_profile_version": profile["spec"]["profile_version"],
+            "model_profile_digest": profile["profile_digest"],
+        }
 
     async with material_fixture(
         tmp_path,
         isolated_database_env,
         provider=storage_provider,
         post_submit_registry_spec=model_registry_spec(),
-        post_submit_binding_setup=publish,
-        post_submit_specification=model_review_specification(),
+        post_submit_configuration_setup=publish,
         # This composed process holds ZIP material while also retaining model
         # evidence; the ordinary two-slot material-only fixture is insufficient.
         scratch_limits=_limits(
