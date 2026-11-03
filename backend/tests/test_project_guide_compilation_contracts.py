@@ -1,50 +1,30 @@
+"""Guide setup contracts, exact source evidence, and default submission limits."""
+
 from __future__ import annotations
 
-from app.core.config import get_settings
-
-from app.adapters.tasks import task_service
-
-from tests.projects.guide_compilation.helpers import runtime_configuration
-from tests.checkers.external.support import registry_spec
-
-from datetime import UTC, datetime
 import json
 from uuid import uuid4
-
-from app.core.identifiers import new_record_id
 
 import pytest
 from pydantic import ValidationError
 
+from app.adapters.tasks import task_service
+from app.core.config import get_settings
+from app.core.identifiers import new_record_id
 from app.interfaces.project_agents import (
     AtomicGuideRequirement,
-    PreSubmissionBindingProposal,
-    PostSubmissionBindingProposal,
-    CapabilityParameter,
-    CapabilitySuggestion,
     CompilationFinding,
     GuideEvidenceRef,
-    PlatformCoverageRef,
     ProjectGuideCompilationContext,
     ProjectGuideCompilationResult,
     SubmissionArtifactPolicyProposal,
+    project_guide_compilation_prompt_bytes,
     validate_project_guide_compilation_result,
 )
 from app.modules.projects.api.guide_documents import GuideDocumentManifest, GuideDocumentVersion
-from app.modules.checkers.api.default_checker import (
-    WORKSTREAM_DEFAULT_CHECKER_ID,
-    WORKSTREAM_DEFAULT_CHECKER_VERSION,
-)
-from app.modules.checkers.api.external import (
-    ExternalCheckerCapabilityDefinition,
-    ExternalCheckerCapabilityProjection,
-    ExternalCheckerRegistryEntry,
-    external_checker_json_hash,
-)
-
+from tests.projects.guide_compilation.helpers import runtime_configuration, valid_specification
 
 SHA256 = "sha256:" + "a" * 64
-
 
 @pytest.mark.parametrize(
     "project_limit, default_limit, expected",
@@ -171,58 +151,6 @@ SOURCE_ITEM_ID = new_record_id()
 DOCUMENT_VERSION_ID = new_record_id()
 
 
-def _registered_capability(capability_id: str, phase: str, capability_version: str = "v1.2.3"):
-    spec = registry_spec(phase).model_copy(
-        update={
-            "capability_id": capability_id,
-            "capability_version": capability_version,
-        }
-    )
-    spec = type(spec).model_validate(spec.model_dump())
-    entry = ExternalCheckerRegistryEntry(
-        **spec.model_dump(),
-        registry_entry_id=new_record_id(),
-        entry_digest=spec.spec_digest,
-        registration_operation_id=uuid4(),
-        registered_by_actor_profile_id=uuid4(),
-        authorization_decision_event_id=uuid4(),
-        created_at=datetime.now(UTC),
-    )
-    return ExternalCheckerCapabilityDefinition(
-        capability_id=capability_id,
-        capability_version=spec.capability_version,
-        phase=phase,
-        selectable=True,
-        registry_entry=entry,
-    )
-
-
-def _capabilities() -> ExternalCheckerCapabilityProjection:
-    definitions = tuple(
-        sorted(
-            (
-                ExternalCheckerCapabilityDefinition(
-                    capability_id=WORKSTREAM_DEFAULT_CHECKER_ID,
-                    capability_version=WORKSTREAM_DEFAULT_CHECKER_VERSION,
-                    phase="pre_submit",
-                    selectable=False,
-                ),
-                _registered_capability("acme.pre", "pre_submit"),
-                _registered_capability("acme.post", "post_submit"),
-            ),
-            key=lambda item: (item.phase, item.capability_id, item.capability_version),
-        )
-    )
-    body = {
-        "schema_version": "external_checker_capabilities.v1",
-        "definitions": [item.model_dump(mode="json") for item in definitions],
-    }
-    return ExternalCheckerCapabilityProjection(
-        definitions=definitions,
-        manifest_sha256=external_checker_json_hash(body),
-    )
-
-
 def _context() -> ProjectGuideCompilationContext:
     setup_id = new_record_id()
     material = GuideDocumentManifest(
@@ -257,7 +185,6 @@ def _context() -> ProjectGuideCompilationContext:
         instruction_version="v1",
         agent_identity="project-guide-compilation-agent-v1",
         agent_version="v1",
-        checker_capabilities=_capabilities(),
         runtime_configuration=runtime_configuration(),
     )
 
@@ -280,47 +207,15 @@ def _artifact_policy() -> SubmissionArtifactPolicyProposal:
     )
 
 
-def test_checker_projection_has_one_default_and_exact_registry_entries() -> None:
-    projection = _capabilities()
-    defaults = [item for item in projection.definitions if not item.selectable]
-    registered = [item for item in projection.definitions if item.selectable]
-
-    assert [(item.capability_id, item.phase) for item in defaults] == [
-        ("workstream.default", "pre_submit")
-    ]
-    assert [(item.capability_id, item.phase) for item in registered] == [
-        ("acme.post", "post_submit"),
-        ("acme.pre", "pre_submit"),
-    ]
-    assert all(item.registry_entry is not None for item in registered)
-
-
-def test_checker_projection_rejects_a_second_code_owned_default() -> None:
-    projection = _capabilities()
-    body = projection.model_dump(mode="json")
-    body["definitions"] = (
-        *body["definitions"],
-        {
-            "capability_id": "workstream.other",
-            "capability_version": "v1",
-            "phase": "post_submit",
-            "selectable": False,
-            "registry_entry": None,
-        },
+def _suggestion(stage: str = "pre_submit") -> AtomicGuideRequirement:
+    return AtomicGuideRequirement(
+        suggestion_id=f"required_item_{stage}",
+        statement="The submitted work must include the required item.",
+        stage=stage,
+        classification_rationale="The project guide identifies this required item.",
+        check_specification=valid_specification(),
+        evidence_refs=(_evidence(),),
     )
-    body["definitions"] = tuple(
-        sorted(
-            body["definitions"],
-            key=lambda item: (item["phase"], item["capability_id"], item["capability_version"]),
-        )
-    )
-    manifest = {
-        "schema_version": body["schema_version"],
-        "definitions": list(body["definitions"]),
-    }
-    body["manifest_sha256"] = external_checker_json_hash(manifest)
-    with pytest.raises(ValidationError, match="default capability"):
-        ExternalCheckerCapabilityProjection.model_validate_json(json.dumps(body))
 
 
 @pytest.mark.parametrize(
@@ -371,13 +266,7 @@ def test_guide_evidence_ref_rejects_non_lineage_fields(payload: dict[str, str], 
 )
 def test_model_produced_text_rejects_unsafe_shapes(unsafe: str) -> None:
     with pytest.raises(ValidationError):
-        CapabilitySuggestion(
-            requirement_id="r001",
-            stage="pre_submit",
-            title="new checker",
-            rationale=unsafe,
-            evidence_refs=(_evidence(),),
-        )
+        CompilationFinding(severity="info", code="guide.note", message=unsafe)
 
 
 @pytest.mark.parametrize(
@@ -389,14 +278,8 @@ def test_model_produced_text_rejects_unsafe_shapes(unsafe: str) -> None:
     ],
 )
 def test_model_produced_text_allows_safe_security_policy_language(safe: str) -> None:
-    suggestion = CapabilitySuggestion(
-        requirement_id="r001",
-        stage="pre_submit",
-        title="security guidance",
-        rationale=safe,
-        evidence_refs=(_evidence(),),
-    )
-    assert suggestion.rationale == safe
+    finding = CompilationFinding(severity="info", code="guide.note", message=safe)
+    assert finding.message == safe
 
 
 def test_compilation_context_requires_task_examples_and_preserves_all_input() -> None:
@@ -421,7 +304,7 @@ def test_compilation_context_requires_task_examples_and_preserves_all_input() ->
 
 
 def test_maximum_examples_and_documents_fit_default_runtime_input_budgets() -> None:
-    """Admission's largest text list fits real catalogue and maximum file metadata."""
+    """Largest task examples and document metadata fit the bounded setup input."""
     import json
     from app.interfaces.project_agents import (
         MAXIMUM_PROJECT_GUIDE_COMPILATION_PROMPT_BYTES,
@@ -473,201 +356,87 @@ def test_maximum_examples_and_documents_fit_default_runtime_input_budgets() -> N
     )
 
 
-def test_unified_result_accepts_exact_stage_capability_and_closed_parameters() -> None:
-    context = _context()
-    result = ProjectGuideCompilationResult(
+@pytest.mark.parametrize("stage", ["pre_submit", "post_submit"])
+def test_setup_result_carries_source_linked_pre_or_post_specification(stage: str) -> None:
+    proposal = ProjectGuideCompilationResult(
         status="draft_ready",
-        findings=(
-            CompilationFinding(severity="info", code="guide.ready", message="Guide is complete."),
-        ),
+        findings=(CompilationFinding(
+            severity="info", code="guide.ready", message="Guide is complete.",
+            evidence_refs=(_evidence(),),
+        ),),
         submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.packet",
-                statement="Validate the submission packet.",
-                disposition="supported_pre_submit",
-                evidence_refs=(_evidence(),),
-            ),
-            AtomicGuideRequirement(
-                requirement_id="requirement.acceptance",
-                statement="Check acceptance criteria coverage.",
-                disposition="supported_post_submit",
-            ),
-        ),
-        pre_submit_bindings=(
-            PreSubmissionBindingProposal(
-                requirement_id="requirement.packet",
-                capability_id="acme.pre",
-                capability_version="v1.2.3",
-                stage="pre_submit",
-            ),
-        ),
-        post_submit_bindings=(
-            PostSubmissionBindingProposal(
-                requirement_id="requirement.acceptance",
-                capability_id="acme.post",
-                capability_version="v1.2.3",
-                stage="post_submit",
-            ),
-        ),
+        requirements=(_suggestion(stage),),
         agent_version="v1",
     )
-    validate_project_guide_compilation_result(context, result)
+    validate_project_guide_compilation_result(_context(), proposal)
+    assert proposal.requirements[0].stage == stage
+    assert proposal.requirements[0].check_specification.pass_conditions
 
 
-def test_unified_result_selects_each_exact_registered_capability_version() -> None:
-    definitions = tuple(
-        sorted(
-            (
-                ExternalCheckerCapabilityDefinition(
-                    capability_id=WORKSTREAM_DEFAULT_CHECKER_ID,
-                    capability_version=WORKSTREAM_DEFAULT_CHECKER_VERSION,
-                    phase="pre_submit",
-                    selectable=False,
-                ),
-                _registered_capability("acme.pre", "pre_submit", "v1.0.0"),
-                _registered_capability("acme.pre", "pre_submit", "v2.0.0"),
-                _registered_capability("acme.post", "post_submit"),
-            ),
-            key=lambda item: (item.phase, item.capability_id, item.capability_version),
-        )
+def test_setup_result_rejects_implementation_selection_fields() -> None:
+    proposal = ProjectGuideCompilationResult(
+        status="draft_ready",
+        submission_artifact_policy=_artifact_policy(),
+        requirements=(_suggestion(),),
+        agent_version="v1",
     )
-    body = {
-        "schema_version": "external_checker_capabilities.v1",
-        "definitions": [item.model_dump(mode="json") for item in definitions],
-    }
-    capabilities = ExternalCheckerCapabilityProjection(
-        definitions=definitions,
-        manifest_sha256=external_checker_json_hash(body),
-    )
-    context = _context().model_copy(update={"checker_capabilities": capabilities})
-
-    for version in ("v1.0.0", "v2.0.0"):
-        result = ProjectGuideCompilationResult(
-            status="draft_ready",
-            submission_artifact_policy=_artifact_policy(),
-            requirements=(
-                AtomicGuideRequirement(
-                    requirement_id="requirement.packet",
-                    statement="Validate the submission packet.",
-                    disposition="supported_pre_submit",
-                ),
-            ),
-            pre_submit_bindings=(
-                PreSubmissionBindingProposal(
-                    requirement_id="requirement.packet",
-                    capability_id="acme.pre",
-                    capability_version=version,
-                    stage="pre_submit",
-                ),
-            ),
-            agent_version="v1",
-        )
-        validate_project_guide_compilation_result(context, result)
-
-    wrong_version = result.model_copy(
-        update={
-            "pre_submit_bindings": (
-                result.pre_submit_bindings[0].model_copy(update={"capability_version": "v1.5.0"}),
+    for field, value in (
+        ("pre_submit_bindings", []),
+        ("post_submit_bindings", []),
+        ("capability_suggestions", []),
+    ):
+        with pytest.raises(ValidationError, match=field):
+            ProjectGuideCompilationResult.model_validate(
+                proposal.model_dump(mode="json") | {field: value}
             )
-        }
-    )
-    with pytest.raises(ValueError, match="version is stale"):
-        validate_project_guide_compilation_result(context, wrong_version)
+    with pytest.raises(ValidationError, match="checker_capabilities"):
+        ProjectGuideCompilationContext.model_validate(
+            _context().model_dump(mode="json") | {"checker_capabilities": {}}
+        )
 
 
-@pytest.mark.parametrize(
-    ("capability_id", "version", "stage", "expected_error"),
-    [
-        ("workstream.default", "v1", "pre_submit", "binding is invalid"),
-        ("acme.pre", "stale", "pre_submit", "version is stale"),
-        ("unknown.capability", "v1", "pre_submit", "binding is invalid"),
-        (
-            "acme.pre",
-            "v1.2.3",
-            "post_submit",
-            "binding is invalid",
-        ),
-        (
-            "acme.post",
-            "v1.2.3",
-            "pre_submit",
-            "binding is invalid",
-        ),
-    ],
-)
-def test_unified_result_rejects_default_unknown_stale_and_wrong_stage_bindings(
-    capability_id: str, version: str, stage: str, expected_error: str
-) -> None:
+def test_setup_prompt_contains_only_assigned_guide_and_task_examples() -> None:
     context = _context()
-    disposition = "supported_post_submit" if stage == "post_submit" else "supported_pre_submit"
-    binding_type = (
-        PreSubmissionBindingProposal if stage == "pre_submit" else PostSubmissionBindingProposal
-    )
-    binding = binding_type(
-        requirement_id="requirement.one",
-        capability_id=capability_id,
-        capability_version=version,
-        stage=stage,
-    )
-    result = ProjectGuideCompilationResult(
+    sent = json.loads(project_guide_compilation_prompt_bytes(context))
+    assert set(sent) == {"material", "task_examples"}
+    assert sent["task_examples"] == [item.model_dump(mode="json") for item in context.task_examples]
+    assert "checker_capabilities" not in json.dumps(sent)
+    assert "runtime_configuration" not in json.dumps(sent)
+
+
+def test_result_status_matches_findings_and_blocked_policy_boundary() -> None:
+    ready = ProjectGuideCompilationResult(
         status="draft_ready",
         submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.one",
-                statement="Validate one requirement.",
-                disposition=disposition,
-            ),
-        ),
-        pre_submit_bindings=(binding,) if stage == "pre_submit" else (),
-        post_submit_bindings=(binding,) if stage == "post_submit" else (),
         agent_version="v1",
     )
-    with pytest.raises(ValueError, match=expected_error):
-        validate_project_guide_compilation_result(context, result)
+    validate_project_guide_compilation_result(_context(), ready)
+    with pytest.raises(ValueError, match="requires a warning"):
+        validate_project_guide_compilation_result(
+            _context(), ready.model_copy(update={"status": "draft_ready_with_warnings"})
+        )
+    with pytest.raises(ValueError, match="cannot contain blocking"):
+        validate_project_guide_compilation_result(
+            _context(), ready.model_copy(update={"findings": (
+                CompilationFinding(severity="blocking_gap", code="guide.blocked", message="Guide is incomplete."),
+            )})
+        )
+    with pytest.raises(ValueError, match="requires blocking evidence"):
+        validate_project_guide_compilation_result(
+            _context(), ready.model_copy(update={"status": "guide_blocked", "submission_artifact_policy": None})
+        )
 
 
-def test_unified_result_rejects_open_nested_or_executable_configuration() -> None:
-    with pytest.raises(ValidationError):
-        CapabilityParameter(name="required_packet_fields", value={"command": "sh"})
-    with pytest.raises(ValidationError):
-        CapabilityParameter(name="required_packet_fields", value="import subprocess")
-    with pytest.raises(ValidationError):
-        PreSubmissionBindingProposal(
-            requirement_id="requirement.packet",
-            capability_id="policy.submission_packet.validate",
-            capability_version="https://unsafe.invalid",
-            stage="pre_submit",
-        )
-    with pytest.raises(ValidationError):
-        PlatformCoverageRef(
-            capability_id="artifact.outer_zip.valid",
-            capability_version="https://unsafe.invalid",
-            stage="pre_submit",
-        )
-    with pytest.raises(ValidationError):
-        CapabilityParameter(name="required_packet_fields", value=float("nan"))
+def test_typed_artifact_policy_and_evidence_ref_reject_invalid_values() -> None:
     with pytest.raises(ValidationError):
         SubmissionArtifactPolicyProposal(
-            maximum_file_size_bytes="1000",
-            maximum_package_size_bytes=10_000,
+            maximum_file_size_bytes="1000", maximum_package_size_bytes=10_000,
         )
     with pytest.raises(ValidationError):
         GuideEvidenceRef(
-            source_item_id=SOURCE_ITEM_ID,
-            document_version_id=DOCUMENT_VERSION_ID,
-            sha256=SHA256,
-            start_page="0",
-            end_page=1,
+            source_item_id=SOURCE_ITEM_ID, document_version_id=DOCUMENT_VERSION_ID,
+            sha256=SHA256, start_page="0", end_page=1,
         )
-
-
-def test_external_registry_resource_budget_is_deeply_frozen() -> None:
-    projection = _capabilities()
-    registered = next(item for item in projection.definitions if item.registry_entry)
-    with pytest.raises(ValidationError):
-        registered.registry_entry.resources.deadline_ms = 99
 
 
 @pytest.mark.parametrize("field", ["canonical_content", "content_markdown", "provider_url"])
@@ -731,220 +500,7 @@ def test_unified_result_rejects_unresolved_evidence_lineage() -> None:
         validate_project_guide_compilation_result(context, result)
 
 
-def test_supported_requirement_requires_exactly_one_binding() -> None:
-    context = _context()
-    result = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.packet",
-                statement="Validate the submission packet.",
-                disposition="supported_pre_submit",
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="must have one binding"):
-        validate_project_guide_compilation_result(context, result)
-
-
-def test_post_submission_binding_rejects_unowned_parameters() -> None:
-    context = _context()
-    binding = PostSubmissionBindingProposal(
-        requirement_id="requirement.one",
-        capability_id="acme.post",
-        capability_version="v1.2.3",
-        stage="post_submit",
-        parameters=(CapabilityParameter(name="unowned_parameter", value=True),),
-    )
-    result = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.one",
-                statement="Validate one requirement.",
-                disposition="supported_post_submit",
-            ),
-        ),
-        post_submit_bindings=(binding,),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="value is invalid"):
-        validate_project_guide_compilation_result(context, result)
-
-
-@pytest.mark.parametrize(
-    ("status", "finding_severity", "disposition", "expected_error"),
-    [
-        ("draft_ready", "blocking_gap", "informational", "cannot contain blocking"),
-        ("draft_ready", "info", "guide_blocker", "cannot contain blocking"),
-        ("draft_ready", "warning", "informational", "cannot contain warnings"),
-        (
-            "draft_ready_with_warnings",
-            "info",
-            "informational",
-            "requires a warning",
-        ),
-        ("guide_blocked", "info", "informational", "requires blocking evidence"),
-    ],
-)
-def test_result_status_must_match_findings_and_blocking_dispositions(
-    status: str, finding_severity: str, disposition: str, expected_error: str
-) -> None:
-    result = ProjectGuideCompilationResult(
-        status=status,
-        findings=(
-            CompilationFinding(
-                severity=finding_severity,
-                code="guide.status",
-                message="Guide status evidence.",
-            ),
-        ),
-        submission_artifact_policy=(None if status == "guide_blocked" else _artifact_policy()),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.status",
-                statement="Check guide status.",
-                disposition=disposition,
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match=expected_error):
-        validate_project_guide_compilation_result(_context(), result)
-
-
-@pytest.mark.parametrize(
-    "invalid_capability_id",
-    ["acme.pre", "unknown.capability"],
-)
-def test_platform_coverage_requires_exact_mandatory_platform_capability(
-    invalid_capability_id: str,
-) -> None:
-    context = _context()
-    valid = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.zip",
-                statement="Validate the outer ZIP.",
-                disposition="platform_covered",
-                platform_coverage=PlatformCoverageRef(
-                    capability_id="workstream.default",
-                    capability_version="v1",
-                    stage="pre_submit",
-                ),
-            ),
-        ),
-        agent_version="v1",
-    )
-    validate_project_guide_compilation_result(context, valid)
-
-    invalid = valid.model_copy(
-        update={
-            "requirements": (
-                valid.requirements[0].model_copy(
-                    update={
-                        "platform_coverage": PlatformCoverageRef(
-                            capability_id=invalid_capability_id,
-                            capability_version="v1",
-                            stage="pre_submit",
-                        )
-                    }
-                ),
-            )
-        }
-    )
-    with pytest.raises(ValueError, match="canonical truth"):
-        validate_project_guide_compilation_result(context, invalid)
-
-
-def test_platform_coverage_rejects_registered_project_image() -> None:
-    context = _context()
-    result = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.zip",
-                statement="Validate the outer ZIP.",
-                disposition="platform_covered",
-                platform_coverage=PlatformCoverageRef(
-                    capability_id="acme.pre",
-                    capability_version="v1.2.3",
-                    stage="pre_submit",
-                ),
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="canonical truth"):
-        validate_project_guide_compilation_result(context, result)
-
-
-def test_platform_coverage_rejects_post_submit_project_image() -> None:
-    result = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.packet",
-                statement="Run the platform submission-packet check.",
-                disposition="platform_covered",
-                platform_coverage=PlatformCoverageRef(
-                    capability_id="acme.post",
-                    capability_version="v1.2.3",
-                    stage="post_submit",
-                ),
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="canonical truth"):
-        validate_project_guide_compilation_result(_context(), result)
-
-
-def test_platform_coverage_ref_is_required_only_for_platform_disposition() -> None:
-    missing = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.coverage",
-                statement="Require canonical coverage proof.",
-                disposition="platform_covered",
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="requires canonical proof"):
-        validate_project_guide_compilation_result(_context(), missing)
-
-    misplaced = ProjectGuideCompilationResult(
-        status="draft_ready",
-        submission_artifact_policy=_artifact_policy(),
-        requirements=(
-            AtomicGuideRequirement(
-                requirement_id="requirement.info",
-                statement="Record an informational requirement.",
-                disposition="informational",
-                platform_coverage=PlatformCoverageRef(
-                    capability_id="artifact.outer_zip.valid",
-                    capability_version="v1",
-                    stage="pre_submit",
-                ),
-            ),
-        ),
-        agent_version="v1",
-    )
-    with pytest.raises(ValueError, match="cannot claim platform coverage"):
-        validate_project_guide_compilation_result(_context(), misplaced)
-
-
-def test_blocked_result_cannot_publish_policy_or_bindings() -> None:
+def test_blocked_result_cannot_publish_artifact_policy() -> None:
     context = _context()
     result = ProjectGuideCompilationResult(
         status="guide_blocked",
@@ -962,37 +518,8 @@ def test_blocked_result_cannot_publish_policy_or_bindings() -> None:
         validate_project_guide_compilation_result(context, result)
 
 
-@pytest.mark.parametrize("parameters", [[], [{"name": "maximum_file_size_bytes", "value": 1000}]])
-def test_pre_submission_binding_accepts_explicit_checker_configuration(parameters):
-    """Approved PRE image configuration is distinct from platform intake limits."""
-    binding = PreSubmissionBindingProposal(
-        requirement_id="requirement.size",
-        capability_id="policy.file_size.limit",
-        capability_version="v1",
-        stage="pre_submit",
-        parameters=parameters,
-    )
-    assert [item.model_dump(mode="json") for item in binding.parameters] == parameters
-
-
 def test_context_rejects_instruction_version_separate_from_snapshot() -> None:
     payload = _context().model_dump(mode="json")
     payload["instruction_version"] = "different"
     with pytest.raises(ValidationError, match="instruction configuration mismatch"):
         ProjectGuideCompilationContext.model_validate_json(json.dumps(payload))
-
-
-@pytest.mark.parametrize("value", ["outputs/answer.md", "src/main.py", "tests/**/*.py"])
-def test_checker_configuration_accepts_canonical_relative_paths(value: str) -> None:
-    parameter = CapabilityParameter(name="required_path", value=value)
-    assert parameter.value == value
-
-
-@pytest.mark.parametrize("value", [
-    "/etc/passwd", "../answer.md", "src/../answer.md", "https://example.invalid/x",
-    "file:///tmp/x", "src/answer.md\x00", "src/$(command)", "bash/run",
-    "token=secret", "Bearer opaque-token", "import subprocess", "src\\main.py",
-])
-def test_checker_configuration_rejects_unsafe_machine_values(value: str) -> None:
-    with pytest.raises(ValidationError):
-        CapabilityParameter(name="required_path", value=value)
