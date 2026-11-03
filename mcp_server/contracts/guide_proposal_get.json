@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "60f937d82850f088e679547e15fddcace21a7a4d91d6b6013287fe85ee1e0aa4",
+  "canonical_sha256": "dabdd6ee1442f2d0846152acf5f9f52a75eb39361ebf88060ae3a6471109ab19",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,24 +7,19 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
-            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
-            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
-            "title": "Details",
             "type": "object"
           },
           "message": {
-            "title": "Message",
             "type": "string"
           },
           "retryable": {
-            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -35,7 +30,6 @@
           "correlation_id",
           "retryable"
         ],
-        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -48,8 +42,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Detail"
+            ]
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -58,7 +51,6 @@
         "required": [
           "error"
         ],
-        "title": "ApiErrorResponse",
         "type": "object"
       },
       "CheckFailureFinding": {
@@ -70,14 +62,12 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Code",
             "type": "string"
           },
           "condition": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Condition",
             "type": "string"
           },
           "level": {
@@ -85,14 +75,12 @@
               "warning",
               "error"
             ],
-            "title": "Level",
             "type": "string"
           },
           "message": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Message",
             "type": "string"
           }
         },
@@ -102,7 +90,6 @@
           "condition",
           "message"
         ],
-        "title": "CheckFailureFinding",
         "type": "object"
       },
       "CheckInabilityToEvaluate": {
@@ -114,14 +101,12 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Code",
             "type": "string"
           },
           "condition": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Condition",
             "type": "string"
           }
         },
@@ -129,7 +114,6 @@
           "code",
           "condition"
         ],
-        "title": "CheckInabilityToEvaluate",
         "type": "object"
       },
       "CheckInput": {
@@ -141,7 +125,6 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Input Id",
             "type": "string"
           },
           "kind": {
@@ -149,14 +132,12 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Kind",
             "type": "string"
           },
           "purpose": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Purpose",
             "type": "string"
           },
           "relative_path": {
@@ -170,8 +151,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Relative Path"
+            ]
           }
         },
         "required": [
@@ -179,7 +159,6 @@
           "kind",
           "purpose"
         ],
-        "title": "CheckInput",
         "type": "object"
       },
       "CheckNegativeTest": {
@@ -196,7 +175,6 @@
             },
             "maxItems": 10,
             "minItems": 1,
-            "title": "Expected Finding Codes",
             "type": "array"
           },
           "expected_verdict": {
@@ -204,7 +182,6 @@
               "passed",
               "failed"
             ],
-            "title": "Expected Verdict",
             "type": "string"
           },
           "name": {
@@ -212,14 +189,12 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Name",
             "type": "string"
           },
           "scenario": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Scenario",
             "type": "string"
           }
         },
@@ -229,7 +204,6 @@
           "expected_verdict",
           "expected_finding_codes"
         ],
-        "title": "CheckNegativeTest",
         "type": "object"
       },
       "CheckSpecification": {
@@ -245,14 +219,12 @@
             },
             "maxItems": 20,
             "minItems": 1,
-            "title": "Check Steps",
             "type": "array"
           },
           "evaluation_method": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Evaluation Method",
             "type": "string"
           },
           "failure_findings": {
@@ -261,7 +233,6 @@
             },
             "maxItems": 20,
             "minItems": 1,
-            "title": "Failure Findings",
             "type": "array"
           },
           "implementation_needs": {
@@ -273,7 +244,6 @@
             },
             "maxItems": 10,
             "minItems": 1,
-            "title": "Implementation Needs",
             "type": "array"
           },
           "inability_to_evaluate": {
@@ -283,7 +253,6 @@
             },
             "maxItems": 10,
             "minItems": 1,
-            "title": "Inability To Evaluate",
             "type": "array"
           },
           "inputs": {
@@ -292,7 +261,6 @@
             },
             "maxItems": 20,
             "minItems": 1,
-            "title": "Inputs",
             "type": "array"
           },
           "negative_tests": {
@@ -301,7 +269,6 @@
             },
             "maxItems": 10,
             "minItems": 1,
-            "title": "Negative Tests",
             "type": "array"
           },
           "pass_conditions": {
@@ -313,7 +280,6 @@
             },
             "maxItems": 20,
             "minItems": 1,
-            "title": "Pass Conditions",
             "type": "array"
           },
           "positive_tests": {
@@ -325,7 +291,6 @@
             },
             "maxItems": 10,
             "minItems": 1,
-            "title": "Positive Tests",
             "type": "array"
           }
         },
@@ -340,7 +305,6 @@
           "implementation_needs",
           "inability_to_evaluate"
         ],
-        "title": "CheckSpecification",
         "type": "object"
       },
       "CompilationComponentHashes": {
@@ -349,33 +313,27 @@
         "properties": {
           "artifact_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Artifact Policy Hash",
             "type": "string"
           },
           "post_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Post Submit Hash",
             "type": "string"
           },
           "pre_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Pre Submit Hash",
             "type": "string"
           },
           "requirement_inventory_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Requirement Inventory Hash",
             "type": "string"
           },
           "schema_version": {
             "const": "project_guide_check_specification_hashes.v1",
             "default": "project_guide_check_specification_hashes.v1",
-            "title": "Schema Version",
             "type": "string"
           },
           "sufficiency_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Sufficiency Hash",
             "type": "string"
           }
         },
@@ -386,7 +344,6 @@
           "pre_submit_hash",
           "post_submit_hash"
         ],
-        "title": "CompilationComponentHashes",
         "type": "object"
       },
       "CompilationStage": {
@@ -395,7 +352,6 @@
           "pre_submit",
           "post_submit"
         ],
-        "title": "CompilationStage",
         "type": "string"
       },
       "GuideProposalDisplayResult": {
@@ -405,13 +361,11 @@
           "agent_name": {
             "const": "ProjectGuideCompilationAgent",
             "default": "ProjectGuideCompilationAgent",
-            "title": "Agent Name",
             "type": "string"
           },
           "agent_version": {
             "maxLength": 100,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Agent Version",
             "type": "string"
           },
           "findings": {
@@ -420,7 +374,6 @@
               "$ref": "#/components/schemas/GuideProposalFinding"
             },
             "maxItems": 100,
-            "title": "Findings",
             "type": "array"
           },
           "requirements": {
@@ -429,13 +382,11 @@
               "$ref": "#/components/schemas/GuideProposalRequirement"
             },
             "maxItems": 200,
-            "title": "Requirements",
             "type": "array"
           },
           "schema_version": {
             "const": "project_guide_check_specification.v1",
             "default": "project_guide_check_specification.v1",
-            "title": "Schema Version",
             "type": "string"
           },
           "setup_notes": {
@@ -447,7 +398,6 @@
               "type": "string"
             },
             "maxItems": 20,
-            "title": "Setup Notes",
             "type": "array"
           },
           "status": {
@@ -456,7 +406,6 @@
               "draft_ready",
               "draft_ready_with_warnings"
             ],
-            "title": "Status",
             "type": "string"
           },
           "submission_artifact_policy": {
@@ -474,7 +423,6 @@
           "status",
           "agent_version"
         ],
-        "title": "GuideProposalDisplayResult",
         "type": "object"
       },
       "GuideProposalEvidenceLocation": {
@@ -483,7 +431,6 @@
         "properties": {
           "document_number": {
             "minimum": 1.0,
-            "title": "Document Number",
             "type": "integer"
           },
           "end_page": {
@@ -494,8 +441,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "End Page"
+            ]
           },
           "section": {
             "anyOf": [
@@ -505,8 +451,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Section"
+            ]
           },
           "start_page": {
             "anyOf": [
@@ -516,8 +461,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Start Page"
+            ]
           }
         },
         "required": [
@@ -526,7 +470,6 @@
           "end_page",
           "section"
         ],
-        "title": "GuideProposalEvidenceLocation",
         "type": "object"
       },
       "GuideProposalFinding": {
@@ -535,7 +478,6 @@
         "properties": {
           "code": {
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Code",
             "type": "string"
           },
           "evidence_refs": {
@@ -544,14 +486,12 @@
               "$ref": "#/components/schemas/GuideProposalEvidenceLocation"
             },
             "maxItems": 20,
-            "title": "Evidence Refs",
             "type": "array"
           },
           "message": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Message",
             "type": "string"
           },
           "severity": {
@@ -560,7 +500,6 @@
               "warning",
               "info"
             ],
-            "title": "Severity",
             "type": "string"
           }
         },
@@ -569,7 +508,6 @@
           "code",
           "message"
         ],
-        "title": "GuideProposalFinding",
         "type": "object"
       },
       "GuideProposalRequirement": {
@@ -583,7 +521,6 @@
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Classification Rationale",
             "type": "string"
           },
           "evidence_refs": {
@@ -592,7 +529,6 @@
               "$ref": "#/components/schemas/GuideProposalEvidenceLocation"
             },
             "maxItems": 20,
-            "title": "Evidence Refs",
             "type": "array"
           },
           "stage": {
@@ -602,12 +538,10 @@
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
-            "title": "Statement",
             "type": "string"
           },
           "suggestion_id": {
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Suggestion Id",
             "type": "string"
           }
         },
@@ -618,7 +552,6 @@
           "classification_rationale",
           "check_specification"
         ],
-        "title": "GuideProposalRequirement",
         "type": "object"
       },
       "GuideProposalReviewPackage": {
@@ -638,11 +571,9 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Policy Status"
+            ]
           },
           "current": {
-            "title": "Current",
             "type": "boolean"
           },
           "current_approval_operation_id": {
@@ -654,8 +585,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Current Approval Operation Id"
+            ]
           },
           "current_approval_output_digest": {
             "anyOf": [
@@ -666,8 +596,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Current Approval Output Digest"
+            ]
           },
           "post_submit_policy_id": {
             "anyOf": [
@@ -678,8 +607,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Post Submit Policy Id"
+            ]
           },
           "result": {
             "$ref": "#/components/schemas/GuideProposalDisplayResult"
@@ -689,7 +617,6 @@
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Target Digest",
             "type": "string"
           },
           "warning_hashes": {
@@ -697,7 +624,6 @@
               "pattern": "^sha256:[0-9a-f]{64}$",
               "type": "string"
             },
-            "title": "Warning Hashes",
             "type": "array"
           }
         },
@@ -709,7 +635,6 @@
           "artifact_policy_status",
           "warning_hashes"
         ],
-        "title": "GuideProposalReviewPackage",
         "type": "object"
       },
       "GuideProposalTarget": {
@@ -725,8 +650,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Policy Hash"
+            ]
           },
           "artifact_policy_id": {
             "anyOf": [
@@ -737,8 +661,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Policy Id"
+            ]
           },
           "artifact_projection_operation_id": {
             "anyOf": [
@@ -749,8 +672,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Projection Operation Id"
+            ]
           },
           "artifact_projection_output_digest": {
             "anyOf": [
@@ -761,12 +683,10 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Projection Output Digest"
+            ]
           },
           "compilation_id": {
             "format": "uuid",
-            "title": "Compilation Id",
             "type": "string"
           },
           "component_hashes": {
@@ -774,59 +694,48 @@
           },
           "finalization_facts_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Finalization Facts Digest",
             "type": "string"
           },
           "finalization_id": {
             "format": "uuid",
-            "title": "Finalization Id",
             "type": "string"
           },
           "guide_id": {
             "format": "uuid",
-            "title": "Guide Id",
             "type": "string"
           },
           "guide_version": {
             "maxLength": 50,
             "minLength": 1,
-            "title": "Guide Version",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
-            "title": "Project Id",
             "type": "string"
           },
           "result_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Result Hash",
             "type": "string"
           },
           "result_schema_version": {
             "const": "project_guide_check_specification.v1",
             "default": "project_guide_check_specification.v1",
-            "title": "Result Schema Version",
             "type": "string"
           },
           "setup_generation": {
             "exclusiveMinimum": 0.0,
-            "title": "Setup Generation",
             "type": "integer"
           },
           "setup_run_id": {
             "format": "uuid",
-            "title": "Setup Run Id",
             "type": "string"
           },
           "source_snapshot_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Source Snapshot Hash",
             "type": "string"
           },
           "source_snapshot_id": {
             "format": "uuid",
-            "title": "Source Snapshot Id",
             "type": "string"
           }
         },
@@ -848,7 +757,6 @@
           "artifact_projection_operation_id",
           "artifact_projection_output_digest"
         ],
-        "title": "GuideProposalTarget",
         "type": "object"
       },
       "SubmissionArtifactPolicyProposal": {
@@ -863,7 +771,6 @@
               "const": "artifact",
               "type": "string"
             },
-            "title": "Allowed Storage Schemes",
             "type": "array"
           },
           "attestation_terms": {
@@ -876,7 +783,6 @@
               "type": "string"
             },
             "maxItems": 50,
-            "title": "Attestation Terms",
             "type": "array"
           },
           "forbidden_artifacts": {
@@ -888,7 +794,6 @@
               "type": "string"
             },
             "maxItems": 100,
-            "title": "Forbidden Artifacts",
             "type": "array"
           },
           "maximum_archive_entries": {
@@ -901,8 +806,7 @@
                 "type": "null"
               }
             ],
-            "description": "Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
-            "title": "Maximum Archive Entries"
+            "description": "Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply."
           },
           "maximum_archive_size_bytes": {
             "anyOf": [
@@ -914,8 +818,7 @@
                 "type": "null"
               }
             ],
-            "description": "Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply.",
-            "title": "Maximum Archive Size Bytes"
+            "description": "Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply."
           },
           "maximum_file_size_bytes": {
             "anyOf": [
@@ -928,8 +831,7 @@
                 "type": "null"
               }
             ],
-            "description": "Project-specific maximum expanded bytes per submitted file. Null adds no project limit; platform safety limits always apply.",
-            "title": "Maximum File Size Bytes"
+            "description": "Project-specific maximum expanded bytes per submitted file. Null adds no project limit; platform safety limits always apply."
           },
           "maximum_package_size_bytes": {
             "anyOf": [
@@ -942,13 +844,11 @@
                 "type": "null"
               }
             ],
-            "description": "Project-specific maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes. Null adds no project limit; platform safety limits always apply.",
-            "title": "Maximum Package Size Bytes"
+            "description": "Project-specific maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes. Null adds no project limit; platform safety limits always apply."
           },
           "packaging": {
             "const": "zip",
             "default": "zip",
-            "title": "Packaging",
             "type": "string"
           },
           "required_artifacts": {
@@ -960,7 +860,6 @@
               "type": "string"
             },
             "maxItems": 100,
-            "title": "Required Artifacts",
             "type": "array"
           },
           "required_evidence": {
@@ -973,11 +872,9 @@
               "type": "string"
             },
             "maxItems": 100,
-            "title": "Required Evidence",
             "type": "array"
           }
         },
-        "title": "SubmissionArtifactPolicyProposal",
         "type": "object"
       }
     }
@@ -992,7 +889,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Project Id",
           "type": "string"
         }
       },
@@ -1002,7 +898,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Guide Id",
           "type": "string"
         }
       },
@@ -1012,7 +907,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Compilation Id",
           "type": "string"
         }
       },

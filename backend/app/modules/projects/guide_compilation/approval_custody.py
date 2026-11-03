@@ -122,7 +122,7 @@ def _approval_projection_matches(view, custody, target, receipt, policy, externa
         custody.pre,
     )
     target_hashes = (
-        vars(target.component_hashes)
+        operation.target_json["component_hashes"]
         if view.compilation.result_schema_version is None
         else target.component_hashes.model_dump()
     )

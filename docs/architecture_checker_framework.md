@@ -699,11 +699,11 @@ ReviewPolicy requires human review by default. When it is false, passing all
 required checks invokes shared authorized final acceptance without a fabricated
 Review or reviewer contribution.
 
-Retained compilation results keep their exact hashes and public representation.
-The new `classification_rationale` and `check_specification` members are omitted
-when absent from historical results; reads, approvals and recovery never invent
-them. Newly compiled results must satisfy the complete typed contract before
-acceptance, so retained evidence does not relax new-generation requirements.
+Retained compilation and activation evidence keeps its original bytes and hashes.
+Exact locked-task readers verify that evidence without converting it into a new
+setup result. Current proposal review and approval use the specification contract;
+old proposal formats cannot be submitted to these operations. No historical
+field or executable selection is invented during evidence recovery.
 
 The unified output is a constrained proposal. Workstream's trusted compiler owns the
 canonical `PostSubmitCheckerPolicy.policy_body`, hash and ordered human-selected

@@ -12,10 +12,9 @@ from app.modules.projects.api.post_policy import post_policy_derive_authorizatio
 from app.modules.projects.post_policy.custody import operation_receipt
 
 
-def _operation():
-    digest = "sha256:" + "a" * 64
-    project, guide, compilation, source, setup, finalization = (new_record_id() for _ in range(6))
-    artifact, projection, policy, approval, effective, pre = (new_record_id() for _ in range(6))
+def _retained_proposal(project, guide, compilation, source, setup, finalization,
+                       artifact, projection, digest):
+    """Build the exact original proposal commitment shared by POST receipt facts."""
     hashes = {
         name: digest
         for name in (
@@ -28,7 +27,7 @@ def _operation():
             "setup_notes_hash",
         )
     }
-    proposal = dict(
+    return dict(
         project_id=str(project),
         guide_id=str(guide),
         compilation_id=str(compilation),
@@ -53,6 +52,15 @@ def _operation():
         artifact_policy_hash=digest,
         artifact_projection_operation_id=str(projection),
         artifact_projection_output_digest=digest,
+    )
+
+
+def _operation():
+    digest = "sha256:" + "a" * 64
+    project, guide, compilation, source, setup, finalization = (new_record_id() for _ in range(6))
+    artifact, projection, policy, approval, effective, pre = (new_record_id() for _ in range(6))
+    proposal = _retained_proposal(
+        project, guide, compilation, source, setup, finalization, artifact, projection, digest,
     )
     upstream = dict(
         operation_id=str(approval),

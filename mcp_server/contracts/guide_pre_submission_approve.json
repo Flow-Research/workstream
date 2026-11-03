@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "7eb59df708e9ce1ee5440cc21d5302ae4f664e384c3ab331852fca1e7a9a9cd0",
+  "canonical_sha256": "690119502ed43be6bef23eaf8d4312a376ed6e8d98b5c225d9a477aaba1155a2",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,24 +7,19 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
-            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
-            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
-            "title": "Details",
             "type": "object"
           },
           "message": {
-            "title": "Message",
             "type": "string"
           },
           "retryable": {
-            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -35,7 +30,6 @@
           "correlation_id",
           "retryable"
         ],
-        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -48,8 +42,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Detail"
+            ]
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -58,7 +51,6 @@
         "required": [
           "error"
         ],
-        "title": "ApiErrorResponse",
         "type": "object"
       },
       "CompilationComponentHashes": {
@@ -67,33 +59,27 @@
         "properties": {
           "artifact_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Artifact Policy Hash",
             "type": "string"
           },
           "post_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Post Submit Hash",
             "type": "string"
           },
           "pre_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Pre Submit Hash",
             "type": "string"
           },
           "requirement_inventory_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Requirement Inventory Hash",
             "type": "string"
           },
           "schema_version": {
             "const": "project_guide_check_specification_hashes.v1",
             "default": "project_guide_check_specification_hashes.v1",
-            "title": "Schema Version",
             "type": "string"
           },
           "sufficiency_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Sufficiency Hash",
             "type": "string"
           }
         },
@@ -104,7 +90,6 @@
           "pre_submit_hash",
           "post_submit_hash"
         ],
-        "title": "CompilationComponentHashes",
         "type": "object"
       },
       "ExternalCheckerImageAttachment": {
@@ -115,22 +100,18 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
-            "title": "Configuration",
             "type": "object"
           },
           "registry_entry_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Registry Entry Digest",
             "type": "string"
           },
           "registry_entry_id": {
             "format": "uuid",
-            "title": "Registry Entry Id",
             "type": "string"
           },
           "requirement_id": {
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "title": "Requirement Id",
             "type": "string"
           }
         },
@@ -140,7 +121,6 @@
           "registry_entry_digest",
           "configuration"
         ],
-        "title": "ExternalCheckerImageAttachment",
         "type": "object"
       },
       "GuideProposalApprovalInput": {
@@ -154,7 +134,6 @@
               "type": "string"
             },
             "maxItems": 200,
-            "title": "Acknowledged Warning Hashes",
             "type": "array"
           },
           "expected_previous_approval_operation_id": {
@@ -166,8 +145,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Expected Previous Approval Operation Id"
+            ]
           },
           "expected_previous_approval_output_digest": {
             "anyOf": [
@@ -178,15 +156,13 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Expected Previous Approval Output Digest"
+            ]
           },
           "post_submit_attachments": {
             "items": {
               "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
             },
             "maxItems": 200,
-            "title": "Post Submit Attachments",
             "type": "array"
           },
           "pre_submit_attachments": {
@@ -194,7 +170,6 @@
               "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
             },
             "maxItems": 200,
-            "title": "Pre Submit Attachments",
             "type": "array"
           },
           "target": {
@@ -206,7 +181,6 @@
           "pre_submit_attachments",
           "post_submit_attachments"
         ],
-        "title": "GuideProposalApprovalInput",
         "type": "object"
       },
       "GuideProposalApprovalReceipt": {
@@ -219,47 +193,38 @@
               "type": "string"
             },
             "maxItems": 200,
-            "title": "Acknowledged Warning Hashes",
             "type": "array"
           },
           "artifact_policy_id": {
             "format": "uuid",
-            "title": "Artifact Policy Id",
             "type": "string"
           },
           "effective_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Effective Policy Hash",
             "type": "string"
           },
           "effective_policy_id": {
             "format": "uuid",
-            "title": "Effective Policy Id",
             "type": "string"
           },
           "effective_pre_submit_plan_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Effective Pre Submit Plan Hash",
             "type": "string"
           },
           "operation_id": {
             "format": "uuid",
-            "title": "Operation Id",
             "type": "string"
           },
           "pre_submit_bundle_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Pre Submit Bundle Hash",
             "type": "string"
           },
           "pre_submit_policy_id": {
             "format": "uuid",
-            "title": "Pre Submit Policy Id",
             "type": "string"
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Target Digest",
             "type": "string"
           }
         },
@@ -274,7 +239,6 @@
           "effective_pre_submit_plan_hash",
           "acknowledged_warning_hashes"
         ],
-        "title": "GuideProposalApprovalReceipt",
         "type": "object"
       },
       "GuideProposalTarget": {
@@ -290,8 +254,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Policy Hash"
+            ]
           },
           "artifact_policy_id": {
             "anyOf": [
@@ -302,8 +265,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Policy Id"
+            ]
           },
           "artifact_projection_operation_id": {
             "anyOf": [
@@ -314,8 +276,7 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Projection Operation Id"
+            ]
           },
           "artifact_projection_output_digest": {
             "anyOf": [
@@ -326,12 +287,10 @@
               {
                 "type": "null"
               }
-            ],
-            "title": "Artifact Projection Output Digest"
+            ]
           },
           "compilation_id": {
             "format": "uuid",
-            "title": "Compilation Id",
             "type": "string"
           },
           "component_hashes": {
@@ -339,59 +298,48 @@
           },
           "finalization_facts_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Finalization Facts Digest",
             "type": "string"
           },
           "finalization_id": {
             "format": "uuid",
-            "title": "Finalization Id",
             "type": "string"
           },
           "guide_id": {
             "format": "uuid",
-            "title": "Guide Id",
             "type": "string"
           },
           "guide_version": {
             "maxLength": 50,
             "minLength": 1,
-            "title": "Guide Version",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
-            "title": "Project Id",
             "type": "string"
           },
           "result_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Result Hash",
             "type": "string"
           },
           "result_schema_version": {
             "const": "project_guide_check_specification.v1",
             "default": "project_guide_check_specification.v1",
-            "title": "Result Schema Version",
             "type": "string"
           },
           "setup_generation": {
             "exclusiveMinimum": 0.0,
-            "title": "Setup Generation",
             "type": "integer"
           },
           "setup_run_id": {
             "format": "uuid",
-            "title": "Setup Run Id",
             "type": "string"
           },
           "source_snapshot_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "title": "Source Snapshot Hash",
             "type": "string"
           },
           "source_snapshot_id": {
             "format": "uuid",
-            "title": "Source Snapshot Id",
             "type": "string"
           }
         },
@@ -413,7 +361,6 @@
           "artifact_projection_operation_id",
           "artifact_projection_output_digest"
         ],
-        "title": "GuideProposalTarget",
         "type": "object"
       },
       "JsonValue": {}
@@ -429,7 +376,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Project Id",
           "type": "string"
         }
       },
@@ -439,7 +385,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Guide Id",
           "type": "string"
         }
       },
@@ -449,7 +394,6 @@
         "required": true,
         "schema": {
           "format": "uuid",
-          "title": "Compilation Id",
           "type": "string"
         }
       },

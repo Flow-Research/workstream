@@ -40,8 +40,8 @@ warning-only. The agent cannot change those defaults.
 ## Exact output
 
 One JSON object, with no surrounding prose or Markdown, duplicate keys, unknown
-fields, nonfinite numbers or omitted schema-required members. There is no free-form
-notes field in inference output.
+fields, nonfinite numbers or omitted schema-required members. Optional setup
+notes remain bounded prose; they cannot carry executable selections.
 
 | Field | Purpose |
 | --- | --- |
@@ -86,7 +86,8 @@ cannot silently activate without complete human execution choices.
 
 Both private drafting and independent source review enforce the restricted schema
 and canonical/context rules. Known invalid completed output receives bounded paths
-and closed error codes and may be corrected at most twice across the whole attempt.
+and closed error codes and may be corrected at most twice in each drafting or source-review phase, within
+the original shared attempt budget.
 The agent returns a complete replacement, not a patch. No rejected values or raw
 exception messages are put in feedback. Unknown provider failures are not replayed
 as format errors. Corrections do not reset time, turn/tool budgets, source access,

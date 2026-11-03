@@ -426,6 +426,7 @@ PROJECT_MODULES = (
     "tests/projects/guide_compilation/proposals/test_authority_contract.py",
     "tests/projects/guide_compilation/proposals/test_contracts.py",
     "tests/projects/guide_compilation/proposals/test_attachment_input.py",
+    "tests/projects/guide_compilation/proposals/test_attachment_postgresql.py",
     "tests/projects/guide_compilation/proposals/test_audit_schema.py",
     "tests/projects/guide_compilation/proposals/test_inventory.py",
     "tests/projects/guide_compilation/proposals/test_postgresql.py",

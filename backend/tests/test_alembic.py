@@ -111,7 +111,7 @@ async def _seed_retained_guide_runtime_rows(
     from uuid import UUID
     from app.core.hashing import canonical_json_hash
     from app.core.identifiers import new_record_id
-    from tests.projects.guide_compilation.helpers import context, identity, seed_database
+    from tests.projects.guide_compilation.helpers import SHA256, context, identity, seed_database
     from tests.projects.guide_compilation.test_runtime_cleanup_postgresql import (
         _historical_configuration,
     )
@@ -152,14 +152,15 @@ async def _seed_retained_guide_runtime_rows(
             attempt_identity.setup_generation,
             attempt_identity.canonical_input_hash,
             attempt_identity.guide_material_hash,
-            attempt_identity.pre_catalogue_id,
-            attempt_identity.pre_catalogue_version,
-            attempt_identity.pre_catalogue_schema_version,
-            attempt_identity.pre_catalogue_manifest_hash,
-            attempt_identity.post_catalogue_id,
-            attempt_identity.post_catalogue_version,
-            attempt_identity.post_catalogue_schema_version,
-            attempt_identity.post_catalogue_manifest_hash,
+            # Original 0058 evidence fields are explicit fixture data, not current inputs.
+            "retained.pre",
+            "v1",
+            "v1",
+            SHA256,
+            "retained.post",
+            "v1",
+            "v1",
+            SHA256,
             attempt_identity.agent_identity,
             attempt_identity.agent_version,
             attempt_identity.instruction_version,
