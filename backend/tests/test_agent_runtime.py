@@ -32,6 +32,7 @@ from app.interfaces.project_agents import (
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.interfaces.setup_model_proxy import SetupModelProxyReply
 from app.modules.projects.api.guide_documents import GuideDocumentManifest
+from app.modules.projects.api.task_examples import validate_task_examples
 from tests.projects.guide_compilation.helpers import (
     SOURCE_SHA256,
     context,
@@ -360,7 +361,7 @@ async def test_unified_compilation_uses_scoped_tools_and_strict_output(monkeypat
         assert supplied["phase"] == "coverage_review"
         assert supplied["guide_setup_context"] == json.loads(calls[0][1])
         assert "runtime_configuration" not in supplied["guide_setup_context"]
-        assert "setup_notes" not in supplied["candidate_proposal"]
+        assert supplied["candidate_proposal"] == _provider_payload()
         return _sdk_result(agent)
 
     monkeypatch.setattr(Runner, "run", run)
@@ -744,15 +745,18 @@ async def test_unified_runtime_rejects_omitted_output_member(monkeypatch):
 async def test_oversized_prompt_is_rejected_before_sdk_execution(monkeypatch):
     configuration = runtime_configuration().model_copy(update={"maximum_manifest_bytes": 1024})
     runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
+    compilation = context(ids()).model_copy(update={
+        "task_examples": validate_task_examples([{"content": "A" * 1024}]),
+        "runtime_configuration": configuration,
+    })
+    assert len(project_guide_compilation_prompt_bytes(compilation)) > 1024
 
     async def forbidden(*args):
         pytest.fail("oversized prompt reached provider")
 
     monkeypatch.setattr(runtime, "_run", forbidden)
     with pytest.raises(ProjectAgentRuntimeError, match="size limit"):
-        await _compile(runtime,
-            context(ids()).model_copy(update={"runtime_configuration": configuration})
-        )
+        await _compile(runtime, compilation)
 
 
 async def test_runtime_rejects_context_configuration_substitution(monkeypatch):
