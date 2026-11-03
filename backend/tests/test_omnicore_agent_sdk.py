@@ -1522,5 +1522,3 @@ async def test_actual_sdk_cancellation_closes_forward_and_runtime_lifecycle():
         await runtime.aclose()
         with pytest.raises(ProjectAgentRuntimeError, match="closed"):
             await runtime.compile_project_guide(compilation_context, capabilities)
-
-

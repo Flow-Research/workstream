@@ -411,5 +411,3 @@ async def test_actual_openai_sdk_corrections_are_bounded_per_phase(monkeypatch, 
             if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
         )
         assert correction["phase"] == phase
-
-
