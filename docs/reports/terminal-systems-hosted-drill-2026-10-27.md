@@ -1,28 +1,27 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
 **Current rehearsal: IN PROGRESS — November 3. No complete hosted journey pass is claimed.**
-Deployed source `357b9a55d91ccb285030b3f336eb890b25ae1735` includes the bounded
-setup-diagnostic repair and passed the 11,642-test Backend aggregate. Guide 19
-received one explicit manager correction selecting the eight `real-e0b502f9`
-POST versions, separate PRE/POST approvals and activation. Task creation,
-screening, release and immediate claim-start/replay passed, followed by three
-PRE-negative controls, warnings-only intake and verified immutable Submission/replay.
-Automatic POST ended `infrastructure_failed / invalid_output`, with no persisted
-results or findings. No work verdict, acceptance or ContributionRecord is claimed.
+The backend remains source `357b9a55`; the separate POST repair at
+`e49dfcea1fff63dea4ec03d35322085ac869acab` is now qualified, registered and
+deployed in release `edd0f218`. Its exact-source Backend CI passed 11,642 unique
+tests across 17 lanes with zero test skips/deselections and complete cleanup.
+Guide 20 creation, manager policy choices, original upload and exact replays
+passed, but setup ended **`compilation_invalid_terminal / schema_invalid` at
+11:25:04 UTC** after six completed model calls. Its final candidate passed
+structural/Pydantic parsing but mixed registered model-profile tuples in four
+bindings; the strict validator correctly rejected it. No finalized proposal,
+checker approval, activation, task or new POST outcome resulted. A bounded
+correction-feedback repair is implemented in the source: both SDKs receive only
+the affected selected registry schemas, and the canonical budget validator supplies
+independent closed diagnostics. Focused Agents/configuration tests (70) and the
+complete affected OmniCore module (69) pass. Deployment and a new live result remain pending.
 
-Scoped retrieval verified eight retained model request/response objects and the
-checker request/result against their stored hashes. Both assessment responses used
-string-valued recovery line spans; the correction also quoted finding line
-numbers. The source repair clarifies native integer output and removes unrelated
-runtime-condition instructions from the author rubric, preserving strict validation
-and the bounded correction limit. This repair has not yet been qualified or
-proved in a new hosted run.
-
-The drill resumed November 3 on the same retained instance and volume. After
-the failed POST, the account held **US$7.26586182 settled, zero reserved and
-US$2.73413818 remaining** under the unchanged US$10 cap. Historical guide 17/18 failures and paid effects remain retained. The
-ART fault previously aborted before cancellation; recovery, connected work
-correction and final contribution evidence remain outstanding.
+Guide 19's prior POST remains `infrastructure_failed / invalid_output` with no
+persisted results or findings. Its locked image, policies and paid effects stay
+retained. After guide 20 setup failed, the account held **US$7.48896360 settled,
+zero reserved and US$2.51103640 remaining** under the unchanged US$10 cap.
+Recovery, genuine work outcomes and exact contribution evidence remain
+outstanding.
 [#555](https://github.com/Flow-Research/workstream/issues/555) and the related
 release scopes remain open.
 
@@ -30,7 +29,18 @@ The target is original project guide -> approved locked policies -> released tas
 
 ## Release and project provenance
 
-### Current guide 19 checkpoint — November 2–3
+### Current guide 20 checkpoint — November 3, terminal setup failure
+
+| Required binding | Actual retained evidence |
+|---|---|
+| POST source and CI | `e49dfcea1fff63dea4ec03d35322085ac869acab`, tree `33f71bab03a4d5d1a6050835c48a3a8040fe6c27`; tested merge `75ae528c5c189ef486c6c7a169b3d0f6ebf225b1` has the same tree. [Verified Backend aggregate](https://github.com/Flow-Research/workstream/actions/runs/41617101238): 11,642 unique completions, 17 lanes, zero skipped/deselected tests and complete cleanup. Slowest lane 1,206.477 seconds; timing target not met. CodeRabbit was skipped. Source reviews passed; these checks do not establish a live journey outcome. |
+| POST qualification and publication | Image `sha256:d78b777a57a5bd4675454cf0e0237c4ca963e46ea2eea61fde5c87d81d076bcf`, immutable version `real-e49dfcea`. Controlled image/physical qualification and eight immutable registration/read/exact-replay operations passed. The prompt requires strict integer citations and scopes runtime-only condition 11 to the runtime rubric; validators/correction limits remain unchanged. Controlled qualification supplies no fresh project work verdict. |
+| Actual config deployment | Release `sha256:edd0f2185cd8cbe5f94da8a554f79d3a5bc3987e36b7a034469d83c025ef2513`; marker SHA-256 `7e7c7f0813016cc2c5a04d645a27d090a81fe503922820a18dc0ee46035ac9f8`. Backend source `357b9a55d91ccb285030b3f336eb890b25ae1735` and image `sha256:90df91272f857260a77714207ed28201163749ef86ba6980e8f44ea7ce7658e2` are retained, with genuine build provenance. The native binary is unchanged and restarted as PID 717609. Ten cache entries, 21 authority contexts and 58 registrations preserve all predecessors; canonical proof, retained-data checks and five healthy application containers passed. |
+| Fresh guide and upload | Guide `01a1a11f-67b4-7e20-b8b4-566b39513ef6`, setup `01a1a11f-67f1-7d45-997b-2eb6cfe479d8`. Create/replay, explicit manager review/revision-policy choices/replays, original upload and exact replay passed. The original guide/examples and setup profile v12 are unchanged. Review policy `01a1a11f-d616-7960-82cd-e6270ef35379` and revision policy `01a1a120-3c2f-7ab6-8110-1085bcdcf1bd` are manager choices, not checker approvals. |
+| Terminal setup and diagnosis | Setup ended `compilation_invalid_terminal / schema_invalid` at 11:25:04 UTC after six completed calls: two draft and four correction calls. Twelve retained request/response objects were verified. Exact-owner replay against reconstructed context `sha256:fbdef5b8fb6a16461ab5fdbbfbcfa54ab7283669b64fc511c25bb54cc1a44525` confirms the final candidate passes structural/Pydantic parsing, but four bindings combine trial-profile v10 IDs with semantic-profile v9 version/digest fields. Strict registered-configuration validation correctly rejects those mixed tuples. A private four-ID-only counterfactual then exposes a second rejection: nine selected POST bindings cost 3,600,000 ms against the unchanged 3,400,000 ms budget, including a duplicated checker. It still selects old real-e0b502f9 entries, not the new image. No retained output was rewritten or accepted. |
+| Evidence cutoff and accounting | No finalized proposal, checker approval, activation, task or new POST outcome resulted from guide 20. The source correction-feedback repair passes focused tests; deployment and live qualification remain pending. It never fills in rejected values or changes selected versions, acceptance validation, correction limits or budgets. After terminal setup: 7,488,963,600 settled nanodollars, zero reserved and 2,511,036,400 remaining under the unchanged 10,000,000,000 cap. Guide 19 and all earlier records remain immutable. |
+
+### Historical guide 19 checkpoint — November 2–3
 
 | Required binding | Actual retained evidence |
 |---|---|
@@ -41,6 +51,14 @@ The target is original project guide -> approved locked policies -> released tas
 | Task and immediate claim | Task `01a19c23-2f1b-7928-90ed-0a319cb1d7ac`, assignment `01a19c23-bee3-79dc-804f-c1a159c4108c`. Create/screen/release and immediate replay passed. Claim/replay retained one assignment, one command receipt/event, two distinct authorization decisions and equal assignment/start timestamps, without a separate Start operation. |
 | Intake, immutable Submission and failed POST | Unsafe-traversal, secret-canary and project-PRE negatives returned intended feedback; project-PRE replay and warnings-only intake passed. After the interruption, the stored POST-negative v3 ZIP reached ready admission. Submission v1 `01a1a0ce-7415-7d5f-8e06-070ac760a11f` and evaluation request `01a1a0ce-77a5-7f3a-9761-bdc941fd924c` were created and exactly replayed. Run `01a1a0ce-7844-734f-a14f-197b92557b87` ended `infrastructure_failed / invalid_output`. Read-only observation at November 3 09:55:22 UTC found no persisted results or findings; no work verdict, governed revision, acceptance or contribution outcome is claimed. |
 | Resumption and accounting cutoff | November 3 resumption retained the original instance, volume, source and project evidence; operator transport access was restored without resetting the drill. Pre-POST observation was 7,194,713,820 settled nanodollars and zero reserved. After the failed POST: 7,265,861,820 settled, zero reserved and 2,734,138,180 remaining under the unchanged 10,000,000,000 cap. Recovery, genuine work failure/correction, governed acceptance/contribution and final-data restore remain incomplete. |
+
+Scoped guide 19 retrieval verified eight model request/response objects and the
+checker request/result against their stored hashes. Both assessment responses
+used string-valued recovery spans; the correction also quoted finding line
+numbers. The later e49 repair clarified integer output and moved runtime-only
+instructions out of the author rubric, preserving strict validation and the
+correction limit. Its subsequent qualification/deployment is recorded above;
+no retained response or historical work outcome was rewritten.
 
 ### Historical e0b / guide 18 checkpoint — November 2
 
@@ -74,7 +92,7 @@ The following exact facts belong to the preceding deployment and remain retained
 
 The following bindings describe earlier checkpoints only. Their relative words,
 account balances, pending checks and deployment selections are historical; the
-guide 19 table above supplies the current checkpoint. No retained row or receipt
+guide 20 table above supplies the current checkpoint. No retained row or receipt
 was replaced to advance the drill.
 
 | Required binding | Historical value through guide 12 |
@@ -166,7 +184,7 @@ journey and the release scopes below remain open.
 
 All observations below retain their original dates and scope. References to
 "current", "latest", pending checks or balances inside these historical records
-mean that checkpoint, not the current guide 19 checkpoint above.
+mean that checkpoint, not the current guide 20 checkpoint above.
 
 ### Initial hosted checkpoint — November 1
 
@@ -768,15 +786,15 @@ missing current-project outcomes.
 | Guide custody: create/upload unchanged original and download through public reads | Exact digest/size/bytes and unrelated-actor denial; duplicate upload retains original custody | PASS | Manager detail, original download and setup read returned 200; each corresponding unrelated-contributor read returned concealed 404. Same-key upload returned 202, replayed=true, identical document/hash/byte count. |
 | Async setup: actual assigned originals/example reach durable worker and parser | Source-backed PRE/POST proposal, sufficiency and explicit gaps; no injected result | PASS | Guide 19 generation 1 compiled; an explicit manager correction produced generation 2 with the intended eight POST version selections and unchanged requirements. Guide 18 terminal evidence remains historical. |
 | PM correction and agreement: inspect current proposal against guide and packages | Supported successor preserves predecessor; required uncovered checks block approval/activation | PASS | Guide 19 generation 2 changed only eight POST capability versions to real-e0b502f9, then received separate PRE/POST approvals and exact replay. Substantive package/trial outcomes remain separate. |
-| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | The source-quote image and eight immutable real-e0b502f9 registrations remain qualified and deployed. Guide 19 approved those exact POST selections with unchanged PRE/model profiles; registration alone supplies no acceptance. |
+| Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | The strict-integer POST image and eight immutable real-e49dfcea registrations are qualified and deployed. Guide 20 setup ended terminal schema-invalid on mixed registered model-profile tuples; no fresh selection/approval is claimed. Guide 19 approvals remain bound to real-e0b502f9; PRE/model profiles and prior entries stay retained. |
 | Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | PASS | Guide 19 generation-2 approvals, exact replays, activation/read-back and explicitly false human review passed on deployed source `357b9a55`. Retained revision/unpaid ContributionPolicy choices remain locked; prior guide approvals stay historical. |
 | Task creation/import/screen/release: import original briefs and exercise manager operations | Exact task/source/batch receipts; locks preserved; replay creates no duplicates | IN PROGRESS | Guide 19 queue-task create/screen/release passed with immediate replay and unchanged business snapshots. Original five-task import remains retained; wider current batch scenarios remain separate. |
 | Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | IN PROGRESS | Guide 19 claim/replay immediately started work: one assignment/claim receipt/event, two distinct authorization decisions and no separate Start. Earlier original-byte and foreign-project isolation proofs retain their historical scope. |
 | Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | IN PROGRESS | Guide 19 unsafe-traversal and secret-canary controls returned intended blocking feedback; warnings-only intake passed. Unchanged-work controls and applicable recovery remain outstanding. |
 | Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | IN PROGRESS | Guide 19 project-PRE negative and exact replay passed with intended blocking feedback. The distinct POST-negative v3 archive passed PRE and reached ready admission and immutable Submission; no POST work verdict is claimed yet. |
 | Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | PASS | Guide 19 POST-negative v3 archive reached ready admission after resumption. Submission v1 01a1a0ce-7415-7d5f-8e06-070ac760a11f and evaluation request 01a1a0ce-77a5-7f3a-9761-bdc941fd924c were created and exactly replayed with unchanged immutable custody. |
-| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | IN PROGRESS | Guide 19 automatically dispatched the approved real-e0b502f9 image after immutable Submission. POST ended infrastructure_failed / invalid_output with no persisted results or findings; substantive negative/positive work verdicts remain unproven. Guide 17 invalid-output evidence remains retained. |
-| Model/trial/material custody: approved profile, real assessment and isolated reference/verifier execution | Correct exact material roles, verified trial receipts and private ART call evidence; no passing substitutes | IN PROGRESS | The real-e0b502f9 controlled physical qualification retains four model effects, two trials and zero replay calls. Guide 19 live POST ended invalid-output infrastructure failure with no persisted results or findings; controlled qualification does not establish its live work outcome or final assessment. |
+| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | IN PROGRESS | Guide 19 automatically dispatched the approved real-e0b502f9 image after immutable Submission. POST ended infrastructure_failed / invalid_output with no persisted results or findings; substantive negative/positive work verdicts remain unproven. Guide 20 failed setup before any fresh POST; earlier failures remain retained. |
+| Model/trial/material custody: approved profile, real assessment and isolated reference/verifier execution | Correct exact material roles, verified trial receipts and private ART call evidence; no passing substitutes | IN PROGRESS | The current real-e49dfcea controlled physical qualification retains four model effects, two trials and zero replay calls. Guide 19 retains its separate invalid-output infrastructure failure without results/findings. Guide 20 setup ended schema-invalid; controlled qualification supplies no fresh live work outcome or final assessment. |
 | Model replay/recovery: duplicate delivery or permitted successor uses retained effect | No second paid create; immutable slots and once-only settlement; ambiguous effect remains held | IN PROGRESS | Native-only checker retry reattached the original completed effect without another charge; unresolved/known-no-effect recovery variants remain. |
 | False-policy success: governed acceptance and applicable conditional awards | One shared FinalAcceptance, exact submitter ContributionRecord and frozen award set atomically; no Review/reviewer contribution | NOT RUN | — |
 | True-policy guard/handoff regression | Eligible passing evidence reaches review_pending without acceptance/contribution/award effects; human runtime stays deferred | NOT RUN | — |
@@ -805,8 +823,8 @@ CLI, MCP and TUI surfaces are implemented separately. Record any exercised clien
 |---|---|---|
 | Original Terminal Systems rehearsal | Earlier uncertain setup spend remains retained separately; do not reset it or mark it free | Unresolved historical spend; no new dispatch against this allowance |
 | Separately authorized model-only qualification | Preserve its existing project/account and US$0.016527 settled ledger. A model-plus-trial continuation reuses that account/headroom; no automatic new allowance or transfer to a fresh real-project account | NOT RUN |
-| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | November 1: US$2.021551 after native retry, then US$2.6751144 after guide6 generation 1. Guide 19 after failed POST: US$7.26586182 settled, zero reserved, US$2.73413818 remaining against the unchanged cap. The pre-POST snapshot was US$7.19471382 settled and zero reserved. Earlier balances are dated historical observations |
-| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Earlier failure retained. Setup/correction and one POST model effect completed in the same account; POST added US$0.043729. Native retry reused that effect without another charge. Guide6 generation 1 completed with four model calls and added US$0.6535634; its intermediate unresolved read preceded successful persistence. Generation 2 then persisted a correction, while generation 3 remains provider-uncertain with five completed effects and one prepared effect. Guide7 used six Luna calls costing US$0.0872514 and ended known-invalid. After the reviewed correction repair, guide8 used six calls adding US$0.09226014 and exposed different known-invalid fields. Source-321 guides9/10/11 then added US$0.07918008, US$0.13829728 and US$0.14840234 respectively, with every effect completed and no valid proposal. Guide12 generations 1/2 added US$0.1632804 and US$0.105595; all eleven effects completed, and the corrected generation received separate approvals and activation. Queue12 then completed one author-evidence effect adding US$0.0042353 before invalid-output rejection. The historical guide 17 POST added two completed author-evidence effects totaling US$0.010997 before invalid-output rejection. Guide 19 generation 2 completed four explicit correction calls; the pre-POST account snapshot includes its setup/correction attempts. The subsequent failed guide 19 POST increased settled accounting by US$0.071148 to the observation above, with zero reserved. No budget reset or blind retry occurred. |
+| New complete-project drill | User explicitly authorized an additional US$10 total on 2026-10-27, across setup, POST and retries; one new account, immutable 10,000,000,000-nanodollar ceiling | November 1: US$2.021551 after native retry, then US$2.6751144 after guide6 generation 1. After guide 20 terminal setup: US$7.48896360 settled, zero reserved, US$2.51103640 remaining against the unchanged cap. The prior pre-guide20 snapshot was US$7.26586182 settled and zero reserved. The pre-POST snapshot was US$7.19471382 settled and zero reserved. Earlier balances are dated historical observations |
+| New current-run dispatch | Record pricing provenance, exact account/effect IDs, starting/ending settled and reserved totals and remaining authorized headroom. Stop paid dispatch on ambiguity or exhaustion | Earlier failure retained. Setup/correction and one POST model effect completed in the same account; POST added US$0.043729. Native retry reused that effect without another charge. Guide6 generation 1 completed with four model calls and added US$0.6535634; its intermediate unresolved read preceded successful persistence. Generation 2 then persisted a correction, while generation 3 remains provider-uncertain with five completed effects and one prepared effect. Guide7 used six Luna calls costing US$0.0872514 and ended known-invalid. After the reviewed correction repair, guide8 used six calls adding US$0.09226014 and exposed different known-invalid fields. Source-321 guides9/10/11 then added US$0.07918008, US$0.13829728 and US$0.14840234 respectively, with every effect completed and no valid proposal. Guide12 generations 1/2 added US$0.1632804 and US$0.105595; all eleven effects completed, and the corrected generation received separate approvals and activation. Queue12 then completed one author-evidence effect adding US$0.0042353 before invalid-output rejection. The historical guide 17 POST added two completed author-evidence effects totaling US$0.010997 before invalid-output rejection. Guide 19 generation 2 completed four explicit correction calls; the pre-POST account snapshot includes its setup/correction attempts. The subsequent failed guide 19 POST increased settled accounting by US$0.071148 to the observation above, with zero reserved. Guide 20 then completed six setup calls and ended schema-invalid; its settled increment was US$0.22310178 with zero reserved after termination. No budget reset or blind retry occurred. |
 
 Pinned-rate ledger settlement is not provider-invoice reconciliation. An unresolved paid effect is a held effect, not a free retry. See [shared accounting](../../.commitrail/changes/checker-model-runtime.md) and [the later separate qualification authority](../../.commitrail/changes/hosted-smol-project-execution.md#live-model-qualification-authority).
 
@@ -816,12 +834,12 @@ Keep keys, JWTs, subjects, request headers, credentials, connection/provider coo
 
 | Gate | Current-run disposition |
 |---|---|
-| #576: actual PM agreement, fresh proposal and independently checked packages/material | IN PROGRESS — guide 19 generation 2 received separate PRE/POST approvals/replays and activation with eight exact real-e0b502f9 POST bindings. Hosted substantive package/trial outcomes remain; earlier uncertain/invalid guides stay retained. |
+| #576: actual PM agreement, fresh proposal and independently checked packages/material | IN PROGRESS — guide 19 approvals/activation remain historical. Guide 20 create/policy/upload replays passed under the real-e49dfcea runtime, but setup ended schema-invalid on four mixed model-profile tuples. Deployment of the source feedback repair and fresh successful agreement remain; no new approval/work outcome is claimed. |
 | #581: terminal retry and full request/completion/acceptance interruption matrix | IN PROGRESS — claim/Submission replay and earlier governed retry evidence remain retained. The guide 17 ART fault aborted before cancellation with successful queue cleanup; its recovery is NOT RUN. Actual UNKNOWN request/completion/acceptance and applicable failure/retry proof remain. |
-| #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — source `357b9a55` release probes/preservation and guide 19 immutable Submission/replay passed; wider failure/restore and final journey proof remain. |
-| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — source `357b9a55` backend deployment retained the qualified source-quote POST image/native runtime. Earlier aborted ART cleanup remains scoped; representative real-project trials, limits and operating scenarios remain. |
-| #555: connected real-project public/durable journey and exact final facts | IN PROGRESS — guide 19 correction/agreement, activation, immediate claim-start, PRE-negative/warnings controls and immutable Submission/replay passed. Automatic POST ended infrastructure_failed / invalid_output with no persisted results or findings. No governed revision, acceptance or ContributionRecord is proven. |
-| Exact candidate's required CI, focused defect regressions and applicable internal reviews | PASS for deployed source `357b9a55`: 17 Backend lanes, 11,642 exact completions, zero skips/deselections and complete cleanup; exact-source internal reviews passed. The slowest lane took 1,433.5 seconds and missed the timing target. These checks and controlled image qualification do not establish the complete live journey. |
+| #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — new e49-POST config release probes/preservation and retained guide 19 Submission/replay passed. Guide 20 upload passed but setup ended schema-invalid; wider failure/restore and final journey proof remain. |
+| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — qualified e49 POST is deployed with the retained `357b9a55` backend and unchanged native binary. Earlier aborted ART cleanup remains scoped; representative real-project work outcomes, limits and operating scenarios remain. |
+| #555: connected real-project public/durable journey and exact final facts | IN PROGRESS — guide 19 correction/agreement, activation, immediate claim-start, PRE-negative/warnings controls and immutable Submission/replay passed. Guide 19 POST ended infrastructure_failed / invalid_output with no persisted results or findings. Guide 20 setup ended schema-invalid before a fresh task or POST. No fresh work outcome, governed revision, acceptance or ContributionRecord is proven. |
+| Exact candidate's required CI, focused defect regressions and applicable internal reviews | PASS for e49 POST source: 17 Backend lanes, 11,642 exact completions, zero test skips/deselections and complete cleanup; exact-source internal reviews passed. Slowest lane 1,206.477 seconds, timing target not met; CodeRabbit skipped. Backend deployment remains `357b9a55`. These checks and controlled qualification do not establish the complete live journey. |
 | Stale wording/Markdown links, affected roadmap reconciliation and local sheet constraints if exports exist | Current documentation checks passed; affected roadmap claims reconciled. No local sheet exports are present. Recheck after further changes. |
 
 No issue is closed by this draft or by a child implementation merge. Complete release reporting requires every applicable outcome above to have current evidence, no unresolved journey blocker, and documented operating/recovery limits. Unimplemented/deferred human review, payment fulfillment and reputation must remain clearly identified; they are not silently certified by the automated contribution path.

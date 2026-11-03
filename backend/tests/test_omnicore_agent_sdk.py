@@ -1515,3 +1515,65 @@ async def test_actual_sdk_cancellation_closes_forward_and_runtime_lifecycle():
         await runtime.aclose()
         with pytest.raises(ProjectAgentRuntimeError, match="closed"):
             await runtime.compile_project_guide(compilation_context, capabilities)
+
+
+@pytest.mark.parametrize("corrected", [True, False])
+async def test_actual_sdk_uses_selected_schema_for_mixed_profile_correction(corrected):
+    """Exact trusted configuration guidance cannot make an unchanged mixed tuple valid."""
+    from app.adapters.project_agents.compilation_draft import (
+        selected_configuration_correction_context,
+    )
+    from app.interfaces.project_agents import ProjectGuideCompilationResult
+    from tests.test_guide_compilation_draft import _configured_runtime_proposal
+
+    configured, bad, good = _configured_runtime_proposal()
+    base = _runtime_context()
+    compilation_context = base.model_copy(
+        update={
+            "checker_capabilities": configured.checker_capabilities,
+            "runtime_configuration": base.runtime_configuration.model_copy(
+                update={"maximum_turns": 12}
+            ),
+        }
+    )
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(
+        handle=handle,
+        final_output=json.dumps(good),
+        final_outputs=(
+            json.dumps(bad),
+            json.dumps(good if corrected else bad),
+            json.dumps(good if corrected else bad),
+        ),
+    ) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(
+            compilation_context.runtime_configuration,
+            upstream_url=provider.url,
+        )
+        runtime.admit_execution()
+        try:
+            if corrected:
+                assert await runtime.compile_project_guide(compilation_context, capabilities) == (
+                    ProjectGuideCompilationResult.model_validate(good)
+                )
+            else:
+                with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+                    await runtime.compile_project_guide(compilation_context, capabilities)
+                assert caught.value.failure_code == "schema_invalid"
+        finally:
+            await runtime.aclose()
+    assert reads == [handle, handle, handle]
+    assert len(provider.requests) == 6
+    correction = next(
+        json.loads(m["content"][m["content"].index("{") :])
+        for m in provider.requests[2][1]["messages"]
+        if isinstance(m.get("content"), str) and '"correction_instruction"' in m["content"]
+    )
+    assert correction[
+        "selected_configuration_contracts"
+    ] == selected_configuration_correction_context(
+        compilation_context, bad, correction["validation_errors"]
+    )
+    assert len(correction["selected_configuration_contracts"]) == 1
+    assert correction["untrusted_candidate_proposal"] == bad
+    assert "do not mix tuples" in correction["correction_instruction"]

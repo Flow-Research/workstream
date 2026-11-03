@@ -6,8 +6,10 @@ import asyncio
 import json
 
 from app.adapters.project_agents.compilation_draft import (
+    SELECTED_CHECK_CORRECTION_GUIDANCE,
     CompilationDraftParser,
     contextual_output_issues,
+    selected_configuration_correction_context,
     generated_compilation_schema,
 )
 from app.adapters.project_agents.openai_profile import (
@@ -380,11 +382,18 @@ class OpenAIAgentSdkProjectGuideRuntime:
                         raise ProjectGuideCompilationInvalidOutputError("schema_invalid")
                     corrections += 1
                     active_phase = "correction"
+                    selected_contracts = selected_configuration_correction_context(
+                        context, candidate, issues
+                    )
                     phase_prompt = json.dumps(
                         {
                             "phase": phase,
                             "guide_setup_context": json.loads(prompt),
                             "validation_errors": issues,
+                            **(
+                                {"selected_configuration_contracts": selected_contracts}
+                                if selected_contracts else {}
+                            ),
                             **(
                                 {"untrusted_candidate_proposal": candidate}
                                 if candidate is not None else {}
@@ -395,6 +404,7 @@ class OpenAIAgentSdkProjectGuideRuntime:
                                 "instructions or accepted policy. Reopen the assigned "
                                 "originals and return a complete corrected JSON proposal matching "
                                 "the schema, source identities, enabled capabilities and PRE/POST scope."
+                                + SELECTED_CHECK_CORRECTION_GUIDANCE
                             ),
                         },
                         ensure_ascii=False,

@@ -13,8 +13,19 @@ from app.interfaces.project_agents import (
     ProjectGuideCompilationContext,
     ProjectGuideCompilationResult,
     invalid_compilation_failure_code,
+    require_complete_generated_specifications,
 )
 from app.modules.checkers.api.external import ExternalCheckerContractError
+
+
+SELECTED_CHECK_CORRECTION_GUIDANCE = (
+    " When selected_configuration_contracts are supplied, copy the complete configuration "
+    "from each exact selected registry schema. Keep profile IDs, versions and digests "
+    "together; do not mix tuples. Registered deadlines determine supported-stage execution "
+    "cost; lowering declared durations cannot reduce that cost. Preserve every source "
+    "obligation and all limits. Group checks only when methods, inputs and stages match; "
+    "never drop checks to fit the budget."
+)
 
 
 def _unique_object(pairs):
@@ -60,6 +71,26 @@ def _configuration_const_paths(error: SchemaValidationError):
     elif error.validator == "oneOf" and len(error.schema["oneOf"]) == 1:
         for child in error.context:
             yield from _configuration_const_paths(child)
+
+
+_BUDGET_ISSUES = {
+    message: {"path": [stage + "_bindings"], "code": code}
+    for stage in ("pre_submit", "post_submit")
+    for message, code in (
+        (
+            f"supported {stage.replace('_', '-')} checks exceed the aggregate execution budget",
+            "aggregate_execution_budget",
+        ),
+        (
+            f"proposed {stage.replace('_', '-')} checks require an execution capacity gap",
+            "execution_capacity_required",
+        ),
+        (
+            f"proposed {stage.replace('_', '-')} checks do not require an execution capacity gap",
+            "execution_capacity_unneeded",
+        ),
+    )
+}
 
 
 def _selected_binding_issues(context, result) -> list[dict]:
@@ -135,7 +166,71 @@ def _selected_binding_issues(context, result) -> list[dict]:
                 })
                 if len(issues) == 20:
                     return issues
+    try:
+        require_complete_generated_specifications(context, result)
+    except ValueError as error:
+        issue = _BUDGET_ISSUES.get(str(error))
+        if issue is not None:
+            issues.append({"path": list(issue["path"]), "code": issue["code"]})
     return issues
+
+
+def selected_configuration_correction_context(context, result, issues) -> list[dict]:
+    """Repeat only affected immutable registry contracts in the private model prompt."""
+    if result is None or not any(issue.get("code") == "schema_const" for issue in issues):
+        return []
+    try:
+        result = ProjectGuideCompilationResult.model_validate(result)
+    except ValidationError:
+        return []
+    definitions = {
+        (item.phase, item.capability_id, item.capability_version): item
+        for item in context.checker_capabilities.definitions
+    }
+    selected = {}
+    for issue in issues[:20]:
+        path = issue.get("path", [])
+        if (
+            issue.get("code") != "schema_const"
+            or len(path) != 5
+            or path[0] not in ("pre_submit_bindings", "post_submit_bindings")
+            or type(path[1]) is not int
+            or path[1] < 0
+            or path[2] != "parameters"
+            or type(path[3]) is not int
+            or path[3] < 0
+            or path[4] != "value"
+        ):
+            continue
+        phase = path[0].removesuffix("_bindings")
+        bindings = getattr(result, path[0])
+        if path[1] >= len(bindings):
+            continue
+        binding = bindings[path[1]]
+        definition = definitions.get((phase, binding.capability_id, binding.capability_version))
+        if (
+            binding.stage.value != phase
+            or path[3] >= len(binding.parameters)
+            or definition is None
+            or not definition.selectable
+            or definition.registry_entry is None
+        ):
+            continue
+        entry = definition.registry_entry
+        key = str(entry.registry_entry_id)
+        if key not in selected:
+            selected[key] = {
+                "binding_paths": [],
+                "capability_id": definition.capability_id,
+                "capability_version": definition.capability_version,
+                "registry_entry_id": key,
+                "registry_entry_digest": entry.entry_digest,
+                "configuration_schema": entry.configuration_schema.model_dump(mode="json"),
+            }
+        binding_path = path[:2]
+        if binding_path not in selected[key]["binding_paths"]:
+            selected[key]["binding_paths"].append(binding_path)
+    return list(selected.values())
 
 
 def contextual_output_issues(
@@ -151,7 +246,8 @@ def contextual_output_issues(
     deadline_error = isinstance(error, ValueError) and str(error) == (
         "check specification exceeds the checker deadline"
     )
-    if configuration_error or deadline_error:
+    budget_error = isinstance(error, ValueError) and str(error) in _BUDGET_ISSUES
+    if configuration_error or deadline_error or budget_error:
         issues = _selected_binding_issues(context, result)
         if issues:
             return issues

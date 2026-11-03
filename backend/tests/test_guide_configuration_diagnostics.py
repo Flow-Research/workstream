@@ -53,8 +53,7 @@ def _entry(check, profile_id, digest):
     return entry, configuration
 
 
-@pytest.fixture
-def configured_proposal():
+def _configured_proposal():
     entries, configurations = zip(
         _entry("brief", str(new_record_id()), "sha256:" + "a" * 64),
         _entry("accuracy", str(new_record_id()), "sha256:" + "b" * 64),
@@ -86,6 +85,11 @@ def configured_proposal():
     return body, projection
 
 
+@pytest.fixture
+def configured_proposal():
+    return _configured_proposal()
+
+
 @pytest.mark.parametrize("fault", ["profile_id", "profile_digest", "both"])
 def test_registry_const_substitutions_report_parameter_value_paths(configured_proposal, fault):
     body, projection = configured_proposal
@@ -109,7 +113,7 @@ def test_registry_const_substitutions_report_parameter_value_paths(configured_pr
     with pytest.raises(ExternalCheckerContractError) as caught:
         validate_post_submission_bindings(result, projection)
     issues = contextual_output_issues(
-        caught.value, context=SimpleNamespace(checker_capabilities=projection), result=result
+        caught.value, context=SimpleNamespace(checker_capabilities=projection, runtime_configuration=SimpleNamespace(uses_inference=True)), result=result
     )
     assert issues == expected
     encoded = json.dumps(issues)
@@ -128,7 +132,7 @@ def test_untrusted_exception_text_cannot_manufacture_configuration_diagnostics(c
     error.__cause__ = SchemaValidationError("private-rejected-value", validator="const")
     assert contextual_output_issues(
         error,
-        context=SimpleNamespace(checker_capabilities=projection),
+        context=SimpleNamespace(checker_capabilities=projection, runtime_configuration=SimpleNamespace(uses_inference=True)),
         result=body,
     ) == [{"path": [], "code": "context_constraint"}]
 
@@ -147,7 +151,7 @@ def test_configuration_diagnostics_stop_at_twenty_positions(configured_proposal)
     with pytest.raises(ExternalCheckerContractError) as caught:
         validate_post_submission_bindings(result, projection)
     assert contextual_output_issues(
-        caught.value, context=SimpleNamespace(checker_capabilities=projection), result=result
+        caught.value, context=SimpleNamespace(checker_capabilities=projection, runtime_configuration=SimpleNamespace(uses_inference=True)), result=result
     ) == [
         {"path": ["post_submit_bindings", i, "parameters", 1, "value"], "code": "schema_const"}
         for i in range(20)
@@ -182,7 +186,7 @@ def test_ambiguous_schema_branches_keep_generic_closed_diagnostics(configured_pr
     with pytest.raises(ExternalCheckerContractError) as caught:
         validate_post_submission_bindings(result, projection)
     assert contextual_output_issues(
-        caught.value, context=SimpleNamespace(checker_capabilities=projection), result=result
+        caught.value, context=SimpleNamespace(checker_capabilities=projection, runtime_configuration=SimpleNamespace(uses_inference=True)), result=result
     ) == [{"path": [], "code": "context_constraint"}]
 
 
@@ -313,3 +317,56 @@ def test_arbitrary_exception_does_not_trigger_deadline_metadata(configured_propo
     assert contextual_output_issues(
         ValueError("private-error-text"), context=context, result=body
     ) == [{"path": [], "code": "context_constraint"}]
+
+
+def test_configuration_failure_also_reports_canonical_aggregate_budget(configured_proposal):
+    from app.interfaces.project_agents import require_complete_generated_specifications
+
+    body, context = _deadline_proposal(configured_proposal, duration=10, deadline_ms=3_190_001)
+    body["post_submit_bindings"][0]["parameters"][1]["value"] = "private-candidate-profile"
+    result = ProjectGuideCompilationResult.model_validate(body)
+    with pytest.raises(ExternalCheckerContractError) as caught:
+        validate_post_submission_bindings(result, context.checker_capabilities)
+    expected = [
+        {"path": ["post_submit_bindings", 0, "parameters", 1, "value"], "code": "schema_const"},
+        {"path": ["post_submit_bindings"], "code": "aggregate_execution_budget"},
+    ]
+    issues = contextual_output_issues(caught.value, context=context, result=result)
+    assert issues == expected
+    assert "private-candidate-profile" not in json.dumps(issues)
+    body["post_submit_bindings"][0]["parameters"][1]["value"] = configured_proposal[0][
+        "post_submit_bindings"
+    ][0]["parameters"][1]["value"]
+    fixed_configuration = ProjectGuideCompilationResult.model_validate(body)
+    validate_post_submission_bindings(fixed_configuration, context.checker_capabilities)
+    with pytest.raises(ValueError, match="supported post-submit checks exceed the aggregate"):
+        require_complete_generated_specifications(context, fixed_configuration)
+    # Returned diagnostics cannot mutate the trusted closed mapping.
+    issues[-1]["path"].append("private-field")
+    assert contextual_output_issues(caught.value, context=context, result=result) == expected
+
+
+@pytest.mark.parametrize(
+    "deadline_ms,exceeds", [(3_189_999, False), (3_190_000, False), (3_190_001, True)]
+)
+def test_aggregate_diagnostic_matches_exact_canonical_boundary(
+    configured_proposal, deadline_ms, exceeds
+):
+    from app.interfaces.project_agents import require_complete_generated_specifications
+
+    body, context = _deadline_proposal(configured_proposal, duration=10, deadline_ms=deadline_ms)
+    result = ProjectGuideCompilationResult.model_validate(body)
+    error = ValueError("supported post-submit checks exceed the aggregate execution budget")
+    if exceeds:
+        with pytest.raises(
+            ValueError, match="supported post-submit checks exceed the aggregate"
+        ) as caught:
+            require_complete_generated_specifications(context, result)
+        error = caught.value
+    else:
+        require_complete_generated_specifications(context, result)
+    assert contextual_output_issues(error, context=context, result=result) == (
+        [{"path": ["post_submit_bindings"], "code": "aggregate_execution_budget"}]
+        if exceeds
+        else [{"path": [], "code": "context_constraint"}]
+    )

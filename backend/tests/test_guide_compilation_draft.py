@@ -440,3 +440,193 @@ async def test_actual_openai_sdk_corrections_are_bounded_per_phase(monkeypatch, 
             if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
         )
         assert correction["phase"] == phase
+
+
+def _configured_runtime_proposal():
+    """Two synthetic locked tuples expose cross-profile mixing without private fixtures."""
+    from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
+    from app.interfaces.project_agents import validate_post_submission_bindings
+    from app.modules.checkers.api.external import ExternalCheckerContractError
+    from tests.test_guide_configuration_diagnostics import _configured_proposal
+
+    body, projection = _configured_proposal()
+    body.pop("setup_notes", None)
+    for requirement in body["requirements"]:
+        specification = _provider_specification()
+        specification["execution_mode"] = "background"
+        requirement["check_specification"] = specification
+    compilation = context(ids(), checker_capabilities=projection)
+    good = _provider_payload(ProjectGuideCompilationResult.model_validate(body))
+    opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
+    validate_project_guide_runtime_result(compilation, good, opened)
+    bad = copy.deepcopy(good)
+    bad["post_submit_bindings"][0]["parameters"][1]["value"] = good["post_submit_bindings"][1][
+        "parameters"
+    ][1]["value"]
+    with pytest.raises(ExternalCheckerContractError):
+        validate_post_submission_bindings(
+            ProjectGuideCompilationResult.model_validate(bad), projection
+        )
+    return compilation, bad, good
+
+
+def test_correction_contracts_repeat_only_the_selected_trusted_schema():
+    from app.adapters.project_agents.compilation_draft import (
+        selected_configuration_correction_context,
+    )
+
+    compilation, bad, good = _configured_runtime_proposal()
+    before = copy.deepcopy(bad)
+    issues = [
+        {"path": ["post_submit_bindings", 0, "parameters", 1, "value"], "code": "schema_const"}
+    ]
+    selected = selected_configuration_correction_context(compilation, bad, issues)
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == good["post_submit_bindings"][0]["capability_id"]
+    )
+    assert selected == [
+        {
+            "binding_paths": [["post_submit_bindings", 0]],
+            "capability_id": entry.capability_id,
+            "capability_version": entry.capability_version,
+            "registry_entry_id": str(entry.registry_entry_id),
+            "registry_entry_digest": entry.entry_digest,
+            "configuration_schema": entry.configuration_schema.model_dump(mode="json"),
+        }
+    ]
+    assert bad == before
+    bad["post_submit_bindings"][0]["parameters"][1]["value"] = "private-candidate-guidance-canary"
+    assert selected_configuration_correction_context(compilation, bad, issues) == selected
+    assert "private-candidate-guidance-canary" not in json.dumps(selected)
+    unrelated_id = good["post_submit_bindings"][1]["parameters"][1]["value"]
+    assert unrelated_id not in json.dumps(selected)
+
+
+@pytest.mark.parametrize(
+    "fault", ["absent", "invalid", "version", "stage", "default", "unselectable", "nonconst"]
+)
+def test_correction_contracts_cannot_select_unrelated_or_unavailable_registry(fault):
+    from app.adapters.project_agents.compilation_draft import (
+        selected_configuration_correction_context,
+    )
+
+    compilation, bad, _ = _configured_runtime_proposal()
+    issues = [
+        {"path": ["post_submit_bindings", 0, "parameters", 1, "value"], "code": "schema_const"}
+    ]
+    if fault == "absent":
+        bad = None
+    elif fault == "invalid":
+        bad = {"private-candidate-guidance-canary": "not a proposal"}
+    elif fault == "version":
+        bad["post_submit_bindings"][0]["capability_version"] = "unavailable"
+    elif fault == "stage":
+        bad["post_submit_bindings"][0]["stage"] = "pre_submit"
+    elif fault == "default":
+        bad["post_submit_bindings"][0].update(
+            capability_id="workstream.default", capability_version="v1", stage="pre_submit"
+        )
+        bad["pre_submit_bindings"] = [bad["post_submit_bindings"].pop(0)]
+        issues[0]["path"][0] = "pre_submit_bindings"
+    elif fault == "unselectable":
+        compilation = compilation.model_copy(
+            update={
+                "checker_capabilities": SimpleNamespace(
+                    definitions=[
+                        d.model_copy(update={"selectable": False})
+                        for d in compilation.checker_capabilities.definitions
+                    ]
+                )
+            }
+        )
+    else:
+        issues[0]["code"] = "context_constraint"
+    assert selected_configuration_correction_context(compilation, bad, issues) == []
+
+
+def test_correction_contracts_deduplicate_registry_and_share_twenty_issue_bound():
+    from app.adapters.project_agents.compilation_draft import (
+        selected_configuration_correction_context,
+    )
+
+    compilation, bad, _ = _configured_runtime_proposal()
+    requirement, binding = bad["requirements"][0], bad["post_submit_bindings"][0]
+    bad["requirements"] = [requirement | {"requirement_id": f"check_{i}"} for i in range(25)]
+    bad["post_submit_bindings"] = [binding | {"requirement_id": f"check_{i}"} for i in range(25)]
+    issues = [
+        {"path": ["post_submit_bindings", i, "parameters", 1, "value"], "code": "schema_const"}
+        for i in range(25)
+    ]
+    selected = selected_configuration_correction_context(compilation, bad, issues)
+    assert len(selected) == 1
+    assert selected[0]["binding_paths"] == [["post_submit_bindings", i] for i in range(20)]
+    assert selected_configuration_correction_context(compilation, bad, issues[:1] * 20) == (
+        selected_configuration_correction_context(compilation, bad, issues[:1])
+    )
+
+
+@pytest.mark.parametrize("corrected", [True, False])
+async def test_actual_openai_sdk_uses_selected_schema_for_mixed_profile_correction(
+    monkeypatch, corrected
+):
+    """A completed mixed tuple remains invalid; only the model's corrected output can pass."""
+    compilation, bad, good = _configured_runtime_proposal()
+    handle = compilation.material.handle_for(compilation.material.documents[0])
+    responses = iter(
+        [
+            _chat_tool_call("draft-read", "read_document", {"handle": handle}),
+            _chat_text("mixed", json.dumps(bad)),
+            _chat_tool_call("correction-read", "read_document", {"handle": handle}),
+            _chat_text("next", json.dumps(good if corrected else bad)),
+            _chat_tool_call("last-read", "read_document", {"handle": handle}),
+            _chat_text("last", json.dumps(good if corrected else bad)),
+        ]
+    )
+    requests = []
+
+    async def dispatch(phase, body):
+        requests.append(body)
+        return httpx2.Response(
+            200,
+            json=next(responses),
+            request=httpx2.Request("POST", "https://model-proxy.invalid/v1/chat/completions"),
+        )
+
+    _patch_openai_transport(monkeypatch, dispatch)
+    configuration = compilation.runtime_configuration.model_copy(
+        update={
+            "model_provider": "openrouter",
+            "model_api": "chat_completions",
+            "model": "openai/gpt-5.6-terra",
+        }
+    )
+    compilation = compilation.model_copy(update={"runtime_configuration": configuration})
+    runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
+    if corrected:
+        assert await _compile(runtime, compilation, model=_TestModelSession(dispatch)) == (
+            ProjectGuideCompilationResult.model_validate(good)
+        )
+    else:
+        with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+            await _compile(runtime, compilation, model=_TestModelSession(dispatch))
+        assert caught.value.failure_code == "schema_invalid"
+    assert len(requests) == 6
+    correction = next(
+        json.loads(m["content"])
+        for m in requests[2]["messages"]
+        if isinstance(m.get("content"), str) and '"correction_instruction"' in m["content"]
+    )
+    from app.adapters.project_agents.compilation_draft import (
+        selected_configuration_correction_context,
+    )
+
+    assert correction[
+        "selected_configuration_contracts"
+    ] == selected_configuration_correction_context(
+        compilation, bad, correction["validation_errors"]
+    )
+    assert len(correction["selected_configuration_contracts"]) == 1
+    assert correction["untrusted_candidate_proposal"] == bad
+    assert "do not mix tuples" in correction["correction_instruction"]
