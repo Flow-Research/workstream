@@ -15,7 +15,7 @@ from app.modules.projects.api import (
 )
 from app.modules.projects.api.guide_compilation import ProjectGuideSetupFinalizationCommand
 from app.modules.projects.api.guide_proposals import GuideProposalError
-from app.modules.projects.api.locked_policy import RetainedActivationEvidence
+from app.modules.projects.api.retained_activation import RetainedActivationEvidence
 from app.modules.projects.api.post_policy import PostPolicySelection
 from app.modules.projects.guide_activation.custody import load_guide_activation
 from app.modules.projects.guide_compilation.finalization_payloads import (

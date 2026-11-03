@@ -12,7 +12,7 @@ from app.modules.projects.api.guide_activation import (
     GuideActivationLocator,
     GuideActivationReceipt,
 )
-from app.modules.projects.api.locked_policy import RetainedActivationEvidence
+from app.modules.projects.api.retained_activation import RetainedActivationEvidence
 from app.modules.projects.models import GuideMutationIdempotencyRecord
 
 ACTION = "project.guide.activate"

@@ -1,6 +1,8 @@
 """Retained results stay verifiable without an executable old agent contract."""
 
 from types import SimpleNamespace
+import subprocess
+import sys
 
 import pytest
 
@@ -51,6 +53,20 @@ def test_retained_result_verified_as_evidence():
     compilation = _retained_compilation()
     assert verified_compilation_result(compilation) is compilation.canonical_result
     assert "schema_version" not in compilation.component_hashes
+
+
+def test_project_agent_contract_imports_before_project_api():
+    """Catch the actual cold-import order used by setup adapters."""
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from app.interfaces.project_agents import AtomicGuideRequirement; "
+            "from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextFacts",
+        ],
+        check=True,
+        capture_output=True,
+    )
 
 
 @pytest.mark.parametrize("change", ["result", "component", "schema", "extra_hash"])
