@@ -36,14 +36,7 @@ def identity_from_attempt(attempt: ProjectGuideCompilationAttempt) -> Compilatio
         setup_generation=attempt.setup_generation,
         canonical_input_hash=attempt.canonical_input_hash,
         guide_material_hash=attempt.guide_material_hash,
-        pre_catalogue_id=attempt.pre_catalogue_id,
-        pre_catalogue_version=attempt.pre_catalogue_version,
-        pre_catalogue_schema_version=attempt.pre_catalogue_schema_version,
-        pre_catalogue_manifest_hash=attempt.pre_catalogue_manifest_hash,
-        post_catalogue_id=attempt.post_catalogue_id,
-        post_catalogue_version=attempt.post_catalogue_version,
-        post_catalogue_schema_version=attempt.post_catalogue_schema_version,
-        post_catalogue_manifest_hash=attempt.post_catalogue_manifest_hash,
+        result_schema_version=attempt.result_schema_version,
         agent_identity=attempt.agent_identity,
         agent_version=attempt.agent_version,
         instruction_version=attempt.instruction_version,
@@ -81,8 +74,6 @@ def validate_persistence_authority(
         requirement_inventory_hash=facts.requirement_inventory_component_hash,
         pre_submit_hash=facts.pre_submit_policy_component_hash,
         post_submit_hash=facts.post_submit_policy_component_hash,
-        capability_suggestions_hash=facts.capability_suggestions_component_hash,
-        setup_notes_hash=facts.setup_notes_component_hash,
     )
     if (
         actor.actor_kind is not ActorKind.SERVICE
@@ -98,14 +89,7 @@ def validate_persistence_authority(
         or facts.guide_material_hash != identity.guide_material_hash
         or facts.setup_run_id != identity.setup_run_id
         or facts.setup_generation != identity.setup_generation
-        or facts.pre_catalogue_id != identity.pre_catalogue_id
-        or facts.pre_catalogue_version != identity.pre_catalogue_version
-        or facts.pre_catalogue_schema_version != identity.pre_catalogue_schema_version
-        or facts.pre_catalogue_manifest_hash != identity.pre_catalogue_manifest_hash
-        or facts.post_catalogue_id != identity.post_catalogue_id
-        or facts.post_catalogue_version != identity.post_catalogue_version
-        or facts.post_catalogue_schema_version != identity.post_catalogue_schema_version
-        or facts.post_catalogue_manifest_hash != identity.post_catalogue_manifest_hash
+        or facts.result_schema_version != identity.result_schema_version
         or facts.agent_identity != identity.agent_identity
         or facts.agent_version != identity.agent_version
         or facts.instruction_version != identity.instruction_version

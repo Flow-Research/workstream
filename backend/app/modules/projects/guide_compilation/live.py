@@ -12,7 +12,6 @@ from app.modules.authorization.api import (
     ActorIdentityFacts,
     ProjectGuideCompilationAuthorizationPort,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.model_usage.api import ModelProfileReaderPort
 from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationDelivery,
@@ -62,7 +61,6 @@ class LiveGuideCompilationCoordinator:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-        checker_capabilities: ExternalCheckerCapabilityProjection,
         request_authority: RequestAuthority,
         configuration_factory: Callable[[], ProjectGuideRuntimeConfiguration],
         model_profiles: Callable[[AsyncSession], ModelProfileReaderPort],
@@ -72,7 +70,6 @@ class LiveGuideCompilationCoordinator:
     ) -> None:
         self._sessions = session_factory
         self._material = material_factory
-        self._checker_capabilities = checker_capabilities
         self._request_authority = request_authority
         self._configuration = configuration_factory
         self._model_profiles = model_profiles
@@ -106,7 +103,6 @@ class LiveGuideCompilationCoordinator:
                         authority,
                         request_inputs=CompilationRequestInputs(
                             self._material(session),
-                            self._checker_capabilities,
                             configuration,
                         ),
                     ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)

@@ -11,7 +11,6 @@ from app.modules.projects.api.guide_documents import (
     GuideDocumentManifestPort,
     GuideDocumentManifestRequest,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.authorization.api import (
     ProjectGuideCompilationRequestFacts,
     ProjectGuideCompilationRequestOrigin,
@@ -35,10 +34,9 @@ from app.modules.model_usage.api import ModelProfileReaderPort
 
 @dataclass(frozen=True)
 class CompilationRequestInputs:
-    """Composition supplies material access and canonical CHECKERS projections, never a runtime."""
+    """Composition supplies material access and a trusted setup runtime."""
 
     material: GuideDocumentManifestPort
-    checker_capabilities: ExternalCheckerCapabilityProjection
     runtime_configuration: ProjectGuideRuntimeConfiguration | None
 
     async def resolve(
@@ -132,7 +130,6 @@ class CompilationRequestInputs:
             loaded=loaded,
             setup_run_id=setup_run_id,
             setup_generation=setup.setup_generation,
-            checker_capabilities=self.checker_capabilities,
             runtime_configuration=self.runtime_configuration,
             correction_input=await load_correction_input(session, setup_run_id),
         )

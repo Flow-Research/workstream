@@ -36,7 +36,6 @@ from app.modules.authorization.api import (
     PreparedAuthorizationInvalid,
     ProjectGuideCompilationAuthorizationPort,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionClassification,
     ProjectGuideCompilationExecutionCommand,
@@ -92,7 +91,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-        checker_capabilities: ExternalCheckerCapabilityProjection,
         authorization_context: GuideCompilationAuthorizationContext,
         document_tools_factory: GuideDocumentToolsFactory,
         model_session_factory: Callable[
@@ -103,7 +101,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         """Store the owner-supplied ports used by each short transaction."""
         self._session_factory = session_factory
         self._material_factory = material_factory
-        self._checker_capabilities = checker_capabilities
         self._authorization_context = authorization_context
         self._document_tools_factory = document_tools_factory
         self._model_session_factory = model_session_factory or _no_model_session
@@ -145,7 +142,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
                     session,
                     state=state,
                     material=self._material_factory(session),
-                    checker_capabilities=self._checker_capabilities,
                 )
         except GuideDocumentUnavailable:
             raise ProjectGuideCompilationExecutionError("context_unavailable") from None
@@ -235,7 +231,6 @@ def project_guide_compilation_execution_port(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-    checker_capabilities: ExternalCheckerCapabilityProjection,
     authorization_context: GuideCompilationAuthorizationContext,
     runtime_factory: Callable[[ProjectGuideRuntimeConfiguration], ProjectGuideAgentRuntime],
     document_tools_factory: GuideDocumentToolsFactory,
@@ -248,7 +243,6 @@ def project_guide_compilation_execution_port(
     backend = SqlAlchemyGuideCompilationExecutionBackend(
         session_factory,
         material_factory=material_factory,
-        checker_capabilities=checker_capabilities,
         authorization_context=authorization_context,
         document_tools_factory=document_tools_factory,
         model_session_factory=model_session_factory,

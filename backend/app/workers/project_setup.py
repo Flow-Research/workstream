@@ -14,7 +14,7 @@ from app.adapters.auth import (
     guide_sufficiency_projection_authorization,
     setup_finalization_authorization,
 )
-from app.adapters.checkers import external_checker_capability_projection, model_profile_reader
+from app.adapters.checkers import model_profile_reader
 from app.adapters.guide_document_tools import (
     GUIDE_DOCUMENT_PARSER_PROVIDER_KEY,
     guide_document_parser_factory,
@@ -53,8 +53,6 @@ logger = get_task_logger(__name__)
 async def _coordinator(session_factory):
     """Compose owner ports and the configured runtime at the worker boundary."""
     settings = get_settings()
-    async with session_factory() as session, session.begin():
-        capabilities = await external_checker_capability_projection(session)
     return project_guide_compilation_delivery_port(
         session_factory,
         material_factory=guide_document_manifest_port,
@@ -70,7 +68,6 @@ async def _coordinator(session_factory):
             sessions=session_factory,
             socket_path=settings.checker_model_proxy_socket,
         ),
-        checker_capabilities=capabilities,
         request_authority=guide_compilation_request_authority,
         execution_authority=guide_compilation_execution_authority,
         configuration_factory=lambda: project_guide_runtime_configuration(

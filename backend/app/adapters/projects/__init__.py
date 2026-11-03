@@ -83,7 +83,6 @@ def project_guide_compilation_delivery_port(
     material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
     document_tools_factory: GuideDocumentToolsFactory,
     model_session_factory,
-    checker_capabilities: ExternalCheckerCapabilityProjection,
     request_authority: RequestAuthority,
     execution_authority: GuideCompilationAuthorizationContext,
     configuration_factory: Callable[[], ProjectGuideRuntimeConfiguration],
@@ -103,14 +102,12 @@ def project_guide_compilation_delivery_port(
     return LiveGuideCompilationCoordinator(
         session_factory,
         material_factory=material_factory,
-        checker_capabilities=checker_capabilities,
         request_authority=request_authority,
         configuration_factory=configuration_factory,
         model_profiles=model_profiles,
         execution=project_guide_compilation_execution_port(
             session_factory,
             material_factory=material_factory,
-            checker_capabilities=checker_capabilities,
             authorization_context=execution_authority,
             runtime_factory=runtime_factory,
             document_tools_factory=document_tools_factory,
@@ -223,7 +220,6 @@ def project_guide_correction_dispatch(
     authorization: ProjectGuideCompilationAuthorizationPort,
     *,
     material: GuideDocumentManifestPort,
-    capabilities: ExternalCheckerCapabilityProjection,
     configuration: ProjectGuideRuntimeConfiguration,
 ) -> GuideCorrectionDispatchPort[ActorIdentityFacts]:
     """Compose human correction admission and existing queue dispatch without inference."""
@@ -237,7 +233,7 @@ def project_guide_correction_dispatch(
     return GuideCorrectionDispatchService(
         session,
         authorization,
-        CompilationRequestInputs(material, capabilities, configuration),
+        CompilationRequestInputs(material, configuration),
         profiles=model_profile_reader(session),
     )
 

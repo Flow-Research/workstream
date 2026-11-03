@@ -25,26 +25,41 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 _HASH_CHECK = "~ '^sha256:[0-9a-f]{64}$'"
-_COMPONENT_NAMES = (
+_CURRENT_RESULT_SCHEMA = "project_guide_check_specification.v1"
+_CURRENT_HASH_SCHEMA = "project_guide_check_specification_hashes.v1"
+_CURRENT_COMPONENT_NAMES = (
     "sufficiency_hash",
     "artifact_policy_hash",
     "requirement_inventory_hash",
     "pre_submit_hash",
     "post_submit_hash",
+)
+_RETAINED_COMPONENT_NAMES = _CURRENT_COMPONENT_NAMES + (
     "capability_suggestions_hash",
     "setup_notes_hash",
 )
 
 
-def _component_hashes_check(column: str) -> str:
-    """Return the exact seven-key JSON shape and digest checks."""
-    pairs = ",".join(f"'{name}',{column}->>'{name}'" for name in _COMPONENT_NAMES)
+def _component_hashes_check(column: str, *, retained: bool = False) -> str:
+    """Validate one exact current or retained immutable hash envelope."""
+    names = _RETAINED_COMPONENT_NAMES if retained else _CURRENT_COMPONENT_NAMES
+    pairs = ",".join(f"'{name}',{column}->>'{name}'" for name in names)
+    if not retained:
+        pairs = f"'schema_version',{column}->>'schema_version'," + pairs
     hashes = " and ".join(
-        f"coalesce(({column}->>'{name}') {_HASH_CHECK},false)" for name in _COMPONENT_NAMES
+        f"coalesce(({column}->>'{name}') {_HASH_CHECK},false)" for name in names
     )
     return (
         f"json_typeof({column})='object' and "
-        f"{column}::jsonb=jsonb_build_object({pairs}) and {hashes}"
+        + ("" if retained else f"{column}->>'schema_version'='{_CURRENT_HASH_SCHEMA}' and ")
+        + f"{column}::jsonb=jsonb_build_object({pairs}) and {hashes}"
+    )
+
+
+def _versioned_component_hashes_check(column: str, version: str) -> str:
+    return (
+        f"(({version} is null and ({_component_hashes_check(column, retained=True)})) or "
+        f"({version}='{_CURRENT_RESULT_SCHEMA}' and ({_component_hashes_check(column)})))"
     )
 
 
@@ -124,10 +139,15 @@ class ProjectGuideCompilationAttempt(Base):
             + _HASH_CHECK
             + " and guide_material_hash "
             + _HASH_CHECK
-            + " and pre_catalogue_manifest_hash "
+            + " and ((result_schema_version is null and pre_catalogue_manifest_hash "
             + _HASH_CHECK
             + " and post_catalogue_manifest_hash "
-            + _HASH_CHECK,
+            + _HASH_CHECK
+            + ") or (result_schema_version='" + _CURRENT_RESULT_SCHEMA
+            + "' and pre_catalogue_id is null and pre_catalogue_version is null "
+            + "and pre_catalogue_schema_version is null and pre_catalogue_manifest_hash is null "
+            + "and post_catalogue_id is null and post_catalogue_version is null "
+            + "and post_catalogue_schema_version is null and post_catalogue_manifest_hash is null))",
             name="ck_compilation_attempt_identity_hashes",
         ),
         CheckConstraint(
@@ -139,8 +159,13 @@ class ProjectGuideCompilationAttempt(Base):
             name="ck_compilation_attempt_result_size",
         ),
         CheckConstraint(
-            "component_hashes is null or (" + _component_hashes_check("component_hashes") + ")",
+            "component_hashes is null or (" + _versioned_component_hashes_check("component_hashes", "result_schema_version") + ")",
             name="ck_compilation_attempt_component_hashes",
+        ),
+        CheckConstraint(
+            "result_schema_version is null or canonical_result is null or "
+            "canonical_result->>'schema_version'=result_schema_version",
+            name="ck_compilation_attempt_spec_result",
         ),
         CheckConstraint(
             "(status='compilation_reserved' and provider_uncertain_at is null and accepted_at is null "
@@ -177,14 +202,15 @@ class ProjectGuideCompilationAttempt(Base):
     setup_generation: Mapped[int] = mapped_column(BigInteger)
     canonical_input_hash: Mapped[str] = mapped_column(String(71))
     guide_material_hash: Mapped[str] = mapped_column(String(71))
-    pre_catalogue_id: Mapped[str] = mapped_column(String(160))
-    pre_catalogue_version: Mapped[str] = mapped_column(String(100))
-    pre_catalogue_schema_version: Mapped[str] = mapped_column(String(160))
-    pre_catalogue_manifest_hash: Mapped[str] = mapped_column(String(71))
-    post_catalogue_id: Mapped[str] = mapped_column(String(160))
-    post_catalogue_version: Mapped[str] = mapped_column(String(100))
-    post_catalogue_schema_version: Mapped[str] = mapped_column(String(160))
-    post_catalogue_manifest_hash: Mapped[str] = mapped_column(String(71))
+    pre_catalogue_id: Mapped[str | None] = mapped_column(String(160))
+    pre_catalogue_version: Mapped[str | None] = mapped_column(String(100))
+    pre_catalogue_schema_version: Mapped[str | None] = mapped_column(String(160))
+    pre_catalogue_manifest_hash: Mapped[str | None] = mapped_column(String(71))
+    post_catalogue_id: Mapped[str | None] = mapped_column(String(160))
+    post_catalogue_version: Mapped[str | None] = mapped_column(String(100))
+    post_catalogue_schema_version: Mapped[str | None] = mapped_column(String(160))
+    post_catalogue_manifest_hash: Mapped[str | None] = mapped_column(String(71))
+    result_schema_version: Mapped[str | None] = mapped_column(String(100))
     agent_identity: Mapped[str] = mapped_column(String(100))
     agent_version: Mapped[str] = mapped_column(String(100))
     instruction_version: Mapped[str] = mapped_column(String(100))
@@ -385,17 +411,21 @@ class ProjectGuideCompilation(Base):
             + _HASH_CHECK
             + " and guide_material_hash "
             + _HASH_CHECK
-            + " and pre_catalogue_manifest_hash "
+            + " and ((result_schema_version is null and pre_catalogue_manifest_hash "
             + _HASH_CHECK
             + " and post_catalogue_manifest_hash "
             + _HASH_CHECK
+            + ") or (result_schema_version='" + _CURRENT_RESULT_SCHEMA
+            + "' and pre_catalogue_manifest_hash is null and post_catalogue_manifest_hash is null))"
             + " and result_hash "
             + _HASH_CHECK,
             name="ck_project_guide_compilation_hashes",
         ),
         CheckConstraint(
             "octet_length(canonical_result::text) <= 4194304 and "
-            + _component_hashes_check("component_hashes"),
+            + _versioned_component_hashes_check("component_hashes", "result_schema_version")
+            + " and (result_schema_version is null or "
+            + "canonical_result->>'schema_version'=result_schema_version)",
             name="ck_project_guide_compilation_result_shape",
         ),
     )
@@ -415,8 +445,9 @@ class ProjectGuideCompilation(Base):
     setup_generation: Mapped[int] = mapped_column(BigInteger)
     canonical_input_hash: Mapped[str] = mapped_column(String(71))
     guide_material_hash: Mapped[str] = mapped_column(String(71))
-    pre_catalogue_manifest_hash: Mapped[str] = mapped_column(String(71))
-    post_catalogue_manifest_hash: Mapped[str] = mapped_column(String(71))
+    pre_catalogue_manifest_hash: Mapped[str | None] = mapped_column(String(71))
+    post_catalogue_manifest_hash: Mapped[str | None] = mapped_column(String(71))
+    result_schema_version: Mapped[str | None] = mapped_column(String(100))
     agent_identity: Mapped[str] = mapped_column(String(100))
     agent_version: Mapped[str] = mapped_column(String(100))
     instruction_version: Mapped[str] = mapped_column(String(100))
@@ -706,7 +737,11 @@ class ProjectGuideSetupFinalization(Base):
             name="ck_finalization_hashes",
         ),
         CheckConstraint(
-            _component_hashes_check("component_hashes"), name="ck_finalization_components"
+            "((result_schema_version='" + _CURRENT_RESULT_SCHEMA + "' and ("
+            + _component_hashes_check("component_hashes")
+            + ")) or (result_schema_version<>'" + _CURRENT_RESULT_SCHEMA + "' and ("
+            + _component_hashes_check("component_hashes", retained=True) + ")))",
+            name="ck_finalization_components"
         ),
     )
 
