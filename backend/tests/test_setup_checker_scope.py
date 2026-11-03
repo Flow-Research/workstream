@@ -105,19 +105,23 @@ def _example_in_context(*entries):
     for suggestion in payload["capability_suggestions"]:
         suggestion["evidence_refs"] = [actual_ref]
     payload["agent_version"] = compilation.agent_version
-    return compilation, payload
+    parser = CompilationDraftParser(_schema(), 100_000)
+    assert parser.parse(json.dumps(payload)) == payload
+    canonical = parser.canonical_candidate(compilation, payload)
+    assert canonical is not None
+    return compilation, canonical
 
 
 def test_example_is_complete_valid_and_bound_to_instructions():
     example = PROJECT_GUIDE_OUTPUT_EXAMPLE
     raw = json.dumps(example["result"])
     assert CompilationDraftParser(_schema(), 100_000).parse(raw) == example["result"]
-    result = ProjectGuideCompilationResult.model_validate_json(raw)
+    compilation, payload = _example_in_context(_example_registry())
+    result = ProjectGuideCompilationResult.model_validate(payload)
     assert {r.check_specification.execution_mode for r in result.requirements} == {
         "bounded_pre_submit",
         "background",
     }
-    compilation, payload = _example_in_context(_example_registry())
     actual = ProjectGuideCompilationResult.model_validate(payload)
     opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
     assert validate_project_guide_runtime_result(compilation, actual, opened) == actual

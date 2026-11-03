@@ -68,6 +68,10 @@ async def _open_prompt_documents(agent, prompt, count=None):
 def _provider_payload(value=None):
     """Include nullable members required by the provider's strict JSON schema."""
     payload = (result() if value is None else value).model_dump(mode="json", exclude={"setup_notes"})
+    for field in ("pre_submit_bindings", "post_submit_bindings"):
+        for binding in payload[field]:
+            binding["configuration_source"] = "explicit"
+            binding.setdefault("parameters", [])
     for requirement in payload["requirements"]:
         requirement.setdefault("classification_rationale", None)
         requirement.setdefault("check_specification", None)

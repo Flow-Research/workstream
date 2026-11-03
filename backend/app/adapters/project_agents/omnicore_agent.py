@@ -19,7 +19,6 @@ from app.adapters.project_agents.compilation_draft import (
     SELECTED_CHECK_CORRECTION_GUIDANCE,
     CompilationDraftParser,
     contextual_output_issues,
-    selected_configuration_correction_context,
     generated_compilation_schema,
 )
 from app.adapters.project_agents.omnicore_profile import (
@@ -384,7 +383,7 @@ class OmniCoreAgentProjectGuideRuntime:
             schema = generated_compilation_schema(ProjectGuideCompilationResult.model_json_schema())
             draft_parser = CompilationDraftParser(schema, configuration.maximum_manifest_bytes)
 
-            async def run_phase(phase: str, phase_prompt: str, turn_ceiling: int) -> dict:
+            async def run_phase(phase: str, phase_prompt: str, turn_ceiling: int):
                 corrections = 0
                 guard.phase = "draft" if phase == "checker_specification" else "review"
                 guard.phase_turn_ceiling = turn_ceiling
@@ -423,18 +422,19 @@ class OmniCoreAgentProjectGuideRuntime:
                     output = None
                     issues = draft_parser.issues
                     if candidate is not None:
-                        issues = draft_parser.canonical_issues(candidate)
-                        if not issues:
+                        canonical = draft_parser.canonical_candidate(context, candidate)
+                        issues = draft_parser.issues
+                        if canonical is not None:
                             try:
-                                validate_project_guide_runtime_result(context, candidate, run_opened)
+                                result = validate_project_guide_runtime_result(context, canonical, run_opened)
                             except (TypeError, ValueError) as error:
                                 issues = contextual_output_issues(
-                                    error, context=context, result=candidate
+                                    error, context=context, result=canonical
                                 )
                                 if invalid_compilation_failure_code(error) == "unsafe_text":
                                     candidate = None
                             else:
-                                return candidate
+                                return candidate if phase == "checker_specification" else result
                         if draft_parser.unsafe_text:
                             candidate = None
                     # A correction must have a turn to reopen originals and a
@@ -443,18 +443,11 @@ class OmniCoreAgentProjectGuideRuntime:
                         raise ProjectGuideCompilationInvalidOutputError("schema_invalid")
                     corrections += 1
                     guard.phase = "correction"
-                    selected_contracts = selected_configuration_correction_context(
-                        context, candidate, issues
-                    )
                     phase_prompt = json.dumps(
                         {
                             "phase": phase,
                             "guide_setup_context": json.loads(prompt),
                             "validation_errors": issues,
-                            **(
-                                {"selected_configuration_contracts": selected_contracts}
-                                if selected_contracts else {}
-                            ),
                             **(
                                 {"untrusted_candidate_proposal": candidate}
                                 if candidate is not None else {}

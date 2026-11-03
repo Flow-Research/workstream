@@ -442,11 +442,41 @@ async def test_actual_openai_sdk_corrections_are_bounded_per_phase(monkeypatch, 
         assert correction["phase"] == phase
 
 
-def _configured_runtime_proposal():
-    """Two synthetic locked tuples expose cross-profile mixing without private fixtures."""
-    from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
-    from app.interfaces.project_agents import validate_post_submission_bindings
-    from app.modules.checkers.api.external import ExternalCheckerContractError
+def _replace_configuration_schema(compilation, capability_id, document):
+    from app.modules.checkers.api.external import (
+        ExternalCheckerRegistryEntry,
+        ExternalCheckerRegistrySpec,
+        ExternalCheckerSchema,
+        external_checker_json_hash,
+    )
+    from tests.checkers.external.support import capability_projection
+
+    entries = [
+        d.registry_entry for d in compilation.checker_capabilities.definitions if d.selectable
+    ]
+    selected = next(e for e in entries if e.capability_id == capability_id)
+    schema = ExternalCheckerSchema(
+        schema_id=selected.configuration_schema.schema_id,
+        schema_version="v1",
+        document=document,
+        schema_sha256=external_checker_json_hash(document),
+    )
+    values = {key: selected.model_dump()[key] for key in ExternalCheckerRegistrySpec.model_fields}
+    spec = ExternalCheckerRegistrySpec.model_validate(values | {"configuration_schema": schema})
+    replacement = ExternalCheckerRegistryEntry.model_validate(
+        selected.model_dump() | spec.model_dump() | {"entry_digest": spec.spec_digest}
+    )
+    return compilation.model_copy(
+        update={
+            "checker_capabilities": capability_projection(
+                *(replacement if e.capability_id == capability_id else e for e in entries)
+            )
+        }
+    )
+
+
+def _configured_runtime_proposal(*, explicit=False):
+    """Synthetic fixed registry metadata and a real explicit-choice schema share one wire."""
     from tests.test_guide_configuration_diagnostics import _configured_proposal
 
     body, projection = _configured_proposal()
@@ -456,132 +486,214 @@ def _configured_runtime_proposal():
         specification["execution_mode"] = "background"
         requirement["check_specification"] = specification
     compilation = context(ids(), checker_capabilities=projection)
-    good = _provider_payload(ProjectGuideCompilationResult.model_validate(body))
-    opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
-    validate_project_guide_runtime_result(compilation, good, opened)
-    bad = copy.deepcopy(good)
-    bad["post_submit_bindings"][0]["parameters"][1]["value"] = good["post_submit_bindings"][1][
-        "parameters"
-    ][1]["value"]
-    with pytest.raises(ExternalCheckerContractError):
-        validate_post_submission_bindings(
-            ProjectGuideCompilationResult.model_validate(bad), projection
+    if explicit:
+        binding = body["post_submit_bindings"][0]
+        entry = next(
+            d.registry_entry
+            for d in projection.definitions
+            if d.capability_id == binding["capability_id"]
         )
-    return compilation, bad, good
+        schema = copy.deepcopy(entry.configuration_schema.document)
+        schema["oneOf"][0]["properties"]["check"] = {"enum": ["brief", "alternate_brief"]}
+        compilation = _replace_configuration_schema(compilation, binding["capability_id"], schema)
+    wire = copy.deepcopy(body)
+    for index, binding in enumerate(wire["post_submit_bindings"]):
+        binding["configuration_source"] = "explicit" if explicit and index == 0 else "registry"
+        if binding["configuration_source"] == "registry":
+            binding["parameters"] = []
+            body["post_submit_bindings"][index]["parameters"].sort(key=lambda p: p["name"])
+    return compilation, wire, body
 
 
-def test_correction_contracts_repeat_only_the_selected_trusted_schema():
-    from app.adapters.project_agents.compilation_draft import (
-        selected_configuration_correction_context,
+def _private_parser(limit=100_000):
+    from agents import AgentOutputSchema
+
+    return CompilationDraftParser(
+        generated_compilation_schema(
+            AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
+        ),
+        limit,
     )
 
-    compilation, bad, good = _configured_runtime_proposal()
-    before = copy.deepcopy(bad)
-    issues = [
-        {"path": ["post_submit_bindings", 0, "parameters", 1, "value"], "code": "schema_const"}
-    ]
-    selected = selected_configuration_correction_context(compilation, bad, issues)
-    entry = next(
-        d.registry_entry
-        for d in compilation.checker_capabilities.definitions
-        if d.capability_id == good["post_submit_bindings"][0]["capability_id"]
+
+def test_registry_wire_materializes_exact_metadata_without_mutating_or_echoing_wire():
+    from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
+
+    compilation, wire, expected = _configured_runtime_proposal()
+    original = copy.deepcopy(wire)
+    parser = _private_parser()
+    assert parser.parse(json.dumps(wire)) == wire
+    canonical = parser.canonical_candidate(compilation, wire)
+    assert canonical is not None and wire == original
+    opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
+    assert validate_project_guide_runtime_result(compilation, canonical, opened) == (
+        ProjectGuideCompilationResult.model_validate(expected)
     )
-    assert selected == [
-        {
-            "binding_paths": [["post_submit_bindings", 0]],
-            "capability_id": entry.capability_id,
-            "capability_version": entry.capability_version,
-            "registry_entry_id": str(entry.registry_entry_id),
-            "registry_entry_digest": entry.entry_digest,
-            "configuration_schema": entry.configuration_schema.model_dump(mode="json"),
-        }
-    ]
-    assert bad == before
-    bad["post_submit_bindings"][0]["parameters"][1]["value"] = "private-candidate-guidance-canary"
-    assert selected_configuration_correction_context(compilation, bad, issues) == selected
-    assert "private-candidate-guidance-canary" not in json.dumps(selected)
-    unrelated_id = good["post_submit_bindings"][1]["parameters"][1]["value"]
-    assert unrelated_id not in json.dumps(selected)
+    assert all("configuration_source" not in b for b in canonical["post_submit_bindings"])
+    assert all(b["parameters"] == [] for b in wire["post_submit_bindings"])
 
 
 @pytest.mark.parametrize(
-    "fault", ["absent", "invalid", "version", "stage", "default", "unselectable", "nonconst"]
+    "mode,supplied,code",
+    [
+        ("explicit", False, "registry_configuration_required"),
+        ("explicit", True, "registry_configuration_required"),
+        ("registry", True, "registry_parameters_forbidden"),
+    ],
 )
-def test_correction_contracts_cannot_select_unrelated_or_unavailable_registry(fault):
-    from app.adapters.project_agents.compilation_draft import (
-        selected_configuration_correction_context,
-    )
-
-    compilation, bad, _ = _configured_runtime_proposal()
-    issues = [
-        {"path": ["post_submit_bindings", 0, "parameters", 1, "value"], "code": "schema_const"}
+def test_fixed_wire_rejects_contradictory_mode_even_with_correct_literals(mode, supplied, code):
+    compilation, wire, canonical = _configured_runtime_proposal()
+    wire["post_submit_bindings"][0]["configuration_source"] = mode
+    if supplied:
+        wire["post_submit_bindings"][0]["parameters"] = canonical["post_submit_bindings"][0][
+            "parameters"
+        ]
+    parser = _private_parser()
+    assert parser.parse(json.dumps(wire)) == wire
+    assert parser.canonical_candidate(compilation, wire) is None
+    assert parser.issues == [
+        {
+            "path": [
+                "post_submit_bindings",
+                0,
+                "parameters" if supplied and mode == "registry" else "configuration_source",
+            ],
+            "code": code,
+        }
     ]
-    if fault == "absent":
-        bad = None
-    elif fault == "invalid":
-        bad = {"private-candidate-guidance-canary": "not a proposal"}
-    elif fault == "version":
-        bad["post_submit_bindings"][0]["capability_version"] = "unavailable"
-    elif fault == "stage":
-        bad["post_submit_bindings"][0]["stage"] = "pre_submit"
-    elif fault == "default":
-        bad["post_submit_bindings"][0].update(
-            capability_id="workstream.default", capability_version="v1", stage="pre_submit"
+
+
+@pytest.mark.parametrize("fault", ["missing", "unknown"])
+def test_generation_wire_requires_new_mode_without_old_format_alias(fault):
+    _, wire, _ = _configured_runtime_proposal()
+    binding = wire["post_submit_bindings"][0]
+    if fault == "missing":
+        binding.pop("configuration_source")
+    else:
+        binding["configuration_source"] = "implicit"
+    assert _private_parser().parse(json.dumps(wire)) is None
+
+
+@pytest.mark.parametrize("fault", ["stage", "version", "capability", "foreign_entry"])
+def test_registry_wire_cannot_substitute_selected_identity_or_stage(fault):
+    compilation, wire, _ = _configured_runtime_proposal()
+    if fault == "foreign_entry":
+        definitions = list(compilation.checker_capabilities.definitions)
+        chosen = next(
+            d
+            for d in definitions
+            if d.capability_id == wire["post_submit_bindings"][0]["capability_id"]
         )
-        bad["pre_submit_bindings"] = [bad["post_submit_bindings"].pop(0)]
-        issues[0]["path"][0] = "pre_submit_bindings"
-    elif fault == "unselectable":
+        other = next(d for d in definitions if d.selectable and d is not chosen)
+        definitions[definitions.index(chosen)] = chosen.model_copy(
+            update={"registry_entry": other.registry_entry}
+        )
         compilation = compilation.model_copy(
-            update={
-                "checker_capabilities": SimpleNamespace(
-                    definitions=[
-                        d.model_copy(update={"selectable": False})
-                        for d in compilation.checker_capabilities.definitions
-                    ]
-                )
-            }
+            update={"checker_capabilities": SimpleNamespace(definitions=definitions)}
         )
     else:
-        issues[0]["code"] = "context_constraint"
-    assert selected_configuration_correction_context(compilation, bad, issues) == []
+        field = {"stage": "stage", "version": "capability_version", "capability": "capability_id"}[
+            fault
+        ]
+        wire["post_submit_bindings"][0][field] = "pre_submit" if fault == "stage" else "unavailable"
+    parser = _private_parser()
+    assert parser.canonical_candidate(compilation, wire) is None
+    assert parser.issues == [{"path": ["post_submit_bindings", 0], "code": "binding_reference"}]
 
 
-def test_correction_contracts_deduplicate_registry_and_share_twenty_issue_bound():
-    from app.adapters.project_agents.compilation_draft import (
-        selected_configuration_correction_context,
+@pytest.mark.parametrize("shape", ["variable", "branches", "default", "reference", "bad_parent"])
+def test_non_singleton_or_invalid_parent_registry_contract_is_never_materialized(shape):
+    compilation, wire, canonical = _configured_runtime_proposal()
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == wire["post_submit_bindings"][0]["capability_id"]
     )
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    if shape == "variable":
+        schema["oneOf"][0]["properties"]["check"] = {"enum": ["brief", "alternate_brief"]}
+    elif shape == "branches":
+        other = copy.deepcopy(schema["oneOf"][0])
+        other["properties"]["model_profile_version"]["const"] = 2
+        schema["oneOf"].append(other)
+    elif shape == "default":
+        schema["oneOf"][0]["properties"]["check"]["default"] = "brief"
+    elif shape == "reference":
+        schema["$defs"] = {"fixed": schema.pop("oneOf")[0]}
+        schema["$ref"] = "#/$defs/fixed"
+    else:
+        schema["type"] = "array"
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    parser = _private_parser()
+    assert parser.canonical_candidate(compilation, wire) is None
+    assert parser.issues[0]["code"] == "registry_configuration_unavailable"
+    if shape != "bad_parent":
+        wire["post_submit_bindings"][0].update(
+            configuration_source="explicit",
+            parameters=canonical["post_submit_bindings"][0]["parameters"],
+        )
+        materialized = parser.canonical_candidate(compilation, wire)
+        assert materialized is not None
+        from app.adapters.project_agents.result_validation import (
+            validate_project_guide_runtime_result,
+        )
 
-    compilation, bad, _ = _configured_runtime_proposal()
-    requirement, binding = bad["requirements"][0], bad["post_submit_bindings"][0]
-    bad["requirements"] = [requirement | {"requirement_id": f"check_{i}"} for i in range(25)]
-    bad["post_submit_bindings"] = [binding | {"requirement_id": f"check_{i}"} for i in range(25)]
-    issues = [
-        {"path": ["post_submit_bindings", i, "parameters", 1, "value"], "code": "schema_const"}
-        for i in range(25)
+        opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
+        validate_project_guide_runtime_result(compilation, materialized, opened)
+
+
+@pytest.mark.parametrize("choice", ["brief", "alternate_brief"])
+def test_explicit_variable_choices_and_fixed_fields_are_preserved(choice):
+    compilation, wire, _ = _configured_runtime_proposal(explicit=True)
+    wire["post_submit_bindings"][0]["parameters"][0]["value"] = choice
+    parser = _private_parser()
+    canonical = parser.canonical_candidate(compilation, wire)
+    assert canonical is not None
+    assert (
+        canonical["post_submit_bindings"][0]["parameters"]
+        == wire["post_submit_bindings"][0]["parameters"]
+    )
+    from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
+
+    opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
+    validate_project_guide_runtime_result(compilation, canonical, opened)
+
+
+def test_unsafe_text_is_suppressed_before_registry_mode_error():
+    compilation, wire, canonical = _configured_runtime_proposal()
+    wire["post_submit_bindings"][0]["parameters"] = canonical["post_submit_bindings"][0][
+        "parameters"
     ]
-    selected = selected_configuration_correction_context(compilation, bad, issues)
-    assert len(selected) == 1
-    assert selected[0]["binding_paths"] == [["post_submit_bindings", i] for i in range(20)]
-    assert selected_configuration_correction_context(compilation, bad, issues[:1] * 20) == (
-        selected_configuration_correction_context(compilation, bad, issues[:1])
-    )
+    wire["requirements"][0]["statement"] = "token=private-mode-canary"
+    parser = _private_parser()
+    assert parser.parse(json.dumps(wire)) == wire
+    assert parser.canonical_candidate(compilation, wire) is None and parser.unsafe_text
+    assert any(i["code"] == "unsafe_text" for i in parser.issues)
+    assert "private-mode-canary" not in json.dumps(parser.issues)
 
 
 @pytest.mark.parametrize("corrected", [True, False])
-async def test_actual_openai_sdk_uses_selected_schema_for_mixed_profile_correction(
-    monkeypatch, corrected
+@pytest.mark.parametrize("explicit", [True, False])
+async def test_actual_openai_sdk_keeps_private_wire_and_strict_explicit_validation(
+    monkeypatch, corrected, explicit
 ):
-    """A completed mixed tuple remains invalid; only the model's corrected output can pass."""
-    compilation, bad, good = _configured_runtime_proposal()
+    compilation, wire, canonical = _configured_runtime_proposal(explicit=explicit)
+    bad = copy.deepcopy(wire)
+    if explicit:
+        bad["post_submit_bindings"][0]["parameters"][1]["value"] = canonical[
+            "post_submit_bindings"
+        ][1]["parameters"][1]["value"]
+    else:
+        bad["post_submit_bindings"][0]["configuration_source"] = "explicit"
     handle = compilation.material.handle_for(compilation.material.documents[0])
     responses = iter(
         [
             _chat_tool_call("draft-read", "read_document", {"handle": handle}),
-            _chat_text("mixed", json.dumps(bad)),
+            _chat_text("invalid", json.dumps(bad)),
             _chat_tool_call("correction-read", "read_document", {"handle": handle}),
-            _chat_text("next", json.dumps(good if corrected else bad)),
+            _chat_text("next", json.dumps(wire if corrected else bad)),
             _chat_tool_call("last-read", "read_document", {"handle": handle}),
-            _chat_text("last", json.dumps(good if corrected else bad)),
+            _chat_text("last", json.dumps(wire if corrected else bad)),
         ]
     )
     requests = []
@@ -597,6 +709,7 @@ async def test_actual_openai_sdk_uses_selected_schema_for_mixed_profile_correcti
     _patch_openai_transport(monkeypatch, dispatch)
     configuration = compilation.runtime_configuration.model_copy(
         update={
+            "maximum_turns": 12,
             "model_provider": "openrouter",
             "model_api": "chat_completions",
             "model": "openai/gpt-5.6-terra",
@@ -605,9 +718,9 @@ async def test_actual_openai_sdk_uses_selected_schema_for_mixed_profile_correcti
     compilation = compilation.model_copy(update={"runtime_configuration": configuration})
     runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
     if corrected:
-        assert await _compile(runtime, compilation, model=_TestModelSession(dispatch)) == (
-            ProjectGuideCompilationResult.model_validate(good)
-        )
+        assert await _compile(
+            runtime, compilation, model=_TestModelSession(dispatch)
+        ) == ProjectGuideCompilationResult.model_validate(canonical)
     else:
         with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
             await _compile(runtime, compilation, model=_TestModelSession(dispatch))
@@ -618,15 +731,133 @@ async def test_actual_openai_sdk_uses_selected_schema_for_mixed_profile_correcti
         for m in requests[2]["messages"]
         if isinstance(m.get("content"), str) and '"correction_instruction"' in m["content"]
     )
-    from app.adapters.project_agents.compilation_draft import (
-        selected_configuration_correction_context,
-    )
-
-    assert correction[
-        "selected_configuration_contracts"
-    ] == selected_configuration_correction_context(
-        compilation, bad, correction["validation_errors"]
-    )
-    assert len(correction["selected_configuration_contracts"]) == 1
     assert correction["untrusted_candidate_proposal"] == bad
-    assert "do not mix tuples" in correction["correction_instruction"]
+    assert {i["code"] for i in correction["validation_errors"]} == (
+        {"schema_const"} if explicit else {"registry_configuration_required"}
+    )
+    if corrected:
+        review = next(
+            json.loads(m["content"])
+            for m in requests[4]["messages"]
+            if isinstance(m.get("content"), str) and '"candidate_proposal"' in m["content"]
+        )
+        assert review["candidate_proposal"] == wire
+
+
+@pytest.mark.parametrize("value", [True, 7, 1.25, "literal", [True, 2, "literal"]])
+def test_registry_materialization_preserves_existing_typed_flat_values(value):
+    compilation, wire, _ = _configured_runtime_proposal()
+    binding = wire["post_submit_bindings"][0]
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == binding["capability_id"]
+    )
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    branch = schema["oneOf"][0]
+    branch["properties"]["machine_setting"] = {"const": value}
+    branch["required"].append("machine_setting")
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    canonical = _private_parser().canonical_candidate(compilation, wire)
+    assert canonical is not None
+    actual = next(
+        p["value"]
+        for p in canonical["post_submit_bindings"][0]["parameters"]
+        if p["name"] == "machine_setting"
+    )
+    assert actual == value and type(actual) is type(value)
+
+
+@pytest.mark.parametrize(
+    "value", [None, {}, [], [[1]], 10**12 + 1, "token=private-constant-canary"]
+)
+def test_registry_cannot_expand_values_outside_the_canonical_parameter_contract(value):
+    compilation, wire, _ = _configured_runtime_proposal()
+    binding = wire["post_submit_bindings"][0]
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == binding["capability_id"]
+    )
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    branch = schema["oneOf"][0]
+    branch["properties"]["machine_setting"] = {"const": value}
+    branch["required"].append("machine_setting")
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    parser = _private_parser()
+    assert parser.canonical_candidate(compilation, wire) is None
+    assert parser.issues == [
+        {
+            "path": ["post_submit_bindings", 0, "configuration_source"],
+            "code": "registry_configuration_unavailable",
+        }
+    ]
+    assert "private-constant-canary" not in json.dumps(parser.issues)
+
+
+@pytest.mark.parametrize("count", [50, 51])
+def test_registry_configuration_obeys_existing_fifty_parameter_limit(count):
+    compilation, wire, _ = _configured_runtime_proposal()
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == wire["post_submit_bindings"][0]["capability_id"]
+    )
+    schema = {
+        "type": "object",
+        "properties": {f"field_{i}": {"const": i} for i in range(count)},
+        "required": [f"field_{i}" for i in range(count)],
+        "additionalProperties": False,
+    }
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    parser = _private_parser()
+    canonical = parser.canonical_candidate(compilation, wire)
+    if count == 50:
+        assert (
+            canonical is not None and len(canonical["post_submit_bindings"][0]["parameters"]) == 50
+        )
+    else:
+        assert (
+            canonical is None and parser.issues[0]["code"] == "registry_configuration_unavailable"
+        )
+
+
+def test_registry_expansion_and_raw_wire_have_exact_independent_utf8_byte_bounds():
+    compilation, wire, _ = _configured_runtime_proposal()
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == wire["post_submit_bindings"][0]["capability_id"]
+    )
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    branch = schema["oneOf"][0]
+    branch["properties"]["display_label"] = {"const": "é" * 80}
+    branch["required"].append("display_label")
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    raw = json.dumps(wire, ensure_ascii=False, separators=(",", ":"))
+    canonical = _private_parser().canonical_candidate(compilation, wire)
+    encoded = json.dumps(canonical, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    assert len(encoded) > len(raw.encode("utf-8")) and len(encoded) > len(encoded.decode("utf-8"))
+    for bound, succeeds in ((len(encoded) - 1, False), (len(encoded), True)):
+        parser = _private_parser(bound)
+        assert parser.parse(raw) == wire  # Reaches expansion rather than failing raw setup.
+        result = parser.canonical_candidate(compilation, wire)
+        assert (result is not None) is succeeds
+        if not succeeds:
+            assert parser.issues == [{"path": [], "code": "expanded_output_too_large"}]
+    assert _private_parser(len(raw.encode("utf-8")) - 1).parse(raw) is None
+    assert _private_parser(len(raw.encode("utf-8"))).parse(raw) == wire
+
+
+def test_constant_parameter_named_default_is_not_a_schema_default():
+    compilation, wire, _ = _configured_runtime_proposal()
+    entry = next(d.registry_entry for d in compilation.checker_capabilities.definitions
+                 if d.capability_id == wire["post_submit_bindings"][0]["capability_id"])
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    branch = schema["oneOf"][0]
+    branch["properties"]["default"] = {"const": "literal"}
+    branch["required"].append("default")
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    canonical = _private_parser().canonical_candidate(compilation, wire)
+    assert canonical is not None
+    assert {p["name"]: p["value"] for p in canonical["post_submit_bindings"][0]["parameters"]}["default"] == "literal"

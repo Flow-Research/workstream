@@ -14,8 +14,9 @@ from app.modules.checkers.api.external_policy import (
 
 PROJECT_GUIDE_OUTPUT_EXAMPLE = {
     "hypothetical_guide": "Submit a root report file whose conclusions follow its observations.",
-    "assumption": "Hypothetical POST example.report_reasoning/example_v1 requires the shown "
-    "parameters. PRE is unavailable; all identities are synthetic.",
+    "assumption": "Hypothetical POST example.report_reasoning/example_v1 has one closed "
+    "constant configuration. Select registry without copying its parameters. PRE is unavailable; "
+    "all identities are synthetic.",
     "result": {
         "status": "draft_ready_with_warnings",
         "findings": [],
@@ -179,12 +180,8 @@ PROJECT_GUIDE_OUTPUT_EXAMPLE = {
                 "capability_id": "example.report_reasoning",
                 "capability_version": "example_v1",
                 "stage": "post_submit",
-                "parameters": [
-                    {"name": "check", "value": "report_reasoning"},
-                    {"name": "model_profile_id", "value": "00000000-0000-7000-8000-000000000003"},
-                    {"name": "model_profile_version", "value": 1},
-                    {"name": "model_profile_digest", "value": "sha256:" + "2" * 64},
-                ],
+                "configuration_source": "registry",
+                "parameters": [],
             }
         ],
         "capability_suggestions": [
@@ -279,11 +276,14 @@ expanded-total, compressed-ZIP and entry-count limits null. Do not block for abs
 limits, invent numbers or copy platform ceilings into project policy. An explicit
 project limit may tighten, never relax the platform. Keep those four quantities distinct.
 Match exact enabled selectable capability IDs, versions, stages and schemas.
-Each supported requirement has exactly one same-stage binding. Copy constants with
-their JSON types from ONE matching schema branch of the SELECTED entry/version.
-Keep complete model/trial ID-version-digest tuples and role arrays together;
-never mix tuple members or edit constants. No other entry/version, setup profile,
-default checker or example is a substitute. Use parameters: [] for empty configuration.
+Each supported requirement has one same-stage binding with configuration_source
+and parameters. Use registry with parameters: [] only for a closed object whose
+properties are all required constants, directly or in a single oneOf branch,
+with at most50 typed flat parameters. The adapter supplies its literals; never
+supply them yourself, even if correct. Use explicit with complete typed parameters,
+including fixed fields, for variable, ambiguous, default or reference schemas.
+PRE check enums remain explicit choices. No implicit branch/default/latest choice
+or substitution from another entry/version, setup profile, default or example.
 Never invent checker IDs, images, digests or implementations. Missing implementations
 are same-stage capability gaps, each with exactly one suggestion.
 

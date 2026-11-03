@@ -819,6 +819,12 @@ async def test_actual_sdk_large_valid_draft_crosses_review_handoff():
         presented_schema, _ = json.JSONDecoder().raw_decode(schema_text)
         assert "setup_notes" not in presented_schema["properties"]
         assert "setup_notes" not in presented_schema.get("required", [])
+        for binding_name in ("PreSubmissionBindingProposal", "PostSubmissionBindingProposal"):
+            binding_schema = presented_schema["$defs"][binding_name]
+            assert {"configuration_source", "parameters"} <= set(binding_schema["required"])
+            assert binding_schema["properties"]["configuration_source"]["enum"] == [
+                "registry", "explicit"
+            ]
         assert set(presented_schema["$defs"]["RequirementDisposition"]["enum"]) == {
             "platform_covered",
             "supported_pre_submit",
@@ -1517,16 +1523,27 @@ async def test_actual_sdk_cancellation_closes_forward_and_runtime_lifecycle():
             await runtime.compile_project_guide(compilation_context, capabilities)
 
 
+@pytest.mark.parametrize("correction_phase", ["checker_specification", "coverage_review"])
 @pytest.mark.parametrize("corrected", [True, False])
-async def test_actual_sdk_uses_selected_schema_for_mixed_profile_correction(corrected):
-    """Exact trusted configuration guidance cannot make an unchanged mixed tuple valid."""
-    from app.adapters.project_agents.compilation_draft import (
-        selected_configuration_correction_context,
-    )
+@pytest.mark.parametrize(
+    ("fault", "issue_code"),
+    [
+        ("registry_parameters", "registry_parameters_forbidden"),
+        ("explicit_profile_tuple", "schema_const"),
+        ("old_wire", "schema_required"),
+        ("unsafe_registry_parameters", "unsafe_text"),
+    ],
+)
+async def test_actual_sdk_keeps_private_wire_through_configuration_corrections(
+    correction_phase, corrected, fault, issue_code
+):
+    """Only final canonical output expands registry parameters; rejected values stay rejected."""
     from app.interfaces.project_agents import ProjectGuideCompilationResult
     from tests.test_guide_compilation_draft import _configured_runtime_proposal
 
-    configured, bad, good = _configured_runtime_proposal()
+    configured, wire, canonical = _configured_runtime_proposal(
+        explicit=fault == "explicit_profile_tuple"
+    )
     base = _runtime_context()
     compilation_context = base.model_copy(
         update={
@@ -1536,25 +1553,46 @@ async def test_actual_sdk_uses_selected_schema_for_mixed_profile_correction(corr
             ),
         }
     )
+    rejected = copy.deepcopy(wire)
+    if fault == "old_wire":
+        rejected = copy.deepcopy(canonical)
+    else:
+        binding = rejected["post_submit_bindings"][0]
+        if fault != "explicit_profile_tuple":
+            binding["parameters"] = copy.deepcopy(canonical["post_submit_bindings"][0]["parameters"])
+        selected_profile = next(
+            p for p in binding["parameters"] if p["name"] == "model_profile_id"
+        )
+        other_profile = next(
+            p for p in canonical["post_submit_bindings"][1]["parameters"]
+            if p["name"] == "model_profile_id"
+        )
+        assert selected_profile["value"] != other_profile["value"]
+        selected_profile["value"] = other_profile["value"]
+        if fault == "unsafe_registry_parameters":
+            rejected["findings"][0]["message"] = "token=private-draft-marker-7391"
+    next_output = wire if corrected else rejected
+    outputs = [rejected, next_output, next_output]
+    if correction_phase == "coverage_review":
+        outputs.insert(0, wire)
     capabilities, reads, handle = _capabilities(compilation_context)
     async with _SyntheticOpenRouter(
         handle=handle,
-        final_output=json.dumps(good),
-        final_outputs=(
-            json.dumps(bad),
-            json.dumps(good if corrected else bad),
-            json.dumps(good if corrected else bad),
-        ),
+        final_output=json.dumps(wire),
+        final_outputs=tuple(json.dumps(output) for output in outputs),
     ) as provider:
         runtime = OmniCoreAgentProjectGuideRuntime._for_test(
-            compilation_context.runtime_configuration,
-            upstream_url=provider.url,
+            compilation_context.runtime_configuration, upstream_url=provider.url
         )
         runtime.admit_execution()
         try:
             if corrected:
-                assert await runtime.compile_project_guide(compilation_context, capabilities) == (
-                    ProjectGuideCompilationResult.model_validate(good)
+                result = await runtime.compile_project_guide(compilation_context, capabilities)
+                assert result == ProjectGuideCompilationResult.model_validate(canonical)
+                assert all(
+                    "configuration_source" not in binding
+                    for field in ("pre_submit_bindings", "post_submit_bindings")
+                    for binding in result.model_dump(mode="json")[field]
                 )
             else:
                 with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
@@ -1562,18 +1600,34 @@ async def test_actual_sdk_uses_selected_schema_for_mixed_profile_correction(corr
                 assert caught.value.failure_code == "schema_invalid"
         finally:
             await runtime.aclose()
-    assert reads == [handle, handle, handle]
-    assert len(provider.requests) == 6
-    correction = next(
-        json.loads(m["content"][m["content"].index("{") :])
-        for m in provider.requests[2][1]["messages"]
-        if isinstance(m.get("content"), str) and '"correction_instruction"' in m["content"]
+
+    expected_reads = 4 if correction_phase == "coverage_review" and not corrected else 3
+    assert reads == [handle] * expected_reads
+    assert len(provider.requests) == 2 * expected_reads
+
+    def phase_payload(request_index, member):
+        return next(
+            json.loads(message["content"][message["content"].index("{") :])
+            for message in provider.requests[request_index][1]["messages"]
+            if isinstance(message.get("content"), str) and f'"{member}"' in message["content"]
+        )
+
+    correction = phase_payload(
+        4 if correction_phase == "coverage_review" else 2, "correction_instruction"
     )
-    assert correction[
-        "selected_configuration_contracts"
-    ] == selected_configuration_correction_context(
-        compilation_context, bad, correction["validation_errors"]
-    )
-    assert len(correction["selected_configuration_contracts"]) == 1
-    assert correction["untrusted_candidate_proposal"] == bad
-    assert "do not mix tuples" in correction["correction_instruction"]
+    assert correction["phase"] == correction_phase
+    assert {issue["code"] for issue in correction["validation_errors"]} == {issue_code}
+    if fault in {"old_wire", "unsafe_registry_parameters"}:
+        assert "untrusted_candidate_proposal" not in correction
+        assert "private-draft-marker" not in json.dumps(correction)
+    else:
+        assert correction["untrusted_candidate_proposal"] == rejected
+        assert correction["untrusted_candidate_proposal"]["post_submit_bindings"][0][
+            "configuration_source"
+        ] == wire["post_submit_bindings"][0]["configuration_source"]
+    if corrected or correction_phase == "coverage_review":
+        review = phase_payload(
+            4 if correction_phase == "checker_specification" else 2, "candidate_proposal"
+        )
+        assert review["candidate_proposal"] == wire
+        assert review["candidate_validation_issues"] == []

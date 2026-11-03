@@ -9,7 +9,6 @@ from app.adapters.project_agents.compilation_draft import (
     SELECTED_CHECK_CORRECTION_GUIDANCE,
     CompilationDraftParser,
     contextual_output_issues,
-    selected_configuration_correction_context,
     generated_compilation_schema,
 )
 from app.adapters.project_agents.openai_profile import (
@@ -202,14 +201,15 @@ class OpenAIAgentSdkProjectGuideRuntime:
                 json_str = None
                 if candidate is None:
                     raise RejectedOutput(self.parser.issues) from None
-                issues = self.parser.canonical_issues(candidate)
-                if not issues:
+                canonical = self.parser.canonical_candidate(context, candidate)
+                issues = self.parser.issues
+                if canonical is not None:
                     try:
-                        result = ProjectGuideCompilationResult.model_validate(candidate)
+                        result = ProjectGuideCompilationResult.model_validate(canonical)
                         validate_project_guide_runtime_result(context, result, phase_opened)
                     except (TypeError, ValueError) as error:
                         issues = contextual_output_issues(
-                            error, context=context, result=candidate
+                            error, context=context, result=canonical
                         )
                         if invalid_compilation_failure_code(error) == "unsafe_text":
                             candidate = None
@@ -382,18 +382,11 @@ class OpenAIAgentSdkProjectGuideRuntime:
                         raise ProjectGuideCompilationInvalidOutputError("schema_invalid")
                     corrections += 1
                     active_phase = "correction"
-                    selected_contracts = selected_configuration_correction_context(
-                        context, candidate, issues
-                    )
                     phase_prompt = json.dumps(
                         {
                             "phase": phase,
                             "guide_setup_context": json.loads(prompt),
                             "validation_errors": issues,
-                            **(
-                                {"selected_configuration_contracts": selected_contracts}
-                                if selected_contracts else {}
-                            ),
                             **(
                                 {"untrusted_candidate_proposal": candidate}
                                 if candidate is not None else {}

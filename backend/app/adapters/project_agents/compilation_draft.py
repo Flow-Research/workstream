@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 
 from jsonschema import Draft202012Validator
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 
 from app.interfaces.project_agents import (
     GENERATED_REQUIREMENT_DISPOSITIONS,
+    CapabilityParameter,
     ProjectGuideCompilationContext,
     ProjectGuideCompilationResult,
     invalid_compilation_failure_code,
@@ -19,9 +21,12 @@ from app.modules.checkers.api.external import ExternalCheckerContractError
 
 
 SELECTED_CHECK_CORRECTION_GUIDANCE = (
-    " When selected_configuration_contracts are supplied, copy the complete configuration "
-    "from each exact selected registry schema. Keep profile IDs, versions and digests "
-    "together; do not mix tuples. Registered deadlines determine supported-stage execution "
+    " Every binding requires configuration_source and parameters. Use registry with empty "
+    "parameters only for a uniquely fixed, closed constant configuration of the exact selected "
+    "entry/version; the adapter supplies its immutable parameters. Use explicit with your "
+    "complete typed parameters, including any fixed fields, for variable, ambiguous, default "
+    "or reference schemas. Do not supply the literals of wholly fixed registry-mode configurations. "
+    "Registered deadlines determine supported-stage execution "
     "cost; lowering declared durations cannot reduce that cost. Preserve every source "
     "obligation and all limits. Group checks only when methods, inputs and stages match; "
     "never drop checks to fit the budget."
@@ -45,9 +50,19 @@ def _reject_constant(_value):
 
 def generated_compilation_schema(schema: dict) -> dict:
     """Restrict new model output while retaining immutable historical read schemas."""
-    from copy import deepcopy
-
     generated = deepcopy(schema)
+    for name in ("PreSubmissionBindingProposal", "PostSubmissionBindingProposal"):
+        binding = generated["$defs"][name]
+        binding["properties"]["configuration_source"] = {
+            "type": "string", "enum": ["registry", "explicit"],
+            "description": (
+                "registry requires empty parameters and one uniquely fixed registered "
+                "configuration; explicit retains typed variable configuration choices."
+            ),
+        }
+        for field in ("configuration_source", "parameters"):
+            if field not in binding.setdefault("required", []):
+                binding["required"].append(field)
     generated["$defs"]["RequirementDisposition"]["enum"] = sorted(
         item.value for item in GENERATED_REQUIREMENT_DISPOSITIONS
     )
@@ -175,62 +190,54 @@ def _selected_binding_issues(context, result) -> list[dict]:
     return issues
 
 
-def selected_configuration_correction_context(context, result, issues) -> list[dict]:
-    """Repeat only affected immutable registry contracts in the private model prompt."""
-    if result is None or not any(issue.get("code") == "schema_const" for issue in issues):
-        return []
+def _compact_bytes(value) -> bytes:
+    """Measure the complete private/canonical proposal with exact UTF-8 JSON bytes."""
+    return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+
+
+def _fixed_registry_parameters(entry) -> list[dict] | None:
+    """Certify one closed literal object, never infer branches, defaults or references."""
+    document = entry.configuration_schema.document
+    pending = [(document, False)]
+    while pending:
+        node, names_only = pending.pop()
+        if isinstance(node, dict):
+            if not names_only and (any(key in node for key in (
+                "$ref", "$dynamicRef", "$recursiveRef", "default", "anyOf", "allOf",
+                "if", "then", "else", "not",
+            )) or ("oneOf" in node and node is not document)):
+                return None
+            pending.extend((value, not names_only and key in {"properties", "patternProperties", "$defs", "definitions"})
+                           for key, value in node.items())
+        elif isinstance(node, list):
+            pending.extend((value, False) for value in node)
+    branch = document
+    if "oneOf" in document:
+        if not isinstance(document["oneOf"], list) or len(document["oneOf"]) != 1:
+            return None
+        branch = document["oneOf"][0]
+    properties = branch.get("properties") if isinstance(branch, dict) else None
+    required = branch.get("required") if isinstance(branch, dict) else None
+    if (
+        not isinstance(properties, dict) or len(properties) > 50
+        or branch.get("type") != "object" or branch.get("additionalProperties") is not False
+        or not isinstance(required, list) or len(required) != len(properties)
+        or any(type(name) is not str for name in required)
+        or set(required) != set(properties)
+        or any(not isinstance(value, dict) or "const" not in value for value in properties.values())
+    ):
+        return None
     try:
-        result = ProjectGuideCompilationResult.model_validate(result)
-    except ValidationError:
-        return []
-    definitions = {
-        (item.phase, item.capability_id, item.capability_version): item
-        for item in context.checker_capabilities.definitions
-    }
-    selected = {}
-    for issue in issues[:20]:
-        path = issue.get("path", [])
-        if (
-            issue.get("code") != "schema_const"
-            or len(path) != 5
-            or path[0] not in ("pre_submit_bindings", "post_submit_bindings")
-            or type(path[1]) is not int
-            or path[1] < 0
-            or path[2] != "parameters"
-            or type(path[3]) is not int
-            or path[3] < 0
-            or path[4] != "value"
-        ):
-            continue
-        phase = path[0].removesuffix("_bindings")
-        bindings = getattr(result, path[0])
-        if path[1] >= len(bindings):
-            continue
-        binding = bindings[path[1]]
-        definition = definitions.get((phase, binding.capability_id, binding.capability_version))
-        if (
-            binding.stage.value != phase
-            or path[3] >= len(binding.parameters)
-            or definition is None
-            or not definition.selectable
-            or definition.registry_entry is None
-        ):
-            continue
-        entry = definition.registry_entry
-        key = str(entry.registry_entry_id)
-        if key not in selected:
-            selected[key] = {
-                "binding_paths": [],
-                "capability_id": definition.capability_id,
-                "capability_version": definition.capability_version,
-                "registry_entry_id": key,
-                "registry_entry_digest": entry.entry_digest,
-                "configuration_schema": entry.configuration_schema.model_dump(mode="json"),
-            }
-        binding_path = path[:2]
-        if binding_path not in selected[key]["binding_paths"]:
-            selected[key]["binding_paths"].append(binding_path)
-    return list(selected.values())
+        parameters = [
+            CapabilityParameter.model_validate_json(_compact_bytes({
+                "name": name, "value": properties[name]["const"],
+            })).model_dump(mode="json")
+            for name in sorted(properties)
+        ]
+        entry.configuration_schema.validate_instance({p["name"]: p["value"] for p in parameters})
+    except (TypeError, ValueError):
+        return None
+    return parameters
 
 
 def contextual_output_issues(
@@ -346,6 +353,68 @@ class CompilationDraftParser:
             return None
         self.issues = []
         return candidate
+
+    def canonical_candidate(self, context, candidate: dict) -> dict | None:
+        """Resolve only the required private mode on a detached, byte-bounded proposal."""
+        self.unsafe_text = False
+        canonical = deepcopy(candidate)
+        modes = []
+        for phase in ("pre_submit", "post_submit"):
+            field = phase + "_bindings"
+            for index, binding in enumerate(canonical[field]):
+                mode = binding.pop("configuration_source", None)
+                modes.append((phase, field, index, mode))
+        # A mode error cannot license echoing unsafe text from another field.
+        # Required private metadata is removed before the existing text owner runs.
+        early_issues = self.canonical_issues(canonical)
+        if self.unsafe_text:
+            self.issues = early_issues
+            return None
+        size = len(_compact_bytes(canonical))
+        definitions = {
+            (item.phase, item.capability_id, item.capability_version): item
+            for item in context.checker_capabilities.definitions
+        }
+        for phase, field, index, mode in modes:
+            binding = canonical[field][index]
+            if mode not in ("registry", "explicit"):
+                self.issues = [{"path": [field, index, "configuration_source"],
+                                "code": "configuration_source_required"}]
+                return None
+            definition = definitions.get((phase, binding["capability_id"], binding["capability_version"]))
+            entry = definition.registry_entry if definition is not None else None
+            if (
+                definition is None or not definition.selectable or entry is None
+                or binding["stage"] != phase or entry.phase != phase
+                or entry.capability_id != binding["capability_id"]
+                or entry.capability_version != binding["capability_version"]
+            ):
+                self.issues = [{"path": [field, index], "code": "binding_reference"}]
+                return None
+            fixed = _fixed_registry_parameters(entry)
+            if mode == "registry":
+                if binding["parameters"]:
+                    self.issues = [{"path": [field, index, "parameters"],
+                                    "code": "registry_parameters_forbidden"}]
+                    return None
+                if fixed is None:
+                    self.issues = [{"path": [field, index, "configuration_source"],
+                                    "code": "registry_configuration_unavailable"}]
+                    return None
+                size += len(_compact_bytes(fixed)) - len(b"[]")
+                if size > self._maximum_bytes:
+                    self.issues = [{"path": [], "code": "expanded_output_too_large"}]
+                    return None
+                binding["parameters"] = fixed
+            elif fixed is not None:
+                self.issues = [{"path": [field, index, "configuration_source"],
+                                "code": "registry_configuration_required"}]
+                return None
+        if len(_compact_bytes(canonical)) > self._maximum_bytes:
+            self.issues = [{"path": [], "code": "expanded_output_too_large"}]
+            return None
+        self.issues = self.canonical_issues(canonical)
+        return None if self.issues else canonical
 
     def canonical_issues(self, candidate: dict) -> list[dict]:
         """Identify failing fields without forwarding rejected values or error messages."""
