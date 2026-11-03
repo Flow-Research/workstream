@@ -352,23 +352,32 @@ class HostedModelAuthority(unittest.TestCase):
         self.assertEqual(budget['lifetime_limit_nanodollars'], CEILING)
         self.assertEqual(budget['configuration_version'], 1)
         self.assertEqual(qualification.state['historical_charge']['status'], 'unresolved_separate')
-        original = qualification.guide_bytes()
-        capabilities = {stage: {'capability_id': 'fixture.' + stage, 'capability_version': 'v1'}
-                        for stage in ('pre_submit', 'post_submit')}
-        rules = json.loads(qualification.rules(original, capabilities, 0))
-        binding = rules['post_submit_bindings'][0]
-        configuration = {item['name']: item['value'] for item in binding['parameters']}
+        selected = qualification.approval_attachments()
+        self.assertEqual(selected['pre_submit_attachments'], [])
+        [attachment] = selected['post_submit_attachments']
+        self.assertEqual(attachment['requirement_id'], CHECK)
+        self.assertEqual(attachment['registry_entry_id'], qualification.registry['registry_entry_id'])
+        self.assertEqual(attachment['registry_entry_digest'], qualification.registry['entry_digest'])
+        configuration = attachment['configuration']
         registry_spec('sha256:' + 'a' * 64).configuration_schema.validate_instance(configuration)
         self.assertEqual(configuration['check'], CHECK)
         self.assertEqual(configuration['model_profile_id'], str(profile_id))
-        self.assertEqual(rules['pre_submit_bindings'], [])
+        self.assertEqual(configuration['model_profile_digest'], qualification.profile.profile_digest)
+        original = qualification.guide_bytes()
+        rules = json.loads(qualification.rules(original, 0))
+        self.assertNotIn('pre_submit_bindings', rules)
+        self.assertNotIn('post_submit_bindings', rules)
         doc = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(original))
         authored = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(canonical(rules)))
         result = _compile_rules(SimpleNamespace(agent_version='v1', material=SimpleNamespace(documents=[doc, authored])), [(authored, rules)])
-        self.assertEqual(result.requirements[0].check_specification, specification()[0])
-        self.assertEqual(result.requirements[0].check_specification.runtime_dependencies[0].provisioning, 'model_proxy')
-        with self.assertRaisesRegex(RuntimeError, 'PRE model'):
-            qualification.rules(original, capabilities, 1)
+        [suggestion] = result.requirements
+        self.assertEqual(suggestion.stage, 'post_submit')
+        self.assertNotEqual(suggestion.suggestion_id, attachment['requirement_id'])
+        self.assertEqual([ref.sha256 for ref in suggestion.evidence_refs], [doc.sha256, authored.sha256])
+        self.assertEqual(suggestion.check_specification, specification()[0])
+        self.assertTrue(suggestion.check_specification.implementation_needs)
+        with self.assertRaisesRegex(RuntimeError, 'must not propose a PRE check'):
+            qualification.rules(original, 1)
 
     def test_ambiguous_effect_or_outstanding_reservation_cannot_claim_model_proof(self):
         good = {'reserved_nanodollars': 0, 'effects': [{'state': 'completed', 'provider_response_known': True,

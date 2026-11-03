@@ -359,6 +359,21 @@ class HostedFixtureContracts(unittest.TestCase):
         for spec in registered_specs:
             expected = _locked_spec(spec.phase, image).model_dump(mode='json') | capabilities[spec.phase]
             self.assertEqual(spec.model_dump(mode='json'), expected)
+        for count in (0, 1, 2):
+            selected = attachment.approval_attachments(count)
+            self.assertEqual(len(selected['pre_submit_attachments']), count)
+            self.assertEqual(len(selected['post_submit_attachments']), 1)
+            for phase, entries in (('pre_submit', selected['pre_submit_attachments']),
+                                   ('post_submit', selected['post_submit_attachments'])):
+                published = attachment.registered_images[phase]
+                for entry in entries:
+                    self.assertEqual(entry['registry_entry_id'], str(published.registry_entry_id))
+                    self.assertEqual(entry['registry_entry_digest'], published.entry_digest)
+                    self.assertEqual(entry['configuration'], {})
+            self.assertEqual([item['requirement_id'] for item in selected['pre_submit_attachments']],
+                             ['project.pre_submit.01', 'project.pre_submit.02'] if count == 2 else
+                             (['project.pre_submit'] if count == 1 else []))
+            self.assertEqual(selected['post_submit_attachments'][0]['requirement_id'], 'project.post_submit')
 
     def test_baseline_registration_refuses_unvalidated_cache_and_substituted_receipts(self):
         import httpx
@@ -467,16 +482,24 @@ class HostedFixtureContracts(unittest.TestCase):
                                    sha256='sha256:' + hashlib.sha256(original).hexdigest())
         rules = SimpleNamespace(source_item_id=uuid4(), ingest_id=uuid4(), sha256='sha256:' + 'f' * 64)
         context = SimpleNamespace(agent_version='v1', material=SimpleNamespace(documents=[document, rules]))
-        capabilities = {stage: {'capability_id': 'probe.' + stage, 'capability_version': 'v1'}
-                        for stage in ('pre_submit', 'post_submit')}
         for count in (0, 1, 2):
-            authored = json.loads(manager_rules(original, capabilities, count))
+            authored = json.loads(manager_rules(original, count))
             result = _compile_rules(context, [(rules, authored)])
             self.assertEqual(result.status, 'draft_ready')
-            self.assertEqual(len(result.pre_submit_bindings), count)
-            self.assertEqual(len(result.post_submit_bindings), 1)
+            self.assertEqual(len([item for item in result.requirements if item.stage == 'pre_submit']), count)
+            self.assertEqual(len([item for item in result.requirements if item.stage == 'post_submit']), 1)
             self.assertEqual(len(result.requirements), count + 1)
             self.assertEqual(result.findings[0].evidence_refs[0].sha256, document.sha256)
+            for suggestion in result.requirements:
+                self.assertEqual([ref.sha256 for ref in suggestion.evidence_refs],
+                                 [document.sha256, rules.sha256])
+                self.assertTrue(suggestion.suggestion_id.startswith('suggested.'))
+                self.assertTrue(suggestion.check_specification.check_steps)
+                self.assertTrue(suggestion.check_specification.pass_conditions)
+                self.assertTrue(suggestion.check_specification.negative_tests)
+            self.assertNotIn('pre_submit_bindings', authored)
+            self.assertNotIn('post_submit_bindings', authored)
+            self.assertNotIn('capability_suggestions', authored)
 
     def test_hosted_cli_never_calls_local_launcher(self):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
