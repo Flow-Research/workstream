@@ -51,11 +51,31 @@ async def create_approved_policy_bundle(
             ProjectSetupRun.guide_id == guide_id,
         ))).one()
         report = {**report, "id": setup.output_sufficiency_report_id}
+    post_submit_attachments = ()
+    if post_submit_registry_spec is not None:
+        from app.adapters.checkers import external_checker_registry_reader
+        from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+
+        async with db_session.get_session_factory()() as session, session.begin():
+            entry = await external_checker_registry_reader(session).read_identity(
+                capability_id=post_submit_registry_spec.capability_id,
+                capability_version=post_submit_registry_spec.capability_version,
+                phase="post_submit",
+            )
+        assert entry.entry_digest == post_submit_registry_spec.spec_digest
+        post_submit_attachments = (ExternalCheckerImageAttachment(
+            requirement_id="project.post_evidence",
+            registry_entry_id=entry.registry_entry_id,
+            registry_entry_digest=entry.entry_digest,
+            configuration={},
+        ),)
     effective = await approve_submission_artifact_policy(
         client,
         project_id,
         guide_id,
         policy["id"],
+        pre_submit_attachments=(),
+        post_submit_attachments=post_submit_attachments,
     )
     compiled_pre_submit_checker = await load_pre_submit_checker_policy(effective)
     assert compiled_pre_submit_checker["lifecycle_status"] == "compiled"
@@ -63,6 +83,11 @@ async def create_approved_policy_bundle(
         project_id=project_id, guide_id=guide_id, source_snapshot=snapshot,
         pre_submit_checker_policy=compiled_pre_submit_checker, sessions=db_session.get_session_factory(),
     )
+    if post_submit_registry_spec is not None:
+        selected = post_submit_checker_policy["policy_body"]["entries"]
+        assert len(selected) == 1
+        assert selected[0]["requirement_id"] == "project.post_evidence"
+        assert selected[0]["registry"]["entry_digest"] == post_submit_registry_spec.spec_digest
     return {
         "source_snapshot": snapshot,
         "sufficiency_report": report,

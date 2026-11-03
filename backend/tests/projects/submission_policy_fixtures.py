@@ -139,7 +139,11 @@ async def approve_submission_artifact_policy(
     project_id: str,
     guide_id: str,
     policy_id: str | None,
+    *,
+    pre_submit_attachments=(),
+    post_submit_attachments=(),
 ) -> dict:
+    """Approve a policy with the caller's explicit phase image choices (empty by default)."""
     from projects.guide_fixtures import read_guide_source_snapshot
     from projects.unified_policy_fixtures import (
         approve_unified_submission_policy, create_unified_submission_policy,
@@ -150,7 +154,11 @@ async def approve_submission_artifact_policy(
         report = await create_sufficiency_report(client, project_id, guide_id, snapshot["id"])
         policy = await create_unified_submission_policy(report["id"], snapshot["id"])
         policy_id = policy["id"]
-    return await approve_unified_submission_policy(project_id, guide_id, policy_id)
+    return await approve_unified_submission_policy(
+        project_id, guide_id, policy_id,
+        pre_submit_attachments=pre_submit_attachments,
+        post_submit_attachments=post_submit_attachments,
+    )
 
 
 async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:

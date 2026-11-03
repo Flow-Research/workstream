@@ -252,8 +252,8 @@ async def _material_fixture(
     max_revision_rounds=2,
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
-    post_submit_binding_setup=None,
-    post_submit_bindings_setup=None,
+    post_submit_configuration_setup=None,
+    post_submit_configurations_setup=None,
     post_submit_specification=None,
     post_scratch_root=None,
 ):
@@ -271,8 +271,8 @@ async def _material_fixture(
             max_revision_rounds=max_revision_rounds,
             pre_submit_registry_spec=pre_submit_registry_spec,
             post_submit_registry_spec=post_submit_registry_spec,
-            post_submit_binding_setup=post_submit_binding_setup,
-            post_submit_bindings_setup=post_submit_bindings_setup,
+            post_submit_configuration_setup=post_submit_configuration_setup,
+            post_submit_configurations_setup=post_submit_configurations_setup,
             post_submit_specification=post_submit_specification,
         )
         context, task_id, data, admission_id, creation_request, created = await _create_material_submission(
