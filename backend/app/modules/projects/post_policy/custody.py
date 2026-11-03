@@ -33,7 +33,7 @@ from .models import PostPolicyOperation
 class PostPolicyCustody:
     """One policy and its exact immutable receipts; no current-successor substitution."""
 
-    target: PostPolicyTarget
+    target: PostPolicyTarget | SimpleNamespace
     compiled: LockedExternalPostSubmitPolicy
     projection: PostPolicyOperation
     approval: PostPolicyOperation | None
@@ -97,8 +97,10 @@ def _retained_receipt(raw):
         raise GuideProposalError("proposal_unavailable") from exc
 
 
-def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt:
+def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt | SimpleNamespace:
     """Recompute every stored commitment before trusting a replay or disclosure."""
+    if operation.kind not in {"derive", "approve", "correction"}:
+        raise GuideProposalError("proposal_unavailable")
     retained = (
         isinstance(operation.target_json, dict)
         and isinstance(operation.target_json.get("proposal"), dict)

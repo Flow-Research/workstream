@@ -148,3 +148,11 @@ def test_retained_post_receipt_preserves_old_resource_commitment():
     operation.resource_context_digest = canonical_json_hash(operation.resource_context_json)
     with pytest.raises(GuideProposalError):
         operation_receipt(operation)
+
+
+def test_retained_post_receipt_rejects_unknown_operation_kind():
+    operation = _operation()
+    operation.kind = "unknown"
+    with pytest.raises(GuideProposalError) as refusal:
+        operation_receipt(operation)
+    assert refusal.value.code == "proposal_unavailable"
