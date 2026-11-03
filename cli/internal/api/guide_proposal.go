@@ -251,23 +251,17 @@ func validateProposalTarget(raw json.RawMessage, value *ProposalTarget) error {
 }
 
 func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
-	fields, err := contextObject(raw, value, []string{"status", "agent_version"}, []string{"setup_notes"})
+	fields, err := contextObject(raw, value, []string{
+		"status", "agent_version", "agent_name", "schema_version", "findings", "requirements",
+	}, []string{"setup_notes"})
 	if err != nil {
 		return err
 	}
 	if value.Status != "guide_blocked" && value.Status != "draft_ready" && value.Status != "draft_ready_with_warnings" {
 		return errors.New("invalid proposal classification")
 	}
-	if _, present := fields["agent_name"]; !present {
-		value.AgentName = "ProjectGuideCompilationAgent"
-	}
-	if _, present := fields["schema_version"]; !present {
-		value.SchemaVersion = "project_guide_check_specification.v1"
-	}
-	for _, key := range []string{"agent_name", "schema_version"} {
-		if string(fields[key]) == "null" {
-			return errors.New("null result field")
-		}
+	if _, present := fields["submission_artifact_policy"]; !present {
+		return errors.New("missing result policy")
 	}
 	if value.AgentName != "ProjectGuideCompilationAgent" || value.SchemaVersion != "project_guide_check_specification.v1" {
 		return errors.New("invalid proposal protocol")
@@ -298,9 +292,6 @@ func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
 		}
 	}
 	for _, key := range []string{"findings", "requirements"} {
-		if _, present := fields[key]; !present {
-			continue
-		}
 		var members []json.RawMessage
 		if jsonv2.Unmarshal(fields[key], &members) != nil || members == nil {
 			return errors.New("invalid result array")

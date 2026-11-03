@@ -162,11 +162,14 @@ def test_proposal_exact_selector_raw_bytes_and_escaped_text(cli):
         assert response["commands"] == [] and response["updates"] == []
 
 
-def test_proposal_defaults_nullable_lineage_and_large_integer(cli):
+def test_proposal_nullable_lineage_and_large_integer(cli):
     value = proposal()
     for key in ("current_approval_operation_id", "current_approval_output_digest", "post_submit_policy_id"):
         del value[key]
-    value["result"] = {"status": "guide_blocked", "agent_version": "v1"}
+    value["result"].update(
+        status="guide_blocked", requirements=[], submission_artifact_policy=None
+    )
+    value["result"].pop("setup_notes")
     with http_fixture() as (origin, response, _):
         for generation in (1, 9223372036854775808):
             value["target"]["setup_generation"] = generation
@@ -253,6 +256,29 @@ def test_proposal_rejects_obsolete_or_malformed_nested_contract(cli, path, inval
 def test_proposal_missing_required_outer_field_rejected(cli, field):
     value = proposal()
     del value[field]
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
+@pytest.mark.parametrize("field", [
+    "status", "agent_version", "agent_name", "schema_version", "findings", "requirements",
+    "submission_artifact_policy",
+])
+def test_proposal_missing_required_result_field_rejected(cli, field):
+    value = proposal()
+    del value["result"][field]
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
+@pytest.mark.parametrize("field", [
+    "status", "agent_version", "agent_name", "schema_version", "findings", "requirements",
+])
+def test_proposal_null_required_result_field_rejected(cli, field):
+    value = proposal()
+    value["result"][field] = None
     with http_fixture() as (origin, response, _):
         response["body"] = json.dumps(value).encode()
         assert_failure(invoke(cli, origin), "invalid_api_response")
