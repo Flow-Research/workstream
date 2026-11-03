@@ -361,64 +361,6 @@ def external_checker_registration_request_digest(
     )
 
 
-class ExternalCheckerCapabilityDefinition(ExternalCheckerValue):
-    """One model-facing capability backed by code or an immutable registry row."""
-
-    capability_id: Identifier
-    capability_version: SchemaVersion
-    phase: ExternalCheckerPhase
-    selectable: bool
-    registry_entry: ExternalCheckerRegistryEntry | None = None
-
-    @model_validator(mode="after")
-    def validate_source(self) -> Self:
-        """Keep the sole code-owned default distinct from selectable project images."""
-        if self.selectable != (self.registry_entry is not None):
-            raise ExternalCheckerContractError("external checker capability source is invalid")
-        if self.registry_entry is not None and (
-            self.capability_id,
-            self.capability_version,
-            self.phase,
-        ) != (
-            self.registry_entry.capability_id,
-            self.registry_entry.capability_version,
-            self.registry_entry.phase,
-        ):
-            raise ExternalCheckerContractError("external checker capability identity is invalid")
-        return self
-
-
-class ExternalCheckerCapabilityProjection(ExternalCheckerValue):
-    """Complete immutable compiler input with one default and registered images."""
-
-    schema_version: Literal["external_checker_capabilities.v1"] = "external_checker_capabilities.v1"
-    definitions: tuple[ExternalCheckerCapabilityDefinition, ...]
-    manifest_sha256: Sha256
-
-    @model_validator(mode="after")
-    def validate_projection(self) -> Self:
-        identities = [
-            (item.phase, item.capability_id, item.capability_version) for item in self.definitions
-        ]
-        if identities != sorted(identities) or len(identities) != len(set(identities)):
-            raise ExternalCheckerContractError(
-                "external checker capability projection is not canonical"
-            )
-        defaults = [item for item in self.definitions if not item.selectable]
-        if len(defaults) != 1 or (
-            defaults[0].capability_id,
-            defaults[0].capability_version,
-            defaults[0].phase,
-        ) != ("workstream.default", "v1", "pre_submit"):
-            raise ExternalCheckerContractError("external checker default capability is invalid")
-        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
-        if self.manifest_sha256 != external_checker_json_hash(body):
-            raise ExternalCheckerContractError(
-                "external checker capability projection digest mismatch"
-            )
-        return self
-
-
 class PreSubmitExternalCheckerMaterial(ExternalCheckerValue):
     """Verified prepared bytes that exist before a Submission or ART binding."""
 

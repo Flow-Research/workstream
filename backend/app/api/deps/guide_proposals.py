@@ -22,7 +22,6 @@ from app.core.api_controls import request_ids
 from app.db.session import get_db_session
 from app.modules.authorization.api import ActorIdentityFacts
 from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.adapters.auth import guide_proposal_authorization, human_guide_compilation_authorization
 from app.adapters.projects import project_guide_proposal_service, project_guide_correction_dispatch
 
@@ -35,8 +34,7 @@ class ProposalRequest:
     service: GuideProposalOperationsPort[
         ActorIdentityFacts,
         GuideDocumentManifestPort,
-        ExternalCheckerCapabilityProjection,
-    ]
+        ]
     actor: ActorIdentityFacts
     request_id: UUID
 

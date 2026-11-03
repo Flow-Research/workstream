@@ -17,7 +17,6 @@ from app.modules.authorization.api import (
 )
 from app.modules.authorization.api.guide_proposal_review import GuideProposalAuthorizationPort
 from app.modules.authorization.api.post_policy import PostPolicyAuthorizationPort
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.projects.api import (
     ProjectContributionPolicyEligibilityPort,
     ProjectLockedPolicyContextPort,
@@ -201,7 +200,6 @@ def project_guide_proposal_service(
 ) -> GuideProposalOperationsPort[
     ActorIdentityFacts,
     GuideDocumentManifestPort,
-    ExternalCheckerCapabilityProjection,
 ]:
     """Compose the sole proposal owner with explicit authority."""
     from app.adapters.checkers import external_checker_registry_reader, model_profile_reader

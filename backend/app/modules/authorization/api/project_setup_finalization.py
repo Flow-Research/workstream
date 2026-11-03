@@ -12,7 +12,7 @@ from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 _HASH = re.compile(r"sha256:[0-9a-f]{64}\Z")
-_COMPONENT_KEYS = frozenset(
+_RETAINED_COMPONENT_KEYS = frozenset(
     {
         "sufficiency_hash",
         "artifact_policy_hash",
@@ -23,6 +23,11 @@ _COMPONENT_KEYS = frozenset(
         "setup_notes_hash",
     }
 )
+_COMPONENT_KEYS = (_RETAINED_COMPONENT_KEYS - {
+    "capability_suggestions_hash", "setup_notes_hash"
+}) | {"schema_version"}
+_CURRENT_RESULT_SCHEMA = "project_guide_check_specification.v1"
+_CURRENT_HASH_SCHEMA = "project_guide_check_specification_hashes.v1"
 FINALIZATION_ACTION = "project.setup_run.update"
 FINALIZATION_PERMISSION = "project.guide.manage"
 FINALIZATION_SERVICE = "workstream.project.setup"
@@ -87,7 +92,7 @@ class ProjectSetupFinalizationFacts:
         for field in fields(self):
             value = getattr(self, field.name)
             if field.name == "component_hashes":
-                _validate_components(value)
+                _validate_components(value, self.result_schema_version)
             elif field.name == "setup_generation":
                 if type(value) is not int or value <= 0:
                     raise ValueError("setup generation must be positive")
@@ -120,16 +125,24 @@ class ProjectSetupFinalizationFacts:
             raise ValueError("finalization classification and projection shape disagree")
 
 
-def _validate_components(value: object) -> None:
+def _validate_components(value: object, result_schema: str) -> None:
     """Keep all component hashes deeply immutable and canonically ordered."""
     if not isinstance(value, tuple) or any(
         not isinstance(item, tuple) or len(item) != 2 for item in value
     ):
         raise ValueError("component hashes must be immutable pairs")
-    if len(value) != len(_COMPONENT_KEYS) or {item[0] for item in value} != _COMPONENT_KEYS:
+    if result_schema == _CURRENT_RESULT_SCHEMA:
+        keys = _COMPONENT_KEYS
+    elif result_schema == "project_guide_compilation_result.v1":
+        # Retained receipt facts remain hash-verifiable; consume_new rejects this format.
+        keys = _RETAINED_COMPONENT_KEYS
+    else:
+        raise ValueError("result schema is invalid")
+    if len(value) != len(keys) or {item[0] for item in value} != keys:
         raise ValueError("component hash keys are invalid")
     if value != tuple(sorted(value)) or any(
-        not isinstance(item[1], str) or not _HASH.fullmatch(item[1]) for item in value
+        (item[1] != _CURRENT_HASH_SCHEMA if item[0] == "schema_version" else
+         not isinstance(item[1], str) or not _HASH.fullmatch(item[1])) for item in value
     ):
         raise ValueError("component hash values are invalid")
 

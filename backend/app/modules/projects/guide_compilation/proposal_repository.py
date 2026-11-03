@@ -118,19 +118,7 @@ class GuideProposalRepository:
             finalization_facts_digest=finalization.facts_digest,
             result_hash=accepted.result_hash,
             component_hashes=accepted.component_hashes,
-            **{
-                name: getattr(attempt, name)
-                for name in (
-                    "pre_catalogue_id",
-                    "pre_catalogue_version",
-                    "pre_catalogue_schema_version",
-                    "pre_catalogue_manifest_hash",
-                    "post_catalogue_id",
-                    "post_catalogue_version",
-                    "post_catalogue_schema_version",
-                    "post_catalogue_manifest_hash",
-                )
-            },
+            result_schema_version=attempt.result_schema_version,
             artifact_policy_id=finalization.artifact_policy_id,
             artifact_policy_hash=view.policy.policy_hash if view.policy is not None else None,
             artifact_projection_operation_id=finalization.artifact_policy_operation_id,
@@ -197,7 +185,7 @@ class GuideProposalRepository:
             for number, (item, ingest) in enumerate(sources, 1)
         }
         body = locked.result.model_dump(mode="json")
-        for name in ("findings", "requirements", "capability_suggestions"):
+        for name in ("findings", "requirements"):
             for item in body[name]:
                 projected = []
                 for ref in item["evidence_refs"]:
