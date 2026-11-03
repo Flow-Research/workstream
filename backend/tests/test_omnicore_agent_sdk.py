@@ -49,6 +49,7 @@ from app.interfaces.project_agents import (
     project_guide_compilation_prompt_bytes,
 )
 from app.interfaces.project_guide_runtime import canonical_adapter_profile
+from app.modules.projects.api.task_examples import validate_task_examples
 from tests.projects.guide_compilation.helpers import (
     context,
     generated_result,
@@ -832,11 +833,13 @@ async def test_actual_sdk_rejects_oversized_workstream_input_before_provider():
     base = _runtime_context()
     compilation_context = base.model_copy(
         update={
+            "task_examples": validate_task_examples([{"content": "A" * 1024}]),
             "runtime_configuration": base.runtime_configuration.model_copy(
                 update={"maximum_manifest_bytes": 1024}
             )
         }
     )
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) > 1024
     capabilities, reads, handle = _capabilities(compilation_context)
     async with _SyntheticOpenRouter(
         handle=handle,
@@ -976,10 +979,15 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
             )
             for fault, code in [
                 ("blocked", "blocked_evidence"), ("duplicate", "suggestion_ids_unique"),
-                ("isolated", "isolated_dependency"), ("binding", "binding_count"),
-                ("availability", "dependency_availability"),
+                ("code_overlap", "verdict_code_overlap"),
+                ("unknown_finding", "finding_reference"),
             ]
         ],
+        (
+            (json.dumps(_invalid_canonical_payload("material")), _provider_output(), _provider_output()),
+            "checker_specification",
+            "canonical_constraint",
+        ),
         (
             (json.dumps(_invalid_canonical_payload("unsafe")), _provider_output(), _provider_output()),
             "checker_specification",
