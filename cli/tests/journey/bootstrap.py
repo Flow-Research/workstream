@@ -237,8 +237,9 @@ def main():
                             },
                             key=str(uuid4()),
                         )
+                    registry_entries = {}
                     for phase in ("pre", "post"):
-                        client.call(
+                        registry_entries[phase] = client.call(
                             tokens["operator"],
                             "operations",
                             "checker",
@@ -254,7 +255,8 @@ def main():
                     publish_unpaid_terms(client, tokens["finance"], project_id)
                     guide_id = configure_guide(client, tokens, project_id)
                     approve_and_activate(
-                        client, tokens["manager"], project_id, guide_id
+                        client, tokens["manager"], project_id, guide_id,
+                        registry_entries,
                     )
                     client.complete_stage("public_guide_activation")
                     if os.environ.get("WORKSTREAM_CLI_JOURNEY_TASKS") == "1":

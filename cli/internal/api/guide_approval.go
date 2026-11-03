@@ -3,17 +3,28 @@ package api
 import (
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 )
 
 type guideApprovalInput struct {
-	Target                               ProposalTarget `json:"target"`
-	AcknowledgedWarningHashes            []string       `json:"acknowledged_warning_hashes"`
-	ExpectedPreviousApprovalOperationID  *string        `json:"expected_previous_approval_operation_id"`
-	ExpectedPreviousApprovalOutputDigest *string        `json:"expected_previous_approval_output_digest"`
+	Target                               ProposalTarget         `json:"target"`
+	PreSubmitAttachments                 []guideImageAttachment `json:"pre_submit_attachments"`
+	PostSubmitAttachments                []guideImageAttachment `json:"post_submit_attachments"`
+	AcknowledgedWarningHashes            []string               `json:"acknowledged_warning_hashes"`
+	ExpectedPreviousApprovalOperationID  *string                `json:"expected_previous_approval_operation_id"`
+	ExpectedPreviousApprovalOutputDigest *string                `json:"expected_previous_approval_output_digest"`
+}
+
+type guideImageAttachment struct {
+	RequirementID       string          `json:"requirement_id"`
+	RegistryEntryID     string          `json:"registry_entry_id"`
+	RegistryEntryDigest string          `json:"registry_entry_digest"`
+	Configuration       json.RawMessage `json:"configuration"`
 }
 
 // GuideApproval is immutable intake approval, not post-policy or activation.
@@ -62,9 +73,11 @@ func decodeGuideApprovalInput(raw json.RawMessage) (guideApprovalInput, error) {
 	if len(raw) == 0 || len(raw) > MaxGuideInputBytes {
 		return value, errors.New("invalid approval input size")
 	}
-	fields, err := contextObject(raw, &value, []string{"target"}, []string{"acknowledged_warning_hashes"})
+	fields, err := contextObject(raw, &value, []string{"target", "pre_submit_attachments", "post_submit_attachments"}, []string{"acknowledged_warning_hashes"})
 	if err != nil || validateProposalTarget(fields["target"], &value.Target) != nil ||
-		!validApprovalWarnings(value.AcknowledgedWarningHashes) {
+		!validApprovalWarnings(value.AcknowledgedWarningHashes) ||
+		!validGuideImageAttachments(fields["pre_submit_attachments"]) ||
+		!validGuideImageAttachments(fields["post_submit_attachments"]) {
 		return value, errors.New("invalid approval input")
 	}
 	previous, digest := value.ExpectedPreviousApprovalOperationID, value.ExpectedPreviousApprovalOutputDigest
@@ -72,6 +85,36 @@ func decodeGuideApprovalInput(raw json.RawMessage) (guideApprovalInput, error) {
 		return value, errors.New("invalid previous approval identity")
 	}
 	return value, nil
+}
+
+func validGuideImageAttachments(raw json.RawMessage) bool {
+	var members []json.RawMessage
+	if jsonv2.Unmarshal(raw, &members) != nil || members == nil || len(members) > 200 {
+		return false
+	}
+	previous := ""
+	for _, member := range members {
+		var attachment guideImageAttachment
+		fields, err := contextObject(member, &attachment, []string{
+			"requirement_id", "registry_entry_id", "registry_entry_digest", "configuration",
+		}, nil)
+		if err != nil || !proposalIdentifier.MatchString(attachment.RequirementID) ||
+			attachment.RequirementID <= previous ||
+			strings.HasPrefix(attachment.RequirementID, "workstream.") ||
+			!contextPolicyDigest.MatchString(attachment.RegistryEntryDigest) {
+			return false
+		}
+		identity, valid := uuidIdentity(attachment.RegistryEntryID)
+		if !valid || identity[6]>>4 != 7 || identity[8]&0xc0 != 0x80 {
+			return false
+		}
+		var configuration map[string]json.RawMessage
+		if jsonv2.Unmarshal(fields["configuration"], &configuration) != nil || configuration == nil {
+			return false
+		}
+		previous = attachment.RequirementID
+	}
+	return true
 }
 
 func validApprovalWarnings(values []string) bool {

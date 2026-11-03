@@ -188,6 +188,8 @@ async def test_approval_public_socket_replay_and_fresh_authority(
                 assert len(package["warning_hashes"]) == 1
                 body = {
                     "target": package["target"],
+                    "pre_submit_attachments": [],
+                    "post_submit_attachments": [],
                     "acknowledged_warning_hashes": package["warning_hashes"],
                 }
                 for warnings in ([], ["sha256:" + "f" * 64]):

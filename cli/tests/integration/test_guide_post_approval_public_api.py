@@ -203,6 +203,8 @@ async def test_post_approval_public_socket_replay_and_fresh_authority(
                     headers=headers | {"Idempotency-Key": str(uuid4())},
                     json={
                         "target": proposal["target"],
+                        "pre_submit_attachments": [],
+                        "post_submit_attachments": [],
                         "acknowledged_warning_hashes": proposal["warning_hashes"],
                     },
                 )

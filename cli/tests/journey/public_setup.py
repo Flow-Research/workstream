@@ -33,23 +33,17 @@ def poll(client, token, arguments, predicate):
 
 def authored_rules():
     reference = {"document": "sha256:" + hashlib.sha256(GUIDE).hexdigest()}
-    requirements, pre, post = [], [], []
-    for phase, bindings in (("pre_submit", pre), ("post_submit", post)):
-        requirement = f"proof.{phase}"
+    requirements = []
+    for phase in ("pre_submit", "post_submit"):
         requirements.append(
             {
-                "requirement_id": requirement,
+                "suggestion_id": f"proof.{phase}",
                 "statement": "Validate the declared proof fields.",
-                "disposition": "supported_" + phase,
+                "stage": phase,
                 "evidence_refs": [reference],
-                "classification_rationale": "Registered static inspection validates declared fields, not remote work.",
+                "classification_rationale": "Static inspection can validate declared fields, without verifying remote work.",
                 "check_specification": {
-                    "evaluation_method": "static_inspection",
-                    "execution_mode": "bounded_pre_submit"
-                    if phase == "pre_submit"
-                    else "background",
-                    "maximum_duration_seconds": 30,
-                    "stage_rationale": "Validate the candidate at intake and the immutable attempt after submission.",
+                    "evaluation_method": "Inspect the declared proof fields in proof.json.",
                     "inputs": [
                         {
                             "input_id": "proof",
@@ -86,23 +80,16 @@ def authored_rules():
                             "expected_finding_codes": ["harnessy.proof.invalid_json"],
                         }
                     ],
-                    "runtime_dependencies": [],
-                    "infrastructure_failures": [
+                    "implementation_needs": [
+                        "Implement a JSON parser and the listed static field predicates."
+                    ],
+                    "inability_to_evaluate": [
                         {
-                            "code": "invalid_output",
-                            "condition": "The registered checker returns a malformed result envelope.",
+                            "code": "harnessy.proof.unreadable",
+                            "condition": "proof.json cannot be read as candidate content.",
                         }
                     ],
                 },
-            }
-        )
-        bindings.append(
-            {
-                "requirement_id": requirement,
-                "capability_id": "harnessy.work_proof",
-                "capability_version": "v1",
-                "stage": phase,
-                "parameters": [],
             }
         )
     return {
@@ -122,9 +109,6 @@ def authored_rules():
             "required_artifacts": ["proof.json"],
         },
         "requirements": requirements,
-        "pre_submit_bindings": pre,
-        "post_submit_bindings": post,
-        "capability_suggestions": [],
         "setup_notes": [],
     }
 
@@ -246,7 +230,7 @@ def publish_unpaid_terms(client, token, project_id):
     return policy
 
 
-def approve_and_activate(client, token, project_id, guide_id):
+def approve_and_activate(client, token, project_id, guide_id, registry_entries):
     setup = poll(
         client,
         token,
@@ -265,7 +249,26 @@ def approve_and_activate(client, token, project_id, guide_id):
         "guide",
         "approve-pre",
         *selectors,
-        body={"target": proposal["target"], "acknowledged_warning_hashes": []},
+        body={
+            "target": proposal["target"],
+            "pre_submit_attachments": [
+                {
+                    "requirement_id": "project.proof_pre",
+                    "registry_entry_id": registry_entries["pre"]["registry_entry_id"],
+                    "registry_entry_digest": registry_entries["pre"]["entry_digest"],
+                    "configuration": {},
+                }
+            ],
+            "post_submit_attachments": [
+                {
+                    "requirement_id": "project.proof_post",
+                    "registry_entry_id": registry_entries["post"]["registry_entry_id"],
+                    "registry_entry_digest": registry_entries["post"]["entry_digest"],
+                    "configuration": {},
+                }
+            ],
+            "acknowledged_warning_hashes": [],
+        },
     )
     proposal = poll(
         client,

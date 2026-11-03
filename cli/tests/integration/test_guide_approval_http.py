@@ -11,7 +11,17 @@ from test_http_boundary import PROJECT, TOKEN, assert_failure, http_fixture
 
 
 def approval():
-    return {"target": proposal()["target"], "acknowledged_warning_hashes": [HASH]}
+    return {
+        "target": proposal()["target"],
+        "pre_submit_attachments": [{
+            "requirement_id": "project.results",
+            "registry_entry_id": PROJECT,
+            "registry_entry_digest": HASH,
+            "configuration": {"required": True, "labels": ["research", 2]},
+        }],
+        "post_submit_attachments": [],
+        "acknowledged_warning_hashes": [HASH],
+    }
 
 
 def receipt(body=None):
@@ -68,6 +78,12 @@ def test_approval_exact_post_raw_input_defaults_and_uuid_identity(cli, tmp_path)
 
     with http_fixture() as (origin, response, requests):
         bodies = [approval()]
+        both_phases = approval()
+        both_phases["post_submit_attachments"] = [
+            both_phases["pre_submit_attachments"][0]
+            | {"requirement_id": "project.post_evidence", "configuration": {"threshold": 0.9}}
+        ]
+        bodies.append(both_phases)
         omitted = approval()
         del omitted["acknowledged_warning_hashes"]
         bodies.append(omitted)
@@ -125,6 +141,10 @@ def test_approval_exact_post_raw_input_defaults_and_uuid_identity(cli, tmp_path)
 def test_approval_invalid_input_never_dispatches(cli, tmp_path):
     with http_fixture() as (origin, response, requests):
         variants = [None, [], {}, {"target": None}, approval() | {"private": True}]
+        for phase in ("pre_submit_attachments", "post_submit_attachments"):
+            missing = approval()
+            del missing[phase]
+            variants.append(missing)
         for key in (
             "project_id",
             "guide_id",
@@ -139,6 +159,26 @@ def test_approval_invalid_input_never_dispatches(cli, tmp_path):
             variants.append(value)
         for value in (None, [None], [HASH, HASH], ["bad"], [HASH] * 201):
             variants.append(approval() | {"acknowledged_warning_hashes": value})
+        for phase in ("pre_submit_attachments", "post_submit_attachments"):
+            for attachments in (None, {}, [None], [approval()["pre_submit_attachments"][0]] * 201):
+                variants.append(approval() | {phase: attachments})
+        for malformed in (
+            {"requirement_id": "workstream.archive"},
+            {"requirement_id": "Bad.Key"},
+            {"registry_entry_id": "550e8400-e29b-41d4-a716-446655440000"},
+            {"registry_entry_digest": "bad"},
+            {"configuration": None},
+            {"configuration": []},
+            {"private": "credential"},
+        ):
+            attachment = approval()["pre_submit_attachments"][0] | malformed
+            variants.append(approval() | {"pre_submit_attachments": [attachment]})
+        for keys in (("project.z", "project.a"), ("project.a", "project.a")):
+            attachments = [
+                approval()["pre_submit_attachments"][0] | {"requirement_id": key}
+                for key in keys
+            ]
+            variants.append(approval() | {"pre_submit_attachments": attachments})
         for value in (
             {"expected_previous_approval_operation_id": PROJECT},
             {"expected_previous_approval_output_digest": HASH},

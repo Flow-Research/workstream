@@ -874,28 +874,23 @@ documents, or executes a decision. Workstream owns fresh scoped manager
 authority and exact project/guide/compilation membership.
 
 JSON retains the complete public package: exact target and hashes, findings
-with display-only source locations, requirement inventory, proposed intake
-policy, pre-submission intake bindings, distinct post-submission evaluation
-bindings, suggestions, notes and nullable approval/post-policy references.
+with display-only source locations, proposed intake policy, PRE and POST check
+suggestions, notes and nullable approval/post-policy references.
 Text starts with concise proposal and approval status, then renders the intake
-policy, findings and evidence document numbers. It groups requirements into
-PRE, POST and non-checker sections and expands each available engineering
-specification into its inputs, ordered steps, pass conditions, coded failure
-findings, positive/negative tests, execution budget, runtime dependencies and
-infrastructure-failure behavior. Suggestions and every setup note follow those
-requirements. Dynamic text remains terminal escaped; private runtime document
+policy, findings and evidence document numbers. It groups suggestions into PRE
+and POST sections and expands each check specification into its inputs, ordered
+steps, pass conditions, coded failure findings, positive and negative tests,
+implementation needs and inability conditions. Every setup note follows the
+suggestions. Dynamic text remains terminal escaped; private runtime document
 handles are not part of this public projection. Unknown/duplicate members,
 missing/null required facts, malformed nested types or substituted identities
 fail with empty stdout. Integer facts retain the backend range.
 
-New checker requirements can carry a typed `check_specification` and a
-`classification_rationale`. PRE specifications describe bounded work of at most
-60 seconds before Submission creation; POST specifications describe background
-work and may declare up to a one-hour budget. Both PRE and POST bindings can
-show their exact catalogue parameters. Earlier retained proposals may omit the
-two new requirement fields and empty PRE parameters; the reader preserves and
-labels that absence without manufacturing content. When any new field is
-present, its nested object remains closed and strictly validated.
+Each PRE or POST suggestion has a `suggestion_id`, source evidence,
+`classification_rationale` and a typed `check_specification`. Suggestions are
+engineering guidance; they do not select an image or determine its configuration.
+The manager selects registered images separately in the approval request, using
+human-authored `requirement_id` values that need not match suggestion IDs.
 
 Project file, expanded-package, compressed-archive and entry-count limits may
 be null or omitted. The reader
@@ -918,15 +913,20 @@ from that displayed target; this separate preparation does not authorize it:
 
 ```sh
 workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
-jq '{target: .target, acknowledged_warning_hashes: []}' proposal.json > approval.json
+jq '{target: .target, pre_submit_attachments: [], post_submit_attachments: [], acknowledged_warning_hashes: []}' proposal.json > approval.json
 # Read the findings. Edit approval.json to acknowledge only the exact displayed
 # warning_hashes you deliberately accept; the backend requires the complete order.
+# Add each selected registered image to the appropriate attachments array.
+# Each attachment needs requirement_id, registry_entry_id,
+# registry_entry_digest and configuration. Empty arrays select no images.
 workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
 ```
 
 `--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
 `GuideProposalApprovalInput`, not the entire display package. It requires
-`target`; omitted `acknowledged_warning_hashes` means an empty list, never
+`target`, `pre_submit_attachments` and `post_submit_attachments`. Each attachment
+uses a human-authored requirement ID, the exact registry entry ID and digest,
+and a configuration object. Omitted `acknowledged_warning_hashes` means an empty list, never
 automatic acknowledgment. When replacing an earlier approval, supply both
 `expected_previous_approval_operation_id` and
 `expected_previous_approval_output_digest` from the inspected prior approval.

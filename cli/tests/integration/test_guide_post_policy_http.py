@@ -56,11 +56,6 @@ def binding(requirement_id="quality_review", capability_id="acme.quality_review"
 
 def package():
     source = proposal()
-    source["target"].update(
-        post_catalogue_id="workstream.post_submission_checkers",
-        post_catalogue_version="v0.1",
-        post_catalogue_schema_version="post_submission_checker_capability_projection",
-    )
     upstream = receipt()
     source.update(
         artifact_policy_status="approved",

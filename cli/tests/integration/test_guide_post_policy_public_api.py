@@ -60,7 +60,7 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
         clean_postgres_database,
         post_submit_registry_spec=post_registry_spec(),
     ) as (
-        _,
+        values,
         factory,
         command,
         actor,
@@ -165,6 +165,14 @@ async def test_post_policy_public_socket_history_and_fresh_authority(
                     headers=headers | {"Idempotency-Key": str(uuid4())},
                     json={
                         "target": proposal["target"],
+                        "pre_submit_attachments": [
+                            attachment.model_dump(mode="json")
+                            for attachment in values["pre_submit_attachments"]
+                        ],
+                        "post_submit_attachments": [
+                            attachment.model_dump(mode="json")
+                            for attachment in values["post_submit_attachments"]
+                        ],
                         "acknowledged_warning_hashes": proposal["warning_hashes"],
                     },
                 )
