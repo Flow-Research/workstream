@@ -28,7 +28,7 @@ judgment deterministic. Evidence must remain attributable to the evaluated
 artifact and policy; reproducible inputs do not promise identical judgments.
 
 This describes the distinction, not activation of a runtime agent judge. Only
-supported registered checkers execute. Setup agents propose checker policies;
+supported registered checkers execute. Setup agents propose check specifications;
 they are not called again as an implicit evaluator of contributor work.
 
 ## Checker Result Contract
@@ -89,29 +89,32 @@ The registry supports both `pre_submit` and `post_submit`. Registration alone
 grants no execution; selected owners execute only exact approved image bindings
 with fresh phase authority and ART-verified material.
 
-Guide setup classifies a check from its complete work and execution budget, not
-from whether the guide says automated, PRE or POST. A newly proposed PRE binding
-must fit the `bounded_pre_submit` mode, propose at most 60 seconds and select a
-registry entry whose deadline does not exceed that boundary. Longer work uses
-the background POST stage. A cheap automated structural check stays PRE.
+Guide setup proposes a stage from the kind of check, not
+from whether the guide says automated, PRE or POST. It receives only assigned
+guide documents and task examples, apart from trusted system instructions.
+PRE suggestions describe intake work before Submission creation; background
+work and model evaluation belong in POST. Registry admission and policy
+approval separately validate the selected PRE images and their deadlines.
 Static means a deterministic predicate over explicit syntax or a guide-defined
 grammar. Free-form completeness and consistency judgments belong to model-based
 POST evaluation; setup must not invent document headings or keywords to force
 them into PRE.
 
-Setup checks aggregate capacity separately for PRE and POST, including the PRE
-default or POST materialization and per-entry cleanup. A proposed policy that cannot
-fit must expose an `execution_capacity` runtime gap with a `capacity_exceeded`
-infrastructure outcome; supported bindings cannot exceed the actual aggregate
-deadline. A stage that fits must not claim a capacity gap. This does not increase
-runtime capacity. Ordinary checker-image isolation does not supply nested task
-environments. A POST requirement may claim that support only when its exact
-binding selects the typed generic isolated-trial profile described below and
-every required material and runtime dependency is present.
+The proposal identifies required inputs and checking steps, including any
+implementation needs, without claiming that registry entries, runtime profiles
+or model services are available. Approval checks aggregate PRE and POST capacity
+against the human-selected images, including the PRE default or POST
+materialization and per-entry cleanup. A policy that cannot fit cannot activate;
+runtime capacity is unchanged. Ordinary checker-image isolation does not supply
+nested task environments. A POST image receives isolated-trial support only
+through its exact approved image/configuration and administrative profile.
 
-The trusted compiler binds approved requirement identities to exact immutable
-registry entries, image/configuration/schema digests and ordered PRE/POST
-policies. PRE includes the single versioned Workstream default. No executable
+The trusted compiler binds human-selected, approved phase attachments to exact
+immutable registry entries, image/configuration/schema digests and ordered
+PRE/POST policies. Image attachments are independent of the suggestion list:
+one image may cover several suggestions and a phase may use several images.
+Explicit empty attachment lists are valid human intent. PRE includes the single
+versioned Workstream default. No executable
 pre-submit or post-submit catalogue remains, and no registry-driven Python
 implementation discovery is allowed. Retained catalogue identities remain
 immutable provenance for earlier records; they do not select new execution.
@@ -127,8 +130,8 @@ External registry fields include:
 - complete entry and registration-request digests plus the exact authorization
   decision receipt.
 
-Capability names must not drift between project guides, approved policy
-bindings, registry entries and checker results. Approved policies bind the
+Registered capability names must not drift between approved policy attachments,
+registry entries and checker results. Approved policies bind the
 exact digest, configuration and schema identities; registration alone changes
 no locked task or approved guide generation.
 
@@ -285,12 +288,12 @@ External image execution never occurs inside that database transaction. A
 valid locked policy with no project pre-submit bindings is distinct from an
 unavailable required image and may proceed after the default checker passes.
 
-Guide activation refuses an approved compilation with unresolved required
-checker capabilities. After current manager authority and policy custody checks,
-the canonical HTTP `error.details.missing_capabilities` lists only each
-requirement ID, pre-submit or post-submit stage, and title. It contains no
-rationale, evidence paths or provider coordinates. Registration alone cannot
-clear a gap: a corrected compilation and approved binding are required.
+Guide activation requires the exact approved phase policies and their locked
+registered images and configurations. Registry publication alone grants no
+project authority. A missing required execution configuration cannot silently
+approve an unimplemented phase; the authorized human must make an explicit
+phase attachment choice. Registering an image after proposal does not alter
+the proposal hash or require another setup run.
 
 The target launcher and checker integration use the agreed Rust service and
 SDK. Registered OCI images are not thereby required to be written in Rust;
@@ -319,8 +322,9 @@ establish a real public journey or model call. See the [node contract](../extern
 Project-specific requirements are implemented by registered external images.
 The shared service accepts the normalized result contract; it does not interpret
 project-private continuation plans, task-ID allowlists or named build profiles.
-Setup proposes bindings or missing capabilities from the guide and examples;
-engineering implements gaps before corrected policy approval and activation.
+Setup proposes source-cited check specifications from the guide and examples.
+Engineering implements selected checks, publishes exact images and registers
+them; the authorized Project Manager selects phase attachments during approval.
 The runner's existing sandbox contract does not by itself prove that arbitrary
 submitted environments can be built and tested. Any such requirement must have
 a supported, bounded image implementation before the project can activate.
@@ -450,19 +454,19 @@ or access to the host Docker socket by returning a private plan.
 
 The Rust launcher owns sandbox execution; durable CHECKERS owners retain
 approved policy binding, phase authority/currentness, attempts, results and
-isolation receipts. F-020 requires corrected approved generation after missing
-capability registration; registration alone never clears the old warning.
+isolation receipts. Registry publication after a proposal does not change that
+proposal or approve an image for the project.
 Production completion routes true-policy success to review_pending and eligible
-locked false-policy success through shared acceptance. Complete supported false
-guides can activate when the approved inventory contains no `human_review`
-disposition. ARCH-02I-B exposes public ZIP preparation plus admission-backed
+locked false-policy success through shared acceptance. False-policy activation
+requires complete approved phase selections and the existing acceptance guards.
+ARCH-02I-B exposes public ZIP preparation plus admission-backed
 initial/checker-remediation Submission creation. Local
 Rust/MinIO proof uses runc/docker-dev and makes no deployed or gVisor claim.
 
 ## Gate Mapping
 
 - Project activation validates approved source/policy identities and exact
-  registry digests; missing required capability coverage blocks activation.
+  registry digests and explicit human phase selections.
 - TASK screening and release retain their canonical locked-context and lifecycle
   guards; registry publication alone grants no Task transition authority.
 - Selected PRE runs the four Workstream defaults and all required project images
@@ -475,9 +479,9 @@ Rust/MinIO proof uses runc/docker-dev and makes no deployed or gVisor claim.
   or invokes shared acceptance.
 
 Revision closure and task lifecycle movement remain owner guards, not generated
-checker names. Complete supported false-policy guides can activate when their
-approved inventory contains no `human_review` disposition, and public ZIP
-preparation plus admission-backed Submission creation expose contributor intake.
+checker names. False-policy guides require complete approved phase selections
+and existing shared-acceptance guards. Public ZIP preparation and
+admission-backed Submission creation expose contributor intake.
 
 ## Submission Artifact Policy And Pre-Submit Generation
 
@@ -616,16 +620,15 @@ Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 
-The `ProjectGuideCompilationAgent` derives only PRE and POST checks. Artifact
-requirements, guide sufficiency, exact default coverage and capability gaps support
-that specification. The PM independently configures review mode, revision caps and
-windows, deadlines, eligibility and compensation. The agent neither recommends nor
-classifies those choices. New inference output rejects human-review, lifecycle and
-informational requirement classifications; it has no free-form notes field.
-Each check explains its classification in `classification_rationale` and carries
-one `check_specification`. Exact default coverage and guide blockers are supporting
-facts, with no checker specification. Retained results and explicitly manager-authored
-rules preserve their existing read and authority contracts.
+The `ProjectGuideCompilationAgent` proposes guide sufficiency, artifact
+requirements and source-cited PRE/POST check specifications from assigned guide
+documents and task examples only. The PM independently configures review mode,
+revision caps and windows, deadlines, eligibility and compensation. The agent
+does not see or select registry images, profiles, runtime availability or
+lifecycle policy. Each proposed check explains its stage, reason, inputs,
+checking steps, pass/fail findings and implementation test examples. Missing
+guide information may block a proposal; a missing implementation alone does not.
+Retained results remain immutable evidence and cannot supply live selections.
 
 Both inference phases require one strict JSON object. Malformed JSON, duplicate
 keys, extra fields and schema/canonical/context failures are rejected before the
@@ -637,25 +640,16 @@ review phase independently reopens the source originals before final admission.
 The complete synthetic PRE/POST example is included in the immutable instruction
 snapshot and hash. See [the setup contract](engineering/guide-checker-specification.md).
 
-The typed specification is the implementation and test handoff. It records the
-evaluation method, `bounded_pre_submit` or `background` execution mode, proposed
-duration, stage rationale, exact input materials, ordered steps, pass conditions,
-coded work findings, positive and negative cases, runtime dependencies and
-infrastructure failures. File and directory inputs use canonical relative paths.
-Capacity, deadline, unavailable material or implementation, and invalid output
-remain infrastructure outcomes rather than contributor work findings. Model
-evaluation requires a `model_service` dependency provisioned by the credential-
-isolated `model_proxy`. An isolated execution check may declare the same dependency
-for model-assisted planning or assessment. Nested builds and trials declare
-`nested_sandbox` through `trial_proxy`, with exact profile and projection selectors
-declared by the registered image's configuration schema. This capability is POST-only.
-Its approved offline cache is `prepared_material` through the same trial tool,
-with `material_unavailable` handling; it is not received package content. Other
-external material and unavailable task/guide context remain explicit runtime gaps.
-An unavailable cache or runtime is an infrastructure failure. The
-ordinary image runner remains networkless. Model access is available only to a
-registered POST image through its exact approved project model profile; a missing
-image or profile remains an unbound capability suggestion that blocks activation.
+The typed specification is the implementation and test handoff. It records
+stage and duration reasoning, source citations, input materials, ordered steps,
+pass and fail findings, and positive and negative test examples. Implementation
+needs are proposals, not assertions that a runtime capability or registered
+image exists. File and directory inputs use canonical relative paths. Runtime
+capacity, deadline, unavailable material or implementation, and invalid output
+remain infrastructure outcomes rather than contributor work findings. Separately
+registered and approved POST images may use model or isolated-trial services
+through their exact locked configuration and administrative profiles. The
+ordinary image runner remains networkless.
 The paid-call slot excludes retry generation and execution lease. Workstream
 reserves the maximum configured charge before create, retains that reservation
 on ambiguous delivery, and retrieves only a known provider ID during recovery.
@@ -664,14 +658,15 @@ or spend a revision. Public Operator profile/budget controls and narrowly
 authorized terminal-call recovery are described in
 [model runtime operations](operations_checker_models.md).
 
-The trusted compiler resolves each supported project check to an immutable
-Operator-registered image, validates bounded typed configuration against that
-entry's schema, and locks its exact digest and order. A missing implementation
-produces a staged capability gap and engineering suggestion, rather than a human
-fallback or a fabricated binding. Capability gaps permit a warning-ready draft
-for manager review but continue to block activation. Only an actual guide blocker
-or blocking finding stops draft policy projection. A presence check cannot stand
-in for a substantive evaluator. The removed primitive catalogue is not an
+The trusted compiler validates the human-selected project PRE and POST image
+attachments against immutable Operator-registered entries, validates bounded
+non-secret configuration against each entry's schema, and locks exact digests
+and order. The approval request retains the exact phase lists and binds them to
+authorization and replay; changing a list with the same replay key conflicts.
+Approval and the locked policy must match in both directions. A missing
+implementation does not block a source-sufficient proposal. An unconfigured
+required execution phase cannot activate. A presence check cannot stand in
+for a substantive evaluator. The removed primitive catalogue is not an
 alternate compiler or runtime path.
 
 Project-specific file/count/size/evidence requirements belong to these approved
@@ -687,23 +682,22 @@ false after the required evidence and authority checks.
 
 ## Post-Submit Policy Projection
 
-The unified compilation already contains the post-submit proposal before the
+The unified compilation already contains post-submit suggestions before the
 Project Manager approves the artifact/pre-submit chain. Approval creates the
-effective intake policy and compiled pre-submit policy; a separate operation
-then deterministically projects the same result's post-submit component. It
-does not resume finalized setup or invoke `PostSubmitCheckerPolicyDerivationAgent`.
+effective intake policy and compiled pre-submit policy, locking the human-selected
+POST attachments; a separate operation deterministically projects that approved
+POST policy. It does not resume finalized setup or invoke
+`PostSubmitCheckerPolicyDerivationAgent`.
 
-Bindings select exact registered image/configuration/schema identities and trace
-to the guide's requirement inventory. Both PRE and POST bindings carry only
-configuration accepted by the selected immutable registry schema. Capability
-gaps remain visible in a warning-ready draft and block activation until a later
-corrected compilation selects the registered implementation. Ordinary warnings
-may be acknowledged; unsupported automation cannot be silently reclassified as
-human review. Explicit approved `human_review` requirements remain valid and do
-not claim automated semantic coverage.
-They require `human_review_required=true`: false guide activation and final
-acceptance both reject any applicable approved `human_review` disposition.
-Passing every executable check cannot discharge that separate requirement.
+Human-selected phase attachments lock exact registered image/configuration/schema
+identities. Both PRE and POST attachments carry only configuration accepted by
+their selected immutable registry schemas. The setup proposal remains a
+source-cited specification; it cannot assign executable authority. The approval
+and activation guards require explicit complete phase selections, including
+empty lists when the authorized human intends no project image for that phase.
+ReviewPolicy requires human review by default. When it is false, passing all
+required checks invokes shared authorized final acceptance without a fabricated
+Review or reviewer contribution.
 
 Retained compilation results keep their exact hashes and public representation.
 The new `classification_rationale` and `check_specification` members are omitted
@@ -712,8 +706,8 @@ them. Newly compiled results must satisfy the complete typed contract before
 acceptance, so retained evidence does not relax new-generation requirements.
 
 The unified output is a constrained proposal. Workstream's trusted compiler owns the
-canonical `PostSubmitCheckerPolicy.policy_body`, hash and ordered external
-bindings. Workstream defaults belong to PRE, not a duplicated POST list. Runtime checker execution loads the locked compiled
+canonical `PostSubmitCheckerPolicy.policy_body`, hash and ordered human-selected
+external attachments. Workstream defaults belong to PRE, not a duplicated POST list. Runtime checker execution loads the locked compiled
 policy; it does not call the setup derivation agent to judge a contributor
 submission. Model-based runtime evaluation uses a separately registered checker
 and approved model profile; setup inference alone grants no runtime access.
@@ -752,18 +746,18 @@ Examples:
 ## Post-Submit Compiler Boundary
 
 `PostSubmitCheckerPolicy` is produced by Workstream's trusted post-submit
-compiler by projecting the exact approved external POST policy. The compiler owns the canonical
-runtime body and hash. Setup agents may propose registered checker names and
-PRE/POST classifications, but they do not produce executable runtime code and
-they do not decide submission outcomes at runtime.
+compiler by projecting the exact approved, human-selected external POST policy.
+The compiler owns the canonical runtime body and hash. Setup agents propose
+source-cited PRE/POST specifications; they do not see registered images, produce
+executable code or decide submission outcomes at runtime.
 
 Stored pre-cutover bodies preserve their original ordered entries and hashes
 as immutable provenance, without a runtime decoder or replay executor.
 
 Those bodies are retained provenance only. New POST bodies contain the exact
-approved external entries and `policy_sha256`; an empty approved POST binding
-set is valid. Saved requirement, capability/version, stage and configuration
-substitution rejects before projection. All required image results are consumed
+approved external entries and `policy_sha256`; an explicit empty approved POST
+attachment list is valid. Attachment ID, phase, image digest, schema and
+configuration substitution rejects before projection. All required image results are consumed
 by the selected outcome owner, without runtime catalogue lookup.
 
 ## Checker Run Flow — Target Contract
@@ -1066,11 +1060,11 @@ worker boundary. Determinism and automation do not select the stage.
 
 ### Saved guide proposal to post-submit policy
 
-POL-06A projects validated bindings from the saved unified guide result through
-this canonical compiler. Shared identical bindings emit one required checker;
-all requirement references remain in the saved proposal. Platform defaults are
-inserted once. The complete policy body and its canonical hash are the reviewable
-draft; separate operation receipts bind its source and approved upstream chain.
+POL-06A projects the approved human-selected POST attachments through this
+canonical compiler. The saved setup proposal remains independent of executable
+selection. Platform defaults are inserted once. The complete policy body and
+its canonical hash are the reviewable draft; separate operation receipts bind
+its source and approved upstream chain.
 Approval cannot supply a replacement body. Correction creates the existing
 unified successor, preserving the original result and policy evidence.
 
@@ -1081,8 +1075,8 @@ republishes missing derivations in bounded pages. Derivation supersedes any
 still-current prior policy. The proposal read identifies its exact derived
 policy, whose complete body is separately reviewed and approved. Projection and approval neither
 open guide documents nor invoke a model or runtime checker. Supported structural
-checks do not establish substantive work quality, and capability suggestions do
-not register implementations or bypass required gaps.
+checks do not establish substantive work quality, and setup suggestions do
+not register implementations or authorize execution.
 
 
 ## Retained history reads
@@ -1116,9 +1110,9 @@ alone confers no execution or acceptance authority.
 Preparation has no stored Submission to observe and never replaces the TASK
 evaluation guard.
 
-External PRE and POST bindings may carry the same bounded, flat typed parameters.
-Approval validates their JSON values against the exact registered configuration
-schema and retains both the values and configuration digest in the locked policy.
-Empty PRE parameters remain absent from serialized bindings so reading historical
-compilation evidence does not change its original hash. Array values serialize
-as JSON arrays before schema validation and digest computation.
+Human-selected external PRE and POST attachments may carry bounded, flat typed
+non-secret parameters. Approval validates their JSON values against the exact
+registered configuration schema and retains both values and configuration
+digest in the locked policy. Historical compilation evidence keeps its original
+bytes and hash. Array values serialize as JSON arrays before schema validation
+and digest computation.

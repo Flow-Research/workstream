@@ -158,7 +158,7 @@ This section is a human-readable summary. The enforcement source is the approved
 Every active guide version must have:
 
 - GuideSourceSnapshot:
-- ProjectGuideCompilation and exact result/component/catalogue lineage:
+- ProjectGuideCompilation and exact immutable result/component lineage:
 - Immutable setup finalization reference:
 - GuideSufficiencyReport:
 - SubmissionArtifactPolicy:
@@ -317,25 +317,22 @@ reviewer training note.
 ## Checker Coverage And Engineering Handoff
 
 Describe required outcomes in the guide; the PM need not label checks PRE or POST
-or design their implementations. Setup infers testable checks from those outcomes
-and task examples, and compares them with registered checker capabilities. Static
-or reliably bounded checks within 60 seconds belong before Submission creation;
-longer execution and model evaluation belong in background post-submit checks.
-Each checker requirement has a classification rationale and a typed specification
-of inputs, steps, pass conditions, findings, tests and runtime dependencies.
+or design their implementations. Setup reads the assigned guide documents and
+task examples and proposes source-cited check specifications. It does not see
+the checker registry, image choices or runtime profiles. Each proposed PRE or
+POST check explains its stage and gives inputs, steps, pass/fail findings and
+positive and negative implementation test examples. Missing guide information
+can block a proposal; a missing implementation alone cannot.
 
-Each required unsupported check produces one staged capability suggestion linked
-to that specification and guide evidence. Missing implementations produce a draft
-with warnings and prevent activation until covered by approved bindings; they do
-not by themselves make the guide insufficient. Actual guide blockers produce a
-blocked report and no policy. Supported matches retain exact registered references
-even in blocked reports. Explicit human decisions retain their authority, while
-supporting testable checks are classified separately. A fully covered project
-needs no suggestions. Optional improvements may appear in setup notes.
-
-The canonical compilation stores this handoff. POL-05 owns its manager-facing
-review, correction and approval surface. A manager can request engineering work;
-engineers implement, test and register accepted capabilities, deploy them, and
-a fresh authorized setup can select them. Suggestions themselves cannot
-implement, register, execute or activate checks. Manager feedback for improving
-the setup agent remains deferred.
+The canonical compilation stores the proposal for PM and engineering review.
+Engineering implements, tests, pushes to ECR and registers chosen external
+images. An authorized Project Manager then attaches explicit
+`pre_submit_attachments` and `post_submit_attachments` lists with exact image
+identities and non-secret configuration during approval. Empty lists are valid
+intent when no project image is required. Image attachments are phase choices,
+not one-to-one matches to setup suggestions; one image may cover several checks
+and a phase may use several images. The Workstream PRE default remains separate.
+Registration after proposal does not change its hash or require another setup
+run. Approval locks exact image digest and configuration. Suggestions never
+register, execute or activate checks. Optional/configurable automatic setup is
+deferred; manager feedback for improving setup remains deferred.
