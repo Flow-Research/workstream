@@ -95,6 +95,176 @@ def replace_request_digest():
     )
 
 
+def add_approval_attachment_validator() -> None:
+    """Verify the exact human attachment arrays against immutable locked images."""
+    op.execute("""
+CREATE FUNCTION public.guide_approval_attachments_valid(request jsonb, plan jsonb)
+RETURNS boolean LANGUAGE plpgsql STABLE STRICT
+SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE phase_name text; selected jsonb; entries jsonb; attachment jsonb; entry jsonb;
+        prior_key text; key_name text; index_no integer; pre_budget bigint := 60000;
+        post_budget bigint := 60000; registry_id uuid;
+BEGIN
+  IF jsonb_typeof(request) IS DISTINCT FROM 'object'
+     OR (SELECT count(*) FROM jsonb_object_keys(request))<>7
+     OR NOT request ?& ARRAY[
+       'target','acknowledged_warning_hashes',
+       'expected_previous_approval_operation_id',
+       'expected_previous_approval_output_digest','idempotency_key',
+       'pre_submit_attachments','post_submit_attachments']
+  THEN RAISE EXCEPTION 'approval request shape invalid' USING ERRCODE='23514'; END IF;
+  FOREACH phase_name IN ARRAY ARRAY['pre_submit','post_submit'] LOOP
+    selected := request->(phase_name||'_attachments');
+    entries := plan->phase_name->'entries';
+    IF jsonb_typeof(selected) IS DISTINCT FROM 'array'
+       OR jsonb_typeof(entries) IS DISTINCT FROM 'array'
+       OR jsonb_array_length(selected)>200
+       OR jsonb_array_length(selected)<>jsonb_array_length(entries)
+    THEN RAISE EXCEPTION 'approval attachment phase mismatch' USING ERRCODE='23514'; END IF;
+    prior_key := NULL; index_no := 0;
+    FOR attachment IN SELECT value FROM jsonb_array_elements(selected) AS item(value) LOOP
+      index_no := index_no+1;
+      entry := entries->(index_no-1);
+      key_name := attachment->>'requirement_id';
+      IF jsonb_typeof(attachment) IS DISTINCT FROM 'object'
+         OR (SELECT count(*) FROM jsonb_object_keys(attachment))<>4
+         OR key_name !~ '^[a-z][a-z0-9_.-]{0,99}$'
+         OR key_name LIKE 'workstream.%'
+         OR (prior_key IS NOT NULL AND key_name COLLATE "C" <= prior_key COLLATE "C")
+         OR jsonb_typeof(attachment->'configuration') IS DISTINCT FROM 'object'
+         OR octet_length((attachment->'configuration')::text)>65536
+         OR attachment->>'registry_entry_digest' !~ '^sha256:[0-9a-f]{64}$'
+      THEN RAISE EXCEPTION 'approval attachment invalid' USING ERRCODE='23514'; END IF;
+      registry_id := (attachment->>'registry_entry_id')::uuid;
+      IF (get_byte(uuid_send(registry_id),6) >> 4)<>7
+         OR (get_byte(uuid_send(registry_id),8) & 192)<>128
+         OR entry->>'requirement_id' IS DISTINCT FROM key_name
+         OR entry->>'stage' IS DISTINCT FROM phase_name
+         OR entry->'registry'->>'registry_entry_id' IS DISTINCT FROM registry_id::text
+         OR entry->'registry'->>'entry_digest' IS DISTINCT FROM
+              attachment->>'registry_entry_digest'
+         OR entry->'configuration' IS DISTINCT FROM attachment->'configuration'
+         OR entry->>'configuration_sha256' IS DISTINCT FROM
+              public.external_checker_registry_digest(attachment->'configuration')
+      THEN RAISE EXCEPTION 'locked image differs from approval attachment' USING ERRCODE='23514'; END IF;
+      IF phase_name='pre_submit' THEN
+        pre_budget := pre_budget + (entry#>>'{registry,resources,deadline_ms}')::bigint + 60000;
+      ELSE
+        post_budget := post_budget + (entry#>>'{registry,resources,deadline_ms}')::bigint
+          + 60000 + CASE WHEN attachment->'configuration'->>'workstream_forge_facts_version'='v1'
+                         THEN 120000 ELSE 0 END;
+      END IF;
+      prior_key := key_name;
+    END LOOP;
+  END LOOP;
+  IF pre_budget>7200000 OR post_budget>3400000 THEN
+    RAISE EXCEPTION 'locked image budget exceeded' USING ERRCODE='23514';
+  END IF;
+  RETURN true;
+EXCEPTION WHEN SQLSTATE '23514' THEN RAISE;
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'approval attachment value invalid' USING ERRCODE='23514';
+END $$
+    """)
+
+
+def replace_proposal_target() -> None:
+    """Current target binds the result format while old targets stay verifiable."""
+    signature = "public.require_guide_proposal_target(jsonb,text,uuid)"
+    replace_function(
+        signature,
+        ("DECLARE expected jsonb;", "DECLARE expected jsonb; result_version text;"),
+        (") INTO expected FROM project_guide_setup_finalizations f",
+         "),c.result_schema_version INTO expected,result_version FROM project_guide_setup_finalizations f"),
+        ("IF expected IS NULL OR target IS DISTINCT FROM expected",
+         """IF result_version='project_guide_check_specification.v1' THEN
+          expected := expected - ARRAY[
+            'pre_catalogue_id','pre_catalogue_version','pre_catalogue_schema_version',
+            'pre_catalogue_manifest_hash','post_catalogue_id','post_catalogue_version',
+            'post_catalogue_schema_version','post_catalogue_manifest_hash'
+          ] || jsonb_build_object('result_schema_version',result_version);
+        ELSIF result_version IS NOT NULL THEN
+          RAISE EXCEPTION 'guide proposal result format invalid' USING ERRCODE='23514';
+        END IF;
+        IF expected IS NULL OR target IS DISTINCT FROM expected"""),
+    )
+
+
+def replace_proposal_approval() -> None:
+    """Enforce full current request custody without reinterpreting old approvals."""
+    signature = "public.require_guide_proposal_approval()"
+    old = """OR a.request_digest IS DISTINCT FROM guide_proposal_hash(jsonb_build_object(
+             'target',a.target_json::jsonb,'idempotency_key',r.idempotency_key,
+             'acknowledged_warning_hashes',warning_hashes,
+             'expected_previous_approval_operation_id',prior.operation_id,
+             'expected_previous_approval_output_digest',prior.output_digest))"""
+    new = """OR (a.request_json IS NULL AND
+             a.request_digest IS DISTINCT FROM guide_proposal_hash(jsonb_build_object(
+               'target',a.target_json::jsonb,'idempotency_key',r.idempotency_key,
+               'acknowledged_warning_hashes',warning_hashes,
+               'expected_previous_approval_operation_id',prior.operation_id,
+               'expected_previous_approval_output_digest',prior.output_digest)))
+           OR (a.request_json IS NOT NULL AND (
+               a.target_json->>'result_schema_version' IS DISTINCT FROM
+                 'project_guide_check_specification.v1'
+               OR a.request_json->'target' IS DISTINCT FROM a.target_json::jsonb
+               OR a.request_json->>'idempotency_key' IS DISTINCT FROM r.idempotency_key::text
+               OR a.request_json->'acknowledged_warning_hashes' IS DISTINCT FROM warning_hashes
+               OR a.request_json->>'expected_previous_approval_operation_id'
+                    IS DISTINCT FROM prior.operation_id::text
+               OR a.request_json->>'expected_previous_approval_output_digest'
+                    IS DISTINCT FROM prior.output_digest
+               OR a.request_digest IS DISTINCT FROM public.guide_proposal_hash(a.request_json)
+               OR NOT public.guide_approval_attachments_valid(
+                    a.request_json,a.effective_pre_submit_plan::jsonb)))"""
+    replace_function(signature, (old, new))
+
+
+def replace_post_policy() -> None:
+    """New POST is the approval's locked body; retained POST keeps old evidence."""
+    signature = "public.require_post_policy_operation()"
+    # The existing locked-body equality is authoritative for both retained and
+    # current approvals. The old result-binding loops below are retired for
+    # current approvals only; retained rows keep their historical guard.
+    definition = op.get_bind().execute(
+        text("select pg_catalog.pg_get_functiondef(cast(:signature as regprocedure))"),
+        {"signature": signature},
+    ).scalar_one()
+    anchor = """      IF EXISTS(
+        SELECT 1 FROM project_guide_compilations c,
+          jsonb_array_elements(c.canonical_result::jsonb->'post_submit_bindings') binding"""
+    if definition.count(anchor) != 1:
+        raise RuntimeError("POST result-binding predecessor changed")
+    definition = definition.replace(anchor, "      IF a.request_json IS NULL THEN\n" + anchor)
+    tail = """      expected := jsonb_build_object(
+        'locator'"""
+    if definition.count(tail) != 1:
+        raise RuntimeError("POST resource predecessor changed")
+    definition = definition.replace(tail, "      END IF;\n" + tail)
+    old_catalogue = """         OR p.policy_body->>'catalogue_manifest_sha256' IS DISTINCT FROM t->'proposal'->>'post_catalogue_manifest_hash'"""
+    if definition.count(old_catalogue) != 0:
+        raise RuntimeError("POST current locked-body predecessor changed")
+    # Current resource JSON no longer carries catalogue_manifest_hash; retained
+    # rows keep that key and continue to compare against the old target.
+    resource = """        'catalogue_manifest_hash',t->'proposal'->>'post_catalogue_manifest_hash',"""
+    if definition.count(resource) != 1:
+        raise RuntimeError("POST resource catalogue predecessor changed")
+    definition = definition.replace(resource, "")
+    check = """IF NEW.resource_context_json::jsonb IS DISTINCT FROM expected"""
+    if definition.count(check) != 1:
+        raise RuntimeError("POST resource check predecessor changed")
+    definition = definition.replace(
+        check,
+        """IF a.request_json IS NULL THEN
+        expected := expected || jsonb_build_object(
+          'catalogue_manifest_hash',t->'proposal'->>'post_catalogue_manifest_hash');
+      END IF;
+      IF NEW.resource_context_json::jsonb IS DISTINCT FROM expected""",
+    )
+    op.execute(definition)
+    op.execute("ALTER FUNCTION " + signature + " SET search_path=pg_catalog,public,pg_temp")
+
+
 def upgrade():
     op.execute("SET LOCAL search_path=pg_catalog,public,pg_temp")
     op.execute(
@@ -202,6 +372,50 @@ def upgrade():
          "source_attempt.result_schema_version,source_attempt.canonical_result::jsonb,source_attempt.result_hash,"),
     )
     replace_request_digest()
+    op.execute(
+        "ALTER TABLE public.project_guide_proposal_approvals "
+        "ADD COLUMN request_json jsonb"
+    )
+    op.execute(
+        "ALTER TABLE public.project_guide_proposal_approvals "
+        "DROP CONSTRAINT ck_project_guide_proposal_approvals_ck_proposal_approval_sizes"
+    )
+    op.execute(
+        "ALTER TABLE public.project_guide_proposal_approvals "
+        "ADD CONSTRAINT ck_project_guide_proposal_approvals_ck_proposal_approval_sizes "
+        "CHECK (octet_length(target_json::text)<=16384 AND "
+        "(request_json IS NULL OR octet_length(request_json::text)<=1048576) AND "
+        "octet_length(receipt_json::text)<=32768 AND "
+        "octet_length(effective_pre_submit_plan::text)<=4194304)"
+    )
+    op.execute(
+        "CREATE FUNCTION public.require_current_guide_proposal_approval() "
+        "RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp "
+        "AS $$ BEGIN "
+        "IF NEW.request_json IS NULL OR NEW.target_json->>'result_schema_version' "
+        f"IS DISTINCT FROM '{RESULT}' THEN "
+        "RAISE EXCEPTION 'current guide approval request required' USING ERRCODE='23514'; "
+        "END IF; RETURN NEW; END $$"
+    )
+    op.execute(
+        "CREATE TRIGGER current_guide_proposal_approval_insert BEFORE INSERT ON "
+        "public.project_guide_proposal_approvals FOR EACH ROW EXECUTE FUNCTION "
+        "public.require_current_guide_proposal_approval()"
+    )
+    op.execute(
+        "CREATE TRIGGER current_guide_compilation_insert BEFORE INSERT ON "
+        "public.project_guide_compilations FOR EACH ROW EXECUTE FUNCTION "
+        "public.require_current_guide_specification_attempt()"
+    )
+    op.execute(
+        "CREATE TRIGGER current_guide_finalization_insert BEFORE INSERT ON "
+        "public.project_guide_setup_finalizations FOR EACH ROW EXECUTE FUNCTION "
+        "public.require_current_guide_specification_attempt()"
+    )
+    add_approval_attachment_validator()
+    replace_proposal_target()
+    replace_proposal_approval()
+    replace_post_policy()
 
 
 def downgrade():

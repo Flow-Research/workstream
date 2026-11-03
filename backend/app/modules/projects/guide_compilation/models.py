@@ -21,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import Base
 
@@ -964,6 +965,7 @@ class ProjectGuideProposalApproval(Base):
         ),
         CheckConstraint(
             "octet_length(target_json::text) <= 16384 and "
+            "(request_json is null or octet_length(request_json::text) <= 1048576) and "
             "octet_length(receipt_json::text) <= 32768 and "
             "octet_length(effective_pre_submit_plan::text) <= 4194304",
             name="ck_proposal_approval_sizes",
@@ -988,6 +990,7 @@ class ProjectGuideProposalApproval(Base):
     )
     target_json: Mapped[dict] = mapped_column(JSON)
     target_digest: Mapped[str] = mapped_column(String(71))
+    request_json: Mapped[dict | None] = mapped_column(JSONB)
     request_digest: Mapped[str] = mapped_column(String(71))
     resource_context_digest: Mapped[str] = mapped_column(String(71))
     output_digest: Mapped[str] = mapped_column(String(71))
