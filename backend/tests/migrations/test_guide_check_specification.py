@@ -114,6 +114,15 @@ async def test_guide_specification_migration_custody(postgres_database_url, migr
                     "(operation_id,target_json,request_json) values($1,$2::json,null)",
                     new_record_id(), json.dumps({"result_schema_version": "old"}),
                 )
+            for table in (
+                "project_guide_compilations", "project_guide_setup_finalizations",
+            ):
+                with pytest.raises(asyncpg.CheckViolationError):
+                    await connection.execute(
+                        f"insert into public.{table}(id,result_schema_version) "
+                        "values($1,'project_guide_compilation_result.v1')",
+                        new_record_id(),
+                    )
             empty_request = {
                 "target": {}, "acknowledged_warning_hashes": [],
                 "expected_previous_approval_operation_id": None,
@@ -151,6 +160,19 @@ async def test_guide_specification_migration_custody(postgres_database_url, migr
             locked = empty_plan | {"pre_submit": {"entries": [entry]}}
             check = "select public.guide_approval_attachments_valid($1::jsonb,$2::jsonb)"
             assert await connection.fetchval(check, json.dumps(selected), json.dumps(locked))
+            missing_image_id = {key: value for key, value in attachment.items()
+                                if key != "registry_entry_id"} | {"unexpected": True}
+            missing_locked_id = entry | {"registry": {
+                key: value for key, value in entry["registry"].items()
+                if key != "registry_entry_id"
+            }}
+            missing_requirement = {key: value for key, value in attachment.items()
+                                   if key != "requirement_id"} | {"unexpected": True}
+            missing_locked_requirement = {key: value for key, value in entry.items()
+                                          if key != "requirement_id"}
+            missing_locked_deadline = entry | {"registry": entry["registry"] | {
+                "resources": {},
+            }}
             for bad_request, bad_plan in (
                 (selected | {"unexpected": True}, locked),
                 (selected | {"pre_submit_attachments": [attachment, attachment]}, locked),
@@ -160,6 +182,11 @@ async def test_guide_specification_migration_custody(postgres_database_url, migr
                 (selected | {"pre_submit_attachments": [attachment | {"configuration": {"x": 1}}]}, locked),
                 (selected | {"pre_submit_attachments": [attachment | {"registry_entry_digest": canonical_json_hash({})}]}, locked),
                 (selected | {"pre_submit_attachments": [attachment | {"requirement_id": "workstream.default"}]}, locked),
+                (selected | {"pre_submit_attachments": [missing_image_id]},
+                 empty_plan | {"pre_submit": {"entries": [missing_locked_id]}}),
+                (selected | {"pre_submit_attachments": [missing_requirement]},
+                 empty_plan | {"pre_submit": {"entries": [missing_locked_requirement]}}),
+                (selected, empty_plan | {"pre_submit": {"entries": [missing_locked_deadline]}}),
                 (selected, empty_plan | {"pre_submit": {"entries": [
                     entry | {"registry": entry["registry"] | {"resources": {"deadline_ms": 7_200_000}}}
                 ]}}),

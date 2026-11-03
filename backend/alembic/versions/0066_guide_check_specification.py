@@ -128,12 +128,17 @@ BEGIN
       key_name := attachment->>'requirement_id';
       IF jsonb_typeof(attachment) IS DISTINCT FROM 'object'
          OR (SELECT count(*) FROM jsonb_object_keys(attachment))<>4
-         OR key_name !~ '^[a-z][a-z0-9_.-]{0,99}$'
+         OR NOT attachment ?& ARRAY[
+              'requirement_id','registry_entry_id','registry_entry_digest','configuration']
+         OR jsonb_typeof(attachment->'requirement_id') IS DISTINCT FROM 'string'
+         OR jsonb_typeof(attachment->'registry_entry_id') IS DISTINCT FROM 'string'
+         OR jsonb_typeof(attachment->'registry_entry_digest') IS DISTINCT FROM 'string'
+         OR (key_name ~ '^[a-z][a-z0-9_.-]{0,99}$') IS NOT TRUE
          OR key_name LIKE 'workstream.%'
          OR (prior_key IS NOT NULL AND key_name COLLATE "C" <= prior_key COLLATE "C")
          OR jsonb_typeof(attachment->'configuration') IS DISTINCT FROM 'object'
          OR octet_length((attachment->'configuration')::text)>65536
-         OR attachment->>'registry_entry_digest' !~ '^sha256:[0-9a-f]{64}$'
+         OR (attachment->>'registry_entry_digest' ~ '^sha256:[0-9a-f]{64}$') IS NOT TRUE
       THEN RAISE EXCEPTION 'approval attachment invalid' USING ERRCODE='23514'; END IF;
       registry_id := (attachment->>'registry_entry_id')::uuid;
       IF (get_byte(uuid_send(registry_id),6) >> 4)<>7
@@ -146,6 +151,8 @@ BEGIN
          OR entry->'configuration' IS DISTINCT FROM attachment->'configuration'
          OR entry->>'configuration_sha256' IS DISTINCT FROM
               public.external_checker_registry_digest(attachment->'configuration')
+         OR jsonb_typeof(entry#>'{registry,resources,deadline_ms}') IS DISTINCT FROM 'number'
+         OR (entry#>>'{registry,resources,deadline_ms}')::bigint<=0
       THEN RAISE EXCEPTION 'locked image differs from approval attachment' USING ERRCODE='23514'; END IF;
       IF phase_name='pre_submit' THEN
         pre_budget := pre_budget + (entry#>>'{registry,resources,deadline_ms}')::bigint + 60000;
