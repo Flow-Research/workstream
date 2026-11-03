@@ -16,7 +16,6 @@ from app.adapters.artifacts import (
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind, AuthorizationDenied
 from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
 from app.modules.projects.models import ProjectSetupRun
-from tests.checkers.external.support import capability_projection
 
 from tests.projects.client_fixtures import (
     project_client as project_client,
@@ -76,7 +75,6 @@ def acknowledge_automatic_setup(setup):
 def automatic_service(session, actor):
     inputs = CompilationRequestInputs(
         guide_document_manifest_port(session),
-        capability_projection(),
         runtime_configuration=runtime_configuration(),
     )
     return _execution_service(session, actor, request_inputs=inputs)

@@ -6,6 +6,7 @@ import pytest
 
 from app.interfaces.project_agents import (
     MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES,
+    CheckSpecification,
     ProjectGuideCompilationResult,
     project_guide_compilation_result_storage_bytes,
     validate_project_guide_compilation_result,
@@ -15,40 +16,30 @@ from .test_capability_growth import _context as growth_context, growth_report
 
 
 def large_report(length):
-    """Build valid multibyte prose within every individual field and array bound."""
+    """Build valid multibyte specifications within each field and collection bound."""
     report = growth_report()
-    requirement = report.requirements[1]
-    suggestion = report.capability_suggestions[0]
-    ref = suggestion.evidence_refs[0].model_copy(update={"section": "文" * 200})
-    refs = (ref, ref)
-    return report.model_copy(
-        update={
-            "requirements": tuple(
-                requirement.model_copy(
-                    update={
-                        "requirement_id": f"r{i}",
-                        "statement": "文" * length,
-                        "evidence_refs": refs,
-                    }
-                )
-                for i in range(200)
-            ),
-            "capability_suggestions": tuple(
-                suggestion.model_copy(
-                    update={
-                        "requirement_id": f"r{i}",
-                        "title": "文" * length,
-                        "rationale": "文" * length,
-                        "evidence_refs": refs,
-                    }
-                )
-                for i in range(200)
-            ),
-            "pre_submit_bindings": (),
-            "post_submit_bindings": (),
-        }
-    )
-
+    template = report.requirements[0]
+    prose = "文" * length
+    body = template.check_specification.model_dump(mode="json")
+    body["evaluation_method"] = prose
+    for field in ("check_steps", "pass_conditions", "positive_tests", "implementation_needs"):
+        body[field] = [prose]
+    body["inputs"][0]["purpose"] = prose
+    body["failure_findings"][0]["condition"] = prose
+    body["failure_findings"][0]["message"] = prose
+    body["negative_tests"][0]["scenario"] = prose
+    body["inability_to_evaluate"][0]["condition"] = prose
+    specification = CheckSpecification.model_validate(body)
+    ref = template.evidence_refs[0].model_copy(update={"section": "文" * 200})
+    return report.model_copy(update={
+        "requirements": tuple(template.model_copy(update={
+            "suggestion_id": f"r{i}",
+            "statement": prose,
+            "classification_rationale": prose,
+            "check_specification": specification,
+            "evidence_refs": (ref, ref),
+        }) for i in range(200)),
+    })
 
 def boundary_reports():
     """Find adjacent field lengths straddling the real four MiB envelope ceiling."""
@@ -79,15 +70,15 @@ def test_multibyte_storage_threshold_uses_driver_encoding():
         validate_project_guide_compilation_result(context(ids()), above)
 
 
-@pytest.mark.parametrize("gaps", [False, True])
-def test_actual_sdk_parser_accepts_current_handoff(gaps):
+@pytest.mark.parametrize("extra_checks", [False, True])
+def test_actual_sdk_parser_accepts_current_handoff(extra_checks):
     from agents import AgentOutputSchema
 
     schema = AgentOutputSchema(ProjectGuideCompilationResult)
     # Strict SDK parsing sees every field, including explicit linkage and evidence.
-    parsed = schema.validate_json(growth_report(gaps=gaps).model_dump_json())
+    parsed = schema.validate_json(growth_report(extra_checks=extra_checks).model_dump_json())
     validate_project_guide_compilation_result(growth_context(), parsed)
-    assert len(parsed.capability_suggestions) == (2 if gaps else 0)
+    assert len(parsed.requirements) == (4 if extra_checks else 2)
 
 
 def test_stored_revalidation_enforces_storage_limit_even_with_valid_hashes():
