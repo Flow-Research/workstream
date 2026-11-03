@@ -212,13 +212,14 @@ a model-only engineering fixture do not establish the real project journey.
 exact semantic projection of that historical handoff. Its
 `post_submit_capability_gap` disposition records the source proposal's state; it
 is not a current policy binding or a claim that the implemented trial runtime is
-unavailable. Qualification expresses the intended isolated execution and receipt
-assessment as advisory `implementation_needs` and `inability_to_evaluate` fields
-in the current check specification. These fields select no runtime or image.
-Human approval separately supplies the exact registered image and its model and
-trial configuration. A fresh setup proposal does not rewrite this image's frozen
-rubric; the manager and engineer must confirm that the image implements the
-project's requirements before attaching it.
+unavailable, and the bundled rubric is not input to fresh setup inference.
+The model-only qualification expresses its model-service need through advisory
+`implementation_needs` and `inability_to_evaluate` fields. Human approval
+separately supplies the exact registered image and model profile. A trial-bearing
+approval must additionally carry the exact trial selectors described below.
+A fresh setup proposal does not rewrite an image's frozen rubric; the manager
+and engineer must confirm that the image implements the project's requirements
+before attaching it.
 
 The locked POST configuration schema must declare all six flat trial selectors:
 `trial_profile_id`, `trial_profile_version`, `trial_profile_digest`,
