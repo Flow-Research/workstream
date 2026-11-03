@@ -104,10 +104,17 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     # Restore and validate the exact archived column inventory first. Only then
-    # add the nullable current-ORM projection, removed before the real upgrade.
+    # add nullable current-ORM projections, removed before the real upgrade.
     async with engine.begin() as connection:
         await connection.execute(text(
             "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
+        ))
+        for table in ("project_guide_compilation_attempts", "project_guide_compilations"):
+            await connection.execute(text(
+                f"ALTER TABLE public.{table} ADD COLUMN result_schema_version varchar(100)"
+            ))
+        await connection.execute(text(
+            "ALTER TABLE public.project_guide_proposal_approvals ADD COLUMN request_json jsonb"
         ))
     settings = _settings(tmp_path, maximum_bytes=1024 * 1024)
     manager = ArtifactScratchManager(
@@ -344,6 +351,9 @@ async def leave_predecessor_owner_shape(execute, database_url):
     await execute(database_url, (
         "DROP TABLE public.checker_result_findings; "
         "ALTER TABLE public.checker_runs DROP COLUMN input_context_custody; "
+        "ALTER TABLE public.project_guide_compilation_attempts DROP COLUMN result_schema_version; "
+        "ALTER TABLE public.project_guide_compilations DROP COLUMN result_schema_version; "
+        "ALTER TABLE public.project_guide_proposal_approvals DROP COLUMN request_json; "
         "ALTER TABLE public.submissions DROP COLUMN attempt_status, DROP COLUMN status_reason, "
         "DROP COLUMN decided_at, DROP COLUMN updated_at; "
         "ALTER TABLE public.task_assignments DROP COLUMN started_at, DROP COLUMN updated_at"

@@ -27,11 +27,16 @@ from app.modules.tasks.schemas import AssignmentResponse
 from tests.authorization.task_authority.test_concurrency import actor_context
 from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
+from tests.migration_revision_fixtures import (
+    _restore_historical_revision_rows, assert_historical_revision_guards,
+)
+from tests.project_create_fixtures import grant_fixture_admin_role
+from tests.test_alembic import _execute
 from tests.test_tasks import (
     task_client as current_task_client,
     task_database_env as task_database_env,
+    actor_id,
     admit_and_grant_project_submitter,
-    create_active_project,
     create_ready_task,
 )
 
@@ -49,9 +54,31 @@ async def predecessor_client(task_database_env, migration_lock):
     await db_session.dispose_engine()
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
+        await asyncio.to_thread(command.upgrade, _config(), "0047_revision_recovery")
+        seed = await _restore_historical_revision_rows(
+            task_database_env, "0047_revision_source_default",
+        )
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
+        # Current TASK owners read retained guide custody through current ORM
+        # columns. These null-only projections are removed before the upgrade.
+        await _execute(task_database_env, """
+            ALTER TABLE public.project_guide_compilation_attempts
+                ADD COLUMN result_schema_version varchar(100);
+            ALTER TABLE public.project_guide_compilations
+                ADD COLUMN result_schema_version varchar(100);
+            ALTER TABLE public.project_guide_proposal_approvals ADD COLUMN request_json jsonb
+        """)
     async for client in current_task_client.__wrapped__(task_database_env):
-        yield client
+        project_id = seed["request"]["project_id"]
+        await assert_historical_revision_guards(
+            db_session.get_session_factory(), "0064_checker_trial_evidence",
+        )
+        manager_id = await actor_id("project-manager-subject")
+        async with db_session.get_session_factory()() as session, session.begin():
+            await grant_fixture_admin_role(
+                session, manager_id, project_id=project_id,
+            )
+        yield client, project_id
 
 
 async def _claim(session, task_id, actor_id, *, started=False):
@@ -109,10 +136,10 @@ async def _claim(session, task_id, actor_id, *, started=False):
     return task, assignment
 
 
-async def _setup(client, monkeypatch):
-    project = await create_active_project(client)
-    tasks = [await create_ready_task(client, project["id"]) for _ in range(3)]
-    grant = await admit_and_grant_project_submitter(client, monkeypatch, project["id"], "historical-claimant")
+async def _setup(predecessor, monkeypatch):
+    client, project_id = predecessor
+    tasks = [await create_ready_task(client, project_id) for _ in range(3)]
+    grant = await admit_and_grant_project_submitter(client, monkeypatch, project_id, "historical-claimant")
     return tasks, grant["actor_profile_id"]
 
 
@@ -158,6 +185,11 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
         assignment_id = assignment.id
         await session.commit()
     await db_session.dispose_engine()
+    await _execute(get_settings().database_url, """
+        ALTER TABLE public.project_guide_compilation_attempts DROP COLUMN result_schema_version;
+        ALTER TABLE public.project_guide_compilations DROP COLUMN result_schema_version;
+        ALTER TABLE public.project_guide_proposal_approvals DROP COLUMN request_json
+    """)
     await asyncio.to_thread(command.upgrade, _config(), "head")
     async with db_session.get_session_factory()() as session:
         after = await _snapshot(session)
