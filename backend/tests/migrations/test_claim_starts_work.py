@@ -29,9 +29,9 @@ from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
     _restore_historical_revision_rows, assert_historical_revision_guards,
+    add_retained_guide_read_projection, drop_retained_guide_read_projection,
 )
 from tests.project_create_fixtures import grant_fixture_admin_role
-from tests.test_alembic import _execute
 from tests.test_tasks import (
     task_client as current_task_client,
     task_database_env as task_database_env,
@@ -61,13 +61,8 @@ async def predecessor_client(task_database_env, migration_lock):
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
         # Current TASK owners read retained guide custody through current ORM
         # columns. These null-only projections are removed before the upgrade.
-        await _execute(task_database_env, """
-            ALTER TABLE public.project_guide_compilation_attempts
-                ADD COLUMN result_schema_version varchar(100);
-            ALTER TABLE public.project_guide_compilations
-                ADD COLUMN result_schema_version varchar(100);
-            ALTER TABLE public.project_guide_proposal_approvals ADD COLUMN request_json jsonb
-        """)
+        async with db_session.get_engine().begin() as connection:
+            await add_retained_guide_read_projection(connection)
     async for client in current_task_client.__wrapped__(task_database_env):
         project_id = seed["request"]["project_id"]
         await assert_historical_revision_guards(
@@ -184,12 +179,9 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
         before = await _snapshot(session)
         assignment_id = assignment.id
         await session.commit()
+    async with db_session.get_engine().begin() as connection:
+        await drop_retained_guide_read_projection(connection)
     await db_session.dispose_engine()
-    await _execute(get_settings().database_url, """
-        ALTER TABLE public.project_guide_compilation_attempts DROP COLUMN result_schema_version;
-        ALTER TABLE public.project_guide_compilations DROP COLUMN result_schema_version;
-        ALTER TABLE public.project_guide_proposal_approvals DROP COLUMN request_json
-    """)
     await asyncio.to_thread(command.upgrade, _config(), "head")
     async with db_session.get_session_factory()() as session:
         after = await _snapshot(session)
