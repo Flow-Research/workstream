@@ -354,13 +354,14 @@ An upload receipt is not setup completion, policy approval or guide activation.
 setup status and compilation lineage. A successful diagnostic read is not
 approval or activation; there is no polling or setup execution in the CLI.
 `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` reads
-the exact finalized proposal, findings, requirement inventory and proposed
-intake/evaluation bindings. It never substitutes the latest compilation or
-approves a policy; blocked and historical proposals remain observations.
+the exact finalized proposal, findings, artifact policy and PRE/POST suggestions
+with their check specifications and target. It never substitutes the latest
+compilation or approves a policy.
 `workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input
 FILE --idempotency-key UUID` submits the deliberately prepared public intake
 approval request. It preserves the exact target, ordered warning acknowledgments
-and prior-approval selectors with explicit manual replay. The backend owns fresh
+and prior-approval selectors, plus the explicit human PRE/POST image attachment
+lists, with explicit manual replay. The backend owns fresh
 authority, currentness and policy validation; the receipt proves intake approval,
 not post-policy approval, post-policy job delivery or guide activation.
 `workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID`

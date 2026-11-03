@@ -290,9 +290,9 @@ unavailable required image and may proceed after the default checker passes.
 
 Guide activation requires the exact approved phase policies and their locked
 registered images and configurations. Registry publication alone grants no
-project authority. A missing required execution configuration cannot silently
-approve an unimplemented phase; the authorized human must make an explicit
-phase attachment choice. Registering an image after proposal does not alter
+project authority. Approval requires both phase attachment lists to be present;
+explicit empty lists are valid human choices. Suggestions impose no image-membership
+requirement. Registering an image after proposal does not alter
 the proposal hash or require another setup run.
 
 The target launcher and checker integration use the agreed Rust service and
@@ -664,9 +664,9 @@ non-secret configuration against each entry's schema, and locks exact digests
 and order. The approval request retains the exact phase lists and binds them to
 authorization and replay; changing a list with the same replay key conflicts.
 Approval and the locked policy must match in both directions. A missing
-implementation does not block a source-sufficient proposal. An unconfigured
-required execution phase cannot activate. A presence check cannot stand in
-for a substantive evaluator. The removed primitive catalogue is not an
+implementation does not block a source-sufficient proposal. Both phase attachment
+lists must be present; explicit empty lists are valid and suggestions impose no
+image-membership requirement. A presence check cannot stand in for a substantive evaluator. The removed primitive catalogue is not an
 alternate compiler or runtime path.
 
 Project-specific file/count/size/evidence requirements belong to these approved

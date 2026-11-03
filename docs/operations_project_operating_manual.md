@@ -132,10 +132,10 @@ manual diagnostic report is neither reused nor linked as compilation output.
 The three former inference steps and sufficiency-run endpoint are removed.
 
 A ready compilation persists separate pre-submission and post-submission
-proposals and stops at a draft. Missing required checker implementations produce
-a warning-ready draft with staged capability gaps; those gaps still block
-activation. An insufficient guide with an actual guide blocker or blocking
-finding stops without draft policy projection.
+suggestions and stops at a draft. Missing implementations do not block a
+source-sufficient proposal or create a warning. Humans choose the external images
+later during approval. An insufficient guide with an actual guide blocker or
+blocking finding stops without draft policy projection.
 The latest setup diagnostic reflects durable invalid or unresolved provider
 outcomes without rewriting setup evidence. An uncertain attempt is never
 invoked again. Transport failures retry the same task and attempt. After bounded Celery retries
@@ -341,8 +341,8 @@ tested external images to ECR and registers their exact identities. During
 approval, an authorized Project Manager supplies explicit
 `pre_submit_attachments` and `post_submit_attachments` lists with non-secret
 configuration. These phase choices need not correspond one-to-one to
-suggestion IDs. Empty lists express valid human intent; approval and activation
-still require complete execution choices for any required phase. Workstream's
+suggestion IDs. Both lists must be present; explicit empty lists express valid
+human intent. Suggestions impose no image-membership requirement. Workstream's
 default covers only bounded ZIP safety, received-byte/manifest identity,
 high-confidence secret detection and unchanged-work detection. Required files,
 layout, project metadata and project-specific content rules still need project
@@ -474,13 +474,13 @@ authorized Project Manager supplies explicit `pre_submit_attachments` and
 The attachment lists are independent of suggestion IDs. Empty lists are valid
 human intent; the Workstream PRE default remains separate. Approval locks exact
 image digest and configuration, and registration after proposal does not change
-the proposal hash. A required execution phase cannot silently activate without
-complete human choices.
+the proposal hash. Omitted or null phase lists reject; explicit empty lists are
+complete human choices and suggestions impose no image-membership requirement.
 
-Historical results remain byte- and hash-stable. Reads and recovery omit the new
-members when an older retained result did not contain them; they never synthesize
-a rationale or specification. Strict completeness applies to newly compiled
-results before persistence and projection.
+Historical results remain byte- and hash-stable. Private retained-evidence readers
+verify their original fields and hashes for existing locked policies without
+synthesizing specifications. Current proposal reads and approvals accept the
+current specification contract only; historical results cannot enter that path.
 
 The runtime opens every assigned original once through the attempt's exact
 document grant and records each read. It allocates no provider container or

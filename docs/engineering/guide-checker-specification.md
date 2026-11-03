@@ -79,8 +79,9 @@ Workstream PRE default stays separate. Approval retains the exact lists, binds
 them to authorization and replay, and locks image digests and configuration.
 Registration after the proposal does not change its hash or require a new setup
 run. POST projection consumes the approved locked POST policy. Registry
-publication alone grants no project execution authority. A required phase
-cannot silently activate without complete human execution choices.
+publication alone grants no project execution authority. Both phase attachment
+lists must be present; explicit empty lists are valid and suggestions impose no
+image-membership requirement.
 
 ## Rejection and correction
 

@@ -515,9 +515,9 @@ Statuses:
 
 The run references downstream truth by id/hash. Operators can read the latest
 run through the project setup API to understand whether setup is still queued,
-blocked by guide sufficiency, waiting on policy approval, compiling post-submit
-policy, blocked by unsupported checker requirements, or failed at the Celery
-queue layer. Retained error summaries and post-submit derivation summaries are
+blocked by guide sufficiency, waiting on policy approval, deriving the approved
+post-submit policy, or failed at the Celery queue layer. Setup does not inspect
+checker availability; human image attachments are supplied during approval. Retained error summaries and post-submit derivation summaries are
 bounded and redacted. Operational diagnostics use fixed safe events plus
 validated request and correlation IDs; they do not retain sensitive messages or
 bodies. See the [observability operator guide](engineering/observability.md) for

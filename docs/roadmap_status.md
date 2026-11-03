@@ -581,8 +581,9 @@ and POST image attachment choices during policy approval. The phase lists are
 independent of suggestion IDs and may intentionally be empty; the Workstream
 PRE default stays separate. Approval locks exact image digest and configuration.
 Registration after proposal does not change its hash or require another setup
-run. Missing implementation does not block a source-sufficient proposal;
-incomplete required execution choices still cannot silently activate. Retained
+run. Missing implementation does not block a source-sufficient proposal. Both
+phase lists must be present; explicit empty lists are valid, and suggestions impose
+no image-membership requirement. Retained
 result bytes and hashes remain immutable evidence, not an alternate compiler or
 executor. Setup inference is not a runtime judge.
 The inference adapter drafts a candidate, then reviews source coverage in a fresh
@@ -1124,9 +1125,9 @@ cannot be reused as post-submission review-gate evidence. See the
   so a replacement manager can discover and explicitly dispatch a pending correction
   after the creator is revoked, without the original creation receipt.
   Superseded post-submit setup/approval/correction routes are removed. POL-06A
-  implements hidden deterministic projection of the saved post-submit proposal,
-  complete draft read, separate approval and correction through the existing
-  unified successor. Immutable operation receipts replace role-string authority
+  implements deterministic projection from the approval-locked human POST policy,
+  retaining the saved proposal's provenance. It also supplies complete draft reads,
+  separate approval and correction through the existing unified successor. Immutable operation receipts replace role-string authority
   in affected readers. AUTH-12G supplies live fixed-service and exact-project manager adapters. POL-06B exposes the complete post-policy read, separate approval and correction, with automatic deterministic derivation and approval-driven recovery. Real Terra runs through API upload,
   MinIO, the Celery handler and PostgreSQL proved both blocked findings and ready
   draft policy outcomes, with exact replay and provider cleanup. Broker delivery
@@ -1859,8 +1860,9 @@ images; only a complete pass permits immutable Submission creation and durable
 POST dispatch. Under PR #697, setup suggestions do not select registered images;
 an authorized Project Manager supplies exact phase attachments, including
 intentional empty lists, and approval locks their digest/configuration identities.
-Registration alone grants no project authority, and incomplete required execution
-choices cannot silently activate. Production completion routes true-policy success to review_pending
+Registration alone grants no project authority. Both phase lists must be present;
+explicit empty lists are valid, and suggestions impose no image-membership
+requirement. Production completion routes true-policy success to review_pending
 and false-policy success through shared atomic acceptance. Default failures prevent
 Submission creation; infrastructure failures retain recoverable outcomes. Local
 Rust/MinIO integration evidence uses runc/docker-dev, not gVisor. ARCH-02I-B

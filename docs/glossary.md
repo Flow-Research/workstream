@@ -249,10 +249,10 @@ The deterministic merge of Workstream's default submission artifact policy and t
 ## Pre-Submit Checker Policy
 
 The approved, versioned bindings for project checks before Submission creation.
-Setup derives requirements from the guide and task examples, proposes bindings
-to registered external capabilities, and identifies missing implementations.
-Engineering supplies missing checker images; corrected or recompiled proposals
-require approval before activation. Registration alone does not update policy.
+Setup reads the guide and task examples and proposes PRE/POST check specifications.
+Engineering implements and registers external checker images; the Project Manager
+then supplies explicit phase attachments during approval. Registration does not
+change the proposal hash or require another setup run, and does not update policy.
 
 The compiled plan commits to the Workstream default checker's identity and exact
 external registry, image and configuration identities. Tasks lock the approved

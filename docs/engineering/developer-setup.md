@@ -258,8 +258,8 @@ retained proposal.
 Both phases share one attempt, trusted document tools, client, overall timeout and
 aggregate model-turn/tool budgets. The draft can use at most half the configured turn
 allowance; review receives the unused remainder. Full serialized review and correction
-inputs (original credential-free context, including any retained correction predecessor,
-plus candidate and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
+inputs (assigned guide material and task examples, plus the same-run candidate
+and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
 bytes, configured through `WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES`; an oversized
 envelope is terminal invalid output. Every phase and correction must
 initially read every assigned original, including for blocked proposals. Only a
@@ -270,27 +270,24 @@ A review failure, cancellation, invalid result or exhausted budget does not publ
 the unchecked draft. This is a bounded phase of the same attempt, not a retry of
 an uncertain or terminal invocation. PM review and approval remain separate.
 
-Direct registry `const` failures and those in a single-branch `oneOf` identify
-binding and parameter-value positions in those diagnostics. Other schema failures
-retain a generic closed code. Expected constants, rejected values and exception
-text are never returned. The exact registered configuration schema remains authoritative.
+Specification failures identify bounded field paths and closed error codes.
+Rejected values and exception text are never returned. Registry configuration
+validation belongs to human image attachment at approval, not to setup inference.
 
-For a manager correction, both phases receive the exact retained predecessor
-proposal alongside feedback. The server validates its project, guide, source,
-generation, finalization and canonical/component hashes against the saved target.
-The body is untrusted comparison material, not evidence or approval. Its existing
-feedback result hash commits it in the attempt identity; materializing the body
-does not rewrite that identity or retained results. The complete prompt, including
-this body, must fit the configured input bound before dispatch. A missing,
-substituted or oversized predecessor fails closed. Provider uncertainty still
-prevents redispatch.
+For a manager correction, the server validates predecessor and feedback custody
+against the saved project, guide, source, generation, finalization and hashes.
+These retained facts bind the request identity; they are not model inputs. Both
+phases start from the assigned guide material and task examples. Same-run draft
+review and bounded invalid-output feedback remain internal phases of that attempt.
+Retained results are never rewritten, and provider uncertainty prevents redispatch.
 
-The specification is validated as data: execution mode and duration, material
-inputs, ordered checks, pass conditions, coded findings, positive and negative
-cases, runtime dependencies and infrastructure failures must agree. Current
-images are offline and do not implicitly receive task/guide prose or model access.
-Older retained results remain readable with the new fields absent; new results
-cannot use that historical omission. Known invalid inference output receives at
+The specification is validated as data: suggested method, inputs, ordered steps,
+pass conditions, work findings, positive and negative examples, implementation
+needs and inability outcomes must agree. These describe proposed behavior, not
+registered capabilities or runtime settings. New proposals use the strict
+`project_guide_check_specification.v1` contract. Original retained results remain
+private read-only evidence for existing locked policies; they cannot enter the
+current proposal approval or compilation path. Known invalid inference output receives at
 most two corrections in each drafting and review phase, using bounded field paths
 and error codes within the original shared execution budget. Exhaustion ends
 terminally; provider uncertainty is never retried as an output correction.
