@@ -1440,7 +1440,8 @@ Unified guide compilation separates request authority from selected runtime exec
 `project.guide_compilation.request` requires a current exact-project Project
 Manager grant; system-scoped grants do not substitute. Transaction-bound PREP
 binds the actor, identity link, matched grant, immutable guide/setup lineage,
-catalogue manifests, agent/instruction versions, and operation/request facts.
+assigned source and task-example identity, agent/instruction versions, and
+operation/request facts. Registry inventory is not setup model input.
 `project.guide_compilation.execute` belongs only to `workstream.project.setup`.
 Its pre-execution check validates the complete typed attempt and any credentials
 required by the selected inference adapter. The manager-authored runtime requires
@@ -1507,8 +1508,9 @@ post-submit policy derivation with the fixed setup identity and separate approva
 or correction with a current exact-project manager grant; neither approval gate is required for draft finalization.
 
 The post-policy adapter consumes the POL-owned finalization, upstream approval,
-projection, source, catalogue, effective/pre-submit and policy commitments without
-recomputing business identity or policy content. Its complete draft read reuses
+projection, source, human-selected phase attachments, effective/pre-submit and
+policy commitments without recomputing business identity or policy content.
+Its complete draft read reuses
 `project.guide_compilation.review_package.read` with `project.guide.manage`;
 private preparation distinguishes post-policy and unified-proposal operations,
 so their handles cannot be exchanged. Mutation evidence retains the exact public
@@ -1525,7 +1527,7 @@ The 12F1 foundation binds each future submission-policy handle to the exact
 project/guide/source lineage, mutation target, operation and request digests,
 policy generation, actor/link and grant-or-fixed-service custody, and current
 root transaction. Unified approval replaces the manual approval resource. Its canonical proposal
-commitments bind both catalogues, complete result/component hashes and the
+commitments bind explicit human phase attachments, complete result/component hashes and the
 actual compiled/effective output hashes through the POL-owned target and receipt. Its replay reservation distinguishes human
 idempotency from fixed setup-service task custody. Manual mutations permit only
 `pending -> committed`. Fixed-service derivation uses the 12F3 one-way
@@ -1729,9 +1731,10 @@ selectors and that digest, never the policy body or guide material.
 
 Replay validates the original event under fresh live authority and returns the
 original receipt without another activation or decision. Readiness and policy
-selection remain CP07 responsibilities. A complete supported
-`human_review_required=false` guide activates only when the exact approved
-requirement inventory contains no `human_review` disposition. The existing exact-manager post-policy read
+selection remain CP07 responsibilities. A `human_review_required=false` guide
+requires complete approved PRE and POST phase attachments and the existing
+shared-acceptance guards. Setup suggestions do not choose review mode. The
+existing exact-manager post-policy read
 also discloses activation selections, with the complete response bound to its
 authorization digest; this grants no Finance policy-body access.
 

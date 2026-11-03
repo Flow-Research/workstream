@@ -1035,7 +1035,7 @@ Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. ART constructs an audit-ready projection;
 publication as a task event named `pre_submission_check_failed` remains pending.
-That event must use bounded identifiers, catalogue identity,
+That event must use bounded default and approved image identities,
 stable codes, counts and categories for project operators. It excludes paths,
 filenames, scratch/provider references, raw output, evidence contents,
 credentials and free-form checker messages. Pre-submit results never return
@@ -1052,15 +1052,17 @@ and `policy_hash`; required/warning checker and blocking-severity sidecars;
 
 `policy_body` is the sole execution body. Its hash is
 `sha256(canonical_json(policy_body))`; sidecars must match it. Lifecycle is
-`compiled`, `approved` or `superseded`. POL-06A derives a compiled policy only
-from a finalized unified result with the current approved artifact/effective/
-pre-submit chain. Separate exact-target manager approval records its receipt.
+`compiled`, `approved` or `superseded`. POL-06A derives a compiled policy from
+the approved human-selected POST attachments with the finalized unified result
+and current approved artifact/effective/pre-submit chain as provenance.
+Separate exact-target manager approval records its receipt.
 Both compiled and approved policies may be corrected while their setup is current.
 
 The append-only `project_post_policy_operations` family records derive, approve
 and correction receipts with exact actor, identity link, grant or fixed service,
-authorization decision, finalization, source/result, upstream approval, catalogue
-and policy commitments. Active-guide readers require that custody. Historical
+authorization decision, finalization, source/result, upstream approval,
+human-selected phase attachments and policy commitments. Active-guide readers
+require that custody. Historical
 role-string approval/supersession columns remain inert retained data; they do not
 authorize operations and receive no new writes.
 
@@ -1071,11 +1073,13 @@ It may have the same canonical hash: new generation/approval custody identifies
 the replacement. A general unified correction also invalidates the predecessor's
 current upstream; subsequent post-policy derivation supersedes it atomically.
 
-The policy operations consume the saved result without model, document or checker
-calls. AUTH-12G supplies authorization; POL-06B connects public manager decisions
+The policy operations consume the approved phase selections and saved result
+provenance without model, document or checker calls. AUTH-12G supplies
+authorization; POL-06B connects public manager decisions
 and approval-driven automatic derivation/recovery. Setup remains
-immutable. The existing complete proposal retains requirements, exact registered
-bindings, safe findings and non-executable capability suggestions. Evidence binds
+immutable. The existing complete proposal retains source-cited PRE/POST
+suggestions, artifact requirements and safe findings, without registered images
+or runtime availability choices. Evidence binds
 assigned original-document versions and hashes; model page/section attributions
 do not become verified judgments. Review display excludes credentials, private
 storage locators, signed URLs and raw source excerpts. No second derivation
@@ -1091,13 +1095,15 @@ The current compiler projects the exact approved external POST policy. Its
 canonical body contains:
 
 - `schema_version`: `external_post_submit_policy.v1`
-- ordered `entries` containing the exact approved external POST bindings
+- ordered `entries` containing the exact approved human-selected external POST images
 - `policy_sha256`, committing the canonical body without that digest field
 
-Each binding contains its `requirement_id`, `stage`, immutable `registry`
-publication, `configuration` and `configuration_sha256`. Registry phase,
-configuration schema, exact selected identities and hashes are validated. All
-approved POST entries are required; an empty approved binding set is valid.
+Each policy member contains its external-protocol `requirement_id`, `stage`,
+immutable `registry` publication, `configuration` and `configuration_sha256`.
+This execution key is independent of setup `suggestion_id`; no one-to-one
+mapping is required. Registry phase, configuration schema, exact selected
+identities and hashes are validated. All approved POST entries are required;
+an explicit empty approved attachment list is valid human intent.
 The [current checker framework](architecture_checker_framework.md#post-submit-compiler-boundary)
 defines this contract.
 

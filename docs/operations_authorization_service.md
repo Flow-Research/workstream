@@ -1261,8 +1261,9 @@ changing these selectors: active and superseded guide selections remain frozen.
 omitted replacements preserve the exact predecessor's value. Every new version
 uses `semantics_format=v2` and hashes the explicit setting. Existing v1 rows
 retain their hashes and mean true; incomplete history remains incomplete.
-False may be saved in draft. A complete supported guide may activate when its
-exact approved requirement inventory contains no `human_review` disposition.
+False may be saved in draft. Activation requires complete, explicitly approved
+PRE and POST image attachments and the existing policy and authority guards;
+setup suggestions cannot select the ReviewPolicy branch.
 New false/pass acceptance effects still require an authorized live REV generation.
 An exact committed retry recovers the original response under the adopted
 WS-XINT-003-02B actor/request contract; it does not reselect today's policy or
@@ -1305,9 +1306,10 @@ locks project and policy resources. A nominal one-use handle binds the operation
 request, identity, session and root transaction. The complete CP07 facts digest is
 the exact digest saved in the allow event, mutation ledger and activation receipt.
 CP07 still owns complete-chain readiness, separate approvals, ContributionPolicy
-validation and atomic activation/supersession. A complete supported
-`human_review_required=false` guide activates only when its exact approved
-requirement inventory contains no `human_review` disposition.
+validation and atomic activation/supersession. A
+`human_review_required=false` guide requires complete approved PRE and POST
+phase selections and the existing shared-acceptance guards. An explicit empty
+phase list is valid human intent; setup suggestions cannot choose review mode.
 
 Exact replay acquires fresh live authority and validates the retained decision;
 it returns the original receipt without a second allow or activation. Supersession
