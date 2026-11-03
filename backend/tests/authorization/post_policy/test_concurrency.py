@@ -108,7 +108,7 @@ async def test_concurrent_derive_commits_once(clean_postgres_database):
     from tests.projects.post_policy.pg_support import prepare_upstream
 
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        payload = await prepare_upstream(factory, command, actor, grant)
+        payload = await prepare_upstream(factory, command, actor, grant, values)
         setup = service_actor(values)
         held, started, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
         pids = {}

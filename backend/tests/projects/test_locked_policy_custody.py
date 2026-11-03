@@ -161,6 +161,8 @@ async def test_context_read_does_not_allow_activated_proposal_mutations(clean_po
                     grant,
                     GuideProposalApproval(
                         target=target,
+                        pre_submit_attachments=(),
+                        post_submit_attachments=(),
                         idempotency_key=uuid4(),
                         acknowledged_warning_hashes=receipt.command.target.upstream.acknowledged_warning_hashes,
                     ),

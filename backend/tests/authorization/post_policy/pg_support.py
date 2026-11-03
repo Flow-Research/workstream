@@ -84,7 +84,7 @@ async def operate(factory, actor, operation, command):
 @asynccontextmanager
 async def ready_case(url):
     async with source_case(url) as (values, factory, command, actor, grant):
-        payload = await prepare_upstream(factory, command, actor, grant)
+        payload = await prepare_upstream(factory, command, actor, grant, values)
         setup_actor = service_actor(values)
         projected = await operate(factory, setup_actor, "derive", payload)
         yield factory, command, actor, grant, setup_actor, payload, projected
