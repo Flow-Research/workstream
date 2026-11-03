@@ -13,12 +13,14 @@ from test_http_boundary import PROJECT, TOKEN, assert_failure, http_fixture
 def approval():
     return {
         "target": proposal()["target"],
-        "pre_submit_attachments": [{
-            "requirement_id": "project.results",
-            "registry_entry_id": PROJECT,
-            "registry_entry_digest": HASH,
-            "configuration": {"required": True, "labels": ["research", 2]},
-        }],
+        "pre_submit_attachments": [
+            {
+                "requirement_id": "project.results",
+                "registry_entry_id": PROJECT,
+                "registry_entry_digest": HASH,
+                "configuration": {"required": True, "labels": ["research", 2]},
+            }
+        ],
         "post_submit_attachments": [],
         "acknowledged_warning_hashes": [HASH],
     }
@@ -81,7 +83,10 @@ def test_approval_exact_post_raw_input_defaults_and_uuid_identity(cli, tmp_path)
         both_phases = approval()
         both_phases["post_submit_attachments"] = [
             both_phases["pre_submit_attachments"][0]
-            | {"requirement_id": "project.post_evidence", "configuration": {"threshold": 0.9}}
+            | {
+                "requirement_id": "project.post_evidence",
+                "configuration": {"threshold": 0.9},
+            }
         ]
         bodies.append(both_phases)
         omitted = approval()
@@ -160,7 +165,12 @@ def test_approval_invalid_input_never_dispatches(cli, tmp_path):
         for value in (None, [None], [HASH, HASH], ["bad"], [HASH] * 201):
             variants.append(approval() | {"acknowledged_warning_hashes": value})
         for phase in ("pre_submit_attachments", "post_submit_attachments"):
-            for attachments in (None, {}, [None], [approval()["pre_submit_attachments"][0]] * 201):
+            for attachments in (
+                None,
+                {},
+                [None],
+                [approval()["pre_submit_attachments"][0]] * 201,
+            ):
                 variants.append(approval() | {phase: attachments})
         for malformed in (
             {"requirement_id": "workstream.archive"},

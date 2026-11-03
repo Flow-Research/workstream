@@ -255,7 +255,10 @@ def main():
                     publish_unpaid_terms(client, tokens["finance"], project_id)
                     guide_id = configure_guide(client, tokens, project_id)
                     approve_and_activate(
-                        client, tokens["manager"], project_id, guide_id,
+                        client,
+                        tokens["manager"],
+                        project_id,
+                        guide_id,
                         registry_entries,
                     )
                     client.complete_stage("public_guide_activation")
