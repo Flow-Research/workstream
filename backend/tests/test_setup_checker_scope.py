@@ -1,317 +1,63 @@
-"""Setup proposes only checks and repairs strict output without granting new authority."""
+"""Setup proposes readable checks without selecting external implementations."""
 
 import copy
 import json
-import re
 from types import SimpleNamespace
 
 import pytest
 
-from app.adapters.project_agents.compilation_draft import (
-    CompilationDraftParser,
-    generated_compilation_schema,
-)
+from app.adapters.project_agents.compilation_draft import CompilationDraftParser
 from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
-from app.core.project_guide_instructions import (
-    PROJECT_GUIDE_INSTRUCTIONS,
-    PROJECT_GUIDE_OUTPUT_EXAMPLE,
-)
+from app.core.project_guide_instructions import PROJECT_GUIDE_INSTRUCTIONS, PROJECT_GUIDE_OUTPUT_EXAMPLE
 from app.interfaces.project_agents import (
-    CheckRuntimeDependency,
-    CheckSpecification,
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
-    require_complete_generated_specifications,
-)
-from app.modules.projects.guide_compilation.contracts import accepted_compilation_result
-from app.modules.checkers.api.external import (
-    ExternalCheckerRegistryEntry,
-    ExternalCheckerRegistrySpec,
-    ExternalCheckerSchema,
-    external_checker_json_hash,
 )
 from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
-from tests.checkers.external.support import capability_projection, registry_entry
-from tests.projects.guide_compilation.helpers import (
-    context,
-    generated_result,
-    ids,
-    runtime_configuration,
-    valid_specification,
-)
+from tests.projects.guide_compilation.helpers import context, generated_result, ids, runtime_configuration
 from tests.test_agent_runtime import (
-    _compile,
-    _open_prompt_documents,
-    _provider_payload,
-    _sdk_result,
+    _compile, _open_prompt_documents, _provider_payload, _sdk_result,
     model_credentials,  # noqa: F401
 )
 
 
 def _schema():
     from agents import AgentOutputSchema
-
-    return generated_compilation_schema(
-        AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
-    )
+    return AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
 
 
-def _example_registry(*, alternate=False):
-    """Declare the hypothetical registry independently of the example's binding."""
-    base = registry_entry("post_submit")
-    properties = {
-        "check": {"const": "report_reasoning"},
-        "model_profile_id": {
-            "const": "00000000-0000-7000-8000-000000000004" if alternate
-            else "00000000-0000-7000-8000-000000000003",
-        },
-        "model_profile_version": {"const": 1},
-        "model_profile_digest": {"const": "sha256:" + "2" * 64},
-    }
-    document = {
-        "type": "object",
-        "properties": {name: {} for name in properties},
-        "additionalProperties": False,
-        "oneOf": [{
-            "type": "object", "properties": properties,
-            "required": sorted(properties), "additionalProperties": False,
-        }],
-    }
-    values = {name: base.model_dump(mode="json")[name]
-              for name in ExternalCheckerRegistrySpec.model_fields}
-    values.update(
-        capability_id="example.report_reasoning",
-        capability_version="example_v2" if alternate else "example_v1",
-        configuration_schema=ExternalCheckerSchema(
-            schema_id="example.report_reasoning.configuration", schema_version="v1",
-            document=document, schema_sha256=external_checker_json_hash(document),
-        ).model_dump(mode="json"),
-    )
-    values["resources"]["deadline_ms"] = 180_000
-    spec = ExternalCheckerRegistrySpec.model_validate_json(json.dumps(values))
-    return ExternalCheckerRegistryEntry.model_validate_json(json.dumps({
-        **base.model_dump(mode="json"), **spec.model_dump(mode="json"),
-        "entry_digest": spec.spec_digest,
-    }))
-
-
-def _example_in_context(*entries):
-    compilation = context(ids(), checker_capabilities=capability_projection(*entries))
-    # Only substitute synthetic example source identities, as in the original proof.
+def test_instruction_example_is_complete_readable_without_implementations():
+    compilation = context(ids())
     payload = copy.deepcopy(PROJECT_GUIDE_OUTPUT_EXAMPLE["result"])
     actual_ref = generated_result().requirements[0].evidence_refs[0].model_dump(mode="json")
-    for requirement in payload["requirements"]:
-        requirement["evidence_refs"] = [actual_ref]
-    for suggestion in payload["capability_suggestions"]:
-        suggestion["evidence_refs"] = [actual_ref]
+    for section in ("findings", "requirements"):
+        for item in payload[section]:
+            item["evidence_refs"] = [actual_ref]
     payload["agent_version"] = compilation.agent_version
     parser = CompilationDraftParser(_schema(), 100_000)
     assert parser.parse(json.dumps(payload)) == payload
-    canonical = parser.canonical_candidate(compilation, payload)
-    assert canonical is not None
-    return compilation, canonical
-
-
-def test_example_is_complete_valid_and_bound_to_instructions():
-    example = PROJECT_GUIDE_OUTPUT_EXAMPLE
-    raw = json.dumps(example["result"])
-    assert CompilationDraftParser(_schema(), 100_000).parse(raw) == example["result"]
-    compilation, payload = _example_in_context(_example_registry())
     result = ProjectGuideCompilationResult.model_validate(payload)
-    assert {r.check_specification.execution_mode for r in result.requirements} == {
-        "bounded_pre_submit",
-        "background",
-    }
-    actual = ProjectGuideCompilationResult.model_validate(payload)
     opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
-    assert validate_project_guide_runtime_result(compilation, actual, opened) == actual
-    assert actual.requirements[0].disposition.value == "pre_submit_capability_gap"
-    assert [item.requirement_id for item in actual.capability_suggestions] == ["report_present"]
-    assert actual.requirements[1].disposition.value == "supported_post_submit"
-    assert len(actual.post_submit_bindings) == 1
+    assert validate_project_guide_runtime_result(compilation, result, opened) == result
+    assert {item.stage.value for item in result.requirements} == {"pre_submit", "post_submit"}
+    for item in result.requirements:
+        assert item.statement and item.classification_rationale and item.evidence_refs
+        assert item.check_specification.check_steps and item.check_specification.pass_conditions
+        assert item.check_specification.failure_findings
+        assert item.check_specification.positive_tests and item.check_specification.negative_tests
+    assert not {"pre_submit_bindings", "post_submit_bindings", "capability_suggestions"} & payload.keys()
     displayed = PROJECT_GUIDE_INSTRUCTIONS.split("Complete JSON output example:\n", 1)[1]
-    assert CompilationDraftParser(_schema(), 100_000).parse(displayed) == example["result"]
+    assert parser.parse(displayed) == PROJECT_GUIDE_OUTPUT_EXAMPLE["result"]
     assert len(PROJECT_GUIDE_INSTRUCTIONS) <= 16_000
-    assert "setup_notes" not in PROJECT_GUIDE_INSTRUCTIONS
-    schema = _schema()
-    assert "setup_notes" not in schema["properties"]
-    assert "setup_notes" not in schema["required"]
-    allowed = {
-        "platform_covered",
-        "guide_blocker",
-        "supported_pre_submit",
-        "supported_post_submit",
-        "pre_submit_capability_gap",
-        "post_submit_capability_gap",
-    }
-    assert set(schema["$defs"]["RequirementDisposition"]["enum"]) == allowed
-    assert (
-        set(schema["$defs"]["AtomicGuideRequirement"]["properties"]["disposition"]["enum"])
-        == allowed
-    )
 
 
-def test_example_cannot_mix_selector_constants_from_another_registry_entry():
-    selected, other = _example_registry(), _example_registry(alternate=True)
-    compilation, payload = _example_in_context(selected, other)
-    parameters = payload["post_submit_bindings"][0]["parameters"]
-    configuration = {item["name"]: item["value"] for item in parameters}
-    foreign = other.configuration_schema.document["oneOf"][0]["properties"]["model_profile_id"]["const"]
-    # The foreign ID is real within this hypothetical catalog, rather than malformed.
-    other.configuration_schema.validate_instance({**configuration, "model_profile_id": foreign})
-    assert configuration["model_profile_id"] != foreign
-    next(item for item in parameters if item["name"] == "model_profile_id")["value"] = foreign
-    opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
-    with pytest.raises(ValueError, match="value is invalid"):
-        validate_project_guide_runtime_result(compilation, payload, opened)
-
-
-@pytest.mark.parametrize("supported", [False, True])
-def test_example_pre_specification_is_required_despite_artifact_path(supported):
-    entries = [_example_registry()]
-    if supported:
-        entries.append(registry_entry("pre_submit"))
-    compilation, payload = _example_in_context(*entries)
-    assert "report.md" in payload["submission_artifact_policy"]["required_artifacts"]
-    if supported:
-        payload["requirements"][0]["disposition"] = "supported_pre_submit"
-        payload["capability_suggestions"] = []
-        payload["status"] = "draft_ready"
-        payload["pre_submit_bindings"] = [{
-            "requirement_id": "report_present", "capability_id": entries[1].capability_id,
-            "capability_version": entries[1].capability_version,
-            "stage": "pre_submit", "parameters": [],
-        }]
-    opened = {compilation.material.handle_for(item) for item in compilation.material.documents}
-    validate_project_guide_runtime_result(compilation, payload, opened)
-    payload["requirements"][0]["check_specification"] = None
-    with pytest.raises(ValueError, match="check requirement lacks a check specification"):
-        validate_project_guide_runtime_result(compilation, payload, opened)
-
-
-def test_dependency_guidance_matches_canonical_triples_methods_and_nested_material():
-    from tests.projects.guide_compilation.test_check_specifications import (
-        _requirement,
-        _with_requirement,
-    )
-
-    guidance = PROJECT_GUIDE_INSTRUCTIONS.split("DEPENDENCIES\n", 1)[1].split(
-        "OUTPUT AND VALIDATION\n", 1
-    )[0]
-    availability = re.search(
-        r"kind/provisioning; unavailable_code=([a-z_]+):\n(.*?)\.\n", guidance, re.DOTALL
-    )
-    assert availability is not None
-    dependencies = {
-        kind: CheckRuntimeDependency(
-            dependency_id=kind,
-            kind=kind,
-            provisioning=provisioning,
-            unavailable_code=availability[1],
-            purpose="Provide the declared checker support.",
-        )
-        for kind, provisioning in re.findall(r"([a-z_]+)/([a-z_]+)", availability[2])
-    }
-    assert set(dependencies) == {
-        "checker_tool",
-        "isolated_execution",
-        "model_service",
-        "nested_sandbox",
-    }
-
-    def admit(method, selected, *, material=False):
-        body = valid_specification().model_dump(mode="json")
-        body.update(evaluation_method=method, execution_mode="background")
-        body["runtime_dependencies"] = [item.model_dump(mode="json") for item in selected]
-        body["infrastructure_failures"] = [
-            {"code": code, "condition": "Required checker support is unavailable."}
-            for code in sorted({item.unavailable_code for item in selected})
-        ]
-        if material:
-            body["inputs"].append(
-                {"input_id": "cache", "kind": "prepared_material", "purpose": "Offline inputs."}
-            )
-        specification = CheckSpecification.model_validate(body)
-        requirement = _requirement(
-            disposition="post_submit_capability_gap", check_specification=specification
-        )
-        require_complete_generated_specifications(context(ids()), _with_requirement(requirement))
-
-    method_guidance = re.search(r"evaluation_method/kind: (.*?)\.\n", guidance, re.DOTALL)
-    assert method_guidance is not None
-    methods = dict(re.findall(r"([a-z_]+) requires ([a-z_]+)", method_guidance[1]))
-    assert set(methods) == {"isolated_execution", "model_evaluation"}
-    for method, required_kind in methods.items():
-        admit(method, [dependencies[required_kind]])
-
-    cache_guidance = re.search(
-        r"Cache: ([a-z_]+)/([a-z_]+)/([a-z_]+) requires ([a-z_]+)/([a-z_]+)\.", guidance
-    )
-    assert cache_guidance is not None
-    kind, provisioning, code, nested_kind, nested_provisioning = cache_guidance.groups()
-    cache = CheckRuntimeDependency(
-        dependency_id="cache",
-        kind=kind,
-        provisioning=provisioning,
-        unavailable_code=code,
-        purpose="Provide the declared offline inputs.",
-    )
-    assert cache.kind == "prepared_material"
-    nested = dependencies[nested_kind]
-    assert nested.provisioning == nested_provisioning
-    trial_dependencies = {
-        item.dependency_id: item
-        for item in [dependencies[methods["isolated_execution"]], cache, nested]
-    }
-    admit(
-        "isolated_execution",
-        list(trial_dependencies.values()),
-        material=True,
-    )
-
-    combined = re.search(r"model\+trial=([a-z_]+)\+([a-z_]+);", guidance)
-    assert combined is not None
-    admit(
-        "model_evaluation",
-        [dependencies[kind] for kind in combined.groups()] + [cache],
-        material=True,
-    )
-
-
-
-@pytest.mark.parametrize(
-    "disposition", ["human_review", "project_lifecycle_policy", "informational"]
-)
-def test_inference_cannot_return_management_classifications_but_retained_reads_survive(disposition):
+@pytest.mark.parametrize("stage", ["human_review", "project_lifecycle_policy", "informational"])
+def test_inference_cannot_generate_management_policy(stage):
     payload = _provider_payload()
-    requirement = payload["requirements"][0]
-    requirement.update(disposition=disposition, platform_coverage=None)
+    payload["requirements"][0]["stage"] = stage
     assert CompilationDraftParser(_schema(), 100_000).parse(json.dumps(payload)) is None
-    retained = ProjectGuideCompilationResult.model_validate(payload)
-    original = accepted_compilation_result(retained)
-    assert (
-        accepted_compilation_result(
-            ProjectGuideCompilationResult.model_validate(
-                original.canonical_result,
-            )
-        )
-        == original
-    )
-    with pytest.raises(ValueError, match="outside PRE and POST"):
-        require_complete_generated_specifications(context(ids()), retained)
-    manager = context(ids()).model_copy(
-        update={
-            "runtime_configuration": runtime_configuration().model_copy(
-                update={
-                    "runtime_key": "manager_authored",
-                    "model_provider": "none",
-                    "model_api": "none",
-                    "model": "none",
-                }
-            ),
-        }
-    )
-    require_complete_generated_specifications(manager, retained)
+    with pytest.raises(ValueError):
+        ProjectGuideCompilationResult.model_validate(payload)
 
 
 @pytest.mark.usefixtures("model_credentials")
@@ -322,7 +68,6 @@ def test_inference_cannot_return_management_classifications_but_retained_reads_s
         "prose",
         "duplicate",
         "extra",
-        "notes",
         "lifecycle",
         "canonical",
         "source",
@@ -337,8 +82,8 @@ async def test_rejected_output_gets_error_feedback_then_complete_revalidation(
     calls = []
     marker = "private-rejected-output-781"
     bad = _provider_payload()
-    if fault in {"extra", "notes"}:
-        bad["setup_notes" if fault == "notes" else marker] = [marker]
+    if fault == "extra":
+        bad[marker] = [marker]
     elif fault == "lifecycle":
         bad["requirements"][0].update(
             disposition="project_lifecycle_policy", platform_coverage=None
@@ -628,11 +373,8 @@ async def test_recorded_public_journey_runtime_emits_admissible_inference(monkey
     from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
     from app.interfaces.project_agents import PROJECT_GUIDE_COMPILATION_AGENT_VERSION
     from app.modules.projects.api.task_examples import validate_task_examples
-    from tests.checkers.external.support import capability_projection, registry_entry
 
-    compilation = context(ids(), checker_capabilities=capability_projection(
-        registry_entry("pre_submit"), registry_entry("post_submit"),
-    ))
+    compilation = context(ids())
     document = compilation.material.documents[0].model_copy(update={
         "sha256": "sha256:" + hashlib.sha256(GUIDE_BYTES).hexdigest(),
         "byte_count": len(GUIDE_BYTES), "media_type": "text/markdown",
@@ -646,7 +388,7 @@ async def test_recorded_public_journey_runtime_emits_admissible_inference(monkey
     output = await _compile(runtime, compilation, document_text=GUIDE_BYTES.decode())
     opened = {compilation.material.handle_for(document)}
     assert validate_project_guide_runtime_result(compilation, output, opened) == output
-    assert len(output.pre_submit_bindings) == len(output.post_submit_bindings) == 1
+    assert {item.stage.value for item in output.requirements} == {"pre_submit", "post_submit"}
     assert runtime.calls == 1
 
 

@@ -44,7 +44,6 @@ from app.modules.projects.guide_compilation.orchestrator import (
     project_guide_compilation_execution_port,
 )
 from app.modules.projects.guide_compilation import runtime_resources
-from tests.checkers.external.support import capability_projection
 
 from .helpers import (
     context,
@@ -122,17 +121,15 @@ def _backend(factory):
         factory,
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
-        checker_capabilities=capability_projection(),
         authorization_context=_fixed_service_authorization,
     )
 
 
-def _port(factory, runtime, *, checker_capabilities=None, model_session_factory=None):
+def _port(factory, runtime, *, model_session_factory=None):
     return project_guide_compilation_execution_port(
         factory,
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
-        checker_capabilities=checker_capabilities or capability_projection(),
         authorization_context=_fixed_service_authorization,
         runtime_factory=lambda configuration: runtime,
         model_session_factory=model_session_factory,
@@ -782,7 +779,6 @@ async def test_unavailable_authority_returns_only_the_safe_public_code(
             factory,
             material_factory=guide_document_manifest_port,
             document_tools_factory=document_tools(factory),
-            checker_capabilities=capability_projection(),
             authorization_context=_unavailable_service_authorization,
             runtime_factory=lambda configuration: runtime,
         )

@@ -141,9 +141,6 @@ async def compilation_and_projections(
             patch.update(
                 submission_artifact_policy=None,
                 requirements=(),
-                pre_submit_bindings=(),
-                post_submit_bindings=(),
-                capability_suggestions=(),
             )
         outcome = outcome.model_copy(update=patch)
     from ..test_hidden_orchestrator_postgresql import _Runtime, _port

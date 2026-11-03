@@ -89,9 +89,6 @@ class E2EProjectGuideRuntime:
             ),
             # This drill proposes no project checks; findings retain source coverage.
             requirements=(),
-            pre_submit_bindings=(),
-            post_submit_bindings=(),
-            capability_suggestions=(),
             agent_name=PROJECT_GUIDE_COMPILATION_AGENT_NAME,
             agent_version=PROJECT_GUIDE_COMPILATION_AGENT_VERSION,
             schema_version=PROJECT_GUIDE_COMPILATION_SCHEMA_VERSION,

@@ -189,7 +189,6 @@ async def database_case(
     project=True,
     guide_version="v1",
     outcome=None,
-    checker_capabilities=None,
 ):
     values = await seed_database(url, guide_version=guide_version)
     engine = create_async_engine(url)
@@ -200,7 +199,6 @@ async def database_case(
             compilation_context=context(
                 values,
                 guide_version=guide_version,
-                checker_capabilities=checker_capabilities,
             ),
             outcome=outcome
         )
