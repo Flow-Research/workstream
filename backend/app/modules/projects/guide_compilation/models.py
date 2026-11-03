@@ -52,7 +52,7 @@ def _component_hashes_check(column: str, *, retained: bool = False) -> str:
     )
     return (
         f"json_typeof({column})='object' and "
-        + ("" if retained else f"{column}->>'schema_version'='{_CURRENT_HASH_SCHEMA}' and ")
+        + ("" if retained else f"{column}->>'schema_version' IS NOT DISTINCT FROM '{_CURRENT_HASH_SCHEMA}' and ")
         + f"{column}::jsonb=jsonb_build_object({pairs}) and {hashes}"
     )
 
@@ -165,7 +165,7 @@ class ProjectGuideCompilationAttempt(Base):
         ),
         CheckConstraint(
             "result_schema_version is null or canonical_result is null or "
-            "canonical_result->>'schema_version'=result_schema_version",
+            "canonical_result->>'schema_version' IS NOT DISTINCT FROM result_schema_version",
             name="ck_compilation_attempt_spec_result",
         ),
         CheckConstraint(
@@ -426,7 +426,7 @@ class ProjectGuideCompilation(Base):
             "octet_length(canonical_result::text) <= 4194304 and "
             + _versioned_component_hashes_check("component_hashes", "result_schema_version")
             + " and (result_schema_version is null or "
-            + "canonical_result->>'schema_version'=result_schema_version)",
+            + "canonical_result->>'schema_version' IS NOT DISTINCT FROM result_schema_version)",
             name="ck_project_guide_compilation_result_shape",
         ),
     )

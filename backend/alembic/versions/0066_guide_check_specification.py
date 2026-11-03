@@ -24,7 +24,7 @@ def hashes_check(column, current):
     checks = " and ".join(
         f"coalesce(({column}->>'{key}') {DIGEST},false)" for key in keys
     )
-    version = f"{column}->>'schema_version'='{HASHES}' and " if current else ""
+    version = f"{column}->>'schema_version' IS NOT DISTINCT FROM '{HASHES}' and " if current else ""
     return (f"json_typeof({column})='object' and {version}"
             f"{column}::jsonb=jsonb_build_object({pairs}) and {checks}")
 
@@ -364,7 +364,7 @@ def upgrade():
     op.execute(
         f"ALTER TABLE {attempt} ADD CONSTRAINT ck_compilation_attempt_spec_result "
         "CHECK (result_schema_version is null or canonical_result is null or "
-        "canonical_result->>'schema_version'=result_schema_version)"
+        "canonical_result->>'schema_version' IS NOT DISTINCT FROM result_schema_version)"
     )
     op.execute(
         f"ALTER TABLE {compilation} ADD CONSTRAINT ck_project_guide_compilations_ck_project_guide_compilat_9cd9 "
@@ -379,7 +379,7 @@ def upgrade():
         f"((result_schema_version is null and ({hashes_check('component_hashes', False)})) "
         f"or (result_schema_version='{RESULT}' and "
         f"({hashes_check('component_hashes', True)}) and "
-        "canonical_result->>'schema_version'=result_schema_version)))"
+        "canonical_result->>'schema_version' IS NOT DISTINCT FROM result_schema_version)))"
     )
     op.execute(
         f"ALTER TABLE {finalization} ADD CONSTRAINT ck_finalization_components "
