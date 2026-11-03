@@ -262,48 +262,10 @@ async def source_case(
             ).one()
             values.update(actor=UUID(service_id), link=UUID(link_id))
         actor, grant = await seed_review_actor(factory, values["project"])
-        pre_registry_entry = (
-            await _register_external_checker_fixture(factory, pre_submit_registry_spec)
-            if pre_submit_registry_spec is not None
-            else None
-        )
-        post_registry_entry = (
-            await _register_external_checker_fixture(factory, post_submit_registry_spec)
-            if post_submit_registry_spec is not None
-            else None
-        )
-        if post_submit_configuration_setup is not None and post_submit_configurations_setup is not None:
-            raise ValueError("post-submit configuration setup is ambiguous")
-        if (post_submit_configuration_setup is not None or post_submit_configurations_setup is not None) and post_registry_entry is None:
-            raise ValueError("post-submit configuration requires a registered image")
-        post_configuration = (
-            await post_submit_configuration_setup(factory, values["project"], post_registry_entry)
-            if post_submit_configuration_setup is not None
-            else {}
-        )
-        post_cases = (
-            await post_submit_configurations_setup(factory, values["project"], post_registry_entry)
-            if post_submit_configurations_setup is not None
-            else (PostSubmitAttachmentCase("project.post_evidence", post_configuration),)
-        )
-        values["pre_submit_attachments"] = (
-            (ExternalCheckerImageAttachment(
-                requirement_id="project.archive_rules",
-                registry_entry_id=pre_registry_entry.registry_entry_id,
-                registry_entry_digest=pre_registry_entry.entry_digest,
-                configuration={},
-            ),)
-            if pre_registry_entry is not None else ()
-        )
-        values["post_submit_attachments"] = (
-            tuple(ExternalCheckerImageAttachment(
-                requirement_id=case.requirement_id,
-                registry_entry_id=post_registry_entry.registry_entry_id,
-                registry_entry_digest=post_registry_entry.entry_digest,
-                configuration=case.configuration,
-            ) for case in sorted(post_cases, key=lambda item: item.requirement_id))
-            if post_registry_entry is not None else ()
-        )
+        values.update(await _prepare_human_attachments(
+            factory, values["project"], pre_submit_registry_spec, post_submit_registry_spec,
+            post_submit_configuration_setup, post_submit_configurations_setup,
+        ))
         values, finalization = await create_compiled_guide(
             factory,
             values,
@@ -317,6 +279,58 @@ async def source_case(
         yield values, factory, finalization, actor, grant
     finally:
         await engine.dispose()
+
+
+async def _prepare_human_attachments(
+    factory,
+    project_id,
+    pre_submit_registry_spec,
+    post_submit_registry_spec,
+    post_submit_configuration_setup,
+    post_submit_configurations_setup,
+):
+    """Register fixture images and return exact human-selected phase members."""
+    pre_registry_entry = (
+        await _register_external_checker_fixture(factory, pre_submit_registry_spec)
+        if pre_submit_registry_spec is not None else None
+    )
+    post_registry_entry = (
+        await _register_external_checker_fixture(factory, post_submit_registry_spec)
+        if post_submit_registry_spec is not None else None
+    )
+    if post_submit_configuration_setup is not None and post_submit_configurations_setup is not None:
+        raise ValueError("post-submit configuration setup is ambiguous")
+    if (post_submit_configuration_setup is not None or post_submit_configurations_setup is not None) and post_registry_entry is None:
+        raise ValueError("post-submit configuration requires a registered image")
+    post_configuration = (
+        await post_submit_configuration_setup(factory, project_id, post_registry_entry)
+        if post_submit_configuration_setup is not None else {}
+    )
+    post_cases = (
+        await post_submit_configurations_setup(factory, project_id, post_registry_entry)
+        if post_submit_configurations_setup is not None
+        else (PostSubmitAttachmentCase("project.post_evidence", post_configuration),)
+    )
+    pre_attachments = (
+        (ExternalCheckerImageAttachment(
+            requirement_id="project.archive_rules",
+            registry_entry_id=pre_registry_entry.registry_entry_id,
+            registry_entry_digest=pre_registry_entry.entry_digest,
+            configuration={},
+        ),)
+        if pre_registry_entry is not None else ()
+    )
+    post_attachments = (
+        tuple(ExternalCheckerImageAttachment(
+            requirement_id=case.requirement_id,
+            registry_entry_id=post_registry_entry.registry_entry_id,
+            registry_entry_digest=post_registry_entry.entry_digest,
+            configuration=case.configuration,
+        ) for case in sorted(post_cases, key=lambda item: item.requirement_id))
+        if post_registry_entry is not None else ()
+    )
+    return {"pre_submit_attachments": pre_attachments,
+            "post_submit_attachments": post_attachments}
 
 
 async def _register_external_checker_fixture(factory, spec):
