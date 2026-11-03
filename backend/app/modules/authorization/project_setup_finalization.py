@@ -90,9 +90,9 @@ class _PreparedFinalization(PreparedSetupFinalization):
         self, facts: ProjectSetupFinalizationFacts
     ) -> ProjectSetupFinalizationAuthorityReceipt:
         """Consume once and return every field required by POL receipt custody."""
+        resource = self._resource(facts)
         if facts.result_schema_version != "project_guide_check_specification.v1":
             raise ValueError("new finalization requires the current proposal format")
-        resource = self._resource(facts)
         with _authority_errors():
             decision = await self._custody.service.consume(
                 self._handle, ActionId.PROJECT_SETUP_RUN_UPDATE, self._input, resource
