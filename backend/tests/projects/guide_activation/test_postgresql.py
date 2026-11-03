@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError
 from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.guide_activation.custody import load_guide_activation
 from app.modules.projects.models import ProjectGuide
-from .pg_support import activation_case, activation_service, readiness_read
+from .pg_support import activation_case, activation_service
 
 
 async def _activation_effects(session):
@@ -23,67 +23,6 @@ async def _activation_effects(session):
             "workstream_tasks", "submissions", "outbox_events",
         )
     }
-
-
-def _capability_outcome(*, supported):
-    """Return the same requirement before and after exact capability coverage."""
-    from app.interfaces.project_agents import (
-        AtomicGuideRequirement,
-        CapabilitySuggestion,
-        PreSubmissionBindingProposal,
-    )
-    from tests.projects.guide_compilation.helpers import generated_result, valid_specification
-
-    outcome = generated_result()
-    refs = outcome.findings[0].evidence_refs
-    requirement = AtomicGuideRequirement(
-        requirement_id="specialist_archive",
-        statement="Inspect the specialist archive before admission.",
-        disposition="supported_pre_submit" if supported else "pre_submit_capability_gap",
-        classification_rationale="Bounded archive inspection completes before admission.",
-        check_specification=valid_specification(),
-        evidence_refs=refs,
-    )
-    return outcome.model_copy(
-        update={
-            "status": "draft_ready" if supported else "draft_ready_with_warnings",
-            "findings": (
-                outcome.findings[0].model_copy(
-                    update={
-                        "severity": "info" if supported else "warning",
-                        "code": "guide.ready" if supported else "checker.capability_gap",
-                        "message": (
-                            "Exact checker coverage is available."
-                            if supported
-                            else "Register and bind the required checker capability."
-                        ),
-                    }
-                ),
-            ),
-            "requirements": (requirement,),
-            "pre_submit_bindings": (
-                PreSubmissionBindingProposal(
-                    requirement_id=requirement.requirement_id,
-                    capability_id="acme.safe_archive",
-                    capability_version="v1.2.3",
-                    stage="pre_submit",
-                ),
-            )
-            if supported
-            else (),
-            "capability_suggestions": ()
-            if supported
-            else (
-                CapabilitySuggestion(
-                    requirement_id=requirement.requirement_id,
-                    stage="pre_submit",
-                    title="Specialist archive checker",
-                    rationale="The required immutable checker is not registered yet.",
-                    evidence_refs=refs,
-                ),
-            ),
-        }
-    )
 
 
 async def _activation_inputs(factory, finalization, approval, actor, grant, values, policy):
@@ -193,7 +132,7 @@ async def test_complete_activation_and_exact_replay(clean_postgres_database):
 async def test_registered_post_checker_activates_false_guide_with_real_authority(
     clean_postgres_database,
 ):
-    """Public manager activation binds an exact registered POST requirement."""
+    """Public manager activation carries a separately selected POST image."""
     from tests.checkers.external.support import registry_spec
     from tests.projects.guide_compilation.proposals.public_support import proposal_client
 
@@ -226,8 +165,13 @@ async def test_registered_post_checker_activates_false_guide_with_real_authority
                 "SELECT canonical_result::jsonb FROM project_guide_compilations "
                 "WHERE id=:id"
             ), {"id": command.target.proposal.compilation_id})
-            assert [item["disposition"] for item in result["requirements"]] == [
-                "supported_post_submit"
+            assert "post_submit" in {item["stage"] for item in result["requirements"]}
+            assert all("disposition" not in item for item in result["requirements"])
+            selected = await session.scalar(text(
+                "SELECT policy_body::jsonb FROM checker_policies WHERE id=:id"
+            ), {"id": command.target.policy_id})
+            assert [item["registry"]["capability_id"] for item in selected["entries"]] == [
+                registry_spec("post_submit").capability_id
             ]
             assert await session.scalar(text(
                 "SELECT human_review_required FROM review_policies WHERE id=:id"
@@ -306,104 +250,118 @@ async def test_activation_default_authority_is_unavailable(clean_postgres_databa
             assert guide.status == "draft" and guide.activation_operation_id is None
 
 
-async def test_checker_registration_requires_corrected_approval_before_activation(
+async def test_later_checker_registration_attaches_to_unchanged_proposal_before_activation(
     clean_postgres_database,
 ):
-    """F-020 closes only after register, recompile, approve and exact activation."""
-    from app.modules.projects.api.guide_proposals import (
-        GuideProposalApproval,
-        GuideProposalCorrection,
-    )
+    """F-020: later image publication changes human selection, not setup evidence."""
+    from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+    from app.modules.projects.api.guide_proposals import GuideProposalApproval
     from tests.checkers.external.support import registry_spec
     from tests.projects.guide_compilation.proposals.pg_support import (
-        finalize_corrected_attempt,
         read_package,
         seed_selected_review_revision_inputs,
     )
-    from tests.projects.guide_compilation.proposals.test_postgresql import approve, correct
+    from tests.projects.guide_compilation.proposals.test_postgresql import approve
     from .pg_support import publish_policy
     from .source_fixtures import _register_external_checker_fixture, source_case
 
-    gap, covered = _capability_outcome(supported=False), _capability_outcome(supported=True)
-    async with source_case(
-        clean_postgres_database,
-        compilation_outcome=gap,
-    ) as (values, factory, initial, actor, grant):
-        package = await read_package(factory, initial, actor, grant)
-        first = await approve(
+    async with source_case(clean_postgres_database) as (
+        values, factory, finalization, actor, grant,
+    ):
+        before = await read_package(factory, finalization, actor, grant)
+        assert {item.stage for item in before.result.requirements} == {
+            "pre_submit", "post_submit"
+        }
+        assert values["pre_submit_attachments"] == ()
+        assert values["post_submit_attachments"] == ()
+        async with factory() as session:
+            retained_before = (
+                await session.execute(text(
+                    "SELECT result_hash, canonical_result::jsonb FROM "
+                    "project_guide_compilations WHERE id=:id"
+                ), {"id": finalization.compilation_id})
+            ).one()
+            counts_before = (
+                await session.scalar(text("SELECT count(*) FROM project_guide_compilation_attempts")),
+                await session.scalar(text("SELECT count(*) FROM project_guide_compilations")),
+            )
+
+        pre_entry = await _register_external_checker_fixture(factory, registry_spec("pre_submit"))
+        post_entry = await _register_external_checker_fixture(factory, registry_spec("post_submit"))
+        values["pre_submit_attachments"] = (ExternalCheckerImageAttachment(
+            requirement_id="project.archive_rules",
+            registry_entry_id=pre_entry.registry_entry_id,
+            registry_entry_digest=pre_entry.entry_digest,
+            configuration={},
+        ),)
+        values["post_submit_attachments"] = (ExternalCheckerImageAttachment(
+            requirement_id="project.post_evidence",
+            registry_entry_id=post_entry.registry_entry_id,
+            registry_entry_digest=post_entry.entry_digest,
+            configuration={},
+        ),)
+        after = await read_package(factory, finalization, actor, grant)
+        assert after.target == before.target
+        assert after.target.result_hash == before.target.result_hash
+        assert after.result == before.result
+        async with factory() as session:
+            retained_after = (
+                await session.execute(text(
+                    "SELECT result_hash, canonical_result::jsonb FROM "
+                    "project_guide_compilations WHERE id=:id"
+                ), {"id": finalization.compilation_id})
+            ).one()
+            counts_after = (
+                await session.scalar(text("SELECT count(*) FROM project_guide_compilation_attempts")),
+                await session.scalar(text("SELECT count(*) FROM project_guide_compilations")),
+            )
+        assert retained_after == retained_before
+        assert counts_after == counts_before
+
+        approval = await approve(
             factory,
-            initial,
+            finalization,
             actor,
             grant,
             GuideProposalApproval(
-                target=package.target,
-                acknowledged_warning_hashes=package.warning_hashes,
+                target=after.target,
+                pre_submit_attachments=values["pre_submit_attachments"],
+                post_submit_attachments=values["post_submit_attachments"],
+                acknowledged_warning_hashes=after.warning_hashes,
                 idempotency_key=uuid4(),
             ),
         )
-        await _register_external_checker_fixture(factory, registry_spec("pre_submit"))
-        _, policy = await publish_policy(factory, initial.project_id)
-        await seed_selected_review_revision_inputs(
-            factory, initial, actor, human_review_required=False
-        )
-        stale = await _activation_inputs(factory, initial, first, actor, grant, values, policy)
-        async with factory() as session, session.begin():
-            before = await _activation_effects(session)
-            with pytest.raises(GuideProposalError, match="approval_blocked") as refusal:
-                await activation_service(session, actor, stale, grant).activate(
-                    stale, actor=actor, request_id=uuid4()
-                )
-            assert [item.model_dump(mode="json") for item in refusal.value.missing_capabilities] == [
-                dict(requirement_id=item.requirement_id, stage=item.stage, title=item.title)
-                for item in gap.capability_suggestions
-            ]
-            guide = await session.get(ProjectGuide, str(stale.target.proposal.guide_id))
-            assert guide.status == "draft" and guide.activation_operation_id is None
-            assert await _activation_effects(session) == before
-        # PILOT-READ-3 C3: readiness reports the same refusal with the same capability list.
-        readiness = await readiness_read(factory, initial.project_id, initial.guide_id)
-        first_unmet = readiness.unmet[0]
-        assert (first_unmet.code, first_unmet.reason) == (refusal.value.code, "checker_capability_missing")
-        assert [item.model_dump(mode="json") for item in first_unmet.missing_capabilities] == [
-            item.model_dump(mode="json") for item in refusal.value.missing_capabilities
+        assert approval.target_digest == before.target.digest
+        async with factory() as session:
+            compiled_pre = await session.scalar(text(
+                "SELECT compiled_bundle::jsonb FROM pre_submit_checker_policies WHERE id=:id"
+            ), {"id": approval.pre_submit_policy_id})
+        assert [entry["registry"]["registry_entry_id"] for entry in compiled_pre["entries"]] == [
+            str(pre_entry.registry_entry_id)
         ]
 
-        correction = await correct(
-            factory,
-            initial,
-            actor,
-            grant,
-            GuideProposalCorrection(
-                target=package.target,
-                reason="Bind the registered checker to the required pre-admission stage.",
-                idempotency_key=uuid4(),
-            ),
+        await seed_selected_review_revision_inputs(
+            factory, finalization, actor, human_review_required=False
         )
-        successor = await finalize_corrected_attempt(
-            factory, values, actor, correction, outcome=covered
+        _, policy = await publish_policy(factory, finalization.project_id)
+        command = await _activation_inputs(
+            factory, finalization, approval, actor, grant, values, policy
         )
-        revised = await read_package(factory, successor, actor, grant)
-        second = await approve(
-            factory,
-            successor,
-            actor,
-            grant,
-            GuideProposalApproval(
-                target=revised.target,
-                expected_previous_approval_operation_id=first.operation_id,
-                expected_previous_approval_output_digest=revised.current_approval_output_digest,
-                idempotency_key=uuid4(),
-            ),
-        )
-        assert second.pre_submit_bundle_hash != first.pre_submit_bundle_hash
-        command = await _activation_inputs(factory, successor, second, actor, grant, values, policy)
+        assert command.target.proposal.result_hash == before.target.result_hash
+        assert command.target.upstream.pre_submit_bundle_hash == approval.pre_submit_bundle_hash
+        async with factory() as session:
+            compiled_post = await session.scalar(text(
+                "SELECT policy_body::jsonb FROM checker_policies WHERE id=:id"
+            ), {"id": command.target.policy_id})
+        assert [entry["registry"]["registry_entry_id"] for entry in compiled_post["entries"]] == [
+            str(post_entry.registry_entry_id)
+        ]
         async with factory() as session, session.begin():
             receipt = await activation_service(session, actor, command, grant).activate(
                 command, actor=actor, request_id=uuid4()
             )
-        assert receipt.command.target.proposal.compilation_id == successor.compilation_id
-        async with factory() as session, session.begin():
-            with pytest.raises(GuideProposalError, match="proposal_(stale|unavailable)"):
-                await activation_service(session, actor, stale, grant).activate(
-                    stale, actor=actor, request_id=uuid4()
-                )
+        assert receipt.command.target.proposal.compilation_id == finalization.compilation_id
+        async with factory() as session:
+            guide = await session.get(ProjectGuide, str(finalization.guide_id))
+            assert guide.status == "active"
+            assert guide.activation_operation_id == receipt.operation_id
