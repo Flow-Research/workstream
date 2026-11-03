@@ -100,6 +100,7 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
                 "submission_artifact_policy": None
                 if status == "guide_blocked"
                 else base_outcome.submission_artifact_policy,
+                "requirements": () if status == "guide_blocked" else base_outcome.requirements,
             }
         )
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
@@ -1018,7 +1019,23 @@ _RULES_LABEL = "workstream-rules.json"
 def _manager_rules(**overrides) -> bytes:
     """A manager-authored rules document citing the PDF original by SHA-256."""
     import json
-    from .helpers import SOURCE_SHA256
+    from .helpers import SOURCE_SHA256, valid_specification
+
+    pre_specification = valid_specification().model_dump(mode="json")
+    pre_specification["evaluation_method"] = "Inspect the candidate package manifest before submission."
+    pre_specification["inputs"][0].update(
+        input_id="candidate_package", purpose="Candidate package to inspect before submission."
+    )
+    pre_specification["check_steps"] = [
+        "Inspect the candidate package manifest for the submission artifact."
+    ]
+    post_specification = valid_specification().model_dump(mode="json")
+    post_specification["evaluation_method"] = (
+        "Inspect the immutable submitted package manifest after submission."
+    )
+    post_specification["check_steps"] = [
+        "Inspect the immutable package manifest for the submission artifact."
+    ]
 
     return json.dumps({
         "format": "workstream.project_guide_rules.v1",
@@ -1028,16 +1045,25 @@ def _manager_rules(**overrides) -> bytes:
         "submission_artifact_policy": {"maximum_file_size_bytes": 1000,
                                        "maximum_package_size_bytes": 10000,
                                        "required_artifacts": ["submission"]},
-        "requirements": [{
-            "requirement_id": "guide.context",
-            "statement": "Use the project guide.",
-            "disposition": "informational",
-            "platform_coverage": None,
-            "classification_rationale": "This identifies the governing guide for the work.",
-            "check_specification": None,
-            "evidence_refs": [],
-        }], "pre_submit_bindings": [], "post_submit_bindings": [],
-        "capability_suggestions": [], "setup_notes": [],
+        "requirements": [
+            {
+                "suggestion_id": "submission_present_before_intake",
+                "statement": "The package must include the submission artifact before intake.",
+                "stage": "pre_submit",
+                "classification_rationale": "The required artifact can be checked before Submission creation.",
+                "check_specification": pre_specification,
+                "evidence_refs": [],
+            },
+            {
+                "suggestion_id": "submission_present_after_intake",
+                "statement": "The submitted package must retain the submission artifact.",
+                "stage": "post_submit",
+                "classification_rationale": "The immutable submitted package can be evaluated after intake.",
+                "check_specification": post_specification,
+                "evidence_refs": [],
+            },
+        ],
+        "setup_notes": [],
     } | overrides).encode()
 
 
@@ -1155,3 +1181,12 @@ async def test_manager_authored_rules_compile_through_the_live_worker_without_in
     [finding] = compilation["findings"]
     assert [ref["sha256"] for ref in finding["evidence_refs"]] == [SOURCE_SHA256, rules_sha256]
     assert finding["evidence_refs"][1]["source_item_id"] == str(rules_item.source_item_id)
+    assert [(item["suggestion_id"], item["stage"]) for item in compilation["requirements"]] == [
+        ("submission_present_before_intake", "pre_submit"),
+        ("submission_present_after_intake", "post_submit"),
+    ]
+    for suggestion in compilation["requirements"]:
+        [evidence] = suggestion["evidence_refs"]
+        assert evidence["sha256"] == rules_sha256
+        assert evidence["source_item_id"] == str(rules_item.source_item_id)
+        assert suggestion["check_specification"]["check_steps"]
