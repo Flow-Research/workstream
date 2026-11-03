@@ -54,14 +54,7 @@ def _request() -> ProjectGuideCompilationRequestFacts:
         operation_id=uuid5(NAMESPACE_URL, "workstream.test.compilation-request-selector"),
         request_id=uuid4(),
         idempotency_key=uuid4(),
-        pre_catalogue_id="pre",
-        pre_catalogue_version="v1",
-        pre_catalogue_schema_version="v1",
-        pre_catalogue_manifest_hash=digest,
-        post_catalogue_id="post",
-        post_catalogue_version="v1",
-        post_catalogue_schema_version="v1",
-        post_catalogue_manifest_hash=digest,
+        result_schema_version="project_guide_check_specification.v1",
         agent_identity="agent",
         agent_version="v1",
         instruction_version="v1",
@@ -225,8 +218,6 @@ async def test_preflight_is_non_durable_and_final_digest_is_exact() -> None:
             "requirement_inventory_component_hash": digest,
             "pre_submit_policy_component_hash": digest,
             "post_submit_policy_component_hash": digest,
-            "capability_suggestions_component_hash": digest,
-            "setup_notes_component_hash": digest,
         },
     }
     provisional = ProjectGuideCompilationExecutePersistFacts(
@@ -445,8 +436,6 @@ async def test_real_kernel_preflight_is_non_evidencing_and_final_is_single_use()
         requirement_inventory_component_hash=digest,
         pre_submit_policy_component_hash=digest,
         post_submit_policy_component_hash=digest,
-        capability_suggestions_component_hash=digest,
-        setup_notes_component_hash=digest,
     )
     provisional = ProjectGuideCompilationExecutePersistFacts(
         **asdict(preflight), **result, resource_context_digest=digest

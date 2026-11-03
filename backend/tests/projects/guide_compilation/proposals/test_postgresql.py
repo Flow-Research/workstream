@@ -4,6 +4,7 @@ import json
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.adapters.artifacts import guide_document_manifest_port
@@ -341,10 +342,24 @@ async def test_correction_rejects_authority_for_a_substituted_locator_operation(
 async def test_approval_rejects_every_substituted_target_identity(clean_postgres_database):
     async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
+        with pytest.raises(ValidationError) as invalid_result_version:
+            type(package.target).model_validate({
+                **package.target.model_dump(mode="json"),
+                "result_schema_version": "project_guide_check_specification.v2",
+            })
+        assert invalid_result_version.value.errors()[0]["loc"] == ("result_schema_version",)
+        with pytest.raises(ValidationError) as invalid_hash_version:
+            type(package.target.component_hashes).model_validate({
+                **package.target.component_hashes.model_dump(mode="json"),
+                "schema_version": "project_guide_check_specification_hashes.v2",
+            })
+        assert invalid_hash_version.value.errors()[0]["loc"] == ("schema_version",)
         replacements = {}
         for name, value in package.target.model_dump().items():
             if name == "component_hashes":
                 for component in type(package.target.component_hashes).model_fields:
+                    if component == "schema_version":
+                        continue
                     replacements["component:" + component] = dict(
                         component_hashes=package.target.component_hashes.model_copy(
                             update={component: "sha256:" + "b" * 64}
@@ -352,6 +367,8 @@ async def test_approval_rejects_every_substituted_target_identity(clean_postgres
                     )
             elif isinstance(value, type(uuid4())):
                 replacements[name] = {name: uuid4()}
+            elif name == "result_schema_version":
+                continue
             elif isinstance(value, str):
                 replacements[name] = {
                     name: "sha256:" + "b" * 64 if value.startswith("sha256:") else value + "-other"
