@@ -23,14 +23,23 @@ from app.modules.authorization.runtime import (
 from app.modules.projects.guide_mutation_service import GuideMutationService
 from app.modules.projects.schemas import ProjectGuideCreate
 from app.modules.projects.models import ProjectSetupRun
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification, GuideEvidenceRef
+from app.interfaces.project_agents import (
+    AtomicGuideRequirement,
+    CheckFailureFinding,
+    CheckInabilityToEvaluate,
+    CheckInput,
+    CheckNegativeTest,
+    CheckSpecification,
+    GuideEvidenceRef,
+)
 from app.modules.checkers.api.external import ExternalCheckerRegistryEntry
+from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
 from tests.committed_guide_fixtures import (
     create_committed_document_fixture,
     seed_setup_service_for_compiled_fixture,
 )
 from tests.project_create_fixtures import seed_authorized_project
-from tests.projects.guide_compilation.helpers import ids, context, generated_result, valid_specification
+from tests.projects.guide_compilation.helpers import ids, context, generated_result
 from tests.projects.guide_compilation.finalization.pg_prerequisites import (
     compilation_and_projections,
 )
@@ -75,114 +84,58 @@ async def _create_guide_source(factory, values, actor, version):
         return setup.source_snapshot_id
 
 
-PostSubmitBindingSetup = Callable[
+PostSubmitConfigurationSetup = Callable[
     [async_sessionmaker, UUID, ExternalCheckerRegistryEntry],
-    Awaitable[tuple[CapabilityParameter, ...]],
+    Awaitable[dict],
 ]
 
 
 @dataclass(frozen=True, slots=True)
-class PostSubmitBindingCase:
-    """One test-authored requirement and exact configuration for a real binding."""
+class PostSubmitAttachmentCase:
+    """One human-defined execution member with exact image configuration."""
 
     requirement_id: str
-    statement: str
-    classification_rationale: str
-    specification: CheckSpecification
-    parameters: tuple[CapabilityParameter, ...]
+    configuration: dict
 
 
-PostSubmitBindingsSetup = Callable[
+PostSubmitConfigurationsSetup = Callable[
     [async_sessionmaker, UUID, ExternalCheckerRegistryEntry],
-    Awaitable[tuple[PostSubmitBindingCase, ...]],
+    Awaitable[tuple[PostSubmitAttachmentCase, ...]],
 ]
 
 
-def _external_compilation_outcome(
-    outcome,
-    registry_entries,
-    pre_entry,
-    post_entry,
-    refs,
-    *,
-    post_submit_parameters=(),
-    post_submit_specification=None,
-    post_submit_cases=(),
-):
-    if not registry_entries:
-        return outcome
-    from app.interfaces.project_agents import (
-        AtomicGuideRequirement,
-        CheckSpecification,
-        PostSubmissionBindingProposal,
-        PreSubmissionBindingProposal,
+def _post_check_suggestion(refs, specification=None):
+    """Describe POST work from source evidence, without consulting registered images."""
+    check = specification or CheckSpecification(
+        evaluation_method="Assess submitted claims against the project guide.",
+        inputs=(CheckInput(
+            input_id="submitted_work", kind="package", purpose="Work and evidence to assess.",
+        ),),
+        check_steps=("Read the submitted claims and supporting evidence.",
+                     "Compare each material claim with its supporting evidence."),
+        pass_conditions=("Every material claim has adequate supporting evidence.",),
+        failure_findings=(CheckFailureFinding(
+            code="unsupported_claim", level="error",
+            condition="A material claim lacks adequate supporting evidence.",
+            message="Support the claim with evidence.",
+        ),),
+        positive_tests=("A supported claim passes.",),
+        negative_tests=(CheckNegativeTest(
+            name="unsupported_claim", scenario="A material claim lacks evidence.",
+            expected_verdict="failed", expected_finding_codes=("unsupported_claim",),
+        ),),
+        implementation_needs=("Read submitted work and compare claims with evidence.",),
+        inability_to_evaluate=(CheckInabilityToEvaluate(
+            code="material_unavailable", condition="The submitted work cannot be read.",
+        ),),
     )
-
-    requirements, pre_bindings, post_bindings = [], [], []
-    if pre_entry is not None:
-        requirements.append(
-            AtomicGuideRequirement(
-                requirement_id="project.archive_rules",
-                statement="Validate the submitted project archive rules.",
-                disposition="supported_pre_submit",
-                evidence_refs=refs,
-                classification_rationale="Bounded archive inspection fits before submission.",
-                check_specification=valid_specification(),
-            )
-        )
-        pre_bindings.append(
-            PreSubmissionBindingProposal(
-                requirement_id="project.archive_rules",
-                capability_id=pre_entry.capability_id,
-                capability_version=pre_entry.capability_version,
-                stage="pre_submit",
-            )
-        )
-    if post_entry is not None:
-        cases = post_submit_cases or (
-            PostSubmitBindingCase(
-                requirement_id="project.post_evidence",
-                statement="Evaluate the submitted evidence package.",
-                classification_rationale="Evaluate the submitted work in the background.",
-                specification=post_submit_specification
-                or CheckSpecification.model_validate(
-                    {
-                        **valid_specification().model_dump(mode="json"),
-                        "execution_mode": "background",
-                        "stage_rationale": (
-                            "The selected registry entry evaluates immutable submitted evidence."
-                        ),
-                    }
-                ),
-                parameters=post_submit_parameters,
-            ),
-        )
-        for case in cases:
-            requirements.append(
-                AtomicGuideRequirement(
-                    requirement_id=case.requirement_id,
-                    statement=case.statement,
-                    disposition="supported_post_submit",
-                    evidence_refs=refs,
-                    classification_rationale=case.classification_rationale,
-                    check_specification=case.specification,
-                )
-            )
-            post_bindings.append(
-                PostSubmissionBindingProposal(
-                    requirement_id=case.requirement_id,
-                    capability_id=post_entry.capability_id,
-                    capability_version=post_entry.capability_version,
-                    stage="post_submit",
-                    parameters=case.parameters,
-                )
-            )
-    return outcome.model_copy(
-        update={
-            "requirements": tuple(requirements),
-            "pre_submit_bindings": tuple(pre_bindings),
-            "post_submit_bindings": tuple(post_bindings),
-        }
+    return AtomicGuideRequirement(
+        suggestion_id="review_claim_evidence",
+        statement="Material claims in the submitted work need supporting evidence.",
+        stage="post_submit",
+        classification_rationale="Evidence assessment follows immutable submission.",
+        check_specification=check,
+        evidence_refs=refs,
     )
 
 
@@ -193,11 +146,7 @@ async def create_compiled_guide(
     *,
     version="v1",
     artifact_proposal=None,
-    pre_submit_registry_entry=None,
-    post_submit_registry_entry=None,
-    post_submit_parameters=(),
     post_submit_specification=None,
-    post_submit_cases=(),
     compilation_outcome=None,
     configuration=None,
 ):
@@ -217,20 +166,9 @@ async def create_compiled_guide(
         "snapshot": manifest.source_snapshot_id,
         "setup_1": manifest.setup_run_id,
     }
-    checker_capabilities = None
-    registry_entries = tuple(
-        entry
-        for entry in (pre_submit_registry_entry, post_submit_registry_entry)
-        if entry is not None
-    )
-    if registry_entries:
-        from tests.checkers.external.support import capability_projection
-
-        checker_capabilities = capability_projection(*registry_entries)
     compilation_context = context(
         values,
         guide_version=version,
-        checker_capabilities=checker_capabilities,
         configuration=configuration,
     ).model_copy(update={"material": manifest})
     outcome = compilation_outcome or generated_result()
@@ -249,19 +187,13 @@ async def create_compiled_guide(
             field: tuple(
                 item.model_copy(update={"evidence_refs": refs}) for item in getattr(outcome, field)
             )
-            for field in ("findings", "requirements", "capability_suggestions")
+            for field in ("findings", "requirements")
         }
     )
-    outcome = _external_compilation_outcome(
-        outcome,
-        registry_entries,
-        pre_submit_registry_entry,
-        post_submit_registry_entry,
-        refs,
-        post_submit_parameters=post_submit_parameters,
-        post_submit_specification=post_submit_specification,
-        post_submit_cases=post_submit_cases,
-    )
+    if outcome.status != "guide_blocked" and compilation_outcome is None:
+        outcome = outcome.model_copy(update={
+            "requirements": (*outcome.requirements, _post_check_suggestion(refs, post_submit_specification)),
+        })
     url = factory.kw["bind"].url.render_as_string(hide_password=False)
     finalization = await compilation_and_projections(
         url,
@@ -283,8 +215,8 @@ async def source_case(
     artifact_proposal=None,
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
-    post_submit_binding_setup: PostSubmitBindingSetup | None = None,
-    post_submit_bindings_setup: PostSubmitBindingsSetup | None = None,
+    post_submit_configuration_setup: PostSubmitConfigurationSetup | None = None,
+    post_submit_configurations_setup: PostSubmitConfigurationsSetup | None = None,
     post_submit_specification=None,
     compilation_outcome=None,
     configuration=None,
@@ -340,17 +272,37 @@ async def source_case(
             if post_submit_registry_spec is not None
             else None
         )
-        if post_submit_binding_setup is not None and post_submit_bindings_setup is not None:
-            raise ValueError("post-submit binding setup is ambiguous")
-        post_submit_parameters = (
-            await post_submit_binding_setup(factory, values["project"], post_registry_entry)
-            if post_registry_entry is not None and post_submit_binding_setup is not None
-            else ()
+        if post_submit_configuration_setup is not None and post_submit_configurations_setup is not None:
+            raise ValueError("post-submit configuration setup is ambiguous")
+        if (post_submit_configuration_setup is not None or post_submit_configurations_setup is not None) and post_registry_entry is None:
+            raise ValueError("post-submit configuration requires a registered image")
+        post_configuration = (
+            await post_submit_configuration_setup(factory, values["project"], post_registry_entry)
+            if post_submit_configuration_setup is not None
+            else {}
         )
-        post_submit_cases = (
-            await post_submit_bindings_setup(factory, values["project"], post_registry_entry)
-            if post_registry_entry is not None and post_submit_bindings_setup is not None
-            else ()
+        post_cases = (
+            await post_submit_configurations_setup(factory, values["project"], post_registry_entry)
+            if post_submit_configurations_setup is not None
+            else (PostSubmitAttachmentCase("project.post_evidence", post_configuration),)
+        )
+        values["pre_submit_attachments"] = (
+            (ExternalCheckerImageAttachment(
+                requirement_id="project.archive_rules",
+                registry_entry_id=pre_registry_entry.registry_entry_id,
+                registry_entry_digest=pre_registry_entry.entry_digest,
+                configuration={},
+            ),)
+            if pre_registry_entry is not None else ()
+        )
+        values["post_submit_attachments"] = (
+            tuple(ExternalCheckerImageAttachment(
+                requirement_id=case.requirement_id,
+                registry_entry_id=post_registry_entry.registry_entry_id,
+                registry_entry_digest=post_registry_entry.entry_digest,
+                configuration=case.configuration,
+            ) for case in sorted(post_cases, key=lambda item: item.requirement_id))
+            if post_registry_entry is not None else ()
         )
         values, finalization = await create_compiled_guide(
             factory,
@@ -358,11 +310,7 @@ async def source_case(
             actor,
             version=guide_version,
             artifact_proposal=artifact_proposal,
-            pre_submit_registry_entry=pre_registry_entry,
-            post_submit_registry_entry=post_registry_entry,
-            post_submit_parameters=post_submit_parameters,
             post_submit_specification=post_submit_specification,
-            post_submit_cases=post_submit_cases,
             compilation_outcome=compilation_outcome,
             configuration=configuration,
         )

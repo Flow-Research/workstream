@@ -254,7 +254,6 @@ async def create_compiled_report_fixture(
         guide_sufficiency_projection_authorization,
         artifact_policy_projection_authorization,
     )
-    from app.adapters.checkers import external_checker_capability_projection
     from app.modules.projects.api import (
         ProjectGuideCompilationExecutionCommand,
         ProjectGuideProjectionCommand,
@@ -275,11 +274,8 @@ async def create_compiled_report_fixture(
     sessions = db_session.get_session_factory()
     from tests.projects.guide_activation.source_fixtures import _register_external_checker_fixture
 
-    post_entry = (
+    if post_submit_registry_spec is not None:
         await _register_external_checker_fixture(sessions, post_submit_registry_spec)
-        if post_submit_registry_spec is not None
-        else None
-    )
     await seed_setup_service_for_compiled_fixture(sessions)
     async with sessions() as session:
         report = await session.scalar(
@@ -309,8 +305,6 @@ async def create_compiled_report_fixture(
                 raise
 
         selected_document_access_factory = observed_document_access
-    async with sessions() as session, session.begin():
-        capabilities = await external_checker_capability_projection(session)
     async with sessions() as session:
         setup = await session.get(ProjectSetupRun, str(manifest.setup_run_id))
         setup.status = setup.current_step = "queued"
@@ -325,7 +319,7 @@ async def create_compiled_report_fixture(
                 session,
                 authority,
                 request_inputs=CompilationRequestInputs(
-                    guide_document_manifest_port(session), capabilities, configuration
+                    guide_document_manifest_port(session), configuration
                 ),
             ).request_automatic(actor=actor, setup_run_id=manifest.setup_run_id)
 
@@ -380,23 +374,13 @@ async def create_compiled_report_fixture(
                 "requirements": tuple(
                     item.model_copy(update={"evidence_refs": refs})
                     for item in generated_result().requirements
-                ),
+                ) if status != "blocked" else (),
             }
             if artifact_proposal is not None:
                 patch["submission_artifact_policy"] = artifact_proposal
             if status == "blocked":
                 patch["submission_artifact_policy"] = None
-            from tests.projects.guide_activation.source_fixtures import (
-                _external_compilation_outcome,
-            )
-
-            return _external_compilation_outcome(
-                generated_result().model_copy(update=patch),
-                (post_entry,) if post_entry is not None else (),
-                None,
-                post_entry,
-                refs,
-            )
+            return generated_result().model_copy(update=patch)
 
     execution = project_guide_compilation_execution_port(
         sessions,
@@ -404,7 +388,6 @@ async def create_compiled_report_fixture(
         document_tools_factory=document_tools(
             sessions, document_access_factory=selected_document_access_factory
         ),
-        checker_capabilities=capabilities,
         authorization_context=guide_compilation_execution_authority,
         runtime_factory=lambda config: Runtime(),
     )
