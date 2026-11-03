@@ -41,6 +41,21 @@ def test_attempt_provider_key_is_deterministic_and_context_bound() -> None:
     assert first.provider_idempotency_key() != first.model_copy(
         update={"instruction_version": "v2"}
     ).provider_idempotency_key()
+    assert first.result_schema_version == "project_guide_check_specification.v1"
+    assert not any("catalogue" in name for name in first.model_fields)
+
+
+def test_accepted_result_commits_the_setup_only_component_schema() -> None:
+    accepted = accepted_compilation_result(result())
+    assert accepted.component_hashes.schema_version == "project_guide_check_specification_hashes.v1"
+    assert set(accepted.component_hashes.model_fields) == {
+        "schema_version",
+        "sufficiency_hash",
+        "artifact_policy_hash",
+        "requirement_inventory_hash",
+        "pre_submit_hash",
+        "post_submit_hash",
+    }
 
 
 def test_accepted_result_rejects_component_or_full_hash_drift() -> None:

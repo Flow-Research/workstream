@@ -28,8 +28,7 @@ from app.modules.projects.api.guide_documents import GuideDocumentManifest, Guid
 from app.interfaces.project_agents import (
     AtomicGuideRequirement,
     CheckFailureFinding,
-    PlatformCoverageRef,
-    CheckInfrastructureFailure,
+    CheckInabilityToEvaluate,
     CheckInput,
     CheckNegativeTest,
     CheckSpecification,
@@ -49,7 +48,6 @@ from app.modules.projects.guide_compilation.contracts import (
     CompilationAttemptIdentity,
     accepted_compilation_result,
 )
-from tests.checkers.external.support import capability_projection
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 from app.core.hashing import canonical_json_hash
@@ -136,7 +134,6 @@ def context(
     *,
     generation: int = 1,
     guide_version="v1",
-    checker_capabilities=None,
     configuration=None,
 ) -> ProjectGuideCompilationContext:
     """Build one exact committed-original metadata context."""
@@ -173,7 +170,6 @@ def context(
         instruction_version="v1",
         agent_identity="project-guide-compilation-agent-v1",
         agent_version="v1",
-        checker_capabilities=checker_capabilities or capability_projection(),
     )
 
 
@@ -201,23 +197,17 @@ def result() -> ProjectGuideCompilationResult:
             required_artifacts=("submission",),
         ),
         requirements=(),
-        pre_submit_bindings=(),
-        post_submit_bindings=(),
-        capability_suggestions=(),
         setup_notes=(),
         agent_name="ProjectGuideCompilationAgent",
         agent_version="v1",
-        schema_version="project_guide_compilation_result.v1",
+        schema_version="project_guide_check_specification.v1",
     )
 
 
 def valid_specification() -> CheckSpecification:
-    """Return one actionable static check that fits the bounded PRE stage."""
+    """Return one actionable source-derived PRE check specification."""
     return CheckSpecification(
-        evaluation_method="static_inspection",
-        execution_mode="bounded_pre_submit",
-        maximum_duration_seconds=10,
-        stage_rationale="Static package inspection completes within the intake budget.",
+        evaluation_method="Inspect the submitted package manifest.",
         inputs=(
             CheckInput(
                 input_id="submitted_package",
@@ -244,11 +234,11 @@ def valid_specification() -> CheckSpecification:
                 expected_finding_codes=("required_item_missing",),
             ),
         ),
-        runtime_dependencies=(),
-        infrastructure_failures=(
-            CheckInfrastructureFailure(
+        implementation_needs=("Read the submitted package manifest and identify its entries.",),
+        inability_to_evaluate=(
+            CheckInabilityToEvaluate(
                 code="invalid_output",
-                condition="The checker returns a malformed result.",
+                condition="The submitted package manifest cannot be read.",
             ),
         ),
     )
@@ -257,13 +247,11 @@ def valid_specification() -> CheckSpecification:
 def generated_result() -> ProjectGuideCompilationResult:
     """Return a valid new-generation result without changing retained fixtures."""
     requirement = AtomicGuideRequirement(
-        requirement_id="safe_archive",
-        statement="The submitted archive must be safe to open.",
-        disposition="platform_covered",
-        platform_coverage=PlatformCoverageRef(
-            capability_id="workstream.default", capability_version="v1", stage="pre_submit",
-        ),
-        classification_rationale="The default checker enforces bounded archive safety.",
+        suggestion_id="required_item",
+        statement="The submitted work must include the required item.",
+        stage="pre_submit",
+        classification_rationale="The guide asks for this item before submission.",
+        check_specification=valid_specification(),
         evidence_refs=(
             GuideEvidenceRef(
                 source_item_id=SOURCE_ITEM_ID,
@@ -317,14 +305,7 @@ def persistence_facts(
         operation_id=values["operation"],
         request_id=values["request"],
         idempotency_key=values["key"],
-        pre_catalogue_id=attempt_identity.pre_catalogue_id,
-        pre_catalogue_version=attempt_identity.pre_catalogue_version,
-        pre_catalogue_schema_version=attempt_identity.pre_catalogue_schema_version,
-        pre_catalogue_manifest_hash=attempt_identity.pre_catalogue_manifest_hash,
-        post_catalogue_id=attempt_identity.post_catalogue_id,
-        post_catalogue_version=attempt_identity.post_catalogue_version,
-        post_catalogue_schema_version=attempt_identity.post_catalogue_schema_version,
-        post_catalogue_manifest_hash=attempt_identity.post_catalogue_manifest_hash,
+        result_schema_version=attempt_identity.result_schema_version,
         agent_identity=attempt_identity.agent_identity,
         agent_version=attempt_identity.agent_version,
         instruction_version=attempt_identity.instruction_version,
@@ -337,8 +318,6 @@ def persistence_facts(
         requirement_inventory_component_hash=hashes.requirement_inventory_hash,
         pre_submit_policy_component_hash=hashes.pre_submit_hash,
         post_submit_policy_component_hash=hashes.post_submit_hash,
-        capability_suggestions_component_hash=hashes.capability_suggestions_hash,
-        setup_notes_component_hash=hashes.setup_notes_hash,
         resource_context_digest=SHA256,
     )
     return replace(
