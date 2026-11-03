@@ -272,6 +272,42 @@ def replace_post_policy() -> None:
     op.execute("ALTER FUNCTION " + signature + " SET search_path=pg_catalog,public,pg_temp")
 
 
+def replace_false_review_activation() -> None:
+    """Current specifications do not classify requirements by reviewer disposition."""
+    old = """                        AND CASE
+                          WHEN jsonb_typeof(c.canonical_result::jsonb->'requirements')='array'
+                          THEN NOT EXISTS(
+                            SELECT 1 FROM jsonb_array_elements(
+                              c.canonical_result::jsonb->'requirements'
+                            ) AS requirement(value)
+                            WHERE jsonb_typeof(requirement.value) IS DISTINCT FROM 'object'
+                               OR jsonb_typeof(requirement.value->'disposition') IS DISTINCT FROM 'string'
+                               OR requirement.value->>'disposition'='human_review'
+                          )
+                          ELSE false
+                        END"""
+    new = """                        AND ((c.result_schema_version IS NULL
+                              AND CASE
+                                WHEN jsonb_typeof(c.canonical_result::jsonb->'requirements')='array'
+                                THEN NOT EXISTS(
+                                  SELECT 1 FROM jsonb_array_elements(
+                                    c.canonical_result::jsonb->'requirements'
+                                  ) AS requirement(value)
+                                  WHERE jsonb_typeof(requirement.value) IS DISTINCT FROM 'object'
+                                     OR jsonb_typeof(requirement.value->'disposition') IS DISTINCT FROM 'string'
+                                     OR requirement.value->>'disposition'='human_review'
+                                )
+                                ELSE false
+                              END)
+                          OR (c.result_schema_version='project_guide_check_specification.v1'
+                              AND target->'proposal'->>'result_schema_version'
+                                  IS NOT DISTINCT FROM c.result_schema_version
+                              AND c.canonical_result::jsonb->>'schema_version'
+                                  IS NOT DISTINCT FROM c.result_schema_version
+                              AND jsonb_typeof(c.canonical_result::jsonb->'requirements')='array'))"""
+    replace_function("public.require_guide_activation_custody(uuid,boolean)", (old, new))
+
+
 def upgrade():
     op.execute("SET LOCAL search_path=pg_catalog,public,pg_temp")
     op.execute(
@@ -423,6 +459,7 @@ def upgrade():
     replace_proposal_target()
     replace_proposal_approval()
     replace_post_policy()
+    replace_false_review_activation()
 
 
 def downgrade():
