@@ -123,7 +123,12 @@ def test_manager_commands_reject_unknown_server_owned_fields(model, extra):
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError, match="Extra inputs"):
-        model(target=GuideProposalTarget(**target_values()), idempotency_key=uuid4(), **extra)
+        model(
+            target=GuideProposalTarget(**target_values()), idempotency_key=uuid4(),
+            **({"pre_submit_attachments": (), "post_submit_attachments": ()}
+               if model is GuideProposalApproval else {}),
+            **extra,
+        )
 
 
 def test_complete_proposal_read_requires_manager_content_permission():
