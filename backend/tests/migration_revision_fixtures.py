@@ -69,6 +69,14 @@ async def drop_retained_guide_read_projection(connection):
         await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
 
 
+async def add_historical_revision_read_projection(connection):
+    """Expose current checker and guide reads only after validating the exact archive."""
+    await connection.execute(text(
+        "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
+    ))
+    await add_retained_guide_read_projection(connection)
+
+
 @lru_cache(maxsize=1)
 def _historical_revision_snapshots() -> dict[str, dict[str, object]]:
     encoded = _REVISION_ARCHIVE.read_bytes()
@@ -129,10 +137,7 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
     # Restore and validate the exact archived column inventory first. Only then
     # add nullable current-ORM projections, removed before the real upgrade.
     async with engine.begin() as connection:
-        await connection.execute(text(
-            "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
-        ))
-        await add_retained_guide_read_projection(connection)
+        await add_historical_revision_read_projection(connection)
     settings = _settings(tmp_path, maximum_bytes=1024 * 1024)
     manager = ArtifactScratchManager(
         root=tmp_path / "historical-post-scratch",

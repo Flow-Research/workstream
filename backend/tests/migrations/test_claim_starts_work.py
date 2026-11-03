@@ -30,8 +30,11 @@ from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
     _restore_historical_revision_rows, assert_historical_revision_guards,
     add_retained_guide_read_projection, drop_retained_guide_read_projection,
+    add_historical_revision_read_projection, enter_predecessor_owner_shape,
+    leave_predecessor_owner_shape,
 )
 from tests.project_create_fixtures import grant_fixture_admin_role
+from tests.test_alembic import _execute
 from tests.test_tasks import (
     task_client as current_task_client,
     task_database_env as task_database_env,
@@ -55,9 +58,18 @@ async def predecessor_client(task_database_env, migration_lock):
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
         await asyncio.to_thread(command.upgrade, _config(), "0047_revision_recovery")
-        seed = await _restore_historical_revision_rows(
-            task_database_env, "0047_revision_source_default",
-        )
+        shape = pytest.MonkeyPatch()
+        await enter_predecessor_owner_shape(_execute, task_database_env, shape)
+        try:
+            seed = await _restore_historical_revision_rows(
+                task_database_env, "0047_revision_source_default",
+            )
+            async with db_session.get_engine().begin() as connection:
+                await add_historical_revision_read_projection(connection)
+        finally:
+            shape.undo()
+        await leave_predecessor_owner_shape(_execute, task_database_env)
+        await db_session.dispose_engine()
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
         # Current TASK owners read retained guide custody through current ORM
         # columns. These null-only projections are removed before the upgrade.
