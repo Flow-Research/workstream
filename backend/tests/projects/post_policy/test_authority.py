@@ -39,7 +39,7 @@ async def state(factory):
 
 async def test_stored_foreign_authority_cannot_mutate_replay_or_read_policy(clean_postgres_database):
     async with source_case(clean_postgres_database) as (values, factory, command, owner, grant):
-        derive, projected = await prepare_post_policy(factory, command, owner, grant, service_actor(values))
+        derive, projected = await prepare_post_policy(factory, command, owner, grant, service_actor(values), values)
         foreign_project, foreign, foreign_grant, crossed_grant = await foreign_manager(factory, owner)
         approval = PostPolicyApproval(target=projected.target, idempotency_key=uuid4())
         approved = await operate(factory, owner, command.project_id, grant, 'approve', approval)
@@ -69,7 +69,7 @@ async def test_stored_foreign_authority_cannot_mutate_replay_or_read_policy(clea
 
 async def test_exact_draft_is_not_disclosed_when_read_decision_denies(clean_postgres_database, monkeypatch):
     async with source_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        derive, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        derive, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         selection = PostPolicySelection(**derive.selection.model_dump(), policy_id=projected.target.policy_id)
         before = await state(factory)
         original = PreparedPostPolicy.authorize_read

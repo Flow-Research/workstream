@@ -180,7 +180,7 @@ async def activation_case(
             factory, finalization, actor, human_review_required=human_review_required
         )
         _, derived = await prepare_post_policy(
-            factory, finalization, actor, grant, service_actor(values)
+            factory, finalization, actor, grant, service_actor(values), values
         )
         approved = await operate(
             factory,

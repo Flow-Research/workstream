@@ -8,7 +8,6 @@ from app.modules.checkers.api.external_policy import (
 )
 from tests.checkers.external.test_policy import _entry, _attachment, _request, _Registry
 from tests.checkers.external.test_trial_profiles import configuration
-from tests.projects.guide_compilation.helpers import valid_specification
 
 
 def _configuration():

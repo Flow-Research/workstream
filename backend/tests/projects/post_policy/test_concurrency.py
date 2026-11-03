@@ -15,7 +15,7 @@ from .pg_support import operate, prepare_upstream
 @pytest.mark.parametrize('operation', ['derive', 'approve', 'request_correction'])
 async def test_concurrent_exact_requests_have_one_effect(clean_postgres_database, operation):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        derive = await prepare_upstream(factory, command, actor, grant)
+        derive = await prepare_upstream(factory, command, actor, grant, values)
         setup = service_actor(values)
         if operation == 'derive':
             identity, role, payload = setup, None, derive

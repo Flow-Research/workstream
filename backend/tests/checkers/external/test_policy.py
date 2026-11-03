@@ -18,16 +18,12 @@ from app.modules.checkers.api.external_policy import (
     ExternalCheckerImageAttachment, ExternalCheckerPolicyCompileRequest,
     ExternalCheckerPolicyError, ForgeFactsSelection,
     LockedExternalCheckerBinding, LockedExternalPostSubmitPolicy,
-    LockedWorkstreamDefault, MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
-    SELECTED_POST_MATERIALIZATION_BUDGET_MS,
-    compile_external_checker_policies, selected_forge_facts,
-    selected_post_submit_execution_budget_ms, selected_pre_submit_execution_budget_ms,
+    LockedWorkstreamDefault, compile_external_checker_policies, selected_forge_facts,
+    selected_post_submit_execution_budget_ms,
 )
 from app.modules.model_usage.api import (
     ModelGenerationSettings, ModelPricing, ProjectModelProfile, ProjectModelProfileSpec,
 )
-from app.modules.checkers.api.external import EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
-from app.modules.artifacts.preparation import ArtifactPreparationLimits
 
 
 def _schema(schema_id):

@@ -15,7 +15,6 @@ from app.modules.projects.api.post_policy import PostPolicyApproval, PostPolicyD
 from app.modules.projects.post_policy.service import PostPolicyService
 from app.modules.projects.post_policy.compiler import compile_saved_post_policy
 from app.modules.checkers.api.external_policy import validate_stored_external_checker_policies
-from app.interfaces.project_agents import ProjectGuideCompilationResult
 from tests.checkers.external.support import post_registry_spec
 from tests.projects.guide_compilation.helpers import service_actor
 from tests.projects.guide_compilation.proposals.pg_support import read_package
@@ -27,7 +26,12 @@ async def test_post_policy_operation_preserves_finalization_without_provider_or_
     async with source_case(clean_postgres_database, post_submit_registry_spec=post_registry_spec()) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         upstream = await approve(factory, command, actor, grant,
-                                 GuideProposalApproval(target=package.target, idempotency_key=uuid4()))
+                                 GuideProposalApproval(
+                                     target=package.target,
+                                     pre_submit_attachments=values["pre_submit_attachments"],
+                                     post_submit_attachments=values["post_submit_attachments"],
+                                     idempotency_key=uuid4(),
+                                 ))
         from app.core.hashing import canonical_json_hash
         payload = PostPolicyDerive(selection=GuideProposalSelection(
             project_id=command.project_id, guide_id=command.guide_id, compilation_id=command.compilation_id),
@@ -58,9 +62,6 @@ async def test_post_policy_operation_preserves_finalization_without_provider_or_
         assert draft.current and draft.lifecycle_status == 'compiled'
         assert draft.policy.policy_sha256 == target.policy_hash
         async with factory() as session:
-            saved = await session.scalar(text(
-                "SELECT canonical_result FROM project_guide_compilations WHERE id=:id"
-            ), {"id": command.compilation_id})
             approved_plan = await session.scalar(text(
                 "SELECT effective_pre_submit_plan FROM project_guide_proposal_approvals WHERE operation_id=:id"
             ), {"id": upstream.operation_id})
@@ -68,13 +69,11 @@ async def test_post_policy_operation_preserves_finalization_without_provider_or_
         assert draft.policy == policies.post_submit
         assert len(draft.policy.entries) == 1
         assert draft.policy.entries[0].registry.capability_id == post_registry_spec().capability_id
-        saved_result = ProjectGuideCompilationResult.model_validate(saved)
-        changed_result = saved_result.model_copy(update={
-            "post_submit_bindings": tuple(binding.model_copy(update={"capability_version": "v9.9.9"})
-                                          for binding in saved_result.post_submit_bindings),
-        })
-        with pytest.raises(ValueError, match="changes a required binding"):
-            compile_saved_post_policy(result=changed_result, policies=policies)
+        assert compile_saved_post_policy(policies=policies) == draft.policy
+        changed_plan = policies.model_dump(mode="json")
+        changed_plan["post_submit"]["entries"][0]["requirement_id"] = "substituted_member"
+        with pytest.raises(ValueError, match="digest mismatch"):
+            validate_stored_external_checker_policies(changed_plan)
         assert draft.proposal.target == package.target
         approval = PostPolicyApproval(target=target, idempotency_key=uuid4())
         approved = []
