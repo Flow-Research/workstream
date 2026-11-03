@@ -59,7 +59,7 @@ async def _unbound_case(url, *, approve):
 
     async with source_case(url) as (values, factory, finalization, actor, grant):
         await seed_selected_review_revision_inputs(factory, finalization, actor)
-        _, derived = await prepare_post_policy(factory, finalization, actor, grant, service_actor(values))
+        _, derived = await prepare_post_policy(factory, finalization, actor, grant, service_actor(values), values)
         selected = derived
         if approve:
             selected = await operate(
