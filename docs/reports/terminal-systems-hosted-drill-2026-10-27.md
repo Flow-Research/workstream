@@ -54,9 +54,17 @@ the same validator. No trial ran and no work failure was found. The two complete
 model calls cost US$0.0156745. The candidate now reports all independent citation
 failures in its single bounded correction; strict source validation and the
 two-call limit remain. All 119 external-checker model tests pass, including a
-three-error regression. The repaired image is not yet built or deployed, and
-no further live call is claimed. No POST work verdict, governed acceptance or
-ContributionRecord is claimed yet.
+three-error regression. The repaired image
+`sha256:e1408460fe3d6ec329123570d216b3dd6ad959d3463b31310f315bc67550ef40`
+has passed controlled qualification without provider calls. Native qualification
+then stopped during collection because its fixture still imported removed setup
+catalogue contracts; no sandbox trial ran. The fixture now separates advisory
+specifications from explicit human image attachments, and both native fixtures
+collect successfully. Existing backend preflight also collects them to detect
+this missed-caller failure. Fresh native qualification, image publication and
+deployment remain required. The live backend and retained guide 24 outcome are
+unchanged; no POST work verdict, governed acceptance or ContributionRecord is
+claimed yet.
 
 At the **before-POST dispatch cutoff**, the unchanged US$10 account had
 **US$8.44144978 settled, zero reserved and US$1.55855022 remaining**. These
@@ -66,9 +74,10 @@ was reset. Pinned-rate settlement is not provider-invoice reconciliation.
 The deployed `284b86cb` application tree is identical to candidate `8fb`'s
 application tree; their whole backend trees differ. CI run
 [41720437277](https://github.com/Flow-Research/workstream/actions/runs/41720437277)
-for `32ebea21e` was canceled after supersession. The current `8fb` run
+for `32ebea21e` was canceled after supersession. The subsequent `8fb` run
 [41723295868](https://github.com/Flow-Research/workstream/actions/runs/41723295868)
-was in progress with no failure at this cutoff. Neither canceled nor pending
+was also canceled after supersession. Fresh aggregate verification remains
+required for the fixture repair. Neither canceled nor pending
 CI is a passing aggregate claim. The corrected real API contract drill passed
 through authorized claim on isolated PostgreSQL and MinIO with complete
 cleanup; the current hosted journey now reaches an actual immutable Submission.

@@ -49,7 +49,13 @@ from app.interfaces.checker_model_provider import (
     CheckerModelResponseReference,
     CheckerModelUsage,
 )
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
+from app.interfaces.project_agents import (
+    CheckFailureFinding,
+    CheckInabilityToEvaluate,
+    CheckInput,
+    CheckNegativeTest,
+    CheckSpecification,
+)
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
@@ -89,16 +95,12 @@ from tests.checkers.external.test_trial_evidence import _owner
 from tests.checkers.external.test_revision_materialization import (
     DiagnosticMaterialization,
 )
-from tests.checkers.external.test_trial_policy import trial_specification
-from tests.checkers_model_calls.test_composed_execution import (
-    model_review_specification,
-)
 from tests.checkers_model_calls.test_public_api import profile_spec
 import tests.post_submit_materialization_helpers as material_helpers
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from tests.test_s3_artifact_store import minio_settings
-from tests.projects.guide_activation.source_fixtures import PostSubmitBindingCase
+from tests.projects.guide_activation.source_fixtures import PostSubmitAttachmentCase
 from tests.test_checker_materialization import _limits
 
 
@@ -585,20 +587,52 @@ def _registry_spec(image_digest: str, profile, projection):
 
 
 def _trial_model_specification() -> CheckSpecification:
-    """Declare both the nested sandbox and the bounded semantic assessment."""
-    trial = trial_specification()
-    model = model_review_specification()
-    model_dependency = next(
-        item for item in model.runtime_dependencies if item.kind == "model_service"
-    )
-    return CheckSpecification.model_validate(
-        trial.model_dump(mode="json")
-        | {
-            "runtime_dependencies": [
-                *trial.model_dump(mode="json")["runtime_dependencies"],
-                model_dependency.model_dump(mode="json"),
-            ]
-        }
+    """Propose observable work checks independently of registered execution images."""
+    return CheckSpecification(
+        evaluation_method="Compare contributor claims with isolated execution evidence.",
+        inputs=(
+            CheckInput(
+                input_id="submitted_package",
+                kind="package",
+                purpose="Documented procedures, reference implementation and verification suite.",
+            ),
+        ),
+        check_steps=(
+            "Read the documented commands and expected verification outcomes.",
+            "Observe starter rejection, three fresh reference passes and negative controls.",
+            "Compare author claims and recovery behavior with authenticated trial evidence.",
+        ),
+        pass_conditions=(
+            "Documented claims agree with the observed execution outcomes.",
+        ),
+        failure_findings=(
+            CheckFailureFinding(
+                code="trial_evidence_disagrees",
+                level="error",
+                condition="A required observed execution outcome contradicts the documented claim.",
+                message="Repair the implementation or unsupported claim and rerun verification.",
+            ),
+        ),
+        positive_tests=(
+            "A reference passes three fresh runs and its negative controls fail.",
+        ),
+        negative_tests=(
+            CheckNegativeTest(
+                name="unsupported_execution_claim",
+                scenario="A reference fails verification while its author claims all checks pass.",
+                expected_verdict="failed",
+                expected_finding_codes=("trial_evidence_disagrees",),
+            ),
+        ),
+        implementation_needs=(
+            "Inspect submitted sources and assess isolated execution evidence.",
+        ),
+        inability_to_evaluate=(
+            CheckInabilityToEvaluate(
+                code="trial_evidence_unavailable",
+                condition="Authenticated execution evidence cannot be obtained or read.",
+            ),
+        ),
     )
 
 
@@ -813,13 +847,11 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
     )
     model_profiles = []
 
-    async def binding_cases(_factory, project_id, registry):
+    async def attachment_cases(_factory, project_id, _registry):
         selected = ProjectModelProfileSpec.model_validate(
             profile_spec(project_id)
             .model_copy(
                 update={
-                    "registry_entry_id": registry.registry_entry_id,
-                    "registry_entry_digest": registry.entry_digest,
                     "maximum_request_bytes": 512 * 1024,
                     "maximum_output_bytes": 64 * 1024,
                     "maximum_response_bytes": 1024 * 1024,
@@ -863,31 +895,12 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             "model_profile_version": response.json()["spec"]["profile_version"],
             "model_profile_digest": response.json()["profile_digest"],
         }
-        specification = _trial_model_specification()
         return tuple(
-            PostSubmitBindingCase(
+            PostSubmitAttachmentCase(
                 requirement_id=requirement_id,
-                statement=statement,
-                classification_rationale=(
-                    "A project image evaluates immutable material through bounded model and "
-                    "isolated trial dependencies."
-                ),
-                specification=specification,
-                parameters=tuple(
-                    CapabilityParameter(name=key, value=value)
-                    for key, value in (shared | {"check": requirement_id}).items()
-                ),
+                configuration=shared | {"check": requirement_id},
             )
-            for requirement_id, statement in (
-                (
-                    AUTHOR_REQUIREMENT,
-                    "Compare author claims with authenticated trial evidence.",
-                ),
-                (
-                    REQUIREMENT,
-                    "Evaluate runtime and verification behavior in isolated trials.",
-                ),
-            )
+            for requirement_id in (AUTHOR_REQUIREMENT, REQUIREMENT)
             if recovery is None or requirement_id == REQUIREMENT
         )
 
@@ -910,7 +923,8 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             }
         ),
         post_submit_registry_spec=registry_spec,
-        post_submit_bindings_setup=binding_cases,
+        post_submit_configurations_setup=attachment_cases,
+        post_submit_specification=_trial_model_specification(),
         post_scratch_root=post_scratch,
         scratch_limits=_limits(
             aggregate_reserved_bytes=5 * HARD_MAXIMUM_ARTIFACT_BYTES,
