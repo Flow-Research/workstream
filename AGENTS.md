@@ -48,8 +48,10 @@ definition or ownership boundary of Workstream.
   deterministic or confuse setup-agent policy proposals with runtime evaluators.
   Model-based judges require supported registered implementations; do not claim
   them live merely because setup uses an agent.
-  Setup inference reads only the assigned guide documents and task examples,
-  apart from trusted system instructions. It proposes source-cited PRE/POST check
+  Initial setup inference reads only the assigned guide documents and task examples,
+  apart from trusted system instructions. An explicit manager correction may also
+  supply the manager's written feedback, never previous image selections or
+  registry metadata. It proposes source-cited PRE/POST check
   specifications, never executable images or available runtime choices. An
   authorized human selects exact registered project images and configuration for
   each phase during policy approval; the Workstream PRE default stays separate.

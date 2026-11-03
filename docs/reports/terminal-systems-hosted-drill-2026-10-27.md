@@ -7,8 +7,9 @@ CI evidence does not qualify the current source repair.
 
 The drill exposed the wrong setup contract: the agent was asked to choose checker
 registrations and runtime configuration. The repair removes that task. Setup gets
-only assigned guide documents and task examples, apart from system instructions,
-and proposes structured PRE/POST requirements. PM/engineering supply the exact
+assigned guide documents and task examples, apart from system instructions,
+and proposes structured PRE/POST requirements. Explicit correction runs also
+receive the PM's written feedback, never prior proposals or image selections. PM/engineering supply the exact
 image attachments separately after implementation and registration. Registration
 must not require another inference or change the proposal hash. This source
 repair is being verified; it is not deployed or proven by a complete hosted run.

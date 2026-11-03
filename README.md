@@ -442,7 +442,8 @@ One project-guide compilation proposes sufficiency findings, artifact
 requirements and separate pre-submission and post-submission check
 specifications through a selected registered setup runtime.
 The model sees the assigned guide documents and task examples, apart from trusted
-system instructions. It proposes source-cited check specifications with inputs,
+system instructions. An explicit manager correction also includes the PM's written
+feedback, never previous image selections. It proposes source-cited check specifications with inputs,
 steps, pass/fail findings and implementation test examples. It does not receive
 checker registry entries, image choices or runtime profiles. PM and engineering
 review the proposal, and engineering implements, pushes to ECR and registers

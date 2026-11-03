@@ -258,8 +258,8 @@ retained proposal.
 Both phases share one attempt, trusted document tools, client, overall timeout and
 aggregate model-turn/tool budgets. The draft can use at most half the configured turn
 allowance; review receives the unused remainder. Full serialized review and correction
-inputs (assigned guide material and task examples, plus the same-run candidate
-and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
+inputs (assigned guide material and task examples, explicit manager feedback when
+present, plus the same-run candidate and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
 bytes, configured through `WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES`; an oversized
 envelope is terminal invalid output. Every phase and correction must
 initially read every assigned original, including for blocked proposals. Only a
@@ -276,8 +276,10 @@ validation belongs to human image attachment at approval, not to setup inference
 
 For a manager correction, the server validates predecessor and feedback custody
 against the saved project, guide, source, generation, finalization and hashes.
-These retained facts bind the request identity; they are not model inputs. Both
-phases start from the assigned guide material and task examples. Same-run draft
+These retained facts bind the request identity. Both phases receive only the
+manager's bounded written reason in `manager_feedback`, alongside the assigned
+guide material and task examples. Predecessor bodies, registry metadata and prior
+image selections remain excluded. Same-run draft
 review and bounded invalid-output feedback remain internal phases of that attempt.
 Retained results are never rewritten, and provider uncertainty prevents redispatch.
 

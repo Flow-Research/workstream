@@ -371,11 +371,12 @@ status and lineage pointers; it does not substitute for the authorized package.
 A manager correction preserves finalized history and creates a successor setup
 generation with bounded feedback. It never reopens a finalized run or activates
 the guide. The successor's pre-submission proposal requires its own approval.
-The model prompt contains only assigned guide documents and task examples,
-apart from trusted system instructions, and checks the originals again.
-Correction custody retains feedback and the exact hash-verified predecessor,
-but neither supplies new project configuration to the model. Same-run output
-repair may receive bounded validation errors.
+The initial prompt contains only assigned guide documents and task examples,
+apart from trusted system instructions. On an explicit correction, both inference
+phases additionally receive the PM's bounded written feedback and recheck the
+originals. Correction custody verifies the exact predecessor and request but does
+not send the predecessor body, registry metadata or image selections to the model.
+Same-run output repair may receive bounded validation errors.
 
 Timeout or unknown provider acceptance is not a correctable finalized result.
 It remains blocked without another call until the adapter supports verified

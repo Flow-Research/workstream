@@ -3,7 +3,9 @@
 Setup translates the assigned guide documents and task examples into check
 specifications. The initial model prompt contains only that project material,
 apart from trusted system instructions. Registry inventory, image choices,
-runtime availability and lifecycle policy are not model inputs.
+runtime availability and lifecycle policy are not model inputs. An explicitly
+requested correction also supplies the PM's bounded written feedback, without
+the prior proposal body or image selections.
 It does not recommend review mode, revision caps or windows, deadlines, assignments,
 compensation or routing. The PM configures those through the existing policy paths.
 Administrative guide clauses are outside the checker inventory.
@@ -14,6 +16,7 @@ Administrative guide clauses are outside the checker inventory.
 | --- | --- |
 | Document manifest | Exact authorized originals, opaque read handles and evidence identities. The agent must actually read them. |
 | Task examples | Illustrations of the project, never a task allowlist or completed submission. |
+| Explicit correction feedback | The authenticated PM's bounded written reason, only for a requested correction; no predecessor body or executable selections. |
 | Instructions | Snapshotted scope, format, complete synthetic output example and constraints. |
 
 Only assigned originals are accessible. Same-run structured-output repair may

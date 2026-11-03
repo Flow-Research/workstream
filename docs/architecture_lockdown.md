@@ -205,8 +205,10 @@ high-confidence secret rejection, and unchanged-work rejection unless locked
 rules changed. Missing summary or attestation produces warnings only. All
 project checks are approved, digest-pinned external images; there is no built-in
 project-rule catalogue or alternate checker runtime.
-Setup receives only assigned guide documents and task examples, apart from
+Initial setup receives only assigned guide documents and task examples, apart from
 trusted system instructions, and proposes source-cited PRE/POST specifications.
+An explicit manager correction additionally supplies the PM's written feedback;
+registry metadata, prior proposals and image selections remain excluded.
 Engineering implements, pushes to ECR and registers external images; an
 authorized Project Manager selects exact registered images and non-secret
 configuration in separate phase lists during approval. Approval locks the
