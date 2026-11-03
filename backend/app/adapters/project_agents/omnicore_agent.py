@@ -35,6 +35,7 @@ from app.adapters.model_usage.openrouter import (
 from app.adapters.project_agents.provider_resilience import ModelCircuitAdmission
 from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
 from app.adapters.project_agents.setup_model_proxy import SetupModelProxyUnavailable
+from app.core.project_guide_instructions import project_guide_system_instructions
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
@@ -401,6 +402,7 @@ class OmniCoreAgentProjectGuideRuntime:
                         reasoning_effort=capabilities.model.reasoning_effort,
                         text_verbosity=capabilities.model.text_verbosity,
                         maximum_output_tokens=capabilities.model.maximum_output_tokens,
+                        agent_version=context.agent_version,
                         phase_instruction=(
                             "Return only one complete JSON object matching this exact "
                             "checker-specification schema: "
@@ -524,6 +526,7 @@ def _build_agent(
     reasoning_effort: str,
     text_verbosity: str,
     maximum_output_tokens: int,
+    agent_version: str,
     phase_instruction: str,
 ) -> Any:
     """Construct one phase with a fresh private in-memory session and no extras."""
@@ -560,7 +563,9 @@ def _build_agent(
     }
     return OmniCoreAgent(
         name="ProjectGuideCompilationAgent",
-        system_instruction=configuration.instructions + "\n\n" + phase_instruction,
+        system_instruction=project_guide_system_instructions(
+            configuration.instructions, agent_version, phase_instruction=phase_instruction
+        ),
         model_config={
             "provider": "openrouter",
             "model": configuration.model,

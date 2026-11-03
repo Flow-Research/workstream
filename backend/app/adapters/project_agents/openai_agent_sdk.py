@@ -9,6 +9,7 @@ from app.adapters.project_agents.compilation_draft import (
     CompilationDraftParser,
     contextual_output_issues,
 )
+from app.core.project_guide_instructions import project_guide_system_instructions
 from app.adapters.project_agents.openai_profile import (
     require_openai_agents_sdk_adapter_profile,
 )
@@ -339,7 +340,9 @@ class OpenAIAgentSdkProjectGuideRuntime:
             )
             agent = Agent(
                 name="ProjectGuideCompilationAgent",
-                instructions=configuration.instructions,
+                instructions=project_guide_system_instructions(
+                    configuration.instructions, context.agent_version
+                ),
                 model=model,
                 model_settings=model_settings,
                 output_type=draft_schema,

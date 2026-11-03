@@ -31,6 +31,8 @@ def _reject_constant(_value):
 
 def contextual_output_issues(error: Exception, *, context, result) -> list[dict]:
     """Map validation failures to bounded diagnostics without rejected values."""
+    if str(error) == "compilation result agent version is invalid":
+        return [{"path": ["agent_version"], "code": "agent_version"}]
     codes = {
         "compilation requirements must be unique": "suggestion_ids_unique",
         "blocked compilation requires blocking evidence": "blocked_evidence",

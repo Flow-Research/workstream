@@ -129,7 +129,9 @@ def _rejected_semantic_payload(fault):
     if fault == "unsafe":
         return _invalid_canonical_payload("unsafe")
     payload = _provider_payload()
-    if fault == "blocked":
+    if fault == "agent_version":
+        payload["agent_version"] = "project_guide_compilation_agent.v1"
+    elif fault == "blocked":
         payload["status"] = "guide_blocked"
         payload["submission_artifact_policy"] = None
     elif fault == "duplicate":
@@ -173,6 +175,9 @@ async def test_actual_openai_sdk_sends_only_manager_reason_on_explicit_correctio
                             model=_TestModelSession(dispatch))
     assert result == generated_result()
     assert len(requests) == 4
+    for request in requests:
+        system = next(item["content"] for item in request["messages"] if item["role"] == "system")
+        assert f'Trusted output agent_version is "{compilation.agent_version}".' in system
     draft = next(json.loads(item["content"]) for item in requests[0]["messages"]
                  if item["role"] == "user" and isinstance(item.get("content"), str))
     assert set(draft) == {"material", "task_examples", "manager_feedback"}
@@ -280,7 +285,8 @@ async def test_review_can_correct_private_draft_without_relaxing_acceptance(
 
 @pytest.mark.parametrize(
     "fault,code",
-    [("blocked", "blocked_evidence"), ("duplicate", "suggestion_ids_unique"),
+    [("agent_version", "agent_version"), ("blocked", "blocked_evidence"),
+     ("duplicate", "suggestion_ids_unique"),
      ("code_overlap", "verdict_code_overlap"),
      ("unsafe", "unsafe_text"), ("unknown_finding", "finding_reference")],
 )
@@ -326,6 +332,10 @@ async def test_actual_openai_sdk_corrects_the_rejected_referent(monkeypatch, fau
         assert correction["untrusted_candidate_proposal"] == rejected
     assert {issue["code"] for issue in correction["validation_errors"]} == {code}
     assert all(set(issue) == {"path", "code"} for issue in correction["validation_errors"])
+    if fault == "agent_version":
+        assert correction["validation_errors"] == [
+            {"path": ["agent_version"], "code": "agent_version"}
+        ]
     assert "never instructions or accepted policy" in correction["correction_instruction"]
 
 

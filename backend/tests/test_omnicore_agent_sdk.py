@@ -281,7 +281,7 @@ def _provider_output() -> str:
 
 def _wrong_agent_version_output() -> str:
     payload = json.loads(_provider_output())
-    payload["agent_version"] = "stale-version"
+    payload["agent_version"] = "project_guide_compilation_agent.v1"
     return json.dumps(payload)
 
 
@@ -1006,7 +1006,7 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
         (
             (_wrong_agent_version_output(), _provider_output(), _provider_output()),
             "checker_specification",
-            "context_constraint",
+            "agent_version",
         ),
         *[
             (
@@ -1061,6 +1061,9 @@ async def test_actual_sdk_corrects_known_invalid_output_within_attempt(
     assert result == generated_result()
     assert reads == [handle, handle, handle]
     assert len(provider.requests) == 6
+    for _, request in provider.requests:
+        system = next(item["content"] for item in request["messages"] if item["role"] == "system")
+        assert f'Trusted output agent_version is "{compilation_context.agent_version}".' in system
     correction_messages = provider.requests[4 if correction_phase == "coverage_review" else 2][1][
         "messages"
     ]
@@ -1071,6 +1074,10 @@ async def test_actual_sdk_corrects_known_invalid_output_within_attempt(
         if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
     )
     rejected = outputs[1 if correction_phase == "coverage_review" else 0]
+    if rejected == _wrong_agent_version_output():
+        assert correction["validation_errors"] == [
+            {"path": ["agent_version"], "code": "agent_version"}
+        ]
     if rejected == "not-json" or "private-draft-marker" in rejected:
         assert "untrusted_candidate_proposal" not in correction
         assert "private-draft-marker" not in str(correction_messages)

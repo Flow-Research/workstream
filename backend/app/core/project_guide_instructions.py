@@ -227,3 +227,13 @@ PROJECT_GUIDE_INSTRUCTIONS += (
     + "\nComplete JSON output example:\n"
     + json.dumps(PROJECT_GUIDE_OUTPUT_EXAMPLE["result"], ensure_ascii=False, separators=(",", ":"))
 )
+
+
+def project_guide_system_instructions(
+    configured_instructions: str, agent_version: str, *, phase_instruction: str = ""
+) -> str:
+    """Give every model phase the trusted result version outside source/user input."""
+    parts = [configured_instructions, f'Trusted output agent_version is "{agent_version}".']
+    if phase_instruction:
+        parts.append(phase_instruction)
+    return "\n\n".join(parts)
