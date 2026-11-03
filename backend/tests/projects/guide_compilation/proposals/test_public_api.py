@@ -40,7 +40,7 @@ def test_openapi_exposes_complete_proposal_journey():
 async def test_public_approval_read_replay_and_current_authority(clean_postgres_database, project_size_limits, typed_specification):
     from tests.projects.guide_compilation.helpers import generated_result, valid_specification
     from app.interfaces.project_agents import (
-        AtomicGuideRequirement, CapabilitySuggestion, SubmissionArtifactPolicyProposal,
+        AtomicGuideRequirement, SubmissionArtifactPolicyProposal,
     )
 
     outcome = generated_result()
@@ -49,16 +49,13 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
         outcome = outcome.model_copy(update={
             "status": "draft_ready_with_warnings",
             "requirements": (AtomicGuideRequirement(
-                requirement_id="package.structure", statement="Supply the required package files.",
-                disposition="pre_submit_capability_gap",
+                suggestion_id="package.structure", statement="Supply the required package files.",
+                stage="pre_submit",
                 classification_rationale="This is bounded static inspection requiring a project image.",
                 check_specification=valid_specification(), evidence_refs=references,
             ),),
-            "capability_suggestions": (CapabilitySuggestion(
-                requirement_id="package.structure", stage="pre_submit",
-                title="Package structure check", rationale="Register an image that checks required files.",
-                evidence_refs=references,
-            ),),
+            "findings": tuple(item.model_copy(update={"severity": "warning"})
+                              for item in outcome.findings),
         })
     if not project_size_limits:
         outcome = outcome.model_copy(update={
@@ -86,7 +83,7 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
                     outcome.submission_artifact_policy, field
                 )
             key = {"Idempotency-Key": str(uuid4())}
-            payload = {"target": body["target"], "acknowledged_warning_hashes": body["warning_hashes"]}
+            payload = {"pre_submit_attachments": [], "post_submit_attachments": [], "target": body["target"], "acknowledged_warning_hashes": body["warning_hashes"]}
             approved = await client.post(path+"/pre-submission-approval", headers=key, json=payload)
             assert approved.status_code == 200, approved.text
             replay = await client.post(path+"/pre-submission-approval", headers=key, json=payload)
@@ -121,7 +118,7 @@ async def test_public_approval_rejects_without_writes(clean_postgres_database, f
             package = await client.get(path+"/proposal")
             assert package.status_code == 200, package.text
             body = package.json()
-            payload = {"target":body["target"], "acknowledged_warning_hashes":body["warning_hashes"]}
+            payload = {"pre_submit_attachments": [], "post_submit_attachments": [], "target":body["target"], "acknowledged_warning_hashes":body["warning_hashes"]}
             headers = {"Idempotency-Key":str(uuid4())}
             expected = 409
             if failure == "missing_key":
@@ -205,6 +202,6 @@ async def test_setup_pointer_opens_exact_complete_proposal(clean_postgres_databa
             assert package.status_code == 200, package.text
             assert package.json()["result"]["status"] == classification
             if classification == "guide_blocked":
-                denied = await client.post(path+"/pre-submission-approval",headers={"Idempotency-Key":str(uuid4())},json={"target":package.json()["target"]})
+                denied = await client.post(path+"/pre-submission-approval",headers={"Idempotency-Key":str(uuid4())},json={"target":package.json()["target"], "pre_submit_attachments": [], "post_submit_attachments": []})
                 assert denied.status_code == 409, denied.text
                 assert denied.json()["error"]["code"] == "approval_blocked"

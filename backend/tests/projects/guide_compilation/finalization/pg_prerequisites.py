@@ -152,11 +152,6 @@ async def compilation_and_projections(
     receipt = await _port(
         factory,
         runtime,
-        checker_capabilities=(
-            compilation_context.checker_capabilities
-            if compilation_context.checker_capabilities.definitions
-            else None
-        ),
     ).execute(
         ProjectGuideCompilationExecutionCommand(attempt_id=requested.attempt_id)
     )

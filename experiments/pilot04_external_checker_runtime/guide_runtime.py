@@ -83,7 +83,7 @@ def _recorded_specification(stage, *, index=0):
         "positive_tests": [f"A fixture without {marker} passes this rule."],
         "negative_tests": [{"name": "negative_marker", "scenario": f"Add {marker} to the fixture.",
                             "expected_verdict": "failed", "expected_finding_codes": [code]}],
-        "implementation_needs": [],
+        "implementation_needs": ["Read the submitted fixture file listing."],
         "inability_to_evaluate": [{"code": "invalid_output",
                                      "condition": "The runner receives malformed checker output."}],
     })

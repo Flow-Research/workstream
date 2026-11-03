@@ -1,4 +1,4 @@
-"""Persist external-capability gap handoffs and terminalize oversized output."""
+"""Persist implementation-independent suggestions and terminalize oversized output."""
 import json
 
 import pytest
@@ -31,13 +31,6 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
     from app.workers import project_setup as worker
 
     factory, actor, setup_id, snapshot = automatic_source
-    from tests.checkers.external.support import registry_spec
-    from tests.projects.guide_activation.source_fixtures import (
-        _register_external_checker_fixture,
-    )
-
-    await _register_external_checker_fixture(factory, registry_spec("pre_submit"))
-    await _register_external_checker_fixture(factory, registry_spec("post_submit"))
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
@@ -57,7 +50,7 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
                 return report.model_copy(update={
                     field: tuple(item.model_copy(update={"evidence_refs": (ref, ref)})
                                  for item in getattr(report, field))
-                    for field in ("findings", "requirements", "capability_suggestions")
+                    for field in ("findings", "requirements")
                 })
         runtime = OversizedRuntime()
     else:
@@ -82,9 +75,12 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
         else:
             parsed = ProjectGuideCompilationResult.model_validate(row.canonical_result)
             assert row.stored_bytes == project_guide_compilation_result_storage_bytes(parsed)
-            assert len(parsed.pre_submit_bindings) == len(parsed.post_submit_bindings) == 1
-            assert {s.stage.value for s in parsed.capability_suggestions} == {"pre_submit", "post_submit"}
-            assert {s.requirement_id for s in parsed.capability_suggestions} == {"gap_pre_submit", "gap_post_submit"}
+            assert {item.stage.value for item in parsed.requirements} == {"pre_submit", "post_submit"}
+            assert {item.suggestion_id for item in parsed.requirements} == {
+                item.suggestion_id for item in runtime.outcome.requirements
+            }
+            assert "pre_submit_bindings" not in row.canonical_result
+            assert "post_submit_bindings" not in row.canonical_result
         await _assert_projection_state(session, setup_id, oversized)
         expected_counts = {
             "project_guide_compilations": 1,

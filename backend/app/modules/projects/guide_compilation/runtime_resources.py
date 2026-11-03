@@ -272,7 +272,6 @@ async def require_compilation_document_access(session, attempt_id, manifest, res
     references = (
         *(ref for finding in result.findings for ref in finding.evidence_refs),
         *(ref for requirement in result.requirements for ref in requirement.evidence_refs),
-        *(ref for suggestion in result.capability_suggestions for ref in suggestion.evidence_refs),
     )
     cited = {str(ref.source_item_id) for ref in references}
     if not cited <= opened:
