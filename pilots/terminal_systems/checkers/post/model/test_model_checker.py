@@ -230,6 +230,18 @@ class AssessmentTests(unittest.TestCase):
     def validate(self, value: dict):
         return validate_assessment(json.dumps(value), self.rubric, self.snapshot)
 
+    def test_finding_line_requires_integer_even_when_string_looks_numeric(self):
+        valid = self.assessment(failed=True)
+        self.assertEqual(len(self.validate(valid)), 1)
+        for invalid_line in ("1", "1: Run tool check.", True, 1.0):
+            with self.subTest(line=invalid_line):
+                value = deepcopy(valid)
+                value["findings"][0]["line"] = invalid_line
+                with self.assertRaisesRegex(AssessmentError, "invalid_output"):
+                    self.validate(value)
+        prompt = json.loads(build_prompt(self.source, self.rubric, self.snapshot))
+        self.assertIn("JSON integer", prompt["output_contract"]["findings"][0]["line"])
+
     def test_complete_passing_assessment_cites_actual_material(self):
         self.assertEqual(self.validate(self.assessment()), ())
 

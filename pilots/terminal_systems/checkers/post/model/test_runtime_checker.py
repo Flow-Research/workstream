@@ -628,6 +628,27 @@ class RuntimeCheckerTests(unittest.TestCase):
         )
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
+        prompt = json.loads(session.calls[1][0])
+        self.assertEqual(
+            [item["condition_number"] for item in prompt["rubric"]["pass_conditions"]],
+            [1, 2, 3, 4, 5],
+        )
+        self.assertTrue(
+            any("complete instruction.md" in item for item in prompt["security"])
+        )
+        for instruction in prompt["security"]:
+            self.assertNotIn("condition 11", instruction)
+            self.assertNotIn("behavioral_coverage_incomplete", instruction)
+        self.assertEqual(
+            set(prompt["output_contract"]), {"recovery_applicability", "assessment"}
+        )
+        instruction = next(
+            item
+            for item in prompt["untrusted_evidence_data"]["evidence"]
+            if item["path"] == "instruction.md"
+        )
+        self.assertEqual(instruction["content_utf8"], INSTRUCTION)
+        self.assertEqual(instruction["line_count"], len(INSTRUCTION.splitlines()))
 
     def test_author_plan_gap_uses_fresh_proposal_finding_without_trial(self):
         session = FakeModelSession(coverage_complete=False)

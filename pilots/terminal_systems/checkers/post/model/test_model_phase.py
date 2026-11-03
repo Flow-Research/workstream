@@ -109,6 +109,30 @@ class ModelPhaseTests(unittest.TestCase):
                 self.assertEqual(correction["validation_error"], "invalid_output")
                 self.assertNotIn("accepted_candidate", correction)
 
+    def test_quoted_recovery_lines_require_a_fresh_integer_output(self):
+        # The hosted assessment returned numbered source text for integer spans.
+        for field in ("start_line", "end_line"):
+            with self.subTest(field=field):
+                invalid_value = deepcopy(self.value)
+                invalid_value["recovery_applicability"][field] = "1: source text"
+                invalid = json.dumps(invalid_value)
+                with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+                    self.validate(invalid)
+                session = Session([invalid, self.valid])
+                proposal, _ = run_model_phase(session, self.prompt, self.validate)
+                self.assertTrue(proposal.coverage_complete)
+                correction = json.loads(session.calls[1][0])
+                self.assertIn(
+                    "must be JSON integers", correction["correction_instruction"]
+                )
+                self.assertEqual(correction["untrusted_prior_output"], invalid)
+                self.assertEqual(correction["original_prompt"], self.prompt)
+                self.assertEqual(len(session.calls), 2)
+                with self.assertRaisesRegex(TrialPlanError, "invalid_output"):
+                    run_model_phase(
+                        Session([invalid, invalid]), self.prompt, self.validate
+                    )
+
     def test_citation_correction_identifies_the_offending_procedure(self):
         # A closing fence cannot substitute for the source window containing
         # the command. This public fixture preserves bounded correction proof.

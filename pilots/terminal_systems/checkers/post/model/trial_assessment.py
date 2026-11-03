@@ -175,9 +175,7 @@ def add_recovery_assessment_contract(prompt: dict) -> None:
         "Independently read the complete instruction.md contract to decide whether recovery "
         "across interruption and restart is promised. Do not infer non-applicability from "
         "missing commands, missing trial steps, task names, metadata flags, or author opt-outs. "
-        "For runtime condition 11, interruption and restart are required only when promised; "
-        "if promised but absent from authenticated trials, mark condition 11 not_satisfied "
-        "with behavioral_coverage_incomplete. A citation establishes custody, not correctness."
+        "A citation establishes custody, not correctness."
     )
     prompt["output_contract"] = {
         "recovery_applicability": recovery_applicability_contract(),
@@ -291,6 +289,11 @@ def prepare_runtime_assessment(
         "required_receipt_count": 1,
     }
     add_recovery_assessment_contract(prompt)
+    prompt["security"].append(
+        "For runtime condition 11, interruption and restart are required only when promised; "
+        "if promised but absent from authenticated trials, mark condition 11 not_satisfied "
+        "with behavioral_coverage_incomplete."
+    )
     encoded_prompt = _canonical(prompt)
     if len(encoded_prompt) > MAXIMUM_MODEL_PROMPT_BYTES:
         raise TrialAssessmentError("capacity_exceeded")

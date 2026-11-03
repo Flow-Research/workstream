@@ -286,8 +286,8 @@ def recovery_applicability_contract() -> dict[str, str]:
     return {
         "required": "boolean: whether instruction.md promises recovery across interruption and restart",
         "evidence_id": "instruction.md evidence identifier",
-        "start_line": "1: cite the entire solver contract",
-        "end_line": "instruction.md line_count: absence cannot be inferred from an isolated excerpt",
+        "start_line": "JSON integer 1, not a string or source text: cite the entire solver contract",
+        "end_line": "JSON integer equal to instruction.md line_count, not a string or source text: cite the entire solver contract",
     }
 
 

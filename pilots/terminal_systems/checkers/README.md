@@ -145,9 +145,21 @@ Guide 17's two completed author-evidence calls still belong to its locked
 `real-26d5977e` image: the corrected proposal cited a closing code fence at line
 103 instead of the command at line 102, and POST stopped as infrastructure
 `invalid_output` before trials. Fresh guide 18 then failed setup validation before
-approval or task creation. A successful fresh proposal, approved bindings and
-guide/task are still required; retained paid effects and locked policies are
-not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+approval or task creation. The bounded setup-diagnostic repair deployed at
+`357b9a55`; guide 19 then received an explicit version-selection correction,
+separate PRE/POST approvals and activation. Its task reached immutable
+Submission/replay and automatic POST, which ended infrastructure
+`invalid_output` on November 3 without persisted results or findings. No live
+work verdict or contribution is claimed; retained paid
+effects and locked policies are not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+
+The retained guide 19 assessment returned source text in string-valued recovery
+line spans; its correction repeated those strings and also quoted finding line
+numbers. The prompt now explicitly requires native JSON integers for those
+fields, including during bounded correction. The author-evidence prompt also
+keeps runtime-only condition 11 instructions out of its five-condition rubric.
+Strict validators and retry limits are unchanged. These source repairs require
+fresh image qualification and hosted proof; they do not repair retained outcomes.
 
 Each model phase permits one correction only after a completed response fails its
 strict output validator with `invalid_output`. The correction includes the complete
@@ -188,11 +200,12 @@ Terminal Systems contribution journey. Hosted Smol composition and its scoped
 AWS proof are tracked separately in [PR #692](https://github.com/Flow-Research/workstream/pull/692);
 that owned baseline passed with its disclosed fixture identity. Live-provider/model-quality
 proof and full project qualification remain separate. The real Terminal Systems
-project now has approved `real-26d5977e` POST bindings and guide 17 activation,
-but its POST run stopped before substantive trials or a work verdict. The new
-source-quote image is qualified, registered and deployed; guide 18 failed setup
-before it could approve those bindings. Successful fresh guide agreement and
-real project POST outcomes remain unproven. Registration and guide authority in
+project retains guide 17's `real-26d5977e` approvals and failed POST evidence.
+Guide 18 failed setup; guide 19 generation 2 subsequently approved the qualified,
+registered and deployed `real-e0b502f9` bindings and activated. After immutable
+Submission/replay, its live POST ended `infrastructure_failed / invalid_output`
+without persisted results or findings. Real project work outcomes and the
+connected contribution journey remain unproven. Registration and guide authority in
 a model-only engineering fixture do not establish the real project journey.
 
 [`post/model/execution-rubrics.json`](post/model/execution-rubrics.json) is an

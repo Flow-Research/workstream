@@ -182,11 +182,11 @@ def build_prompt(
             "material_digest": snapshot.digest,
             "conditions": [
                 {
-                    "condition_number": "one-based rubric pass-condition number",
+                    "condition_number": "one-based JSON integer rubric pass-condition number",
                     "status": "satisfied or not_satisfied",
                     "evidence_ids": ["one or more supplied evidence identifiers"],
                     "finding_numbers": [
-                        "one-based output finding numbers; empty only when satisfied"
+                        "one-based JSON integer output finding numbers; empty only when satisfied"
                     ],
                 }
             ],
@@ -194,7 +194,7 @@ def build_prompt(
                 {
                     "code": "one allowed failure code",
                     "evidence_id": "one supplied evidence identifier",
-                    "line": "positive cited line or null",
+                    "line": "positive JSON integer line number or null; never a quoted number or source text",
                 }
             ],
         },

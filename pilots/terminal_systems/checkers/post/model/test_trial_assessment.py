@@ -219,6 +219,10 @@ class RuntimeAssessmentTests(unittest.TestCase):
         )
         self.assertIn("recovery_applicability", prompt["output_contract"])
         self.assertNotIn("recovery_required", prompt)
+        recovery_instruction = next(
+            item for item in prompt["security"] if "For runtime condition 11" in item
+        )
+        self.assertIn("behavioral_coverage_incomplete", recovery_instruction)
         self.assertEqual(
             prompt["authenticated_trial_binding"]["receipt_digest"],
             self.trial.receipt_digest,

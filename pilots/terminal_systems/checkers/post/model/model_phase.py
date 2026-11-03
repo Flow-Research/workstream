@@ -59,6 +59,9 @@ def run_model_phase(
             "Return the complete output required by the original contract, not a patch. "
             "Use every required member and exact schema version, no duplicate members, "
             "and exact source identities, source quotes, required line citations and documented argv. "
+            "Line references (start_line, end_line and non-null line), condition_number "
+            "and finding_numbers entries must be JSON integers, never quoted numbers "
+            "or numbered source text. required must be a JSON boolean, never a string. "
             "Do not invent procedures or claim observations absent from the supplied evidence."
         ),
     }
