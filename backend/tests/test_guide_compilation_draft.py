@@ -861,3 +861,74 @@ def test_constant_parameter_named_default_is_not_a_schema_default():
     canonical = _private_parser().canonical_candidate(compilation, wire)
     assert canonical is not None
     assert {p["name"]: p["value"] for p in canonical["post_submit_bindings"][0]["parameters"]}["default"] == "literal"
+
+
+@pytest.mark.parametrize("form", ["direct", "one_of"])
+def test_pattern_properties_remain_explicit_typed_choices(form):
+    from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
+
+    compilation, wire, expected = _configured_runtime_proposal()
+    binding = wire["post_submit_bindings"][0]
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == binding["capability_id"]
+    )
+    branch = copy.deepcopy(entry.configuration_schema.document["oneOf"][0])
+    branch["patternProperties"] = {"^option_[a-z]+$": {"type": "integer"}}
+    schema = branch if form == "direct" else {"oneOf": [branch]}
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    selected = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == binding["capability_id"]
+    )
+    configuration = {
+        p["name"]: p["value"] for p in expected["post_submit_bindings"][0]["parameters"]
+    }
+    # Both are valid under this one exact registered schema: it is not singleton.
+    selected.configuration_schema.validate_instance(configuration)
+    selected.configuration_schema.validate_instance({**configuration, "option_retry": 7})
+    parser = _private_parser()
+    assert parser.parse(json.dumps(wire)) == wire
+    assert parser.canonical_candidate(compilation, wire) is None, (
+        "pattern_properties_must_not_be_registry_materialized"
+    )
+    assert parser.issues == [
+        {
+            "path": ["post_submit_bindings", 0, "configuration_source"],
+            "code": "registry_configuration_unavailable",
+        }
+    ]
+    binding.update(
+        configuration_source="explicit",
+        parameters=[
+            *expected["post_submit_bindings"][0]["parameters"],
+            {"name": "option_retry", "value": 7},
+        ],
+    )
+    canonical = parser.canonical_candidate(compilation, wire)
+    assert canonical is not None, "valid_pattern_choice_must_remain_explicit"
+    assert canonical["post_submit_bindings"][0]["parameters"] == binding["parameters"]
+    opened = {compilation.material.handle_for(d) for d in compilation.material.documents}
+    validate_project_guide_runtime_result(compilation, canonical, opened)
+    binding["parameters"][-1]["value"] = "wrong-type"
+    canonical = parser.canonical_candidate(compilation, wire)
+    assert canonical is not None
+    with pytest.raises(ValueError, match="value is invalid"):
+        validate_project_guide_runtime_result(compilation, canonical, opened)
+
+
+def test_definition_named_pattern_properties_is_not_a_schema_keyword():
+    compilation, wire, _ = _configured_runtime_proposal()
+    binding = wire["post_submit_bindings"][0]
+    entry = next(
+        d.registry_entry
+        for d in compilation.checker_capabilities.definitions
+        if d.capability_id == binding["capability_id"]
+    )
+    schema = copy.deepcopy(entry.configuration_schema.document)
+    # Definition names may be camelCase; canonical parameter names may not.
+    schema["$defs"] = {"patternProperties": {"type": "string"}}
+    compilation = _replace_configuration_schema(compilation, entry.capability_id, schema)
+    assert _private_parser().canonical_candidate(compilation, wire) is not None

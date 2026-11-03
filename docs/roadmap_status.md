@@ -1785,7 +1785,10 @@ Guide 19's earlier agreement, immediate claim-start, PRE controls and immutable
 Submission/replay remain scoped passes; its POST failed as infrastructure invalid
 output with no findings/results. The current public artifact drill passed 29
 reads, including paired contributor denials, but no verification recovery is
-claimed. Prior policies, paid effects and aborted ART fault remain retained.
+claimed. A subsequent guide 19 fault observer aborted before injection on address
+parsing; independent observation confirmed holder release, queue restoration and
+normal first-attempt verification. Prior policies, paid effects and aborted fault
+evidence remain retained.
 After guide 21: US$7.70410398 settled, zero reserved and US$2.29589602 remaining
 under the unchanged US$10 cap.
 Substantive POST/trials, feedback-governed correction, actual recovery/replay

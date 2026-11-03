@@ -204,7 +204,7 @@ def _fixed_registry_parameters(entry) -> list[dict] | None:
         if isinstance(node, dict):
             if not names_only and (any(key in node for key in (
                 "$ref", "$dynamicRef", "$recursiveRef", "default", "anyOf", "allOf",
-                "if", "then", "else", "not",
+                "if", "then", "else", "not", "patternProperties",
             )) or ("oneOf" in node and node is not document)):
                 return None
             pending.extend((value, not names_only and key in {"properties", "patternProperties", "$defs", "definitions"})

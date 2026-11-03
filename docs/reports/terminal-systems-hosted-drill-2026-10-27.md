@@ -17,7 +17,9 @@ The source repair replaces copying fixed registry parameters in the private
 model output with mandatory `configuration_source` and `parameters` fields.
 A uniquely fixed, closed configuration requires `registry` with an empty parameter
 list; the adapter resolves it only from the exact selected registry entry and
-validates the complete original schema. Variable configurations remain explicit.
+validates the complete original schema. Variable configurations, including
+schemas with `patternProperties`, remain explicit. A definition named after that
+keyword is not itself a schema constraint.
 Contradictory supplied parameters and the superseded generation format reject.
 Both SDKs keep the raw selection model-facing and bound the expanded canonical
 result before existing validation. Persisted policy contracts and retained
@@ -821,7 +823,7 @@ missing current-project outcomes.
 | Revision limits/windows: zero/positive caps, final failure, setup pause/repair and timeout/reclaim | Correct assignment rounds/database-clock window; final failure or timeout retains evidence and returns ready; no artificial renewal | NOT RUN | — |
 | Coverage-incomplete routing | No false auto-acceptance; false returns needs_revision without spent round, true retains review_pending | NOT RUN | — |
 | Known infrastructure failure: discover and reason-bound Operator retry | Original Submission retained, no contributor revision spent; fresh authority and stable replay | IN PROGRESS | Earlier public retry/replay reused the original completed paid effect without revision penalty. Guide 17 and guide 19 retain separate invalid-output runs without a work verdict; no guide 19 retry or model resampling is claimed. Wider failure/recovery variants remain. |
-| ART verification failure and same-job recovery | Bound one actual interruption before terminal commit, then normal retry yields the same job and exact receipt/admission lineage | NOT RUN | Guide 17 observer aborted before cancellation on query-proof mismatch; holder release and both-queue restoration passed. The warning job verified normally at generation 1, not a recovered generation. |
+| ART verification failure and same-job recovery | Bound one actual interruption before terminal commit, then normal retry yields the same job and exact receipt/admission lineage | NOT RUN | Guide 17's observer aborted on query-proof mismatch. The later guide 19 task's observer rejected PostgreSQL's full-mask address representation before cancellation. Independent observation confirmed the holder was gone and both original queues restored; its job verified normally at generation 1/attempt 1 with one receipt and admission. Neither abort proves recovery. |
 | UNKNOWN request interruption | Source-specific inspection classifies committed/no-effect/unresolved; only proven-safe recovery invokes existing owner | NOT RUN | — |
 | UNKNOWN completion interruption | Committed outcome verified without repeated effects; unresolved source/UNKNOWN child remains held | NOT RUN | — |
 | Acceptance commit/ack loss and duplicate broker delivery | Exact acceptance/contribution/award set unchanged; retained original attempts immutable | NOT RUN | — |

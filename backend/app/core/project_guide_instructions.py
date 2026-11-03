@@ -277,9 +277,9 @@ limits, invent numbers or copy platform ceilings into project policy. An explici
 project limit may tighten, never relax the platform. Keep those four quantities distinct.
 Match exact enabled selectable capability IDs, versions, stages and schemas.
 Each supported requirement has one same-stage binding with configuration_source
-and parameters. Use registry with parameters: [] only for a closed object whose
-properties are all required constants, directly or in a single oneOf branch,
-with at most50 typed flat parameters. The adapter supplies its literals; never
+and parameters. registry needs parameters: [], no patternProperties, and a
+closed object with all properties required constants (direct or one oneOf branch),
+with <=50 flat parameters. The adapter supplies its literals; never
 supply them yourself, even if correct. Use explicit with complete typed parameters,
 including fixed fields, for variable, ambiguous, default or reference schemas.
 PRE check enums remain explicit choices. No implicit branch/default/latest choice
