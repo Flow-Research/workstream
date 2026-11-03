@@ -6,7 +6,6 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from app.core.identifiers import new_record_id
 
-from app.interfaces.project_agents import RequirementDisposition
 from app.modules.authorization.api import ActorKind
 from app.modules.checkers.api.external_policy import (
     ExternalCheckerPolicyError,
@@ -26,7 +25,7 @@ from app.modules.projects.api.guide_activation import (
     PreparedGuideActivation,
 )
 from app.modules.projects.api.guide_activation_context import GuideContributionDiscoveryPort
-from app.modules.projects.api.guide_proposals import GuideProposalError, MissingCheckerCapability
+from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.api.post_policy import PostPolicySelection
 from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
 from app.modules.projects.guide_mutation_repository import GuideMutationRepository
@@ -396,24 +395,6 @@ class GuideActivationService:
             if current != binding.registry:
                 conditions.fail("approval_blocked", "checker_registry_changed")
                 break
-        if locked.result.capability_suggestions:
-            conditions.fail(
-                "approval_blocked",
-                "checker_capability_missing",
-                tuple(
-                    MissingCheckerCapability(
-                        requirement_id=item.requirement_id,
-                        stage=item.stage,
-                        title=item.title,
-                    )
-                    for item in locked.result.capability_suggestions
-                ),
-            )
-        if not review.human_review_required and any(
-            item.disposition is RequirementDisposition.HUMAN_REVIEW
-            for item in locked.result.requirements
-        ):
-            conditions.fail("approval_blocked", "human_review_required_by_guide")
         try:
             ProjectService(self.session).validate_activation_ready(
                 locked.view.guide,

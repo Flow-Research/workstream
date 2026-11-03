@@ -6,8 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.adapters.artifacts import guide_document_manifest_port
-from app.adapters.checkers import external_checker_capability_projection
 from app.api.deps.authorization import enforce_human_authorization_read
 from app.api.deps.guide_proposals import (
     ProposalRequest,
@@ -92,13 +90,10 @@ async def approve_proposal(
     """Approve one displayed pre-submission policy without running inference."""
     require_matching_target(payload.target, project_id, guide_id, compilation_id)
     try:
-        capabilities = await external_checker_capability_projection(request.session)
         response = await request.service.approve(
             GuideProposalApproval(**payload.model_dump(), idempotency_key=key),
             actor=request.actor,
             request_id=request.request_id,
-            material=guide_document_manifest_port(request.session),
-            capabilities=capabilities,
         )
         await request.session.commit()
         await dispatch_post_policy_derivation_after_commit(response.operation_id)

@@ -197,10 +197,7 @@ def project_guide_document_scope_port(session: AsyncSession) -> ProjectGuideDocu
 def project_guide_proposal_service(
     session: AsyncSession,
     authorization: GuideProposalAuthorizationPort,
-) -> GuideProposalOperationsPort[
-    ActorIdentityFacts,
-    GuideDocumentManifestPort,
-]:
+) -> GuideProposalOperationsPort[ActorIdentityFacts]:
     """Compose the sole proposal owner with explicit authority."""
     from app.adapters.checkers import external_checker_registry_reader, model_profile_reader
     from app.modules.projects.guide_compilation.proposal_service import GuideProposalService
