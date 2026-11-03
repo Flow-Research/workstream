@@ -9,7 +9,9 @@ from uuid import UUID
 from app.core.identifiers import new_record_id
 
 import pytest
-from pydantic import ValidationError
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import select
 
 from app.db import session as db_session
@@ -69,6 +71,49 @@ def context_values():
                                    source_payload_hash=None, import_batch_id=None, external_task_id=None,
                                    created_by="creator", assigned_to="owner")
     return task, manager, values
+
+
+@pytest.mark.parametrize("management,work_context", [(False, False), (True, False), (False, True), (True, True)])
+async def test_task_read_http_json_retains_required_nulls(management, work_context):
+    """Actual route bytes round-trip through the advertised audience contract."""
+    from app.api.deps.authorization import enforce_human_authorization_read
+    from app.modules.tasks.router import get_task_commands, router
+
+    task, manager, values = context_values()
+    detail = manager if management else task
+    expected = (
+        ManagementTaskWorkContext(task=manager, **values) if management else
+        ContributorTaskWorkContext(task=task, **values, guide_documents=(),
+            lifecycle=ContributorTaskLifecycle(assigned_to_current_actor=True, next_actions=()))
+    ) if work_context else detail
+    method = ("management_" if management else "contributor_") + ("work_context" if work_context else "detail")
+    commands = SimpleNamespace(**{method: AsyncMock(return_value=expected)})
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[get_task_commands] = lambda: commands
+    app.dependency_overrides[enforce_human_authorization_read] = lambda: None
+    root = f"/api/v1/projects/{task.project_id}" if management else "/api/v1"
+    path = f"{root}/tasks/{task.task_id}" + ("/work-context" if work_context else "")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.get(path)
+    assert response.status_code == 200, response.text
+    parsed = type(expected).model_validate_json(response.content) if work_context else TypeAdapter(type(expected)).validate_json(response.content)
+    assert parsed == expected
+    body = response.json()
+    wire = body["task"] if work_context else body
+    for field in ("task_type", "difficulty", "estimated_time_minutes", "acceptance_criteria", "rejection_criteria", "deadline_at"):
+        assert wire[field] is None, field
+    if work_context:
+        assert body["project"]["description"] is None
+        assert body["guide"]["change_summary"] is None
+    if management:
+        assert wire["source_ref"] == "private"
+        assert "compensation" not in wire
+        assert "lifecycle" not in body
+    else:
+        assert set(wire).isdisjoint(MANAGEMENT)
+        assert "private" not in response.text
+        assert wire["compensation"]["accepted_submission"] == "unpaid"
 
 
 def test_work_context_contracts():
@@ -213,13 +258,15 @@ async def test_work_context_public_projections(task_client, monkeypatch):
         response = await task_client.get(f"{path}/tasks/{task['id']}/work-context", headers=auth_headers())
         assert response.status_code == 200, response.text
         body = response.json()
-        fields = (COMMON | MANAGEMENT) if management else CONTRIBUTOR
-        assert set(body) == CONTEXT | (set() if management else {"lifecycle", "guide_documents"})
-        # Initial work has no revision preparation. The public route
-        # excludes None; prepared revision contexts are covered by their journey.
-        assert "revision_context" not in body
+        fields = (COMMON | MANAGEMENT | {"revision_context"}) if management else CONTRIBUTOR
+        fields |= {"last_assignment_outcome"}
+        assert set(body) == CONTEXT | (set() if management else {"lifecycle", "guide_documents", "revision_context"})
+        # Nullable audience fields remain explicit; prepared revision contexts
+        # are covered by their journey.
+        assert body["task"]["last_assignment_outcome"] is None
+        assert (body["task"] if management else body)["revision_context"] is None
         assert set(body["task"]) == fields
-        for name in fields - {"created_at", "updated_at", "deadline_at", "compensation"}:
+        for name in fields - {"created_at", "updated_at", "deadline_at", "compensation", "last_assignment_outcome", "revision_context"}:
             assert body["task"][name] == stored["id" if name == "task_id" else name], name
         for name in ("created_at", "updated_at", "deadline_at"):
             assert datetime.fromisoformat(body["task"][name]) == stored[name]

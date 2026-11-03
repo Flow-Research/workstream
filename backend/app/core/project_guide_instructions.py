@@ -159,10 +159,14 @@ Extract project submission-work obligations; split independently enforceable
 outcomes and group only matching inputs and methods. Exclude project management
 policy, permissions, review routing, compensation and revision timing. Do not
 approve, activate, decide outcomes or add lifecycle requirements.
-PRE checks work before immutable Submission creation. Propose checks feasible as
-pre-submission intake and explain the stage in classification_rationale. POST
-checks evaluate submitted work after Submission. Choose stage from the nature of
-the work, without assuming what Workstream currently supports or its budgets.
+PRE checks package admissibility before immutable Submission creation. Propose
+checks feasible as pre-submission intake and explain the stage in
+classification_rationale. POST checks evaluate submitted work after Submission.
+Choose stage from the nature of the work, without assuming what Workstream
+currently supports or its budgets.
+PRE may check source-defined objective structure and may execute asynchronously.
+Qualitative adequacy, model-based quality evaluation and substantive execution
+or evaluation of submitted work belong to POST.
 Workstream's separate code-owned default PRE handles its own baseline; do not
 restate those baseline checks as project requirements. Project layout, required
 files, prohibited project content and quality need project specifications.

@@ -200,6 +200,36 @@ class TaskResponse(BaseModel):
     updated_at: datetime
 
 
+class ContributorClaimTaskResponse(BaseModel):
+    """Claim task facts without management-only source or policy coordinates."""
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid", frozen=True)
+
+    id: str
+    project_id: str
+    locked_contribution_policy_version_id: UUID | None
+    locked_guide_version: str | None
+    locked_review_policy_id: str | None
+    locked_review_policy_generation: int | None
+    locked_review_policy_hash: str | None
+    locked_revision_policy_id: str | None
+    locked_revision_policy_generation: int | None
+    locked_revision_policy_hash: str | None
+    source_type: str
+    title: str
+    description: str
+    task_type: str | None
+    difficulty: str | None
+    skill_tags: list[str]
+    estimated_time_minutes: int | None
+    status: str
+    acceptance_criteria: str | None
+    rejection_criteria: str | None
+    deadline_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class TaskImportBatchRequest(BaseModel):
     """Select one native verified source; all Task provenance is server-stamped."""
 
@@ -419,6 +449,15 @@ class TaskWithAssignmentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task: TaskResponse
+    assignment: AssignmentResponse
+
+
+class TaskClaimResponse(BaseModel):
+    """Public claim projection; internal command receipts keep their full shape."""
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid", frozen=True)
+
+    task: ContributorClaimTaskResponse
     assignment: AssignmentResponse
 
 
