@@ -74,7 +74,7 @@ def replace_request_digest():
         ("project_id", "op.project_id"),
         ("request_id", "op.request_id::text"),
         ("result_schema_version", "attempt.result_schema_version"),
-        ("setup_generation", "attempt.setup_generation"),
+        ("setup_generation", "op.setup_generation"),
         ("setup_run_id", "op.setup_run_id"),
         ("source_snapshot_hash", "attempt.source_snapshot_hash"),
         ("source_snapshot_id", "op.source_snapshot_id"),
