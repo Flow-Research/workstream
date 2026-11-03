@@ -46,9 +46,9 @@ MANAGER_AUTHORED_RUNTIME_KEY = "manager_authored"
 MAXIMUM_RULES_DOCUMENT_BYTES = MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES
 _RESULT_FIELDS = frozenset({
     "status", "findings", "submission_artifact_policy", "requirements",
-    "pre_submit_bindings", "post_submit_bindings", "capability_suggestions", "setup_notes",
+    "setup_notes",
 })
-_EVIDENCE_FIELDS = ("findings", "requirements", "capability_suggestions")
+_EVIDENCE_FIELDS = ("findings", "requirements")
 _AUTHOR_REF_FIELDS = frozenset({"document", "start_page", "end_page", "section"})
 
 

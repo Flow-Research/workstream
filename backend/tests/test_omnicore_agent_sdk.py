@@ -274,7 +274,7 @@ class _GuardAdmission:
 
 
 def _provider_output() -> str:
-    return generated_result().model_dump_json(exclude={"setup_notes"})
+    return generated_result().model_dump_json()
 
 
 def _wrong_agent_version_output() -> str:
@@ -301,7 +301,7 @@ def _large_provider_output() -> str:
         ).model_dump(mode="python")
         for index in range(10)
     ]
-    return type(result).model_validate(payload).model_dump_json(exclude={"setup_notes"})
+    return type(result).model_validate(payload).model_dump_json()
 
 
 def _capabilities(
@@ -817,22 +817,15 @@ async def test_actual_sdk_large_valid_draft_crosses_review_handoff():
         assert len(instructions) == 1
         schema_text = instructions[0].split("checker-specification schema: ", 1)[1]
         presented_schema, _ = json.JSONDecoder().raw_decode(schema_text)
-        assert "setup_notes" not in presented_schema["properties"]
-        assert "setup_notes" not in presented_schema.get("required", [])
-        for binding_name in ("PreSubmissionBindingProposal", "PostSubmissionBindingProposal"):
-            binding_schema = presented_schema["$defs"][binding_name]
-            assert {"configuration_source", "parameters"} <= set(binding_schema["required"])
-            assert binding_schema["properties"]["configuration_source"]["enum"] == [
-                "registry", "explicit"
-            ]
-        assert set(presented_schema["$defs"]["RequirementDisposition"]["enum"]) == {
-            "platform_covered",
-            "supported_pre_submit",
-            "pre_submit_capability_gap",
-            "supported_post_submit",
-            "post_submit_capability_gap",
-            "guide_blocker",
+        assert "requirements" in presented_schema["properties"]
+        requirement = presented_schema["$defs"]["AtomicGuideRequirement"]
+        assert {"stage", "check_specification", "classification_rationale"} <= set(requirement["required"])
+        assert set(presented_schema["$defs"]["CompilationStage"]["enum"]) == {
+            "pre_submit", "post_submit"
         }
+        assert "PreSubmissionBindingProposal" not in presented_schema["$defs"]
+        assert "PostSubmissionBindingProposal" not in presented_schema["$defs"]
+
 
 
 async def test_actual_sdk_rejects_oversized_workstream_input_before_provider():
@@ -1220,7 +1213,7 @@ async def test_actual_sdk_rejects_historical_scope_and_exhausts_corrections():
         }
     )
     capabilities, reads, handle = _capabilities(compilation_context)
-    out_of_scope = generated_result().model_dump(mode="json", exclude={"setup_notes"})
+    out_of_scope = generated_result().model_dump(mode="json")
     out_of_scope["requirements"][0]["disposition"] = "human_review"
     async with _SyntheticOpenRouter(
         handle=handle,
@@ -1239,7 +1232,7 @@ async def test_actual_sdk_rejects_historical_scope_and_exhausts_corrections():
     assert caught.value.failure_code == "schema_invalid"
     assert len(reads) == 3
     assert len(provider.requests) == 6
-    assert "schema_enum" in str(provider.requests[2][1]["messages"])
+    assert "schema_additionalProperties" in str(provider.requests[2][1]["messages"])
     assert "human_review" not in str(provider.requests[2][1]["messages"])
 
 
@@ -1523,111 +1516,3 @@ async def test_actual_sdk_cancellation_closes_forward_and_runtime_lifecycle():
             await runtime.compile_project_guide(compilation_context, capabilities)
 
 
-@pytest.mark.parametrize("correction_phase", ["checker_specification", "coverage_review"])
-@pytest.mark.parametrize("corrected", [True, False])
-@pytest.mark.parametrize(
-    ("fault", "issue_code"),
-    [
-        ("registry_parameters", "registry_parameters_forbidden"),
-        ("explicit_profile_tuple", "schema_const"),
-        ("old_wire", "schema_required"),
-        ("unsafe_registry_parameters", "unsafe_text"),
-    ],
-)
-async def test_actual_sdk_keeps_private_wire_through_configuration_corrections(
-    correction_phase, corrected, fault, issue_code
-):
-    """Only final canonical output expands registry parameters; rejected values stay rejected."""
-    from app.interfaces.project_agents import ProjectGuideCompilationResult
-    from tests.test_guide_compilation_draft import _configured_runtime_proposal
-
-    configured, wire, canonical = _configured_runtime_proposal(
-        explicit=fault == "explicit_profile_tuple"
-    )
-    base = _runtime_context()
-    compilation_context = base.model_copy(
-        update={
-            "checker_capabilities": configured.checker_capabilities,
-            "runtime_configuration": base.runtime_configuration.model_copy(
-                update={"maximum_turns": 12}
-            ),
-        }
-    )
-    rejected = copy.deepcopy(wire)
-    if fault == "old_wire":
-        rejected = copy.deepcopy(canonical)
-    else:
-        binding = rejected["post_submit_bindings"][0]
-        if fault != "explicit_profile_tuple":
-            binding["parameters"] = copy.deepcopy(canonical["post_submit_bindings"][0]["parameters"])
-        selected_profile = next(
-            p for p in binding["parameters"] if p["name"] == "model_profile_id"
-        )
-        other_profile = next(
-            p for p in canonical["post_submit_bindings"][1]["parameters"]
-            if p["name"] == "model_profile_id"
-        )
-        assert selected_profile["value"] != other_profile["value"]
-        selected_profile["value"] = other_profile["value"]
-        if fault == "unsafe_registry_parameters":
-            rejected["findings"][0]["message"] = "token=private-draft-marker-7391"
-    next_output = wire if corrected else rejected
-    outputs = [rejected, next_output, next_output]
-    if correction_phase == "coverage_review":
-        outputs.insert(0, wire)
-    capabilities, reads, handle = _capabilities(compilation_context)
-    async with _SyntheticOpenRouter(
-        handle=handle,
-        final_output=json.dumps(wire),
-        final_outputs=tuple(json.dumps(output) for output in outputs),
-    ) as provider:
-        runtime = OmniCoreAgentProjectGuideRuntime._for_test(
-            compilation_context.runtime_configuration, upstream_url=provider.url
-        )
-        runtime.admit_execution()
-        try:
-            if corrected:
-                result = await runtime.compile_project_guide(compilation_context, capabilities)
-                assert result == ProjectGuideCompilationResult.model_validate(canonical)
-                assert all(
-                    "configuration_source" not in binding
-                    for field in ("pre_submit_bindings", "post_submit_bindings")
-                    for binding in result.model_dump(mode="json")[field]
-                )
-            else:
-                with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
-                    await runtime.compile_project_guide(compilation_context, capabilities)
-                assert caught.value.failure_code == "schema_invalid"
-        finally:
-            await runtime.aclose()
-
-    expected_reads = 4 if correction_phase == "coverage_review" and not corrected else 3
-    assert reads == [handle] * expected_reads
-    assert len(provider.requests) == 2 * expected_reads
-
-    def phase_payload(request_index, member):
-        return next(
-            json.loads(message["content"][message["content"].index("{") :])
-            for message in provider.requests[request_index][1]["messages"]
-            if isinstance(message.get("content"), str) and f'"{member}"' in message["content"]
-        )
-
-    correction = phase_payload(
-        4 if correction_phase == "coverage_review" else 2, "correction_instruction"
-    )
-    assert correction["phase"] == correction_phase
-    assert {issue["code"] for issue in correction["validation_errors"]} == {issue_code}
-    if fault in {"old_wire", "unsafe_registry_parameters"}:
-        assert "untrusted_candidate_proposal" not in correction
-        assert "private-draft-marker" not in json.dumps(correction)
-    else:
-        assert correction["untrusted_candidate_proposal"] == rejected
-        assert correction["untrusted_candidate_proposal"]["post_submit_bindings"][0][
-            "configuration_source"
-        ] == wire["post_submit_bindings"][0]["configuration_source"]
-    if corrected or correction_phase == "coverage_review":
-        review = phase_payload(
-            4 if correction_phase == "checker_specification" else 2, "candidate_proposal"
-        )
-        assert review["candidate_proposal"] == wire
-        assert review["candidate_validation_issues"] == []

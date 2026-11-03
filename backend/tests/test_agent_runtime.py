@@ -67,11 +67,7 @@ async def _open_prompt_documents(agent, prompt, count=None):
 
 def _provider_payload(value=None):
     """Include nullable members required by the provider's strict JSON schema."""
-    payload = (result() if value is None else value).model_dump(mode="json", exclude={"setup_notes"})
-    for field in ("pre_submit_bindings", "post_submit_bindings"):
-        for binding in payload[field]:
-            binding["configuration_source"] = "explicit"
-            binding.setdefault("parameters", [])
+    payload = (result() if value is None else value).model_dump(mode="json")
     for requirement in payload["requirements"]:
         requirement.setdefault("classification_rationale", None)
         requirement.setdefault("check_specification", None)
@@ -873,11 +869,9 @@ async def test_sdk_parser_requires_declared_isolated_execution_dependency(
     from agents import Runner
 
     payload = _provider_payload()
-    payload["status"] = "draft_ready_with_warnings"
     requirement = payload["requirements"][0]
-    requirement["disposition"] = "post_submit_capability_gap"
+    requirement["stage"] = "post_submit"
     requirement["classification_rationale"] = "Repeated trials need background execution."
-    requirement["platform_coverage"] = None
     specification = _provider_specification()
     specification.update(
         evaluation_method="isolated_execution",
@@ -902,15 +896,6 @@ async def test_sdk_parser_requires_declared_isolated_execution_dependency(
         ],
     )
     requirement["check_specification"] = specification
-    payload["capability_suggestions"] = [
-        {
-            "requirement_id": requirement["requirement_id"],
-            "stage": "post_submit",
-            "title": "Repeated trial evaluation",
-            "rationale": "A project implementation must run the required trials.",
-            "evidence_refs": requirement["evidence_refs"],
-        }
-    ]
     calls = []
 
     async def run(agent, prompt, **kwargs):
@@ -926,7 +911,7 @@ async def test_sdk_parser_requires_declared_isolated_execution_dependency(
             output.requirements[0].check_specification.runtime_dependencies[0].kind
             == "isolated_execution"
         )
-        assert output.status == "draft_ready_with_warnings"
+        assert output.status == "draft_ready"
     else:
         with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
             await _compile(runtime, context(ids()))
@@ -1046,12 +1031,8 @@ def test_sdk_output_schema_exposes_the_identifier_rule_to_the_model():
     schema = AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
     for owner, field in (
         ("AtomicGuideRequirement", "requirement_id"),
-        ("PreSubmissionBindingProposal", "requirement_id"),
-        ("PreSubmissionBindingProposal", "capability_id"),
-        ("PreSubmissionBindingProposal", "capability_version"),
-        ("PlatformCoverageRef", "capability_id"),
-        ("PlatformCoverageRef", "capability_version"),
-        ("CapabilityParameter", "name"),
+        ("CheckInput", "input_id"),
+        ("CheckFailureFinding", "code"),
         ("CompilationFinding", "code"),
     ):
         pattern = schema["$defs"][owner]["properties"][field]["pattern"]
@@ -1061,8 +1042,8 @@ def test_sdk_output_schema_exposes_the_identifier_rule_to_the_model():
         assert not re.fullmatch(pattern, "r/001")
 
 
-def test_sdk_output_schema_has_one_intake_configuration_and_separate_post_parameters():
-    """Actual SDK schema cannot ask the model for two conflicting intake policies."""
+def test_sdk_output_schema_has_staged_specs_without_implementation_fields():
+    """The model receives check requirements before an implementation is selected."""
     from agents import AgentOutputSchema
 
     from app.interfaces.project_agents import ProjectGuideCompilationResult
@@ -1072,45 +1053,31 @@ def test_sdk_output_schema_has_one_intake_configuration_and_separate_post_parame
     for field in ("maximum_file_size_bytes", "maximum_package_size_bytes"):
         assert field in intake["required"]
         assert {item["type"] for item in intake["properties"][field]["anyOf"]} == {"integer", "null"}
-    pre = schema["$defs"]["PreSubmissionBindingProposal"]
-    post = schema["$defs"]["PostSubmissionBindingProposal"]
-    assert pre["additionalProperties"] is False
-    assert "parameters" in pre["properties"]
-    assert pre["properties"]["parameters"]["maxItems"] == 50
-    assert post["properties"]["parameters"]["maxItems"] == 50
-    assert "parameters" in post["properties"]
-    parameter_values = schema["$defs"]["CapabilityParameter"]["properties"]["value"]["anyOf"]
-    array = next(item for item in parameter_values if item.get("type") == "array")
-    assert array["minItems"] == 1
-    assert array["maxItems"] == 50
+    requirement = schema["$defs"]["AtomicGuideRequirement"]
+    assert {"stage", "classification_rationale", "check_specification"} <= set(requirement["required"])
+    assert "PreSubmissionBindingProposal" not in schema["$defs"]
+    assert "PostSubmissionBindingProposal" not in schema["$defs"]
 
 
-def test_default_instructions_advertise_contextual_output_constraints():
-    """Keep rules the JSON schema cannot express visible to the model."""
+def test_default_instructions_advertise_specification_boundaries():
+    """Keep the non-schema stage and authority rules visible to the model."""
     from app.core.project_guide_instructions import PROJECT_GUIDE_INSTRUCTIONS
 
     instructions = " ".join(PROJECT_GUIDE_INSTRUCTIONS.split())
     for rule in (
-        "The PM sets review mode, revision caps/windows",
-        "Ignore administrative clauses when extracting checks",
-        "PRE: static inspection or other bounded work",
+        "Read every original incrementally",
+        "untrusted data",
         "60 seconds",
-        "All model evaluation is POST",
-        "File presence is static",
-        "Project layout, required files, metadata",
-        "Missing implementations are same-stage capability gaps",
-        "Each supported/gap PRE/POST requirement needs the complete typed check_specification",
+        "Model evaluation",
+        "Workstream's code-owned default PRE",
+        "An absent checker implementation cannot",
         "Return exactly one JSON object",
-        "At most two invalid-output corrections",
-        "Reopen the assigned originals",
-        "Leave unspecified project",
-        "source_item_id, document_version_id and sha256",
-        "model_evaluation requires model_service",
-        "registered project image and its exact approved profile",
+        "Reopen assigned originals",
+        "project_guide_check_specification.v1",
     ):
         assert rule in instructions
-    assert "setup_notes" not in instructions
-
+    for forbidden in ("checker_capabilities", "configuration_source", "registered project image"):
+        assert forbidden not in instructions
 
 
 @pytest.mark.parametrize("blocked_phase", ["draft", "review"])
@@ -1265,6 +1232,9 @@ class _DirectGrant:
 
 
 def _rules(**overrides) -> bytes:
+    from app.core.project_guide_instructions import PROJECT_GUIDE_OUTPUT_EXAMPLE
+
+    specification = PROJECT_GUIDE_OUTPUT_EXAMPLE["result"]["requirements"][0]["check_specification"]
     body = {
         "format": "workstream.project_guide_rules.v1",
         "status": "draft_ready",
@@ -1272,17 +1242,14 @@ def _rules(**overrides) -> bytes:
                       "evidence_refs": [{"document": SOURCE_SHA256, "start_page": 1, "end_page": 2}]}],
         "submission_artifact_policy": {"maximum_file_size_bytes": 1000,
                                        "maximum_package_size_bytes": 10000,
-                                       "required_artifacts": ["submission"]},
+                                       "required_artifacts": ["report.md"]},
         "requirements": [{
-            "requirement_id": "guide.context", "statement": "Use the project guide.",
-            "disposition": "informational", "platform_coverage": None,
-            "classification_rationale": "This identifies the governing guide for the work.",
-            "check_specification": None,
-            # The rules document itself supplies this background requirement.
-            # PDF coverage remains owned by findings, including negative cases.
+            "requirement_id": "report.present", "statement": "The package contains a report.",
+            "stage": "pre_submit",
+            "classification_rationale": "File presence is bounded intake work.",
+            "check_specification": specification,
             "evidence_refs": [],
-        }], "pre_submit_bindings": [], "post_submit_bindings": [],
-        "capability_suggestions": [], "setup_notes": [],
+        }], "setup_notes": [],
     } | overrides
     return json.dumps(body).encode()
 
@@ -1334,7 +1301,7 @@ async def test_manager_authored_runtime_converts_rules_without_credentials_or_ne
     assert outcome.status == "draft_ready"
     assert (outcome.agent_name, outcome.agent_version, outcome.schema_version) == (
         "ProjectGuideCompilationAgent", compilation_context.agent_version,
-        "project_guide_compilation_result.v1")
+        "project_guide_check_specification.v1")
     first, second = outcome.findings
     assert [(ref.source_item_id, ref.document_version_id, ref.sha256, ref.start_page)
             for ref in first.evidence_refs] == [

@@ -50,11 +50,6 @@ def require_result_sources_opened(
     references = (
         *(ref for finding in result.findings for ref in finding.evidence_refs),
         *(ref for requirement in result.requirements for ref in requirement.evidence_refs),
-        *(
-            ref
-            for suggestion in result.capability_suggestions
-            for ref in suggestion.evidence_refs
-        ),
     )
     cited_handles = {
         document_handles.get((ref.source_item_id, ref.document_version_id))
