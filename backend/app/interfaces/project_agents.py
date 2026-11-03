@@ -160,59 +160,13 @@ class CompilationFinding(BaseModel):
     _message = field_validator("message")(_validated_safe_model_text)
 
 
-CheckEvaluationMethod = Literal["static_inspection", "isolated_execution", "model_evaluation"]
-CheckExecutionMode = Literal["bounded_pre_submit", "background"]
-EvaluationContextRole = Literal["predecessor_findings", "predecessor_submission_archive"]
-CheckInputKind = Literal[
-    "package",
-    "manifest",
-    "request_metadata",
-    "relative_file",
-    "relative_directory",
-    "task_context",
-    "evaluation_context",
-    "guide_context",
-    "prepared_material",
-]
-CheckerDependencyKind = Literal[
-    "checker_tool",
-    "isolated_execution",
-    "nested_sandbox",
-    "task_context",
-    "evaluation_context",
-    "guide_context",
-    "model_service",
-    "execution_capacity",
-    "prepared_material",
-]
-DependencyProvisioning = Literal[
-    "current_runner", "checker_implementation", "model_proxy", "trial_proxy", "runtime_gap"
-]
-InfrastructureFailureCode = Literal[
-    "capacity_exceeded",
-    "deadline_exceeded",
-    "material_unavailable",
-    "implementation_unavailable",
-    "invalid_output",
-]
-_INFRASTRUCTURE_FAILURE_CODES = frozenset(
-    {
-        "capacity_exceeded",
-        "deadline_exceeded",
-        "material_unavailable",
-        "implementation_unavailable",
-        "invalid_output",
-    }
-)
-
-
 class CheckInput(BaseModel):
     """One exact material or context input needed by a proposed check."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     input_id: PolicyIdentifier
-    kind: CheckInputKind
+    kind: PolicyIdentifier
     relative_path: (
         Annotated[
             str,
@@ -224,31 +178,19 @@ class CheckInput(BaseModel):
         ]
         | None
     ) = Field(default=None, exclude_if=lambda value: value is None)
-    evaluation_context_roles: tuple[EvaluationContextRole, ...] | None = Field(
-        default=None,
-        exclude_if=lambda value: value is None,
-        max_length=2,
-        description="Exact sorted selected revision material roles, only for evaluation_context.",
-    )
     purpose: ModelProse
 
     _input_id = field_validator("input_id")(_validated_identifier)
+    _kind = field_validator("kind")(_validated_identifier)
     _purpose = field_validator("purpose")(_validated_safe_model_text)
 
-    @model_validator(mode="after")
-    def validate_material_selection(self) -> CheckInput:
-        """Require paths and revision roles only on their exact material kinds."""
-        roles = self.evaluation_context_roles
-        if (self.kind == "evaluation_context") != (roles is not None):
-            raise ValueError("evaluation context input requires exact roles only on that kind")
-        if roles is not None and roles != tuple(sorted(set(roles))):
-            raise ValueError("evaluation context roles must be unique and sorted")
-        path_required = self.kind in {"relative_file", "relative_directory"}
-        if path_required != (self.relative_path is not None):
-            raise ValueError("check input relative path does not match its kind")
-        if self.relative_path is not None and not is_canonical_relative_path(self.relative_path):
+    @field_validator("relative_path")
+    @classmethod
+    def validate_relative_path(cls, value: str | None) -> str | None:
+        """Only canonical paths within a submitted package may be proposed."""
+        if value is not None and not is_canonical_relative_path(value):
             raise ValueError("check input relative path is invalid")
-        return self
+        return value
 
 
 class CheckFailureFinding(BaseModel):
@@ -257,7 +199,7 @@ class CheckFailureFinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     code: PolicyIdentifier
-    level: Literal["warning", "error", "coverage_incomplete"]
+    level: Literal["warning", "error"]
     condition: ModelProse
     message: ModelProse
 
@@ -288,204 +230,66 @@ class CheckNegativeTest(BaseModel):
         return tuple(_validated_identifier(value) for value in values)
 
 
-class CheckRuntimeDependency(BaseModel):
-    """One implementation or runner dependency and its availability owner."""
+class CheckInabilityToEvaluate(BaseModel):
+    """A proposed condition where no work verdict can be established."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    dependency_id: PolicyIdentifier
-    kind: CheckerDependencyKind
-    provisioning: DependencyProvisioning
-    purpose: ModelProse
-    unavailable_code: InfrastructureFailureCode
-
-    _dependency_id = field_validator("dependency_id")(_validated_identifier)
-    _purpose = field_validator("purpose")(_validated_safe_model_text)
-
-    @model_validator(mode="after")
-    def validate_provisioning(self) -> CheckRuntimeDependency:
-        """Describe current runner support without treating desired access as live."""
-        expected = {
-            "checker_tool": ("checker_implementation", "implementation_unavailable"),
-            "isolated_execution": ("current_runner", "implementation_unavailable"),
-            "nested_sandbox": ({"trial_proxy", "runtime_gap"}, "implementation_unavailable"),
-            "task_context": ("runtime_gap", "material_unavailable"),
-            "evaluation_context": ("current_runner", "material_unavailable"),
-            "guide_context": ("runtime_gap", "material_unavailable"),
-            "prepared_material": ({"trial_proxy", "runtime_gap"}, "material_unavailable"),
-            "model_service": ("model_proxy", "implementation_unavailable"),
-            "execution_capacity": ("runtime_gap", "capacity_exceeded"),
-        }[self.kind]
-        expected_provisioning, expected_code = expected
-        if (
-            self.provisioning
-            not in (
-                expected_provisioning
-                if isinstance(expected_provisioning, set)
-                else {expected_provisioning}
-            )
-            or self.unavailable_code != expected_code
-        ):
-            raise ValueError("check dependency availability is invalid")
-        return self
-
-
-class CheckInfrastructureFailure(BaseModel):
-    """One non-work failure that must never become a failed work verdict."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    code: InfrastructureFailureCode
+    code: PolicyIdentifier
     condition: ModelProse
 
+    _code = field_validator("code")(_validated_identifier)
     _condition = field_validator("condition")(_validated_safe_model_text)
 
 
 class CheckSpecification(BaseModel):
-    """Bounded implementation and test handoff for one atomic requirement."""
+    """Source-derived check handoff with no claim about available implementations."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    evaluation_method: CheckEvaluationMethod = Field(
-        description=(
-            "isolated_execution requires a runtime dependency of kind isolated_execution; "
-            "model_evaluation requires model_service and belongs to POST background work. "
-            "Model review assesses content; proving runtime outcomes or built-environment "
-            "properties requires isolated_execution with actual trials and observations."
-        )
+    evaluation_method: ModelProse = Field(
+        description="Proposed way to observe the outcome, not a supported runtime selector."
     )
-    execution_mode: CheckExecutionMode
-    maximum_duration_seconds: StrictInt = Field(
-        ge=1,
-        le=3600,
-        description=(
-            "Proposed engineering budget for one check execution, not a measured runtime "
-            "promise. PRE checks must be at most 60 seconds; POST checks may use up to "
-            "3600 seconds in background execution."
-        ),
-    )
-    stage_rationale: ModelProse
-    inputs: tuple[CheckInput, ...] = Field(
-        min_length=1,
-        max_length=20,
-        description=(
-            "All materials needed to observe every pass condition and negative case. "
-            "Every task_context, evaluation_context, guide_context or prepared_material "
-            "runtime dependency requires an input of that same kind, and vice versa."
-        ),
-    )
-    check_steps: tuple[ModelProse, ...] = Field(
-        min_length=1,
-        max_length=20,
-        description=(
-            "Implementable steps on the declared inputs. Static inspection needs explicit "
-            "syntax or deterministic predicates, including source-defined field identifiers, "
-            "types, values, ranges and exceptions rather than references to documented rules; "
-            "qualitative free-form comparison needs "
-            "model evaluation in POST. Never invent a document grammar absent from the guide."
-        ),
-    )
-    pass_conditions: tuple[ModelProse, ...] = Field(
-        min_length=1,
-        max_length=20,
-        description=(
-            "Observable outcomes proved by the declared method and inputs. A model's "
-            "review of claimed execution is not proof of actual execution; a static "
-            "predicate cannot interpret free-form explanations. Require mandatory content "
-            "to exist before judging its accuracy; absent required claims cannot pass vacuously."
-        ),
-    )
+    inputs: tuple[CheckInput, ...] = Field(min_length=1, max_length=20)
+    check_steps: tuple[ModelProse, ...] = Field(min_length=1, max_length=20)
+    pass_conditions: tuple[ModelProse, ...] = Field(min_length=1, max_length=20)
     failure_findings: tuple[CheckFailureFinding, ...] = Field(min_length=1, max_length=20)
     positive_tests: tuple[ModelProse, ...] = Field(min_length=1, max_length=10)
     negative_tests: tuple[CheckNegativeTest, ...] = Field(min_length=1, max_length=10)
-    runtime_dependencies: tuple[CheckRuntimeDependency, ...] = Field(
-        max_length=10,
-        description=(
-            "Declare the evaluation method's required dependency and any task_context, "
-            "evaluation_context, guide_context or prepared_material input dependency. "
-            "Each of those kinds must occur in both inputs and runtime_dependencies, never just one. "
-            "Each unavailable_code must appear in "
-            "infrastructure_failures."
-        ),
-    )
-    infrastructure_failures: tuple[CheckInfrastructureFailure, ...] = Field(
-        min_length=1, max_length=5
+    implementation_needs: tuple[ModelProse, ...] = Field(min_length=1, max_length=10)
+    inability_to_evaluate: tuple[CheckInabilityToEvaluate, ...] = Field(
+        min_length=1, max_length=10,
+        description="Conditions where an implementation cannot establish a work verdict.",
     )
 
-    _stage_rationale = field_validator("stage_rationale")(_validated_safe_model_text)
+    _evaluation_method = field_validator("evaluation_method")(_validated_safe_model_text)
 
-    @field_validator("check_steps", "pass_conditions", "positive_tests")
+    @field_validator("check_steps", "pass_conditions", "positive_tests", "implementation_needs")
     @classmethod
     def validate_prose_items(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        """Apply safe-prose validation to every collection member."""
         return tuple(_validated_safe_model_text(value) for value in values)
 
     @model_validator(mode="after")
     def validate_linkage(self) -> CheckSpecification:
-        """Reject duplicate handoff identities and contradictory expected results."""
+        """Keep work findings and inability to evaluate separate and unambiguous."""
         for values, message in (
             ([item.input_id for item in self.inputs], "check inputs must be unique"),
-            (
-                [item.code for item in self.failure_findings],
-                "check failure findings must be unique",
-            ),
-            (
-                [item.name for item in self.negative_tests],
-                "check negative tests must be unique",
-            ),
-            (
-                [item.dependency_id for item in self.runtime_dependencies],
-                "check runtime dependencies must be unique",
-            ),
-            (
-                [item.code for item in self.infrastructure_failures],
-                "check infrastructure failures must be unique",
-            ),
+            ([item.code for item in self.failure_findings], "check failure findings must be unique"),
+            ([item.name for item in self.negative_tests], "check negative tests must be unique"),
+            ([item.code for item in self.inability_to_evaluate], "evaluation inability codes must be unique"),
         ):
             if len(values) != len(set(values)):
                 raise ValueError(message)
-
         findings = {item.code: item for item in self.failure_findings}
-        if set(findings).intersection(_INFRASTRUCTURE_FAILURE_CODES):
-            raise ValueError("work and infrastructure finding codes must be distinct")
+        if set(findings).intersection(item.code for item in self.inability_to_evaluate):
+            raise ValueError("work and evaluation inability codes must be distinct")
         for test in self.negative_tests:
             referenced = [findings.get(code) for code in test.expected_finding_codes]
             if any(item is None for item in referenced):
-                raise ValueError("negative test references an unknown finding")
+                raise ValueError("negative test references an unknown work finding")
             has_error = any(item.level == "error" for item in referenced if item is not None)
             if (test.expected_verdict == "failed") != has_error:
                 raise ValueError("negative test verdict disagrees with its findings")
-
-        if sum(item.kind == "evaluation_context" for item in self.inputs) > 1:
-            raise ValueError("check must declare one exact evaluation context input")
-        dependency_kinds = {item.kind for item in self.runtime_dependencies}
-        if "evaluation_context" in dependency_kinds and self.execution_mode != "background":
-            raise ValueError("evaluation context requires post-submit background work")
-        if self.evaluation_method == "model_evaluation" and "model_service" not in dependency_kinds:
-            raise ValueError("model evaluation requires a model service dependency")
-        if (
-            self.evaluation_method == "isolated_execution"
-            and "isolated_execution" not in dependency_kinds
-        ):
-            raise ValueError("isolated evaluation requires an execution dependency")
-        for item in self.inputs:
-            if (
-                item.kind
-                in {"task_context", "evaluation_context", "guide_context", "prepared_material"}
-                and item.kind not in dependency_kinds
-            ):
-                raise ValueError("check context input requires a runtime dependency")
-        material_dependencies = dependency_kinds.intersection(
-            {"task_context", "evaluation_context", "guide_context", "prepared_material"}
-        )
-        if material_dependencies - {item.kind for item in self.inputs}:
-            raise ValueError("check material dependency requires a declared input")
-        available_failures = {item.code for item in self.infrastructure_failures}
-        if any(
-            dependency.unavailable_code not in available_failures
-            for dependency in self.runtime_dependencies
-        ):
-            raise ValueError("check dependency failure is not specified")
         return self
 
 
@@ -494,7 +298,7 @@ class AtomicGuideRequirement(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    requirement_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
+    suggestion_id: str = Field(json_schema_extra={"pattern": _SAFE_IDENTIFIER.pattern})
     statement: ModelProse
     stage: CompilationStage
     classification_rationale: ModelProse
@@ -503,7 +307,7 @@ class AtomicGuideRequirement(BaseModel):
         min_length=1, max_length=MAXIMUM_EVIDENCE_REFS
     )
 
-    _requirement_id = field_validator("requirement_id")(_validated_identifier)
+    _suggestion_id = field_validator("suggestion_id")(_validated_identifier)
     _statement = field_validator("statement")(_validated_safe_model_text)
     _classification_rationale = field_validator("classification_rationale")(
         _validated_safe_model_text
@@ -734,36 +538,6 @@ def require_complete_project_guide_compilation_result(
         raise ValueError("compilation result envelope is incomplete")
 
 
-def require_complete_generated_specifications(
-    context: ProjectGuideCompilationContext,
-    result: ProjectGuideCompilationResult,
-) -> None:
-    """Require complete staged specifications without implementation selection."""
-    for requirement in result.requirements:
-        specification = requirement.check_specification
-        if requirement.stage is CompilationStage.PRE_SUBMIT:
-            if any(item.kind == "evaluation_context" for item in specification.inputs):
-                raise ValueError("evaluation context requires post-submit background work")
-            if specification.evaluation_method == "model_evaluation" or any(
-                dependency.kind == "model_service"
-                for dependency in specification.runtime_dependencies
-            ):
-                raise ValueError("model service requires post-submit background work")
-            if (
-                specification.execution_mode != "bounded_pre_submit"
-                or specification.maximum_duration_seconds > 60
-            ):
-                raise ValueError("pre-submit check specification is not bounded")
-        elif specification.execution_mode != "background":
-            raise ValueError("post-submit check specification is not background work")
-        if any(item.kind == "nested_sandbox" for item in specification.runtime_dependencies):
-            if requirement.stage is not CompilationStage.POST_SUBMIT:
-                raise ValueError("trial execution requires post-submit background work")
-        if any(item.provisioning == "trial_proxy" for item in specification.runtime_dependencies):
-            if not any(item.kind == "nested_sandbox" for item in specification.runtime_dependencies):
-                raise ValueError("trial material requires an isolated trial dependency")
-
-
 def validate_project_guide_compilation_result(
     context: ProjectGuideCompilationContext,
     result: ProjectGuideCompilationResult,
@@ -771,7 +545,7 @@ def validate_project_guide_compilation_result(
     """Validate source lineage, status, and bounded specification-only output."""
     if project_guide_compilation_result_storage_bytes(result) > MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES:
         raise ValueError("compilation result exceeds storage byte limit")
-    identifiers = [item.requirement_id for item in result.requirements]
+    identifiers = [item.suggestion_id for item in result.requirements]
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("compilation requirements must be unique")
     has_blocker = any(item.severity == "blocking_gap" for item in result.findings)
@@ -803,7 +577,6 @@ def validate_project_guide_compilation_result(
         for ref in refs
     ):
         raise ValueError("compilation evidence does not resolve to source lineage")
-    require_complete_generated_specifications(context, result)
 
 
 def require_ready_result_cites_every_document(

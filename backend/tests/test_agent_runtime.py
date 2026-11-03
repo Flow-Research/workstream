@@ -74,7 +74,6 @@ def _provider_payload(value=None):
         if requirement["check_specification"] is not None:
             for item in requirement["check_specification"]["inputs"]:
                 item.setdefault("relative_path", None)
-                item.setdefault("evaluation_context_roles", None)
     return payload
 
 
@@ -83,7 +82,6 @@ def _provider_specification():
     specification = valid_specification().model_dump(mode="json")
     for item in specification["inputs"]:
         item.setdefault("relative_path", None)
-        item.setdefault("evaluation_context_roles", None)
     return specification
 
 
@@ -861,41 +859,17 @@ async def test_actual_sdk_parser_preserves_known_invalid_output(monkeypatch, kin
     assert calls == ([1, 1] if kind == "valid" else [1, 1, 1])
 
 
-@pytest.mark.parametrize("include_dependency", [True, False])
-async def test_sdk_parser_requires_declared_isolated_execution_dependency(
-    monkeypatch, include_dependency
+@pytest.mark.parametrize("distinct_codes", [True, False])
+async def test_sdk_parser_separates_work_failure_from_inability_to_evaluate(
+    monkeypatch, distinct_codes
 ):
-    """Reproduce the live handoff failure through the actual SDK parser."""
+    """A real SDK parse keeps inability to evaluate out of work verdicts."""
     from agents import Runner
 
     payload = _provider_payload()
-    requirement = payload["requirements"][0]
-    requirement["stage"] = "post_submit"
-    requirement["classification_rationale"] = "Repeated trials need background execution."
-    specification = _provider_specification()
-    specification.update(
-        evaluation_method="isolated_execution",
-        execution_mode="background",
-        maximum_duration_seconds=120,
-        runtime_dependencies=[
-            {
-                "dependency_id": "execution",
-                "kind": "isolated_execution",
-                "provisioning": "current_runner",
-                "purpose": "Run the evaluation in an isolated environment.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        ]
-        if include_dependency
-        else [],
-        infrastructure_failures=[
-            {
-                "code": "implementation_unavailable",
-                "condition": "The isolated environment is unavailable.",
-            }
-        ],
-    )
-    requirement["check_specification"] = specification
+    specification = payload["requirements"][0]["check_specification"]
+    if not distinct_codes:
+        specification["inability_to_evaluate"][0]["code"] = specification["failure_findings"][0]["code"]
     calls = []
 
     async def run(agent, prompt, **kwargs):
@@ -905,18 +879,14 @@ async def test_sdk_parser_requires_declared_isolated_execution_dependency(
 
     monkeypatch.setattr(Runner, "run", run)
     runtime = OpenAIAgentSdkProjectGuideRuntime(runtime_configuration())
-    if include_dependency:
+    if distinct_codes:
         output = await _compile(runtime, context(ids()))
-        assert (
-            output.requirements[0].check_specification.runtime_dependencies[0].kind
-            == "isolated_execution"
-        )
-        assert output.status == "draft_ready"
+        assert output.requirements[0].check_specification.inability_to_evaluate
     else:
         with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
             await _compile(runtime, context(ids()))
         assert caught.value.failure_code == "schema_invalid"
-    assert calls == ([1, 1] if include_dependency else [1, 1, 1])
+    assert calls == ([1, 1] if distinct_codes else [1, 1, 1])
 
 
 async def test_unclassified_sdk_behavior_error_remains_unresolved(monkeypatch):
@@ -1030,7 +1000,7 @@ def test_sdk_output_schema_exposes_the_identifier_rule_to_the_model():
 
     schema = AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
     for owner, field in (
-        ("AtomicGuideRequirement", "requirement_id"),
+        ("AtomicGuideRequirement", "suggestion_id"),
         ("CheckInput", "input_id"),
         ("CheckFailureFinding", "code"),
         ("CompilationFinding", "code"),
@@ -1065,18 +1035,20 @@ def test_default_instructions_advertise_specification_boundaries():
 
     instructions = " ".join(PROJECT_GUIDE_INSTRUCTIONS.split())
     for rule in (
-        "Read every original incrementally",
+        "Read every assigned original incrementally",
         "untrusted data",
-        "60 seconds",
-        "Model evaluation",
-        "Workstream's code-owned default PRE",
-        "An absent checker implementation cannot",
+        "The method is a proposal",
+        "Workstream's separate code-owned default PRE",
+        "an absent implementation cannot",
         "Return exactly one JSON object",
         "Reopen assigned originals",
         "project_guide_check_specification.v1",
     ):
         assert rule in instructions
-    for forbidden in ("checker_capabilities", "configuration_source", "registered project image"):
+    for forbidden in (
+        "checker_capabilities", "configuration_source", "registered project image",
+        "trial_proxy", "model_proxy", "maximum_duration_seconds",
+    ):
         assert forbidden not in instructions
 
 
@@ -1244,7 +1216,7 @@ def _rules(**overrides) -> bytes:
                                        "maximum_package_size_bytes": 10000,
                                        "required_artifacts": ["submission"]},
         "requirements": [{
-            "requirement_id": "report.present", "statement": "The package contains a report.",
+            "suggestion_id": "report.present", "statement": "The package contains a report.",
             "stage": "pre_submit",
             "classification_rationale": "File presence is bounded intake work.",
             "check_specification": specification,

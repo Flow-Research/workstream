@@ -32,10 +32,7 @@ def _reject_constant(_value):
 def contextual_output_issues(error: Exception, *, context, result) -> list[dict]:
     """Map validation failures to bounded diagnostics without rejected values."""
     codes = {
-        "model service requires post-submit background work": "model_requires_post",
-        "pre-submit check specification is not bounded": "pre_duration",
-        "post-submit check specification is not background work": "post_background",
-        "compilation requirements must be unique": "requirement_ids_unique",
+        "compilation requirements must be unique": "suggestion_ids_unique",
         "blocked compilation requires blocking evidence": "blocked_evidence",
         "ready compilation cannot contain blocking evidence": "ready_blocking_evidence",
         "draft-ready compilation cannot contain warnings": "ready_warnings",
@@ -125,12 +122,8 @@ class CompilationDraftParser:
         self.unsafe_text = False
         codes = {
             "model-produced text is unsafe": "unsafe_text",
-            "check dependency availability is invalid": "dependency_availability",
-            "isolated evaluation requires an execution dependency": "isolated_dependency",
-            "model evaluation requires a model service dependency": "model_dependency",
-            "check context input requires a runtime dependency": "context_dependency",
-            "check material dependency requires a declared input": "dependency_input",
-            "check dependency failure is not specified": "dependency_failure",
+            "work and evaluation inability codes must be distinct": "verdict_code_overlap",
+            "negative test references an unknown work finding": "finding_reference",
         }
         try:
             ProjectGuideCompilationResult.model_validate(candidate)

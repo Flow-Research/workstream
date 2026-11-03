@@ -117,23 +117,7 @@ def _invalid_canonical_payload(fault):
     if fault == "path":
         payload["submission_artifact_policy"]["required_artifacts"] = ["environment/"]
     elif fault == "material":
-        specification = _provider_specification()
-        specification["runtime_dependencies"] = [
-            {
-                "dependency_id": "prior_material",
-                "kind": "task_context",
-                "provisioning": "runtime_gap",
-                "purpose": "Compare the prior task context.",
-                "unavailable_code": "material_unavailable",
-            }
-        ]
-        specification["infrastructure_failures"] = [
-            {
-                "code": "material_unavailable",
-                "condition": "The prior context is unavailable.",
-            }
-        ]
-        payload["requirements"][0]["check_specification"] = specification
+        payload["requirements"][0]["check_specification"]["inputs"][0]["relative_path"] = "../private"
     else:
         payload["findings"][0]["message"] = "token=private-draft-marker-7391"
     return payload
@@ -152,29 +136,17 @@ def _rejected_semantic_payload(fault):
     else:
         requirement = payload["requirements"][0]
         specification = _provider_specification()
-        if fault == "isolated":
-            specification.update(evaluation_method="isolated_execution", execution_mode="background")
-        elif fault == "duration":
-            specification["maximum_duration_seconds"] = 61
-        elif fault == "availability":
-            specification["runtime_dependencies"] = [{
-                "dependency_id": "file_inspection",
-                "kind": "checker_tool",
-                "provisioning": "current_runner",
-                "purpose": "Inspect the required file.",
-                "unavailable_code": "implementation_unavailable",
-            }]
-            specification["infrastructure_failures"] = [{
-                "code": "implementation_unavailable",
-                "condition": "The file checker is unavailable.",
-            }]
+        if fault == "code_overlap":
+            specification["inability_to_evaluate"][0]["code"] = specification["failure_findings"][0]["code"]
+        elif fault == "unknown_finding":
+            specification["negative_tests"][0]["expected_finding_codes"] = ["unknown_finding"]
         requirement["check_specification"] = specification
     return payload
 
 
-def test_private_text_diagnostic_does_not_relabel_other_invalid_fields(parser):
-    """A mixed rejection keeps useful closed causes without exposing either value."""
-    payload = _rejected_semantic_payload("availability")
+def test_private_text_diagnostic_does_not_expose_other_invalid_fields(parser):
+    """A mixed rejection keeps the unsafe value out of diagnostics."""
+    payload = _rejected_semantic_payload("code_overlap")
     payload["requirements"][0]["check_specification"]["check_steps"] = [
         "token=private-draft-marker-7391"
     ]
@@ -184,10 +156,12 @@ def test_private_text_diagnostic_does_not_relabel_other_invalid_fields(parser):
     assert issues == [
         {"path": ["requirements", 0, "check_specification", "check_steps"],
          "code": "unsafe_text"},
-        {"path": ["requirements", 0, "check_specification", "runtime_dependencies", 0],
-         "code": "dependency_availability"},
     ]
     assert "private-draft-marker" not in json.dumps(issues)
+    assert parser.canonical_issues(_rejected_semantic_payload("code_overlap")) == [
+        {"path": ["requirements", 0, "check_specification"],
+         "code": "verdict_code_overlap"},
+    ]
     assert parser.canonical_issues(_provider_payload()) == []
     assert parser.unsafe_text is False
 
@@ -262,9 +236,9 @@ async def test_review_can_correct_private_draft_without_relaxing_acceptance(
 
 @pytest.mark.parametrize(
     "fault,code",
-    [("blocked", "blocked_evidence"), ("duplicate", "requirement_ids_unique"),
-     ("isolated", "isolated_dependency"), ("duration", "pre_duration"),
-     ("unsafe", "unsafe_text"), ("availability", "dependency_availability")],
+    [("blocked", "blocked_evidence"), ("duplicate", "suggestion_ids_unique"),
+     ("code_overlap", "verdict_code_overlap"),
+     ("unsafe", "unsafe_text"), ("unknown_finding", "finding_reference")],
 )
 async def test_actual_openai_sdk_corrects_the_rejected_referent(monkeypatch, fault, code):
     """The installed SDK gets a complete untrusted referent and closed diagnostics."""

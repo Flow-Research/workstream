@@ -56,12 +56,36 @@ def test_implementation_selections_are_not_setup_output(field):
         ProjectGuideCompilationResult.model_validate(proposal)
 
 
-def test_pre_specification_cannot_claim_model_or_unbounded_execution():
+def test_specification_is_descriptive_without_runtime_selection():
     proposal = _proposal()
-    proposal["requirements"][0]["check_specification"]["maximum_duration_seconds"] = 61
+    specification = proposal["requirements"][0]["check_specification"]
+    assert set(specification) == {
+        "evaluation_method", "inputs", "check_steps", "pass_conditions",
+        "failure_findings", "positive_tests", "negative_tests",
+        "implementation_needs", "inability_to_evaluate",
+    }
+    assert "runtime_dependencies" not in specification
+    assert "execution_mode" not in specification
+    assert "maximum_duration_seconds" not in specification
+    specification["evaluation_method"] = "Compare the submitted observations with source rules."
+    specification["inputs"][0]["kind"] = "source_defined_material"
     result = ProjectGuideCompilationResult.model_validate(proposal)
-    with pytest.raises(ValueError, match="pre-submit check specification is not bounded"):
-        validate_project_guide_compilation_result(_context(), result)
+    validate_project_guide_compilation_result(_context(), result)
+
+
+def test_work_failure_and_inability_codes_are_distinct():
+    proposal = _proposal()
+    specification = proposal["requirements"][0]["check_specification"]
+    specification["inability_to_evaluate"][0]["code"] = specification["failure_findings"][0]["code"]
+    with pytest.raises(ValidationError, match="work and evaluation inability codes must be distinct"):
+        ProjectGuideCompilationResult.model_validate(proposal)
+
+
+def test_input_paths_remain_canonical_when_present():
+    proposal = _proposal()
+    proposal["requirements"][0]["check_specification"]["inputs"][0]["relative_path"] = "../private"
+    with pytest.raises(ValidationError, match="check input relative path is invalid"):
+        ProjectGuideCompilationResult.model_validate(proposal)
 
 
 def test_artifact_policy_paths_are_valid_without_per_file_pre_specs():

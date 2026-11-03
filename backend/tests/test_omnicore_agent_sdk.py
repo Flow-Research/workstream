@@ -290,7 +290,7 @@ def _large_provider_output() -> str:
     payload["requirements"] = [
         requirement.model_copy(
             update={
-                "requirement_id": f"synthetic_requirement_{index}",
+                "suggestion_id": f"synthetic_requirement_{index}",
                 "statement": (
                     "The synthetic guide requires a bounded observable answer. " * 12
                 ).strip(),
@@ -975,7 +975,7 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
                 code,
             )
             for fault, code in [
-                ("blocked", "blocked_evidence"), ("duplicate", "requirement_ids_unique"),
+                ("blocked", "blocked_evidence"), ("duplicate", "suggestion_ids_unique"),
                 ("isolated", "isolated_dependency"), ("binding", "binding_count"),
                 ("availability", "dependency_availability"),
             ]
