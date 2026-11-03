@@ -21,6 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+from sqlalchemy.schema import conv
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.base import Base
@@ -742,7 +743,7 @@ class ProjectGuideSetupFinalization(Base):
             + _component_hashes_check("component_hashes")
             + ")) or (result_schema_version<>'" + _CURRENT_RESULT_SCHEMA + "' and ("
             + _component_hashes_check("component_hashes", retained=True) + ")))",
-            name="ck_finalization_components"
+            name=conv("ck_finalization_components")
         ),
     )
 

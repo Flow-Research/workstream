@@ -701,10 +701,16 @@ async def test_no_inference_run_ignores_the_model_prompt_limit(
 
     configuration = manager_runtime_configuration().model_copy(
         update={"maximum_manifest_bytes": 1024})
-    values = await seed_database(clean_postgres_database)
-    assert len(project_guide_compilation_prompt_bytes(
-        context(values, configuration=configuration))) > 1024
-    requested = await _authorized_attempt(clean_postgres_database, values, configuration)
+    examples = [{"content": "Assess the submitted claim against the guide. " * 40}]
+    values = await seed_database(clean_postgres_database, task_examples=examples)
+    compilation_context = context(
+        values, configuration=configuration, task_examples=examples,
+    )
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) > 1024
+    requested = await _authorized_attempt(
+        clean_postgres_database, values, configuration,
+        compilation_context=compilation_context,
+    )
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     runtime = _ManagerRuntime(ProjectGuideCompilationInvalidOutputError("schema_invalid"))

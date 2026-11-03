@@ -135,6 +135,7 @@ def context(
     generation: int = 1,
     guide_version="v1",
     configuration=None,
+    task_examples=TASK_EXAMPLES,
 ) -> ProjectGuideCompilationContext:
     """Build one exact committed-original metadata context."""
     material = GuideDocumentManifest(
@@ -162,7 +163,7 @@ def context(
         ),
     )
     return ProjectGuideCompilationContext(
-        task_examples=({"content": "Review a claim using the project guide."},),
+        task_examples=task_examples,
         runtime_configuration=configuration or runtime_configuration(),
         material=material,
         setup_run_id=values[f"setup_{generation}"],
@@ -329,16 +330,20 @@ def persistence_facts(
 
 
 async def _seed_project_rows(
-    engine: AsyncEngine, values: dict[str, UUID], generations: int, guide_version: str
+    engine: AsyncEngine, values: dict[str, UUID], generations: int, guide_version: str,
+    task_examples=TASK_EXAMPLES,
 ) -> None:
     sql_values = {name: str(value) for name, value in values.items()}
-    examples = TASK_EXAMPLES
+    examples = validate_task_examples(task_examples)
     example_hash = task_examples_hash(examples)
     sql_values.update(
         guide_version=guide_version,
         examples=json.dumps([item.model_dump(mode="json") for item in examples]),
         examples_hash=example_hash,
-        example_manifest=json.dumps(TASK_EXAMPLE_MANIFEST),
+        example_manifest=json.dumps({
+            "task_examples_hash": example_hash,
+            "task_examples_count": len(examples),
+        }),
     )
     async with engine.begin() as connection:
         await connection.execute(text("alter table projects disable trigger user"))
@@ -547,12 +552,13 @@ async def seed_database(
     guide_version="v1",
     namespace=None,
     provider_object_ref: str | None = None,
+    task_examples=TASK_EXAMPLES,
 ) -> dict[str, UUID]:
     """Seed only canonical parent rows needed by hidden persistence tests."""
     values = ids()
     engine = create_async_engine(database_url)
     try:
-        await _seed_project_rows(engine, values, generations, guide_version)
+        await _seed_project_rows(engine, values, generations, guide_version, task_examples)
         await _seed_snapshot_item(engine, values)
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session, session.begin():
