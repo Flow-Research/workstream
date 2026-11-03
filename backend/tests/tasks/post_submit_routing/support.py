@@ -364,7 +364,7 @@ async def _successor_human_attachments(factory):
     from app.adapters.checkers import external_checker_registry_reader
     from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
 
-    async with factory() as session:
+    async with factory() as session, session.begin():
         registry_entries = await external_checker_registry_reader(session).list_entries()
     pre_entries = tuple(entry for entry in registry_entries if entry.phase == "pre_submit")
     post_entries = tuple(entry for entry in registry_entries if entry.phase == "post_submit")
