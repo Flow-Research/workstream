@@ -278,8 +278,9 @@ async def test_correction_uses_canonical_human_request_and_binds_feedback(clean_
             assert context.material.source_snapshot_id == package.target.source_snapshot_id
             predecessor = await session.get(ProjectGuideCompilation, command.compilation_id)
             prompt = json.loads(project_guide_compilation_prompt_bytes(context))
-            assert prompt["correction_predecessor"] == predecessor.canonical_result
-            assert canonical_json_hash(prompt["correction_predecessor"]) == package.target.result_hash
+            assert set(prompt) == {"material", "task_examples", "manager_feedback"}
+            assert prompt["manager_feedback"] == "Reconsider the existing source evidence."
+            assert canonical_json_hash(predecessor.canonical_result) == package.target.result_hash
             original_identity = (attempt.canonical_input_hash, attempt.provider_idempotency_key)
         class RecordingFailure(_Runtime):
             async def compile_project_guide(self, execution_context, capabilities):

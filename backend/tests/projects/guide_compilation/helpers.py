@@ -138,12 +138,17 @@ def context(
     task_examples=TASK_EXAMPLES,
 ) -> ProjectGuideCompilationContext:
     """Build one exact committed-original metadata context."""
+    task_examples = validate_task_examples(task_examples)
+    snapshot_hash = canonical_json_hash({
+        "task_examples_hash": task_examples_hash(task_examples),
+        "task_examples_count": len(task_examples),
+    })
     material = GuideDocumentManifest(
         project_id=values["project"],
         guide_id=values["guide"],
         guide_version=guide_version,
         source_snapshot_id=values["snapshot"],
-        source_snapshot_hash=SHA256,
+        source_snapshot_hash=snapshot_hash,
         setup_run_id=values[f"setup_{generation}"],
         setup_generation=generation,
         documents=(
@@ -336,14 +341,16 @@ async def _seed_project_rows(
     sql_values = {name: str(value) for name, value in values.items()}
     examples = validate_task_examples(task_examples)
     example_hash = task_examples_hash(examples)
+    example_manifest = {
+        "task_examples_hash": example_hash,
+        "task_examples_count": len(examples),
+    }
+    snapshot_hash = canonical_json_hash(example_manifest)
     sql_values.update(
         guide_version=guide_version,
         examples=json.dumps([item.model_dump(mode="json") for item in examples]),
         examples_hash=example_hash,
-        example_manifest=json.dumps({
-            "task_examples_hash": example_hash,
-            "task_examples_count": len(examples),
-        }),
+        example_manifest=json.dumps(example_manifest),
     )
     async with engine.begin() as connection:
         await connection.execute(text("alter table projects disable trigger user"))
@@ -387,7 +394,7 @@ async def _seed_project_rows(
                 "(:snapshot,:project,:guide,:guide_version,'guide_source_snapshot.task_examples',cast(:example_manifest as json),"
                 ":hash,'test')"
             ),
-            {**sql_values, "hash": SHA256},
+            {**sql_values, "hash": snapshot_hash},
         )
         for generation in range(1, generations + 1):
             await connection.execute(
@@ -401,7 +408,7 @@ async def _seed_project_rows(
                 {
                     **sql_values,
                     "setup": str(values[f"setup_{generation}"]),
-                    "hash": SHA256,
+                    "hash": snapshot_hash,
                     "generation": generation,
                     "task_id": project_guide_compilation_task_id(
                         str(values[f"setup_{generation}"]), generation
