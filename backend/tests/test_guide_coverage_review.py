@@ -54,9 +54,9 @@ async def test_coverage_review_cannot_reset_the_attempt_work_budget(monkeypatch,
     async def run(agent, prompt, **kwargs):
         inputs = json.loads(prompt)
         guide_context = inputs.get("guide_setup_context", inputs)
-        assert guide_context[
-            "correction_predecessor"
-        ] == compilation.correction_predecessor.model_dump(mode="json")
+        assert set(guide_context) == {"material", "task_examples", "manager_feedback"}
+        assert guide_context["manager_feedback"] == compilation.correction_feedback.reason
+        assert "correction_predecessor" not in guide_context
         await _open_prompt_documents(agent, prompt)
         phases.append(kwargs["max_turns"])
         # Candidate uses three turns. The review tries four more, irrespective of
@@ -90,21 +90,24 @@ async def test_coverage_review_cannot_reset_the_attempt_work_budget(monkeypatch,
     assert all(model is responses[0] for model in responses)
 
 
-async def test_oversize_predecessor_is_rejected_before_provider_execution(monkeypatch):
-    """The authenticated body counts towards the actual provider prompt bound."""
+async def test_oversize_manager_feedback_is_rejected_before_provider_execution(monkeypatch):
+    """The manager's bounded reason counts towards the actual provider prompt bound."""
     from app.interfaces.project_agents import project_guide_compilation_prompt_bytes
 
     monkeypatch.setenv("OPENAI_API_KEY", "unit-test-only")
-    compilation = correction_context()
-    prompt = json.loads(project_guide_compilation_prompt_bytes(compilation))
-    del prompt["correction_predecessor"]
-    previous_size = len(
-        json.dumps(prompt, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    )
+    original = correction_context()
+    compilation = original.model_copy(update={
+        "correction_feedback": original.correction_feedback.model_copy(
+            update={"reason": "Clarify the assigned source rule. " * 100}
+        ),
+    })
     config = compilation.runtime_configuration.model_copy(
-        update={"maximum_manifest_bytes": previous_size}
+        update={"maximum_manifest_bytes": 1024}
     )
     compilation = compilation.model_copy(update={"runtime_configuration": config})
+    prompt = json.loads(project_guide_compilation_prompt_bytes(compilation))
+    assert set(prompt) == {"material", "task_examples", "manager_feedback"}
+    assert len(project_guide_compilation_prompt_bytes(compilation)) > 1024
     runtime = OpenAIAgentSdkProjectGuideRuntime(config)
 
     async def forbidden(*args):
@@ -127,8 +130,9 @@ def _large_correction_proposals(configuration):
                 "requirements": [
                     {
                         **requirement,
-                        "requirement_id": f"observable_{index}",
-                        "statement": ("The archive preserves bounded evidence. " * 23).strip(),
+                        "suggestion_id": f"observable_{index}",
+                        "statement": ("The archive preserves bounded evidence. " * 23).strip()
+                        + " Include source context.",
                         "classification_rationale": (
                             "The platform validates bounded archive evidence. " * 18
                         ).strip(),
@@ -138,7 +142,7 @@ def _large_correction_proposals(configuration):
             }
         )
 
-    predecessor, candidate = proposal(100), proposal(30)
+    predecessor, candidate = proposal(100), proposal(81)
     original = correction_context()
     compilation = ProjectGuideCompilationContext.model_validate(
         {
@@ -161,7 +165,7 @@ def _large_correction_proposals(configuration):
 async def test_large_manager_correction_reaches_review_with_default_envelope(
     monkeypatch, explicit_limit
 ):
-    """The default fits a full correction; an explicit smaller bound still stops review."""
+    """The default fits a candidate review; a smaller bound stops that envelope."""
     from agents import Runner
 
     monkeypatch.delenv("WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES", raising=False)
@@ -184,13 +188,16 @@ async def test_large_manager_correction_reaches_review_with_default_envelope(
     compilation, candidate = _large_correction_proposals(configuration)
     original_prompt = project_guide_compilation_prompt_bytes(compilation)
     assert len(original_prompt) < 256_000
+    assert set(json.loads(original_prompt)) == {"material", "task_examples", "manager_feedback"}
+    candidate_json = json.dumps(_provider_payload(candidate), separators=(",", ":"))
+    assert len(candidate_json.encode()) < 256_000
     prompts = []
 
     async def run(agent, prompt, **kwargs):
         prompts.append(json.loads(prompt))
         assert explicit_limit is None or len(prompts) == 1, "oversized review reached provider"
         await _open_prompt_documents(agent, prompt)
-        return _sdk_result(agent, candidate)
+        return SimpleNamespace(final_output=agent.output_type.validate_json(candidate_json))
 
     monkeypatch.setattr(Runner, "run", run)
     runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)

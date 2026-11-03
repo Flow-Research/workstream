@@ -514,12 +514,14 @@ def canonical_project_guide_compilation_context_bytes(
 
 
 def project_guide_compilation_prompt_bytes(context: ProjectGuideCompilationContext) -> bytes:
-    """Give the model only assigned originals and task examples."""
+    """Give the model assigned originals, examples, and explicit manager feedback."""
     context.require_correction_predecessor()
     body = {
         "material": context.material.agent_projection(),
         "task_examples": [item.model_dump(mode="json") for item in context.task_examples],
     }
+    if context.correction_feedback is not None:
+        body["manager_feedback"] = context.correction_feedback.reason
     return json.dumps(
         body, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     ).encode("utf-8")

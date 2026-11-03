@@ -44,9 +44,12 @@ def test_correction_materializes_exact_predecessor_without_changing_retained_ide
     assert json.loads(canonical) == historical
     assert "sha256:" + hashlib.sha256(canonical).hexdigest() == canonical_json_hash(historical)
     prompt = json.loads(project_guide_compilation_prompt_bytes(compilation))
-    assert set(prompt) == {"material", "task_examples"}
+    assert set(prompt) == {"material", "task_examples", "manager_feedback"}
+    assert prompt["manager_feedback"] == compilation.correction_feedback.reason
     assert "correction_predecessor" not in prompt
     assert "correction_feedback" not in prompt
+    assert compilation.correction_feedback.predecessor_result_hash not in json.dumps(prompt)
+    assert compilation.correction_feedback.target_digest not in json.dumps(prompt)
     assert canonical_json_hash(compilation.correction_predecessor.model_dump(mode="json")) == (
         compilation.correction_feedback.predecessor_result_hash
     )

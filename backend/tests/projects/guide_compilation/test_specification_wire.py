@@ -99,7 +99,7 @@ def test_artifact_policy_paths_are_valid_without_per_file_pre_specs():
 
 
 @pytest.mark.parametrize("corrected", [False, True])
-def test_model_prompt_has_exactly_documents_and_examples_without_private_canaries(corrected):
+def test_model_prompt_has_only_assigned_inputs_and_explicit_manager_feedback(corrected):
     material = SimpleNamespace(agent_projection=lambda: {"documents": [{"handle": "assigned-guide"}]})
     examples = validate_task_examples([{"content": "Assigned task example."}])
     context = ProjectGuideCompilationContext.model_construct(
@@ -113,13 +113,15 @@ def test_model_prompt_has_exactly_documents_and_examples_without_private_canarie
         runtime_configuration="private registry profile binding canary",
     )
     if corrected:
-        predecessor = ProjectGuideCompilationResult.model_validate(_proposal())
+        predecessor = ProjectGuideCompilationResult.model_validate(_proposal()).model_copy(
+            update={"setup_notes": ("previous registry and image selection canary",)}
+        )
         feedback = ProjectGuideCorrectionFeedback(
             operation_id=uuid4(),
             predecessor_compilation_id=uuid4(),
             predecessor_result_hash=canonical_json_hash(predecessor.model_dump(mode="json")),
             target_digest="sha256:" + "1" * 64,
-            reason="private previous registry profile binding canary",
+            reason="Clarify the assigned source obligation.",
         )
         context = context.model_copy(update={
             "correction_feedback": feedback,
@@ -127,12 +129,21 @@ def test_model_prompt_has_exactly_documents_and_examples_without_private_canarie
         })
     prompt = project_guide_compilation_prompt_bytes(context)
     body = json.loads(prompt)
-    assert body == {
+    expected = {
         "material": {"documents": [{"handle": "assigned-guide"}]},
         "task_examples": [item.model_dump(mode="json") for item in examples],
     }
-    assert set(body) == {"material", "task_examples"}
+    if corrected:
+        expected["manager_feedback"] = feedback.reason
+    assert body == expected
+    assert set(body) == ({"material", "task_examples", "manager_feedback"} if corrected
+                         else {"material", "task_examples"})
     assert b"private" not in prompt
+    assert b"previous registry and image selection canary" not in prompt
+    if corrected:
+        assert str(feedback.operation_id).encode() not in prompt
+        assert feedback.predecessor_result_hash.encode() not in prompt
+        assert feedback.target_digest.encode() not in prompt
 
 
 def test_source_lineage_stays_exact_without_registry_input():

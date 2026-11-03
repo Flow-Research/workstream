@@ -23,6 +23,7 @@ from tests.projects.guide_compilation.helpers import (
     ids,
     runtime_configuration,
 )
+from tests.projects.guide_compilation.test_correction_context import correction_context
 from tests.test_agent_runtime import (
     _compile,
     _open_prompt_documents,
@@ -142,6 +143,49 @@ def _rejected_semantic_payload(fault):
             specification["negative_tests"][0]["expected_finding_codes"] = ["unknown_finding"]
         requirement["check_specification"] = specification
     return payload
+
+
+async def test_actual_openai_sdk_sends_only_manager_reason_on_explicit_correction(monkeypatch):
+    """Provider phases receive the PM request without prior proposal or custody IDs."""
+    compilation = correction_context()
+    handle = compilation.material.handle_for(compilation.material.documents[0])
+    good = json.dumps(_provider_payload())
+    responses = iter([
+        _chat_tool_call("draft-read", "read_document", {"handle": handle}),
+        _chat_text("draft", good),
+        _chat_tool_call("review-read", "read_document", {"handle": handle}),
+        _chat_text("review", good),
+    ])
+    requests = []
+
+    async def dispatch(phase, body):
+        requests.append(body)
+        request = httpx2.Request("POST", "https://model-proxy.invalid/v1/chat/completions")
+        return httpx2.Response(200, json=next(responses), request=request)
+
+    _patch_openai_transport(monkeypatch, dispatch)
+    configuration = compilation.runtime_configuration.model_copy(update={
+        "model_provider": "openrouter", "model_api": "chat_completions",
+        "model": "openai/gpt-5.6-terra",
+    })
+    compilation = compilation.model_copy(update={"runtime_configuration": configuration})
+    result = await _compile(OpenAIAgentSdkProjectGuideRuntime(configuration), compilation,
+                            model=_TestModelSession(dispatch))
+    assert result == generated_result()
+    assert len(requests) == 4
+    draft = next(json.loads(item["content"]) for item in requests[0]["messages"]
+                 if item["role"] == "user" and isinstance(item.get("content"), str))
+    assert set(draft) == {"material", "task_examples", "manager_feedback"}
+    assert draft["manager_feedback"] == compilation.correction_feedback.reason
+    review = next(json.loads(item["content"]) for item in requests[2]["messages"]
+                  if item["role"] == "user" and isinstance(item.get("content"), str)
+                  and '"guide_setup_context"' in item["content"])
+    assert review["guide_setup_context"] == draft
+    for body in (draft, review["guide_setup_context"]):
+        exposed = json.dumps(body)
+        assert "Preserve this coverage." not in exposed
+        assert str(compilation.correction_feedback.operation_id) not in exposed
+        assert compilation.correction_feedback.predecessor_result_hash not in exposed
 
 
 def test_private_text_diagnostic_does_not_expose_other_invalid_fields(parser):

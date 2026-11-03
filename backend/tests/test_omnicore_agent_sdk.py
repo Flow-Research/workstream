@@ -55,6 +55,7 @@ from tests.projects.guide_compilation.helpers import (
     generated_result,
     ids,
 )
+from tests.projects.guide_compilation.test_correction_context import correction_context
 from tests.test_guide_compilation_draft import (
     _invalid_canonical_payload,
     _rejected_semantic_payload,
@@ -827,6 +828,42 @@ async def test_actual_sdk_large_valid_draft_crosses_review_handoff():
         assert "PreSubmissionBindingProposal" not in presented_schema["$defs"]
         assert "PostSubmissionBindingProposal" not in presented_schema["$defs"]
 
+
+
+async def test_actual_sdk_sends_only_manager_reason_on_explicit_correction():
+    """The Omni provider sees PM feedback but no retained proposal or custody IDs."""
+    base = correction_context()
+    compilation_context = base.model_copy(update={
+        "runtime_configuration": _runtime_context().runtime_configuration,
+    })
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(handle=handle, final_output=_provider_output()) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(
+            compilation_context.runtime_configuration, upstream_url=provider.url,
+        )
+        runtime.admit_execution()
+        try:
+            assert await runtime.compile_project_guide(compilation_context, capabilities) == generated_result()
+        finally:
+            await runtime.aclose()
+    assert reads == [handle, handle]
+    assert len(provider.requests) == 4
+    draft = next(json.loads(item["content"][item["content"].index("{"):])
+                 for item in provider.requests[0][1]["messages"]
+                 if item["role"] == "user" and isinstance(item.get("content"), str)
+                 and '"manager_feedback"' in item["content"])
+    assert set(draft) == {"material", "task_examples", "manager_feedback"}
+    assert draft["manager_feedback"] == compilation_context.correction_feedback.reason
+    review = next(json.loads(item["content"][item["content"].index("{"):])
+                  for item in provider.requests[2][1]["messages"]
+                  if item["role"] == "user" and isinstance(item.get("content"), str)
+                  and '"guide_setup_context"' in item["content"])
+    assert review["guide_setup_context"] == draft
+    for body in (draft, review["guide_setup_context"]):
+        exposed = json.dumps(body)
+        assert "Preserve this coverage." not in exposed
+        assert str(compilation_context.correction_feedback.operation_id) not in exposed
+        assert compilation_context.correction_feedback.predecessor_result_hash not in exposed
 
 
 async def test_actual_sdk_rejects_oversized_workstream_input_before_provider():
