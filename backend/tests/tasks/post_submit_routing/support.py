@@ -359,16 +359,47 @@ async def source_count(session) -> int:
     )
 
 
+async def _successor_human_attachments(factory):
+    """Select the fixture's exact registered images independently for each phase."""
+    from app.adapters.checkers import external_checker_registry_reader
+    from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+
+    async with factory() as session:
+        registry_entries = await external_checker_registry_reader(session).list_entries()
+    pre_entries = tuple(entry for entry in registry_entries if entry.phase == "pre_submit")
+    post_entries = tuple(entry for entry in registry_entries if entry.phase == "post_submit")
+    assert len(registry_entries) == len(pre_entries) + len(post_entries)
+    assert len(pre_entries) <= 1 and len(post_entries) <= 1
+    return {
+        "pre_submit_attachments": tuple(
+            ExternalCheckerImageAttachment(
+                requirement_id="project.archive_rules",
+                registry_entry_id=entry.registry_entry_id,
+                registry_entry_digest=entry.entry_digest,
+                configuration={},
+            )
+            for entry in pre_entries
+        ),
+        "post_submit_attachments": tuple(
+            ExternalCheckerImageAttachment(
+                requirement_id="project.post_evidence",
+                registry_entry_id=entry.registry_entry_id,
+                registry_entry_digest=entry.entry_digest,
+                configuration={},
+            )
+            for entry in post_entries
+        ),
+    }
+
+
 async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
     """Activate a genuine successor guide in the source Submission's project."""
     from uuid import uuid4
 
     from sqlalchemy import select
 
-    from app.adapters.checkers import external_checker_registry_reader
     from app.interfaces.project_agents import SubmissionArtifactPolicyProposal
     from app.modules.actors.models import ActorIdentityLink, ActorProfile
-    from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
     from app.modules.projects.api.post_policy import PostPolicyApproval
     from app.modules.projects.models import ProjectGuide
     from tests.authorization.guide_activation.pg_support import activate
@@ -400,33 +431,8 @@ async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
                 )
             )
         ).one()
-        registry_entries = await external_checker_registry_reader(session).list_entries()
-    pre_entries = tuple(entry for entry in registry_entries if entry.phase == "pre_submit")
-    post_entries = tuple(entry for entry in registry_entries if entry.phase == "post_submit")
-    assert len(registry_entries) == len(pre_entries) + len(post_entries)
-    assert len(pre_entries) <= 1 and len(post_entries) <= 1
-    values.update(
-        actor=as_uuid(setup_actor),
-        link=as_uuid(setup_link),
-        pre_submit_attachments=tuple(
-            ExternalCheckerImageAttachment(
-                requirement_id="project.archive_rules",
-                registry_entry_id=entry.registry_entry_id,
-                registry_entry_digest=entry.entry_digest,
-                configuration={},
-            )
-            for entry in pre_entries
-        ),
-        post_submit_attachments=tuple(
-            ExternalCheckerImageAttachment(
-                requirement_id="project.post_evidence",
-                registry_entry_id=entry.registry_entry_id,
-                registry_entry_digest=entry.entry_digest,
-                configuration={},
-            )
-            for entry in post_entries
-        ),
-    )
+    values.update(actor=as_uuid(setup_actor), link=as_uuid(setup_link))
+    values.update(await _successor_human_attachments(h.factory))
     manager, grant = await seed_review_actor(h.factory, h.request.project_id)
     proposal = SubmissionArtifactPolicyProposal(
         maximum_file_size_bytes=1_000_000,
