@@ -993,7 +993,10 @@ async def exercise_guide_setup_contract(
         return {}
     from tests.projects.unified_policy_fixtures import approve_unified_submission_policy
     from app.modules.projects.schemas import PreSubmitCheckerPolicyResponse
-    effective_policy = await approve_unified_submission_policy(project_id, guide_id, policy["id"])
+    effective_policy = await approve_unified_submission_policy(
+        project_id, guide_id, policy["id"],
+        pre_submit_attachments=(), post_submit_attachments=(),
+    )
     async with db_session.get_session_factory()() as session:
         pre = (await session.scalars(select(PreSubmitCheckerPolicy).where(
             PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"],

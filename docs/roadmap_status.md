@@ -1782,24 +1782,23 @@ uses retained reference-repaired state for interruption/restart and rejects a
 failed restart verifier despite model approval. Its registered real26 image is
 selected by guide 17's approved POST policy, but real-project trial qualification
 remains outstanding. The [current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md)
-records backend `e2b92628` deployed with qualified `real-e49dfcea` POST,
-unchanged native process and preserved data. Exact-tree CI passed 11,702 tests
-across 17 lanes, zero skips/deselections and complete cleanup; timing target
-remains unmet. Guide 22 generation 1 persisted a `draft_ready` proposal with ten
-requirements, two PRE/eight real-e49 POST bindings and no warnings. PM correction
-generation 2 for the Dockerfile path, solver-evaluation evidence and qualified
-PRE reached `policy_draft_ready`. No checker approval, activation, task or POST
-outcome followed. This deployed e2 result does not include PR #697's
-proposal/attachment separation or qualify the hosted contribution journey.
-The deployed private registry-selection repair is historical source; its result
-cannot select images under the intended PR #697 contract. Earlier
-guide 20/21 terminal setup failures remain history, as do guide 19's agreement,
-claim/PRE/Submission and subsequent invalid-output POST without findings/results.
-The earlier 29 public artifact reads and independent cleanup after an aborted
-ART observer remain scoped: normal first-attempt verification is not recovery.
-Before guide 22 correction dispatch, generation 1 added US$0.21189044: total
-US$7.91599442 settled, zero reserved and US$2.08400558 remaining under the unchanged
-US$10 cap. The drill report owns later generation 2 accounting.
+records backend `c8837f2b` deployed with schema `0066_guide_check_specification`,
+qualified `real-e49dfcea` POST, unchanged native process and preserved data.
+Guide 23 generation 1 produced two PRE and six POST suggestions. Actual retained
+requests prove normal setup receives only guide material/examples and explicit
+correction adds only PM feedback, without image/registry/prior-proposal metadata.
+Generation 2 failed strict output-version validation. The source repair supplies
+the trusted version in both SDKs' system instructions and a field-specific repair
+cue; live verification remains pending. Neither generation has checker approval,
+activation, a fresh task or contribution. Current public recovery requires a new
+guide version after this terminal setup failure; retained attempts are not reset.
+The 17 hosted lanes completed 11,519 unique tests with zero skips/deselections and
+complete cleanup after an exact-tree schema-lane rerun. Overall CI remains
+unqualified at this checkpoint because the aggregate exposed a stale API-drill
+approval caller. The current account has US$8.25615336 settled, zero reserved and
+US$1.74384664 remaining under the unchanged US$10 cap. Earlier guide 19–22 outcomes,
+public artifact reads and aborted-observer cleanup remain historical scoped
+proof; they do not establish the corrected hosted contribution journey.
 Substantive POST/trials, feedback-governed correction, actual recovery/replay
 without extra effects and shared authorized acceptance with exact contribution
 evidence remain the connected journey gates. Preserve both ReviewPolicy branches;

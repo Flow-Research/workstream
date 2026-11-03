@@ -1,32 +1,47 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
 **Current rehearsal: IN PROGRESS — November 3. No complete hosted journey pass is claimed.**
-Backend `e2b92628` remains deployed in release `a6d626a5`, retaining the
-qualified `real-e49dfcea` POST image, native runtime and existing data. Its prior
-CI evidence does not qualify the current source repair.
+Backend `c8837f2b` is deployed in release `95e7611e`, with schema
+`0066_guide_check_specification`. The migration preserved retained data, the
+qualified `real-e49dfcea` POST image and native runtime. The 17 hosted backend
+lanes completed 11,519 unique tests with zero skips/deselections and complete
+cleanup after an exact-tree schema-lane rerun. The aggregate then exposed a stale
+API-drill approval caller; overall CI is not claimed passing at this checkpoint.
 
-The drill exposed the wrong setup contract: the agent was asked to choose checker
-registrations and runtime configuration. The repair removes that task. Setup gets
-assigned guide documents and task examples, apart from system instructions,
-and proposes structured PRE/POST requirements. Explicit correction runs also
-receive the PM's written feedback, never prior proposals or image selections. PM/engineering supply the exact
-image attachments separately after implementation and registration. Registration
-must not require another inference or change the proposal hash. This source
-repair is being verified; it is not deployed or proven by a complete hosted run.
+Setup now receives assigned guide documents and task examples, apart from
+system instructions, and proposes structured PRE/POST requirements. Explicit
+corrections add only the PM's written feedback. Actual retained request bytes
+prove those input boundaries for guide 23; neither request included image,
+registry or prior-proposal metadata. PM/engineering supply image attachments
+separately, and registration does not require another inference or change the
+proposal hash.
 
-Guide 22 generation 2 completed as `policy_draft_ready` under the earlier contract.
-It has no checker approval, activation, task or POST outcome. It is retained
-unchanged, not treated as proof of the corrected setup design. Guide 19's active
-locked policies, task, Submission and failed POST also remain unchanged; the
-repair must preserve their original evidence and runtime custody.
+Guide 23 generation 1 produced a `draft_ready` proposal with two PRE and six POST
+suggestions using OpenRouter `openai/gpt-5.6-luna`. An explicit PM correction
+asked for project-wide suggestions and exact guide citations. Generation 2
+ended `compilation_invalid_terminal`: the instructions required an exact
+`agent_version` without supplying its trusted value, and the model guessed a
+different value. Strict validation rejected it. The source repair supplies the
+trusted version in both SDKs' system instructions and returns a bounded,
+field-specific correction diagnostic; its live verification remains pending.
+Neither generation has checker approval, guide activation, a fresh task or an
+accepted contribution. Both attempts and their evidence remain immutable.
 
-The last verified account totals are **US$8.14026044 settled, zero reserved and
-US$1.85973956 remaining** under the unchanged US$10 cap. No additional inference
-has been run during the setup separation repair. After source verification and
-review, the next drill must prove new setup, human image attachment, separate
-approvals, activation, genuine work failure/correction and exact acceptance /
-contribution evidence. [#555](https://github.com/Flow-Research/workstream/issues/555)
-and the related release scopes remain open.
+The latest verified account totals are **US$8.25615336 settled, zero reserved and
+US$1.74384664 remaining** under the unchanged US$10 cap. Guide 23's initial run
+and explicit correction together added US$0.11589292. Current public recovery
+cannot reopen a terminal setup attempt: same-operation replay retains that
+outcome, while correction requires a finalized current proposal. The next live
+run will use a fresh guide version with the same original documents and examples,
+without rewriting guide 23. This is a recovery limitation, not proof of in-place
+retry.
+
+The remaining connected proof is repaired setup, explicit human image
+attachment, separate approvals, activation, genuine work failure/correction,
+recovery/replay and exact shared acceptance/contribution evidence.
+[#555](https://github.com/Flow-Research/workstream/issues/555) and related release
+scopes remain open. Earlier guide 19–22 outcomes remain historical evidence;
+none establishes the corrected hosted contribution journey.
 
 The target is original project guide -> approved locked policies -> released task -> claim (starts work) -> ZIP intake feedback or immutable Submission -> durable POST -> governed outcome -> exact contribution evidence. Use explicitly PM-approved `human_review_required=false`. Preserve default-true handoff guards; live human review, payment delivery, reputation, frontend and claim expiry/skip remain deferred. #496 is excluded.
 
