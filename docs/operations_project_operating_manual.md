@@ -377,6 +377,9 @@ phases additionally receive the PM's bounded written feedback and recheck the
 originals. Correction custody verifies the exact predecessor and request but does
 not send the predecessor body, registry metadata or image selections to the model.
 Same-run output repair may receive bounded validation errors.
+Write self-contained correction feedback: describe the requested change or quote
+the relevant suggestion, rather than relying on a suggestion ID alone. The prior
+proposal is not sent to the model.
 
 Timeout or unknown provider acceptance is not a correctable finalized result.
 It remains blocked without another call until the adapter supports verified
