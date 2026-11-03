@@ -334,7 +334,10 @@ async def test_unified_compilation_uses_scoped_tools_and_strict_output(monkeypat
     async def run(agent, prompt, **kwargs):
         calls.append((agent, prompt, kwargs))
         await _open_prompt_documents(agent, prompt)
-        assert agent.instructions == configuration.instructions
+        assert agent.instructions == (
+            configuration.instructions
+            + f'\n\nTrusted output agent_version is "{compilation_context.agent_version}".'
+        )
         assert len(agent.tools) == 2 and agent.handoffs == []
         assert all(isinstance(tool, FunctionTool) for tool in agent.tools)
         assert [tool.name for tool in agent.tools] == ["read_document", "search_document"]
