@@ -212,11 +212,13 @@ a model-only engineering fixture do not establish the real project journey.
 exact semantic projection of that historical handoff. Its
 `post_submit_capability_gap` disposition records the source proposal's state; it
 is not a current policy binding or a claim that the implemented trial runtime is
-unavailable. Qualification constructs a separate typed specification declaring
-the outer `isolated_execution/current_runner`, nested
-`nested_sandbox/trial_proxy`, and receipt assessment
-`model_service/model_proxy` dependencies. A future #555 correction must review
-that current dependency shape before it can bind or approve it.
+unavailable. Qualification expresses the intended isolated execution and receipt
+assessment as advisory `implementation_needs` and `inability_to_evaluate` fields
+in the current check specification. These fields select no runtime or image.
+Human approval separately supplies the exact registered image and its model and
+trial configuration. A fresh setup proposal does not rewrite this image's frozen
+rubric; the manager and engineer must confirm that the image implements the
+project's requirements before attaching it.
 
 The locked POST configuration schema must declare all six flat trial selectors:
 `trial_profile_id`, `trial_profile_version`, `trial_profile_digest`,
