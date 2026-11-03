@@ -3,7 +3,6 @@
 from tests.projects.guide_compilation.helpers import manager_runtime_configuration
 
 from contextlib import asynccontextmanager
-from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -128,47 +127,22 @@ async def test_archived_project_reports_activations_refusal_first(clean_postgres
         assert await _state(factory) == before
 
 
-async def test_human_requirement_under_disabled_review_reports_activations_refusal(clean_postgres_database):
-    from app.interfaces.project_agents import AtomicGuideRequirement
+async def test_check_suggestion_under_disabled_review_is_ready_and_activates(clean_postgres_database):
     from tests.projects.guide_compilation.helpers import generated_result as compiled
 
     outcome = compiled()
-    requirement = AtomicGuideRequirement(
-        requirement_id="human_quality", statement="An authorized reviewer must assess the final quality.",
-        disposition="human_review",
-        classification_rationale="The guide requires an authorized human decision.", evidence_refs=outcome.findings[0].evidence_refs,
-    )
-    outcome = outcome.model_copy(update={"requirements": (requirement,)})
     async with activation_case(
         clean_postgres_database, human_review_required=False, compilation_outcome=outcome, configuration=manager_runtime_configuration(),
     ) as (factory, command, actor, grant, _, _):
+        before = await _state(factory)
         result = await _readiness(factory, *_ids(command))
-        assert [item.reason for item in result.unmet] == ["human_review_required_by_guide"]
-        assert result.unmet[0].code == "approval_blocked" == await _refusal(factory, actor, command, grant)
-
-
-async def test_disposition_check_is_the_one_activation_runs(clean_postgres_database, monkeypatch):
-    """Removing the shared check removes it from readiness too: one code path, not a copy."""
-    from app.interfaces.project_agents import AtomicGuideRequirement
-    from tests.projects.guide_compilation.helpers import generated_result as compiled
-
-    outcome = compiled()
-    requirement = AtomicGuideRequirement(
-        requirement_id="human_quality", statement="An authorized reviewer must assess the final quality.",
-        disposition="human_review",
-        classification_rationale="The guide requires an authorized human decision.", evidence_refs=outcome.findings[0].evidence_refs,
-    )
-    outcome = outcome.model_copy(update={"requirements": (requirement,)})
-    original = GuideActivationService._readiness
-
-    async def omit_disposition(self, conditions, locked, *args):
-        await original(self, conditions, replace(locked, result=locked.result.model_copy(update={"requirements": ()})), *args)
-
-    async with activation_case(
-        clean_postgres_database, human_review_required=False, compilation_outcome=outcome, configuration=manager_runtime_configuration(),
-    ) as (factory, command, _, _, _, _):
-        monkeypatch.setattr(GuideActivationService, "_readiness", omit_disposition)
-        assert (await _readiness(factory, *_ids(command))).ready
+        assert (result.ready, result.unmet) == (True, ())
+        assert await _state(factory) == before
+        async with factory() as session, session.begin():
+            receipt = await activation_service(session, actor, command, grant).activate(
+                command, actor=actor, request_id=uuid4(),
+            )
+        assert receipt.command == command
 
 
 async def test_unpublished_contribution_policy_is_unmet_with_activations_code(clean_postgres_database):

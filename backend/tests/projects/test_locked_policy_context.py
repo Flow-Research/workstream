@@ -28,17 +28,16 @@ from app.modules.projects.post_policy.models import PostPolicyOperation
 from tests.projects.locked_policy_fixtures import activated_context, frozen_request
 
 
-async def test_false_locked_context_rechecks_approved_human_requirement(
+async def test_false_locked_context_rechecks_approved_checker_plan(
     clean_postgres_database, monkeypatch,
 ):
-    """Execution refuses a false policy if its exact approved inventory needs a human."""
-    from app.interfaces.project_agents import AtomicGuideRequirement
+    """Execution refuses a changed plan even when the review policy allows automatic acceptance."""
     from app.modules.projects.post_policy.repository import PostPolicyRepository
     from tests.authorization.guide_activation.pg_support import activate
     from tests.projects.guide_activation.pg_support import activation_case
 
     async with activation_case(
-        clean_postgres_database, human_review_required=False
+        clean_postgres_database, human_review_required=False,
     ) as (factory, command, actor, _, _, _):
         receipt = await activate(factory, actor, command)
         request = frozen_request(receipt)
@@ -49,19 +48,16 @@ async def test_false_locked_context_rechecks_approved_human_requirement(
 
         original = PostPolicyRepository.lock_policy
 
-        async def locked_with_human_requirement(self, *args, **kwargs):
+        async def locked_with_changed_plan(self, *args, **kwargs):
             locked, policy, custody = await original(self, *args, **kwargs)
-            human = AtomicGuideRequirement(
-                requirement_id="human_quality",
-                statement="An authorized reviewer must assess final quality.",
-                disposition="human_review",
-                evidence_refs=locked.result.findings[0].evidence_refs,
-            )
-            return replace(locked, result=locked.result.model_copy(update={
-                "requirements": (*locked.result.requirements, human)
-            })), policy, custody
+            operation = locked.view.approval_custody.operation
+            plan = json.loads(json.dumps(operation.effective_pre_submit_plan))
+            assert plan["pre_submit"]["policy_sha256"].startswith("sha256:")
+            plan["pre_submit"]["policy_sha256"] = "sha256:" + "f" * 64
+            set_committed_value(operation, "effective_pre_submit_plan", plan)
+            return locked, policy, custody
 
-        monkeypatch.setattr(PostPolicyRepository, "lock_policy", locked_with_human_requirement)
+        monkeypatch.setattr(PostPolicyRepository, "lock_policy", locked_with_changed_plan)
         async with factory() as session, session.begin():
             with pytest.raises(ProjectLockedPolicyContextUnavailable):
                 await ProjectLockedPolicyRepository(session).lock_locked_policy_context(request)
