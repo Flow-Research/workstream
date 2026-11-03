@@ -33,6 +33,100 @@ Adapter = tuple[TestClient, list[httpx.Request], dict[str, Any]]
 Call = Callable[..., httpx.Response]
 
 
+def _approval_arguments() -> dict[str, Any]:
+    digest = "sha256:" + "a" * 64
+    target = {
+        "project_id": PROJECT_ID,
+        "guide_id": GUIDE_ID,
+        "compilation_id": COMPILATION_ID,
+        "guide_version": "1",
+        "source_snapshot_id": DOCUMENT_ID,
+        "source_snapshot_hash": digest,
+        "setup_run_id": REPORT_ID,
+        "setup_generation": 1,
+        "finalization_id": CORRECTION_ID,
+        "finalization_facts_digest": digest,
+        "result_hash": digest,
+        "result_schema_version": "project_guide_check_specification.v1",
+        "component_hashes": {
+            "schema_version": "project_guide_check_specification_hashes.v1",
+            **{
+                name: digest
+                for name in (
+                    "sufficiency_hash",
+                    "artifact_policy_hash",
+                    "requirement_inventory_hash",
+                    "pre_submit_hash",
+                    "post_submit_hash",
+                )
+            },
+        },
+        "artifact_policy_id": POLICY_ID,
+        "artifact_policy_hash": digest,
+        "artifact_projection_operation_id": CORRECTION_ID,
+        "artifact_projection_output_digest": digest,
+    }
+    return {
+        "project_id": PROJECT_ID,
+        "guide_id": GUIDE_ID,
+        "compilation_id": COMPILATION_ID,
+        "idempotency_key": IDEMPOTENCY_KEY,
+        "body": {
+            "target": target,
+            "pre_submit_attachments": [],
+            "post_submit_attachments": [
+                {
+                    "requirement_id": "project.quality",
+                    "registry_entry_id": POLICY_ID,
+                    "registry_entry_digest": digest,
+                    "configuration": {"rubric": "Check the guide's requirements", "limit": 3},
+                }
+            ],
+        },
+    }
+
+
+def test_approval_forwards_human_image_attachments_unchanged(
+    adapter: Adapter,
+    call: Call,
+) -> None:
+    client, received, upstream = adapter
+    # A backend conflict still proves the full input reached its authority boundary.
+    upstream["status"] = 409
+    upstream["json"] = {
+        "error": {
+            "code": "proposal_stale",
+            "message": "Proposal changed",
+            "retryable": False,
+        }
+    }
+    arguments = _approval_arguments()
+    result = call(
+        client, name="workstream_guide_pre_submission_approve", arguments=arguments
+    ).json()["result"]
+    assert len(received) == 1
+    assert json.loads(received[0].content) == arguments["body"]
+    assert received[0].headers["idempotency-key"] == IDEMPOTENCY_KEY
+    assert result["isError"] is True
+    assert result["structuredContent"]["status"] == 409
+
+
+@pytest.mark.parametrize("field", ["pre_submit_attachments", "post_submit_attachments"])
+def test_approval_requires_explicit_phase_image_choice(
+    adapter: Adapter,
+    call: Call,
+    field: str,
+) -> None:
+    client, received, _ = adapter
+    arguments = _approval_arguments()
+    del arguments["body"][field]
+    result = call(
+        client, name="workstream_guide_pre_submission_approve", arguments=arguments
+    ).json()["result"]
+    assert result["structuredContent"]["error"] == "invalid_tool_input"
+    assert received == []
+
+
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
@@ -79,9 +173,7 @@ def test_project_guide_list_forwards_only_typed_query_and_bearer(
     assert "if-match" not in request.headers
 
 
-def test_saved_correction_dispatch_uses_only_fixed_selectors(
-    adapter: Adapter, call: Call
-) -> None:
+def test_saved_correction_dispatch_uses_only_fixed_selectors(adapter: Adapter, call: Call) -> None:
     client, received, upstream = adapter
     upstream["status"] = 202
     upstream["json"] = {
@@ -167,12 +259,8 @@ def test_document_read_returns_bounded_base64_and_digest(adapter: Adapter, call:
 
 def test_document_contract_matches_supported_media_and_transport_bounds() -> None:
     schema = guide_lifecycle_input_schema("guide_document_upload")
-    assert schema["properties"]["media_type"]["enum"] == list(
-        GUIDE_DOCUMENT_MEDIA_TYPES
-    )
-    assert schema["properties"]["content_base64"]["maxLength"] == (
-        GUIDE_DOCUMENT_MAX_BASE64_CHARS
-    )
+    assert schema["properties"]["media_type"]["enum"] == list(GUIDE_DOCUMENT_MEDIA_TYPES)
+    assert schema["properties"]["content_base64"]["maxLength"] == (GUIDE_DOCUMENT_MAX_BASE64_CHARS)
     settings = Settings(api_url="http://127.0.0.1:8000")
     assert settings.max_request_bytes > GUIDE_DOCUMENT_MAX_BASE64_CHARS
     assert settings.max_response_bytes == 65_536

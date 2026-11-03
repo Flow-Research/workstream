@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "ba62a1dce36398d1a69ee0f79d88f9811a652a8717a84134eae92e73e4fc3c71",
+  "canonical_sha256": "0684d6b50b26fcb6eaaee82c7b8514a8032682bd64bd6568874079e04c0913c2",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,19 +7,24 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
+            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
+            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
+            "title": "Details",
             "type": "object"
           },
           "message": {
+            "title": "Message",
             "type": "string"
           },
           "retryable": {
+            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -30,6 +35,7 @@
           "correlation_id",
           "retryable"
         ],
+        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -42,7 +48,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Detail"
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -51,58 +58,7 @@
         "required": [
           "error"
         ],
-        "type": "object"
-      },
-      "CapabilityParameter": {
-        "additionalProperties": false,
-        "description": "Closed flat capability configuration supplied for trusted validation.",
-        "properties": {
-          "name": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "integer"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "boolean"
-                    }
-                  ]
-                },
-                "maxItems": 50,
-                "minItems": 1,
-                "type": "array"
-              }
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "value"
-        ],
+        "title": "ApiErrorResponse",
         "type": "object"
       },
       "CheckFailureFinding": {
@@ -114,26 +70,29 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
             "type": "string"
           },
           "condition": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Condition",
             "type": "string"
           },
           "level": {
             "enum": [
               "warning",
-              "error",
-              "coverage_incomplete"
+              "error"
             ],
+            "title": "Level",
             "type": "string"
           },
           "message": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Message",
             "type": "string"
           }
         },
@@ -143,26 +102,26 @@
           "condition",
           "message"
         ],
+        "title": "CheckFailureFinding",
         "type": "object"
       },
-      "CheckInfrastructureFailure": {
+      "CheckInabilityToEvaluate": {
         "additionalProperties": false,
-        "description": "One non-work failure that must never become a failed work verdict.",
+        "description": "A proposed condition where no work verdict can be established.",
         "properties": {
           "code": {
-            "enum": [
-              "capacity_exceeded",
-              "deadline_exceeded",
-              "material_unavailable",
-              "implementation_unavailable",
-              "invalid_output"
-            ],
+            "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
             "type": "string"
           },
           "condition": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Condition",
             "type": "string"
           }
         },
@@ -170,56 +129,34 @@
           "code",
           "condition"
         ],
+        "title": "CheckInabilityToEvaluate",
         "type": "object"
       },
       "CheckInput": {
         "additionalProperties": false,
         "description": "One exact material or context input needed by a proposed check.",
         "properties": {
-          "evaluation_context_roles": {
-            "anyOf": [
-              {
-                "items": {
-                  "enum": [
-                    "predecessor_findings",
-                    "predecessor_submission_archive"
-                  ],
-                  "type": "string"
-                },
-                "maxItems": 2,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Exact sorted selected revision material roles, only for evaluation_context."
-          },
           "input_id": {
             "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Input Id",
             "type": "string"
           },
           "kind": {
-            "enum": [
-              "package",
-              "manifest",
-              "request_metadata",
-              "relative_file",
-              "relative_directory",
-              "task_context",
-              "evaluation_context",
-              "guide_context",
-              "prepared_material"
-            ],
+            "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Kind",
             "type": "string"
           },
           "purpose": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Purpose",
             "type": "string"
           },
           "relative_path": {
@@ -233,7 +170,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Relative Path"
           }
         },
         "required": [
@@ -241,6 +179,7 @@
           "kind",
           "purpose"
         ],
+        "title": "CheckInput",
         "type": "object"
       },
       "CheckNegativeTest": {
@@ -257,6 +196,7 @@
             },
             "maxItems": 10,
             "minItems": 1,
+            "title": "Expected Finding Codes",
             "type": "array"
           },
           "expected_verdict": {
@@ -264,6 +204,7 @@
               "passed",
               "failed"
             ],
+            "title": "Expected Verdict",
             "type": "string"
           },
           "name": {
@@ -271,12 +212,14 @@
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Name",
             "type": "string"
           },
           "scenario": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Scenario",
             "type": "string"
           }
         },
@@ -286,75 +229,14 @@
           "expected_verdict",
           "expected_finding_codes"
         ],
-        "type": "object"
-      },
-      "CheckRuntimeDependency": {
-        "additionalProperties": false,
-        "description": "One implementation or runner dependency and its availability owner.",
-        "properties": {
-          "dependency_id": {
-            "description": "Canonical machine identifier, not prose or a file path: start with a lowercase letter, then lowercase letters, digits, underscores, dots or hyphens. Example: results or rights_confirmed.",
-            "maxLength": 100,
-            "minLength": 1,
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "kind": {
-            "enum": [
-              "checker_tool",
-              "isolated_execution",
-              "nested_sandbox",
-              "task_context",
-              "evaluation_context",
-              "guide_context",
-              "model_service",
-              "execution_capacity",
-              "prepared_material"
-            ],
-            "type": "string"
-          },
-          "provisioning": {
-            "enum": [
-              "current_runner",
-              "checker_implementation",
-              "model_proxy",
-              "trial_proxy",
-              "runtime_gap"
-            ],
-            "type": "string"
-          },
-          "purpose": {
-            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
-          },
-          "unavailable_code": {
-            "enum": [
-              "capacity_exceeded",
-              "deadline_exceeded",
-              "material_unavailable",
-              "implementation_unavailable",
-              "invalid_output"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "dependency_id",
-          "kind",
-          "provisioning",
-          "purpose",
-          "unavailable_code"
-        ],
+        "title": "CheckNegativeTest",
         "type": "object"
       },
       "CheckSpecification": {
         "additionalProperties": false,
-        "description": "Bounded implementation and test handoff for one atomic requirement.",
+        "description": "Source-derived check handoff with no claim about available implementations.",
         "properties": {
           "check_steps": {
-            "description": "Implementable steps on the declared inputs. Static inspection needs explicit syntax or deterministic predicates, including source-defined field identifiers, types, values, ranges and exceptions rather than references to documented rules; qualitative free-form comparison needs model evaluation in POST. Never invent a document grammar absent from the guide.",
             "items": {
               "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
               "maxLength": 1000,
@@ -363,22 +245,14 @@
             },
             "maxItems": 20,
             "minItems": 1,
+            "title": "Check Steps",
             "type": "array"
           },
           "evaluation_method": {
-            "description": "isolated_execution requires a runtime dependency of kind isolated_execution; model_evaluation requires model_service and belongs to POST background work. Model review assesses content; proving runtime outcomes or built-environment properties requires isolated_execution with actual trials and observations.",
-            "enum": [
-              "static_inspection",
-              "isolated_execution",
-              "model_evaluation"
-            ],
-            "type": "string"
-          },
-          "execution_mode": {
-            "enum": [
-              "bounded_pre_submit",
-              "background"
-            ],
+            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Evaluation Method",
             "type": "string"
           },
           "failure_findings": {
@@ -387,30 +261,39 @@
             },
             "maxItems": 20,
             "minItems": 1,
+            "title": "Failure Findings",
             "type": "array"
           },
-          "infrastructure_failures": {
+          "implementation_needs": {
             "items": {
-              "$ref": "#/components/schemas/CheckInfrastructureFailure"
+              "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
+              "maxLength": 1000,
+              "minLength": 1,
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 10,
             "minItems": 1,
+            "title": "Implementation Needs",
+            "type": "array"
+          },
+          "inability_to_evaluate": {
+            "description": "Conditions where an implementation cannot establish a work verdict.",
+            "items": {
+              "$ref": "#/components/schemas/CheckInabilityToEvaluate"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Inability To Evaluate",
             "type": "array"
           },
           "inputs": {
-            "description": "All materials needed to observe every pass condition and negative case. Every task_context, evaluation_context, guide_context or prepared_material runtime dependency requires an input of that same kind, and vice versa.",
             "items": {
               "$ref": "#/components/schemas/CheckInput"
             },
             "maxItems": 20,
             "minItems": 1,
+            "title": "Inputs",
             "type": "array"
-          },
-          "maximum_duration_seconds": {
-            "description": "Proposed engineering budget for one check execution, not a measured runtime promise. PRE checks must be at most 60 seconds; POST checks may use up to 3600 seconds in background execution.",
-            "maximum": 3600.0,
-            "minimum": 1.0,
-            "type": "integer"
           },
           "negative_tests": {
             "items": {
@@ -418,10 +301,10 @@
             },
             "maxItems": 10,
             "minItems": 1,
+            "title": "Negative Tests",
             "type": "array"
           },
           "pass_conditions": {
-            "description": "Observable outcomes proved by the declared method and inputs. A model's review of claimed execution is not proof of actual execution; a static predicate cannot interpret free-form explanations. Require mandatory content to exist before judging its accuracy; absent required claims cannot pass vacuously.",
             "items": {
               "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
               "maxLength": 1000,
@@ -430,6 +313,7 @@
             },
             "maxItems": 20,
             "minItems": 1,
+            "title": "Pass Conditions",
             "type": "array"
           },
           "positive_tests": {
@@ -441,37 +325,22 @@
             },
             "maxItems": 10,
             "minItems": 1,
+            "title": "Positive Tests",
             "type": "array"
-          },
-          "runtime_dependencies": {
-            "description": "Declare the evaluation method's required dependency and any task_context, evaluation_context, guide_context or prepared_material input dependency. Each of those kinds must occur in both inputs and runtime_dependencies, never just one. Each unavailable_code must appear in infrastructure_failures.",
-            "items": {
-              "$ref": "#/components/schemas/CheckRuntimeDependency"
-            },
-            "maxItems": 10,
-            "type": "array"
-          },
-          "stage_rationale": {
-            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
           }
         },
         "required": [
           "evaluation_method",
-          "execution_mode",
-          "maximum_duration_seconds",
-          "stage_rationale",
           "inputs",
           "check_steps",
           "pass_conditions",
           "failure_findings",
           "positive_tests",
           "negative_tests",
-          "runtime_dependencies",
-          "infrastructure_failures"
+          "implementation_needs",
+          "inability_to_evaluate"
         ],
+        "title": "CheckSpecification",
         "type": "object"
       },
       "CompilationComponentHashes": {
@@ -480,30 +349,33 @@
         "properties": {
           "artifact_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "capability_suggestions_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Policy Hash",
             "type": "string"
           },
           "post_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Post Submit Hash",
             "type": "string"
           },
           "pre_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Pre Submit Hash",
             "type": "string"
           },
           "requirement_inventory_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Requirement Inventory Hash",
             "type": "string"
           },
-          "setup_notes_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
+          "schema_version": {
+            "const": "project_guide_check_specification_hashes.v1",
+            "default": "project_guide_check_specification_hashes.v1",
+            "title": "Schema Version",
             "type": "string"
           },
           "sufficiency_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Sufficiency Hash",
             "type": "string"
           }
         },
@@ -512,10 +384,9 @@
           "artifact_policy_hash",
           "requirement_inventory_hash",
           "pre_submit_hash",
-          "post_submit_hash",
-          "capability_suggestions_hash",
-          "setup_notes_hash"
+          "post_submit_hash"
         ],
+        "title": "CompilationComponentHashes",
         "type": "object"
       },
       "CompilationStage": {
@@ -524,6 +395,7 @@
           "pre_submit",
           "post_submit"
         ],
+        "title": "CompilationStage",
         "type": "string"
       },
       "ExternalCheckerRegistryEntry": {
@@ -532,18 +404,21 @@
         "properties": {
           "authorization_decision_event_id": {
             "format": "uuid",
+            "title": "Authorization Decision Event Id",
             "type": "string"
           },
           "capability_id": {
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Capability Id",
             "type": "string"
           },
           "capability_version": {
             "maxLength": 50,
             "minLength": 1,
             "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "title": "Capability Version",
             "type": "string"
           },
           "configuration_schema": {
@@ -551,14 +426,17 @@
           },
           "created_at": {
             "format": "date-time",
+            "title": "Created At",
             "type": "string"
           },
           "entry_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Entry Digest",
             "type": "string"
           },
           "image_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Image Digest",
             "type": "string"
           },
           "input_schema": {
@@ -572,18 +450,22 @@
               "pre_submit",
               "post_submit"
             ],
+            "title": "Phase",
             "type": "string"
           },
           "registered_by_actor_profile_id": {
             "format": "uuid",
+            "title": "Registered By Actor Profile Id",
             "type": "string"
           },
           "registration_operation_id": {
             "format": "uuid",
+            "title": "Registration Operation Id",
             "type": "string"
           },
           "registry_entry_id": {
             "format": "uuid",
+            "title": "Registry Entry Id",
             "type": "string"
           },
           "resources": {
@@ -606,6 +488,7 @@
           "authorization_decision_event_id",
           "created_at"
         ],
+        "title": "ExternalCheckerRegistryEntry",
         "type": "object"
       },
       "ExternalCheckerResourceLimits": {
@@ -615,21 +498,25 @@
           "cpu_millis": {
             "maximum": 64000.0,
             "minimum": 100.0,
+            "title": "Cpu Millis",
             "type": "integer"
           },
           "deadline_ms": {
             "maximum": 3600000.0,
             "minimum": 100.0,
+            "title": "Deadline Ms",
             "type": "integer"
           },
           "maximum_output_bytes": {
             "maximum": 65536.0,
             "minimum": 256.0,
+            "title": "Maximum Output Bytes",
             "type": "integer"
           },
           "memory_bytes": {
             "maximum": 68719476736.0,
             "minimum": 16777216.0,
+            "title": "Memory Bytes",
             "type": "integer"
           }
         },
@@ -639,6 +526,7 @@
           "deadline_ms",
           "maximum_output_bytes"
         ],
+        "title": "ExternalCheckerResourceLimits",
         "type": "object"
       },
       "ExternalCheckerSchema": {
@@ -649,22 +537,26 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
+            "title": "Document",
             "type": "object"
           },
           "schema_id": {
             "maxLength": 100,
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Schema Id",
             "type": "string"
           },
           "schema_sha256": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Schema Sha256",
             "type": "string"
           },
           "schema_version": {
             "maxLength": 50,
             "minLength": 1,
             "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "title": "Schema Version",
             "type": "string"
           }
         },
@@ -674,6 +566,7 @@
           "document",
           "schema_sha256"
         ],
+        "title": "ExternalCheckerSchema",
         "type": "object"
       },
       "GuideActivationContext": {
@@ -699,7 +592,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Generation"
           },
           "expected_previous_active_guide_id": {
             "anyOf": [
@@ -710,10 +604,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Id"
           },
           "guide_mutation_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Guide Mutation Generation",
             "type": "integer"
           },
           "post_approval_operation_id": {
@@ -725,7 +621,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Post Approval Operation Id"
           },
           "post_approval_output_digest": {
             "anyOf": [
@@ -736,7 +633,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Post Approval Output Digest"
           },
           "review": {
             "anyOf": [
@@ -769,6 +667,7 @@
           "post_approval_operation_id",
           "post_approval_output_digest"
         ],
+        "title": "GuideActivationContext",
         "type": "object"
       },
       "GuidePolicySelection": {
@@ -777,14 +676,17 @@
         "properties": {
           "generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Generation",
             "type": "integer"
           },
           "policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Policy Hash",
             "type": "string"
           },
           "policy_id": {
             "format": "uuid",
+            "title": "Policy Id",
             "type": "string"
           }
         },
@@ -793,6 +695,7 @@
           "generation",
           "policy_hash"
         ],
+        "title": "GuidePolicySelection",
         "type": "object"
       },
       "GuideProposalApprovalReceipt": {
@@ -805,38 +708,47 @@
               "type": "string"
             },
             "maxItems": 200,
+            "title": "Acknowledged Warning Hashes",
             "type": "array"
           },
           "artifact_policy_id": {
             "format": "uuid",
+            "title": "Artifact Policy Id",
             "type": "string"
           },
           "effective_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Effective Policy Hash",
             "type": "string"
           },
           "effective_policy_id": {
             "format": "uuid",
+            "title": "Effective Policy Id",
             "type": "string"
           },
           "effective_pre_submit_plan_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Effective Pre Submit Plan Hash",
             "type": "string"
           },
           "operation_id": {
             "format": "uuid",
+            "title": "Operation Id",
             "type": "string"
           },
           "pre_submit_bundle_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Pre Submit Bundle Hash",
             "type": "string"
           },
           "pre_submit_policy_id": {
             "format": "uuid",
+            "title": "Pre Submit Policy Id",
             "type": "string"
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Target Digest",
             "type": "string"
           }
         },
@@ -851,6 +763,7 @@
           "effective_pre_submit_plan_hash",
           "acknowledged_warning_hashes"
         ],
+        "title": "GuideProposalApprovalReceipt",
         "type": "object"
       },
       "GuideProposalCorrectionReceipt": {
@@ -859,27 +772,33 @@
         "properties": {
           "feedback_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Feedback Hash",
             "type": "string"
           },
           "operation_id": {
             "format": "uuid",
+            "title": "Operation Id",
             "type": "string"
           },
           "status": {
             "const": "correction_requested",
             "default": "correction_requested",
+            "title": "Status",
             "type": "string"
           },
           "successor_setup_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Successor Setup Generation",
             "type": "integer"
           },
           "successor_setup_run_id": {
             "format": "uuid",
+            "title": "Successor Setup Run Id",
             "type": "string"
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Target Digest",
             "type": "string"
           }
         },
@@ -890,6 +809,7 @@
           "successor_setup_generation",
           "feedback_hash"
         ],
+        "title": "GuideProposalCorrectionReceipt",
         "type": "object"
       },
       "GuideProposalDisplayResult": {
@@ -899,20 +819,14 @@
           "agent_name": {
             "const": "ProjectGuideCompilationAgent",
             "default": "ProjectGuideCompilationAgent",
+            "title": "Agent Name",
             "type": "string"
           },
           "agent_version": {
             "maxLength": 100,
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Agent Version",
             "type": "string"
-          },
-          "capability_suggestions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/GuideProposalSuggestion"
-            },
-            "maxItems": 200,
-            "type": "array"
           },
           "findings": {
             "default": [],
@@ -920,22 +834,7 @@
               "$ref": "#/components/schemas/GuideProposalFinding"
             },
             "maxItems": 100,
-            "type": "array"
-          },
-          "post_submit_bindings": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/PostSubmissionBindingProposal"
-            },
-            "maxItems": 200,
-            "type": "array"
-          },
-          "pre_submit_bindings": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/PreSubmissionBindingProposal"
-            },
-            "maxItems": 200,
+            "title": "Findings",
             "type": "array"
           },
           "requirements": {
@@ -944,11 +843,13 @@
               "$ref": "#/components/schemas/GuideProposalRequirement"
             },
             "maxItems": 200,
+            "title": "Requirements",
             "type": "array"
           },
           "schema_version": {
-            "const": "project_guide_compilation_result.v1",
-            "default": "project_guide_compilation_result.v1",
+            "const": "project_guide_check_specification.v1",
+            "default": "project_guide_check_specification.v1",
+            "title": "Schema Version",
             "type": "string"
           },
           "setup_notes": {
@@ -960,6 +861,7 @@
               "type": "string"
             },
             "maxItems": 20,
+            "title": "Setup Notes",
             "type": "array"
           },
           "status": {
@@ -968,6 +870,7 @@
               "draft_ready",
               "draft_ready_with_warnings"
             ],
+            "title": "Status",
             "type": "string"
           },
           "submission_artifact_policy": {
@@ -985,6 +888,7 @@
           "status",
           "agent_version"
         ],
+        "title": "GuideProposalDisplayResult",
         "type": "object"
       },
       "GuideProposalEvidenceLocation": {
@@ -993,6 +897,7 @@
         "properties": {
           "document_number": {
             "minimum": 1.0,
+            "title": "Document Number",
             "type": "integer"
           },
           "end_page": {
@@ -1003,7 +908,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "End Page"
           },
           "section": {
             "anyOf": [
@@ -1013,7 +919,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Section"
           },
           "start_page": {
             "anyOf": [
@@ -1023,7 +930,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Start Page"
           }
         },
         "required": [
@@ -1032,6 +940,7 @@
           "end_page",
           "section"
         ],
+        "title": "GuideProposalEvidenceLocation",
         "type": "object"
       },
       "GuideProposalFinding": {
@@ -1040,6 +949,7 @@
         "properties": {
           "code": {
             "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Code",
             "type": "string"
           },
           "evidence_refs": {
@@ -1048,12 +958,14 @@
               "$ref": "#/components/schemas/GuideProposalEvidenceLocation"
             },
             "maxItems": 20,
+            "title": "Evidence Refs",
             "type": "array"
           },
           "message": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Message",
             "type": "string"
           },
           "severity": {
@@ -1062,6 +974,7 @@
               "warning",
               "info"
             ],
+            "title": "Severity",
             "type": "string"
           }
         },
@@ -1070,6 +983,7 @@
           "code",
           "message"
         ],
+        "title": "GuideProposalFinding",
         "type": "object"
       },
       "GuideProposalRequirement": {
@@ -1077,33 +991,14 @@
         "description": "Keep requirement semantics without returning runtime document selectors.",
         "properties": {
           "check_specification": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CheckSpecification"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Typed implementation and test handoff inferred from the required outcome for every supported or capability-gap PRE or POST requirement."
+            "$ref": "#/components/schemas/CheckSpecification"
           },
           "classification_rationale": {
-            "anyOf": [
-              {
-                "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
-                "maxLength": 1000,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Explain the selected ownership and, for a staged check, why its work and runtime fit PRE or POST."
-          },
-          "disposition": {
-            "$ref": "#/components/schemas/RequirementDisposition",
-            "description": "Infer checkable requirements from observable outcomes even when the guide does not call them automated. Use supported_pre_submit for static or other bounded checks that reliably complete within 60 seconds, and supported_post_submit for longer background evaluation. Use the matching capability gap when the required implementation is unavailable; a gap keeps the proposal warning-ready but blocks activation. Use human_review only for retained historical evidence only. Newly generated requirements are limited to PRE and POST checks, exact platform coverage and check-definition blockers. Do not propose human-review or project-management policy. Revision explanation, rerun evidence and objective preservation remain separately checkable work requirements, not lifecycle. A guide_blocker requires guide_blocked and no artifact policy."
+            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Classification Rationale",
+            "type": "string"
           },
           "evidence_refs": {
             "default": [],
@@ -1111,34 +1006,33 @@
               "$ref": "#/components/schemas/GuideProposalEvidenceLocation"
             },
             "maxItems": 20,
+            "title": "Evidence Refs",
             "type": "array"
           },
-          "platform_coverage": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlatformCoverageRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "requirement_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
+          "stage": {
+            "$ref": "#/components/schemas/CompilationStage"
           },
           "statement": {
             "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
             "maxLength": 1000,
             "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "suggestion_id": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "title": "Suggestion Id",
             "type": "string"
           }
         },
         "required": [
-          "requirement_id",
+          "suggestion_id",
           "statement",
-          "disposition"
+          "stage",
+          "classification_rationale",
+          "check_specification"
         ],
+        "title": "GuideProposalRequirement",
         "type": "object"
       },
       "GuideProposalReviewPackage": {
@@ -1158,9 +1052,11 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Policy Status"
           },
           "current": {
+            "title": "Current",
             "type": "boolean"
           },
           "current_approval_operation_id": {
@@ -1172,7 +1068,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Current Approval Operation Id"
           },
           "current_approval_output_digest": {
             "anyOf": [
@@ -1183,7 +1080,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Current Approval Output Digest"
           },
           "post_submit_policy_id": {
             "anyOf": [
@@ -1194,7 +1092,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Post Submit Policy Id"
           },
           "result": {
             "$ref": "#/components/schemas/GuideProposalDisplayResult"
@@ -1204,6 +1103,7 @@
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Target Digest",
             "type": "string"
           },
           "warning_hashes": {
@@ -1211,6 +1111,7 @@
               "pattern": "^sha256:[0-9a-f]{64}$",
               "type": "string"
             },
+            "title": "Warning Hashes",
             "type": "array"
           }
         },
@@ -1222,47 +1123,7 @@
           "artifact_policy_status",
           "warning_hashes"
         ],
-        "type": "object"
-      },
-      "GuideProposalSuggestion": {
-        "additionalProperties": false,
-        "description": "An engineering suggestion retains its evidence's display location.",
-        "properties": {
-          "evidence_refs": {
-            "items": {
-              "$ref": "#/components/schemas/GuideProposalEvidenceLocation"
-            },
-            "maxItems": 20,
-            "minItems": 1,
-            "type": "array"
-          },
-          "rationale": {
-            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
-          },
-          "requirement_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/CompilationStage"
-          },
-          "title": {
-            "description": "Plain prose only. No URLs, email addresses, credentials, filesystem paths, slash-separated words, code, or executable command names. Spell alternatives with words (for example, 'training and evaluation', not a slash expression). Describe shell instructions and module loading without literal command tokens. Source-defined field identifiers, types, numeric constraints and constants may be described explicitly; put file and directory paths in typed relative_path inputs.",
-            "maxLength": 1000,
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": [
-          "requirement_id",
-          "stage",
-          "title",
-          "rationale",
-          "evidence_refs"
-        ],
+        "title": "GuideProposalReviewPackage",
         "type": "object"
       },
       "GuideProposalTarget": {
@@ -1278,7 +1139,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Policy Hash"
           },
           "artifact_policy_id": {
             "anyOf": [
@@ -1289,7 +1151,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Policy Id"
           },
           "artifact_projection_operation_id": {
             "anyOf": [
@@ -1300,7 +1163,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Projection Operation Id"
           },
           "artifact_projection_output_digest": {
             "anyOf": [
@@ -1311,10 +1175,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Projection Output Digest"
           },
           "compilation_id": {
             "format": "uuid",
+            "title": "Compilation Id",
             "type": "string"
           },
           "component_hashes": {
@@ -1322,81 +1188,59 @@
           },
           "finalization_facts_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Finalization Facts Digest",
             "type": "string"
           },
           "finalization_id": {
             "format": "uuid",
+            "title": "Finalization Id",
             "type": "string"
           },
           "guide_id": {
             "format": "uuid",
+            "title": "Guide Id",
             "type": "string"
           },
           "guide_version": {
             "maxLength": 50,
             "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "post_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "pre_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
+            "title": "Guide Version",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           },
           "result_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Result Hash",
+            "type": "string"
+          },
+          "result_schema_version": {
+            "const": "project_guide_check_specification.v1",
+            "default": "project_guide_check_specification.v1",
+            "title": "Result Schema Version",
             "type": "string"
           },
           "setup_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Setup Generation",
             "type": "integer"
           },
           "setup_run_id": {
             "format": "uuid",
+            "title": "Setup Run Id",
             "type": "string"
           },
           "source_snapshot_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Source Snapshot Hash",
             "type": "string"
           },
           "source_snapshot_id": {
             "format": "uuid",
+            "title": "Source Snapshot Id",
             "type": "string"
           }
         },
@@ -1413,19 +1257,12 @@
           "finalization_facts_digest",
           "result_hash",
           "component_hashes",
-          "pre_catalogue_id",
-          "pre_catalogue_version",
-          "pre_catalogue_schema_version",
-          "pre_catalogue_manifest_hash",
-          "post_catalogue_id",
-          "post_catalogue_version",
-          "post_catalogue_schema_version",
-          "post_catalogue_manifest_hash",
           "artifact_policy_id",
           "artifact_policy_hash",
           "artifact_projection_operation_id",
           "artifact_projection_output_digest"
         ],
+        "title": "GuideProposalTarget",
         "type": "object"
       },
       "GuidePublishedContributionSelection": {
@@ -1434,10 +1271,12 @@
         "properties": {
           "contribution_policy_id": {
             "format": "uuid",
+            "title": "Contribution Policy Id",
             "type": "string"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
             "type": "string"
           }
         },
@@ -1445,6 +1284,7 @@
           "contribution_policy_id",
           "contribution_policy_version_id"
         ],
+        "title": "GuidePublishedContributionSelection",
         "type": "object"
       },
       "JsonValue": {},
@@ -1456,10 +1296,12 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
+            "title": "Configuration",
             "type": "object"
           },
           "configuration_sha256": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Configuration Sha256",
             "type": "string"
           },
           "registry": {
@@ -1468,6 +1310,7 @@
           "requirement_id": {
             "maxLength": 100,
             "minLength": 1,
+            "title": "Requirement Id",
             "type": "string"
           },
           "stage": {
@@ -1475,6 +1318,7 @@
               "pre_submit",
               "post_submit"
             ],
+            "title": "Stage",
             "type": "string"
           }
         },
@@ -1485,6 +1329,7 @@
           "configuration",
           "configuration_sha256"
         ],
+        "title": "LockedExternalCheckerBinding",
         "type": "object"
       },
       "LockedExternalPostSubmitPolicy": {
@@ -1495,15 +1340,18 @@
             "items": {
               "$ref": "#/components/schemas/LockedExternalCheckerBinding"
             },
+            "title": "Entries",
             "type": "array"
           },
           "policy_sha256": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Policy Sha256",
             "type": "string"
           },
           "schema_version": {
             "const": "external_post_submit_policy.v1",
             "default": "external_post_submit_policy.v1",
+            "title": "Schema Version",
             "type": "string"
           }
         },
@@ -1511,29 +1359,7 @@
           "entries",
           "policy_sha256"
         ],
-        "type": "object"
-      },
-      "PlatformCoverageRef": {
-        "additionalProperties": false,
-        "description": "Exact non-selectable phase-owner capability covering a requirement.",
-        "properties": {
-          "capability_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "capability_version": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/CompilationStage"
-          }
-        },
-        "required": [
-          "capability_id",
-          "capability_version",
-          "stage"
-        ],
+        "title": "LockedExternalPostSubmitPolicy",
         "type": "object"
       },
       "PostPolicyReviewPackage_LockedExternalPostSubmitPolicy_": {
@@ -1551,7 +1377,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Approval Operation Id"
           },
           "correction": {
             "anyOf": [
@@ -1564,6 +1391,7 @@
             ]
           },
           "current": {
+            "title": "Current",
             "type": "boolean"
           },
           "lifecycle_status": {
@@ -1572,6 +1400,7 @@
               "approved",
               "superseded"
             ],
+            "title": "Lifecycle Status",
             "type": "string"
           },
           "policy": {
@@ -1594,6 +1423,7 @@
           "approval_operation_id",
           "correction"
         ],
+        "title": "PostPolicyReviewPackage[LockedExternalPostSubmitPolicy]",
         "type": "object"
       },
       "PostPolicyTarget": {
@@ -1602,10 +1432,12 @@
         "properties": {
           "policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Policy Hash",
             "type": "string"
           },
           "policy_id": {
             "format": "uuid",
+            "title": "Policy Id",
             "type": "string"
           },
           "predecessor_policy_id": {
@@ -1617,10 +1449,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Predecessor Policy Id"
           },
           "projection_operation_id": {
             "format": "uuid",
+            "title": "Projection Operation Id",
             "type": "string"
           },
           "proposal": {
@@ -1631,6 +1465,7 @@
           },
           "upstream_output_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Upstream Output Digest",
             "type": "string"
           }
         },
@@ -1642,94 +1477,8 @@
           "projection_operation_id",
           "policy_hash"
         ],
+        "title": "PostPolicyTarget",
         "type": "object"
-      },
-      "PostSubmissionBindingProposal": {
-        "additionalProperties": false,
-        "description": "Reference work evaluation capability with its own typed configuration.",
-        "properties": {
-          "capability_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "capability_version": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "parameters": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/CapabilityParameter"
-            },
-            "maxItems": 50,
-            "type": "array"
-          },
-          "requirement_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/CompilationStage"
-          }
-        },
-        "required": [
-          "requirement_id",
-          "capability_id",
-          "capability_version",
-          "stage"
-        ],
-        "type": "object"
-      },
-      "PreSubmissionBindingProposal": {
-        "additionalProperties": false,
-        "description": "Reference an external intake image with approved typed configuration.",
-        "properties": {
-          "capability_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "capability_version": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "parameters": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/CapabilityParameter"
-            },
-            "maxItems": 50,
-            "type": "array"
-          },
-          "requirement_id": {
-            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
-            "type": "string"
-          },
-          "stage": {
-            "$ref": "#/components/schemas/CompilationStage"
-          }
-        },
-        "required": [
-          "requirement_id",
-          "capability_id",
-          "capability_version",
-          "stage"
-        ],
-        "type": "object"
-      },
-      "RequirementDisposition": {
-        "description": "Closed trusted classifications for one atomic guide requirement.",
-        "enum": [
-          "platform_covered",
-          "supported_pre_submit",
-          "pre_submit_capability_gap",
-          "supported_post_submit",
-          "post_submit_capability_gap",
-          "human_review",
-          "project_lifecycle_policy",
-          "guide_blocker",
-          "informational"
-        ],
-        "type": "string"
       },
       "SubmissionArtifactPolicyProposal": {
         "additionalProperties": false,
@@ -1743,6 +1492,7 @@
               "const": "artifact",
               "type": "string"
             },
+            "title": "Allowed Storage Schemes",
             "type": "array"
           },
           "attestation_terms": {
@@ -1755,6 +1505,7 @@
               "type": "string"
             },
             "maxItems": 50,
+            "title": "Attestation Terms",
             "type": "array"
           },
           "forbidden_artifacts": {
@@ -1766,6 +1517,7 @@
               "type": "string"
             },
             "maxItems": 100,
+            "title": "Forbidden Artifacts",
             "type": "array"
           },
           "maximum_archive_entries": {
@@ -1778,7 +1530,8 @@
                 "type": "null"
               }
             ],
-            "description": "Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply."
+            "description": "Maximum normalized outer ZIP entries, counting files and directory entries including implied parent directories. Omitting a directory record cannot evade the limit. Nested archives count as files, not recursively expanded members. Null adds no project limit; platform safety limits always apply.",
+            "title": "Maximum Archive Entries"
           },
           "maximum_archive_size_bytes": {
             "anyOf": [
@@ -1790,7 +1543,8 @@
                 "type": "null"
               }
             ],
-            "description": "Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply."
+            "description": "Maximum verified byte count of the entire submitted compressed ZIP, including archive metadata; not expanded contents or summed compressed member sizes. Null adds no project limit; platform safety limits always apply.",
+            "title": "Maximum Archive Size Bytes"
           },
           "maximum_file_size_bytes": {
             "anyOf": [
@@ -1803,7 +1557,8 @@
                 "type": "null"
               }
             ],
-            "description": "Project-specific maximum expanded bytes per submitted file. Null adds no project limit; platform safety limits always apply."
+            "description": "Project-specific maximum expanded bytes per submitted file. Null adds no project limit; platform safety limits always apply.",
+            "title": "Maximum File Size Bytes"
           },
           "maximum_package_size_bytes": {
             "anyOf": [
@@ -1816,11 +1571,13 @@
                 "type": "null"
               }
             ],
-            "description": "Project-specific maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes. Null adds no project limit; platform safety limits always apply."
+            "description": "Project-specific maximum total expanded bytes in the submitted ZIP, verified from actual contents; not compressed upload bytes. Null adds no project limit; platform safety limits always apply.",
+            "title": "Maximum Package Size Bytes"
           },
           "packaging": {
             "const": "zip",
             "default": "zip",
+            "title": "Packaging",
             "type": "string"
           },
           "required_artifacts": {
@@ -1832,6 +1589,7 @@
               "type": "string"
             },
             "maxItems": 100,
+            "title": "Required Artifacts",
             "type": "array"
           },
           "required_evidence": {
@@ -1844,9 +1602,11 @@
               "type": "string"
             },
             "maxItems": 100,
+            "title": "Required Evidence",
             "type": "array"
           }
         },
+        "title": "SubmissionArtifactPolicyProposal",
         "type": "object"
       }
     }
@@ -1861,6 +1621,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Project Id",
           "type": "string"
         }
       },
@@ -1870,6 +1631,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Guide Id",
           "type": "string"
         }
       },
@@ -1879,6 +1641,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Compilation Id",
           "type": "string"
         }
       },
@@ -1888,6 +1651,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Policy Id",
           "type": "string"
         }
       },
@@ -2170,6 +1934,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}/post-submission-policies/{policy_id}",
-    "repository_sha": "9e38a8491f3497702c7395bb24260433ea8b4199"
+    "repository_sha": "234a3ec9d8028f1035c4b2a20269619708ba82de"
   }
 }

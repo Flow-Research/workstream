@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "9a8fa0b025bfd8eb59acef953f8a3b6afedfc3ef80071d5fd21acaa372e6b2df",
+  "canonical_sha256": "ca1c9607fb3b39aaf32ac51cfbee9664868f01708bb7b5483cf139647dec137f",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,19 +7,24 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
+            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
+            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
+            "title": "Details",
             "type": "object"
           },
           "message": {
+            "title": "Message",
             "type": "string"
           },
           "retryable": {
+            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -30,6 +35,7 @@
           "correlation_id",
           "retryable"
         ],
+        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -42,7 +48,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Detail"
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -51,6 +58,7 @@
         "required": [
           "error"
         ],
+        "title": "ApiErrorResponse",
         "type": "object"
       },
       "CompilationComponentHashes": {
@@ -59,30 +67,33 @@
         "properties": {
           "artifact_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "capability_suggestions_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Policy Hash",
             "type": "string"
           },
           "post_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Post Submit Hash",
             "type": "string"
           },
           "pre_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Pre Submit Hash",
             "type": "string"
           },
           "requirement_inventory_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Requirement Inventory Hash",
             "type": "string"
           },
-          "setup_notes_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
+          "schema_version": {
+            "const": "project_guide_check_specification_hashes.v1",
+            "default": "project_guide_check_specification_hashes.v1",
+            "title": "Schema Version",
             "type": "string"
           },
           "sufficiency_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Sufficiency Hash",
             "type": "string"
           }
         },
@@ -91,10 +102,9 @@
           "artifact_policy_hash",
           "requirement_inventory_hash",
           "pre_submit_hash",
-          "post_submit_hash",
-          "capability_suggestions_hash",
-          "setup_notes_hash"
+          "post_submit_hash"
         ],
+        "title": "CompilationComponentHashes",
         "type": "object"
       },
       "GuideActivationCommand": {
@@ -103,10 +113,12 @@
         "properties": {
           "contribution_policy_id": {
             "format": "uuid",
+            "title": "Contribution Policy Id",
             "type": "string"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
             "type": "string"
           },
           "expected_previous_active_guide_generation": {
@@ -118,7 +130,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Generation"
           },
           "expected_previous_active_guide_id": {
             "anyOf": [
@@ -129,22 +142,27 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Id"
           },
           "guide_mutation_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Guide Mutation Generation",
             "type": "integer"
           },
           "idempotency_key": {
             "format": "uuid",
+            "title": "Idempotency Key",
             "type": "string"
           },
           "post_approval_operation_id": {
             "format": "uuid",
+            "title": "Post Approval Operation Id",
             "type": "string"
           },
           "post_approval_output_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Post Approval Output Digest",
             "type": "string"
           },
           "review": {
@@ -170,6 +188,7 @@
           "expected_previous_active_guide_generation",
           "idempotency_key"
         ],
+        "title": "GuideActivationCommand",
         "type": "object"
       },
       "GuideActivationInput": {
@@ -178,10 +197,12 @@
         "properties": {
           "contribution_policy_id": {
             "format": "uuid",
+            "title": "Contribution Policy Id",
             "type": "string"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
             "type": "string"
           },
           "expected_previous_active_guide_generation": {
@@ -193,7 +214,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Generation"
           },
           "expected_previous_active_guide_id": {
             "anyOf": [
@@ -204,18 +226,22 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Expected Previous Active Guide Id"
           },
           "guide_mutation_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Guide Mutation Generation",
             "type": "integer"
           },
           "post_approval_operation_id": {
             "format": "uuid",
+            "title": "Post Approval Operation Id",
             "type": "string"
           },
           "post_approval_output_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Post Approval Output Digest",
             "type": "string"
           },
           "review": {
@@ -240,6 +266,7 @@
           "expected_previous_active_guide_id",
           "expected_previous_active_guide_generation"
         ],
+        "title": "GuideActivationInput",
         "type": "object"
       },
       "GuideActivationReceipt": {
@@ -248,6 +275,7 @@
         "properties": {
           "activation_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Activation Generation",
             "type": "integer"
           },
           "command": {
@@ -258,10 +286,12 @@
           },
           "effective_at": {
             "format": "date-time",
+            "title": "Effective At",
             "type": "string"
           },
           "operation_id": {
             "format": "uuid",
+            "title": "Operation Id",
             "type": "string"
           },
           "prior_project_status": {
@@ -269,6 +299,7 @@
               "draft",
               "active"
             ],
+            "title": "Prior Project Status",
             "type": "string"
           }
         },
@@ -280,6 +311,7 @@
           "effective_at",
           "prior_project_status"
         ],
+        "title": "GuideActivationReceipt",
         "type": "object"
       },
       "GuideContributionPolicyFacts": {
@@ -291,30 +323,37 @@
               "format": "uuid",
               "type": "string"
             },
+            "title": "Adapter Binding Ids",
             "type": "array"
           },
           "contribution_policy_id": {
             "format": "uuid",
+            "title": "Contribution Policy Id",
             "type": "string"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           },
           "purpose": {
             "const": "guide_activation",
+            "title": "Purpose",
             "type": "string"
           },
           "rules_and_definitions_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Rules And Definitions Digest",
             "type": "string"
           },
           "version_number": {
             "exclusiveMinimum": 0.0,
+            "title": "Version Number",
             "type": "integer"
           }
         },
@@ -327,6 +366,7 @@
           "rules_and_definitions_digest",
           "adapter_binding_ids"
         ],
+        "title": "GuideContributionPolicyFacts",
         "type": "object"
       },
       "GuidePolicySelection": {
@@ -335,14 +375,17 @@
         "properties": {
           "generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Generation",
             "type": "integer"
           },
           "policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Policy Hash",
             "type": "string"
           },
           "policy_id": {
             "format": "uuid",
+            "title": "Policy Id",
             "type": "string"
           }
         },
@@ -351,6 +394,7 @@
           "generation",
           "policy_hash"
         ],
+        "title": "GuidePolicySelection",
         "type": "object"
       },
       "GuideProposalApprovalReceipt": {
@@ -363,38 +407,47 @@
               "type": "string"
             },
             "maxItems": 200,
+            "title": "Acknowledged Warning Hashes",
             "type": "array"
           },
           "artifact_policy_id": {
             "format": "uuid",
+            "title": "Artifact Policy Id",
             "type": "string"
           },
           "effective_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Effective Policy Hash",
             "type": "string"
           },
           "effective_policy_id": {
             "format": "uuid",
+            "title": "Effective Policy Id",
             "type": "string"
           },
           "effective_pre_submit_plan_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Effective Pre Submit Plan Hash",
             "type": "string"
           },
           "operation_id": {
             "format": "uuid",
+            "title": "Operation Id",
             "type": "string"
           },
           "pre_submit_bundle_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Pre Submit Bundle Hash",
             "type": "string"
           },
           "pre_submit_policy_id": {
             "format": "uuid",
+            "title": "Pre Submit Policy Id",
             "type": "string"
           },
           "target_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Target Digest",
             "type": "string"
           }
         },
@@ -409,6 +462,7 @@
           "effective_pre_submit_plan_hash",
           "acknowledged_warning_hashes"
         ],
+        "title": "GuideProposalApprovalReceipt",
         "type": "object"
       },
       "GuideProposalTarget": {
@@ -424,7 +478,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Policy Hash"
           },
           "artifact_policy_id": {
             "anyOf": [
@@ -435,7 +490,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Policy Id"
           },
           "artifact_projection_operation_id": {
             "anyOf": [
@@ -446,7 +502,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Projection Operation Id"
           },
           "artifact_projection_output_digest": {
             "anyOf": [
@@ -457,10 +514,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Artifact Projection Output Digest"
           },
           "compilation_id": {
             "format": "uuid",
+            "title": "Compilation Id",
             "type": "string"
           },
           "component_hashes": {
@@ -468,81 +527,59 @@
           },
           "finalization_facts_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Finalization Facts Digest",
             "type": "string"
           },
           "finalization_id": {
             "format": "uuid",
+            "title": "Finalization Id",
             "type": "string"
           },
           "guide_id": {
             "format": "uuid",
+            "title": "Guide Id",
             "type": "string"
           },
           "guide_version": {
             "maxLength": 50,
             "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "post_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "pre_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
+            "title": "Guide Version",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           },
           "result_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Result Hash",
+            "type": "string"
+          },
+          "result_schema_version": {
+            "const": "project_guide_check_specification.v1",
+            "default": "project_guide_check_specification.v1",
+            "title": "Result Schema Version",
             "type": "string"
           },
           "setup_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Setup Generation",
             "type": "integer"
           },
           "setup_run_id": {
             "format": "uuid",
+            "title": "Setup Run Id",
             "type": "string"
           },
           "source_snapshot_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Source Snapshot Hash",
             "type": "string"
           },
           "source_snapshot_id": {
             "format": "uuid",
+            "title": "Source Snapshot Id",
             "type": "string"
           }
         },
@@ -559,19 +596,12 @@
           "finalization_facts_digest",
           "result_hash",
           "component_hashes",
-          "pre_catalogue_id",
-          "pre_catalogue_version",
-          "pre_catalogue_schema_version",
-          "pre_catalogue_manifest_hash",
-          "post_catalogue_id",
-          "post_catalogue_version",
-          "post_catalogue_schema_version",
-          "post_catalogue_manifest_hash",
           "artifact_policy_id",
           "artifact_policy_hash",
           "artifact_projection_operation_id",
           "artifact_projection_output_digest"
         ],
+        "title": "GuideProposalTarget",
         "type": "object"
       },
       "PostPolicyTarget": {
@@ -580,10 +610,12 @@
         "properties": {
           "policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Policy Hash",
             "type": "string"
           },
           "policy_id": {
             "format": "uuid",
+            "title": "Policy Id",
             "type": "string"
           },
           "predecessor_policy_id": {
@@ -595,10 +627,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Predecessor Policy Id"
           },
           "projection_operation_id": {
             "format": "uuid",
+            "title": "Projection Operation Id",
             "type": "string"
           },
           "proposal": {
@@ -609,6 +643,7 @@
           },
           "upstream_output_digest": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Upstream Output Digest",
             "type": "string"
           }
         },
@@ -620,6 +655,7 @@
           "projection_operation_id",
           "policy_hash"
         ],
+        "title": "PostPolicyTarget",
         "type": "object"
       }
     }
@@ -634,6 +670,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Project Id",
           "type": "string"
         }
       },
@@ -643,6 +680,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Guide Id",
           "type": "string"
         }
       },
@@ -944,6 +982,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/guides/{guide_id}/activate",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "repository_sha": "234a3ec9d8028f1035c4b2a20269619708ba82de"
   }
 }

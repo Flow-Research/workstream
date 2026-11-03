@@ -33,6 +33,9 @@ def test_openapi_exposes_complete_proposal_journey():
         assert any(p["name"] == "Idempotency-Key" and p["required"] for p in paths[prefix+suffix]["post"]["parameters"])
     schemas = create_app().openapi()["components"]["schemas"]
     assert "idempotency_key" not in schemas["GuideProposalApprovalInput"]["properties"]
+    assert {"pre_submit_attachments", "post_submit_attachments"}.issubset(
+        schemas["GuideProposalApprovalInput"]["required"]
+    )
     assert "provider_idempotency_key" not in schemas["GuideProposalDispatchResponse"]["properties"]
 
 
@@ -110,7 +113,7 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
             assert denied.status_code == 404, denied.text
 
 
-@pytest.mark.parametrize("failure", ["missing_key", "invalid_key", "wrong_path", "warning", "changed_target"])
+@pytest.mark.parametrize("failure", ["missing_key", "invalid_key", "wrong_path", "warning", "changed_target", "omitted_attachments"])
 async def test_public_approval_rejects_without_writes(clean_postgres_database, failure):
     async with proposal_case(clean_postgres_database) as (_, factory, command, actor, _):
         path = proposal_path(command)
@@ -132,6 +135,9 @@ async def test_public_approval_rejects_without_writes(clean_postgres_database, f
                 expected = 404
             elif failure == "warning":
                 payload["acknowledged_warning_hashes"] = ["sha256:"+"f"*64]
+            elif failure == "omitted_attachments":
+                del payload["pre_submit_attachments"]
+                expected = 422
             else:
                 payload["target"]["result_hash"] = "sha256:"+"f"*64
             response = await client.post(path+"/pre-submission-approval", headers=headers, json=payload)
