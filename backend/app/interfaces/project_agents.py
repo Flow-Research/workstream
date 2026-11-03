@@ -710,12 +710,12 @@ def canonical_project_guide_compilation_context_bytes(
 
 
 def project_guide_compilation_prompt_bytes(context: ProjectGuideCompilationContext) -> bytes:
-    """Serialize source and examples without trusted runtime settings."""
-    body = json.loads(canonical_project_guide_compilation_context_bytes(context))
-    del body["runtime_configuration"]
-    body["material"] = context.material.agent_projection()
-    if context.correction_predecessor is not None:
-        body["correction_predecessor"] = context.correction_predecessor.model_dump(mode="json")
+    """Give the model only assigned originals and task examples."""
+    context.require_correction_predecessor()
+    body = {
+        "material": context.material.agent_projection(),
+        "task_examples": [item.model_dump(mode="json") for item in context.task_examples],
+    }
     return json.dumps(
         body, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     ).encode("utf-8")
@@ -786,15 +786,6 @@ def validate_project_guide_compilation_result(
             raise ValueError("ready compilation cannot contain blocking evidence")
         if result.submission_artifact_policy is None:
             raise ValueError("draft-ready compilation requires artifact policy")
-        pre_file_inputs = {
-            item.relative_path
-            for requirement in result.requirements
-            if requirement.stage is CompilationStage.PRE_SUBMIT
-            for item in requirement.check_specification.inputs
-            if item.kind == "relative_file"
-        }
-        if not set(result.submission_artifact_policy.required_artifacts) <= pre_file_inputs:
-            raise ValueError("required artifact lacks a pre-submit check specification")
         if result.status == "draft_ready" and has_warning:
             raise ValueError("draft-ready compilation cannot contain warnings")
         if result.status == "draft_ready_with_warnings" and not has_warning:

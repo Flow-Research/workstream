@@ -1242,7 +1242,7 @@ def _rules(**overrides) -> bytes:
                       "evidence_refs": [{"document": SOURCE_SHA256, "start_page": 1, "end_page": 2}]}],
         "submission_artifact_policy": {"maximum_file_size_bytes": 1000,
                                        "maximum_package_size_bytes": 10000,
-                                       "required_artifacts": ["report.md"]},
+                                       "required_artifacts": ["submission"]},
         "requirements": [{
             "requirement_id": "report.present", "statement": "The package contains a report.",
             "stage": "pre_submit",
