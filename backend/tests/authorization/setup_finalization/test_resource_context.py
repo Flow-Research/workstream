@@ -24,7 +24,7 @@ def test_exact_fact_inventory():
     assert set(FIELDS) == {field.name for field in fields(ProjectSetupFinalizationFacts)}
 
 
-@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("field", tuple(field for field in FIELDS if field != "result_schema_version"))
 async def test_each_finalization_fact_is_bound(monkeypatch, field):
     case = Case(monkeypatch)
     async with case.prepare() as prepared:
@@ -49,8 +49,6 @@ async def test_each_finalization_fact_is_bound(monkeypatch, field):
         "requirement_inventory_hash",
         "pre_submit_hash",
         "post_submit_hash",
-        "capability_suggestions_hash",
-        "setup_notes_hash",
     ],
 )
 async def test_each_component_hash_is_bound(monkeypatch, key):
@@ -63,6 +61,16 @@ async def test_each_component_hash_is_bound(monkeypatch, key):
     async with case.prepare() as prepared:
         with pytest.raises(AuthorizationDenied):
             await prepared.validate_replay(changed, receipt.decision_event_id)
+
+
+def test_current_result_and_component_schema_versions_are_closed(monkeypatch):
+    case = Case(monkeypatch)
+    with pytest.raises(ValueError, match="result schema is invalid"):
+        replace(case.facts, result_schema_version="project_guide_check_specification.v2")
+    changed = dict(case.facts.component_hashes)
+    changed["schema_version"] = "project_guide_check_specification_hashes.v2"
+    with pytest.raises(ValueError, match="component hash values are invalid"):
+        replace(case.facts, component_hashes=tuple(sorted(changed.items())))
 
 
 @pytest.mark.parametrize(

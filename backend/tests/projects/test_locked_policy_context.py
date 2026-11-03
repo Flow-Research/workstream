@@ -71,7 +71,7 @@ async def test_false_locked_context_rechecks_approved_checker_plan(
         "pre_approval",
         "post_approval",
         "finalization",
-        "catalogue",
+        "attempt_input_hash",
         "foreign_selector",
         "foreign_project",
         "snapshot_hash",
@@ -109,9 +109,9 @@ async def test_context_rejects_missing_or_substituted_custody(
                     "request_digest",
                     "sha256:" + "a" * 64,
                 ),
-                "catalogue": (
+                "attempt_input_hash": (
                     ProjectGuideCompilationAttempt,
-                    "pre_catalogue_manifest_hash",
+                    "canonical_input_hash",
                     "sha256:" + "a" * 64,
                 ),
                 "snapshot_hash": (GuideSourceSnapshot, "manifest_json", {"wrong": True}),
@@ -245,7 +245,7 @@ async def test_context_refreshes_preloaded_custody(clean_postgres_database):
                 (GuideMutationIdempotencyRecord, "request_digest", "sha256:" + "f" * 64),
                 (
                     ProjectGuideCompilationAttempt,
-                    "pre_catalogue_manifest_hash",
+                    "canonical_input_hash",
                     "sha256:" + "f" * 64,
                 ),
                 (ProjectGuideCompilationRequestOperation, "source_snapshot_id", str(uuid4())),
