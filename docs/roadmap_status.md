@@ -58,8 +58,13 @@ and verified S3 admission/immutable Submission v1/replay passed. Its POST ended
 exist, but build export capacity failed and all 17 work-test steps were skipped.
 There is no work verdict, Revision, FinalAcceptance or ContributionRecord.
 The pending project-checker capacity/assessment repair is not deployed or covered
-by the exact `942aa11a` CI pass. Guide 24/25 failures and earlier default-intake
-proof remain retained; live work outcome, recovery and contribution evidence remain.
+by the exact `942aa11a` CI pass. A separate image `52659960` negative capacity
+probe passed with 100,000 entries/original 64 MiB: ten executed steps, seven grounded work
+skips, no resource failures, controlled replay and cleanup. Separate standard
+positive qualification on `adcf35a5` passed with two trials/four controlled model
+effects/no paid calls/no additional replay calls and complete owned runtime/
+PostgreSQL/MinIO cleanup. Prospective adoption remains pending. Guide 24/25 failures and
+earlier default-intake proof remain retained; live work outcome, recovery and contribution evidence remain.
 See [WS-EXEC-001](../.commitrail/initiatives/WS-EXEC-001/OVERVIEW.md).
 
 The artifact diagnosis API uses exact,
@@ -627,7 +632,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | CLI and terminal interface | **Public CLI clients and contributor workbench with deliberate claim** | Explicit commands retain text/JSON/noninteractive behavior. [WS-CLI-001-48](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-48.md) supplies scoped contributor reads; [WS-CLI-001-49](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-49.md) adds verified guide downloads/findings; [WS-CLI-001-50](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md) improves presentation. [WS-CLI-001-51](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md) adds direct navigation and exact confirmed claim with caller-owned saved keys, explicit replay and honest unknown outcomes | ZIP preparation/Submission, automatic crash recovery and management remain separate TUI boundaries. Contribution Evidence remains an inert CLI handoff pending a typed single-page port. Protected publication and hosted journey proof remain separate operational claims |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
 | Runtime diagnostics | **Implemented foundation; release configuration prepared** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional typed OTLP export; hosted composition accepts only an optional HTTPS collector origin and keeps exporter outage outside product correctness | Restrict broker publishers and secure log access, encryption and finite deletion; prove actual-service privacy/correlation. Recorded hosted configuration disables export. If an approved collector is enabled, qualify its access, egress, retention and outage behavior; absence is not an outage pass and optional collector deployment is not a first-journey prerequisite |
-| Frontend and pilot | **Partial hosted backend journey; live POST work pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. The earlier five-task import remains historical; guide 24 used a fresh task claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Guide 26 reached approved policies, activation, claim, selected-PRE feedback/replay and verified S3 admission/immutable Submission v1/replay. POST ended infrastructure_failed/invalid_output; two trial receipts with export capacity failure/all 17 steps skipped do not prove completed work tests. Pending project-checker repair is not deployed. Guide 24/25 failures remain immutable; live work outcome/recovery/exact contribution evidence remain. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). Optional clients do not replace backend proof. |
+| Frontend and pilot | **Partial hosted backend journey; live POST work pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. The earlier five-task import remains historical; guide 24 used a fresh task claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Guide 26 reached approved policies, activation, claim, selected-PRE feedback/replay and verified S3 admission/immutable Submission v1/replay. POST ended infrastructure_failed/invalid_output; two trial receipts with export capacity failure/all 17 steps skipped do not prove completed work tests. Pending project-checker repair is not deployed. Controlled image `52659960` capacity probe passed with 100,000 entries/original 64 MiB, ten executed steps/seven grounded work skips and no resource failures. Separate standard positive qualification passed on `adcf35a5` with two trials/four controlled effects/no paid calls; zero additional replay calls and complete owned-service cleanup. Live work verdict remains pending. Guide 24/25 failures remain immutable; live work outcome/recovery/exact contribution evidence remain. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). Optional clients do not replace backend proof. |
 
 ## What Has Been Completed
 
@@ -1516,6 +1521,10 @@ PR #697 setup seam (guide 26 source-only setup + independent human approvals pro
   -> POST infrastructure_failed/invalid_output: export capacity failure, all 17 test steps skipped
   Pending repair: default 100,000 entries; infrastructure capacity before assessment only
     for exit0/no-signal/exportcapacity/null image+archive; task-disk/step-capacity still assessed
+  Controlled negative capacity probe: image `52659960` + 100,000 entries/original 64 MiB passed
+    ten steps ran/seven grounded work skips/no resource failures
+  Separate standard positive: adcf fixture/image5265 passed in 173.08 s: two trials/four controlled effects
+    no paid calls/no additional replay calls/owned-service cleanup passed; prospective adoption pending
   Next: qualified repair -> live work verdict -> recovery -> exact contribution evidence
   Preserved: guide 25 PM correction + five default-negative/replay controls (ratio-only size case)
 
@@ -1589,7 +1598,13 @@ v0.1 is not ready until all of the following are true:
   no-signal builds with capacity-exceeded export and null candidate image/archive
   digests as infrastructure capacity before assessment. Task-disk-limit and
   step-export-capacity results remain assessable. It changes no native contract
-  and is not deployed/live-proven. Guide 24/25 failures
+  and is not deployed/live-proven. Controlled image `52659960` retry2 proves capacity with
+  100,000 entries and the original 64 MiB archive limit: ten steps ran, seven grounded
+  work skips, no resource failures, controlled replay and cleanup. The first two
+  probe tests remain failed; repaired custody-count/skip assertions do not turn
+  them into passes. Separate standard positive qualification on `adcf35a5` passed
+  in 173.08 seconds with two trials/four controlled effects/no paid inference; its
+  owned-service cleanup completed with no additional replay calls; prospective adoption remains pending. Guide 24/25 failures
   remain immutable. Live work verification, recovery and exact acceptance/contribution
   evidence remain. Preserve default-true human review and the locked automatic branch.
   The bounded local drill now covers original upload, task examples, recorded
@@ -1819,6 +1834,19 @@ tests, work verdict, Revision, FinalAcceptance or ContributionRecord. The 64 MiB
 limit, 20,000-entry profile and immutable-base lower bound of 36,596 component
 charges do not identify the first capacity branch. The pending project-checker
 capacity/assessment repair is not deployed and changes no native contract.
+Controlled image `52659960` retry2 then passed the retained negative-package capacity
+probe with 100,000 entries and original 64 MiB/2 GiB disk: archive 45,435,904 bytes,
+ten executed steps/seven graph-grounded work skips/no resource failures, two
+controlled effects and zero additional effects on replay, no paid inference and
+confirmed cleanup. The first two probe failures remain retained after custody-count
+and skip-assertion repairs. Semantic assessment was disabled. No 256 MiB deployment
+or production runtime-identity change is required by this proof. Separate standard
+positive qualification on `adcf35a5` passed in 173.08 seconds with two trials/four
+controlled effects/no paid inference/no additional replay calls and complete
+owned runtime/PostgreSQL/MinIO cleanup; fresh immutable profile/image approval
+remains pending.
+Image `52659960` was built from `6af3c7ee` with 125 focused tests; `e6935430`/`adcf35a5`
+are later fixture repairs, separate from image source and the `942aa11a` aggregate.
 
 At 02:52:03 UTC November 4, the unchanged US$10 account had US$8.757024460
 settled, zero reserved and US$1.242975540 remaining. Exact source `942aa11a`

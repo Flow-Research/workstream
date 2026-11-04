@@ -143,6 +143,23 @@ is classified as infrastructure capacity before assessment. Task-disk-limit and
 step-export-capacity results remain assessable. This changes no native contract
 and is not deployed or live-proven.
 
+A separate image `52659960` negative capacity probe passed with only plan/profile entries
+raised to 100,000: the original 64 MiB archive limit and 2 GiB disk were unchanged.
+Its 45,435,904-byte archive matched native custody; ten steps ran and seven skips
+were grounded in failed reference verification, with no resource failures. Two
+controlled model effects, no extra effects on replay, no paid inference and cleanup
+were verified. The first two probe tests remain failed after bounded fixture
+custody-count and dependency-skip assertion repairs. Semantic assessment was
+disabled: this is neither a live work verdict nor full positive qualification.
+Image `52659960` was built from `6af3c7ee` with 125 focused tests; later `e6935430`/`adcf35a5`
+fixture repairs remain separately attributed. Separate standard canonical positive
+qualification on exact `adcf35a5` passed in 173.08 seconds: two isolated trials,
+four controlled model effects, exit zero, no paid inference and zero additional
+replay calls. Owned runtime resources and isolated PostgreSQL/MinIO containers
+were removed. Fresh immutable profile/image approval and live semantic
+acceptance remain unproven; no 256 MiB deployment or production runtime-identity
+change is needed for the demonstrated capacity.
+
 Guide 24/25 failures and guide 25's explicit PM-feedback correction remain
 immutable. Earlier five default-negative/replay controls created no admission or
 Submission; the size case proves compression ratio only. Exact source `942aa11a`
