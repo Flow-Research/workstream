@@ -442,7 +442,7 @@ def _trial_authority(
         # provisioned inputs below; Rust independently charges expanded facts.
         maximum_disk_bytes=TRIAL_DISK_CEILING_BYTES,
         maximum_disk_overrun_bytes=4 * 1024 * 1024,
-        maximum_entries=20_000,
+        maximum_entries=100_000,
         maximum_entries_overrun=32,
         maximum_step_output_bytes=64 * 1024,
         maximum_observation_bytes=512 * 1024,
