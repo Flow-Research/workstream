@@ -2,17 +2,17 @@
 
 **Current rehearsal: IN PROGRESS — November 4. No complete hosted journey pass is claimed.**
 
-The deployed backend remains source `284b86cb0ce31d1387fa4b48fdcc7e8246c7298b`
-and schema `0066_guide_check_specification`. The additive POST-image rollout
-passed all phases in release
-`sha256:bb6afea7062b8312403b716baa848131de2a5c6f5025e1217648a8dcffbd24f9`;
+The deployed backend is source `466faca5e0e7e4c640c2f94e4472562618f1da71`,
+schema `0066_guide_check_specification`, release
+`sha256:79e84fa5cec3bbb3452e608bf8b1288a121dabe5be895c9a3d5942ef2fbe31bc`;
 active-marker SHA-256 is
-`902f8a016c7a1f298c5c6312181ae5946b3b6bc059b8ffebc72361ae3a15312a`.
-Canonical AWS proof and the retained-data preservation cutoff passed; five
-application services are healthy and Beat resumed. The unchanged native binary
-restarted as PID `1962586`. No migration, database reset, retained-data rewrite
-or replacement of earlier registrations occurred. Deployment evidence alone
-grants no guide approval or work verdict.
+`08d3658c9c22e0c20437248467d50a07b8e3f2244282f729e6bdb53fa79891cd`.
+Eleven actual rollout receipts verify canonical AWS proof, the retained-data
+preservation cutoff, five healthy application services and resumed Beat. The
+native binary and PID `1962586` are unchanged. No migration, database reset,
+retained-data rewrite or replacement of earlier registrations occurred. This
+backend-only repair retains the qualified POST image and guide 25's approved
+policies and working assignment; deployment alone grants no work verdict.
 
 Guide 24 `01a1a337-4ca2-71bc-b0c3-d7067c8d159d` uses the same original guide
 bytes and task example. Generation 1 produced a `draft_ready` proposal with
@@ -76,10 +76,12 @@ and complete owned runtime, PostgreSQL and MinIO cleanup. That controlled
 qualification made no paid provider calls and establishes no complete project journey.
 
 Eight new immutable `real-e1908427` POST registrations passed public POST,
-GET and exact replay. The image is now deployed through the additive release
-above; predecessor images, registrations and guide 24's locked policies and
-failed run remain intact. Backend source `284b86cb` remains distinct from POST
-image source `e1908427` and native-qualification source `a05c962f`.
+GET and exact replay. The image entered deployment through additive release
+`sha256:bb6afea7062b8312403b716baa848131de2a5c6f5025e1217648a8dcffbd24f9`
+and remains selected after the current backend-only rollout. Predecessor images,
+registrations and guide 24's locked policies and failed run remain intact.
+Backend source `466faca5` is distinct from POST image source `e1908427` and
+native-qualification source `a05c962f`.
 
 Fresh guide 25 `01a1a3b4-7b5c-744f-86cc-f35a7c5c4f23` completed normal
 setup and one explicit PM-feedback correction. Its corrected `draft_ready`
@@ -91,7 +93,8 @@ adds only `manager_feedback`. Original document identities, hashes, bytes and
 examples match, while run-scoped handles and manifests bind distinct attempts.
 No registry or image metadata entered either input. The explicit feedback
 already distinguishes objective PRE intake from qualitative/model POST work
-evaluation; a general setup-prompt clarification is not yet deployed.
+evaluation. The subsequent `466faca5` deployment includes the general prompt
+clarification; no new setup inference is credited to that deployment.
 
 The PM independently selected two unchanged PRE and eight new POST attachments;
 POST policy readback matches the exact qualified `e1408460` image entries. Separate approvals
@@ -101,32 +104,79 @@ passed creation, screening, release and claim, including exact replays;
 assignment `01a1a3c6-fa27-7b43-b2d4-05eb38846af6` is `active`, and the task is `in_progress`.
 Claim starts work atomically; there is no separate Start operation.
 
-Guide 25's first unsafe-traversal control stopped before any intake POST:
-strict public work-context JSON validation found omitted required nullable
-fields. Its write journal contains zero entries, so this is no ZIP-negative
-result. Earlier private-reader normalization of omitted Task fields was an
+Guide 25's first unsafe-traversal control originally stopped before intake POST:
+strict public work-context JSON found omitted required nullable fields, and its
+write journal remained empty. Earlier private-reader normalization was an
 observer accommodation, not proof that the advertised TASK wire contract was
-valid. The current PR repairs required-nullable output in four reads and manager
-commands, plus the public claim projection while preserving internal replay
-custody; those repairs are not yet deployed. Guide 25 has no admission,
-Submission or POST work result. Fresh intake, substantive POST, governed
-correction, acceptance and exact ContributionRecord evidence remain pending.
+valid. The deployed repair preserves required-nullable output in four reads and
+manager commands, with a closed public claim projection and unchanged internal
+replay custody. A fresh raw public context now passes strict JSON validation and
+identifies the same task/assignment; at that pre-intake read the complete PM
+project collection confirmed zero Submissions for the task.
+
+All five default-negative cases and exact same-key replays then passed: unsafe
+traversal, secret canary, symlink, malformed ZIP and compression ratio. The ten
+requests returned the intended 422 feedback between 00:35:02 and 00:42:09 UTC on
+November 4, retaining the original working assignment. No admission, Submission,
+POST evaluation or model dispatch resulted. The `size-limit` case proves compression-ratio
+enforcement only, not the maximum uploaded-byte limit. The aggregate
+`default-intake-live-proof.json` binds the exact deployed source/release and ten
+receipt hashes. Selected project-PRE negative and same-key outcome replay also
+passed: both responses returned 422 `pre_submission_checker_failed`, with
+`layout_missing_required_file` at `instruction.md` and `eligible=false`. Four
+Workstream baseline checks and the first external check passed; the second
+external layout check failed as intended. Error outcome/details match across
+replay; request correlation IDs differ normally. At that negative cutoff, the
+complete PM Submission collection had no target row and `next_cursor=null`.
+Public reads and a read-only
+SQL snapshot at 00:49:21 UTC confirm the same active assignment/task in progress,
+zero admissions, Submissions, dispatches, POST runs and model effects. The detailed
+`project-pre-proof-v2.private.json` retains this bounded proof.
+The subsequent intended POST-negative package passed preparation: the first
+202 response was `stored_pending_verification`; explicit same-key replay returned
+202 `ready`, with admission `01a1a409-3569-73cc-8fff-666e12d06429`.
+Submission creation and exact 201 replay passed with immutable v1
+`01a1a409-a2b1-7ce9-af68-57dcc19d72bb` and evaluation request
+`01a1a409-a6b2-7530-9dd1-8b34b20be532`. Initial public feedback showed
+`evaluation_pending` and checker `queued`. The subsequent bounded read-only SQL
+observation found run `01a1a409-a755-7869-bab5-b4f8072c8cb5` ended
+`infrastructure_failed / invalid_output` at 00:52:36 UTC. No work verdict or
+Revision resulted. Retained output is under diagnosis; no retry or successor is
+claimed. Submission creation supersedes the zero-Submission snapshot at 00:49:21,
+but this infrastructure failure does not establish the intended negative work
+result. Substantive POST, governed correction, acceptance and exact
+ContributionRecord evidence remain pending.
 
 At the **before-publication read-only cutoff**, the unchanged US$10 account had
 **US$8.45712428 settled, zero reserved and US$1.54287572 remaining**
 (8,457,124,280 / 0 / 1,542,875,720 nanodollars). The publisher verified those
 balances unchanged after registration. No allowance was reset. These historical
 figures follow guide 24's failed POST and precede guide 25 setup; they are not
-the current balance. A later fully settled balance has not been established.
-Pinned-rate settlement is not provider-invoice reconciliation.
+the current balance. A later settled observation is recorded separately below.
+
+At **00:50:01 UTC on November 4**, a fresh read-only observation before POST
+records the unchanged US$10 cap with **US$8.55824392 settled, zero
+reserved and US$1.44175608 remaining** (8,558,243,920 / 0 / 1,441,756,080
+nanodollars), unchanged from the settled post-correction receipt at 00:06:02 UTC.
+This is the pre-POST cutoff, not a later settlement claim. These account
+observations are not provider-invoice reconciliation. At **00:52:46 UTC**, after
+the failed POST, read-only SQL records **US$8.57363932 settled and zero reserved**,
+leaving **US$1.42636068** under the unchanged cap (8,573,639,320 / 0 /
+1,426,360,680 nanodollars). No later settlement is inferred.
 
 Exact source `a05c962f` is distinct from the retained deployed backend source.
 CI run
 [41732508593](https://github.com/Flow-Research/workstream/actions/runs/41732508593)
 passed 11,520 unique tests across 17 lanes, with zero skips/deselections and
 complete cleanup. Independent reconciliation verified the artifact and lane
-hashes against the identical tested merge tree. This aggregate does not cover
-the pending TASK wire-shape and setup-prompt repairs. Earlier runs
+hashes against the identical tested merge tree. This is parent-source evidence,
+not a passing aggregate for the deployed repair or current PR head. Current
+source `e822a022c4440914e3aa627eaab0dbc2e687df28` has the same backend/application
+trees as deployed `466faca5`; QA/test-delta review passed on `e822a022`, and
+security/architecture review passed on `466faca5`. Current backend CI
+[41746851816](https://github.com/Flow-Research/workstream/actions/runs/41746851816)
+is pending. Earlier `04437e76`/`97ad` failures or cancellations are not credited
+as passes. Earlier runs
 [41720437277](https://github.com/Flow-Research/workstream/actions/runs/41720437277)
 and [41723295868](https://github.com/Flow-Research/workstream/actions/runs/41723295868)
 were canceled after supersession and remain historical. The corrected real API
@@ -946,11 +996,11 @@ missing current-project outcomes.
 | Registry and model configuration: register/read/replay exact configured capabilities | Immutable image/config/profile identities and fresh Operator authority; registration alone does not activate | PASS | Qualified PRE and prior POST registrations are retained. Eight new immutable `real-e1908427` POST entries passed public POST/GET/exact replay. Setup input excludes registry/image metadata; human phase attachments remain a separate approval choice. |
 | Policy/activation: separate PRE/POST approval, review/revision configuration and Finance publication | Exact complete locked context before activation/READY; false policy explicitly approved | PASS | The current guide's human-selected PRE/POST policies were separately approved and activated with exact replay. Earlier guide 19 approvals remain historical. |
 | Task creation/import/screen/release: import original briefs and exercise manager operations | Exact task/source/batch receipts; locks preserved; replay creates no duplicates | IN PROGRESS | Guide 25 task creation, screening, release and claim passed with exact replays. Earlier five-task import remains historical; wider current batch scenarios remain separate. |
-| Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | IN PROGRESS | Guide 25 claim/replay reached `in_progress`. Strict work-context JSON then exposed omitted required nullable output fields before intake POST; the public serialization/claim projection repair is not deployed. Wider isolation and revocation scenarios remain. |
-| Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | IN PROGRESS | Guide 25 unsafe-traversal stopped before intake POST on invalid work-context JSON; zero write-journal entries, no negative result. Guide 19 traversal/secret blocks and warning-only pass remain historical. Fresh controls await the wire repair. |
-| Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | IN PROGRESS | Guide 24 selected PRE rejected missing root `instruction.md` with exact feedback replay, then accepted a valid structural ZIP. Guide 25 has no admission or PRE result; fresh metadata/failure controls remain. |
-| Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | IN PROGRESS | Guide 24 passed PRE/S3 verification, immutable Submission v1 creation and exact 201 replay. Guide 25 has no admission or Submission; its intake has not POSTed. |
-| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | IN PROGRESS | Guide 24's automatic POST remains `infrastructure_failed`; Submission stays `evaluation_pending` with no work findings or Revision. The repaired image passed qualification, publication and deployment, but no fresh live work verdict exists. Guide 25 is approved, activated and claimed, with no intake POST or work result yet; earlier guide 19 evidence is historical. |
+| Contributor workspace: discover/read task, claim and obtain locked guide/context | Exact grant and assignment authority; downloaded original is verified; other assignees deny | IN PROGRESS | Guide 25 claim/replay reached `in_progress`. After the backend wire repair, fresh raw public context passes strict validation and retains the same task/assignment. Wider isolation and revocation scenarios remain. |
+| Default ZIP intake: unsafe ZIP/secret/unchanged-work negative plus warning-only inputs | Blocking feedback creates no Submission and preserves valid working assignment; warnings do not block | IN PROGRESS | Guide 25 traversal, secret-canary, symlink, malformed-ZIP and compression-ratio negatives plus exact replays passed (ten intended 422 responses), with no admission/Submission/POST/model dispatch and the same working assignment. The size case proves ratio only. Current unchanged-work/warning-only proof remains separate. |
+| Project PRE: genuine layout/metadata negatives and corrected package | Actionable intended findings before Submission; exact ready admission only after complete pass | IN PROGRESS | Guide 24 missing-instruction feedback/replay and structural ZIP pass remain historical. Guide 25 selected-PRE negative and outcome replay passed: four baseline checks/first external check passed, second external check rejected missing `instruction.md` with `layout_missing_required_file` and `eligible=false`. Public+read-only SQL confirm the same working assignment and no admission/Submission/dispatch/POST/model effects. A later package passed preparation into ready admission/Submission with replay. Wider metadata/failure controls remain. |
+| Successful preparation/replay and immutable Submission | Same bytes/hash/size/manifest and locked lineage; replay reuses IDs without rerunning effects | PASS | Guide 25 preparation progressed from `202 stored_pending_verification` to same-key `202 ready` admission, then immutable Submission v1 creation and exact `201` replay with the same Submission/evaluation-request IDs. Initial feedback was evaluation_pending/checker queued; later POST infrastructure failure supplies no work verdict. |
+| Durable POST: real positive and substantive negative package | Exactly one current result with intended findings; automatic dispatch uses selected image/material | IN PROGRESS | Guide 24's automatic POST remains `infrastructure_failed`; Submission stays `evaluation_pending` with no work findings or Revision. The repaired image passed qualification, publication and deployment, but no fresh live work verdict exists. Guide 25 has immutable Submission v1 and exact replay. Its run ended `infrastructure_failed / invalid_output` at 00:52:36 UTC, with no work verdict or Revision; retained output is under diagnosis without retry or successor. Earlier guide 19 evidence is historical. |
 | Model/trial/material custody: approved profile, real assessment and isolated reference/verifier execution | Correct exact material roles, verified trial receipts and private ART call evidence; no passing substitutes | IN PROGRESS | The deployed `real-e1908427` image passed controlled native qualification on `a05c962f`: two isolated trials, four controlled model effects, no additional provider call on replay and complete cleanup. Guide 24's two paid POST calls still ended before any trial; substantive live work assessment remains pending. |
 | Model replay/recovery: duplicate delivery or permitted successor uses retained effect | No second paid create; immutable slots and once-only settlement; ambiguous effect remains held | IN PROGRESS | Native-only checker retry reattached the original completed effect without another charge; unresolved/known-no-effect recovery variants remain. |
 | False-policy success: governed acceptance and applicable conditional awards | One shared FinalAcceptance, exact submitter ContributionRecord and frozen award set atomically; no Review/reviewer contribution | NOT RUN | — |
@@ -993,10 +1043,10 @@ Keep keys, JWTs, subjects, request headers, credentials, connection/provider coo
 |---|---|
 | #576: actual PM agreement, fresh proposal and independently checked packages/material | IN PROGRESS — guide 25 source-only setup, explicit correction and independent human attachments/approvals passed. Fresh package/material and substantive live POST proof remain; see the opening checkpoint. |
 | #581: terminal retry and full request/completion/acceptance interruption matrix | IN PROGRESS — claim/Submission replay and earlier governed retry evidence remain retained. The guide 17 ART fault aborted before cancellation with successful queue cleanup; its recovery is NOT RUN. Actual UNKNOWN request/completion/acceptance and applicable failure/retry proof remain. |
-| #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — the additive rollout preserved retained data and AWS custody. Guide 24 ZIP/S3/Submission proof remains historical; guide 25 has no intake POST. Artifact failure/recovery, wider isolation/restore and final journey proof remain. |
-| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — `real-e1908427` POST passed qualification on source `a05c962f` and additive deployment, preserving backend `284b86cb` and restarting the unchanged native binary. Representative work outcomes, limits and operating scenarios remain. |
-| #555: connected real-project public/durable journey and exact final facts | IN PROGRESS — guide 25 reached approved policies, activation and claim; strict work-context validation stopped before intake POST. Guide 24 Submission/failed POST remain retained. Work verdict, governed acceptance and ContributionRecord remain. |
-| Exact candidate's required CI, focused defect regressions and applicable internal reviews | IN PROGRESS — exact `a05c962f` passed 11,520 unique tests across 17 lanes with zero skips/deselections and complete cleanup, independently reconciled. That aggregate excludes the pending TASK wire-shape and setup-prompt repairs; their final candidate checks and reviews remain separate. The earlier real API contract drill passed through claim; guide 24 reached actual Submission, while guide 25 intake has not POSTed. CodeRabbit is not credited as substantive review. |
+| #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — the additive rollout preserved retained data and AWS custody. Guide 25 now has ready admission, immutable Submission v1 and exact replay after successful preparation; earlier negative controls created no admission/Submission. Artifact failure/recovery, wider isolation/restore and final journey proof remain. |
+| #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — `real-e1908427` POST passed qualification on source `a05c962f` and additive deployment, then remained selected through backend-only `466faca5` deployment, with the native binary/PID unchanged. Representative work outcomes, limits and operating scenarios remain. |
+| #555: connected real-project public/durable journey and exact final facts | IN PROGRESS — guide 25 reached approved policies, activation and claim, then strict raw context and five default-negative/replay passes after the wire repair. Guide 25 ready admission and Submission v1/replay passed; POST ended infrastructure_failed/invalid_output without work verdict or Revision. Guide 24 Submission/failed POST remain retained. Work verdict, governed acceptance and ContributionRecord remain. |
+| Exact candidate's required CI, focused defect regressions and applicable internal reviews | IN PROGRESS — exact `a05c962f` passed 11,520 unique tests across 17 lanes with zero skips/deselections and complete cleanup, independently reconciled. That parent aggregate excludes the deployed TASK wire/prompt repair. Current `e822a022` shares deployed `466faca5` backend/app trees; current backend run41746851816 is pending. QA/test-delta passed on e822 and security/architecture on466. Earlier failed/canceled runs are not passes. Guide 25 has immutable Submission v1/replay and a retained infrastructure-failed POST; no current CI aggregate or work verdict is inferred. CodeRabbit is not credited as substantive review. |
 | Stale wording/Markdown links, affected roadmap reconciliation and local sheet constraints if exports exist | Current documentation checks passed; affected roadmap claims reconciled. No local sheet exports are present. Recheck after further changes. |
 
 No issue is closed by this draft or by a child implementation merge. Complete release reporting requires every applicable outcome above to have current evidence, no unresolved journey blocker, and documented operating/recovery limits. Unimplemented/deferred human review, payment fulfillment and reputation must remain clearly identified; they are not silently certified by the automated contribution path.

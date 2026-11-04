@@ -112,17 +112,23 @@ project rules before the authorized approval locks it.
 The project-owned [checker implementation](checkers/README.md) has qualified
 PRE and POST images. At the November 4 checkpoint, repaired POST image
 `real-e1908427` passed controlled native qualification, public registration/read/replay
-and additive deployment; backend source `284b86cb`, POST image source `e1908427`
+and additive deployment; current backend source `466faca5`, POST image source `e1908427`
 and qualification source `a05c962f` are distinct. Guide 25 completed normal
 source-only setup and explicit PM correction, independently chosen two PRE/eight
 POST attachments, separate approvals, activation and task claim/replays. Its
 corrected proposal has two PRE/seven POST advisory suggestions. Retained outbound
 request bytes prove guide material/examples only, plus feedback for correction.
-The first unsafe-traversal control stopped before intake POST on omitted required
-nullable work-context fields; the TASK wire and setup-prompt repairs are not yet
-deployed. Guide 25 has no admission, Submission or POST result. Guide 24's
-infrastructure-failed POST remains unchanged. Live work verdicts, recovery and
-exact contribution evidence remain pending.
+After the deployed wire/prompt repair, fresh raw work-context JSON passes strict
+validation. Five default-negative cases and exact replays passed, preserving the
+assignment and creating no admission, Submission or POST/model dispatch. The size
+case proves compression ratio only. Selected-PRE negative and outcome replay
+passed: baseline checks succeeded and the external layout check rejected missing
+`instruction.md`; at the negative cutoff, public/read-only SQL confirmed the
+same working assignment and no admission/Submission/POST/model effects. A later
+package reached ready admission and immutable Submission v1 with exact replay.
+POST then ended infrastructure_failed/invalid_output without a work verdict or
+Revision. Retained output is under diagnosis; no retry or successor is claimed.
+Guide 24's infrastructure-failed POST remains unchanged. Live work verdicts, recovery and exact contribution evidence remain pending.
 This input package and its image qualification do not claim a complete hosted
 journey; use the linked report for current results and historical scope.
 
