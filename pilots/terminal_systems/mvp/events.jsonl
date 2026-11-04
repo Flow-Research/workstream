@@ -1,0 +1,7 @@
+{"service":"api","status":"ok"}
+{"service":"worker","status":"error"}
+{"service":"api","status":"error"}
+{"service":"api","status":"ok"}
+{"service":"worker","status":"ok"}
+{"service":"scheduler","status":"error"}
+{"service":"worker","status":"error"}
