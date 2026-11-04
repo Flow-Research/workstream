@@ -192,7 +192,9 @@ async def exercise_manager_task_preparation(
     locked_keys = {key for key in receipts["release"] if key.startswith("locked_")}
     assert "locked_guide_version" in locked_keys
     assert {
-        key: value for key, value in receipts["create"].items() if key.startswith("locked_")
+        key: value
+        for key, value in receipts["create"].items()
+        if key.startswith("locked_")
     } == dict.fromkeys(locked_keys)
 
     foreign = await post(f"/api/v1/projects/{foreign_project}/tasks", payload, system)
