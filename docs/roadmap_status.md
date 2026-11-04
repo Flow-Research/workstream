@@ -1828,8 +1828,10 @@ work verdict or Revision; offline replay identifies mixed schema/citation errors
 yet image-qualified or deployed; no retry or successor is claimed. No FinalAcceptance or ContributionRecord exists yet. The exact
 `a05c962f` CI pass
 (11,520 tests/17 lanes, zero skipped/deselected) is parent-source evidence only.
-Current `e822a022` shares deployed `466faca5` backend/app trees; its backend run41746851816
-is pending, with no current aggregate pass claimed. Current public recovery still
+Earlier `e822a022` shares deployed `466faca5` backend/app trees; its backend run41746851816
+exposed stale nullable-field assertions in three test callers and was cancelled
+after those failures. The assertions are corrected without changing product
+behavior; fresh aggregate validation remains required. Current public recovery still
 needs a fresh guide version after a terminal setup attempt; retained attempts are
 not reset. Substantive POST/trials,
 feedback-governed correction, actual recovery/replay without extra effects and

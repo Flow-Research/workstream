@@ -277,7 +277,7 @@ async def test_zero_cap_releases_immediately_and_reclaim_resets_only_assignment_
         async with _client(h, monkeypatch, isolated_database_env) as client:
             unrelated = await client.get(f"/api/v1/tasks/{h.request.task_id}")
             assert unrelated.status_code == 200, unrelated.text
-            assert "last_assignment_outcome" not in unrelated.json()
+            assert unrelated.json()["last_assignment_outcome"] is None
             h.created = await _submit_initial_after_reclaim(h, client)
             assert h.created.submission_version == 3
         before = await _snapshot(h)

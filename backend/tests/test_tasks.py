@@ -1288,7 +1288,7 @@ async def test_task_can_be_created_in_draft(task_client: AsyncClient) -> None:
     task = await create_draft_task(task_client, project["id"])
 
     assert task["status"] == "draft"
-    assert "locked_guide_version" not in task
+    assert task["locked_guide_version"] is None
     assert task["skill_tags"] == ["stem", "proofs"]
     assert task["source_ref"] == "local-ticket-1"
     assert "required_files" not in task

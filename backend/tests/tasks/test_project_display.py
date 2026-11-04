@@ -190,7 +190,7 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
         manager_facts = {name: getattr(stored, name) for name in (
             "source_type", "source_ref", "source_payload_hash", "import_batch_id", "external_task_id",
             "created_by", "assigned_to",
-        ) if getattr(stored, name) is not None}
+        )}
     for name, expected in expected_policies.items():
         assert original[name] == expected
     await grant_development_context_roles(db_session.get_session_factory())
@@ -280,9 +280,11 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
     assert contributor.status_code == 200, contributor.text
     contributor_body, manager_body = contributor.json(), manager.json()
     assert set(contributor_body) == set(original)
-    assert set(manager_body) == set(original) - {"lifecycle", "guide_documents"}
+    assert set(manager_body) == set(original) - {"lifecycle", "guide_documents", "revision_context"}
+    assert original["revision_context"] is contributor_body["revision_context"] is None
     assert set(contributor_body["task"]) == set(original["task"])
-    assert set(manager_body["task"]) == (set(original["task"]) - {"compensation"}) | set(manager_facts)
+    assert set(manager_body["task"]) == (set(original["task"]) - {"compensation"}) | set(manager_facts) | {"revision_context"}
+    assert manager_body["task"]["revision_context"] is None
     assert {key: manager_body["task"][key] for key in manager_facts} == manager_facts
     for response in (manager_body, contributor_body):
         assert response["guide"] == original["guide"]

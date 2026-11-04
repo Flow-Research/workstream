@@ -181,13 +181,18 @@ CI run
 passed 11,520 unique tests across 17 lanes, with zero skips/deselections and
 complete cleanup. Independent reconciliation verified the artifact and lane
 hashes against the identical tested merge tree. This is parent-source evidence,
-not a passing aggregate for the deployed repair or current PR head. Current
+not a passing aggregate for the deployed repair or current PR head. Earlier
 source `e822a022c4440914e3aa627eaab0dbc2e687df28` has the same backend/application
 trees as deployed `466faca5`; QA/test-delta review passed on `e822a022`, and
-security/architecture review passed on `466faca5`. Current backend CI
+security/architecture review passed on `466faca5`. Its backend CI
 [41746851816](https://github.com/Flow-Research/workstream/actions/runs/41746851816)
-is pending. Earlier `04437e76`/`97ad` failures or cancellations are not credited
-as passes. Earlier runs
+exposed three remaining test callers that expected nullable fields to be omitted:
+draft task creation, historical contributor/manager work context, and the
+unrelated-contributor assignment-outcome projection. Their assertions now require
+explicit nulls while retaining history, privacy and policy checks. The superseded
+run was cancelled after those failures; it is not passing evidence. Fresh aggregate
+validation remains required. Earlier `04437e76`/`97ad` failures or cancellations
+are not credited as passes. Earlier runs
 [41720437277](https://github.com/Flow-Research/workstream/actions/runs/41720437277)
 and [41723295868](https://github.com/Flow-Research/workstream/actions/runs/41723295868)
 were canceled after supersession and remain historical. The corrected real API
