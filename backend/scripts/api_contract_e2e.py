@@ -993,7 +993,10 @@ async def exercise_guide_setup_contract(
         return {}
     from tests.projects.unified_policy_fixtures import approve_unified_submission_policy
     from app.modules.projects.schemas import PreSubmitCheckerPolicyResponse
-    effective_policy = await approve_unified_submission_policy(project_id, guide_id, policy["id"])
+    effective_policy = await approve_unified_submission_policy(
+        project_id, guide_id, policy["id"],
+        pre_submit_attachments=(), post_submit_attachments=(),
+    )
     async with db_session.get_session_factory()() as session:
         pre = (await session.scalars(select(PreSubmitCheckerPolicy).where(
             PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"],
@@ -2001,7 +2004,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         renewed_submitter = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants",
             headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
-            json=role_issue_body | {"reason": "Authorize the subsequent task claim/start drill"},
+            json=role_issue_body | {"reason": "Authorize the subsequent task claim drill"},
         )
         assert renewed_submitter.status_code == 201, renewed_submitter.text
         assert renewed_submitter.json()["id"] != role_grant_id
@@ -2182,6 +2185,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             {"reason": "real worker claim"},
             idempotency_key=str(uuid4()),
         )
+        assert claim["task"]["status"] == "in_progress"
         after_claim = await request_json(client, "GET", queue_paths["ready"], worker_token)
         assert task["id"] not in {item["task_id"] for item in after_claim["items"]}
         assert claim["task"]["locked_contribution_policy_version_id"] == active["contribution_policy_version_id"]
@@ -2198,14 +2202,6 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/tasks/{task['id']}",
             unassigned_worker_token,
             expected_status=404,
-        )
-        await request_json(
-            client,
-            "POST",
-            f"/api/v1/tasks/{task['id']}/start",
-            worker_token,
-            {"reason": "real worker start"},
-            idempotency_key=str(uuid4()),
         )
         active_work_context = await request_json(
             client,
@@ -2246,14 +2242,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert history["next_cursor"] is None
         assert {(event["event_type"], event["from_status"], event["to_status"]) for event in history["items"]} == {
             ("TaskCreated", None, "draft"), ("TaskScreened", "draft", "screening"),
-            ("TaskReleased", "screening", "ready"), ("TaskClaimed", "ready", "claimed"),
-            ("TaskStarted", "claimed", "in_progress"),
+            ("TaskReleased", "screening", "ready"), ("TaskClaimed", "ready", "in_progress"),
         }
         for event in history["items"]:
             assert set(event) == {"event_id", "event_type", "from_status", "to_status", "actor_id",
                                   "created_at", "assignment_id", "authorization_decision_id"}
             assert event["authorization_decision_id"]
-            if event["event_type"] in {"TaskClaimed", "TaskStarted"}:
+            if event["event_type"] == "TaskClaimed":
                 assert event["actor_id"] == canonical_actor["actor_profile_id"]
                 assert event["assignment_id"] == claim["assignment"]["id"]
             else:
@@ -2269,7 +2264,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             expected_status=404,
         )
 
-    print("Public API drill passed through authorized task claim/start; hidden submission not exercised")
+    print("Public API drill passed through authorized task claim; hidden submission not exercised")
     print(f"project_id={project['id']}")
     print(f"guide_id={guide['id']}")
     print(f"task_id={task['id']}")

@@ -157,9 +157,7 @@ async def _submit_initial_after_reclaim(h, client):
     assert claim.status_code == 200, claim.text
     assignment = UUID(claim.json()["assignment"]["id"])
     assert assignment != h.request.assignment_id
-    started = await client.post(f"/api/v1/tasks/{h.request.task_id}/start",
-                                headers={"Idempotency-Key": str(new_record_id())})
-    assert started.status_code == 200, started.text
+    assert claim.json()["task"]["status"] == "in_progress"
     h.data = revision_archive(h.data)
     headers = {"Content-Type": "application/zip", "X-Task-Assignment-Id": str(assignment),
                "Idempotency-Key": str(new_record_id()),
@@ -279,7 +277,7 @@ async def test_zero_cap_releases_immediately_and_reclaim_resets_only_assignment_
         async with _client(h, monkeypatch, isolated_database_env) as client:
             unrelated = await client.get(f"/api/v1/tasks/{h.request.task_id}")
             assert unrelated.status_code == 200, unrelated.text
-            assert "last_assignment_outcome" not in unrelated.json()
+            assert unrelated.json()["last_assignment_outcome"] is None
             h.created = await _submit_initial_after_reclaim(h, client)
             assert h.created.submission_version == 3
         before = await _snapshot(h)

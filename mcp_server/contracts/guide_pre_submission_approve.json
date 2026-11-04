@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "dd360d4cc0f8020a0ba061aade22d85e7b5704916c236968654fd17cb042794b",
+  "canonical_sha256": "690119502ed43be6bef23eaf8d4312a376ed6e8d98b5c225d9a477aaba1155a2",
   "components": {
     "schemas": {
       "ApiError": {
@@ -61,10 +61,6 @@
             "pattern": "^sha256:[0-9a-f]{64}$",
             "type": "string"
           },
-          "capability_suggestions_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
           "post_submit_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
             "type": "string"
@@ -77,8 +73,9 @@
             "pattern": "^sha256:[0-9a-f]{64}$",
             "type": "string"
           },
-          "setup_notes_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
+          "schema_version": {
+            "const": "project_guide_check_specification_hashes.v1",
+            "default": "project_guide_check_specification_hashes.v1",
             "type": "string"
           },
           "sufficiency_hash": {
@@ -91,9 +88,38 @@
           "artifact_policy_hash",
           "requirement_inventory_hash",
           "pre_submit_hash",
-          "post_submit_hash",
-          "capability_suggestions_hash",
-          "setup_notes_hash"
+          "post_submit_hash"
+        ],
+        "type": "object"
+      },
+      "ExternalCheckerImageAttachment": {
+        "additionalProperties": false,
+        "description": "One human-selected execution member of a project's PRE or POST phase.",
+        "properties": {
+          "configuration": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object"
+          },
+          "registry_entry_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "registry_entry_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requirement_id": {
+            "pattern": "^[a-z][a-z0-9_.-]{0,99}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirement_id",
+          "registry_entry_id",
+          "registry_entry_digest",
+          "configuration"
         ],
         "type": "object"
       },
@@ -132,12 +158,28 @@
               }
             ]
           },
+          "post_submit_attachments": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
+          "pre_submit_attachments": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
+            },
+            "maxItems": 200,
+            "type": "array"
+          },
           "target": {
             "$ref": "#/components/schemas/GuideProposalTarget"
           }
         },
         "required": [
-          "target"
+          "target",
+          "pre_submit_attachments",
+          "post_submit_attachments"
         ],
         "type": "object"
       },
@@ -271,50 +313,17 @@
             "minLength": 1,
             "type": "string"
           },
-          "post_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "post_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "post_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_id": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_manifest_hash": {
-            "pattern": "^sha256:[0-9a-f]{64}$",
-            "type": "string"
-          },
-          "pre_catalogue_schema_version": {
-            "maxLength": 160,
-            "minLength": 1,
-            "type": "string"
-          },
-          "pre_catalogue_version": {
-            "maxLength": 100,
-            "minLength": 1,
-            "type": "string"
-          },
           "project_id": {
             "format": "uuid",
             "type": "string"
           },
           "result_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "result_schema_version": {
+            "const": "project_guide_check_specification.v1",
+            "default": "project_guide_check_specification.v1",
             "type": "string"
           },
           "setup_generation": {
@@ -347,21 +356,14 @@
           "finalization_facts_digest",
           "result_hash",
           "component_hashes",
-          "pre_catalogue_id",
-          "pre_catalogue_version",
-          "pre_catalogue_schema_version",
-          "pre_catalogue_manifest_hash",
-          "post_catalogue_id",
-          "post_catalogue_version",
-          "post_catalogue_schema_version",
-          "post_catalogue_manifest_hash",
           "artifact_policy_id",
           "artifact_policy_hash",
           "artifact_projection_operation_id",
           "artifact_projection_output_digest"
         ],
         "type": "object"
-      }
+      },
+      "JsonValue": {}
     }
   },
   "operation": {
@@ -693,6 +695,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/guides/{guide_id}/compilations/{compilation_id}/pre-submission-approval",
-    "repository_sha": "733c752f7c1ecbb74615d42b747dfbda8ff72df5"
+    "repository_sha": "234a3ec9d8028f1035c4b2a20269619708ba82de"
   }
 }

@@ -21,7 +21,7 @@ async def test_database_rejects_duplicate_approved_tip_and_allows_linked_success
 ):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
-        first = await approve(factory, command, actor, grant, GuideProposalApproval(
+        first = await approve(factory, command, actor, grant, GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
             target=package.target, idempotency_key=uuid4()))
         correction = await correct(factory, command, actor, grant, GuideProposalCorrection(
             target=package.target, idempotency_key=uuid4(), reason="Reconsider the required inputs."))
@@ -58,7 +58,7 @@ async def test_database_rejects_duplicate_approved_tip_and_allows_linked_success
                 expected_previous_approval_output_digest=next_package.current_approval_output_digest)
             expected_error = GuideProposalError if omitted_guard == "lookup" else DBAPIError
             with pytest.raises(expected_error) as error:
-                await approve(factory, successor, actor, grant, GuideProposalApproval(
+                await approve(factory, successor, actor, grant, GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
                     target=next_package.target, idempotency_key=uuid4(), **prior))
             if omitted_guard == "lookup":
                 assert error.value.code == "storage_unavailable"
@@ -74,7 +74,7 @@ async def test_database_rejects_duplicate_approved_tip_and_allows_linked_success
             assert await session.scalar(text("SELECT lifecycle_status FROM submission_artifact_policies WHERE id=:id"),
                                         {"id": str(next_package.target.artifact_policy_id)}) == "draft"
 
-        second = await approve(factory, successor, actor, grant, GuideProposalApproval(
+        second = await approve(factory, successor, actor, grant, GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
             target=next_package.target, idempotency_key=uuid4(),
             expected_previous_approval_operation_id=first.operation_id,
             expected_previous_approval_output_digest=next_package.current_approval_output_digest))

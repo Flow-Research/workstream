@@ -135,7 +135,7 @@ async def test_ready_queue_continues_after_claim(task_client, monkeypatch):
     )
     assert claimed.status_code == 200, claimed.text
     async with factory() as session:
-        assert (await session.get(WorkstreamTask, first["id"])).status == "claimed"
+        assert (await session.get(WorkstreamTask, first["id"])).status == "in_progress"
         owner = task_reads(session)
         for query in (request, replace(request, after=page.next_cursor)):
             current = await owner.read_ready_tasks(query)

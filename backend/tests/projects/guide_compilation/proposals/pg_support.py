@@ -180,15 +180,15 @@ async def proposal_case(
     classification="draft_ready",
     guide_version="v1",
     outcome=None,
-    checker_capabilities=None,
 ):
     async with database_case(
         url,
         classification=classification,
         guide_version=guide_version,
         outcome=outcome,
-        checker_capabilities=checker_capabilities,
     ) as (values, factory, command):
+        values["pre_submit_attachments"] = ()
+        values["post_submit_attachments"] = ()
         await finalize(factory, values, command)
         async with factory() as session:
             row = (
@@ -239,7 +239,7 @@ async def read_package(factory, command, actor, grant_id):
 
 
 async def request_corrected_attempt(
-    factory, actor, correction, *, capabilities=None, configuration=None
+    factory, actor, correction, *, configuration=None
 ):
     """Enter the existing production human request port; no provider is invoked."""
     from app.adapters.artifacts import guide_document_manifest_port
@@ -254,7 +254,6 @@ async def request_corrected_attempt(
         HumanAuthorizationContext,
         IdentityLinkStatus,
     )
-    from tests.checkers.external.support import capability_projection
     from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
     from app.modules.projects.guide_compilation.service import GuideCompilationService
     from tests.projects.guide_compilation.helpers import manager_runtime_configuration
@@ -277,7 +276,6 @@ async def request_corrected_attempt(
             ProjectGuideCompilationAuthorizationAdapter(kernel, prepared),
             request_inputs=CompilationRequestInputs(
                 guide_document_manifest_port(session),
-                capabilities or capability_projection(),
                 configuration or manager_runtime_configuration(),
             ),
         )
@@ -298,7 +296,6 @@ async def finalize_corrected_attempt(
         guide_sufficiency_projection_authorization,
         setup_finalization_authorization,
     )
-    from app.adapters.checkers import external_checker_capability_projection
     from app.adapters.projects import project_guide_compilation_delivery_port
     from app.modules.projects.api import ProjectGuideSetupFinalizationCommand
     from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
@@ -309,14 +306,11 @@ async def finalize_corrected_attempt(
         document_tools,
     )
 
-    async with factory() as session, session.begin():
-        capabilities = await external_checker_capability_projection(session)
     configuration = configuration or manager_runtime_configuration()
     await request_corrected_attempt(
         factory,
         actor,
         correction,
-        capabilities=capabilities,
         configuration=configuration,
     )
     async with factory() as session:
@@ -334,7 +328,6 @@ async def finalize_corrected_attempt(
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
         model_session_factory=no_model_session,
-        checker_capabilities=capabilities,
         request_authority=guide_compilation_request_authority,
         execution_authority=guide_compilation_execution_authority,
         configuration_factory=lambda: configuration,

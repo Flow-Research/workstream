@@ -1,6 +1,8 @@
 //! Invocation-local bounded session relay from a checker image to the trusted model proxy.
 
-use crate::proxy_transport::{connect_private, read_frame, write_frame};
+use crate::proxy_transport::{
+    connect_private, read_frame, read_session_frame, write_frame, SessionFrame,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -524,7 +526,7 @@ fn relay_once(
     deadline: Instant,
     cancelled: &AtomicBool,
 ) -> Result<(), String> {
-    let mut image = loop {
+    let image = loop {
         if Instant::now() >= deadline {
             return Err("model relay deadline exceeded".into());
         }
@@ -540,17 +542,41 @@ fn relay_once(
         }
     };
     drop(listener); // one bounded session: no second connection can be accepted.
+    relay_session(
+        image,
+        proxy_path,
+        grant,
+        request_digest,
+        receipt_resolver,
+        deadline,
+        cancelled,
+    )
+}
+
+fn relay_session(
+    mut image: UnixStream,
+    proxy_path: &Path,
+    grant: &ModelGrant,
+    request_digest: &str,
+    receipt_resolver: &dyn ModelReceiptResolver,
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<(), String> {
     image
         .set_nonblocking(true)
         .map_err(|_| "model relay image socket invalid")?;
     let mut next_call_index = 0_u32;
     let mut completed_calls = 0_u32;
     loop {
-        let request = match read_frame(&mut image, MODEL_FRAME_MAXIMUM, deadline, cancelled) {
-            Ok(request) => request,
-            Err(_) if cancelled.load(Ordering::Acquire) && completed_calls > 0 => return Ok(()),
-            Err(error) => return Err(error),
-        };
+        let request =
+            match read_session_frame(&mut image, MODEL_FRAME_MAXIMUM, deadline, cancelled)? {
+                SessionFrame::Frame(request) => request,
+                // A checker can finish before exhausting its allowed calls. Only an
+                // untouched next-frame boundary may close without a transport failure.
+                SessionFrame::Eof | SessionFrame::Cancelled if completed_calls > 0 => return Ok(()),
+                SessionFrame::Eof => return Err("model relay session incomplete".into()),
+                SessionFrame::Cancelled => return Err("model relay session cancelled".into()),
+            };
         let image_request: ImageModelRequest =
             serde_json::from_slice(&request).map_err(|_| "model relay request invalid")?;
         if image_request.protocol_version != MODEL_PROXY_PROTOCOL
@@ -1043,6 +1069,167 @@ mod tests {
         assert!(!first.finish().cleanup_unsettled);
         assert!(!second.finish().cleanup_unsettled);
         fs::remove_file(proxy_path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    fn relay_after_one_response(response: Option<&[u8]>) -> (PathBuf, InvocationRelay, UnixStream) {
+        let root = private_root();
+        let proxy_path = root.join("proxy.sock");
+        let proxy = UnixListener::bind(&proxy_path).unwrap();
+        fs::set_permissions(&proxy_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let owner = fs::metadata(&root).unwrap();
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let grant = ModelGrant {
+            grant_id: format!("model_{}", "1".repeat(32)),
+            binding_digest: digest.clone(),
+        };
+        let relay = InvocationRelay::start(
+            &root,
+            &proxy_path,
+            &grant,
+            &digest,
+            owner.uid(),
+            owner.gid(),
+            Instant::now() + Duration::from_secs(2),
+        )
+        .unwrap();
+        let mut image = UnixStream::connect(relay.socket_path()).unwrap();
+        frame(&mut image, br#"{"protocol_version":"workstream.model_session.v2","operation":"call","call_index":0,"prompt":"bounded","required_receipt_handles":[]}"#);
+        let (mut backend, _) = proxy.accept().unwrap();
+        let _ = receive(&mut backend);
+        if let Some(response) = response {
+            frame(&mut backend, response);
+            assert_eq!(receive(&mut image), response);
+        }
+        (root, relay, image)
+    }
+
+    #[test]
+    fn completed_non_exhausted_session_allows_clean_eof_but_rejects_partial_next_frames() {
+        let response = format!(
+            r#"{{"protocol_version":"{MODEL_PROXY_PROTOCOL}","outcome":"completed","output":"bounded","receipt_digest":"sha256:{}","failure_code":null,"call_index":0,"session_exhausted":false}}"#,
+            "b".repeat(64)
+        );
+        for trailing in [
+            &[][..],
+            &[0, 0][..],
+            &[0, 0, 0, 2, b'{'][..],
+            &[0, 0, 0, 2, b'{', b'}'][..],
+        ] {
+            let (root, mut relay, mut image) = relay_after_one_response(Some(response.as_bytes()));
+            image.write_all(trailing).unwrap();
+            drop(image);
+            // Observe the actual worker result before finish can cancel an idle read.
+            let result = relay.worker.take().unwrap().join().unwrap();
+            assert_eq!(
+                result.is_ok(),
+                trailing.is_empty(),
+                "trailing frame: {trailing:?}"
+            );
+            assert!(!relay.finish().cleanup_unsettled);
+            fs::remove_file(root.join("proxy.sock")).unwrap();
+            fs::remove_dir(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn finish_cancellation_rejects_partial_next_frame_after_a_completed_response() {
+        use std::os::fd::AsRawFd;
+        for partial in [&[][..], &[0, 0][..], &[0, 0, 0, 2, b'{'][..]] {
+            let root = private_root();
+            let proxy_path = root.join("proxy.sock");
+            let proxy = UnixListener::bind(&proxy_path).unwrap();
+            fs::set_permissions(&proxy_path, fs::Permissions::from_mode(0o600)).unwrap();
+            let digest = format!("sha256:{}", "a".repeat(64));
+            let grant = ModelGrant {
+                grant_id: format!("model_{}", "1".repeat(32)),
+                binding_digest: digest.clone(),
+            };
+            let (mut image, receiver) = UnixStream::pair().unwrap();
+            let observer = receiver.try_clone().unwrap();
+            let cancelled = Arc::new(AtomicBool::new(false));
+            let worker_cancelled = Arc::clone(&cancelled);
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let worker = thread::spawn(move || {
+                relay_session(
+                    receiver,
+                    &proxy_path,
+                    &grant,
+                    &digest,
+                    &InvocationReceiptRegistry::default(),
+                    deadline,
+                    &worker_cancelled,
+                )
+            });
+            frame(&mut image, br#"{"protocol_version":"workstream.model_session.v2","operation":"call","call_index":0,"prompt":"bounded","required_receipt_handles":[]}"#);
+            let (mut backend, _) = proxy.accept().unwrap();
+            let _ = receive(&mut backend);
+            let response = format!(
+                r#"{{"protocol_version":"{MODEL_PROXY_PROTOCOL}","outcome":"completed","output":"bounded","receipt_digest":"sha256:{}","failure_code":null,"call_index":0,"session_exhausted":false}}"#,
+                "b".repeat(64)
+            );
+            frame(&mut backend, response.as_bytes());
+            assert_eq!(receive(&mut image), response.as_bytes());
+            image.write_all(partial).unwrap();
+            // The cancellation must occur after the session consumed the partial frame.
+            loop {
+                let mut available: libc::c_int = -1;
+                // SAFETY: observer owns a valid socket and available is writable.
+                assert_eq!(
+                    unsafe { libc::ioctl(observer.as_raw_fd(), libc::FIONREAD, &mut available) },
+                    0
+                );
+                if available == 0 {
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                thread::sleep(Duration::from_millis(2));
+            }
+            cancelled.store(true, Ordering::Release);
+            let result = worker.join().unwrap();
+            assert_eq!(
+                result.is_ok(),
+                partial.is_empty(),
+                "partial frame: {partial:?}"
+            );
+            fs::remove_file(root.join("proxy.sock")).unwrap();
+            fs::remove_dir(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn session_eof_before_any_completed_call_remains_a_failure() {
+        let root = private_root();
+        let socket = root.join("image.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let image = UnixStream::connect(&socket).unwrap();
+        drop(image);
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let grant = ModelGrant {
+            grant_id: format!("model_{}", "1".repeat(32)),
+            binding_digest: digest.clone(),
+        };
+        assert!(relay_once(
+            listener,
+            &root.join("unused-proxy.sock"),
+            &grant,
+            &digest,
+            &InvocationReceiptRegistry::default(),
+            Instant::now() + Duration::from_secs(2),
+            &AtomicBool::new(false),
+        )
+        .is_err());
+        fs::remove_file(socket).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn proxy_eof_during_first_response_remains_a_failed_exchange() {
+        let (root, mut relay, image) = relay_after_one_response(None);
+        assert!(relay.worker.take().unwrap().join().unwrap().is_err());
+        drop(image);
+        assert!(!relay.finish().cleanup_unsettled);
+        fs::remove_file(root.join("proxy.sock")).unwrap();
         fs::remove_dir(root).unwrap();
     }
 

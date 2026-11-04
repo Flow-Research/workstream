@@ -125,11 +125,14 @@ def _request() -> bytes:
 
 def _write_material(root: Path) -> None:
     root.mkdir(mode=0o755)
+    root.chmod(0o755)
     (root / "instruction.md").write_text("Explain the solver approach.\n", encoding="utf-8")
     (root / "task.toml").write_text("format_version = 1\n", encoding="utf-8")
     (root / "AUTHOR_NOTES.md").write_text("No extensions are used.\n", encoding="utf-8")
-    (root / "workspace").mkdir(mode=0o755)
-    (root / "tests").mkdir(mode=0o755)
+    for name in ("workspace", "tests"):
+        directory = root / name
+        directory.mkdir(mode=0o755)
+        directory.chmod(0o755)
     for path in root.iterdir():
         if path.is_file():
             path.chmod(0o444)

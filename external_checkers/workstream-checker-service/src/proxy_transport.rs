@@ -50,10 +50,50 @@ pub(crate) fn read_frame(
     deadline: Instant,
     cancelled: &AtomicBool,
 ) -> Result<Vec<u8>, String> {
+    match read_session_frame(stream, maximum, deadline, cancelled)? {
+        SessionFrame::Frame(frame) => Ok(frame),
+        SessionFrame::Eof => Err("private proxy frame incomplete".into()),
+        SessionFrame::Cancelled => Err("private proxy operation cancelled".into()),
+    }
+}
+
+pub(crate) enum SessionFrame {
+    Frame(Vec<u8>),
+    Eof,
+    Cancelled,
+}
+
+/// Distinguish a closed idle session from a truncated or cancelled frame.
+pub(crate) fn read_session_frame(
+    stream: &mut UnixStream,
+    maximum: usize,
+    deadline: Instant,
+    cancelled: &AtomicBool,
+) -> Result<SessionFrame, String> {
     let mut header = [0_u8; 4];
-    transfer(stream, &mut header, deadline, cancelled, |stream, bytes| {
-        stream.read(bytes)
-    })?;
+    loop {
+        if cancelled.load(Ordering::Acquire) {
+            return Ok(SessionFrame::Cancelled);
+        }
+        if Instant::now() >= deadline {
+            return Err("private proxy operation deadline exceeded".into());
+        }
+        match stream.read(&mut header[..1]) {
+            Ok(0) => return Ok(SessionFrame::Eof),
+            Ok(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            Err(_) => return Err("private proxy I/O failed".into()),
+        }
+    }
+    transfer(
+        stream,
+        &mut header[1..],
+        deadline,
+        cancelled,
+        |stream, bytes| stream.read(bytes),
+    )?;
     let size = u32::from_be_bytes(header) as usize;
     if size == 0 || size > maximum {
         return Err("private proxy frame unbounded".into());
@@ -62,7 +102,7 @@ pub(crate) fn read_frame(
     transfer(stream, &mut body, deadline, cancelled, |stream, bytes| {
         stream.read(bytes)
     })?;
-    Ok(body)
+    Ok(SessionFrame::Frame(body))
 }
 
 pub(crate) fn write_frame(
@@ -200,4 +240,24 @@ pub(crate) fn connect_private(
     }
     // SAFETY: descriptor is uniquely owned and successful connect completed above.
     Ok(unsafe { UnixStream::from_raw_fd(descriptor) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn required_frame_rejects_boundary_eof_and_partial_frames() {
+        for partial in [&[][..], &[0, 0][..], &[0, 0, 0, 2, b'{'][..]] {
+            let (mut sender, mut receiver) = UnixStream::pair().unwrap();
+            sender.write_all(partial).unwrap();
+            drop(sender);
+            assert!(read_frame(
+                &mut receiver,
+                1024,
+                Instant::now() + Duration::from_secs(2),
+                &AtomicBool::new(false)
+            )
+            .is_err());
+        }
+    }
 }

@@ -52,9 +52,6 @@ def source_view(classification="draft_ready"):
                 "findings": (outcome.findings[0].model_copy(update={"severity": "blocking_gap"}),),
                 "submission_artifact_policy": None,
                 "requirements": (),
-                "pre_submit_bindings": (),
-                "post_submit_bindings": (),
-                "capability_suggestions": (),
             }
         )
     elif classification == "draft_ready_with_warnings":
@@ -77,6 +74,7 @@ def source_view(classification="draft_ready"):
     c = SimpleNamespace(
         **lineage,
         id=compilation,
+        result_schema_version=outcome.schema_version,
         attempt_id=attempt,
         canonical_input_hash="sha256:" + "b" * 64,
         result_hash=accepted.result_hash,
@@ -86,6 +84,7 @@ def source_view(classification="draft_ready"):
     a = SimpleNamespace(
         **lineage,
         id=attempt,
+        result_schema_version=outcome.schema_version,
         status="compilation_persisted",
         persisted_compilation_id=compilation,
         canonical_input_hash=c.canonical_input_hash,

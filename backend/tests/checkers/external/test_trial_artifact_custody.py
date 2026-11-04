@@ -26,7 +26,6 @@ from tests.checkers.execution.support import (
     provision_post_submit_service,
 )
 from tests.checkers.external.test_trial_evidence import _owner, _subject, _trial_fixture
-from tests.checkers.external.test_trial_policy import trial_specification
 from tests.checkers.external.test_revision_materialization import DiagnosticMaterialization
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_checker_materialization import _limits
@@ -151,8 +150,7 @@ async def test_trial_bytes_use_real_art_custody_and_recover_exact_original(
         isolated_database_env,
         provider="minio",
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         scratch_limits=_limits(
             # Input material remains reserved while ART prepares the output.
             # Use the production aggregate budget for this composed journey.
@@ -323,8 +321,7 @@ async def test_competing_trial_publication_observes_pin_commit_or_complete_rollb
         isolated_database_env,
         provider="minio",
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         scratch_limits=_limits(
             aggregate_reserved_bytes=4 * HARD_MAXIMUM_ARTIFACT_BYTES,
             maximum_files=4,
@@ -344,3 +341,96 @@ async def test_competing_trial_publication_observes_pin_commit_or_complete_rollb
         assert result.outcome == "completed", result.model_dump_json()
         assert list((h.scratch / "workspaces").iterdir()) == []
         assert not h.preparation._active
+
+
+@pytest.fixture
+def composition_trial_summary(monkeypatch):
+    """Load the canonical fixture owner without executing its native case."""
+    import importlib.util
+    from pathlib import Path
+
+    tests = (
+        Path(__file__).resolve().parents[4]
+        / "external_checkers/workstream-checker-service/tests"
+    )
+    monkeypatch.syspath_prepend(str(tests))
+    spec = importlib.util.spec_from_file_location(
+        "composition_custody_fixture", tests / "terminal_systems_smol_composition.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module._retained_trial_summary
+
+
+def _composition_custody_rows(count):
+    """Synthetic query rows exercise the fixture verifier, not ART publication."""
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from app.modules.checkers.api.external import external_checker_json_hash
+
+    rows, retained, receipts = [], [], []
+    for index in range(count):
+        receipt = {
+            "originating_identity": {"requirement_id": f"requirement_{index}"},
+            "execution": {
+                "build": {"candidate_image_digest": None, "candidate_archive_digest": None},
+                "steps": [{"slot_id": "verification", "outcome": "exit_nonzero"}],
+            },
+        }
+        item = SimpleNamespace(
+            id=str(uuid4()), project_id=str(uuid4()),
+            content_sha256=external_checker_json_hash(receipt), address_digest="sha256:" + "a" * 64,
+        )
+        binding = SimpleNamespace(
+            id=str(uuid4()), resource_id=item.id, project_id=item.project_id,
+            scope_version=1, supersedes_binding_id=None,
+            put_attempt_id=str(uuid4()), verification_receipt_id=str(uuid4()),
+        )
+        content = SimpleNamespace(id=str(uuid4()), sha256=item.content_sha256,
+                                  byte_count=100, media_type="application/json")
+        attempt = SimpleNamespace(checker_trial_evidence_id=item.id,
+                                  status="object_confirmed", checker_output_custody_sealed=True,
+                                  sha256=item.content_sha256, byte_count=100, media_type="application/json")
+        verification = SimpleNamespace(outcome="verified", observed_sha256=item.content_sha256,
+                                       observed_byte_count=100)
+        rows.append((binding, content, attempt, verification))
+        retained.append(item)
+        receipts.append(receipt)
+    return rows, retained, receipts
+
+
+@pytest.mark.parametrize("count", [1, 2])
+async def test_composition_custody_matches_selected_one_or_two_trials(composition_trial_summary, count):
+    from unittest.mock import AsyncMock
+
+    rows, retained, receipts = _composition_custody_rows(count)
+    summary = await composition_trial_summary(
+        AsyncMock(execute=AsyncMock(return_value=rows)), retained, receipts, expected_count=count
+    )
+    assert len(summary) == count
+    assert {item["trial_evidence_id"] for item in summary} == {item.id for item in retained}
+
+
+@pytest.mark.parametrize("expected_count", [0, 2])
+async def test_composition_custody_refuses_invalid_or_missing_selected_count(
+    composition_trial_summary, expected_count
+):
+    from unittest.mock import AsyncMock
+
+    rows, retained, receipts = _composition_custody_rows(1)
+    with pytest.raises(AssertionError):
+        await composition_trial_summary(
+            AsyncMock(execute=AsyncMock(return_value=rows)), retained, receipts,
+            expected_count=expected_count,
+        )
+
+
+async def test_composition_custody_count_requires_verified_content(composition_trial_summary):
+    from unittest.mock import AsyncMock
+
+    rows, retained, receipts = _composition_custody_rows(1)
+    rows[0][3].outcome = "unavailable"
+    with pytest.raises(AssertionError):
+        await composition_trial_summary(
+            AsyncMock(execute=AsyncMock(return_value=rows)), retained, receipts, expected_count=1
+        )

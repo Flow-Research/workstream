@@ -16,6 +16,14 @@ The external Rust service supplies isolated execution. This project's Python
 POST image decides what to inspect and how to assess it against the project
 requirements. A different project supplies its own rules and image.
 
+`configuration.check` selects the project's fixed evaluator/rubric. The locked
+policy's `input.requirement_id` is a separate opaque identifier: it may name the
+same requirement differently. POST validates that identifier's format without
+using it to select the rubric. Findings retain their project-local `check_id`;
+the result's request digest, registry identity and phase bind them to the exact
+invocation. A new image containing this correction must be registered and
+qualified before use; earlier registry entries and locked bindings are retained.
+
 Here, a **trial** is one isolated execution of submitted code, such as a build
 or test run. The `trial_*` modules implement its transport, limits, execution,
 and evidence handling; they are not separate services or product lifecycles.
@@ -89,7 +97,88 @@ suggestions; those counts describe the historical handoff, not an eligibility
 set or approval. The project agent now has strict material/rubric validation, a
 bounded source-cited plan, invocation-local model-session and execution-socket
 clients, protected build/state projections, and receipt-bound runtime and author
-assessment cores. The shared runner implements generic offline image building
+assessment cores. Controlled interruption now inherits the verified third
+reference workspace; restart inherits its exact retained export, followed by
+the full verifier. These steps expose only protected verification material,
+while incomplete repair still starts fresh. A failed restart verifier contradicts
+an all-pass model assessment; a documented signalled interruption is allowed.
+The [repair record](../../../.commitrail/changes/terminal-systems-repaired-recovery-trial.md)
+records local subprocess and false-pass proof. This changes the projection
+digest: use a new immutable image/projection registration and approved binding
+for runtime qualification; existing locked bindings remain historical.
+The prospective project planner now distinguishes tasks that promise recovery from
+ordinary tasks. Its current proposal contract requires a source-cited applicability
+decision over the complete solver instruction. The independent receipt assessment
+reads that instruction again without the planner's flag: a citation alone does not
+make an opt-out trustworthy. Promised recovery still requires the verified
+reference → interruption → restart → full-verifier sequence; ordinary tasks retain
+the other required trials. Missing promised recovery produces a coverage finding
+when the independent assessment identifies it. An all-pass assessment contradicted
+by its own recovery decision, or conflicting author-assessment scope decisions,
+is invalid model output and remains an infrastructure outcome.
+
+This change advances the private plan contract to version 2 and the runtime trial
+projection to version 2; the separate revision projection remains unchanged. It
+requires a new immutable POST image, matching projection/configuration registration
+and exact-image qualification before prospective bindings can use it. Previously
+registered images, locked bindings and their qualification evidence remain retained.
+Local model-session tests establish the conditional control paths, not live model
+quality or deployment qualification.
+
+The private procedure proposal has one format: each procedure supplies
+`evidence_id` and `source_quote`, with no model-supplied `start_line` or
+`end_line`. The quote must match exactly one window of complete contiguous lines
+in the selected source's line view, preserving indentation and blank lines,
+joined with `\n` and without an added trailing newline. It is bounded to 16,384
+UTF-8 bytes. The checker derives the procedure's 1-based line bounds from that
+unique match; partial-line, absent, ambiguous or oversized quotes fail closed.
+This uses source-line matching, with no Markdown parser. `command_text` must
+occur verbatim in the matched span and parse with `shlex` into the exact proposed
+argument array. Coverage gaps and recovery applicability retain their separately
+validated model-supplied citations; purpose, ordering, material, state-source and
+execution-capsule authority checks remain required.
+
+The source-quote implementation passed controlled native qualification and was
+registered and deployed as `real-e0b502f9`. This does not establish a successful
+live project POST outcome.
+Guide 17's two completed author-evidence calls still belong to its locked
+`real-26d5977e` image: the corrected proposal cited a closing code fence at line
+103 instead of the command at line 102, and POST stopped as infrastructure
+`invalid_output` before trials. Fresh guide 18 then failed setup validation before
+approval or task creation. The bounded setup-diagnostic repair deployed at
+`357b9a55`; guide 19 then received an explicit version-selection correction,
+separate PRE/POST approvals and activation. Its task reached immutable
+Submission/replay and automatic POST, which ended infrastructure
+`invalid_output` on November 3 without persisted results or findings. No live
+work verdict or contribution is claimed; retained paid
+effects and locked policies are not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+
+The retained guide 19 assessment returned source text in string-valued recovery
+line spans; its correction repeated those strings and also quoted finding line
+numbers. The prompt now explicitly requires native JSON integers for those
+fields, including during bounded correction. The author-evidence prompt also
+keeps runtime-only condition 11 instructions out of its five-condition rubric.
+Strict validators and retry limits are unchanged. These source repairs require
+fresh image qualification and hosted proof; they do not repair retained outcomes.
+
+Each model phase permits one correction only after a completed response fails its
+strict output validator with `invalid_output`. The correction includes the complete
+original prompt and exact rejected output as untrusted JSON strings; it does not
+insert missing fields, discard duplicate members, alter source quotes or truncate
+evidence. The same validators apply again. A second invalid response is terminal.
+Valid coverage gaps and failing assessments remain work findings; provider,
+unknown-delivery, transport, material and capacity failures do not trigger another
+call. All calls share the invocation session and deadline. The full correction
+prompt must fit the existing 1,000,000-byte UTF-8 bound and underlying transport
+limits. An exhausted corrected planner cannot start a trial without capacity for
+assessment. Runtime and author checks need profiles allowing at most four calls
+(two planning, two assessment); semantic and revision-objective checks need at most
+two. Assessment corrections retain the same authenticated receipt handles and
+independent recovery validation, and never execute the trial again. These changed
+semantics require prospective immutable image/profile registrations and exact-image
+qualification; retained failed runs and locked images are unchanged evidence.
+
+The shared runner implements generic offline image building
 and trials in Smol sibling microVMs, with resource, cancellation, cleanup and
 recovery controls. Native build `b2ce3fa45` passed controlled-provider KVM
 composition 013: trusted intake, two verified ART trial receipts of 17 steps,
@@ -111,18 +200,26 @@ Terminal Systems contribution journey. Hosted Smol composition and its scoped
 AWS proof are tracked separately in [PR #692](https://github.com/Flow-Research/workstream/pull/692);
 that owned baseline passed with its disclosed fixture identity. Live-provider/model-quality
 proof and full project qualification remain separate. The real Terminal Systems
-project has no qualified POST binding or activation. Registration and guide
-authority in a model-only engineering fixture do not establish that project.
+project retains guide 17's `real-26d5977e` approvals and failed POST evidence.
+Guide 18 failed setup; guide 19 generation 2 subsequently approved the qualified,
+registered and deployed `real-e0b502f9` bindings and activated. After immutable
+Submission/replay, its live POST ended `infrastructure_failed / invalid_output`
+without persisted results or findings. Real project work outcomes and the
+connected contribution journey remain unproven. Registration and guide authority in
+a model-only engineering fixture do not establish the real project journey.
 
 [`post/model/execution-rubrics.json`](post/model/execution-rubrics.json) is an
 exact semantic projection of that historical handoff. Its
 `post_submit_capability_gap` disposition records the source proposal's state; it
 is not a current policy binding or a claim that the implemented trial runtime is
-unavailable. Qualification constructs a separate typed specification declaring
-the outer `isolated_execution/current_runner`, nested
-`nested_sandbox/trial_proxy`, and receipt assessment
-`model_service/model_proxy` dependencies. A future #555 correction must review
-that current dependency shape before it can bind or approve it.
+unavailable, and the bundled rubric is not input to fresh setup inference.
+The model-only qualification expresses its model-service need through advisory
+`implementation_needs` and `inability_to_evaluate` fields. Human approval
+separately supplies the exact registered image and model profile. A trial-bearing
+approval must additionally carry the exact trial selectors described below.
+A fresh setup proposal does not rewrite an image's frozen rubric; the manager
+and engineer must confirm that the image implements the project's requirements
+before attaching it.
 
 The locked POST configuration schema must declare all six flat trial selectors:
 `trial_profile_id`, `trial_profile_version`, `trial_profile_digest`,

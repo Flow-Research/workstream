@@ -1262,8 +1262,6 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
             LifecycleAuditEventType.TASK_SCREENED,
             LifecycleAuditEventType.TASK_RELEASED,
             LifecycleAuditEventType.TASK_CLAIMED,
-            LifecycleAuditEventType.TASK_STARTED,
-            LifecycleAuditEventType.TASK_START_OVERRIDDEN,
             LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED,
             LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED,
             LifecycleAuditEventType.TASK_REVISION_CONTEXT_REPAIRED,
@@ -1316,7 +1314,9 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
             LifecycleAuditEventType.COMPENSATION_AWARD_CREATED,
         },
     }
-    assert set().union(*event_groups.values()) == set(LifecycleAuditEventType)
+    assert set().union(*event_groups.values()) == set(LifecycleAuditEventType) - {
+        LifecycleAuditEventType.TASK_STARTED, LifecycleAuditEventType.TASK_START_OVERRIDDEN,
+    }
     entity_references = {
         LifecycleAuditEntityType.CHECKER_RUN: LifecycleAuditReferenceKind.CHECKER_RUN,
         LifecycleAuditEntityType.TASK: LifecycleAuditReferenceKind.TASK,
@@ -1381,8 +1381,8 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
                 })
                 transition = {
                     "reason": LifecycleAuditReason.STATE_CHANGED,
-                    "from_status": "ready" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "claimed",
-                    "to_status": "claimed" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "in_progress",
+                    "from_status": "ready" if event_type is LifecycleAuditEventType.TASK_CLAIMED else "in_progress",
+                    "to_status": "in_progress",
                     "task_reason": "Explicit task operation",
                 }
             if event_type is LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED:
@@ -1855,7 +1855,7 @@ def test_assignment_release_snapshot_is_bounded_copied_and_event_specific():
         "entity_id": value.target.task_id,
         "event_type": LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED,
         "reason": LifecycleAuditReason.STATE_CHANGED,
-        "from_status": "claimed", "to_status": "ready",
+        "from_status": "in_progress", "to_status": "ready",
         "references": {
             LifecycleAuditReferenceKind.PROJECT: value.target.project_id,
             LifecycleAuditReferenceKind.TASK: value.target.task_id,

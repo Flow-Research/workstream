@@ -630,8 +630,6 @@ def _persist_facts(
         requirement_inventory_component_hash=hashes.requirement_inventory_hash,
         pre_submit_policy_component_hash=hashes.pre_submit_hash,
         post_submit_policy_component_hash=hashes.post_submit_hash,
-        capability_suggestions_component_hash=hashes.capability_suggestions_hash,
-        setup_notes_component_hash=hashes.setup_notes_hash,
         resource_context_digest="sha256:" + "0" * 64,
     )
     return replace(

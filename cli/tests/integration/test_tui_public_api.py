@@ -2,8 +2,8 @@
 
 Canonical fixtures arrange an approved guide, started work and a retained
 immutable attempt. The original test remains GET-only; the separate action
-test proves claim/start through the native UI. Neither is a public intake or
-external artifact-provider journey. No AUTH/TASK port is replaced; only the
+test proves claim and immediate work start through the native UI. Neither is a
+public intake or external artifact-provider journey. No AUTH/TASK port is replaced; only the
 signed fixture issuer's JWKS transport is local.
 """
 
@@ -223,7 +223,7 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
 
 
 @pytest.mark.asyncio
-async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
+async def test_tui_real_signed_claim_starts_work_replay_then_fresh_revocation(
     tmp_path, auth_database_env, admin_access
 ):
     signed = admin_access.signed
@@ -254,7 +254,7 @@ async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
         assert projects.status_code == 200, projects.text
         project_name = projects.json()["items"][0]["name"]
         manager = await project_manager(admin_access, h.project_id)
-        claim_key, start_key = str(uuid4()), str(uuid4())
+        claim_key = str(uuid4())
         writes = []
         app = client._transport.app
         assert not app.dependency_overrides, (
@@ -305,18 +305,6 @@ async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
                 await wait(task)
                 await confirm("claim", claim_key)
                 await replay("claim")
-                # Claim does not implicitly start. A fresh Mine read and exact
-                # task detail are required before opening the second action.
-                terminal.send("\x1b")
-                await wait(ready.json()["description"])
-                terminal.send("2")
-                await wait("Evaluate proof")
-                terminal.send("/Evaluate proof\r")
-                await wait("local filter: Evaluate proof")
-                terminal.send("\r")
-                await wait(task)
-                await confirm("start", start_key)
-                await replay("start")
                 current = await client.get(detail_path, headers=owner.headers)
                 assert current.status_code == 200, current.text
                 assert current.json()["status"] == "in_progress"
@@ -328,6 +316,8 @@ async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
                     ).all()
                     assert len(assignments) == 1
                     assert assignments[0].contributor_id == str(owner.id)
+                    assert assignments[0].started_at == assignments[0].assigned_at
+                    assert assignments[0].started_at is not None
                     grant_id = await session.scalar(
                         select(ProjectRoleGrant.id).where(
                             ProjectRoleGrant.actor_profile_id == str(owner.id),
@@ -344,11 +334,11 @@ async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
                 )
                 assert revoked.status_code == 200, revoked.text
                 terminal.send("p")
-                await wait("Confirm start")
+                await wait("Confirm claim")
                 terminal.send("s")
                 terminal.send("y")
                 await wait("Request denied")
-                assert "Start confirmed" in terminal.screen
+                assert "Claim confirmed" in terminal.screen
                 assert ready.json()["description"] not in terminal.screen
                 await asyncio.to_thread(terminal.quit)
                 assert owner.token.encode() not in terminal.raw
@@ -356,13 +346,11 @@ async def test_tui_real_signed_claim_replay_start_replay_then_fresh_revocation(
         assert writes == [
             (detail_path + "/claim", claim_key),
             (detail_path + "/claim", claim_key),
-            (detail_path + "/start", start_key),
-            (detail_path + "/start", start_key),
-            (detail_path + "/start", start_key),
+            (detail_path + "/claim", claim_key),
         ]
-        for denied_key in (start_key, str(uuid4())):
+        for denied_key in (claim_key, str(uuid4())):
             denied = await client.post(
-                detail_path + "/start",
+                detail_path + "/claim",
                 headers=owner.headers | {"Idempotency-Key": denied_key},
                 json={},
             )

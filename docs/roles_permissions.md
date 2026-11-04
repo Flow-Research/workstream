@@ -49,8 +49,7 @@ Normal project repair uses covered Project Manager permission
 and legacy-close actions remain unavailable until their owning hidden behavior,
 AUTH activation and release. REV-12A4A activates internal lifecycle control for
 live system Operators, binding the exact singleton, generation and manifest.
-It supplies no public endpoint, human-review, acceptance or payment authority. Task start override uses
-`operations.task.start_override`. Submission-gate repair
+It supplies no public endpoint, human-review, acceptance or payment authority. Claim starts work atomically; no Operator start action exists. Submission-gate repair
 (`operations.submission_gate.repair`) and checker retry
 (`operations.checker.retry`) are planned and unavailable; their old routes and
 Celery worker were removed. Review lease release remains governed by the separately

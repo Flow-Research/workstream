@@ -48,6 +48,13 @@ definition or ownership boundary of Workstream.
   deterministic or confuse setup-agent policy proposals with runtime evaluators.
   Model-based judges require supported registered implementations; do not claim
   them live merely because setup uses an agent.
+  Initial setup inference reads only the assigned guide documents and task examples,
+  apart from trusted system instructions. An explicit manager correction may also
+  supply the manager's written feedback, never previous image selections or
+  registry metadata. It proposes source-cited PRE/POST check
+  specifications, never executable images or available runtime choices. An
+  authorized human selects exact registered project images and configuration for
+  each phase during policy approval; the Workstream PRE default stays separate.
 - Use the simple engineering loop:
   `Intent -> Plan -> Bounded Change -> Tests -> Review -> PR -> Human Merge`.
 - Inspect existing owners, call paths, policies, contracts and tests before
@@ -101,9 +108,10 @@ definition or ownership boundary of Workstream.
   awards/fulfillment -> contribution evidence for a future reputation
   projection. The immediate delivery priority is the first complete backend
   journey: approved project guide and locked policies -> task creation -> claim
-  and start -> upload ZIP -> actionable pre-check feedback or verified immutable
-  Submission -> automatic post-checking -> governed outcome. For a project with
-  `human_review_required=false`, passing required checks must reach the shared
+  (which immediately starts work) -> upload ZIP -> actionable pre-check feedback
+  or verified immutable Submission -> automatic post-checking -> governed outcome.
+  For a project with `human_review_required=false`, passing required checks must
+  reach the shared
   authorized FinalAcceptance and submitter ContributionRecord, with applicable
   conditional awards committed atomically; never fabricate a Review or reviewer
   contribution. Failed checks and infrastructure failures need distinct,

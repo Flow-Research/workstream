@@ -1,5 +1,11 @@
 # Terminal Systems project setup
 
+The current MVP lifecycle drill uses the [small incident-summary task](mvp/README.md).
+It retains real API/storage/worker/checker behavior and genuinely wrong/correct
+work, with no model in POST. The broader benchmark-authoring inputs below remain
+available and their earlier drill evidence is retained; they are not a prerequisite
+for the first lifecycle demonstration. See the [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+
 Start with [the contributor guide](guide.md) and [one illustrative task](task-example.md).
 These are original project inputs for a fresh onboarding run. They are not a
 checker implementation, an approved policy or a record of completed work.
@@ -44,130 +50,140 @@ normal task creation; no runtime change or checker allowlist is implied.
 
 ## Onboard through the public product flow
 
-1. The PM creates the project and guide with its example and uploads the declared
-   document through the supported API or CLI. Committing the last declared
-   document upload automatically queues setup; there is no separate start command.
-   The manager needs a role grant on this exact project for setup and proposal
-   reads; system-level project-creation authority alone is insufficient.
-2. Setup reads those actual inputs and the available registered capabilities,
-   drafts a candidate, then reviews it against the original sources in a fresh
-   model context. Both phases share one bounded attempt; a failed review does not
-   publish the unchecked candidate.
-   Inspect its source-backed requirement inventory, classification rationale,
-   per-check typed specifications, proposed PRE/POST bindings and
-   missing-capability suggestions. PRE is for static and other reliably bounded
-   checks that complete within 60 seconds before Submission creation; longer or
-   model-based work belongs to background POST. Automation alone does not choose
-   the stage. Do not substitute a prepared result.
-3. Engineering receives the uncovered requirements, intended stage, expected
-   findings, positive/negative cases, material inputs, dependencies and
-   infrastructure outcomes. Build and test the required external checker images
-   against the existing request/result contract. Project logic belongs
+1. The PM creates the project and guide with its illustrative task example,
+   then uploads the declared original document through the public API or CLI.
+   Committing the last document upload queues setup. The manager needs a role
+   grant on this exact project for setup and proposal reads; project-creation
+   authority alone is insufficient.
+2. Setup receives the assigned guide documents and task examples, along with
+   trusted system instructions. It reads the originals and proposes source-cited,
+   structured PRE and POST checks for PM review. Each suggestion has a stage,
+   classification rationale, inputs, ordered steps, pass conditions, work
+   failure findings, positive and negative examples, implementation needs and
+   conditions where evaluation cannot establish a work verdict. The artifact
+   policy records source-supported packaging rules. The proposal names no
+   checker image, registry entry, model profile or runtime configuration.
+   PRE checks run before immutable Submission creation; POST checks evaluate
+   submitted work afterward. A task example illustrates possible work and
+   does not make its subject or identifiers mandatory for every assignment.
+3. The PM reviews the whole proposal against the original guide and tasks.
+   If it needs correction, an authorized PM requests a successor with written
+   feedback. The correction model receives the original guide and examples
+   plus that explicit feedback only. Earlier proposals remain immutable; they
+   are not handed back to the model as instructions or selected implementations.
+   A finalized attempt cannot be rerun, and a terminal invalid attempt cannot
+   be reopened through same-operation replay.
+4. Engineering implements and tests project checks in external images, using
+   the source-backed suggestions as an advisory handoff. Project logic belongs
    in those images, not in project-named branches of Workstream or its shared
-   runner. Reuse a registered implementation only if it really covers the need.
-   Use the merged [image command](../../docs/engineering/checker-images.md) for
-   each project-owned implementation. Its default ECR destination names are
-   `workstream-checker-pre-terminal-systems` and
+   runner. Use the [image command](../../docs/engineering/checker-images.md)
+   for each project-owned implementation. Its default ECR destination names
+   are `workstream-checker-pre-terminal-systems` and
    `workstream-checker-post-terminal-systems` in `eu-north-1`, once the operator
-   has created the selected repositories. A name in this document is not proof
-   that the repository or image exists. Keep implementations in the project's
-   own source directory; do not add rules to the shared Rust service.
-4. Register the exact immutable image/configuration capabilities through the
-   authorized Operator operation. A Project Manager with authority on this
-   project creates and explicitly dispatches a correction successor, or creates
-   a new guide version, so a fresh proposal can bind the registered entries.
-   A finalized setup run cannot be rerun. Registration alone does not repair an
-   earlier proposal or approve a policy.
-   Provision the exact digest and generated cache entry on the execution host;
-   the current service reads its cache configuration at startup. The publisher
-   does not deploy images to that host or enable a policy.
-5. The PM inspects and approves the separate PRE and POST policies and sets the
-   review and revision policies. Finance supplies the published contribution
-   policy. Activate only when required capabilities and all policy prerequisites
-   are satisfied. A suggestion or a green image build is not activation.
+   has created the selected repositories. A name here does not prove an image
+   exists. An authorized Operator registers exact immutable image/configuration
+   entries; the execution host needs the matching digest and cache entry.
+   Publication or registration does not change a saved proposal, require fresh
+   inference, approve a policy or activate a guide.
+5. The PM selects review and revision policies separately. For PRE approval,
+   the PM supplies explicit `pre_submit_attachments` and
+   `post_submit_attachments` lists with the chosen registered image identities
+   and non-secret configuration. These are human phase choices, independent of
+   `suggestion_id`; no one-to-one mapping or image membership in the proposal
+   is required. Both lists are required, and explicit empty lists are valid.
+   Workstream then derives the selected POST policy. The PM reads and approves
+   that POST policy in a separate operation. Finance supplies the published
+   contribution policy. Activate only after the exact approvals and public
+   readiness checks pass. The default ReviewPolicy requires human review;
+   disabling it is an explicit PM choice and retains the shared authorized
+   acceptance operation.
 6. Import the five briefs, screen them against the activated guide, and release
-   eligible tasks. A contributor then claims and starts a task and submits real
-   work through the public ZIP intake.
-7. Observe the complete journey: default/PRE feedback before Submission, durable
-   POST execution after Submission, and the actual governed outcome. Include a
-   correction and an infrastructure interruption without fabricating evidence or
-   editing product rows. Record exact source, guide, policy, image and outcome IDs.
+   eligible tasks. A contributor claims a task, which starts work immediately,
+   then submits real work through public ZIP intake.
+7. Observe the connected journey: default and selected PRE feedback before
+   Submission, durable POST evaluation after Submission, and the governed
+   outcome. Include genuine failure, recovery and replay. Record exact source,
+   guide, policy, image, Submission and contribution facts without editing
+   product rows or fabricating evidence.
 
 ## Current boundary
 
-Real provider-backed local setup and explicit PM correction of the unchanged
-guide produced a reviewed engineering handoff: two static PRE specifications
-(layout and metadata), eight background POST specifications, and two lifecycle
-classifications. This retained proposal predates the narrowed setup contract.
-It needs a fresh correction containing only PRE/POST check requirements before
-use as the current proposal or any policy approval; PM revision and other
-management choices stay outside inference. Historical proposal bytes and hashes
-remain intact. In that retained proposal, all ten checks are capability gaps
-without bindings. Both independent source-to-proposal reviews passed the final corrected
-generation; stored canonical/component hashes and the public CLI output match.
+The [current hosted drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
+records the exact deployment, guide versions, retained evidence and remaining
+gates. Setup's source-backed PRE and POST suggestions are advisory. They do not
+select implementations, approve policies or establish a work outcome. The PM
+and engineering must check that any proposed attachment implements the intended
+project rules before the authorized approval locks it.
 
-All four project size/entry limits remain null. This proves nullable proposal
-output, not submission-intake enforcement. The runtime validates strict JSON, schema, checker scope and canonical/context
-rules in both private drafting and final review. Known invalid output receives
-bounded error-guided correction within the original attempt budgets. Each phase
-must reopen all assigned originals, including when reporting a blocked guide. PM correction supplies the exact,
-hash-verified predecessor alongside feedback. Earlier proposals remain immutable
-and unapproved; the handoff required human review and explicit corrections, so
-this is not a claim of automatic completeness for other guides.
+For this drill, [checker qualification](checkers/README.md#post-prerequisites)
+must exercise realistic valid, invalid and edge-case examples through the actual
+Workstream intake and post-submission execution paths. Retain each exact image
+digest/configuration hash, expected and observed outcomes, and bounded evidence
+in the [drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+Infrastructure failure never establishes a work verdict. The PM judges whether
+the rules express the intended project standard; engineering proves observed
+checker behavior on those examples. That evidence is bounded, not a universal
+correctness guarantee. This is required drill practice; activation does not
+automatically enforce this example suite.
 
-All 57 accumulated provider resources were deleted. The project-owned
-[PRE image](checkers/README.md) now implements the two structural specifications;
-local rule tests and networkless container samples qualify its intake behavior.
-Its samples are structural fixtures, not completed authoring submissions.
-The eight POST checks and their model, isolated execution and authenticated
-material dependencies remain unavailable. The PRE image is published by digest
-and registered in the local rehearsal; no approved binding, activated guide or
-contribution outcome is claimed. Engineering
-must reconcile the published PRE image with the fresh proposal, implement its remaining
-POST checks and resolve their runtime/material gaps,
-register the exact images, and obtain corrected bindings and PM approval before
-activation and the contributor journey.
-See the [live setup record](../../.commitrail/changes/terminal-systems-live-setup.md)
-for the retained attempt sequence and qualification limits.
+The project-owned [checker implementation](checkers/README.md) has qualified
+PRE and POST images. The retained guide 27 release `6ec9fb8d` selected POST image
+`52659960` built from `6af3c7ee` and qualified on `adcf35a5`, with backend
+`466faca5`/schema `0066` unchanged and native PID `2633053`. Profile v2 permits
+100,000 entries while retaining the original 64 MiB archive limit/runtime identity.
+Eight public registration/read/replays and sealed-cache read proof passed; all
+predecessors remain across 82 registrations, 30 authority contexts and 13 cache
+entries. AWS/data/health checks passed before commit; two earlier timer-proof
+commit holds remain retained. This repair/deployment made no paid calls.
+Controlled native qualification passed two isolated trials, four controlled model
+effects, no additional provider call on replay and owned-service cleanup.
 
-For this guide-driven rehearsal, configure the inference setup runtime to derive
-requirements from the original guide and example. Main also supports an explicit
-[manager-authored rules runtime](../../docs/operations_project_operating_manual.md#manager-authored-guide-rules).
-That alternative reads supplied rules without inference; it does not discover
-checks from prose. Its proposal correction operation is unsupported, so follow
-its documented fresh-guide procedure when replacing rules. This input package
-does not supply a prewritten rules result or select that alternative.
+Guide 26 ran under predecessor release `0f46f3ea` and remains locked to image
+`4d8de652`/profile v1 and its original evidence. Its normal setup produced three
+PRE/six POST advisory suggestions and zero
+warnings; actual ART request evidence proves input keys exactly `material` and
+`task_examples`. Independent human two PRE/eight POST attachments, separate
+approvals, activation and immediate claim into work passed with replay. Selected-PRE
+missing-instruction feedback created no Submission and passed replay. A later
+package reached verified S3 admission, immutable Submission v1 and exact replay.
+POST ended `infrastructure_failed / invalid_output` after nine paid model calls.
+Two trial receipts exist, but build export capacity failed and all 17 dependent
+work-test steps were skipped. No work verdict, Revision, FinalAcceptance or
+ContributionRecord resulted. The now-deployed repair raises the default maximum-entry
+limit to 100,000. Only a build with exit code zero, no signal,
+`export_outcome=capacity_exceeded` and both candidate image/archive digests null
+is classified as infrastructure capacity before assessment. Task-disk-limit and
+step-export-capacity results remain assessable. This changes no native contract
+and establishes no live work verdict.
 
+A separate image `52659960` negative capacity probe passed with only plan/profile entries
+raised to 100,000: the original 64 MiB archive limit and 2 GiB disk were unchanged.
+Its 45,435,904-byte archive matched native custody; ten steps ran and seven skips
+were grounded in failed reference verification, with no resource failures. Two
+controlled model effects, no extra effects on replay, no paid inference and cleanup
+were verified. The first two probe tests remain failed after bounded fixture
+custody-count and dependency-skip assertion repairs. Semantic assessment was
+disabled: this is neither a live work verdict nor full positive qualification.
+Image `52659960` was built from `6af3c7ee` with 125 focused tests; later `e6935430`/`adcf35a5`
+fixture repairs remain separately attributed. Separate standard canonical positive
+qualification on exact `adcf35a5` passed in 173.08 seconds: two isolated trials,
+four controlled model effects, exit zero, no paid inference and zero additional
+replay calls. Owned runtime resources and isolated PostgreSQL/MinIO containers
+were removed. Image/profile runtime adoption is committed. Guide 27 reached POST and one authorized retry; both retained incomplete model responses. The small MVP pilot above subsequently reached real POST failure, corrected v2, automatic acceptance and matching public contribution exports on supplemental release `ee22e22e`. No 256 MiB deployment or production runtime-identity change was needed for the earlier capacity proof.
 
-No complete checker set is claimed to implement this guide yet. In particular, the previous
-fixed five-task sample is not an implementation of these requirements. Required
-semantic judgments, metadata tooling, environment support and execution needs
-must appear in setup's capability assessment; do not weaken the guide to hide a
-gap. A missing required capability remains visible in a warning-ready draft and
-blocks activation until engineering supplies it and a corrected proposal binds
-it. It does not make a sufficient guide blocked and cannot be hidden as a human
-fallback. Human-review requirements cannot be silently converted into automated
-acceptance. Workstream's four default checks cover ZIP safety, received-byte and
-manifest identity, high-confidence secret detection and unchanged work; the
-guide's required files, layout, metadata and quality rules need project checks.
+Guide 24/25 failures and guide 25's explicit PM-feedback correction remain
+immutable. Earlier five default-negative/replay controls created no admission or
+Submission; the size case proves compression ratio only. Exact source `942aa11a`
+passed CI with 11,528 tests, excluding the later repair/fixtures; exact `a4afa8d75` later passed 11,533 completed tests with zero skips/deselections; later MVP edits need fresh CI. The small pilot proves wrong/correct work verdicts and exact contribution evidence; broader recovery and restore verification remain pending. This input package and
+its controlled image qualification do not claim a complete hosted journey; use
+the linked report for source pins, timestamped accounting and historical scope.
 
-Before upload, confirm that this guide describes the desired project. The PM
-still chooses compensation, review mode, revision cap and revision window through
-the separate governed policy operations. The input version label does not
-publish or replace any existing guide in a live project.
-Nor does it authorize live model spend, registry publication or deployment.
-
-For each setup run, retain the actual requirements and capability suggestions
-with their guide references. An engineering handoff should identify each uncovered
-requirement, classification rationale, proposed execution stage and duration,
-inputs, ordered checks, pass conditions, expected findings, dependency needs,
-infrastructure failures and representative positive/negative cases. Do not handwrite that result in
-advance or classify a required semantic judgment as enforced merely because a
-file exists. Building submitted environments offline and checking reference/test
-quality need explicit implementations and proof. When the configured runtime
-cannot provide them, keep that gap visible and the guide inactive.
+The inference runtime derives suggestions from this original guide and its
+example. The separate [manager-authored rules runtime](../../docs/operations_project_operating_manual.md#manager-authored-guide-rules)
+accepts a PM-supplied rules document without inference; these inputs do not
+provide one. The PM still chooses compensation, review mode, revision limits
+and timing through their separate governed operations. The input version label
+alone does not publish or replace a live guide.
 
 The work remains tracked by [project preparation #576](https://github.com/Flow-Research/workstream/issues/576)
 and [the connected journey #555](https://github.com/Flow-Research/workstream/issues/555).
-The first milestone here is usable guide/example/task input; readiness requires
-the real setup and contribution journey, not predetermined fixture outcomes.

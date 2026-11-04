@@ -28,8 +28,7 @@ from app.modules.projects.api.guide_documents import GuideDocumentManifest, Guid
 from app.interfaces.project_agents import (
     AtomicGuideRequirement,
     CheckFailureFinding,
-    PlatformCoverageRef,
-    CheckInfrastructureFailure,
+    CheckInabilityToEvaluate,
     CheckInput,
     CheckNegativeTest,
     CheckSpecification,
@@ -49,7 +48,6 @@ from app.modules.projects.guide_compilation.contracts import (
     CompilationAttemptIdentity,
     accepted_compilation_result,
 )
-from tests.checkers.external.support import capability_projection
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 from app.core.hashing import canonical_json_hash
@@ -136,16 +134,21 @@ def context(
     *,
     generation: int = 1,
     guide_version="v1",
-    checker_capabilities=None,
     configuration=None,
+    task_examples=TASK_EXAMPLES,
 ) -> ProjectGuideCompilationContext:
     """Build one exact committed-original metadata context."""
+    task_examples = validate_task_examples(task_examples)
+    snapshot_hash = canonical_json_hash({
+        "task_examples_hash": task_examples_hash(task_examples),
+        "task_examples_count": len(task_examples),
+    })
     material = GuideDocumentManifest(
         project_id=values["project"],
         guide_id=values["guide"],
         guide_version=guide_version,
         source_snapshot_id=values["snapshot"],
-        source_snapshot_hash=SHA256,
+        source_snapshot_hash=snapshot_hash,
         setup_run_id=values[f"setup_{generation}"],
         setup_generation=generation,
         documents=(
@@ -165,7 +168,7 @@ def context(
         ),
     )
     return ProjectGuideCompilationContext(
-        task_examples=({"content": "Review a claim using the project guide."},),
+        task_examples=task_examples,
         runtime_configuration=configuration or runtime_configuration(),
         material=material,
         setup_run_id=values[f"setup_{generation}"],
@@ -173,7 +176,6 @@ def context(
         instruction_version="v1",
         agent_identity="project-guide-compilation-agent-v1",
         agent_version="v1",
-        checker_capabilities=checker_capabilities or capability_projection(),
     )
 
 
@@ -201,23 +203,17 @@ def result() -> ProjectGuideCompilationResult:
             required_artifacts=("submission",),
         ),
         requirements=(),
-        pre_submit_bindings=(),
-        post_submit_bindings=(),
-        capability_suggestions=(),
         setup_notes=(),
         agent_name="ProjectGuideCompilationAgent",
         agent_version="v1",
-        schema_version="project_guide_compilation_result.v1",
+        schema_version="project_guide_check_specification.v1",
     )
 
 
 def valid_specification() -> CheckSpecification:
-    """Return one actionable static check that fits the bounded PRE stage."""
+    """Return one actionable source-derived PRE check specification."""
     return CheckSpecification(
-        evaluation_method="static_inspection",
-        execution_mode="bounded_pre_submit",
-        maximum_duration_seconds=10,
-        stage_rationale="Static package inspection completes within the intake budget.",
+        evaluation_method="Inspect the submitted package manifest.",
         inputs=(
             CheckInput(
                 input_id="submitted_package",
@@ -244,11 +240,11 @@ def valid_specification() -> CheckSpecification:
                 expected_finding_codes=("required_item_missing",),
             ),
         ),
-        runtime_dependencies=(),
-        infrastructure_failures=(
-            CheckInfrastructureFailure(
+        implementation_needs=("Read the submitted package manifest and identify its entries.",),
+        inability_to_evaluate=(
+            CheckInabilityToEvaluate(
                 code="invalid_output",
-                condition="The checker returns a malformed result.",
+                condition="The submitted package manifest cannot be read.",
             ),
         ),
     )
@@ -257,13 +253,11 @@ def valid_specification() -> CheckSpecification:
 def generated_result() -> ProjectGuideCompilationResult:
     """Return a valid new-generation result without changing retained fixtures."""
     requirement = AtomicGuideRequirement(
-        requirement_id="safe_archive",
-        statement="The submitted archive must be safe to open.",
-        disposition="platform_covered",
-        platform_coverage=PlatformCoverageRef(
-            capability_id="workstream.default", capability_version="v1", stage="pre_submit",
-        ),
-        classification_rationale="The default checker enforces bounded archive safety.",
+        suggestion_id="required_item",
+        statement="The submitted work must include the required item.",
+        stage="pre_submit",
+        classification_rationale="The guide asks for this item before submission.",
+        check_specification=valid_specification(),
         evidence_refs=(
             GuideEvidenceRef(
                 source_item_id=SOURCE_ITEM_ID,
@@ -317,14 +311,7 @@ def persistence_facts(
         operation_id=values["operation"],
         request_id=values["request"],
         idempotency_key=values["key"],
-        pre_catalogue_id=attempt_identity.pre_catalogue_id,
-        pre_catalogue_version=attempt_identity.pre_catalogue_version,
-        pre_catalogue_schema_version=attempt_identity.pre_catalogue_schema_version,
-        pre_catalogue_manifest_hash=attempt_identity.pre_catalogue_manifest_hash,
-        post_catalogue_id=attempt_identity.post_catalogue_id,
-        post_catalogue_version=attempt_identity.post_catalogue_version,
-        post_catalogue_schema_version=attempt_identity.post_catalogue_schema_version,
-        post_catalogue_manifest_hash=attempt_identity.post_catalogue_manifest_hash,
+        result_schema_version=attempt_identity.result_schema_version,
         agent_identity=attempt_identity.agent_identity,
         agent_version=attempt_identity.agent_version,
         instruction_version=attempt_identity.instruction_version,
@@ -337,8 +324,6 @@ def persistence_facts(
         requirement_inventory_component_hash=hashes.requirement_inventory_hash,
         pre_submit_policy_component_hash=hashes.pre_submit_hash,
         post_submit_policy_component_hash=hashes.post_submit_hash,
-        capability_suggestions_component_hash=hashes.capability_suggestions_hash,
-        setup_notes_component_hash=hashes.setup_notes_hash,
         resource_context_digest=SHA256,
     )
     return replace(
@@ -350,16 +335,22 @@ def persistence_facts(
 
 
 async def _seed_project_rows(
-    engine: AsyncEngine, values: dict[str, UUID], generations: int, guide_version: str
+    engine: AsyncEngine, values: dict[str, UUID], generations: int, guide_version: str,
+    task_examples=TASK_EXAMPLES,
 ) -> None:
     sql_values = {name: str(value) for name, value in values.items()}
-    examples = TASK_EXAMPLES
+    examples = validate_task_examples(task_examples)
     example_hash = task_examples_hash(examples)
+    example_manifest = {
+        "task_examples_hash": example_hash,
+        "task_examples_count": len(examples),
+    }
+    snapshot_hash = canonical_json_hash(example_manifest)
     sql_values.update(
         guide_version=guide_version,
         examples=json.dumps([item.model_dump(mode="json") for item in examples]),
         examples_hash=example_hash,
-        example_manifest=json.dumps(TASK_EXAMPLE_MANIFEST),
+        example_manifest=json.dumps(example_manifest),
     )
     async with engine.begin() as connection:
         await connection.execute(text("alter table projects disable trigger user"))
@@ -403,7 +394,7 @@ async def _seed_project_rows(
                 "(:snapshot,:project,:guide,:guide_version,'guide_source_snapshot.task_examples',cast(:example_manifest as json),"
                 ":hash,'test')"
             ),
-            {**sql_values, "hash": SHA256},
+            {**sql_values, "hash": snapshot_hash},
         )
         for generation in range(1, generations + 1):
             await connection.execute(
@@ -417,7 +408,7 @@ async def _seed_project_rows(
                 {
                     **sql_values,
                     "setup": str(values[f"setup_{generation}"]),
-                    "hash": SHA256,
+                    "hash": snapshot_hash,
                     "generation": generation,
                     "task_id": project_guide_compilation_task_id(
                         str(values[f"setup_{generation}"]), generation
@@ -568,12 +559,13 @@ async def seed_database(
     guide_version="v1",
     namespace=None,
     provider_object_ref: str | None = None,
+    task_examples=TASK_EXAMPLES,
 ) -> dict[str, UUID]:
     """Seed only canonical parent rows needed by hidden persistence tests."""
     values = ids()
     engine = create_async_engine(database_url)
     try:
-        await _seed_project_rows(engine, values, generations, guide_version)
+        await _seed_project_rows(engine, values, generations, guide_version, task_examples)
         await _seed_snapshot_item(engine, values)
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session, session.begin():

@@ -32,6 +32,7 @@ from app.interfaces.project_agents import (
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.interfaces.setup_model_proxy import SetupModelProxyReply
 from app.modules.projects.api.guide_documents import GuideDocumentManifest
+from app.modules.projects.api.task_examples import validate_task_examples
 from tests.projects.guide_compilation.helpers import (
     SOURCE_SHA256,
     context,
@@ -67,7 +68,7 @@ async def _open_prompt_documents(agent, prompt, count=None):
 
 def _provider_payload(value=None):
     """Include nullable members required by the provider's strict JSON schema."""
-    payload = (result() if value is None else value).model_dump(mode="json", exclude={"setup_notes"})
+    payload = (result() if value is None else value).model_dump(mode="json")
     for requirement in payload["requirements"]:
         requirement.setdefault("classification_rationale", None)
         requirement.setdefault("check_specification", None)
@@ -333,7 +334,10 @@ async def test_unified_compilation_uses_scoped_tools_and_strict_output(monkeypat
     async def run(agent, prompt, **kwargs):
         calls.append((agent, prompt, kwargs))
         await _open_prompt_documents(agent, prompt)
-        assert agent.instructions == configuration.instructions
+        assert agent.instructions == (
+            configuration.instructions
+            + f'\n\nTrusted output agent_version is "{compilation_context.agent_version}".'
+        )
         assert len(agent.tools) == 2 and agent.handoffs == []
         assert all(isinstance(tool, FunctionTool) for tool in agent.tools)
         assert [tool.name for tool in agent.tools] == ["read_document", "search_document"]
@@ -360,7 +364,7 @@ async def test_unified_compilation_uses_scoped_tools_and_strict_output(monkeypat
         assert supplied["phase"] == "coverage_review"
         assert supplied["guide_setup_context"] == json.loads(calls[0][1])
         assert "runtime_configuration" not in supplied["guide_setup_context"]
-        assert "setup_notes" not in supplied["candidate_proposal"]
+        assert supplied["candidate_proposal"] == _provider_payload()
         return _sdk_result(agent)
 
     monkeypatch.setattr(Runner, "run", run)
@@ -744,15 +748,18 @@ async def test_unified_runtime_rejects_omitted_output_member(monkeypatch):
 async def test_oversized_prompt_is_rejected_before_sdk_execution(monkeypatch):
     configuration = runtime_configuration().model_copy(update={"maximum_manifest_bytes": 1024})
     runtime = OpenAIAgentSdkProjectGuideRuntime(configuration)
+    compilation = context(ids()).model_copy(update={
+        "task_examples": validate_task_examples([{"content": "A" * 1024}]),
+        "runtime_configuration": configuration,
+    })
+    assert len(project_guide_compilation_prompt_bytes(compilation)) > 1024
 
     async def forbidden(*args):
         pytest.fail("oversized prompt reached provider")
 
     monkeypatch.setattr(runtime, "_run", forbidden)
     with pytest.raises(ProjectAgentRuntimeError, match="size limit"):
-        await _compile(runtime,
-            context(ids()).model_copy(update={"runtime_configuration": configuration})
-        )
+        await _compile(runtime, compilation)
 
 
 async def test_runtime_rejects_context_configuration_substitution(monkeypatch):
@@ -859,52 +866,17 @@ async def test_actual_sdk_parser_preserves_known_invalid_output(monkeypatch, kin
     assert calls == ([1, 1] if kind == "valid" else [1, 1, 1])
 
 
-@pytest.mark.parametrize("include_dependency", [True, False])
-async def test_sdk_parser_requires_declared_isolated_execution_dependency(
-    monkeypatch, include_dependency
+@pytest.mark.parametrize("distinct_codes", [True, False])
+async def test_sdk_parser_separates_work_failure_from_inability_to_evaluate(
+    monkeypatch, distinct_codes
 ):
-    """Reproduce the live handoff failure through the actual SDK parser."""
+    """A real SDK parse keeps inability to evaluate out of work verdicts."""
     from agents import Runner
 
     payload = _provider_payload()
-    payload["status"] = "draft_ready_with_warnings"
-    requirement = payload["requirements"][0]
-    requirement["disposition"] = "post_submit_capability_gap"
-    requirement["classification_rationale"] = "Repeated trials need background execution."
-    requirement["platform_coverage"] = None
-    specification = _provider_specification()
-    specification.update(
-        evaluation_method="isolated_execution",
-        execution_mode="background",
-        maximum_duration_seconds=120,
-        runtime_dependencies=[
-            {
-                "dependency_id": "execution",
-                "kind": "isolated_execution",
-                "provisioning": "current_runner",
-                "purpose": "Run the evaluation in an isolated environment.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        ]
-        if include_dependency
-        else [],
-        infrastructure_failures=[
-            {
-                "code": "implementation_unavailable",
-                "condition": "The isolated environment is unavailable.",
-            }
-        ],
-    )
-    requirement["check_specification"] = specification
-    payload["capability_suggestions"] = [
-        {
-            "requirement_id": requirement["requirement_id"],
-            "stage": "post_submit",
-            "title": "Repeated trial evaluation",
-            "rationale": "A project implementation must run the required trials.",
-            "evidence_refs": requirement["evidence_refs"],
-        }
-    ]
+    specification = payload["requirements"][0]["check_specification"]
+    if not distinct_codes:
+        specification["inability_to_evaluate"][0]["code"] = specification["failure_findings"][0]["code"]
     calls = []
 
     async def run(agent, prompt, **kwargs):
@@ -914,18 +886,14 @@ async def test_sdk_parser_requires_declared_isolated_execution_dependency(
 
     monkeypatch.setattr(Runner, "run", run)
     runtime = OpenAIAgentSdkProjectGuideRuntime(runtime_configuration())
-    if include_dependency:
+    if distinct_codes:
         output = await _compile(runtime, context(ids()))
-        assert (
-            output.requirements[0].check_specification.runtime_dependencies[0].kind
-            == "isolated_execution"
-        )
-        assert output.status == "draft_ready_with_warnings"
+        assert output.requirements[0].check_specification.inability_to_evaluate
     else:
         with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
             await _compile(runtime, context(ids()))
         assert caught.value.failure_code == "schema_invalid"
-    assert calls == ([1, 1] if include_dependency else [1, 1, 1])
+    assert calls == ([1, 1] if distinct_codes else [1, 1, 1])
 
 
 async def test_unclassified_sdk_behavior_error_remains_unresolved(monkeypatch):
@@ -1039,13 +1007,9 @@ def test_sdk_output_schema_exposes_the_identifier_rule_to_the_model():
 
     schema = AgentOutputSchema(ProjectGuideCompilationResult).json_schema()
     for owner, field in (
-        ("AtomicGuideRequirement", "requirement_id"),
-        ("PreSubmissionBindingProposal", "requirement_id"),
-        ("PreSubmissionBindingProposal", "capability_id"),
-        ("PreSubmissionBindingProposal", "capability_version"),
-        ("PlatformCoverageRef", "capability_id"),
-        ("PlatformCoverageRef", "capability_version"),
-        ("CapabilityParameter", "name"),
+        ("AtomicGuideRequirement", "suggestion_id"),
+        ("CheckInput", "input_id"),
+        ("CheckFailureFinding", "code"),
         ("CompilationFinding", "code"),
     ):
         pattern = schema["$defs"][owner]["properties"][field]["pattern"]
@@ -1055,8 +1019,8 @@ def test_sdk_output_schema_exposes_the_identifier_rule_to_the_model():
         assert not re.fullmatch(pattern, "r/001")
 
 
-def test_sdk_output_schema_has_one_intake_configuration_and_separate_post_parameters():
-    """Actual SDK schema cannot ask the model for two conflicting intake policies."""
+def test_sdk_output_schema_has_staged_specs_without_implementation_fields():
+    """The model receives check requirements before an implementation is selected."""
     from agents import AgentOutputSchema
 
     from app.interfaces.project_agents import ProjectGuideCompilationResult
@@ -1066,45 +1030,33 @@ def test_sdk_output_schema_has_one_intake_configuration_and_separate_post_parame
     for field in ("maximum_file_size_bytes", "maximum_package_size_bytes"):
         assert field in intake["required"]
         assert {item["type"] for item in intake["properties"][field]["anyOf"]} == {"integer", "null"}
-    pre = schema["$defs"]["PreSubmissionBindingProposal"]
-    post = schema["$defs"]["PostSubmissionBindingProposal"]
-    assert pre["additionalProperties"] is False
-    assert "parameters" in pre["properties"]
-    assert pre["properties"]["parameters"]["maxItems"] == 50
-    assert post["properties"]["parameters"]["maxItems"] == 50
-    assert "parameters" in post["properties"]
-    parameter_values = schema["$defs"]["CapabilityParameter"]["properties"]["value"]["anyOf"]
-    array = next(item for item in parameter_values if item.get("type") == "array")
-    assert array["minItems"] == 1
-    assert array["maxItems"] == 50
+    requirement = schema["$defs"]["AtomicGuideRequirement"]
+    assert {"stage", "classification_rationale", "check_specification"} <= set(requirement["required"])
+    assert "PreSubmissionBindingProposal" not in schema["$defs"]
+    assert "PostSubmissionBindingProposal" not in schema["$defs"]
 
 
-def test_default_instructions_advertise_contextual_output_constraints():
-    """Keep rules the JSON schema cannot express visible to the model."""
+def test_default_instructions_advertise_specification_boundaries():
+    """Keep the non-schema stage and authority rules visible to the model."""
     from app.core.project_guide_instructions import PROJECT_GUIDE_INSTRUCTIONS
 
     instructions = " ".join(PROJECT_GUIDE_INSTRUCTIONS.split())
     for rule in (
-        "The PM sets review mode, revision caps/windows",
-        "Ignore administrative clauses when extracting checks",
-        "PRE: static inspection or other bounded work",
-        "60 seconds",
-        "All model evaluation is POST",
-        "File presence is static",
-        "Project layout, required files, metadata",
-        "Missing implementations are same-stage capability gaps",
-        "Each supported/gap PRE/POST requirement needs the complete typed check_specification",
+        "Read every assigned original incrementally",
+        "untrusted data",
+        "The method is a proposal",
+        "Workstream's separate code-owned default PRE",
+        "an absent implementation cannot",
         "Return exactly one JSON object",
-        "At most two invalid-output corrections",
-        "Reopen the assigned originals",
-        "Leave unspecified project",
-        "source_item_id, document_version_id and sha256",
-        "model_evaluation requires model_service",
-        "registered project image and its exact approved profile",
+        "Reopen assigned originals",
+        "project_guide_check_specification.v1",
     ):
         assert rule in instructions
-    assert "setup_notes" not in instructions
-
+    for forbidden in (
+        "checker_capabilities", "configuration_source", "registered project image",
+        "trial_proxy", "model_proxy", "maximum_duration_seconds",
+    ):
+        assert forbidden not in instructions
 
 
 @pytest.mark.parametrize("blocked_phase", ["draft", "review"])
@@ -1259,6 +1211,9 @@ class _DirectGrant:
 
 
 def _rules(**overrides) -> bytes:
+    from app.core.project_guide_instructions import PROJECT_GUIDE_OUTPUT_EXAMPLE
+
+    specification = PROJECT_GUIDE_OUTPUT_EXAMPLE["result"]["requirements"][0]["check_specification"]
     body = {
         "format": "workstream.project_guide_rules.v1",
         "status": "draft_ready",
@@ -1268,15 +1223,12 @@ def _rules(**overrides) -> bytes:
                                        "maximum_package_size_bytes": 10000,
                                        "required_artifacts": ["submission"]},
         "requirements": [{
-            "requirement_id": "guide.context", "statement": "Use the project guide.",
-            "disposition": "informational", "platform_coverage": None,
-            "classification_rationale": "This identifies the governing guide for the work.",
-            "check_specification": None,
-            # The rules document itself supplies this background requirement.
-            # PDF coverage remains owned by findings, including negative cases.
+            "suggestion_id": "report.present", "statement": "The package contains a report.",
+            "stage": "pre_submit",
+            "classification_rationale": "File presence is bounded intake work.",
+            "check_specification": specification,
             "evidence_refs": [],
-        }], "pre_submit_bindings": [], "post_submit_bindings": [],
-        "capability_suggestions": [], "setup_notes": [],
+        }], "setup_notes": [],
     } | overrides
     return json.dumps(body).encode()
 
@@ -1328,7 +1280,7 @@ async def test_manager_authored_runtime_converts_rules_without_credentials_or_ne
     assert outcome.status == "draft_ready"
     assert (outcome.agent_name, outcome.agent_version, outcome.schema_version) == (
         "ProjectGuideCompilationAgent", compilation_context.agent_version,
-        "project_guide_compilation_result.v1")
+        "project_guide_check_specification.v1")
     first, second = outcome.findings
     assert [(ref.source_item_id, ref.document_version_id, ref.sha256, ref.start_page)
             for ref in first.evidence_refs] == [

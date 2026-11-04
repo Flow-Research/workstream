@@ -13,9 +13,37 @@ import os
 from pathlib import Path
 import shutil
 import socket
+import stat
 import struct
 import time
 import uuid
+
+
+def smol_vm_inventory(path):
+    """Separate execution children from Smol's validated persistent cache lock."""
+    if not path.exists():
+        return set(), None
+    entries = {entry.name: entry for entry in path.iterdir()}
+    lock = entries.pop(".artifact-cache.lock", None)
+    identity = None
+    if lock is not None:
+        metadata = lock.lstat()
+        assert stat.S_ISREG(metadata.st_mode), "engine cache lock is not regular"
+        assert stat.S_IMODE(metadata.st_mode) == 0o600, "engine cache lock mode changed"
+        assert (metadata.st_uid, metadata.st_gid, metadata.st_nlink, metadata.st_size) == (
+            os.geteuid(), os.getegid(), 1, 0,
+        ), "engine cache lock custody changed"
+        identity = (metadata.st_dev, metadata.st_ino)
+    return set(entries), identity
+
+
+def assert_smol_vm_inventory(path, before):
+    """Keep exact execution inventory and any already-observed lock identity."""
+    observed = smol_vm_inventory(path)
+    assert observed[0] == before[0], "Smol VM execution children changed"
+    if before[1] is not None:
+        assert observed[1] == before[1], "engine cache lock identity changed"
+    return observed
 
 
 def canonical(value):

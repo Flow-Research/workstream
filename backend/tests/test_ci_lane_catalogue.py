@@ -247,6 +247,7 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
         "tests/test_alembic.py",
         "tests/test_checker_evidence_migrations.py",
         "tests/migrations/test_project_catalogue_read.py",
+        "tests/migrations/test_guide_check_specification.py",
         "tests/migrations/test_contribution_export_snapshots.py",
         "tests/migrations/test_contribution_read_audit.py",
         "tests/test_database_reset.py",
@@ -298,16 +299,16 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            262,
-            "76bee594b1d740d89d42fa4bf055eb6057458ca066c97cc793f9896bac67b281",
+            263,
+            "dd4f190833ff4f3cc779db50c5153cb5be66ae7d6ee4509b4eabcb2f2da95b25",
         ),
         "project": (
-            245,
-            "15981be12ffa9af776ef6e173de92c350452c7f1d622a715579c2325fba93297",
+            252,
+            "1a407534e6c67adedbe6c5b172c6c1cf5b533ec8154a23c9f442afe5028092cf",
         ),
         "task": (
-            95,
-            "76d96db74da2aecac74466fe118af5ed92ce7d8d9620b68e5790e87c3978aad1",
+            94,
+            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
         ),
     }
     actual = {
@@ -375,9 +376,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 245
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 252
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "e348b051989c4fa15aa330460b4f598fb1f9f457c9b0b8b5d8513892c7c54c58"
+        "921fdc0130de8b9e64bcf6d4bca99654b8f5010080bcbd844830a1aa8b6c6551"
     )
 
 
@@ -979,6 +980,7 @@ def test_shared_acceptance_owner_proofs_are_in_partitioned_project_lanes():
 
 def test_evaluation_custody_proofs_use_project_lane_headroom():
     expected = {
+        "tests/projects/guide_compilation/test_evaluation_context_specifications.py",
         "tests/tasks/post_submit_routing/test_evaluation_guard.py",
         "tests/tasks/post_submit_routing/test_evaluation_currentness.py",
         "tests/tasks/post_submit_routing/test_review_admission_currentness.py",

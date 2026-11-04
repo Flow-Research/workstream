@@ -736,7 +736,7 @@ async def _named_retry(h, operator, name, *, named=None, backend_pids=None):
         return await checker_retry_service(session, operator).retry(_command(h, operator))
 
 
-async def _named_override(h, operator, name):
+async def _named_claim(h, operator, name):
     key = operator.request_id
     async with h.factory() as session:
         await session.execute(
@@ -750,11 +750,10 @@ async def _named_override(h, operator, name):
                 audit=task_transition_audit(session),
                 actor_profile_id=operator.actor_profile_id,
                 settings=get_settings(),
-            ).start(
+            ).claim(
                 h.request.task_id,
-                "Operator recovery start while evaluation is pending",
+                "Claim cannot replace a submitted assignment",
                 idempotency_key=key,
-                operator_override=True,
             )
         finally:
             await session.rollback()
@@ -902,15 +901,15 @@ async def test_task_wait_holds_no_retry_authority_custody(
         assert (await _retry_facts(h))[:4] == (2, 1, 2, 1)
 
 
-@pytest.mark.parametrize("first", ["retry", "override"])
-async def test_retry_and_start_override_keep_task_before_authority(
+@pytest.mark.parametrize("first", ["retry", "claim"])
+async def test_retry_and_claim_keep_task_before_authority(
     tmp_path, isolated_database_env, monkeypatch, first
 ):
     async with _failed_source(tmp_path, isolated_database_env, monkeypatch) as (h, _):
         operator = await _operator_for(h)
-        override_key = new_record_id()
-        override = operator.model_copy(
-            update={"request_id": override_key, "correlation_id": override_key}
+        claim_key = new_record_id()
+        claim_actor = operator.model_copy(
+            update={"request_id": claim_key, "correlation_id": claim_key}
         )
         held, release = asyncio.Event(), asyncio.Event()
         holder_name = f"checker-{first}-authority-holder"
@@ -930,9 +929,9 @@ async def test_retry_and_start_override_keep_task_before_authority(
 
         invoke = {
             "retry": lambda name: _named_retry(h, operator, name),
-            "override": lambda name: _named_override(h, override, name),
+            "claim": lambda name: _named_claim(h, claim_actor, name),
         }
-        second = "override" if first == "retry" else "retry"
+        second = "claim" if first == "retry" else "retry"
         tasks = []
         with monkeypatch.context() as patch:
             patch.setattr(AdminAuthorizationRepository, "lock_request_actor", pause_holder)
@@ -963,7 +962,7 @@ async def test_retry_and_start_override_keep_task_before_authority(
             assert await session.scalar(
                 select(func.count())
                 .select_from(TaskCommandReceipt)
-                .where(TaskCommandReceipt.idempotency_key == override_key)
+                .where(TaskCommandReceipt.idempotency_key == claim_key)
             ) == 0
 
 

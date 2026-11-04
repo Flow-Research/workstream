@@ -35,7 +35,6 @@ from app.interfaces.checker_model_provider import (
     CheckerModelResponseReference,
     CheckerModelUsage,
 )
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.checkers.api.external import ExternalCheckerSchema, external_checker_json_hash
@@ -53,9 +52,7 @@ from tests.checkers.execution.support import (
 )
 from tests.checkers.external.test_trial_evidence import _owner, _subject, _trial_fixture
 from tests.checkers.external.test_trial_profiles import configuration, profile as trial_profile
-from tests.checkers.external.test_trial_policy import trial_specification
 from tests.checkers.external.test_revision_materialization import DiagnosticMaterialization
-from tests.checkers_model_calls.test_composed_execution import model_review_specification
 from tests.checkers_model_calls.test_public_api import profile_spec
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_checker_materialization import _limits
@@ -109,24 +106,6 @@ def _combined_fixture():
         }
     )
     return spec, trial_values, selected_profile, projected, catalog_for
-
-
-def _trial_model_specification() -> CheckSpecification:
-    """Declare both nested execution and its bounded model assessment."""
-    trial = trial_specification()
-    model = model_review_specification()
-    model_dependency = next(
-        item for item in model.runtime_dependencies if item.kind == "model_service"
-    )
-    return CheckSpecification.model_validate(
-        trial.model_dump(mode="json")
-        | {
-            "runtime_dependencies": [
-                *trial.model_dump(mode="json")["runtime_dependencies"],
-                model_dependency.model_dump(mode="json"),
-            ]
-        }
-    )
 
 
 def _receipt(request, grant, ticket, profile, plan):
@@ -234,15 +213,14 @@ async def test_trial_receipt_is_art_retained_before_controlled_model_spend(
             "model_profile_version": profile["spec"]["profile_version"],
             "model_profile_digest": profile["profile_digest"],
         }
-        return tuple(CapabilityParameter(name=key, value=value) for key, value in values.items())
+        return values
 
     async with material_fixture(
         tmp_path,
         isolated_database_env,
         provider="minio",
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=_trial_model_specification(),
+        post_submit_configuration_setup=parameters,
         scratch_limits=_limits(
             aggregate_reserved_bytes=4 * HARD_MAXIMUM_ARTIFACT_BYTES,
             maximum_files=4,

@@ -1,6 +1,7 @@
 """Validate retained post-policy content and operation relations without substitution."""
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,7 +13,12 @@ from app.modules.checkers.api.external_policy import (
 )
 from app.modules.authorization.api import ActorKind
 from app.modules.authorization.api.post_policy import PostPolicyAuthorityReceipt
-from app.modules.projects.api.guide_proposals import GuideProposalError
+from app.modules.projects.api.guide_proposals import (
+    GuideProposalApprovalReceipt,
+    GuideProposalCorrectionReceipt,
+    GuideProposalError,
+)
+from app.modules.projects.guide_compilation.retained_evidence import retained_target
 from app.modules.projects.api.post_policy import (
     PostPolicyReceipt,
     PostPolicyTarget,
@@ -27,16 +33,84 @@ from .models import PostPolicyOperation
 class PostPolicyCustody:
     """One policy and its exact immutable receipts; no current-successor substitution."""
 
-    target: PostPolicyTarget
+    target: PostPolicyTarget | SimpleNamespace
     compiled: LockedExternalPostSubmitPolicy
     projection: PostPolicyOperation
     approval: PostPolicyOperation | None
     correction: PostPolicyOperation | None
 
 
-def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt:
+def _retained_receipt(raw):
+    """Expose old stored POST identities only to private custody checks."""
+    if not isinstance(raw, dict) or set(raw) != {"operation_id", "kind", "target", "correction"}:
+        raise GuideProposalError("proposal_unavailable")
+    target_json = raw["target"]
+    if not isinstance(target_json, dict) or set(target_json) != {
+        "proposal",
+        "upstream",
+        "upstream_output_digest",
+        "policy_id",
+        "projection_operation_id",
+        "policy_hash",
+        "predecessor_policy_id",
+    }:
+        raise GuideProposalError("proposal_unavailable")
+    try:
+        proposal = retained_target(target_json["proposal"])
+        upstream = GuideProposalApprovalReceipt.model_validate(target_json["upstream"])
+        if (
+            upstream.target_digest != proposal.digest
+            or upstream.artifact_policy_id != proposal.artifact_policy_id
+            or canonical_json_hash(target_json["upstream"]) != target_json["upstream_output_digest"]
+        ):
+            raise ValueError("retained upstream approval mismatch")
+        target = SimpleNamespace(
+            proposal=proposal,
+            upstream=upstream,
+            upstream_output_digest=target_json["upstream_output_digest"],
+            policy_id=UUID(target_json["policy_id"]),
+            projection_operation_id=UUID(target_json["projection_operation_id"]),
+            policy_hash=target_json["policy_hash"],
+            predecessor_policy_id=(
+                UUID(target_json["predecessor_policy_id"])
+                if target_json["predecessor_policy_id"]
+                else None
+            ),
+            digest=canonical_json_hash(target_json),
+        )
+        correction = (
+            GuideProposalCorrectionReceipt.model_validate(raw["correction"])
+            if raw["correction"] is not None
+            else None
+        )
+        if (raw["kind"] == "correction") != (correction is not None) or (
+            correction is not None and correction.target_digest != proposal.digest
+        ):
+            raise ValueError("retained correction receipt mismatch")
+        return SimpleNamespace(
+            operation_id=UUID(raw["operation_id"]),
+            kind=raw["kind"],
+            target=target,
+            correction=correction,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise GuideProposalError("proposal_unavailable") from exc
+
+
+def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt | SimpleNamespace:
     """Recompute every stored commitment before trusting a replay or disclosure."""
-    receipt = PostPolicyReceipt.model_validate(operation.receipt_json)
+    if operation.kind not in {"derive", "approve", "correction"}:
+        raise GuideProposalError("proposal_unavailable")
+    retained = (
+        isinstance(operation.target_json, dict)
+        and isinstance(operation.target_json.get("proposal"), dict)
+        and "pre_catalogue_id" in operation.target_json["proposal"]
+    )
+    receipt = (
+        _retained_receipt(operation.receipt_json)
+        if retained
+        else PostPolicyReceipt.model_validate(operation.receipt_json)
+    )
     target = receipt.target
     facts = operation.resource_context_json
     action = (
@@ -54,10 +128,46 @@ def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt:
             UUID(operation.actor_profile_id), operation.idempotency_key, operation.kind
         )
     )
+    expected_facts = {
+        "locator": dict(
+            project_id=operation.project_id,
+            guide_id=operation.guide_id,
+            compilation_id=str(operation.compilation_id),
+            actor_profile_id=operation.actor_profile_id,
+            identity_link_id=operation.identity_link_id,
+            action_id=action,
+            operation_id=str(selector_id),
+        ),
+        "policy_id": operation.policy_id,
+        "finalization_id": str(target.proposal.finalization_id),
+        "setup_run_id": str(target.proposal.setup_run_id),
+        "setup_generation": target.proposal.setup_generation,
+        "upstream_approval_operation_id": str(target.upstream.operation_id),
+        "upstream_approval_output_digest": target.upstream_output_digest,
+        "guide_version": target.proposal.guide_version,
+        "source_snapshot_id": str(target.proposal.source_snapshot_id),
+        "source_snapshot_hash": target.proposal.source_snapshot_hash,
+        "result_hash": target.proposal.result_hash,
+        "post_component_hash": target.proposal.component_hashes.post_submit_hash,
+        "requirement_inventory_hash": target.proposal.component_hashes.requirement_inventory_hash,
+        "effective_policy_id": str(target.upstream.effective_policy_id),
+        "effective_policy_hash": target.upstream.effective_policy_hash,
+        "pre_submit_policy_id": str(target.upstream.pre_submit_policy_id),
+        "pre_submit_bundle_hash": target.upstream.pre_submit_bundle_hash,
+        "projection_operation_id": str(target.projection_operation_id),
+        "lifecycle_status": facts.get("lifecycle_status"),
+        "policy_hash": target.policy_hash,
+        "target_digest": target.digest,
+        "request_digest": operation.request_digest,
+        "output_digest": operation.output_digest,
+    }
+    if retained:
+        expected_facts["catalogue_manifest_hash"] = target.proposal.post_catalogue_manifest_hash
     if (
         receipt.operation_id != operation.operation_id
         or receipt.kind != operation.kind
-        or target.model_dump(mode="json") != operation.target_json
+        or (operation.receipt_json["target"] if retained else target.model_dump(mode="json"))
+        != operation.target_json
         or target.digest != operation.target_digest
         or canonical_json_hash(operation.request_json) != operation.request_digest
         or canonical_json_hash(operation.receipt_json) != operation.output_digest
@@ -71,41 +181,7 @@ def operation_receipt(operation: PostPolicyOperation) -> PostPolicyReceipt:
             facts.get("lifecycle_status")
             not in ({"compiled", "approved"} if operation.kind == "correction" else {"compiled"})
         )
-        or facts
-        != {
-            "locator": dict(
-                project_id=operation.project_id,
-                guide_id=operation.guide_id,
-                compilation_id=str(operation.compilation_id),
-                actor_profile_id=operation.actor_profile_id,
-                identity_link_id=operation.identity_link_id,
-                action_id=action,
-                operation_id=str(selector_id),
-            ),
-            "policy_id": operation.policy_id,
-            "finalization_id": str(target.proposal.finalization_id),
-            "setup_run_id": str(target.proposal.setup_run_id),
-            "setup_generation": target.proposal.setup_generation,
-            "upstream_approval_operation_id": str(target.upstream.operation_id),
-            "upstream_approval_output_digest": target.upstream_output_digest,
-            "guide_version": target.proposal.guide_version,
-            "source_snapshot_id": str(target.proposal.source_snapshot_id),
-            "source_snapshot_hash": target.proposal.source_snapshot_hash,
-            "result_hash": target.proposal.result_hash,
-            "post_component_hash": target.proposal.component_hashes.post_submit_hash,
-            "requirement_inventory_hash": target.proposal.component_hashes.requirement_inventory_hash,
-            "catalogue_manifest_hash": target.proposal.post_catalogue_manifest_hash,
-            "effective_policy_id": str(target.upstream.effective_policy_id),
-            "effective_policy_hash": target.upstream.effective_policy_hash,
-            "pre_submit_policy_id": str(target.upstream.pre_submit_policy_id),
-            "pre_submit_bundle_hash": target.upstream.pre_submit_bundle_hash,
-            "projection_operation_id": str(target.projection_operation_id),
-            "lifecycle_status": facts.get("lifecycle_status"),
-            "policy_hash": target.policy_hash,
-            "target_digest": target.digest,
-            "request_digest": operation.request_digest,
-            "output_digest": operation.output_digest,
-        }
+        or facts != expected_facts
     ):
         raise GuideProposalError("proposal_unavailable")
     return receipt
@@ -153,7 +229,7 @@ async def load_post_policy_custody(session, policy) -> PostPolicyCustody:
         raise GuideProposalError("proposal_unavailable")
     approval, correction = operations.get("approve"), operations.get("correction")
     for operation in (approval, correction):
-        if operation and operation_receipt(operation).target != target:
+        if operation and operation_receipt(operation).target.digest != target.digest:
             raise GuideProposalError("proposal_unavailable")
     if (
         policy.approval_operation_id != (approval.operation_id if approval else None)

@@ -140,7 +140,7 @@ async def test_role_issuance_and_claim_linearize_at_real_authority(
                     assignments[0].submitter_contribution_policy_version_id
                     == task.locked_contribution_policy_version_id
                 )
-                assert task.status == "claimed"
+                assert task.status == "in_progress"
             else:
                 assert assignments == []
                 assert task.status == "ready"

@@ -2630,7 +2630,11 @@ def test_omnicore_runtime_ownership_admits_only_its_runtime_and_topology():
 
 def test_partition_allows_only_exact_guide_compilation_draft_target():
     targets = ownership.GUIDE_COMPILATION_DRAFT_TARGETS
-    assert targets == {"backend/app/adapters/project_agents/compilation_draft.py"}
+    assert targets == {
+        "backend/app/modules/projects/api/retained_activation.py",
+        "backend/app/adapters/project_agents/compilation_draft.py",
+        "backend/app/modules/projects/guide_compilation/retained_evidence.py",
+    }
     retained = "backend/app/core/config.py"
     trusted = _partition([retained])
     ownership._validate_additive_partition_transition(

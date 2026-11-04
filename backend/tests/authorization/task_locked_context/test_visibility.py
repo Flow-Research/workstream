@@ -29,7 +29,7 @@ async def test_locked_context_exact_fields_all_states_and_corrupt_custody(admin_
                        execution_checkers=required, blocking_severities=["critical", "high"])
         expected |= {SUMMARY: summary} if kind == "management" else {}
     states = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
-    assert len(states) == 9
+    assert len(states) == 8
     for state in sorted(states):
         # Independent historical rows exercise read visibility without making
         # an invented needs_revision -> ready transition lacking its receipt.
@@ -85,6 +85,6 @@ async def test_state_visibility_probe_detects_restrictive_guard(admin_access, mo
     def ready_only(action, resource):
         return original(action, resource) and (action not in owner.TASK_LOCKED_CONTEXT_READ_ACTIONS or resource.task_status == "ready")
     monkeypatch.setattr(owner, "task_resource_guard", ready_only)
-    with pytest.raises(AssertionError, match="claimed") as detected:
+    with pytest.raises(AssertionError, match="draft") as detected:
         await test_locked_context_exact_fields_all_states_and_corrupt_custody(admin_access, "management", monkeypatch)
     assert "404 == 200" in str(detected.value)

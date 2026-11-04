@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "5d7bf71b7856e75aa580081db7ef26633ec08f6b0979021372128da6e8729beb",
+  "canonical_sha256": "c53fe1ee270d878745a7d6b6d0886b1b8381fc8180cfc73e24ba29f8c8ab4f3c",
   "components": {
     "schemas": {
       "ApiError": {
@@ -138,28 +138,9 @@
         "title": "AssignmentResponse",
         "type": "object"
       },
-      "HTTPValidationError": {
+      "ContributorClaimTaskResponse": {
         "additionalProperties": false,
-        "properties": {
-          "detail": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "error": {
-            "$ref": "#/components/schemas/ApiError"
-          }
-        },
-        "required": [
-          "detail",
-          "error"
-        ],
-        "type": "object"
-      },
-      "TaskResponse": {
-        "additionalProperties": false,
-        "description": "Response schema for task records.",
+        "description": "Claim task facts without management-only source or policy coordinates.",
         "properties": {
           "acceptance_criteria": {
             "anyOf": [
@@ -172,32 +153,10 @@
             ],
             "title": "Acceptance Criteria"
           },
-          "assigned_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assigned To"
-          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
           },
           "deadline_at": {
             "anyOf": [
@@ -237,31 +196,9 @@
             ],
             "title": "Estimated Time Minutes"
           },
-          "external_task_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Task Id"
-          },
           "id": {
             "title": "Id",
             "type": "string"
-          },
-          "import_batch_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Import Batch Id"
           },
           "locked_contribution_policy_version_id": {
             "anyOf": [
@@ -275,50 +212,6 @@
             ],
             "title": "Locked Contribution Policy Version Id"
           },
-          "locked_effective_project_submission_artifact_policy_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Effective Project Submission Artifact Policy Hash"
-          },
-          "locked_effective_project_submission_artifact_policy_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Effective Project Submission Artifact Policy Id"
-          },
-          "locked_guide_source_snapshot_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Guide Source Snapshot Hash"
-          },
-          "locked_guide_source_snapshot_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Guide Source Snapshot Id"
-          },
           "locked_guide_version": {
             "anyOf": [
               {
@@ -329,28 +222,6 @@
               }
             ],
             "title": "Locked Guide Version"
-          },
-          "locked_pre_submit_checker_bundle_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Pre Submit Checker Bundle Hash"
-          },
-          "locked_pre_submit_checker_policy_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Locked Pre Submit Checker Policy Id"
           },
           "locked_review_policy_generation": {
             "anyOf": [
@@ -440,28 +311,6 @@
             "title": "Skill Tags",
             "type": "array"
           },
-          "source_payload_hash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Payload Hash"
-          },
-          "source_ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Ref"
-          },
           "source_type": {
             "title": "Source Type",
             "type": "string"
@@ -502,17 +351,7 @@
           "locked_revision_policy_id",
           "locked_revision_policy_generation",
           "locked_revision_policy_hash",
-          "locked_guide_source_snapshot_id",
-          "locked_guide_source_snapshot_hash",
-          "locked_effective_project_submission_artifact_policy_id",
-          "locked_effective_project_submission_artifact_policy_hash",
-          "locked_pre_submit_checker_policy_id",
-          "locked_pre_submit_checker_bundle_hash",
           "source_type",
-          "source_ref",
-          "source_payload_hash",
-          "import_batch_id",
-          "external_task_id",
           "title",
           "description",
           "task_type",
@@ -523,12 +362,47 @@
           "acceptance_criteria",
           "rejection_criteria",
           "deadline_at",
-          "created_by",
-          "assigned_to",
           "created_at",
           "updated_at"
         ],
-        "title": "TaskResponse",
+        "title": "ContributorClaimTaskResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "detail",
+          "error"
+        ],
+        "type": "object"
+      },
+      "TaskClaimResponse": {
+        "additionalProperties": false,
+        "description": "Public claim projection; internal command receipts keep their full shape.",
+        "properties": {
+          "assignment": {
+            "$ref": "#/components/schemas/AssignmentResponse"
+          },
+          "task": {
+            "$ref": "#/components/schemas/ContributorClaimTaskResponse"
+          }
+        },
+        "required": [
+          "task",
+          "assignment"
+        ],
+        "title": "TaskClaimResponse",
         "type": "object"
       },
       "TaskTransitionRequest": {
@@ -550,28 +424,11 @@
         },
         "title": "TaskTransitionRequest",
         "type": "object"
-      },
-      "TaskWithAssignmentResponse": {
-        "additionalProperties": false,
-        "description": "Response schema for a task operation that creates or uses an assignment.",
-        "properties": {
-          "assignment": {
-            "$ref": "#/components/schemas/AssignmentResponse"
-          },
-          "task": {
-            "$ref": "#/components/schemas/TaskResponse"
-          }
-        },
-        "required": [
-          "task",
-          "assignment"
-        ],
-        "title": "TaskWithAssignmentResponse",
-        "type": "object"
       }
     }
   },
   "operation": {
+    "description": "Claim ready work and atomically enter in_progress with started_at=assigned_at.",
     "operationId": "claim_task_api_v1_tasks__task_id__claim_post",
     "parameters": [
       {
@@ -638,7 +495,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/TaskWithAssignmentResponse"
+              "$ref": "#/components/schemas/TaskClaimResponse"
             }
           }
         },
@@ -890,6 +747,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/claim",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "04437e7615f7693bfd9aa1706af933c61a1c4bc0"
   }
 }

@@ -19,7 +19,6 @@ STATUSES = (
     "draft",
     "screening",
     "ready",
-    "claimed",
     "in_progress",
     "submitted",
     "evaluation_pending",

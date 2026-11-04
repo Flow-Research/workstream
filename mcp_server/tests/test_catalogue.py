@@ -173,7 +173,7 @@ def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
         *(TASK_EXECUTION_INPUT_SCHEMAS[name] for name in TASK_EXECUTION_CONTRACT_NAMES),
         *(task_operation_input_schema(name) for name in TASK_OPERATION_CONTRACT_NAMES),
     ]
-    assert [item["outputSchema"] for item in listed[-24:]] == [
+    assert [item["outputSchema"] for item in listed[-len(TASK_OPERATION_CONTRACT_NAMES):]] == [
         task_operation_output_schema(name) for name in TASK_OPERATION_CONTRACT_NAMES
     ]
 

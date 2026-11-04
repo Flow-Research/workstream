@@ -28,7 +28,6 @@ type Client interface {
 	SubmissionFindings(context.Context, string, string, int, *string) (api.Result[api.SubmissionFindingsResult], error)
 	DownloadGuideDocument(context.Context, string, api.TaskGuideDocument, io.Writer) error
 	ClaimTask(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
-	StartTask(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
 }
 
 var _ Client = (*api.Client)(nil)

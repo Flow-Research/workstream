@@ -12,10 +12,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.hashing import canonical_json_hash
 from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
+from app.modules.projects.guide_compilation.contracts import accepted_compilation_result
 from app.modules.projects.guide_compilation.validation import TERMINAL_FAILURE_CODES
 
-from .helpers import context, identity, seed_database
+from .helpers import context, identity, result, seed_database
+from .runtime_fixtures import record_attempt_document_access
 
 
 async def _reserved(database_url: str):
@@ -26,6 +29,21 @@ async def _reserved(database_url: str):
         _, attempt = await GuideCompilationRepository(session).reserve_attempt(
             identity(context(values)), runtime_configuration=runtime_configuration()
         )
+    return engine, attempt
+
+
+async def _uncertain_with_document_access(database_url: str):
+    values = await seed_database(database_url)
+    engine = create_async_engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    compilation_context = context(values)
+    async with factory() as session, session.begin():
+        repository = GuideCompilationRepository(session)
+        _, attempt = await repository.reserve_attempt(
+            identity(compilation_context), runtime_configuration=runtime_configuration()
+        )
+        await repository.mark_provider_uncertain(attempt.id)
+    await record_attempt_document_access(factory, attempt.id, compilation_context)
     return engine, attempt
 
 
@@ -74,37 +92,114 @@ async def test_attempt_identity_rejects_noncanonical_source_hash(
 async def test_accepted_state_rejects_null_component_hashes(
     clean_postgres_database: str,
 ) -> None:
-    """Explicit JSON nulls cannot satisfy accepted component custody."""
-    engine, attempt = await _reserved(clean_postgres_database)
-    null_hashes = {
-        name: None
-        for name in (
-            "sufficiency_hash",
-            "artifact_policy_hash",
-            "requirement_inventory_hash",
-            "pre_submit_hash",
-            "post_submit_hash",
-            "capability_suggestions_hash",
-            "setup_notes_hash",
-        )
+    """Each current hash is required even when every other accepted fact is valid."""
+    engine, attempt = await _uncertain_with_document_access(clean_postgres_database)
+    accepted = accepted_compilation_result(result())
+    hashes = accepted.component_hashes.model_dump(mode="json")
+    assert hashes["schema_version"] == "project_guide_check_specification_hashes.v1"
+    update = text(
+        "update project_guide_compilation_attempts set status='provider_result_accepted',"
+        "accepted_at=now(),canonical_result=cast(:result as json),result_hash=:hash,"
+        "component_hashes=cast(:components as json) where id=:id"
+    )
+    base = {
+        "id": attempt.id,
+        "result": json.dumps(accepted.canonical_result),
+        "hash": accepted.result_hash,
+        "components": json.dumps(hashes),
     }
     try:
         async with engine.begin() as connection:
-            with pytest.raises(DBAPIError):
-                await connection.execute(
-                    text(
-                        "update project_guide_compilation_attempts set status='provider_result_accepted',"
-                        "accepted_at=now(),canonical_result='{}'::json,result_hash=:hash,"
-                        "component_hashes=cast(:components as json) where id=:id"
-                    ),
-                    {
-                        "id": attempt.id,
-                        "hash": "sha256:" + "a" * 64,
-                        "components": json.dumps(null_hashes),
-                    },
-                )
+            valid_transition = await connection.begin_nested()
+            await connection.execute(update, base)
+            assert await connection.scalar(
+                text("select status from project_guide_compilation_attempts where id=:id"),
+                {"id": attempt.id},
+            ) == "provider_result_accepted"
+            await valid_transition.rollback()
+            for name in hashes:
+                if name == "schema_version":
+                    continue
+                null_hashes = {**hashes, name: None}
+                with pytest.raises(
+                    DBAPIError,
+                    match="ck_project_guide_compilation_attempts_ck_compilation_at_31c4",
+                ):
+                    async with connection.begin_nested():
+                        await connection.execute(
+                            update, {**base, "components": json.dumps(null_hashes)}
+                        )
+            assert await connection.scalar(
+                text("select status from project_guide_compilation_attempts where id=:id"),
+                {"id": attempt.id},
+            ) == "compilation_provider_uncertain"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_accepted_state_rejects_null_or_missing_json_schema_versions(
+    clean_postgres_database: str,
+) -> None:
+    """A valid accepted transition cannot omit either current format discriminator."""
+    engine, attempt = await _uncertain_with_document_access(clean_postgres_database)
+    accepted = accepted_compilation_result(result())
+    body = accepted.canonical_result
+    hashes = accepted.component_hashes.model_dump(mode="json")
+    update = text(
+        "update project_guide_compilation_attempts set status='provider_result_accepted',"
+        "accepted_at=now(),canonical_result=cast(:result as json),result_hash=:hash,"
+        "component_hashes=cast(:components as json) where id=:id"
+    )
+    outcomes = {}
+    try:
+        async with engine.begin() as connection:
+            for variant in (
+                "control", "component_null", "component_missing",
+                "result_null", "result_missing",
+            ):
+                candidate_body = dict(body)
+                candidate_hashes = dict(hashes)
+                if variant == "component_null":
+                    candidate_hashes["schema_version"] = None
+                elif variant == "component_missing":
+                    candidate_hashes.pop("schema_version")
+                elif variant == "result_null":
+                    candidate_body["schema_version"] = None
+                elif variant == "result_missing":
+                    candidate_body.pop("schema_version")
+                savepoint = await connection.begin_nested()
+                try:
+                    await connection.execute(update, {
+                        "id": attempt.id,
+                        "result": json.dumps(candidate_body),
+                        "hash": canonical_json_hash(candidate_body),
+                        "components": json.dumps(candidate_hashes),
+                    })
+                    outcomes[variant] = "accepted"
+                except DBAPIError as exc:
+                    message = str(exc.orig)
+                    if "ck_project_guide_compilation_attempts_ck_compilation_at_31c4" in message:
+                        outcomes[variant] = "component_hashes_constraint"
+                    elif "ck_compilation_attempt_spec_result" in message:
+                        outcomes[variant] = "result_schema_constraint"
+                    else:
+                        outcomes[variant] = message.splitlines()[0][:120]
+                finally:
+                    await savepoint.rollback()
+            assert await connection.scalar(
+                text("select status from project_guide_compilation_attempts where id=:id"),
+                {"id": attempt.id},
+            ) == "compilation_provider_uncertain"
+    finally:
+        await engine.dispose()
+    assert outcomes == {
+        "control": "accepted",
+        "component_null": "component_hashes_constraint",
+        "component_missing": "component_hashes_constraint",
+        "result_null": "result_schema_constraint",
+        "result_missing": "result_schema_constraint",
+    }
 
 
 @pytest.mark.asyncio

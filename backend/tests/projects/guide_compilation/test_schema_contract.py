@@ -11,7 +11,7 @@ import pytest
 pytestmark = pytest.mark.postgres_schema_contract
 
 
-async def _schema_state(database_url: str) -> tuple[str, bool, int, int, int, int]:
+async def _schema_state(database_url: str) -> tuple[str, bool, set[str], int, int, int]:
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         return (
@@ -19,12 +19,12 @@ async def _schema_state(database_url: str) -> tuple[str, bool, int, int, int, in
             await connection.fetchval(
                 "select to_regclass('project_guide_compilation_attempts') is not null"
             ),
-            await connection.fetchval(
-                "select count(*) from pg_trigger where not tgisinternal and tgrelid in "
+            {row["tgname"] for row in await connection.fetch(
+                "select tgname from pg_trigger where not tgisinternal and tgenabled='O' and tgrelid in "
                 "(select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace "
                 "where n.nspname='public' and c.relname in "
                 "('project_guide_compilation_attempts','project_guide_compilations'))"
-            ),
+            )},
             await connection.fetchval(
                 "select count(*) from pg_constraint where conrelid='audit_events'::regclass "
                 "and conname='ck_audit_events_authorization_action_evidence' and "
@@ -51,7 +51,16 @@ def test_current_schema_preserves_guide_compilation_schema(
     assert asyncio.run(_schema_state(isolated_database_env)) == (
         current_schema_revision(),
         True,
-        6,
+        {
+            "compilation_document_evidence_guard",
+            "project_guide_runtime_configuration_guard",
+            "trg_compilation_attempt_delete",
+            "trg_compilation_attempt_update",
+            "trg_compilation_insert",
+            "trg_compilation_mutation",
+            "guide_specification_attempt_insert",
+            "current_guide_compilation_insert",
+        },
         1,
         1,
         1,

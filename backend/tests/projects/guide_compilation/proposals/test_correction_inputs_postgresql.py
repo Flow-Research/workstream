@@ -80,7 +80,7 @@ async def test_correction_rejects_missing_or_altered_predecessor_custody(clean_p
                 {
                     "component_hashes": {
                         **predecessor.component_hashes,
-                        "setup_notes_hash": "sha256:" + "f" * 64,
+                        "pre_submit_hash": "sha256:" + "f" * 64,
                     }
                 },
             ):

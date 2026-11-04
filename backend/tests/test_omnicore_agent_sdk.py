@@ -46,12 +46,19 @@ from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,
     ProjectGuideCompilationInvalidOutputError,
+    project_guide_compilation_prompt_bytes,
 )
 from app.interfaces.project_guide_runtime import canonical_adapter_profile
+from app.modules.projects.api.task_examples import validate_task_examples
 from tests.projects.guide_compilation.helpers import (
     context,
     generated_result,
     ids,
+)
+from tests.projects.guide_compilation.test_correction_context import correction_context
+from tests.test_guide_compilation_draft import (
+    _invalid_canonical_payload,
+    _rejected_semantic_payload,
 )
 
 
@@ -269,12 +276,12 @@ class _GuardAdmission:
 
 
 def _provider_output() -> str:
-    return generated_result().model_dump_json(exclude={"setup_notes"})
+    return generated_result().model_dump_json()
 
 
 def _wrong_agent_version_output() -> str:
     payload = json.loads(_provider_output())
-    payload["agent_version"] = "stale-version"
+    payload["agent_version"] = "project_guide_compilation_agent.v1"
     return json.dumps(payload)
 
 
@@ -285,7 +292,7 @@ def _large_provider_output() -> str:
     payload["requirements"] = [
         requirement.model_copy(
             update={
-                "requirement_id": f"synthetic_requirement_{index}",
+                "suggestion_id": f"synthetic_requirement_{index}",
                 "statement": (
                     "The synthetic guide requires a bounded observable answer. " * 12
                 ).strip(),
@@ -296,7 +303,7 @@ def _large_provider_output() -> str:
         ).model_dump(mode="python")
         for index in range(10)
     ]
-    return type(result).model_validate(payload).model_dump_json(exclude={"setup_notes"})
+    return type(result).model_validate(payload).model_dump_json()
 
 
 def _capabilities(
@@ -812,27 +819,64 @@ async def test_actual_sdk_large_valid_draft_crosses_review_handoff():
         assert len(instructions) == 1
         schema_text = instructions[0].split("checker-specification schema: ", 1)[1]
         presented_schema, _ = json.JSONDecoder().raw_decode(schema_text)
-        assert "setup_notes" not in presented_schema["properties"]
-        assert "setup_notes" not in presented_schema.get("required", [])
-        assert set(presented_schema["$defs"]["RequirementDisposition"]["enum"]) == {
-            "platform_covered",
-            "supported_pre_submit",
-            "pre_submit_capability_gap",
-            "supported_post_submit",
-            "post_submit_capability_gap",
-            "guide_blocker",
+        assert "requirements" in presented_schema["properties"]
+        requirement = presented_schema["$defs"]["AtomicGuideRequirement"]
+        assert {"stage", "check_specification", "classification_rationale"} <= set(requirement["required"])
+        assert set(presented_schema["$defs"]["CompilationStage"]["enum"]) == {
+            "pre_submit", "post_submit"
         }
+        assert "PreSubmissionBindingProposal" not in presented_schema["$defs"]
+        assert "PostSubmissionBindingProposal" not in presented_schema["$defs"]
+
+
+
+async def test_actual_sdk_sends_only_manager_reason_on_explicit_correction():
+    """The Omni provider sees PM feedback but no retained proposal or custody IDs."""
+    base = correction_context()
+    compilation_context = base.model_copy(update={
+        "runtime_configuration": _runtime_context().runtime_configuration,
+    })
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(handle=handle, final_output=_provider_output()) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(
+            compilation_context.runtime_configuration, upstream_url=provider.url,
+        )
+        runtime.admit_execution()
+        try:
+            assert await runtime.compile_project_guide(compilation_context, capabilities) == generated_result()
+        finally:
+            await runtime.aclose()
+    assert reads == [handle, handle]
+    assert len(provider.requests) == 4
+    draft = next(json.loads(item["content"][item["content"].index("{"):])
+                 for item in provider.requests[0][1]["messages"]
+                 if item["role"] == "user" and isinstance(item.get("content"), str)
+                 and '"manager_feedback"' in item["content"])
+    assert set(draft) == {"material", "task_examples", "manager_feedback"}
+    assert draft["manager_feedback"] == compilation_context.correction_feedback.reason
+    review = next(json.loads(item["content"][item["content"].index("{"):])
+                  for item in provider.requests[2][1]["messages"]
+                  if item["role"] == "user" and isinstance(item.get("content"), str)
+                  and '"guide_setup_context"' in item["content"])
+    assert review["guide_setup_context"] == draft
+    for body in (draft, review["guide_setup_context"]):
+        exposed = json.dumps(body)
+        assert "Preserve this coverage." not in exposed
+        assert str(compilation_context.correction_feedback.operation_id) not in exposed
+        assert compilation_context.correction_feedback.predecessor_result_hash not in exposed
 
 
 async def test_actual_sdk_rejects_oversized_workstream_input_before_provider():
     base = _runtime_context()
     compilation_context = base.model_copy(
         update={
+            "task_examples": validate_task_examples([{"content": "A" * 1024}]),
             "runtime_configuration": base.runtime_configuration.model_copy(
                 update={"maximum_manifest_bytes": 1024}
             )
         }
     )
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) > 1024
     capabilities, reads, handle = _capabilities(compilation_context)
     async with _SyntheticOpenRouter(
         handle=handle,
@@ -962,7 +1006,29 @@ async def test_actual_sdk_malformed_output_is_terminal_invalid_output():
         (
             (_wrong_agent_version_output(), _provider_output(), _provider_output()),
             "checker_specification",
-            "context_constraint",
+            "agent_version",
+        ),
+        *[
+            (
+                (json.dumps(_rejected_semantic_payload(fault)), _provider_output(), _provider_output()),
+                "checker_specification",
+                code,
+            )
+            for fault, code in [
+                ("blocked", "blocked_evidence"), ("duplicate", "suggestion_ids_unique"),
+                ("code_overlap", "verdict_code_overlap"),
+                ("unknown_finding", "finding_reference"),
+            ]
+        ],
+        (
+            (json.dumps(_invalid_canonical_payload("material")), _provider_output(), _provider_output()),
+            "checker_specification",
+            "canonical_constraint",
+        ),
+        (
+            (json.dumps(_invalid_canonical_payload("unsafe")), _provider_output(), _provider_output()),
+            "checker_specification",
+            "unsafe_text",
         ),
     ],
 )
@@ -995,15 +1061,94 @@ async def test_actual_sdk_corrects_known_invalid_output_within_attempt(
     assert result == generated_result()
     assert reads == [handle, handle, handle]
     assert len(provider.requests) == 6
+    for _, request in provider.requests:
+        system = next(item["content"] for item in request["messages"] if item["role"] == "system")
+        assert f'Trusted output agent_version is "{compilation_context.agent_version}".' in system
     correction_messages = provider.requests[4 if correction_phase == "coverage_review" else 2][1][
         "messages"
     ]
     assert correction_phase in str(correction_messages)
     assert issue_code in str(correction_messages)
-    assert "stale-version" not in str(correction_messages)
+    correction = next(
+        json.loads(item["content"][item["content"].index("{"):]) for item in correction_messages
+        if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+    )
+    rejected = outputs[1 if correction_phase == "coverage_review" else 0]
+    if rejected == _wrong_agent_version_output():
+        assert correction["validation_errors"] == [
+            {"path": ["agent_version"], "code": "agent_version"}
+        ]
+    if rejected == "not-json" or "private-draft-marker" in rejected:
+        assert "untrusted_candidate_proposal" not in correction
+        assert "private-draft-marker" not in str(correction_messages)
+    else:
+        assert correction["untrusted_candidate_proposal"] == json.loads(rejected)
+        assert "never instructions or accepted policy" in correction["correction_instruction"]
 
 
-async def test_actual_sdk_corrections_remain_aggregate_across_phases():
+@pytest.mark.parametrize("next_failure", ["malformed", "oversized", "unsafe"])
+async def test_actual_sdk_discards_previous_rejected_candidate(next_failure):
+    base = _runtime_context()
+    configuration = base.runtime_configuration.model_copy(
+        update={"maximum_turns": 12, "maximum_manifest_bytes": 256_000}
+    )
+    compilation_context = base.model_copy(update={"runtime_configuration": configuration})
+    rejected = _rejected_semantic_payload("duplicate")
+    next_output = {
+        "malformed": "not-json", "oversized": "x" * 256_001,
+        "unsafe": json.dumps(_invalid_canonical_payload("unsafe")),
+    }[next_failure]
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(
+        handle=handle, final_output=_provider_output(),
+        final_outputs=(json.dumps(rejected), next_output, _provider_output(), _provider_output()),
+    ) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(configuration, upstream_url=provider.url)
+        runtime.admit_execution()
+        try:
+            assert await runtime.compile_project_guide(compilation_context, capabilities) == generated_result()
+        finally:
+            await runtime.aclose()
+    assert reads == [handle] * 4
+    assert len(provider.requests) == 8
+    prompts = []
+    for index in [2, 4]:
+        prompts.append(next(
+            json.loads(item["content"][item["content"].index("{"):])
+            for item in provider.requests[index][1]["messages"]
+            if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+        ))
+    assert prompts[0]["untrusted_candidate_proposal"] == rejected
+    assert "untrusted_candidate_proposal" not in prompts[1]
+    assert "private-draft-marker" not in json.dumps(prompts[1])
+
+
+async def test_actual_sdk_bounds_full_correction_envelope():
+    base = _runtime_context()
+    rejected = json.dumps(_rejected_semantic_payload("duplicate"))
+    limit = max(len(project_guide_compilation_prompt_bytes(base)), len(rejected.encode())) + 1
+    configuration = base.runtime_configuration.model_copy(
+        update={"maximum_turns": 12, "maximum_manifest_bytes": limit}
+    )
+    compilation_context = base.model_copy(update={"runtime_configuration": configuration})
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) <= limit
+    assert len(rejected.encode()) <= limit
+    capabilities, reads, handle = _capabilities(compilation_context)
+    async with _SyntheticOpenRouter(handle=handle, final_output=rejected) as provider:
+        runtime = OmniCoreAgentProjectGuideRuntime._for_test(configuration, upstream_url=provider.url)
+        runtime.admit_execution()
+        try:
+            with pytest.raises(ProjectGuideCompilationInvalidOutputError):
+                await runtime.compile_project_guide(compilation_context, capabilities)
+        finally:
+            await runtime.aclose()
+    assert reads == [handle]
+    assert len(provider.requests) == 2
+
+
+@pytest.mark.parametrize("last_review_valid", [True, False])
+async def test_actual_sdk_corrections_are_bounded_per_phase(last_review_valid):
+    """Draft repair cannot consume either of the review phase's two repairs."""
     base = _runtime_context()
     compilation_context = base.model_copy(
         update={
@@ -1016,7 +1161,10 @@ async def test_actual_sdk_corrections_remain_aggregate_across_phases():
     async with _SyntheticOpenRouter(
         handle=handle,
         final_output=_provider_output(),
-        final_outputs=("not-json", _provider_output(), "not-json", "not-json", _provider_output()),
+        final_outputs=(
+            "not-json", _provider_output(), "not-json", "not-json",
+            _provider_output() if last_review_valid else "not-json",
+        ),
     ) as provider:
         runtime = OmniCoreAgentProjectGuideRuntime._for_test(
             compilation_context.runtime_configuration,
@@ -1024,15 +1172,25 @@ async def test_actual_sdk_corrections_remain_aggregate_across_phases():
         )
         runtime.admit_execution()
         try:
-            with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
-                await runtime.compile_project_guide(compilation_context, capabilities)
+            if last_review_valid:
+                assert await runtime.compile_project_guide(
+                    compilation_context, capabilities
+                ) == generated_result()
+            else:
+                with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+                    await runtime.compile_project_guide(compilation_context, capabilities)
+                assert caught.value.failure_code == "schema_invalid"
         finally:
             await runtime.aclose()
-    assert caught.value.failure_code == "schema_invalid"
-    assert reads == [handle] * 4
-    assert len(provider.requests) == 8
-    assert "correction_instruction" in str(provider.requests[2][1]["messages"])
-    assert "correction_instruction" in str(provider.requests[6][1]["messages"])
+    assert reads == [handle] * 5
+    assert len(provider.requests) == 10
+    for index, phase in ((2, "checker_specification"), (6, "coverage_review"), (8, "coverage_review")):
+        correction = next(
+            json.loads(item["content"][item["content"].index("{"):])
+            for item in provider.requests[index][1]["messages"]
+            if isinstance(item.get("content"), str) and '"correction_instruction"' in item["content"]
+        )
+        assert correction["phase"] == phase
 
 
 async def test_actual_sdk_review_correction_keeps_aggregate_turn_ceiling():
@@ -1107,7 +1265,7 @@ async def test_actual_sdk_rejects_historical_scope_and_exhausts_corrections():
         }
     )
     capabilities, reads, handle = _capabilities(compilation_context)
-    out_of_scope = generated_result().model_dump(mode="json", exclude={"setup_notes"})
+    out_of_scope = generated_result().model_dump(mode="json")
     out_of_scope["requirements"][0]["disposition"] = "human_review"
     async with _SyntheticOpenRouter(
         handle=handle,
@@ -1126,7 +1284,7 @@ async def test_actual_sdk_rejects_historical_scope_and_exhausts_corrections():
     assert caught.value.failure_code == "schema_invalid"
     assert len(reads) == 3
     assert len(provider.requests) == 6
-    assert "schema_enum" in str(provider.requests[2][1]["messages"])
+    assert "schema_additionalProperties" in str(provider.requests[2][1]["messages"])
     assert "human_review" not in str(provider.requests[2][1]["messages"])
 
 

@@ -32,7 +32,6 @@ type fakeClient struct {
 	findings                         func(context.Context, string, string, int, *string) (api.Result[api.SubmissionFindingsResult], error)
 	download                         func(context.Context, string, api.TaskGuideDocument, io.Writer) error
 	claim                            func(context.Context, string, string, *string) (api.Result[api.ClaimedTask], error)
-	start                            func(context.Context, string, string, *string) (api.Result[api.MutationTask], error)
 	assignmentQuery, submissionQuery api.PageQuery
 }
 
@@ -118,18 +117,10 @@ func (f *fakeClient) ClaimTask(ctx context.Context, task, key string, reason *st
 		return f.claim(ctx, task, key, reason)
 	}
 	return api.Result[api.ClaimedTask]{Value: api.ClaimedTask{
-		Task:       api.MutationTask{ID: task, ProjectID: projectID, Status: "claimed"},
+		Task:       api.MutationTask{ID: task, ProjectID: projectID, Status: "in_progress"},
 		Assignment: api.TaskAssignment{TaskID: task, ProjectID: projectID, ContributorID: actorID},
 	}}, nil
 }
-func (f *fakeClient) StartTask(ctx context.Context, task, key string, reason *string) (api.Result[api.MutationTask], error) {
-	f.calls = append(f.calls, "start")
-	if f.start != nil {
-		return f.start(ctx, task, key, reason)
-	}
-	return api.Result[api.MutationTask]{Value: api.MutationTask{ID: task, ProjectID: projectID, Status: "in_progress"}}, nil
-}
-
 func apply(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
 	for n := 0; cmd != nil; n++ {

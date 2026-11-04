@@ -80,7 +80,7 @@ Trial evidence is stored in:
 - [Checker Trial Failure Catalog](checker_trial_failure_catalog.md)
 - backend API integration tests for the sample matrix
 
-The trial test must use real backend API calls for project creation, guide activation, task screening/release, worker claim/start, submission creation, submission finalization, checker run reads, and trusted checker retry. Direct database setup is allowed only to create the controlled locked task setup defect that normal lifecycle guards are designed to prevent.
+The trial test must use real backend API calls for project creation, guide activation, task screening/release, contributor claim (which starts work), submission creation, submission finalization, checker run reads, and trusted checker retry. Direct database setup is allowed only to create the controlled locked task setup defect that normal lifecycle guards are designed to prevent.
 
 The deterministic closeout drill must then verify through API-visible state:
 

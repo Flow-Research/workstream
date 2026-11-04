@@ -6,7 +6,6 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import text
 
-from app.adapters.artifacts import guide_document_manifest_port
 from app.core.identifiers import new_record_id
 from app.modules.authorization.api import ActorKind
 from app.modules.authorization.guide_proposal_authorization import GuideProposalAuthorizationAdapter
@@ -79,14 +78,11 @@ async def mutate(factory, actor, payload):
     async with service(factory, actor) as (session, owner, request):
         if isinstance(payload, GuideProposalCorrection):
             return await owner.request_correction(payload, actor=actor, request_id=request)
-        from app.adapters.checkers import external_checker_capability_projection
 
         return await owner.approve(
             payload,
             actor=actor,
             request_id=request,
-            material=guide_document_manifest_port(session),
-            capabilities=await external_checker_capability_projection(session),
         )
 
 
@@ -127,6 +123,7 @@ async def test_real_proposal_transaction_replay_and_revocation(clean_postgres_da
         assert before_events[0]["resource_id"] == str(command.compilation_id)
         payload = (
             GuideProposalApproval(
+                pre_submit_attachments=(), post_submit_attachments=(),
                 target=review.target,
                 idempotency_key=uuid4(),
                 acknowledged_warning_hashes=review.warning_hashes,
@@ -200,6 +197,7 @@ async def test_real_authority_denial_has_no_product_or_allowed_writes(
                     factory,
                     actor,
                     GuideProposalApproval(
+                pre_submit_attachments=(), post_submit_attachments=(),
                         target=review.target,
                         idempotency_key=uuid4(),
                         acknowledged_warning_hashes=review.warning_hashes,

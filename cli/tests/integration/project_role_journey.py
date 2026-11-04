@@ -400,7 +400,7 @@ async def exercise_project_role_decisions(
             all_events_after,
         )
         # Cleanup only this helper's extra management authority; contributor
-        # state and the existing claim/start denial assertions remain independent.
+        # state and the existing claim denial assertions remain independent.
         await post(
             f"/api/v1/admin-role-grants/{covering['resource_id']}/revoke",
             {"reason": "Role CLI proof complete"},

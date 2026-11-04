@@ -36,8 +36,6 @@ def next_action(
     """The one contributor action this claim currently allows, or ``none``."""
     if state != "active":
         return "none"
-    if task_status == "claimed":
-        return "start"
     if task_status == "in_progress":
         return "prepare_submission"
     if task_status in _AWAITING:

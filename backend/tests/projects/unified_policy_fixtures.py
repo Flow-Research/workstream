@@ -110,7 +110,10 @@ async def create_unified_submission_policy(
         return SubmissionArtifactPolicyResponse.model_validate(policy).model_dump(mode="json")
 
 
-async def approve_unified_submission_policy(project_id, guide_id, policy_id, *, sessions=None):
+async def approve_unified_submission_policy(
+    project_id, guide_id, policy_id, *, sessions=None,
+    pre_submit_attachments, post_submit_attachments,
+):
     """Use strict hidden test authority and the real approval owner; no live route exists."""
     sessions = sessions or db_session.get_session_factory()
     actor, grant_id, compilation = await _approval_context(sessions, project_id, guide_id, policy_id)
@@ -129,12 +132,7 @@ async def approve_unified_submission_policy(project_id, guide_id, policy_id, *, 
         )
     assert str(package.target.artifact_policy_id) == policy_id
     async with sessions() as session, session.begin():
-        from app.adapters.checkers import (
-            external_checker_capability_projection,
-            external_checker_registry_reader,
-        )
-
-        capabilities = await external_checker_capability_projection(session)
+        from app.adapters.checkers import external_checker_registry_reader
         receipt = await GuideProposalService(
             session,
             ProposalAuthority(
@@ -148,14 +146,14 @@ async def approve_unified_submission_policy(project_id, guide_id, policy_id, *, 
             GuideProposalApproval(
                 target=package.target,
                 idempotency_key=uuid4(),
+                pre_submit_attachments=pre_submit_attachments,
+                post_submit_attachments=post_submit_attachments,
                 acknowledged_warning_hashes=package.warning_hashes,
                 expected_previous_approval_operation_id=package.current_approval_operation_id,
                 expected_previous_approval_output_digest=package.current_approval_output_digest,
             ),
             actor=actor,
             request_id=uuid4(),
-            material=guide_document_manifest_port(session),
-            capabilities=capabilities,
         )
     async with sessions() as session:
         effective = await session.get(
@@ -177,8 +175,8 @@ async def create_standalone_unified_policy(
     max_revision_rounds=2,
     pre_submit_registry_spec=None,
     post_submit_registry_spec=None,
-    post_submit_binding_setup=None,
-    post_submit_bindings_setup=None,
+    post_submit_configuration_setup=None,
+    post_submit_configurations_setup=None,
     post_submit_specification=None,
 ):
     """Arrange complete activated context before a downstream artifact transaction."""
@@ -199,15 +197,17 @@ async def create_standalone_unified_policy(
         artifact_proposal=artifact_proposal,
         pre_submit_registry_spec=pre_submit_registry_spec,
         post_submit_registry_spec=post_submit_registry_spec,
-        post_submit_binding_setup=post_submit_binding_setup,
-        post_submit_bindings_setup=post_submit_bindings_setup,
+        post_submit_configuration_setup=post_submit_configuration_setup,
+        post_submit_configurations_setup=post_submit_configurations_setup,
         post_submit_specification=post_submit_specification,
     ) as (values, _, command, actor, grant):
         await seed_selected_review_revision_inputs(
             sessions, command, actor, human_review_required=human_review_required,
             max_revision_rounds=max_revision_rounds,
         )
-        _, derived = await prepare_post_policy(sessions, command, actor, grant, service_actor(values))
+        _, derived = await prepare_post_policy(
+            sessions, command, actor, grant, service_actor(values), values=values,
+        )
         approved = await operate(sessions, actor, command.project_id, grant, "approve",
                                  PostPolicyApproval(target=derived.target, idempotency_key=uuid4()))
         _, policy = await publish_policy(sessions, command.project_id, contribution_awards=contribution_awards)
@@ -251,7 +251,9 @@ async def _approval_context(sessions, project_id, guide_id, policy_id):
     return actor, grant_id, compilation
 
 
-async def supersede_unified_submission_policy(project_id, guide_id, policy_id):
+async def supersede_unified_submission_policy(
+    project_id, guide_id, policy_id, *, pre_submit_attachments, post_submit_attachments,
+):
     """Create a real corrected-generation successor while the guide is still draft."""
     from app.modules.projects.api.guide_proposals import GuideProposalCorrection
     from tests.projects.guide_compilation.proposals.pg_support import finalize_corrected_attempt
@@ -281,4 +283,8 @@ async def supersede_unified_submission_policy(project_id, guide_id, policy_id):
             ProjectGuideComponentProjectionOperation.compilation_id == next_command.compilation_id,
             ProjectGuideComponentProjectionOperation.component == "submission_artifact_policy",
         ))).one()
-    return await approve_unified_submission_policy(project_id, guide_id, next_policy_id)
+    return await approve_unified_submission_policy(
+        project_id, guide_id, next_policy_id,
+        pre_submit_attachments=pre_submit_attachments,
+        post_submit_attachments=post_submit_attachments,
+    )

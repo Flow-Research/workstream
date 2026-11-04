@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from app.adapters.auth import post_submit_execution_authority
 from app.adapters.tasks import evaluation_task_guard
 from app.core.identifiers import new_record_id
-from app.interfaces.project_agents import CapabilityParameter
 from app.modules.checkers.api.external import ExternalCheckerSchema, external_checker_json_hash
 from app.modules.checkers.api.trial_evidence import (
     TrialEvidenceStableSubject,
@@ -25,7 +24,6 @@ from app.modules.checkers.trial_evidence import TrialEvidenceReservations
 from tests.checkers.execution.support import ControlledSelectedExecution, live_executor, reserve
 from tests.checkers.external.support import post_registry_spec
 from tests.checkers.external.test_trial_profiles import configuration, digest, profile, projection
-from tests.checkers.external.test_trial_policy import trial_specification
 from tests.checkers.external.test_revision_materialization import DiagnosticMaterialization
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.test_checker_materialization import _limits
@@ -94,7 +92,7 @@ def _trial_fixture():
     )
 
     async def parameters(_factory, _project, _registry):
-        return tuple(CapabilityParameter(name=key, value=value) for key, value in config.items())
+        return dict(config)
 
     def catalog_for(request):
         return PinnedTrialExecutionCatalog(
@@ -208,8 +206,7 @@ async def test_trial_reservation_is_current_exact_immutable_and_replayed(
         tmp_path,
         isolated_database_env,
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         # The consumer executes multiple real transactions and contention probes
         # while material remains open; it is not the ten-second parser unit case.
         scratch_limits=_limits(total_deadline_seconds=120.0, reservation_ttl_seconds=150.0),
@@ -296,8 +293,7 @@ async def test_concurrent_trial_reservation_waits_then_recovers_complete_rollbac
         tmp_path,
         isolated_database_env,
         post_submit_registry_spec=spec,
-        post_submit_binding_setup=parameters,
-        post_submit_specification=trial_specification(),
+        post_submit_configuration_setup=parameters,
         # The consumer executes multiple real transactions and contention probes
         # while material remains open; it is not the ten-second parser unit case.
         scratch_limits=_limits(total_deadline_seconds=120.0, reservation_ttl_seconds=150.0),

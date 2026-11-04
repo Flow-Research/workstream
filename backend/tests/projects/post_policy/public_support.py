@@ -41,7 +41,7 @@ async def public_approved_case(url, monkeypatch, *, broker_failure=False):
         if broker_failure:
             raise OSError("isolated broker unavailable")
     monkeypatch.setattr(queue, "enqueue_derivation", enqueue)
-    async with source_case(url) as (_, factory, command, actor, grant):
+    async with source_case(url) as (values, factory, command, actor, grant):
         async with proposal_client(factory, actor) as client:
             path = proposal_path(command)
             package = await client.get(path + "/proposal")
@@ -50,7 +50,13 @@ async def public_approved_case(url, monkeypatch, *, broker_failure=False):
             result = await client.post(path + "/pre-submission-approval",
                 headers={"Idempotency-Key": str(uuid4())},
                 json={"target": package.json()["target"],
-                      "acknowledged_warning_hashes": package.json()["warning_hashes"]})
+                      "acknowledged_warning_hashes": package.json()["warning_hashes"],
+                      "pre_submit_attachments": [
+                          item.model_dump(mode="json") for item in values["pre_submit_attachments"]
+                      ],
+                      "post_submit_attachments": [
+                          item.model_dump(mode="json") for item in values["post_submit_attachments"]
+                      ]})
             assert result.status_code == 200, result.text
             approval_id = UUID(result.json()["operation_id"])
             assert published == [approval_id]

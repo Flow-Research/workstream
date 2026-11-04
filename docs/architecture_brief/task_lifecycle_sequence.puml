@@ -30,9 +30,11 @@ participant "Checker\nRunner" as Checks
 note over PM, Checks
 Target sequence. Canonical history reads are delivered.
 Public manager guide activation is delivered.
-Hidden durable checker execution/currentness is delivered.
+Durable checker execution/currentness is delivered.
 Exact input/execute/finalize service authority is delivered.
-  Automatic dispatch and routing remain unavailable.
+Automatic durable dispatch and policy-governed routing are implemented.
+The review section below is the human-review-required target branch;
+live human-review operations remain a separate delivery boundary.
 Flow authenticates; canonical AUTH decides from live exact grants.
 end note
 
@@ -67,7 +69,7 @@ API -> DB : lock guide and policy versions
 API -> DB : DRAFT -> SCREENING -> READY
 
 Contributor -> UI : claim task
-UI -> API : POST claim / start
+UI -> API : POST claim (assign and start atomically)
 API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : resolve actor profile and project grants
@@ -91,6 +93,14 @@ API -> DB : create immutable submission version
 API -> Checks : run post-submission work evaluation async
 Checks -> Artifacts : read exact authorized artifacts
 Checks -> DB : persist checker results
+
+note over Checks, DB
+With human_review_required=false, passing required checks invokes
+shared authorized FinalAcceptance and the submitter ContributionRecord,
+with applicable awards committed atomically.
+No Review or reviewer contribution is fabricated.
+The default-true human-review target continues below.
+end note
 
 Reviewer -> UI : request current work
 UI -> API : GET current work

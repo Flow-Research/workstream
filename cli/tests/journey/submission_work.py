@@ -161,9 +161,9 @@ def submit_and_observe(
         if run[field] != value:
             raise AssertionError("checker run does not bind the accepted attempt")
     if not run["completed_at"] or not any(
-        # Public findings name the locked requirement, not its capability ID.
-        # authored_rules binds this requirement to harnessy.work_proof.
-        result["checker_name"] == "proof.post_submit" and result["status"] == "passed"
+        # Public findings name the manager-selected requirement, independently
+        # of the setup suggestion ID and registry capability.
+        result["checker_name"] == "project.proof_post" and result["status"] == "passed"
         for result in run["results"]
     ):
         raise AssertionError("registered checker has no completed passing evidence")

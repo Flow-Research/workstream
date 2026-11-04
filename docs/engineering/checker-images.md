@@ -174,8 +174,11 @@ the receipt.
 3. Register `registry.json` using the existing Operator checker registry command
    or API, with an explicit idempotency key. An image change requires a new
    capability version; retained registrations and policies remain immutable.
-4. Recompile or correct the project proposal, approve its policy bindings and
-   activate through the existing PM flow.
+4. Have the Project Manager supply the registered images and configuration in
+   the approval request's explicit `pre_submit_attachments` and
+   `post_submit_attachments` lists, then approve and activate through the PM flow.
+   Both lists are required; `[]` records a deliberate choice. Registering images
+   does not change the proposal or require another setup run.
 
 The publisher performs none of those authority-bearing steps. The complete live
 journey still needs the actual guide, task, ZIP intake, selected PRE/POST images

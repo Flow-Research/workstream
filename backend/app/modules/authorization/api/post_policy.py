@@ -49,7 +49,6 @@ class PostPolicyAuthorizationFacts:
     result_hash: str
     post_component_hash: str
     requirement_inventory_hash: str
-    catalogue_manifest_hash: str
     effective_policy_id: UUID
     effective_policy_hash: str
     pre_submit_policy_id: UUID

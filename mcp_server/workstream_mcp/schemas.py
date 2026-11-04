@@ -929,7 +929,6 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "task_screen": _task_transition_input(),
     "task_release": _task_transition_input(),
     "task_claim": _task_transition_input(),
-    "task_start": _task_transition_input(),
     "task_work_context_get": {
         "type": "object",
         "properties": _TASK_SELECTOR_PROPERTIES,
@@ -1017,7 +1016,6 @@ TASK_OPERATION_CONTRACT_NAMES = (
     "audit_task_locked_context_get",
     "task_revision_context_repair",
     "audit_task_evidence_get",
-    "operational_task_start_override",
     "project_model_profile_provision",
     "project_model_budget_configure",
     "project_model_usage_effect_get",

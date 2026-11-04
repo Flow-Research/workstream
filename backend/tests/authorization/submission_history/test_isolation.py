@@ -132,12 +132,12 @@ async def test_same_task_history_separates_contributors(task_client, monkeypatch
     source_id = await route_retained_checker_remediation(case[2], generation=2)
     await _expire_retained_source_for_reclaim(db_session.get_session_factory(), source_id)
     set_dev_actor(monkeypatch, roles="", subject="second-history-contributor")
-    for command in ("claim", "start"):
-        response = await task_client.post(
-            f"/api/v1/tasks/{case[1]}/{command}",
-            headers={**auth_headers(), "Idempotency-Key": str(new_record_id())},
-        )
-        assert response.status_code == 200, response.text
+    response = await task_client.post(
+        f"/api/v1/tasks/{case[1]}/claim",
+        headers={**auth_headers(), "Idempotency-Key": str(new_record_id())},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["task"]["status"] == "in_progress"
     other_submission_id = await seed_retained_submission(
         case[1], complete_submission_payload("sha256:second-contributor"),
     )

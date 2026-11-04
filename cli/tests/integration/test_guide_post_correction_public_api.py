@@ -250,6 +250,8 @@ async def test_post_correction_public_socket_replay_and_authority(
                     headers=headers | {"Idempotency-Key": str(uuid4())},
                     json={
                         "target": source["target"],
+                        "pre_submit_attachments": [],
+                        "post_submit_attachments": [],
                         "acknowledged_warning_hashes": source["warning_hashes"],
                     },
                 )

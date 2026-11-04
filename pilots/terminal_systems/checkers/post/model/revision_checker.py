@@ -17,9 +17,14 @@ from assessment import (
 )
 from material import MaterialEvidence, MaterialSnapshot
 from model_transport import ModelCallUnavailable, ModelSessionError
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import RubricError, load_rubrics
-from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
+from runtime_checker import DEFAULT_TRIAL_LIMITS
+from model_phase import ModelSessionPort, run_model_phase
 from trial_assessment import load_revision_rerun_rubric
 from trial_plan import (
     MAXIMUM_MODEL_PROMPT_BYTES,
@@ -60,16 +65,25 @@ def execute_revision_objective_check(
         prompt = build_prompt(source, rubric, snapshot)
         if len(prompt.encode("utf-8")) > MAXIMUM_MODEL_PROMPT_BYTES:
             return infrastructure_result(request, "capacity_exceeded")
-        assessed = model_session.call(prompt, required_receipt_handles=())
-        findings = validate_assessment(assessed.output, rubric, snapshot)
-        _validate_revision_finding_locations(findings)
+
+        def validate(raw):
+            findings = validate_assessment(raw, rubric, snapshot)
+            _validate_revision_finding_locations(findings)
+            return findings
+
+        findings, _ = run_model_phase(model_session, prompt, validate)
         return completed_result(request, REVISION_OBJECTIVE_REQUIREMENT, findings)
     except MaterialContextError as exc:
         return infrastructure_result(request, str(exc))
     except (ModelCallUnavailable, ModelSessionError, RubricError):
         return infrastructure_result(request, "implementation_unavailable")
-    except AssessmentError:
-        return infrastructure_result(request, "invalid_output")
+    except AssessmentError as exc:
+        return infrastructure_result(
+            request,
+            "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
+            else "invalid_output",
+        )
     except (KeyError, TypeError, ValueError):
         return infrastructure_result(request, "invalid_output")
     except (MemoryError, RecursionError):
@@ -146,6 +160,7 @@ class MaterialContextError(RuntimeError):
 
 
 def _context(request: dict[str, object], requirement_id: str) -> dict[str, object]:
+    validate_requirement_identity(request)
     configuration = request["configuration"]
     input_value = request["input"]
     context = input_value["evaluation_context"]
@@ -153,7 +168,6 @@ def _context(request: dict[str, object], requirement_id: str) -> dict[str, objec
         type(configuration) is not dict
         or configuration.get("check") != requirement_id
         or type(input_value) is not dict
-        or input_value.get("requirement_id") != requirement_id
         or type(context) is not dict
         or context.get("schema_version")
         != "workstream.post_submit_evaluation_context.v1"

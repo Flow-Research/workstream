@@ -438,8 +438,22 @@ Destructive real API drills use the separate local test database:
 postgresql+asyncpg://workstream:<password>@localhost:<port>/workstream_test
 ```
 
-One project-guide compilation proposes sufficiency findings and separate
-pre-submission and post-submission policies through a selected registered runtime.
+One project-guide compilation proposes sufficiency findings, artifact
+requirements and separate pre-submission and post-submission check
+specifications through a selected registered setup runtime.
+The model sees the assigned guide documents and task examples, apart from trusted
+system instructions. An explicit manager correction also includes the PM's written
+feedback, never previous image selections. It proposes source-cited check specifications with inputs,
+steps, pass/fail findings and implementation test examples. It does not receive
+checker registry entries, image choices or runtime profiles. PM and engineering
+review the proposal, and engineering implements, pushes to ECR and registers
+external checker images. An authorized Project Manager attaches exact registered
+PRE and POST images and non-secret configuration in explicit phase lists during
+policy approval. Those human choices need not map one-to-one to suggestions;
+empty lists are valid intent. The Workstream PRE default is independent. Image
+registration after proposal does not change its hash or require another setup
+run; approval locks exact image digests and configuration. Optional/configurable
+automatic setup remains deferred.
 Use the locked installation and environment-loading commands in
 [Native Unified Guide Inference](#native-unified-guide-inference).
 
@@ -489,8 +503,9 @@ for opening the exact complete proposal, plus `correction_operation_id` and
 handoff or a lost creation response. See the
 [manager proposal flow](docs/operations_project_operating_manual.md#review-approve-or-correct-a-guide-proposal).
 POL-06B connects deterministic post-submission policy derivation to committed
-pre-submission approval. The fixed setup service derives from the saved result;
-project managers discover its `post_submit_policy_id` through the proposal read,
+pre-submission approval. The fixed setup service derives from the approved,
+human-selected POST image policy. Project managers discover its
+`post_submit_policy_id` through the proposal read,
 inspect its complete body, and separately approve it or request a unified
 correction. Both correction origins use the same explicit manual dispatch.
 Derivation, reads, approval and correction creation do not invoke inference or
@@ -606,7 +621,7 @@ removing their old role/creator wrappers. PILOT-14 adds the task-locked
 ContributionPolicyVersion compensation block to ready summaries and Contributor
 detail for active exact-project Submitters or Reviewers. It exposes only unpaid
 or instrument/unit/exact-quantity terms, never Finance binding or route facts;
-claim/start authority remains Submitter-only. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
+claim authority remains Submitter-only. ARCH-03C6 exposes separate manager, system-Operator and Audit Authority
 locked-context reads with exact current grants. ARCH-03C7 exposes bounded task
 history only to covered Audit Authority and removes the old payload-bearing
 task-only audit route. AUTH-18 delivers public manager guide activation;

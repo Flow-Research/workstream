@@ -7,6 +7,8 @@ def test_task_public_surface_has_no_self_activation_and_one_admission_creation()
     schema = create_app().openapi()
     paths = schema["paths"]
     assert "/api/v1/workers/me/profile" not in paths
+    assert "/api/v1/tasks/{task_id}/start" not in paths
+    assert "/api/v1/operations/tasks/{task_id}/start" not in paths
     submissions = paths["/api/v1/tasks/{task_id}/submissions"]
     assert "get" in submissions and "post" in submissions
     creation = submissions["post"]
@@ -16,9 +18,7 @@ def test_task_public_surface_has_no_self_activation_and_one_admission_creation()
     assert creation["requestBody"]["required"] is True
     for path, method, action in (
         ("/api/v1/tasks/{task_id}/claim", "post", "task.claim"),
-        ("/api/v1/tasks/{task_id}/start", "post", "task.start"),
         ("/api/v1/tasks/{task_id}/work-context", "get", "task.work_context.read"),
-        ("/api/v1/operations/tasks/{task_id}/start", "post", "operations.task.start_override"),
         ("/api/v1/projects/{project_id}/tasks/{task_id}/work-context", "get", "project.task.work_context.read"),
     ):
         operation = paths[path][method]

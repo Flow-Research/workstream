@@ -37,16 +37,9 @@ from pathlib import Path
 
 
 from app.modules.checkers.api.external import (
-    ExternalCheckerCapabilityDefinition,
-    ExternalCheckerCapabilityProjection,
     ExternalCheckerExecutionRequest,
     PreSubmitExternalCheckerIdentity,
     PreSubmitExternalCheckerMaterial,
-    external_checker_json_hash,
-)
-from app.modules.checkers.api.default_checker import (
-    WORKSTREAM_DEFAULT_CHECKER_ID,
-    WORKSTREAM_DEFAULT_CHECKER_VERSION,
 )
 from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
 from app.modules.checkers.api.selected_pre_submit import (
@@ -258,49 +251,6 @@ def external_checker_registry_service(session, authority):
     from app.modules.checkers.external_registry import ExternalCheckerRegistryService
 
     return ExternalCheckerRegistryService(session, authority)
-
-
-async def external_checker_capability_projection(
-    session,
-) -> ExternalCheckerCapabilityProjection:
-    """Snapshot one default plus every immutable external registry identity."""
-    entries = await external_checker_registry_reader(session).list_entries()
-    definitions = tuple(
-        sorted(
-            (
-                ExternalCheckerCapabilityDefinition(
-                    capability_id=WORKSTREAM_DEFAULT_CHECKER_ID,
-                    capability_version=WORKSTREAM_DEFAULT_CHECKER_VERSION,
-                    phase="pre_submit",
-                    selectable=False,
-                    registry_entry=None,
-                ),
-                *(
-                    ExternalCheckerCapabilityDefinition(
-                        capability_id=entry.capability_id,
-                        capability_version=entry.capability_version,
-                        phase=entry.phase,
-                        selectable=True,
-                        registry_entry=entry,
-                    )
-                    for entry in entries
-                ),
-            ),
-            key=lambda item: (
-                item.phase,
-                item.capability_id,
-                item.capability_version,
-            ),
-        )
-    )
-    body = {
-        "schema_version": "external_checker_capabilities.v1",
-        "definitions": [item.model_dump(mode="json") for item in definitions],
-    }
-    return ExternalCheckerCapabilityProjection(
-        definitions=definitions,
-        manifest_sha256=external_checker_json_hash(body),
-    )
 
 
 def selected_pre_submit_coordinator(session):

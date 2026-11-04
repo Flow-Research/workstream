@@ -33,7 +33,7 @@ TASK_RESPONSE = {
     "title": "Work é\n\x1b[31m",
     "description": "Instructions\n\x1b[32m",
     "skill_tags": ["analysis", "tag\n"],
-    "status": "claimed",
+    "status": "in_progress",
     "created_at": PROFILE["created_at"],
     "updated_at": "2026-10-02T00:00:00Z",
 }
@@ -54,8 +54,7 @@ def body(action):
     task = deepcopy(TASK_RESPONSE)
     if action == "claim":
         return {"task": task, "assignment": deepcopy(ASSIGNMENT_RESPONSE)}
-    task["status"] = "in_progress"
-    return task
+    raise AssertionError("unsupported contributor task mutation")
 
 
 def invoke(cli, origin, action, *flags, selector=TASK, key=KEY, output="json"):
@@ -87,7 +86,7 @@ def canonical_error(code="authorization_denied"):
 
 def test_task_writes_preserve_body_key_selector_and_json(cli):
     with http_fixture() as (origin, response, requests):
-        for action in ("claim", "start"):
+        for action in ("claim",):
             response["body"] = json.dumps(body(action)).encode()
             for selector in (
                 TASK,
@@ -129,7 +128,7 @@ def test_task_writes_preserve_body_key_selector_and_json(cli):
                 [KEY],
                 {"reason": boundary},
             )
-        assert len(requests) == len(response["commands"]) == 26
+        assert len(requests) == len(response["commands"]) == 13
 
 
 def test_task_write_text_is_complete_and_escaped(cli):
@@ -142,14 +141,14 @@ def test_task_write_text_is_complete_and_escaped(cli):
         "rejection_criteria": "Missing",
     }
     with http_fixture() as (origin, response, requests):
-        for action in ("claim", "start"):
+        for action in ("claim",):
             value = body(action)
             task = value["task"] if action == "claim" else value
             task.update(optional)
             response["body"] = json.dumps(value).encode()
             result = invoke(cli, origin, action, output="text")
             assert result.returncode == 0 and result.stderr == ""
-            status = "claimed" if action == "claim" else "in_progress"
+            status = "in_progress"
             expected = SUMMARY_TEXT.replace("Status: draft", f"Status: {status}")
             expected += (
                 "Description: Instructions\\u000A\\u001B[32m\nAcceptance criteria: Accurate\n"
@@ -175,12 +174,12 @@ def test_task_write_text_is_complete_and_escaped(cli):
                 result.returncode == 0
                 and result.stdout.strip().encode() == response["body"]
             )
-        assert len(requests) == 4
+        assert len(requests) == 2
 
 
 def test_task_write_arguments_fail_before_network(cli):
     with http_fixture() as (origin, _response, requests):
-        for action in ("claim", "start"):
+        for action in ("claim",):
             for selector, key, flags in (
                 ("not-uuid", KEY, ()),
                 (TASK + "/start", KEY, ()),
@@ -220,6 +219,7 @@ def test_task_mutation_malformed_and_substituted_success_is_unknown(cli):
             {"locked_revision_policy_generation": "1"},
             {"locked_revision_policy_hash": "bad"},
             {"status": "ready"},
+            {"status": "claimed"},
             {"title": None},
             {"description": None},
             {"skill_tags": [None]},
@@ -238,7 +238,7 @@ def test_task_mutation_malformed_and_substituted_success_is_unknown(cli):
             ],
             {"estimated_time_minutes": "10"},
         ]
-        for action in ("claim", "start"):
+        for action in ("claim",):
             for delta in variants + [
                 {name: None}
                 for name in (
@@ -293,7 +293,7 @@ def test_task_mutation_malformed_and_substituted_success_is_unknown(cli):
             result = invoke(cli, origin, "claim")
             assert_failure(result, "invalid_api_response")
             assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
-        assert len(requests) == 2 * (len(variants) + 12 + 4) + 12
+        assert len(requests) == len(variants) + 12 + 4 + 12
 
 
 def test_task_write_uncertainty_and_no_retry(cli):
@@ -317,7 +317,7 @@ def test_task_write_uncertainty_and_no_retry(cli):
             (200, body("claim"), "text/html", True),
             (200, {}, "application/json", True),
         )
-        for action in ("claim", "start"):
+        for action in ("claim",):
             for status, value, content_type, unknown in cases:
                 response.update(
                     status=status,
@@ -361,11 +361,11 @@ def test_task_write_uncertainty_and_no_retry(cli):
                 "reason": "Received before disconnect"
             }
             response["drop"] = False
-        assert len(requests) == len(response["commands"]) == 2 * (len(cases) + 2)
+        assert len(requests) == len(response["commands"]) == len(cases) + 2
 
 
 def test_task_posts_are_not_replayed_after_http2_goaway(cli, tmp_path):
-    for action in ("claim", "start"):
+    for action in ("claim",):
         with goaway_fixture(tmp_path) as (origin, env, bodies, connections):
             result = cli(
                 origin,
@@ -387,3 +387,9 @@ def test_task_posts_are_not_replayed_after_http2_goaway(cli, tmp_path):
             assert [json.loads(value) for value in bodies] == [
                 {"reason": "Received before GOAWAY"}
             ]
+
+
+def test_removed_task_start_command_sends_no_request(cli):
+    with http_fixture() as (origin, _response, requests):
+        assert_failure(invoke(cli, origin, "start"), "invalid_arguments", 2)
+        assert requests == []

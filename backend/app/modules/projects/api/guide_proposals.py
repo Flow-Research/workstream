@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Protocol, TYPE_CHECKING, TypeVar
 from uuid import UUID
+import json
 import unicodedata
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.modules.checkers.api.external_policy import (
+    ExternalCheckerImageAttachment,
+    ExternalCheckerPolicyCompileRequest,
+)
 from app.modules.projects.api.compilation_identity import CompilationComponentHashes
 
 if TYPE_CHECKING:
@@ -29,6 +34,9 @@ class GuideProposalSelection(BaseModel):
 class GuideProposalTarget(GuideProposalSelection):
     """The exact displayed source and all independently approved components."""
 
+    result_schema_version: Literal["project_guide_check_specification.v1"] = (
+        "project_guide_check_specification.v1"
+    )
     guide_version: str = Field(min_length=1, max_length=50)
     source_snapshot_id: UUID
     source_snapshot_hash: Digest
@@ -38,14 +46,6 @@ class GuideProposalTarget(GuideProposalSelection):
     finalization_facts_digest: Digest
     result_hash: Digest
     component_hashes: CompilationComponentHashes
-    pre_catalogue_id: str = Field(min_length=1, max_length=160)
-    pre_catalogue_version: str = Field(min_length=1, max_length=100)
-    pre_catalogue_schema_version: str = Field(min_length=1, max_length=160)
-    pre_catalogue_manifest_hash: Digest
-    post_catalogue_id: str = Field(min_length=1, max_length=160)
-    post_catalogue_version: str = Field(min_length=1, max_length=100)
-    post_catalogue_schema_version: str = Field(min_length=1, max_length=160)
-    post_catalogue_manifest_hash: Digest
     artifact_policy_id: UUID | None
     artifact_policy_hash: Digest | None
     artifact_projection_operation_id: UUID | None
@@ -75,6 +75,8 @@ class GuideProposalApprovalInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     target: GuideProposalTarget
+    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
     acknowledged_warning_hashes: tuple[Digest, ...] = Field(default=(), max_length=200)
     expected_previous_approval_operation_id: UUID | None = None
     expected_previous_approval_output_digest: Digest | None = None
@@ -88,6 +90,12 @@ class GuideProposalApprovalInput(BaseModel):
             raise ValueError("previous approval identity must be complete or absent")
         if len(set(self.acknowledged_warning_hashes)) != len(self.acknowledged_warning_hashes):
             raise ValueError("warning acknowledgments must be unique")
+        ExternalCheckerPolicyCompileRequest(
+            pre_submit_attachments=self.pre_submit_attachments,
+            post_submit_attachments=self.post_submit_attachments,
+        )
+        if len(json.dumps(self.model_dump(mode="json"), ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1_048_576:
+            raise ValueError("approval request exceeds byte limit")
         return self
 
 
@@ -224,11 +232,9 @@ class GuideProposalError(RuntimeError):
 
 # Composition binds external capabilities; the public PROJECTS contract imports no other owner.
 _ActorT = TypeVar("_ActorT", contravariant=True)
-_MaterialT = TypeVar("_MaterialT", contravariant=True)
-_CapabilitiesT = TypeVar("_CapabilitiesT", contravariant=True)
 
 
-class GuideProposalOperationsPort(Protocol[_ActorT, _MaterialT, _CapabilitiesT]):
+class GuideProposalOperationsPort(Protocol[_ActorT]):
     """Caller-owned transaction for exact finalized proposal operations."""
 
     async def review_package(
@@ -245,8 +251,6 @@ class GuideProposalOperationsPort(Protocol[_ActorT, _MaterialT, _CapabilitiesT])
         *,
         actor: _ActorT,
         request_id: UUID,
-        material: _MaterialT,
-        capabilities: _CapabilitiesT,
     ) -> GuideProposalApprovalReceipt: ...
 
     async def request_correction(

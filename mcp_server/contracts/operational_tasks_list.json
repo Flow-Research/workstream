@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "7519c0718da677484207d0049c95a8a9214574883a2a85b8c58b5ba604ba46c2",
+  "canonical_sha256": "fe2395d6e3c69e133daf8f383e90c432dcc6a5e2e4574706ec22b8bb0f0255e6",
   "components": {
     "schemas": {
       "ApiError": {
@@ -134,7 +134,6 @@
               "draft",
               "screening",
               "ready",
-              "claimed",
               "in_progress",
               "submitted",
               "evaluation_pending",
@@ -466,6 +465,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/operations/projects/{project_id}/tasks",
-    "repository_sha": "517fe54c4ed69777c2a455f2fe9f237e4b4ec184"
+    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
   }
 }

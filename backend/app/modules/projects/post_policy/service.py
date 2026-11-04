@@ -98,7 +98,6 @@ class PostPolicyService:
                 ):
                     raise GuideProposalError("proposal_stale")
                 compiled = compile_saved_post_policy(
-                    result=locked.result,
                     policies=validate_stored_external_checker_policies(
                         upstream.effective_pre_submit_plan
                     ),
@@ -155,7 +154,6 @@ class PostPolicyService:
                 if policy.lifecycle_status != "compiled" or custody.approval is not None:
                     raise GuideProposalError("proposal_stale")
                 compiled = compile_saved_post_policy(
-                    result=locked.result,
                     policies=validate_stored_external_checker_policies(
                         locked.view.approval_custody.operation.effective_pre_submit_plan
                     ),
@@ -331,7 +329,6 @@ class PostPolicyService:
             result_hash=target.proposal.result_hash,
             post_component_hash=target.proposal.component_hashes.post_submit_hash,
             requirement_inventory_hash=target.proposal.component_hashes.requirement_inventory_hash,
-            catalogue_manifest_hash=target.proposal.post_catalogue_manifest_hash,
             effective_policy_id=target.upstream.effective_policy_id,
             effective_policy_hash=target.upstream.effective_policy_hash,
             pre_submit_policy_id=target.upstream.pre_submit_policy_id,

@@ -274,6 +274,6 @@ class ScriptedGuideRuntime:
                     item.model_copy(update={"evidence_refs": refs})
                     for item in getattr(self.outcome, field)
                 )
-                for field in ("findings", "requirements", "capability_suggestions")
+                for field in ("findings", "requirements")
             }
         )

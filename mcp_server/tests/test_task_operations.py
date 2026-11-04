@@ -83,11 +83,6 @@ def _arguments(name: str) -> dict[str, Any]:
             "task_id": TASK_ID,
             "limit": 25,
         },
-        "operational_task_start_override": {
-            "task_id": TASK_ID,
-            "body": {},
-            "idempotency_key": KEY,
-        },
         "project_model_profile_provision": {
             "project_id": PROJECT_ID,
             "body": {"project_id": PROJECT_ID},
@@ -151,8 +146,6 @@ def _bound_response(name: str, upload: bytes | None = None) -> dict[str, Any]:
         return {"project_id": PROJECT_ID, "task_id": TASK_ID}
     if name == "task_revision_context_repair":
         return {}
-    if name == "operational_task_start_override":
-        return {"id": TASK_ID}
     if name in {"project_model_profile_provision", "project_model_budget_configure"}:
         return {"spec": {"project_id": PROJECT_ID}}
     if name == "project_model_usage_effect_get":
@@ -193,7 +186,7 @@ def test_task_operation_catalogue_is_exact_closed_and_does_not_dispatch(
 ) -> None:
     client, received, _ = adapter
     catalogue = _catalogue(client)
-    assert len(task_operations.TOOL_NAMES) == 24
+    assert len(task_operations.TOOL_NAMES) == 23
     for name, tool_name in zip(
         TASK_OPERATION_CONTRACT_NAMES, task_operations.TOOL_NAMES, strict=True
     ):

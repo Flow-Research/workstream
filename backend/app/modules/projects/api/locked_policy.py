@@ -13,6 +13,7 @@ from app.modules.projects.api.policy_lineage import ReviewSemanticsFormat, requi
 
 if TYPE_CHECKING:
     from .guide_activation import GuideActivationReceipt
+    from .retained_activation import RetainedActivationEvidence
 
 ProjectLockedPolicyGuideStatus = Literal["active", "superseded"]
 ProjectLockedPolicyEffectiveStatus = Literal["approved", "superseded"]
@@ -166,7 +167,7 @@ class ProjectLockedPolicyContextFacts:
     pre_submit_policy_status: ProjectLockedPolicyPreSubmitStatus
     pre_submit_compiler_version: str
     compiled_pre_submit_bundle: CanonicalJsonObject
-    activation_receipt: GuideActivationReceipt
+    activation_receipt: GuideActivationReceipt | RetainedActivationEvidence
     artifact_policy: CanonicalJsonObject
     compiled_post_submit_policy: CanonicalJsonObject
     external_checker_policies: CanonicalJsonObject
@@ -208,10 +209,16 @@ class ProjectLockedPolicyContextFacts:
         ):
             raise ValueError("project locked policy bodies must be canonical immutable values")
         from .guide_activation import GuideActivationReceipt
+        from .retained_activation import RetainedActivationEvidence
 
-        receipt = GuideActivationReceipt.model_validate(
-            self.activation_receipt.model_dump(mode="json")
-        )
+        if isinstance(self.activation_receipt, RetainedActivationEvidence):
+            receipt = RetainedActivationEvidence.model_validate(
+                self.activation_receipt.model_dump(mode="json")
+            )
+        else:
+            receipt = GuideActivationReceipt.model_validate(
+                self.activation_receipt.model_dump(mode="json")
+            )
         if (
             not isinstance(self.project, ProjectDisplayFacts)
             or not isinstance(self.guide, GuideDisplayFacts)
@@ -235,11 +242,9 @@ class ProjectLockedPolicyContextFacts:
             external_policies.policies_sha256
             == receipt.command.target.upstream.effective_pre_submit_plan_hash
             and external_policies.pre_submit.model_dump(mode="json") == pre_body
-            and external_policies.pre_submit.policy_sha256
-            == self.pre_submit_policy_bundle_hash
+            and external_policies.pre_submit.policy_sha256 == self.pre_submit_policy_bundle_hash
             and external_policies.post_submit.model_dump(mode="json") == post_body
-            and external_policies.post_submit.policy_sha256
-            == receipt.command.target.policy_hash
+            and external_policies.post_submit.policy_sha256 == receipt.command.target.policy_hash
         )
         if (
             (
@@ -274,12 +279,16 @@ class ProjectLockedPolicyContextFacts:
         ):
             raise ValueError("project locked policy facts differ from activation")
         require_complete_policy(
-            kind="review", status="complete", policy_hash=receipt.command.review.policy_hash,
+            kind="review",
+            status="complete",
+            policy_hash=receipt.command.review.policy_hash,
             semantic_values=json.loads(self.review_policy.value),
             review_semantics_format=self.review_semantics_format,
         )
         require_complete_policy(
-            kind="revision", status="complete", policy_hash=receipt.command.revision.policy_hash,
+            kind="revision",
+            status="complete",
+            policy_hash=receipt.command.revision.policy_hash,
             semantic_values=json.loads(self.revision_policy.value),
         )
         object.__setattr__(self, "activation_receipt", receipt)

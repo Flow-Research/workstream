@@ -104,7 +104,7 @@ class PostAuthority:
                 raise AuthorizationDenied('post-policy close rejected')
 
 
-async def prepare_upstream(factory, command, actor, grant):
+async def prepare_upstream(factory, command, actor, grant, values):
     from app.core.hashing import canonical_json_hash
     from app.modules.projects.api.guide_proposals import GuideProposalApproval, GuideProposalSelection
     from app.modules.projects.api.post_policy import PostPolicyDerive
@@ -112,7 +112,12 @@ async def prepare_upstream(factory, command, actor, grant):
     from tests.projects.guide_compilation.proposals.test_postgresql import approve
 
     package = await read_package(factory, command, actor, grant)
-    upstream = await approve(factory, command, actor, grant, GuideProposalApproval(target=package.target, idempotency_key=uuid4()))
+    upstream = await approve(factory, command, actor, grant, GuideProposalApproval(
+        target=package.target,
+        pre_submit_attachments=values["pre_submit_attachments"],
+        post_submit_attachments=values["post_submit_attachments"],
+        idempotency_key=uuid4(),
+    ))
     payload = PostPolicyDerive(selection=GuideProposalSelection(
         project_id=command.project_id, guide_id=command.guide_id, compilation_id=command.compilation_id),
         upstream_approval_operation_id=upstream.operation_id,
@@ -120,8 +125,8 @@ async def prepare_upstream(factory, command, actor, grant):
     return payload
 
 
-async def prepare_post_policy(factory, command, actor, grant, setup_actor):
-    payload = await prepare_upstream(factory, command, actor, grant)
+async def prepare_post_policy(factory, command, actor, grant, setup_actor, values):
+    payload = await prepare_upstream(factory, command, actor, grant, values)
     receipt = await operate(factory, setup_actor, command.project_id, None, 'derive', payload)
     return payload, receipt
 

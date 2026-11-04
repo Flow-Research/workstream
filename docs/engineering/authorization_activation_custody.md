@@ -8,7 +8,7 @@ restart completed work or create another contribution-permission system.
 The canonical [authorization specification](../spec_authorization_service.md)
 and typed runtime catalogue define the registered facts and availability.
 Verify the current typed registry when implementing rather than treating
-historical catalogue totals as an activation gate. TASK claim/start and its
+historical catalogue totals as an activation gate. TASK claim and its
 work-context operations now use canonical authority; that does not activate
 remaining planned submission, review or recovery operations.
 

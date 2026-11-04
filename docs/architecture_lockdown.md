@@ -76,9 +76,9 @@ and ARCH-04E2-B binds actual routing authority, immutable evidence and complete
 atomic outcomes under currentness custody. B8 supplies completion delivery;
 selected request/completion handlers are registered. ARCH-02I-B exposes public
 ZIP preparation and admission-backed initial/checker-remediation Submission
-creation in OpenAPI. A complete supported false guide activates only when its
-approved requirement inventory contains no
-`human_review` disposition. New false/pass effects still require a live REV
+creation in OpenAPI. A complete false-policy guide requires explicit approved
+PRE and POST image selections, including intentional empty lists, and the
+existing shared-acceptance guards. New false/pass effects still require a live REV
 generation; a pre-effect non-live refusal rolls back and uses bounded retry.
 The bounded local public API and Celery service drill starts from public guide inputs
 with recorded inference; this does not establish hosted deployment.
@@ -205,6 +205,15 @@ high-confidence secret rejection, and unchanged-work rejection unless locked
 rules changed. Missing summary or attestation produces warnings only. All
 project checks are approved, digest-pinned external images; there is no built-in
 project-rule catalogue or alternate checker runtime.
+Initial setup receives only assigned guide documents and task examples, apart from
+trusted system instructions, and proposes source-cited PRE/POST specifications.
+An explicit manager correction additionally supplies the PM's written feedback;
+registry metadata, prior proposals and image selections remain excluded.
+Engineering implements, pushes to ECR and registers external images; an
+authorized Project Manager selects exact registered images and non-secret
+configuration in separate phase lists during approval. Approval locks the
+image digest and configuration. Registry publication alone cannot select an
+image or change the proposal. The Workstream default PRE checker stays separate.
 
 An approved POST image may use the same Rust service's generic, typed,
 invocation-local isolated-trial tool only under an exact registry/image/

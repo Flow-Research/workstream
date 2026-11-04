@@ -109,3 +109,4 @@ async def test_wrong_fact_kind_is_concealed(monkeypatch, operation):
                 await prepared.consume_new(object())
             else:
                 await prepared.validate_replay(object(), uuid4())
+    assert case.evidence.events == []

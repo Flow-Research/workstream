@@ -198,7 +198,7 @@ async def exercise_contributor_task_reads(
         actor_id = profiles["cli-outsider"]["actor_profile_id"]
 
         # Ready persisted work does not permit writes without Submitter authority.
-        for action in ("claim", "start"):
+        for action in ("claim",):
             await mutate(action, ready_ids[0], uuid4(), status=403)
 
         # Stored ready resources exist, but no matching grant permits either read.
@@ -257,7 +257,7 @@ async def exercise_contributor_task_reads(
             == reviewer_detail["compensation"]
         )
         await context_reads(ready_ids[0], peer_tokens["cli-task-reviewer"], denied=True)
-        for action in ("claim", "start"):
+        for action in ("claim",):
             await mutate(
                 action,
                 ready_ids[0],
@@ -327,7 +327,7 @@ async def exercise_contributor_task_reads(
         read(("ready", foreign_project), status=404)
         read(("show", foreign_task_id), status=404)
         # The same caller has Submitter A, but not B. Use B's management baseline.
-        for action in ("claim", "start"):
+        for action in ("claim",):
             before = await direct.get(
                 f"/api/v1/projects/{foreign_project}/tasks/{foreign_task_id}",
                 headers=manager,
@@ -396,7 +396,7 @@ async def exercise_contributor_task_reads(
         assert management.returncode == 1 and management.stdout == ""
         assert json.loads(management.stderr)["error"]["status"] == 422
 
-        claim_key, start_key = uuid4(), uuid4()
+        claim_key = uuid4()
         reason = "Assignment visibility control"
         claimed = await mutate("claim", ready_ids[0], claim_key, reason)
         assert claimed["assignment"]["contributor_id"] == actor_id
@@ -415,11 +415,11 @@ async def exercise_contributor_task_reads(
         assert mismatch["code"] == "idempotency_mismatch"
         mismatch = await mutate("claim", ready_ids[1], claim_key, reason, status=409)
         assert mismatch["code"] == "idempotency_mismatch"
-        assert (await detail(ready_ids[0]))["status"] == "claimed"
+        assert (await detail(ready_ids[0]))["status"] == "in_progress"
         claimed_context = await context_reads(ready_ids[0])
         assert claimed_context["context"]["lifecycle"] == {
             "assigned_to_current_actor": True,
-            "next_actions": ["start"],
+            "next_actions": [],
         }
         assert claimed_context["requirements"] == ready_context["requirements"]
         assert (
@@ -446,43 +446,21 @@ async def exercise_contributor_task_reads(
             assert {item["task_id"] for item in page["items"]} == set(ready_ids[1:])
 
         await mutate(
-            "start",
+            "claim",
             ready_ids[0],
             uuid4(),
             presented=peer_tokens["cli-task-peer"],
             status=403,
         )
-        started = await mutate("start", ready_ids[0], start_key, reason)
-        assert started["id"] == ready_ids[0] and started["status"] == "in_progress"
-        assert (
-            started["locked_contribution_policy_version_id"]
-            == claimed["task"]["locked_contribution_policy_version_id"]
-        )
-        assert (await detail(ready_ids[0]))["status"] == "in_progress"
-        started_context = await context_reads(ready_ids[0])
-        assert started_context["context"]["lifecycle"] == {
-            "assigned_to_current_actor": True,
-            "next_actions": [],
-        }
-        assert started_context["requirements"] == ready_context["requirements"]
-        for field in (
-            "guide",
-            "review_policy",
-            "revision_policy",
-            "contribution_policy_version_id",
-        ):
-            assert started_context["context"][field] == ready_context["context"][field]
-        assert await mutate("start", ready_ids[0], start_key, reason) == started
-        assert (await mutate("start", ready_ids[0], start_key, "Changed", status=409))[
-            "code"
-        ] == "idempotency_mismatch"
-        await mutate("claim", ready_ids[0], claim_key, reason, status=403)
+        # Claim already starts work; a different key cannot create another assignment.
+        await mutate("claim", ready_ids[0], uuid4(), reason, status=403)
+        assert await mutate("claim", ready_ids[0], claim_key, reason) == claimed
 
         await revoke_first_grant()
         read(("ready", project, "--limit", "1", "--cursor", first_cursor), status=404)
         read(("show", ready_ids[1]), status=404)
         await context_reads(ready_ids[1], denied=True)
-        await mutate("start", ready_ids[0], start_key, reason, status=403)
+        await mutate("claim", ready_ids[0], claim_key, reason, status=403)
         await mutate("claim", ready_ids[1], uuid4(), status=403)
         # Manager authority cannot substitute for a revoked Submitter grant.
         await grant(project, actor_id)
@@ -515,7 +493,6 @@ async def exercise_contributor_task_reads(
         read(("show", ready_ids[1]), status=404)
         await context_reads(ready_ids[1], denied=True)
         await mutate("claim", ready_ids[1], second_key, status=403)
-        await mutate("start", ready_ids[1], uuid4(), status=403)
         await post(
             f"/api/v1/actors/{actor_id}/reactivate",
             {"reason": "Continue independent CLI proof"},

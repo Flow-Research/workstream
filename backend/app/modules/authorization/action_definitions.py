@@ -318,7 +318,6 @@ ACTION_DEFINITIONS = (
         ActionOwner.TASK_CHECKER_CLEANUP,
     ),
     _active(ActionId.TASK_CLAIM, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
-    _active(ActionId.TASK_START, PermissionId.TASK_CLAIM, ActionOwner.TASK_PROJECT_GRANT),
     _active(
         ActionId.TASK_WORK_CONTEXT_READ,
         PermissionId.TASK_QUEUE_READ,
@@ -392,11 +391,6 @@ ACTION_DEFINITIONS = (
     _active(
         ActionId.PROJECT_TASK_WORK_CONTEXT_READ,
         PermissionId.PROJECT_TASK_MANAGE,
-        ActionOwner.TASK_PROJECT_GRANT,
-    ),
-    _active(
-        ActionId.OPERATIONS_TASK_START_OVERRIDE,
-        PermissionId.OPERATIONS_TASK_START_OVERRIDE,
         ActionOwner.TASK_PROJECT_GRANT,
     ),
     _planned(

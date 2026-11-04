@@ -69,8 +69,9 @@ remaining setup/activation work:
 - each task locks the guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering `READY`
 
 The existing versioned ReviewPolicy setting `human_review_required` defaults
-true. False can activate when the approved guide has supported exact PRE/POST
-checkers and no `human_review` requirement disposition. The selected production
+true. False can activate with complete, explicitly approved PRE and POST image
+attachments, including intentional empty lists, under the existing policy and
+authority guards. Setup suggestions do not select review mode. The selected production
 completion route uses the authorized FinalAcceptance/CON operation after passing
 required checks; new economic effects require an Operator-authorized live REV
 generation. Activation itself does not start REV or silently switch the setting
@@ -131,10 +132,10 @@ manual diagnostic report is neither reused nor linked as compilation output.
 The three former inference steps and sufficiency-run endpoint are removed.
 
 A ready compilation persists separate pre-submission and post-submission
-proposals and stops at a draft. Missing required checker implementations produce
-a warning-ready draft with staged capability gaps; those gaps still block
-activation. An insufficient guide with an actual guide blocker or blocking
-finding stops without draft policy projection.
+suggestions and stops at a draft. Missing implementations do not block a
+source-sufficient proposal or create a warning. Humans choose the external images
+later during approval. An insufficient guide with an actual guide blocker or
+blocking finding stops without draft policy projection.
 The latest setup diagnostic reflects durable invalid or unresolved provider
 outcomes without rewriting setup evidence. An uncertain attempt is never
 invoked again. Transport failures retry the same task and attempt. After bounded Celery retries
@@ -173,8 +174,8 @@ The active review/revision policy setup endpoints are:
 - `PUT /api/v1/projects/{project_id}/guides/{guide_id}/revision-policy`
 
 The latest setup run exposes bounded diagnostics and `finalized_compilation_id`.
-Use that exact ID to read the complete pre/post proposal, findings and suggested
-catalogue additions through the manager flow below. POL-06B exposes separate
+Use that exact ID to read the complete source-cited PRE and POST suggestions
+and findings through the manager flow below. POL-06B exposes separate
 post-submit policy inspection, approval and correction with AUTH-12G authority.
 
 The two policy `PUT` routes require a UUID `Idempotency-Key` and a quoted
@@ -304,46 +305,44 @@ approval is public through POL-06B.
 An authorized Project Manager reviews the complete bounded proposal before
 approval. Effective intake combines mandatory platform defaults with approved
 project rules using the canonical CHECKERS compiler. Post-submit policy is a
-separate deterministic projection of the same unified result; no contributor-work
-evaluator runs during setup or approval.
+separate deterministic projection of the approved human-selected POST
+attachments. No contributor-work evaluator runs during setup or approval.
 
 Inference drafts a private structured candidate, then checks coverage against the
 originals in a fresh model context. Every draft, review and correction must pass
 strict schema, canonical, owner-context and source validation. Every phase must
 initially read every assigned original, including for blocked proposals; searches
 alone do not establish that observation. At most two known-invalid-output
-corrections share the original attempt limits. Only the validated final review
+corrections per phase share the original attempt limits. Only the validated final review
 can become a retained proposal; failed review never publishes the private draft.
 This does not replace the PM's review of source coverage and the proposed checks'
 observable evidence.
 
-For every newly compiled requirement, review `classification_rationale`. A
-supported PRE/POST requirement or capability gap also has one typed
-`check_specification` describing its evaluation method, execution mode and
-duration, inputs, ordered checks, pass conditions, coded work findings,
-positive/negative cases, runtime dependencies and infrastructure failures. PRE
-means the complete check can reliably finish within 60 seconds before Submission
-creation, even if durable execution and polling are used. Longer or model-based
-work belongs to background POST. Automation by itself does not select POST.
+For every new PRE or POST suggestion, review `suggestion_id`, source citations
+and `classification_rationale`. Its typed `check_specification` describes a
+proposed evaluation method, inputs, ordered steps, pass conditions, coded work
+findings, positive and negative examples, implementation needs and conditions
+where no trustworthy evaluation is possible. PRE is intake work before
+Submission creation. Background work and model evaluation belong to POST.
+Automation by itself does not select POST.
 
 | Specification field | Manager and engineering review question |
 | --- | --- |
-| `evaluation_method`, `execution_mode`, `maximum_duration_seconds`, `stage_rationale` | Is this static inspection, isolated execution or model evaluation, and does its complete work fit the proposed PRE/POST stage and budget? |
-| `inputs` | Are all required package, manifest, request-metadata, file, directory or context inputs named and actually available to the runtime? |
+| `evaluation_method`, `classification_rationale` | Is the proposed way to observe the outcome suitable for its PRE or POST stage? |
+| `inputs` | Are all required materials named and source-supported? Does engineering know which inputs its implementation must supply? |
 | `check_steps`, `pass_conditions` | Can an implementer build the ordered evaluation and tell unambiguously when it passes? |
 | `failure_findings` | Does each work failure have a stable code, level, condition and contributor-safe message? |
 | `positive_tests`, `negative_tests` | Do representative successes and plausible failures discriminate the intended behavior, with negative cases tied to exact finding codes and verdicts? |
-| `runtime_dependencies`, `infrastructure_failures` | Are tools and services assigned to the current runner, checker implementation or a visible runtime gap, and are non-work failures kept outside contributor verdicts? |
+| `implementation_needs`, `inability_to_evaluate` | Are implementation needs explicit without claiming available infrastructure? Are non-work failures kept outside contributor verdicts? |
 
-The capability suggestion for a missing implementation points back to this
-requirement and stage; it does not duplicate the specification in free prose.
-
-Confirm that each claimed input is available to the selected runtime. The
-ordinary checker image is offline and receives verified package material,
-manifest, approved configuration and normalized request metadata. Task or guide
-context, a model service and nested sandboxing are dependencies that must be
-explicitly supplied; setup cannot invent them. Missing registered implementations
-remain engineering gaps and must not be relabelled as human review. Workstream's
+The proposal does not select an implementation or claim runtime availability.
+PM and engineering decide which checks to implement. Engineering publishes
+tested external images to ECR and registers their exact identities. During
+approval, an authorized Project Manager supplies explicit
+`pre_submit_attachments` and `post_submit_attachments` lists with non-secret
+configuration. These phase choices need not correspond one-to-one to
+suggestion IDs. Both lists must be present; explicit empty lists express valid
+human intent. Suggestions impose no image-membership requirement. Workstream's
 default covers only bounded ZIP safety, received-byte/manifest identity,
 high-confidence secret detection and unchanged-work detection. Required files,
 layout, project metadata and project-specific content rules still need project
@@ -360,8 +359,8 @@ provide them. POL-05B supplies public wiring. AUTH-12G authorizes the separate e
 post-policy draft read exposed by POL-06B.
 
 POL-06A implements deterministic post-submit projection, an exact complete draft
-read, separate approval and correction custody. It uses the canonical checker
-policy body and the saved unified result without document access or inference.
+read, separate approval and correction custody. It uses the approved locked
+POST attachments and saved result provenance without document access or inference.
 POL-06B connects those operations to public manager APIs and a fixed-service
 worker. Committed pre-submit approval schedules deterministic derivation. Only
 the fixed setup service derives; an exact-project Project Manager reads, approves
@@ -372,11 +371,15 @@ status and lineage pointers; it does not substitute for the authorized package.
 A manager correction preserves finalized history and creates a successor setup
 generation with bounded feedback. It never reopens a finalized run or activates
 the guide. The successor's pre-submission proposal requires its own approval.
-The setup agent receives both the saved feedback and the exact, hash-verified
-predecessor proposal to correct, then checks the originals again. Previous
-proposal text is untrusted context, not a replacement for source evidence or
-approval. Both model phases and their combined input-size limits include it;
-oversized or unavailable predecessor material stops before provider execution.
+The initial prompt contains only assigned guide documents and task examples,
+apart from trusted system instructions. On an explicit correction, both inference
+phases additionally receive the PM's bounded written feedback and recheck the
+originals. Correction custody verifies the exact predecessor and request but does
+not send the predecessor body, registry metadata or image selections to the model.
+Same-run output repair may receive bounded validation errors.
+Write self-contained correction feedback: describe the requested change or quote
+the relevant suggestion, rather than relying on a suggestion ID alone. The prior
+proposal is not sent to the model.
 
 Timeout or unknown provider acceptance is not a correctable finalized result.
 It remains blocked without another call until the adapter supports verified
@@ -411,16 +414,15 @@ carry no source filenames and JSON is not an admitted guide media type:
   create a new guide version; the failed attempt is not retried.
 
 Besides `format`, the object has exactly the result fields `status`,
-`findings`, `submission_artifact_policy`, `requirements`,
-`pre_submit_bindings`, `post_submit_bindings`, `capability_suggestions` and
-`setup_notes` in this explicit manager-authored format. Inferred setup output has
-no notes field and cannot classify human-review or project-management requirements. The
+`findings`, `submission_artifact_policy`, `requirements` and `setup_notes`.
+Manager-authored and inferred output share this specification-only contract;
+neither classifies human-review or project-management requirements. The
 runtime adds `agent_name`, `agent_version` and `schema_version`. Each evidence
 reference names a document by `"document"`: either its `sha256:` digest or its
 manifest filename (`<source_item_id>.<extension>`), plus optional `start_page`,
 `end_page` and `section`. The runtime resolves it to the exact source item and
-document version, and also cites the rules document itself on every finding,
-requirement and suggestion, so each item may carry at most 19 authored
+document version, and also cites the rules document itself on every finding
+and suggestion, so each item may carry at most 19 authored
 references. A ready result must cite every other guide document at least once.
 
 ```json
@@ -440,37 +442,49 @@ references. A ready result must cite every other guide document at least once.
   "submission_artifact_policy": {
     "maximum_file_size_bytes": 1000000,
     "maximum_package_size_bytes": 10000000,
-    "required_artifacts": ["submission"]
+    "required_artifacts": ["report.md"]
   },
   "requirements": [
     {
-      "requirement_id": "reviewer_checks_rubric",
-      "statement": "A reviewer checks the submission against the rubric.",
-      "disposition": "human_review",
-      "classification_rationale": "The guide explicitly assigns this qualitative decision to an authorized human reviewer.",
-      "evidence_refs": [{"document": "sha256:<64 lowercase hex of guide.pdf>", "section": "Rubric"}]
+      "suggestion_id": "report_present",
+      "statement": "The submitted package includes a root report file.",
+      "stage": "pre_submit",
+      "classification_rationale": "File presence is an intake check.",
+      "check_specification": {
+        "evaluation_method": "Inspect the submitted package structure.",
+        "inputs": [{"input_id": "report", "kind": "relative_file", "relative_path": "report.md", "purpose": "Supplies the report."}],
+        "check_steps": ["Require the root report to be a regular file."],
+        "pass_conditions": ["The root report is a regular file."],
+        "failure_findings": [{"code": "report_missing", "level": "error", "condition": "The root report is absent or not a regular file.", "message": "Provide the required report."}],
+        "positive_tests": ["A root regular report passes."],
+        "negative_tests": [{"name": "missing_report", "scenario": "The report is absent.", "expected_verdict": "failed", "expected_finding_codes": ["report_missing"]}],
+        "implementation_needs": ["An implementation that can inspect submitted file type and location."],
+        "inability_to_evaluate": [{"code": "material_unavailable", "condition": "The submitted file cannot be opened for inspection."}]
+      },
+      "evidence_refs": [{"document": "sha256:<64 lowercase hex of guide.pdf>", "section": "Report"}]
     }
   ],
-  "pre_submit_bindings": [],
-  "post_submit_bindings": [],
-  "capability_suggestions": [],
   "setup_notes": []
 }
 ```
 
-New manager-authored results follow the same completeness rules as provider
-results: every requirement needs `classification_rationale`, and every supported
-or missing PRE/POST check needs one complete `check_specification`. Human-review,
-platform-covered, lifecycle-policy and guide-blocker requirements omit the
-specification. Capability gaps use `draft_ready_with_warnings`; they do not make
-an otherwise sufficient guide `guide_blocked`, but activation remains unavailable.
-Both PRE and POST binding parameters must conform exactly to the selected
-registry configuration schema.
+New manager-authored results follow the same completeness rules as inferred
+results: every source-cited PRE or POST suggestion has a `suggestion_id`, stage,
+reason and complete `check_specification`. A missing implementation alone does
+not create a guide blocker or warning. PM and engineering decide what to
+implement; engineering pushes and registers exact external images. The
+authorized Project Manager supplies explicit `pre_submit_attachments` and
+`post_submit_attachments` lists with non-secret configuration during approval.
+The attachment lists are independent of suggestion IDs. Empty lists are valid
+human intent; the Workstream PRE default remains separate. Approval locks exact
+image digest and configuration, and registration after proposal does not change
+the proposal hash. Omitted or null phase lists reject; explicit empty lists are
+complete human choices and suggestions impose no image-membership requirement.
 
-Historical results remain byte- and hash-stable. Reads and recovery omit the new
-members when an older retained result did not contain them; they never synthesize
-a rationale or specification. Strict completeness applies to newly compiled
-results before persistence and projection.
+Historical results remain byte- and hash-stable. Private retained-evidence readers
+verify their original fields and hashes for existing locked policies without
+synthesizing specifications. Current proposal reads and approvals accept the
+current specification contract only; historical results cannot enter that path.
 
 The runtime opens every assigned original once through the attempt's exact
 document grant and records each read. It allocates no provider container or
@@ -554,7 +568,7 @@ and manager task facts, the exact historical guide, review/revision references
 (`policy_id`, `generation`, `policy_hash`), and the locked
 `contribution_policy_version_id`. It omits obsolete payment amounts and
 submission/precheck flags. Contributor `lifecycle.next_actions` contains only
-currently applicable claim/start hints; management has no contributor lifecycle.
+currently applicable claim hints; management has no contributor lifecycle.
 Executing a hint always rechecks authority. Locked policy provenance uses three
 separate reads (all prefixed by `/api/v1`):
 
@@ -823,7 +837,9 @@ access. The source pointer is not permission to read another project's proposal.
 Approval and correction require exactly one UUID `Idempotency-Key` header.
 Duplicate occurrences are rejected with 422, even when their values match. Copy the exact
 `target` from the package into the request body; do not construct it from status
-summaries. Pre-submission approval supplies `acknowledged_warning_hashes` from that package and,
+summaries. Pre-submission approval supplies explicit
+`pre_submit_attachments` and `post_submit_attachments` lists selected by the
+authorized manager, plus `acknowledged_warning_hashes` from that package and,
 when replacing a prior approval, both prior approval identifiers. Correction
 supplies a meaningful `reason`. The body has no second idempotency key. Dispatch
 uses the committed correction operation ID for stable replay identity.
@@ -839,13 +855,14 @@ or bypasses current Project Manager authority. Initial setups have neither point
 
 After pre-submission approval, poll `GET /proposal` for `post_submit_policy_id`.
 A null ID means derivation has not produced a policy for that exact compilation.
-The fixed setup worker derives from the saved result without another model call.
+The fixed setup worker derives from the approved locked POST attachments
+without another model call.
 Every 60 seconds, Beat scans committed approvals missing a derivation; bounded
 pages progress past unavailable candidates. Broker failure leaves approval
 committed and recoverable. No public derive endpoint or extra manager action is
-needed. Current authority and exact upstream/catalogue custody are rechecked on
-every delivery. Stale custody requires a new corrected generation and approval;
-it is never relabelled by recovery.
+needed. Current authority and exact upstream approval and attachment custody
+are rechecked on every delivery. Stale custody requires a new approved
+generation; recovery cannot relabel it.
 
 Use the discovered policy ID with the three post-submission-policy suffixes.
 Copy that read's `target` into the separate approval or correction body;

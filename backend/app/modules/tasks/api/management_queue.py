@@ -9,7 +9,7 @@ from app.modules.tasks.api.ready_queue import TaskQueueCursor, TaskQueueRequest,
 
 
 TaskStatus = Literal[
-    "draft", "screening", "ready", "claimed", "in_progress", "submitted",
+    "draft", "screening", "ready", "in_progress", "submitted",
     "evaluation_pending", "review_pending", "needs_revision", "accepted",
 ]
 TASK_STATUSES = frozenset(get_args(TaskStatus))

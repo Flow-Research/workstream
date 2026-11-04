@@ -144,7 +144,7 @@ def event_fields():
         actor_id=uuid4(),
         reason=Reason.STATE_CHANGED,
         from_status="ready",
-        to_status="claimed",
+        to_status="in_progress",
         references={
             Reference.TASK: task_id,
             Reference.PROJECT: uuid4(),
@@ -157,9 +157,7 @@ def event_fields():
 @pytest.mark.parametrize(
     "event,before,after,reason",
     [
-        (Event.TASK_CLAIMED, "ready", "claimed", None),
-        (Event.TASK_STARTED, "claimed", "in_progress", "Begin assigned work"),
-        (Event.TASK_START_OVERRIDDEN, "claimed", "in_progress", "Authorized operator intervention"),
+        (Event.TASK_CLAIMED, "ready", "in_progress", None),
     ],
 )
 def test_task_event_preserves_exact_transition_and_reason(event, before, after, reason):
@@ -182,7 +180,7 @@ def test_task_event_preserves_exact_transition_and_reason(event, before, after, 
 @pytest.mark.parametrize(
     "change",
     [
-        {"to_status": "in_progress"},
+        {"to_status": "claimed"},
         {"from_status": "claimed"},
         {"task_reason": " "},
         {"task_reason": "x" * 1001},
@@ -204,3 +202,12 @@ def test_task_event_requires_assignment_and_authorization_evidence(reference):
     fields["references"].pop(reference)
     with pytest.raises(ValidationError, match="exact canonical references"):
         LifecycleAuditEventInput(**fields)
+
+
+@pytest.mark.parametrize("event", [Event.TASK_STARTED, Event.TASK_START_OVERRIDDEN])
+def test_historical_start_tokens_cannot_create_new_lifecycle_facts(event):
+    with pytest.raises(ValidationError, match="retained history only"):
+        LifecycleAuditEventInput(**(event_fields() | {
+            "event_type": event, "from_status": "claimed", "to_status": "in_progress",
+            "task_reason": "Historical start token",
+        }))

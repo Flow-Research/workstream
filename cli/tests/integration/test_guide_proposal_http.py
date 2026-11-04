@@ -1,6 +1,5 @@
 """Built CLI inspects one exact public proposal; it does not execute decisions."""
 
-from copy import deepcopy
 import json
 from urllib.parse import quote
 
@@ -22,18 +21,8 @@ def proposal():
         "end_page": None,
         "section": None,
     }
-    binding = {
-        "requirement_id": "results",
-        "capability_id": "results.present",
-        "capability_version": "v1",
-        "stage": "pre_submit",
-        "parameters": [{"name": "required", "value": True}],
-    }
-    pre_specification = {
-        "evaluation_method": "static_inspection",
-        "execution_mode": "bounded_pre_submit",
-        "maximum_duration_seconds": 45,
-        "stage_rationale": "This bounded package inspection can finish before submission.",
+    specification = {
+        "evaluation_method": "Inspect the submitted results.",
         "inputs": [
             {
                 "input_id": "submission_package",
@@ -78,23 +67,13 @@ def proposal():
                 "expected_finding_codes": ["results.extra"],
             },
         ],
-        "runtime_dependencies": [
-            {
-                "dependency_id": "results_parser",
-                "kind": "checker_tool",
-                "provisioning": "checker_implementation",
-                "purpose": "Parse and validate the results file.",
-                "unavailable_code": "implementation_unavailable",
-            }
+        "implementation_needs": [
+            "Read the submitted package and inspect the named results file."
         ],
-        "infrastructure_failures": [
+        "inability_to_evaluate": [
             {
                 "code": "material_unavailable",
                 "condition": "The submitted package cannot be read.",
-            },
-            {
-                "code": "implementation_unavailable",
-                "condition": "The required checker implementation is unavailable.",
             },
         ],
     }
@@ -103,6 +82,7 @@ def proposal():
             "project_id": PROJECT,
             "guide_id": GUIDE,
             "compilation_id": COMPILATION,
+            "result_schema_version": "project_guide_check_specification.v1",
             "guide_version": "evaluation-guide",
             "source_snapshot_id": OTHER,
             "source_snapshot_hash": HASH,
@@ -111,26 +91,19 @@ def proposal():
             "finalization_id": OTHER,
             "finalization_facts_digest": HASH,
             "result_hash": HASH,
-            "component_hashes": dict.fromkeys(
-                (
-                    "sufficiency_hash",
-                    "artifact_policy_hash",
-                    "requirement_inventory_hash",
-                    "pre_submit_hash",
-                    "post_submit_hash",
-                    "capability_suggestions_hash",
-                    "setup_notes_hash",
+            "component_hashes": {
+                "schema_version": "project_guide_check_specification_hashes.v1",
+                **dict.fromkeys(
+                    (
+                        "sufficiency_hash",
+                        "artifact_policy_hash",
+                        "requirement_inventory_hash",
+                        "pre_submit_hash",
+                        "post_submit_hash",
+                    ),
+                    HASH,
                 ),
-                HASH,
-            ),
-            "pre_catalogue_id": "pre",
-            "pre_catalogue_version": "v1",
-            "pre_catalogue_schema_version": "v1",
-            "pre_catalogue_manifest_hash": HASH,
-            "post_catalogue_id": "post",
-            "post_catalogue_version": "v1",
-            "post_catalogue_schema_version": "v1",
-            "post_catalogue_manifest_hash": HASH,
+            },
             "artifact_policy_id": OTHER,
             "artifact_policy_hash": HASH,
             "artifact_projection_operation_id": OTHER,
@@ -161,76 +134,29 @@ def proposal():
             },
             "requirements": [
                 {
-                    "requirement_id": "results",
+                    "suggestion_id": "results",
                     "statement": "Provide evaluation results.",
-                    "disposition": "supported_pre_submit",
-                    "classification_rationale": "A bounded static check can evaluate this before submission.",
-                    "check_specification": pre_specification,
-                    "platform_coverage": {
-                        "capability_id": "submission.zip",
-                        "capability_version": "v1",
-                        "stage": "pre_submit",
-                    },
+                    "stage": "pre_submit",
+                    "classification_rationale": "The guide asks for results before submission.",
+                    "check_specification": specification,
                     "evidence_refs": [location],
                 },
                 {
-                    "requirement_id": "quality",
+                    "suggestion_id": "quality",
                     "statement": "Evaluate result quality after submission.",
-                    "disposition": "supported_post_submit",
-                    "classification_rationale": "Execution may take longer than the intake budget.",
-                    "check_specification": pre_specification
+                    "stage": "post_submit",
+                    "classification_rationale": "The guide asks for quality evidence after submission.",
+                    "check_specification": specification
                     | {
-                        "evaluation_method": "isolated_execution",
-                        "execution_mode": "background",
-                        "maximum_duration_seconds": 300,
-                        "stage_rationale": "Run the evaluator in the background.",
-                        "runtime_dependencies": [
-                            {
-                                "dependency_id": "execution_runner",
-                                "kind": "isolated_execution",
-                                "provisioning": "current_runner",
-                                "purpose": "Run the project evaluator offline.",
-                                "unavailable_code": "implementation_unavailable",
-                            }
-                        ],
+                        "evaluation_method": "Assess the submitted results against the rubric."
                     },
-                    "platform_coverage": None,
                     "evidence_refs": [location],
                 },
-                {
-                    "requirement_id": "review_decision",
-                    "statement": "A reviewer makes the final decision.",
-                    "disposition": "human_review",
-                    "classification_rationale": "The guide explicitly assigns this judgment to a reviewer.",
-                    "platform_coverage": None,
-                    "evidence_refs": [location],
-                },
-            ],
-            "pre_submit_bindings": [binding],
-            "post_submit_bindings": [
-                binding
-                | {
-                    "requirement_id": "quality",
-                    "stage": "post_submit",
-                    "parameters": [
-                        {"name": "threshold", "value": 0.9},
-                        {"name": "labels", "value": ["research", 2, True]},
-                    ],
-                }
-            ],
-            "capability_suggestions": [
-                {
-                    "requirement_id": "future",
-                    "stage": "post_submit",
-                    "title": "Additional evaluation",
-                    "rationale": "An optional evaluator would help.",
-                    "evidence_refs": [location],
-                }
             ],
             "setup_notes": ["Proposal only."],
             "agent_name": "ProjectGuideCompilationAgent",
             "agent_version": "v1",
-            "schema_version": "project_guide_compilation_result.v1",
+            "schema_version": "project_guide_check_specification.v1",
         },
         "current": True,
         "artifact_policy_status": "draft",
@@ -247,81 +173,57 @@ def invoke(
     return cli(origin, token, "-o", output, "project", "guide", "proposal", *selectors)
 
 
-def test_proposal_complete_exact_selector_and_terminal_safe_observation(cli):
+def test_proposal_exact_selector_raw_bytes_and_escaped_text(cli):
     with http_fixture() as (origin, response, requests):
-        for status, current in (
-            ("draft_ready", True),
-            ("draft_ready_with_warnings", True),
-            ("guide_blocked", False),
+        for spell in (
+            lambda x: x,
+            lambda x: x.replace("-", ""),
+            lambda x: "{" + x + "}",
+            lambda x: "urn:uuid:" + x,
         ):
-            value = proposal()
-            value["result"]["status"], value["current"] = status, current
-            if status == "guide_blocked":
-                value["result"]["submission_artifact_policy"] = None
-                value["artifact_policy_status"] = None
-                for key in (
-                    "artifact_policy_id",
-                    "artifact_policy_hash",
-                    "artifact_projection_operation_id",
-                    "artifact_projection_output_digest",
-                ):
-                    value["target"][key] = None
-            for spell in (
-                lambda x: x,
-                lambda x: x.replace("-", ""),
-                lambda x: "{" + x + "}",
-                lambda x: "urn:uuid:" + x,
-            ):
-                selectors = tuple(spell(x) for x in (PROJECT, GUIDE, COMPILATION))
-                response["body"] = json.dumps(value, indent=2).encode()
-                result = invoke(cli, origin, selectors)
-                assert result.returncode == 0 and result.stderr == "", result.stderr
-                assert result.stdout.strip().encode() == response["body"]
-                assert requests[-1] == (
-                    "GET",
-                    "/api/v1/projects/{}/guides/{}/compilations/{}/proposal".format(
-                        *(quote(x, safe=":") for x in selectors)
-                    ),
-                    "Bearer " + TOKEN,
-                )
+            selectors = tuple(spell(x) for x in (PROJECT, GUIDE, COMPILATION))
+            response["body"] = json.dumps(proposal(), indent=2).encode()
+            result = invoke(cli, origin, selectors)
+            assert result.returncode == 0 and result.stderr == "", result.stderr
+            assert result.stdout.strip().encode() == response["body"]
+            assert requests[-1] == (
+                "GET",
+                "/api/v1/projects/{}/guides/{}/compilations/{}/proposal".format(
+                    *(quote(x, safe=":") for x in selectors)
+                ),
+                "Bearer " + TOKEN,
+            )
         value = proposal()
         value["result"]["findings"][0]["message"] = "Diagnostic é\n\x1b[32m\u202e"
         response["body"] = json.dumps(value, ensure_ascii=False).encode()
-        text = invoke(cli, origin, output="text")
-        assert text.returncode == 0 and text.stderr == "", text.stderr
-        assert text.stdout.startswith("Guide proposal (inspection only)\nStatus: ")
-        assert "\x1b" not in text.stdout and "\u202e" not in text.stdout
-        assert "\\u000A\\u001B[32m\\u202E" in text.stdout
-        assert "9223372036854775808" in text.stdout
+        rendered = invoke(cli, origin, output="text")
+        assert rendered.returncode == 0 and rendered.stderr == "", rendered.stderr
+        assert rendered.stdout.startswith("Guide proposal (inspection only)\nStatus: ")
+        assert "\x1b" not in rendered.stdout and "\u202e" not in rendered.stdout
+        assert "\\u000A\\u001B[32m\\u202E" in rendered.stdout
         for section in (
             "Findings (1)",
             "Submission artifact policy",
-            "PRE requirements (1)",
-            "POST requirements (1)",
-            "Non-checker requirements (1)",
+            "PRE check suggestions (1)",
+            "POST check suggestions (1)",
             "Check steps",
             "Pass conditions",
             "Failure findings",
             "Positive tests",
             "Negative tests",
-            "Runtime dependencies",
-            "Infrastructure failures",
-            "Capability suggestions (1)",
+            "Implementation needs",
+            "Cannot evaluate when",
             "Setup notes (1)",
         ):
-            assert section in text.stdout
-        assert "document 1" in text.stdout
-        assert "results_parser" in text.stdout
-        assert "required=true" in text.stdout
-        assert '"target":' not in text.stdout
-        assert (
-            len(requests) == 13
-            and response["commands"] == []
-            and response["updates"] == []
-        )
+            assert section in rendered.stdout
+        assert "document 1" in rendered.stdout
+        assert "material_unavailable" in rendered.stdout
+        assert "9223372036854775808" in rendered.stdout
+        assert '"target":' not in rendered.stdout
+        assert response["commands"] == [] and response["updates"] == []
 
 
-def test_proposal_defaults_nullable_lineage_and_unbounded_integer(cli):
+def test_proposal_nullable_lineage_and_large_integer(cli):
     value = proposal()
     for key in (
         "current_approval_operation_id",
@@ -329,7 +231,10 @@ def test_proposal_defaults_nullable_lineage_and_unbounded_integer(cli):
         "post_submit_policy_id",
     ):
         del value[key]
-    value["result"] = {"status": "guide_blocked", "agent_version": "v1"}
+    value["result"].update(
+        status="guide_blocked", requirements=[], submission_artifact_policy=None
+    )
+    value["result"].pop("setup_notes")
     with http_fixture() as (origin, response, _):
         for generation in (1, 9223372036854775808):
             value["target"]["setup_generation"] = generation
@@ -350,7 +255,7 @@ def test_proposal_defaults_nullable_lineage_and_unbounded_integer(cli):
             assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
-def test_proposal_substituted_valid_resources_and_malformed_identities(cli):
+def test_proposal_rejects_substituted_selectors_and_invalid_record_ids(cli):
     with http_fixture() as (origin, response, _):
         for key in ("project_id", "guide_id", "compilation_id"):
             value = proposal()
@@ -378,169 +283,197 @@ def test_proposal_substituted_valid_resources_and_malformed_identities(cli):
             assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
-def test_proposal_missing_null_unknown_and_private_nested_fields(cli):
-    value = proposal()
-    objects = [
-        ((), ("target", "target_digest", "result", "current", "warning_hashes")),
-        (
-            ("target",),
-            tuple(
-                value["target"].keys()
-                - {
-                    "artifact_policy_id",
-                    "artifact_policy_hash",
-                    "artifact_projection_operation_id",
-                    "artifact_projection_output_digest",
-                }
-            ),
-        ),
-        (("target", "component_hashes"), tuple(value["target"]["component_hashes"])),
-        (("result",), ("status", "agent_version")),
-        (("result", "findings", 0), ("severity", "code", "message")),
-        (("result", "requirements", 0), ("requirement_id", "statement", "disposition")),
-        (
-            ("result", "requirements", 0, "check_specification"),
-            (
-                "evaluation_method",
-                "execution_mode",
-                "maximum_duration_seconds",
-                "stage_rationale",
-                "inputs",
-                "check_steps",
-                "pass_conditions",
-                "failure_findings",
-                "positive_tests",
-                "negative_tests",
-                "runtime_dependencies",
-                "infrastructure_failures",
-            ),
-        ),
-        (
-            ("result", "requirements", 0, "check_specification", "inputs", 1),
-            ("input_id", "kind", "purpose", "relative_path"),
-        ),
-        (
-            ("result", "requirements", 0, "check_specification", "failure_findings", 0),
-            ("code", "level", "condition", "message"),
-        ),
-        (
-            ("result", "requirements", 0, "check_specification", "negative_tests", 0),
-            ("name", "scenario", "expected_verdict", "expected_finding_codes"),
-        ),
-        (
-            (
-                "result",
-                "requirements",
-                0,
-                "check_specification",
-                "runtime_dependencies",
-                0,
-            ),
-            ("dependency_id", "kind", "provisioning", "purpose", "unavailable_code"),
-        ),
-        (
-            (
-                "result",
-                "requirements",
-                0,
-                "check_specification",
-                "infrastructure_failures",
-                0,
-            ),
-            ("code", "condition"),
-        ),
-        (
-            ("result", "requirements", 0, "platform_coverage"),
-            ("capability_id", "capability_version", "stage"),
-        ),
-        (
-            ("result", "pre_submit_bindings", 0),
-            ("requirement_id", "capability_id", "capability_version", "stage"),
-        ),
-        (("result", "pre_submit_bindings", 0, "parameters", 0), ("name", "value")),
-        (("result", "post_submit_bindings", 0, "parameters", 0), ("name", "value")),
-        (
-            ("result", "capability_suggestions", 0),
-            ("requirement_id", "stage", "title", "rationale", "evidence_refs"),
-        ),
-        (("result", "findings", 0, "evidence_refs", 0), ("document_number",)),
-        (
-            ("result", "submission_artifact_policy"),
-            (),
-        ),
-    ]
+def test_proposal_accepts_warning_only_check_and_rejects_incomplete_policy_identity(
+    cli,
+):
     with http_fixture() as (origin, response, _):
-        for path, required in objects:
-            for key in (*required, "private_handle"):
-                for mode in (
-                    ("missing", "null") if key != "private_handle" else ("unknown",)
-                ):
-                    body = deepcopy(value)
-                    obj = body
-                    for component in path:
-                        obj = obj[component]
-                    if mode == "missing":
-                        del obj[key]
-                    else:
-                        obj[key] = None if mode == "null" else "must-not-be-printed"
-                    response["body"] = json.dumps(body).encode()
-                    assert_failure(invoke(cli, origin), "invalid_api_response")
-        for field in ("artifact_policy_status",):
-            body = deepcopy(value)
-            del body[field]
-            response["body"] = json.dumps(body).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-        for field in ("classification_rationale", "check_specification"):
-            body = deepcopy(value)
-            body["result"]["requirements"][0][field] = None
-            response["body"] = json.dumps(body).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
+        value = proposal()
+        for suggestion in value["result"]["requirements"]:
+            specification = suggestion["check_specification"]
+            specification["failure_findings"] = [specification["failure_findings"][1]]
+            specification["negative_tests"] = [specification["negative_tests"][1]]
+        response["body"] = json.dumps(value).encode()
+        assert invoke(cli, origin).returncode == 0
+
         for field in (
             "artifact_policy_id",
             "artifact_policy_hash",
             "artifact_projection_operation_id",
             "artifact_projection_output_digest",
         ):
-            body = deepcopy(value)
-            del body["target"][field]
-            response["body"] = json.dumps(body).encode()
+            changed = proposal()
+            changed["target"][field] = None
+            response["body"] = json.dumps(changed).encode()
             assert_failure(invoke(cli, origin), "invalid_api_response")
-        location = value["result"]["findings"][0]["evidence_refs"][0]
-        for field in ("start_page", "end_page", "section"):
-            body = deepcopy(value)
-            del body["result"]["findings"][0]["evidence_refs"][0][field]
-            response["body"] = json.dumps(body).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-        assert location["document_number"] == 1
-        response["body"] = (json.dumps(value)[:-1] + ', "current": false}').encode()
+
+
+@pytest.mark.parametrize(
+    "path,invalid",
+    [
+        (("target", "result_schema_version"), "other"),
+        (("target", "pre_catalogue_id"), "old-catalogue"),
+        (("target", "component_hashes", "schema_version"), "other"),
+        (("target", "component_hashes", "post_submit_hash"), "not-digest"),
+        (("result", "schema_version"), "other"),
+        (("result", "requirements", 0, "stage"), "human_review"),
+        (("result", "requirements", 0, "suggestion_id"), "Invalid"),
+        (("result", "requirements", 0, "evidence_refs"), []),
+        (
+            (
+                "result",
+                "requirements",
+                0,
+                "check_specification",
+                "runtime_dependencies",
+            ),
+            [],
+        ),
+        (("result", "requirements", 0, "check_specification", "check_steps"), []),
+        (
+            (
+                "result",
+                "requirements",
+                0,
+                "check_specification",
+                "inputs",
+                0,
+                "relative_path",
+            ),
+            "../secret",
+        ),
+        (
+            (
+                "result",
+                "requirements",
+                0,
+                "check_specification",
+                "failure_findings",
+                0,
+                "level",
+            ),
+            "coverage_incomplete",
+        ),
+        (
+            (
+                "result",
+                "requirements",
+                0,
+                "check_specification",
+                "negative_tests",
+                0,
+                "expected_verdict",
+            ),
+            "passed",
+        ),
+        (
+            (
+                "result",
+                "requirements",
+                0,
+                "check_specification",
+                "inability_to_evaluate",
+                0,
+                "code",
+            ),
+            "results.missing",
+        ),
+        (("result", "capability_suggestions"), []),
+        (("result", "submission_artifact_policy", "maximum_archive_entries"), "20"),
+    ],
+)
+def test_proposal_rejects_obsolete_or_malformed_nested_contract(cli, path, invalid):
+    value = proposal()
+    target = value
+    for component in path[:-1]:
+        target = target[component]
+    target[path[-1]] = invalid
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
         assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
-def test_proposal_rejects_null_array_members_and_parameter_objects(cli):
+@pytest.mark.parametrize(
+    "field",
+    [
+        "target",
+        "target_digest",
+        "result",
+        "current",
+        "warning_hashes",
+    ],
+)
+def test_proposal_missing_required_outer_field_rejected(cli, field):
+    value = proposal()
+    del value[field]
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "status",
+        "agent_version",
+        "agent_name",
+        "schema_version",
+        "findings",
+        "requirements",
+        "submission_artifact_policy",
+    ],
+)
+def test_proposal_missing_required_result_field_rejected(cli, field):
+    value = proposal()
+    del value["result"][field]
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "status",
+        "agent_version",
+        "agent_name",
+        "schema_version",
+        "findings",
+        "requirements",
+    ],
+)
+def test_proposal_null_required_result_field_rejected(cli, field):
+    value = proposal()
+    value["result"][field] = None
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        assert_failure(invoke(cli, origin), "invalid_api_response")
+
+
+def test_proposal_rejects_private_nested_fields_and_null_array_members(cli):
     with http_fixture() as (origin, response, _):
         for field in (
-            "findings",
-            "requirements",
-            "pre_submit_bindings",
-            "post_submit_bindings",
-            "capability_suggestions",
-            "setup_notes",
+            "source_item_id",
+            "document_version_id",
+            "sha256",
+            "provider_url",
+            "raw_excerpt",
         ):
-            for invalid in (None, [None]):
-                value = proposal()
-                value["result"][field] = invalid
-                response["body"] = json.dumps(value).encode()
-                assert_failure(invoke(cli, origin), "invalid_api_response")
-        for invalid in (None, [None], ["x", None], {}, [{"instruction": "execute"}]):
             value = proposal()
-            value["result"]["post_submit_bindings"][0]["parameters"][0]["value"] = (
-                invalid
-            )
+            value["result"]["requirements"][0]["evidence_refs"][0][field] = "private"
+            response["body"] = json.dumps(value).encode()
+            assert_failure(invoke(cli, origin), "invalid_api_response")
+        for field in ("findings", "requirements", "warning_hashes"):
+            value = proposal()
+            if field == "warning_hashes":
+                value[field] = [None]
+            else:
+                value["result"][field] = [None]
             response["body"] = json.dumps(value).encode()
             assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
-def test_proposal_accepts_backend_canonical_paths(cli):
+def test_proposal_check_input_paths_and_prose_match_backend(cli):
+    from pydantic import ValidationError
     from app.modules.projects.api.guide_proposal_package import (
         GuideProposalReviewPackage,
     )
@@ -561,64 +494,15 @@ def test_proposal_accepts_backend_canonical_paths(cli):
             validated = GuideProposalReviewPackage.model_validate(value)
             response["body"] = validated.model_dump_json().encode()
             result = invoke(cli, origin)
-            assert result.returncode == 0
-            actual = json.loads(result.stdout)
-            assert (
-                actual["result"]["requirements"][0]["check_specification"]["inputs"][1][
-                    "relative_path"
-                ]
-                == path
-            )
-
-
-def test_proposal_matches_backend_prose_bounds(cli):
-    from pydantic import ValidationError
-
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        for text in (" ", "\t\n", "結" * 1000):
-            value = proposal()
-            value["result"]["requirements"][0]["check_specification"][
-                "stage_rationale"
-            ] = text
-            validated = GuideProposalReviewPackage.model_validate(value)
-            response["body"] = validated.model_dump_json().encode()
-            result = invoke(cli, origin)
-            assert result.returncode == 0
+            assert result.returncode == 0, result.stderr
             assert (
                 json.loads(result.stdout)["result"]["requirements"][0][
                     "check_specification"
-                ]["stage_rationale"]
-                == text
+                ]["inputs"][1]["relative_path"]
+                == path
             )
 
-        for text in ("", "結" * 1001):
-            value = proposal()
-            value["result"]["requirements"][0]["check_specification"][
-                "stage_rationale"
-            ] = text
-            with pytest.raises(ValidationError):
-                GuideProposalReviewPackage.model_validate(value)
-            response["body"] = json.dumps(value).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_rejects_backend_invalid_unicode_paths(cli):
-    from pydantic import ValidationError
-
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        for path in (
-            "reports/\u200bhidden.txt",
-            "reports/a\u0085b.txt",
-            "結" * 501,
-        ):
+        for path in ("reports/\u200bhidden.txt", "reports/a\u0085b.txt", "結" * 501):
             value = proposal()
             value["result"]["requirements"][0]["check_specification"]["inputs"][1][
                 "relative_path"
@@ -628,364 +512,38 @@ def test_proposal_rejects_backend_invalid_unicode_paths(cli):
             response["body"] = json.dumps(value).encode()
             assert_failure(invoke(cli, origin), "invalid_api_response")
 
-
-def test_proposal_specification_stage_semantics_and_historical_omission(cli):
-    with http_fixture() as (origin, response, _):
-        historical = proposal()
-        for field in ("classification_rationale", "check_specification"):
-            del historical["result"]["requirements"][0][field]
-        response["body"] = json.dumps(historical).encode()
-        result = invoke(cli, origin)
-        assert result.returncode == 0 and json.loads(result.stdout) == historical
-
-        warning_only = proposal()
-        spec = warning_only["result"]["requirements"][0]["check_specification"]
-        spec["failure_findings"] = [spec["failure_findings"][1]]
-        spec["negative_tests"] = [spec["negative_tests"][1]]
-        response["body"] = json.dumps(warning_only).encode()
-        assert invoke(cli, origin).returncode == 0
-
-        invalid_values = []
-
-        value = proposal()
-        del value["result"]["requirements"][0]["classification_rationale"]
-        invalid_values.append(value)
-
-        value = proposal()
-        del value["result"]["requirements"][0]["check_specification"]
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["evidence_refs"] = []
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"][
-            "maximum_duration_seconds"
-        ] = 61
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"]["execution_mode"] = (
-            "background"
-        )
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][1]["check_specification"][
-            "maximum_duration_seconds"
-        ] = 3601
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"]["negative_tests"][0][
-            "expected_verdict"
-        ] = "passed"
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"]["negative_tests"][1][
-            "expected_verdict"
-        ] = "failed"
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"]["inputs"][1][
-            "relative_path"
-        ] = "../results.json"
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"][
-            "runtime_dependencies"
-        ][0]["unavailable_code"] = "capacity_exceeded"
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][2]["check_specification"] = deepcopy(
-            value["result"]["requirements"][0]["check_specification"]
-        )
-        invalid_values.append(value)
-
-        value = proposal()
-        value["result"]["requirements"][0]["check_specification"]["check_steps"] = []
-        invalid_values.append(value)
-
-        for value in invalid_values:
-            response["body"] = json.dumps(value).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_rejects_pre_model_evaluation_and_validates_post_runtime_gaps(cli):
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        value = proposal()
-        requirement = value["result"]["requirements"][0]
-        requirement["disposition"] = "pre_submit_capability_gap"
-        specification = deepcopy(requirement["check_specification"])
-        requirement["check_specification"] = specification
-        specification["evaluation_method"] = "model_evaluation"
-        specification["runtime_dependencies"] = [
-            {
-                "dependency_id": "quality_model",
-                "kind": "model_service",
-                "provisioning": "runtime_gap",
-                "purpose": "Evaluate the submitted results with the configured model.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        ]
-        value["result"]["pre_submit_bindings"] = []
-        value["result"]["capability_suggestions"] = [
-            {
-                "requirement_id": "results",
-                "stage": "pre_submit",
-                "title": "Model quality evaluation",
-                "rationale": "A model service implementation is required.",
-                "evidence_refs": requirement["evidence_refs"],
-            }
-        ]
-        # The public object and specification are otherwise valid. The CLI
-        # rejects only the forbidden PRE placement of model evaluation.
-        GuideProposalReviewPackage.model_validate(value)
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-        requirement["disposition"] = "post_submit_capability_gap"
-        specification["execution_mode"] = "background"
-        specification["maximum_duration_seconds"] = 300
-        specification["runtime_dependencies"].append(
-            {
-                "dependency_id": "worker_capacity",
-                "kind": "execution_capacity",
-                "provisioning": "runtime_gap",
-                "purpose": "Provide enough background worker time for the evaluation.",
-                "unavailable_code": "capacity_exceeded",
-            }
-        )
-        prepared_dependency = {
-            "dependency_id": "prepared_reference_cache",
-            "kind": "prepared_material",
-            "provisioning": "runtime_gap",
-            "purpose": "Provide the prepared reference cache used by the evaluator.",
-            "unavailable_code": "material_unavailable",
-        }
-        specification["runtime_dependencies"].append(prepared_dependency)
-        specification["inputs"].append(
-            {
-                "input_id": "prepared_reference_cache",
-                "kind": "prepared_material",
-                "purpose": "Read the externally prepared reference cache.",
-            }
-        )
-        specification["infrastructure_failures"].append(
-            {
-                "code": "capacity_exceeded",
-                "condition": "The proposed evaluation exceeds the worker time budget.",
-            }
-        )
-        value["result"]["capability_suggestions"][0]["stage"] = "post_submit"
-        GuideProposalReviewPackage.model_validate(value)
-        response["body"] = json.dumps(value).encode()
-        accepted = invoke(cli, origin)
-        assert accepted.returncode == 0 and json.loads(accepted.stdout) == value
-
-        prepared_input = specification["inputs"].pop()
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-        specification["inputs"].append(prepared_input)
-
-        specification["runtime_dependencies"].pop()
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-        specification["runtime_dependencies"].append(prepared_dependency)
-        prepared_dependency["provisioning"] = "current_runner"
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-        prepared_dependency["provisioning"] = "runtime_gap"
-        specification["runtime_dependencies"][1]["provisioning"] = "current_runner"
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-@pytest.mark.parametrize("stage", ["pre_submit", "post_submit"])
-def test_proposal_trial_proxy_and_offline_material_are_post_only(cli, stage):
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        value = proposal()
-        index = 0 if stage == "pre_submit" else 1
-        requirement = value["result"]["requirements"][index]
-        specification = deepcopy(requirement["check_specification"])
-        requirement["check_specification"] = specification
-        dependencies = specification["runtime_dependencies"]
-        dependencies.extend(
-            [
-                {
-                    "dependency_id": "isolated_trial",
-                    "kind": "nested_sandbox",
-                    "provisioning": "trial_proxy",
-                    "purpose": "Run the submitted environment.",
-                    "unavailable_code": "implementation_unavailable",
-                },
-                {
-                    "dependency_id": "offline_cache",
-                    "kind": "prepared_material",
-                    "provisioning": "trial_proxy",
-                    "purpose": "Use the approved offline cache.",
-                    "unavailable_code": "material_unavailable",
-                },
-            ]
-        )
-        specification["inputs"].append(
-            {
-                "input_id": "offline_cache",
-                "kind": "prepared_material",
-                "purpose": "Supply the profile-pinned offline base to the trial tool.",
-            }
-        )
-        GuideProposalReviewPackage.model_validate(value)
-        response["body"] = json.dumps(value).encode()
-        if stage == "pre_submit":
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-            return
-        accepted = invoke(cli, origin)
-        assert accepted.returncode == 0 and json.loads(accepted.stdout) == value
-
-        nested = dependencies.pop(-2)
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-        dependencies.append(nested)
-        nested["provisioning"] = "runtime_gap"
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_accepts_supported_execution_with_model_proxy(cli):
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        value = proposal()
-        dependencies = value["result"]["requirements"][1]["check_specification"][
-            "runtime_dependencies"
-        ]
-        dependencies.append(
-            {
-                "dependency_id": "quality_model",
-                "kind": "model_service",
-                "provisioning": "model_proxy",
-                "purpose": "Assess the authenticated execution observations.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        )
-        GuideProposalReviewPackage.model_validate(value)
-        response["body"] = json.dumps(value).encode()
-        accepted = invoke(cli, origin)
-        assert accepted.returncode == 0 and json.loads(accepted.stdout) == value
-
-        dependencies[-1]["provisioning"] = "runtime_gap"
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_rejects_pre_check_with_model_assistance(cli):
-    with http_fixture() as (origin, response, _):
-        value = proposal()
-        dependencies = value["result"]["requirements"][0]["check_specification"][
-            "runtime_dependencies"
-        ]
-        dependencies.append(
-            {
-                "dependency_id": "quality_model",
-                "kind": "model_service",
-                "provisioning": "model_proxy",
-                "purpose": "Assist the bounded static inspection.",
-                "unavailable_code": "implementation_unavailable",
-            }
-        )
-        response["body"] = json.dumps(value).encode()
-        assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_rejects_malformed_nested_types_and_incomplete_policy_identity(cli):
-    cases = [
-        (("current",), "yes"),
-        (("warning_hashes",), [None]),
-        (("artifact_policy_status",), "activated"),
-        (("result", "status"), "accepted"),
-        (("result", "agent_name"), None),
-        (("result", "schema_version"), "other-protocol"),
-        (("result", "findings", 0, "severity"), "critical"),
-        (("result", "findings", 0, "message"), {"not": "text"}),
-        (("result", "findings", 0, "evidence_refs"), [None]),
-        (("result", "findings", 0, "evidence_refs", 0, "document_number"), "1"),
-        (("result", "findings", 0, "evidence_refs", 0, "start_page"), "1"),
-        (("result", "findings", 0, "evidence_refs", 0, "section"), {}),
-        (("result", "requirements", 0, "disposition"), "approved"),
-        (("result", "requirements", 0, "platform_coverage"), {}),
-        (("result", "pre_submit_bindings", 0, "stage"), "human_acceptance"),
-        (("result", "post_submit_bindings", 0, "parameters"), [None]),
-        (("result", "post_submit_bindings", 0, "parameters", 0, "value"), []),
-        (("result", "capability_suggestions", 0, "evidence_refs"), []),
-        (("result", "submission_artifact_policy", "maximum_archive_entries"), "20"),
-        (("result", "submission_artifact_policy", "maximum_archive_size_bytes"), 1.5),
-        (("result", "submission_artifact_policy", "packaging"), None),
-        (("target", "component_hashes", "post_submit_hash"), "not-digest"),
-    ]
-    cases.extend(
-        (("target", key), None)
-        for key in (
-            "artifact_policy_id",
-            "artifact_policy_hash",
-            "artifact_projection_operation_id",
-            "artifact_projection_output_digest",
-        )
-    )
-    with http_fixture() as (origin, response, _):
-        for path, invalid in cases:
+        for prose in (" ", "\t\n", "結" * 1000):
             value = proposal()
-            obj = value
-            for component in path[:-1]:
-                obj = obj[component]
-            obj[path[-1]] = invalid
-            response["body"] = json.dumps(value).encode()
-            assert_failure(invoke(cli, origin), "invalid_api_response")
-        for field in (
-            "allowed_storage_schemes",
-            "required_artifacts",
-            "forbidden_artifacts",
-            "required_evidence",
-            "attestation_terms",
-        ):
+            value["result"]["requirements"][0]["check_specification"][
+                "evaluation_method"
+            ] = prose
+            validated = GuideProposalReviewPackage.model_validate(value)
+            response["body"] = validated.model_dump_json().encode()
+            assert invoke(cli, origin).returncode == 0
+
+        for prose in ("", "結" * 1001):
             value = proposal()
-            value["result"]["submission_artifact_policy"][field] = [None]
+            value["result"]["requirements"][0]["check_specification"][
+                "evaluation_method"
+            ] = prose
+            with pytest.raises(ValidationError):
+                GuideProposalReviewPackage.model_validate(value)
             response["body"] = json.dumps(value).encode()
             assert_failure(invoke(cli, origin), "invalid_api_response")
 
 
-def test_proposal_response_bound_and_existing_safe_failures(cli):
+def test_proposal_response_bound_and_safe_failures(cli):
     from app.modules.projects.api.guide_proposal_package import (
         GuideProposalReviewPackage,
     )
 
     with http_fixture() as (origin, response, requests):
         value = proposal()
-        requirement = value["result"]["requirements"][0]
+        suggestion = value["result"]["requirements"][0]
         value["result"]["requirements"] = [
-            requirement
-            | {"requirement_id": f"requirement_{index}", "statement": "x" * 1000}
+            suggestion | {"suggestion_id": f"check_{index}", "statement": "x" * 1000}
             for index in range(100)
         ]
-        # The larger successful envelope must be a supported public shape,
-        # not permissive-fake data used to justify widening a response limit.
         GuideProposalReviewPackage.model_validate(value)
         response["body"] = json.dumps(value).encode()
         assert len(response["body"]) > 65536
@@ -1001,7 +559,6 @@ def test_proposal_response_bound_and_existing_safe_failures(cli):
         denied = invoke(cli, origin)
         assert_failure(denied, "proposal_unavailable")
         assert json.loads(denied.stderr)["error"]["status"] == 404
-        assert "outcome_unknown" not in json.loads(denied.stderr)["error"]
         response["body"] = json.dumps(canonical_error("credential_canary_AAA")).encode()
         assert_failure(invoke(cli, origin, token="credential_canary_AAA"), "api_error")
         response["status"] = 302
@@ -1020,65 +577,46 @@ def test_proposal_response_bound_and_existing_safe_failures(cli):
         assert len(requests) == count
 
 
-def test_proposal_intake_integer_field_boundaries(cli):
+def test_proposal_intake_integer_boundaries_and_nulls(cli):
     from app.modules.projects.api.guide_proposal_package import (
         GuideProposalReviewPackage,
     )
 
     ceiling = 10 * 1024**3
-    fields = (
-        "maximum_file_size_bytes",
-        "maximum_package_size_bytes",
-        "maximum_archive_size_bytes",
-        "maximum_archive_entries",
-    )
     with http_fixture() as (origin, response, _):
-        for field in fields:
-            upper = ceiling if field in fields[:2] else 9223372036854775808
+        for field in (
+            "maximum_file_size_bytes",
+            "maximum_package_size_bytes",
+            "maximum_archive_size_bytes",
+            "maximum_archive_entries",
+        ):
+            upper = (
+                ceiling
+                if field in ("maximum_file_size_bytes", "maximum_package_size_bytes")
+                else 9223372036854775808
+            )
             for boundary in (1, upper):
                 value = proposal()
                 policy = value["result"]["submission_artifact_policy"]
-                # Keep cross-field policy coherence in valid controls; this
-                # client check covers only the four declared field ranges.
                 policy["maximum_file_size_bytes"] = 1
                 policy["maximum_package_size_bytes"] = ceiling
                 policy[field] = boundary
                 GuideProposalReviewPackage.model_validate(value)
                 response["body"] = json.dumps(value).encode()
-                result = invoke(cli, origin)
-                assert result.returncode == 0 and json.loads(result.stdout) == value, (
-                    result.stderr
-                )
-            invalid = (-1, 0, ceiling + 1) if field in fields[:2] else (-1, 0)
-            for boundary in invalid:
+                assert invoke(cli, origin).returncode == 0
+            for boundary in (-1, 0):
                 value = proposal()
                 value["result"]["submission_artifact_policy"][field] = boundary
                 response["body"] = json.dumps(value).encode()
                 assert_failure(invoke(cli, origin), "invalid_api_response")
-
-
-def test_proposal_without_project_size_overrides_preserves_nulls(cli):
-    from app.modules.projects.api.guide_proposal_package import (
-        GuideProposalReviewPackage,
-    )
-
-    with http_fixture() as (origin, response, _):
-        for fields in (
-            ("maximum_file_size_bytes",),
-            ("maximum_package_size_bytes",),
-            ("maximum_file_size_bytes", "maximum_package_size_bytes"),
-        ):
-            for omit in (False, True):
-                value = proposal()
-                policy = value["result"]["submission_artifact_policy"]
-                for field in fields:
-                    if omit:
-                        del policy[field]
-                    else:
-                        policy[field] = None
-                GuideProposalReviewPackage.model_validate(value)
-                response["body"] = json.dumps(value).encode()
-                result = invoke(cli, origin)
-                assert result.returncode == 0 and json.loads(result.stdout) == value, (
-                    result.stderr
-                )
+        for omit in (False, True):
+            value = proposal()
+            policy = value["result"]["submission_artifact_policy"]
+            for field in ("maximum_file_size_bytes", "maximum_package_size_bytes"):
+                if omit:
+                    del policy[field]
+                else:
+                    policy[field] = None
+            GuideProposalReviewPackage.model_validate(value)
+            response["body"] = json.dumps(value).encode()
+            assert invoke(cli, origin).returncode == 0

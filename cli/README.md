@@ -5,7 +5,7 @@ agents using the terminal. It provides human self-profile reads and editing,
 plus draft project/guide declaration and original upload, exact-project inspection, authority reads, manager task browsing and
 administrative actor, identity-link and grant inspection and explicit writes,
 active-guide/intake-policy inspection,
-contributor work discovery, claim/start, locked guide documents and governing
+contributor work discovery, claim, locked guide documents and governing
 context/intake requirements, explicit batch import/screen/release, Finance
 policy management, explicit ZIP preparation/submission, checker findings,
 system-Operator checker registration, terminal recovery and uncertain-delivery reconciliation, and
@@ -48,7 +48,7 @@ terms remain available separately. Workstream rechecks each public read.
 | Tab / Esc | Change section / go back or cancel |
 | Shift+Tab | Previous collection or detail section |
 | `1` / `2` / `3` | Go directly to Ready / Mine / Submissions from ordinary views |
-| `a` in task Overview | Open Claim or Start when the freshly inspected task supports that action |
+| `a` in task Overview | Open Claim for the freshly inspected Ready task |
 | `g` | Fetch the project picker again |
 | `n` / `r` | Fetch the next page / refresh the current view |
 | `/` | Filter loaded names/titles locally; Enter finishes and Esc cancels |
@@ -56,15 +56,15 @@ terms remain available separately. Workstream rechecks each public read.
 | `d` in Guide | Enter an existing download directory; Enter reviews the scrollable exact target, `y` confirms |
 | `q` / Ctrl+C | Quit and cancel outstanding client requests, not committed server effects; `q` is text during text entry, Ctrl+C always quits |
 
-Claim and Start are separate deliberate actions through the existing public
-API. Inspect an exact Ready task to claim it; inspect a claimed Mine task to
-start it. Supply a UUID key you have saved outside this session, review the
+Claim immediately starts work through the existing public API. Inspect an exact
+Ready task to claim it; a successful claim returns the task in progress. Supply a
+UUID key you have saved outside this session, review the
 exact action/actor/project/task/key, press `s` to acknowledge the save warning,
 then `y` to confirm. Enter alone never sends the action. The workbench does not generate or persist these keys. Save the
 action, task ID and key together for recovery; this slice omits the optional
 reason. A read or displayed action is not write authority.
 
-There is no automatic retry or claim-to-start chain. A lost response means
+There is no automatic retry. A lost response means
 unknown outcome, not rollback. Explicit replay uses the unchanged action, task
 and key (`p`, then review and acknowledge with `s` and confirm with `y`);
 a later denial cannot prove the earlier request failed. Quit cancels
@@ -212,10 +212,8 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream me summary [--project UUID]` | `GET /api/v1/actors/me/summary` |
 | `workstream task show TASK_ID` | `GET /api/v1/tasks/TASK_ID` |
 | `workstream task claim TASK_ID --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/claim` |
-| `workstream task start TASK_ID --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/start` |
 | `workstream operations task list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/tasks` |
 | `workstream operations task locked-context PROJECT_ID TASK_ID` | `GET /api/v1/operations/projects/PROJECT_ID/tasks/TASK_ID/locked-context` |
-| `workstream operations task start TASK_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/tasks/TASK_ID/start` |
 | `workstream task context TASK_ID` | `GET /api/v1/tasks/TASK_ID/work-context` |
 | `workstream task guide TASK_ID [--download DIR]` | Work context, then assigned-task `GET /api/v1/tasks/TASK_ID/guide/documents/DOCUMENT_ID/content` for downloads |
 | `workstream task requirements TASK_ID` | `GET /api/v1/tasks/TASK_ID/submission-requirements` |
@@ -395,8 +393,8 @@ and contribution evidence with PostgreSQL, MinIO and Celery; see
 [the journey evidence](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-43.md).
 That proof is not hosted deployment verification or proof of human review.
 The [capability ledger](../docs/roadmap_status.md) identifies those remaining
-product boundaries. The interactive workspace exposes claim/start alongside
-contributor reads and guide downloads; explicit commands remain the interface
+product boundaries. The interactive workspace exposes Claim, which immediately
+starts work, alongside contributor reads and guide downloads; explicit commands remain the interface
 for preparation, submission and the other supported mutations.
 
 ### Download and install
@@ -563,7 +561,7 @@ Each invocation sends one POST, not a preflight or a retry loop. AUTH verifies
 current admission, exact-project manager authority, eligible targets and
 self-protection, including on replay; the CLI never derives permission from a
 receipt. Project Manager is an AdminRole, not a contributor role. Issuing a
-Reviewer grant alone does not authorize claim/start or activate human review.
+Reviewer grant alone does not authorize claim or activate human review.
 
 The complete seven-field receipt identifies the grant, qualification snapshot,
 project, actor, role, status and version. Issue expects HTTP 201 with active/1
@@ -876,28 +874,23 @@ documents, or executes a decision. Workstream owns fresh scoped manager
 authority and exact project/guide/compilation membership.
 
 JSON retains the complete public package: exact target and hashes, findings
-with display-only source locations, requirement inventory, proposed intake
-policy, pre-submission intake bindings, distinct post-submission evaluation
-bindings, suggestions, notes and nullable approval/post-policy references.
+with display-only source locations, proposed intake policy, PRE and POST check
+suggestions, notes and nullable approval/post-policy references.
 Text starts with concise proposal and approval status, then renders the intake
-policy, findings and evidence document numbers. It groups requirements into
-PRE, POST and non-checker sections and expands each available engineering
-specification into its inputs, ordered steps, pass conditions, coded failure
-findings, positive/negative tests, execution budget, runtime dependencies and
-infrastructure-failure behavior. Suggestions and every setup note follow those
-requirements. Dynamic text remains terminal escaped; private runtime document
+policy, findings and evidence document numbers. It groups suggestions into PRE
+and POST sections and expands each check specification into its inputs, ordered
+steps, pass conditions, coded failure findings, positive and negative tests,
+implementation needs and inability conditions. Every setup note follows the
+suggestions. Dynamic text remains terminal escaped; private runtime document
 handles are not part of this public projection. Unknown/duplicate members,
 missing/null required facts, malformed nested types or substituted identities
 fail with empty stdout. Integer facts retain the backend range.
 
-New checker requirements can carry a typed `check_specification` and a
-`classification_rationale`. PRE specifications describe bounded work of at most
-60 seconds before Submission creation; POST specifications describe background
-work and may declare up to a one-hour budget. Both PRE and POST bindings can
-show their exact catalogue parameters. Earlier retained proposals may omit the
-two new requirement fields and empty PRE parameters; the reader preserves and
-labels that absence without manufacturing content. When any new field is
-present, its nested object remains closed and strictly validated.
+Each PRE or POST suggestion has a `suggestion_id`, source evidence,
+`classification_rationale` and a typed `check_specification`. Suggestions are
+engineering guidance; they do not select an image or determine its configuration.
+The manager selects registered images separately in the approval request, using
+human-authored `requirement_id` values that need not match suggestion IDs.
 
 Project file, expanded-package, compressed-archive and entry-count limits may
 be null or omitted. The reader
@@ -920,15 +913,20 @@ from that displayed target; this separate preparation does not authorize it:
 
 ```sh
 workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
-jq '{target: .target, acknowledged_warning_hashes: []}' proposal.json > approval.json
+jq '{target: .target, pre_submit_attachments: [], post_submit_attachments: [], acknowledged_warning_hashes: []}' proposal.json > approval.json
 # Read the findings. Edit approval.json to acknowledge only the exact displayed
 # warning_hashes you deliberately accept; the backend requires the complete order.
+# Add each selected registered image to the appropriate attachments array.
+# Each attachment needs requirement_id, registry_entry_id,
+# registry_entry_digest and configuration. Empty arrays select no images.
 workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
 ```
 
 `--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
 `GuideProposalApprovalInput`, not the entire display package. It requires
-`target`; omitted `acknowledged_warning_hashes` means an empty list, never
+`target`, `pre_submit_attachments` and `post_submit_attachments`. Each attachment
+uses a human-authored requirement ID, the exact registry entry ID and digest,
+and a configuration object. Omitted `acknowledged_warning_hashes` means an empty list, never
 automatic acknowledgment. When replacing an earlier approval, supply both
 `expected_previous_approval_operation_id` and
 `expected_previous_approval_output_digest` from the inspected prior approval.
@@ -965,7 +963,12 @@ live setup-provider execution.
 ## Request an exact evaluation-policy correction
 
 Prepare the public `PostPolicyCorrectionInput` from the inspected `post-policy`
-response: `{"target": <complete displayed target>, "reason": "Manager feedback"}`.
+response: `{"target": <complete displayed target>, "reason": "Explain how the POST check verifies that reported test outcomes match the submitted test evidence."}`.
+
+For both correction commands, the written reason is the only additional model
+input beyond the guide and task examples. Describe or quote the requested change
+fully; the prior proposal, image selections and registry metadata are not sent.
+Do not rely on a suggestion ID alone. See the [manager correction workflow](../docs/operations_project_operating_manual.md).
 
 ```sh
 workstream project guide correct-post PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID \
@@ -1016,7 +1019,7 @@ the findings:
 
 ```sh
 workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > proposal.json
-jq '{target: .target, reason: "Clarify the evidence requirement"}' proposal.json > correction.json
+jq '{target: .target, reason: "Explain how the PRE check verifies that reports/results.json includes test commands and observed results."}' proposal.json > correction.json
 workstream project guide correct PROJECT_ID GUIDE_ID COMPILATION_ID \
   --input correction.json --idempotency-key CORRECTION_UUID -o json > saved-correction.json
 # Dispatch is a separate, explicit request using the retained receipt.
@@ -1353,7 +1356,7 @@ An exact manual replay recovers the stored project, whose state may since have
 changed. Changed fields conflict; a different key with the same slug conflicts
 rather than overwriting a project.
 
-Unlike task claim/start, the current project-create API recovers a committed
+Unlike task claim, the current project-create API recovers a committed
 result before fresh creation authorization, including after the creation grant
 is revoked. This recovery is not permission for another creation. Do not assume
 every mutation has task replay semantics or that a replay certifies current
@@ -1468,7 +1471,7 @@ Built-process tests cover exact bodies/keys, complete response binding, malforme
 lineage, credential/terminal safety and no automatic replay. The existing real
 socket/Flow/PREP/PostgreSQL journey prepares a task using these commands, verifies
 stored locks and single command/audit facts, tests foreign-project, suspension and
-revocation denials, then exercises contributor discovery/claim/start. Canonical
+revocation denials, then exercises contributor discovery/claim. Canonical
 guide setup fixtures are not live inference or deployed-service certification.
 
 ## Repair a blocked revision context as a project manager
@@ -1586,7 +1589,7 @@ an exact grant, with your roles and the active guide version. The other reads
 return your assignments, attempts, preparations and totals only in projects
 where you currently hold a Submitter grant; another project, a task you never
 held or someone else's preparation is reported as not found. Each assignment
-carries the server's `next_action` (`start`, `prepare_submission`,
+carries the server's `next_action` (`prepare_submission`,
 `awaiting_evaluation`, `revise` or `none`) and, while a revision is open, the
 same revision fields as `task context`. Lists page with `--limit` and an opaque
 `--cursor` bound to the same filters; `--updated-since` is inclusive. Award
@@ -1734,7 +1737,7 @@ Discovery is live, not a reservation or a claimability guarantee. A later claim
 still requires a Submitter grant and must revalidate current authority and state.
 Cursors are action/project/limit
 bound and cannot be reused as manager cursors; the CLI never decodes them or
-automatically fetches another page. These reads do not claim/start tasks,
+automatically fetches another page. These reads do not claim tasks,
 upload submissions or complete unfinished acceptance integration.
 
 ## Inspect governing work and intake rules
@@ -1765,7 +1768,7 @@ exact preparation pair for a revision ZIP preparation; the read does not reserve
 or authorize later intake.
 Hints are observations, not authority
 or a claimability guarantee. The CLI never recomputes them or automatically
-executes a hinted action. Claim/start independently authorize their requests.
+executes a hinted action. Claim independently authorizes each request.
 
 Requirements expose the task's locked guide and intake rules: packet fields,
 artifact/evidence requirements, forbidden patterns, attestation, hash/manifest
@@ -1820,33 +1823,33 @@ backend integer precision in JSON and human output without a 64-bit ceiling or
 floating-point conversion. Non-integer values remain invalid. The CLI checks public response
 shape, not business policy or contributor eligibility.
 
-## Claim and start contributor work
+## Claim contributor work and begin immediately
 
 ```sh
 workstream task claim TASK_ID --idempotency-key CLAIM_UUID --reason 'Begin this work' --output json
-workstream task start TASK_ID --idempotency-key START_UUID --output json
 ```
 
 Supply your own UUID key and retain it with the action, task and optional reason.
-These commands send exactly one public POST, with no preflight, automatic key,
+This command sends exactly one public POST, with no preflight, automatic key,
 retry or operator override. Reason is optional (at most 1000 UTF-8 characters);
 an omitted flag sends `{}`, while an explicit empty flag sends an empty string.
 The caller's Flow bearer and key are forwarded unchanged. Only Workstream
 decides whether current identity, lifecycle, exact Submitter grant, task state,
 assignment ownership and locked policy permit the write.
 
-Claim returns the contributor-safe task and its assignment; start returns the
-contributor-safe task in progress. The CLI validates the requested task identity,
+Claim returns the contributor-safe task in progress and its active assignment.
+The CLI validates the requested task identity,
 assignment/task/project/policy consistency, claim contributor/assigner identity,
 active/unreleased assignment and required timestamps before output. It rejects
 management-only fields. JSON preserves the API object; text prints every public
 field with escaped terminal controls. Separate submission commands are described
-below; claim/start does not invoke them or activate unfinished human review.
+below; claim does not invoke them or activate unfinished human review.
 
 The API scopes keys by actor and action, and checks current authority before
 recovering a committed result. An exact retry can recover the same result only
 while the required state remains current. Changed reason/task conflicts;
-claim replay after start can be denied. A key never grants permission. Revocation
+claim replay requires the same current in-progress task and active assignment.
+A key never grants permission. Revocation
 and suspension deny further writes/replays; assignment invalidation is a separate
 asynchronous consequence, not a CLI effect or immediate API guarantee.
 
@@ -1858,13 +1861,12 @@ canonical Workstream 4xx error envelope establishes a known denial. Inspect with
 global ordering. If manually retrying, preserve the unchanged action, task,
 reason and key. Do not invent a new key or assume recovery will still succeed.
 
-## Inspect and start tasks as a system Operator
+## Inspect tasks as a system Operator
 
 ```sh
 workstream operations task list PROJECT_ID --limit 50 --output json
 workstream operations task list PROJECT_ID --limit 50 --cursor PREVIOUS_NEXT_CURSOR --output json
 workstream operations task locked-context PROJECT_ID TASK_ID --output json
-workstream operations task start TASK_ID --reason 'Verified the active assignment' --idempotency-key START_UUID --output json
 ```
 
 These are separate system-Operator routes, not aliases for contributor or
@@ -1873,24 +1875,9 @@ creation/update times. Its signed cursor is opaque, scoped to the exact
 project/caller/page size and reauthorized on continuation. Locked context
 contains immutable policy identities, hashes and positive generations, not
 policy bodies or task instructions. Both are observations, not authority for a
-later start.
-
-`operations task start` sends one explicit override POST with a nonblank
-explanation of at most 1000 Unicode characters and a caller-owned UUID key.
-Workstream rechecks the current human Operator grant, exact task/assignment,
-locked context and lifecycle, then records its own authorization decision and
-audit event. The response is the contributor-safe in-progress task, not an
-assignment receipt; the CLI does not infer or alter the assignee. It never
-falls back to `task start`, which requires the assigned Submitter's different
-authority. The three commands use bounded closed response validation, exact
-UUID binding and terminal-safe text/JSON output.
-
-Keep the override action, exact task, reason and key together. Changed inputs
-conflict; exact replay still requires current Operator authority. The CLI does
-not preflight or automatically retry, including after uncertain transport
-delivery. A lost, malformed or unsafe success is `outcome_unknown`; a later
-read may help inspect current state but cannot prove rollback. Manually replay
-only the unchanged override request if appropriate.
+later mutation. The two commands use bounded closed response validation, exact
+UUID binding and terminal-safe text/JSON output. Contributor Claim immediately
+starts work; Operator task inspection does not mutate assignments.
 
 ## Make explicit administrative decisions
 
@@ -2108,17 +2095,17 @@ Contributor proof reuses that API process and bootstrap, arranging approved
 upstream guide inputs through canonical fixtures. Guide inference and storage
 are scripted prerequisites, not live-provider proof; real AUTH activates the
 projects. Public task create/screen/release/claim operations supply persisted
-ready and assigned work. Reads prove pagination parity, draft/claimed exclusion,
+ready and assigned work. Reads prove pagination parity, draft/assigned exclusion,
 same-project non-owner concealment, independent authorized cursor substitution,
 exact Submitter grants, Reviewer-only/foreign/revoked denial and suspension after
 restored positive authority. The process fixture verifies the separate contributor
 shapes, complete field output and refusal of management-only data.
 Contributor mutation proof extends the same API/bootstrap journey with CLI
-claim/start, persisted assignment and locked lineage, exact replay parity,
+claim, persisted assignment and locked lineage, exact replay parity,
 reason/task mismatch, same-project non-owner denial, foreign/Reviewer-only
 authority, revocation and suspension. Denied writes are compared with the
 publicly observed post-administration task baseline, not an assumed pre-revoke
-state. Process tests prove the exact POST/key/body, strict claim/start response
+state. Process tests prove the exact POST/key/body, strict claim response
 identity, safe text, canonical errors and uncertain/no-retry behavior.
 Local Flow-compatible tokens are test fixtures, not deployed-provider proof.
 No coverage percentage or test-count target is used.

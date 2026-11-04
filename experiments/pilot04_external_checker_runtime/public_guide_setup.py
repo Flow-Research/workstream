@@ -108,12 +108,13 @@ async def _correct_public_proposal(client, compilation_root, package, token, cal
     return receipt
 
 
-async def _approve_policies(client, compilation_root, token, call):
+async def _approve_policies(client, compilation_root, token, call, attachments):
     package = await call(client, "GET", compilation_root + "/proposal", token, 200)
     if package["artifact_policy_status"] != "draft" or package["current_approval_operation_id"]:
         raise AssertionError("setup approved a policy without a manager decision")
     headers = {"Idempotency-Key": str(uuid4())}
-    body = {"target": package["target"], "acknowledged_warning_hashes": package["warning_hashes"]}
+    body = {"target": package["target"], "acknowledged_warning_hashes": package["warning_hashes"],
+            **attachments}
     approved = await call(client, "POST", compilation_root + "/pre-submission-approval",
                           token, 200, headers=headers, json=body)
     replay = await call(client, "POST", compilation_root + "/pre-submission-approval",
@@ -220,8 +221,8 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import manager_rules
         await call(client, 'POST', root + f"/documents/{guide['documents'][1]['document_id']}/content",
                    token, 202, headers={'Idempotency-Key': str(uuid4()), 'Content-Type': 'text/markdown'},
-                   content=(model_post.rules(original, attachment.capabilities, pre_requirements) if model_post else
-                            manager_rules(original, attachment.capabilities, pre_requirements)))
+                   content=(model_post.rules(original, pre_requirements) if model_post else
+                            manager_rules(original, pre_requirements)))
     setup = await wait_for_guide_read(client, root + "/setup-runs/latest", token,
                              lambda v: v["status"] == "policy_draft_ready", call)
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
@@ -242,11 +243,15 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         await call(client, "POST", compilation_root + "/pre-submission-approval", token, 409,
                    headers={"Idempotency-Key": str(uuid4())},
                    json={"target": initial["target"],
-                         "acknowledged_warning_hashes": initial["warning_hashes"]})
+                         "acknowledged_warning_hashes": initial["warning_hashes"],
+                         "pre_submit_attachments": [], "post_submit_attachments": []})
         compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     await _finance_policy(client, factory, UUID(project["id"]), token_for,
                           not human_review_required and attachment is None, call, attachment)
-    post = await _approve_policies(client, compilation_root, token, call)
+    attachments = (model_post.approval_attachments() if model_post else
+                   attachment.approval_attachments(pre_requirements) if attachment else
+                   {"pre_submit_attachments": [], "post_submit_attachments": []})
+    post = await _approve_policies(client, compilation_root, token, call, attachments)
     context = post["activation_context"]
     activation = {"target": post["target"], **{field: context[field] for field in (
         "post_approval_operation_id", "post_approval_output_digest", "guide_mutation_generation",

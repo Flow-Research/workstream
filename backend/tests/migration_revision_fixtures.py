@@ -44,6 +44,37 @@ _REVISION_ARCHIVE = Path(__file__).with_name("fixtures") / "historical_revision_
 _REVISION_ARCHIVE_SHA256 = "40b4c2bde917e6c8907da7d5462f6876a268952c449997af1ea93bffe6058420"
 _REVISION_ARCHIVE_SCHEMA = "workstream.historical_revision_rows.v1"
 _REVISION_ARCHIVE_SOURCE = "6fa9a9b557fa3ae22c16af67bca25dc868f67b38"
+_GUIDE_READ_PROJECTION_COLUMNS = (
+    ("project_guide_compilation_attempts", "result_schema_version", "varchar(100)"),
+    ("project_guide_compilations", "result_schema_version", "varchar(100)"),
+    ("project_guide_proposal_approvals", "request_json", "jsonb"),
+)
+
+
+async def add_retained_guide_read_projection(connection):
+    """Expose null-only current ORM fields after exact predecessor restoration."""
+    for table, column, column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+        await connection.execute(text(
+            f"ALTER TABLE public.{table} ADD COLUMN {column} {column_type}"
+        ))
+
+
+async def drop_retained_guide_read_projection(connection):
+    """Reject new-format writes before removing placeholders for the real upgrade."""
+    for table, column, _column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+        assert await connection.scalar(text(
+            f"SELECT count(*) FROM public.{table} WHERE {column} IS NOT NULL"
+        )) == 0, f"historical guide projection contains new evidence: {table}.{column}"
+    for table, column, _column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+        await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
+
+
+async def add_historical_revision_read_projection(connection):
+    """Expose current checker and guide reads only after validating the exact archive."""
+    await connection.execute(text(
+        "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
+    ))
+    await add_retained_guide_read_projection(connection)
 
 
 @lru_cache(maxsize=1)
@@ -104,11 +135,9 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     # Restore and validate the exact archived column inventory first. Only then
-    # add the nullable current-ORM projection, removed before the real upgrade.
+    # add nullable current-ORM projections, removed before the real upgrade.
     async with engine.begin() as connection:
-        await connection.execute(text(
-            "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
-        ))
+        await add_historical_revision_read_projection(connection)
     settings = _settings(tmp_path, maximum_bytes=1024 * 1024)
     manager = ArtifactScratchManager(
         root=tmp_path / "historical-post-scratch",
@@ -341,6 +370,12 @@ async def enter_predecessor_owner_shape(execute, database_url, patch):
 
 async def leave_predecessor_owner_shape(execute, database_url):
     """Remove the placeholders so the upgrade sees only predecessor DDL."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await drop_retained_guide_read_projection(connection)
+    finally:
+        await engine.dispose()
     await execute(database_url, (
         "DROP TABLE public.checker_result_findings; "
         "ALTER TABLE public.checker_runs DROP COLUMN input_context_custody; "

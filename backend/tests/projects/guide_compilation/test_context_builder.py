@@ -55,7 +55,6 @@ async def test_context_rebuilds_the_exact_authorized_art_backed_identity(
                 session,
                 state=state,
                 material=guide_document_manifest_port(session),
-                checker_capabilities=context(values).checker_capabilities,
             )
 
         assert rebuilt == context(values)
@@ -86,16 +85,16 @@ async def test_context_drift_fails_before_dispatch(
             )
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
-        from tests.checkers.external.support import capability_projection, registry_entry
-
-        drifted_capabilities = capability_projection(registry_entry("pre_submit"))
+        drifted = replace(
+            state,
+            identity=state.identity.model_copy(update={"canonical_input_hash": "sha256:" + "f" * 64}),
+        )
         async with factory() as session:
             with pytest.raises(GuideCompilationIntegrityError, match="identity mismatch"):
                 await build_project_guide_compilation_context(
                     session,
-                    state=state,
+                    state=drifted,
                     material=guide_document_manifest_port(session),
-                    checker_capabilities=drifted_capabilities,
                 )
     finally:
         await engine.dispose()
@@ -121,14 +120,12 @@ async def test_context_requires_fresh_session_and_current_lineage(
             )
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
-        capabilities = context(values).checker_capabilities
         async with factory() as session, session.begin():
             with pytest.raises(GuideCompilationIntegrityError, match="fresh root"):
                 await build_project_guide_compilation_context(
                     session,
                     state=state,
                     material=guide_document_manifest_port(session),
-                    checker_capabilities=capabilities,
                 )
         missing = replace(
             state,
@@ -140,7 +137,6 @@ async def test_context_requires_fresh_session_and_current_lineage(
                     session,
                     state=missing,
                     material=guide_document_manifest_port(session),
-                    checker_capabilities=capabilities,
                 )
     finally:
         await engine.dispose()
@@ -178,8 +174,7 @@ async def test_context_enforces_the_canonical_prompt_limit(
                     session,
                     state=state,
                     material=guide_document_manifest_port(session),
-                    checker_capabilities=context(values).checker_capabilities,
-                )
+                    )
     finally:
         await engine.dispose()
 
@@ -214,7 +209,6 @@ def test_context_constructor_rejects_input_drift_after_valid_control(fault):
         loaded=expected.material,
         setup_run_id=expected.setup_run_id,
         setup_generation=expected.setup_generation,
-        checker_capabilities=expected.checker_capabilities,
         runtime_configuration=expected.runtime_configuration,
     )
     assert compilation_context_from_material(**values) == expected

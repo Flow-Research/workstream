@@ -14,13 +14,12 @@ from tests.test_tasks import task_client as task_client, task_database_env as ta
 from tests.tasks.invalidation_support import setup_assignment
 
 
-@pytest.mark.parametrize("started", [False, True], ids=["claimed", "in_progress"])
-async def test_target_projection_exact_membership(task_client, monkeypatch, started):
-    s = await setup_assignment(task_client, monkeypatch, started=started)
+async def test_target_projection_exact_membership(task_client, monkeypatch):
+    s = await setup_assignment(task_client, monkeypatch)
     async with s.sessions() as session:
         assert await session.scalar(select(WorkstreamTask.status).where(
             WorkstreamTask.id == s.task["id"],
-        )) == ("in_progress" if started else "claimed")
+        )) == "in_progress"
         assigned_at = await session.scalar(select(TaskAssignment.assigned_at).where(
             TaskAssignment.id == s.assignment["id"],
         ))
@@ -106,7 +105,7 @@ async def test_target_projection_excludes_retained_submission(task_client, monke
     from tests.submission_fixtures import seed_retained_submission
     from tests.test_tasks import complete_submission_payload
 
-    s = await setup_assignment(task_client, monkeypatch, started=True)
+    s = await setup_assignment(task_client, monkeypatch)
     await seed_retained_submission(s.task["id"], complete_submission_payload())
     async with s.sessions() as session, session.begin():
         # Isolate retained evidence from the separate task-state exclusion.

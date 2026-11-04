@@ -44,7 +44,6 @@ def _arguments(name: str) -> dict[str, Any]:
         "task_screen": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_release": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_claim": {"task_id": TASK_ID, "idempotency_key": KEY},
-        "task_start": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_work_context_get": {"task_id": TASK_ID},
         "task_guide_document_content_get": {
             "task_id": TASK_ID,
@@ -86,10 +85,13 @@ def _bound_response(name: str) -> dict[str, Any]:
         return {"task_id": TASK_ID, "preparation_id": PREPARATION_ID}
     if name in {"task_get", "task_submission_requirements_get"}:
         return {"task_id": TASK_ID}
-    if name in {"task_screen", "task_release", "task_start"}:
+    if name in {"task_screen", "task_release"}:
         return {"id": TASK_ID}
     if name == "task_claim":
-        return {"task": {"id": TASK_ID}, "assignment": {"task_id": TASK_ID}}
+        return {
+            "task": {"id": TASK_ID, "status": "in_progress"},
+            "assignment": {"task_id": TASK_ID},
+        }
     if name == "task_work_context_get":
         return {"task": {"task_id": TASK_ID}}
     if name == "task_guide_document_content_get":
@@ -188,7 +190,7 @@ async def test_every_json_operation_forwards_only_its_fixed_request(
 
 
 @pytest.mark.asyncio
-async def test_claim_dispatches_only_claim_and_never_start(
+async def test_claim_dispatches_one_atomic_claim_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paths: list[str] = []
@@ -214,6 +216,8 @@ async def test_claim_dispatches_only_claim_and_never_start(
 
     assert result.failure is None
     assert paths == [f"/api/v1/tasks/{TASK_ID}/claim"]
+    assert result.data is not None
+    assert result.data["task"]["status"] == "in_progress"
 
 
 @pytest.mark.asyncio
@@ -405,7 +409,7 @@ async def test_substituted_mutation_response_fails_uncertain(
         result = await WorkstreamGateway(
             Settings(api_url="http://127.0.0.1:8000"), client
         ).task_execution_operation(
-            "task_start", "Bearer opaque", _arguments("task_start")
+            "task_release", "Bearer opaque", _arguments("task_release")
         )
 
     assert result.failure is not None

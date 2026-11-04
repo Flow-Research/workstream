@@ -104,7 +104,7 @@ WORKSTREAM_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/works
 
 Do not use `WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE` for ordinary proof.
 
-The public task portion of this drill ends at project-authorized claim/start.
+The public task portion of this drill ends at project-authorized claim, which immediately starts work.
 It checks that revoked grants deny work and explicitly issues fresh authority
 before continuing. The self-activated eligibility endpoint and JSON-packet
 submission POST are removed. A passing drill does not certify hidden

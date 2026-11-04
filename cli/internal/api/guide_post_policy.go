@@ -197,12 +197,9 @@ func sameProposalTarget(a, b ProposalTarget) bool {
 		}
 	}
 	return a.SetupGeneration.Cmp(b.SetupGeneration) == 0 && a.GuideVersion == b.GuideVersion &&
+		a.ResultSchemaVersion == b.ResultSchemaVersion &&
 		a.SourceSnapshotHash == b.SourceSnapshotHash && a.FinalizationFactsDigest == b.FinalizationFactsDigest &&
 		a.ResultHash == b.ResultHash && a.ComponentHashes == b.ComponentHashes &&
-		a.PreCatalogueID == b.PreCatalogueID && a.PreCatalogueVersion == b.PreCatalogueVersion &&
-		a.PreCatalogueSchemaVersion == b.PreCatalogueSchemaVersion && a.PreCatalogueManifestHash == b.PreCatalogueManifestHash &&
-		a.PostCatalogueID == b.PostCatalogueID && a.PostCatalogueVersion == b.PostCatalogueVersion &&
-		a.PostCatalogueSchemaVersion == b.PostCatalogueSchemaVersion && a.PostCatalogueManifestHash == b.PostCatalogueManifestHash &&
 		sameNullableText(a.ArtifactPolicyHash, b.ArtifactPolicyHash) && sameNullableText(a.ArtifactProjectionOutputDigest, b.ArtifactProjectionOutputDigest)
 }
 

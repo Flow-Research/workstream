@@ -8,7 +8,8 @@ digest-pinned external PRE images on ART-verified read-only files. Both built-in
 catalogues and this document's caller-owned precheck surface are removed.
 Project-specific required-file, forbidden-file and similar rules belong in the
 project image. Use the [current checker framework](architecture_checker_framework.md)
-for the implemented flow; the record below describes the retired implementation.
+for the source-cited setup proposal and later human-selected, digest-pinned
+phase attachments. The record below describes the retired implementation.
 
 ## Purpose
 

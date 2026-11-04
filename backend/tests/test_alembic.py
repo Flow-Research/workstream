@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -111,7 +112,7 @@ async def _seed_retained_guide_runtime_rows(
     from uuid import UUID
     from app.core.hashing import canonical_json_hash
     from app.core.identifiers import new_record_id
-    from tests.projects.guide_compilation.helpers import context, identity, seed_database
+    from tests.projects.guide_compilation.helpers import SHA256, context, identity, seed_database
     from tests.projects.guide_compilation.test_runtime_cleanup_postgresql import (
         _historical_configuration,
     )
@@ -152,14 +153,15 @@ async def _seed_retained_guide_runtime_rows(
             attempt_identity.setup_generation,
             attempt_identity.canonical_input_hash,
             attempt_identity.guide_material_hash,
-            attempt_identity.pre_catalogue_id,
-            attempt_identity.pre_catalogue_version,
-            attempt_identity.pre_catalogue_schema_version,
-            attempt_identity.pre_catalogue_manifest_hash,
-            attempt_identity.post_catalogue_id,
-            attempt_identity.post_catalogue_version,
-            attempt_identity.post_catalogue_schema_version,
-            attempt_identity.post_catalogue_manifest_hash,
+            # Original 0058 evidence fields are explicit fixture data, not current inputs.
+            "retained.pre",
+            "v1",
+            "v1",
+            SHA256,
+            "retained.post",
+            "v1",
+            "v1",
+            SHA256,
             attempt_identity.agent_identity,
             attempt_identity.agent_version,
             attempt_identity.instruction_version,
@@ -384,6 +386,9 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0066_guide_check_specification",
+        "0065_claim_starts_work",
+        "0064_checker_trial_evidence",
         "0063_checker_revision_input",
         "0062_model_usage",
         "0061_project_catalogue_read",
@@ -578,6 +583,207 @@ def test_repeated_upgrade_head_preserves_current_database(
     assert after == before
 
 
+def test_canonical_json_restore_path_repair_preserves_output_and_body(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Retained 0066 nested JSON fails under pg_restore's path and succeeds after repair."""
+    config = _alembic_config()
+    signature = "public.project_guide_projection_canonical_json(jsonb)"
+    input_json = '{"b":[2,{"x":"v"}],"a":true}'
+    expected = '{"a":true,"b":[2,{"x":"v"}]}'
+
+    async def probe(*, empty_path_fails: bool) -> tuple[tuple[object, ...], str]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            routine = await connection.fetchrow(
+                "select prosrc,provolatile,proisstrict,proconfig from pg_catalog.pg_proc "
+                "where oid=$1::regprocedure",
+                signature,
+            )
+            ordinary = await connection.fetchval(
+                "select public.project_guide_projection_canonical_json($1::jsonb)",
+                input_json,
+            )
+            assert ordinary == expected
+            async with connection.transaction():
+                await connection.execute("set local search_path to ''")
+                if empty_path_fails:
+                    with pytest.raises(
+                        asyncpg.UndefinedFunctionError,
+                        match="project_guide_projection_canonical_json",
+                    ):
+                        await connection.fetchval(
+                            "select public.project_guide_projection_canonical_json($1::jsonb)",
+                            input_json,
+                        )
+                else:
+                    assert (
+                        await connection.fetchval(
+                            "select public.project_guide_projection_canonical_json($1::jsonb)",
+                            input_json,
+                        )
+                        == expected
+                    )
+            return tuple(routine.values()), ordinary
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0066_guide_check_specification")
+        before, old_output = asyncio.run(probe(empty_path_fails=True))
+        assert before[3] is None
+        command.upgrade(config, HEAD_REVISION)
+        after, new_output = asyncio.run(probe(empty_path_fails=False))
+    assert before[:3] == after[:3]
+    assert old_output == new_output == expected
+    assert after[3] == ["search_path=pg_catalog, public, pg_temp"]
+
+
+def test_outbox_outcome_restore_path_repair_preserves_validation(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Valid retained delivery evidence remains valid under pg_restore's empty path."""
+    config = _alembic_config()
+    signature = (
+        "public.outbox_delivery_outcome_valid(text,text,timestamptz,timestamptz,timestamptz)"
+    )
+    body = json.dumps(
+        {
+            "delivery_state": "acknowledged",
+            "error_code": None,
+            "finalized_at": "2026-01-01T00:02:00+00:00",
+            "invocation_unknown": False,
+            "invoked_at": "2026-01-01T00:01:00+00:00",
+            "next_attempt_at": None,
+            "receipt_completed_at": "2026-01-01T00:02:00+00:00",
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = "sha256:" + hashlib.sha256(body.encode()).hexdigest()
+
+    async def probe() -> tuple[tuple[object, ...], bool, bool]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            routine = await connection.fetchrow(
+                "select prosrc,provolatile,proisstrict,proconfig from pg_catalog.pg_proc "
+                "where oid=$1::regprocedure",
+                signature,
+            )
+            async with connection.transaction():
+                await connection.execute("set local search_path to ''")
+                values = (
+                    body,
+                    digest,
+                    datetime.fromisoformat("2026-01-01T00:00:00+00:00"),
+                    datetime.fromisoformat("2026-01-01T01:00:00+00:00"),
+                    datetime.fromisoformat("2026-01-01T00:01:00+00:00"),
+                )
+                valid = await connection.fetchval(
+                    "select public.outbox_delivery_outcome_valid($1,$2,$3::timestamptz,"
+                    "$4::timestamptz,$5::timestamptz)",
+                    *values,
+                )
+                invalid = await connection.fetchval(
+                    "select public.outbox_delivery_outcome_valid($1,$2,$3::timestamptz,"
+                    "$4::timestamptz,$5::timestamptz)",
+                    body,
+                    "sha256:" + "0" * 64,
+                    *values[2:],
+                )
+            return tuple(routine.values()), valid, invalid
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0066_guide_check_specification")
+        before, old_valid, old_invalid = asyncio.run(probe())
+        assert before[3] is None
+        assert (old_valid, old_invalid) == (False, False)
+        command.upgrade(config, HEAD_REVISION)
+        after, new_valid, new_invalid = asyncio.run(probe())
+    assert before[:3] == after[:3]
+    assert (new_valid, new_invalid) == (True, False)
+    assert after[3] == ["search_path=pg_catalog, public, pg_temp"]
+
+
+def test_project_role_restore_path_repair_keeps_reference_guards(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Role reference checks resolve sibling functions without relaxing validation."""
+    config = _alembic_config()
+    signatures = (
+        "public.project_role_availability_is_safe(jsonb)",
+        "public.project_role_reference_array_is_safe(jsonb,boolean)",
+    )
+    valid = '{"availability":"available","reference_ids":["source:1"],"unavailable_reason":null}'
+    invalid = (
+        '{"availability":"available","reference_ids":["https://bad"],"unavailable_reason":null}'
+    )
+
+    async def probe(*, empty_path_fails: bool) -> list[tuple[object, ...]]:
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            routines = await connection.fetch(
+                "select prosrc,provolatile,proisstrict,proconfig from pg_catalog.pg_proc "
+                "where oid=$1::regprocedure or oid=$2::regprocedure order by proname",
+                *signatures,
+            )
+            assert len(routines) == 2
+            checks = (
+                ("select public.project_role_availability_is_safe($1::jsonb)", (valid,)),
+                (
+                    "select public.project_role_reference_array_is_safe($1::jsonb,false)",
+                    ('["source:1"]',),
+                ),
+            )
+            for statement, parameters in checks:
+                async with connection.transaction():
+                    await connection.execute("set local search_path to ''")
+                    if empty_path_fails:
+                        with pytest.raises(asyncpg.UndefinedFunctionError):
+                            await connection.fetchval(statement, *parameters)
+                    else:
+                        assert await connection.fetchval(statement, *parameters) is True
+            if not empty_path_fails:
+                async with connection.transaction():
+                    await connection.execute("set local search_path to ''")
+                    assert (
+                        await connection.fetchval(
+                            "select public.project_role_availability_is_safe($1::jsonb)", invalid
+                        )
+                        is False
+                    )
+                    assert (
+                        await connection.fetchval(
+                            "select public.project_role_reference_array_is_safe($1::jsonb,false)",
+                            '["https://bad"]',
+                        )
+                        is False
+                    )
+            return [tuple(row.values()) for row in routines]
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(
+            _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        )
+        command.upgrade(config, "0066_guide_check_specification")
+        before = asyncio.run(probe(empty_path_fails=True))
+        assert all(row[3] is None for row in before)
+        command.upgrade(config, HEAD_REVISION)
+        after = asyncio.run(probe(empty_path_fails=False))
+    assert [row[:3] for row in before] == [row[:3] for row in after]
+    assert all(row[3] == ["search_path=pg_catalog, public, pg_temp"] for row in after)
+
+
 @pytest.mark.parametrize(
     "installed_revision",
     [
@@ -606,6 +812,7 @@ def test_repeated_upgrade_head_preserves_current_database(
         "0061_project_catalogue_read",
         "0062_model_usage",
         "0063_checker_revision_input",
+        "0066_guide_check_specification",
     ],
 )
 def test_preceding_head_upgrades_to_current_without_recreation(
@@ -849,6 +1056,7 @@ def test_neutral_runtime_upgrade_preserves_retained_provider_facts(
     isolated_database_env: str, migration_lock
 ) -> None:
     """0059 labels historical access without inventing parser evidence or losing IDs."""
+
     async def retained(seeded):
         connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
         try:
@@ -1834,6 +2042,7 @@ def test_downgrade_refuses_without_mutation(
     (
         ("0059_neutral_guide_runtime", "0058_compensation_unit_create"),
         ("0060_audit_restore_path", "0059_neutral_guide_runtime"),
+        ("0067_canonical_json_restore_path", "0066_guide_check_specification"),
     ),
 )
 def test_runtime_and_audit_one_revision_downgrades_refuse_without_mutation(

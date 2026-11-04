@@ -487,7 +487,9 @@ NEUTRAL_GUIDE_RUNTIME_TARGETS = frozenset({
     "backend/app/interfaces/guide_document_tools.py",
 })
 GUIDE_COMPILATION_DRAFT_TARGETS = frozenset({
+    "backend/app/modules/projects/api/retained_activation.py",
     "backend/app/adapters/project_agents/compilation_draft.py",
+    "backend/app/modules/projects/guide_compilation/retained_evidence.py",
 })
 ARCH_04F5_DELIVERY_RECONCILIATION_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/post_submit_deliveries.py",

@@ -50,7 +50,9 @@ def test_blocked_target_rejects_each_independently_populated_policy_field(field)
 def test_replacement_requires_both_prior_identity_fields(field, value):
     with pytest.raises(ValidationError, match="complete or absent"):
         GuideProposalApproval(
-            target=GuideProposalTarget(**target_values()), idempotency_key=uuid4(), **{field: value}
+            target=GuideProposalTarget(**target_values()),
+            pre_submit_attachments=(), post_submit_attachments=(),
+            idempotency_key=uuid4(), **{field: value}
         )
 
 

@@ -1,7 +1,5 @@
 """Real database activation, denial, atomicity and retained-evidence replay."""
 
-from tests.projects.guide_compilation.helpers import manager_runtime_configuration
-
 from uuid import uuid4
 
 import pytest
@@ -87,27 +85,16 @@ async def test_live_authority_denial_preserves_draft(clean_postgres_database, au
 async def test_live_activation_keeps_product_readiness_guards(clean_postgres_database, human_review_required):
     compilation_outcome = None
     if not human_review_required:
-        from app.interfaces.project_agents import AtomicGuideRequirement
         from tests.projects.guide_compilation.helpers import generated_result
 
-        proposal = generated_result()
-        compilation_outcome = proposal.model_copy(update={"requirements": (
-            AtomicGuideRequirement(
-                requirement_id="human_quality",
-                statement="An authorized reviewer must assess the final quality.",
-                disposition="human_review",
-                classification_rationale="The guide requires an authorized human decision.",
-                evidence_refs=proposal.findings[0].evidence_refs,
-            ),
-        )})
+        compilation_outcome = generated_result()
     async with activation_case(
         clean_postgres_database,
         human_review_required=human_review_required,
         compilation_outcome=compilation_outcome,
-        configuration=manager_runtime_configuration() if not human_review_required else None,
     ) as (factory, command, actor, _, _, _):
         before = await activation_state(factory)
-        variants = [command] if not human_review_required else [
+        variants = [
             command.model_copy(update={"guide_mutation_generation": command.guide_mutation_generation + 1}),
             command.model_copy(update={"post_approval_operation_id": uuid4()}),
             command.model_copy(update={"post_approval_output_digest": "sha256:" + "f" * 64}),
@@ -116,14 +103,10 @@ async def test_live_activation_keeps_product_readiness_guards(clean_postgres_dat
             command.model_copy(update={"contribution_policy_version_id": uuid4()}),
         ]
         for variant in variants:
-            with pytest.raises(
-                GuideProposalError,
-                match="approval_blocked" if not human_review_required else None,
-            ):
+            with pytest.raises(GuideProposalError):
                 await activate(factory, actor, variant)
             assert await activation_state(factory) == before
-        if human_review_required:
-            assert (await activate(factory, actor, command)).command == command
+        assert (await activate(factory, actor, command)).command == command
 
 
 async def test_caller_rollback_removes_activation_evidence(clean_postgres_database):

@@ -16,9 +16,14 @@ from assessment import (
 from checker import DEFAULT_LIMITS
 from material import MaterialEvidence, MaterialError, MaterialSnapshot, collect_material
 from model_transport import ModelCallUnavailable, ModelSessionError
-from result import completed_result, infrastructure_result
+from result import (
+    completed_result,
+    infrastructure_result,
+    validate_requirement_identity,
+)
 from rubric import Rubric, RubricError, load_rubrics
-from runtime_checker import DEFAULT_TRIAL_LIMITS, ModelSessionPort
+from runtime_checker import DEFAULT_TRIAL_LIMITS
+from model_phase import ModelSessionPort, run_model_phase
 from trial_plan import (
     MAXIMUM_MODEL_PROMPT_BYTES,
     TrialPlanError,
@@ -31,6 +36,11 @@ from trial_plan import (
     validate_plan_proposal,
 )
 from trial_transport import CompletedTrial, TrialTransportError, TrialUnavailable
+from trial_assessment import (
+    add_recovery_assessment_contract,
+    decode_recovery_assessment,
+    require_build_export_capacity,
+)
 
 
 AUTHOR_REQUIREMENT = "author_evidence_accuracy"
@@ -49,11 +59,11 @@ def execute_author_accuracy_check(
         _validate_request(request)
         metadata = parse_task_metadata(material_root)
         material_digest, sources = collect_plan_sources(material_root)
-        planning = model_session.call(
+        proposal, planning = run_model_phase(
+            model_session,
             build_plan_prompt(metadata, material_digest, sources),
-            required_receipt_handles=(),
+            lambda raw: validate_plan_proposal(raw, material_digest, sources),
         )
-        proposal = validate_plan_proposal(planning.output, material_digest, sources)
         if not proposal.coverage_complete:
             return _procedure_unavailable(request, sources, proposal.coverage_gaps)
         if planning.session_exhausted:
@@ -62,13 +72,23 @@ def execute_author_accuracy_check(
         if plan is None:
             raise TrialPlanError("invalid_output")
         trial = trial_execute(plan)
+        require_build_export_capacity(trial)
         source, rubrics = load_rubrics()
         rubric = rubrics[AUTHOR_REQUIREMENT]
-        prepared = _prepare_assessment(source, rubric, material_root, trial)
-        assessed = model_session.call(
-            prepared[0], required_receipt_handles=(trial.receipt_handle,)
+        prepared = _prepare_assessment(source, rubric, material_root, trial, sources)
+
+        def validate(raw):
+            inner, independent_recovery = decode_recovery_assessment(raw, sources)
+            if independent_recovery != proposal.recovery_applicability["required"]:
+                raise AssessmentError("invalid_output")
+            return validate_assessment(inner, rubric, prepared[1])
+
+        findings, _ = run_model_phase(
+            model_session,
+            prepared[0],
+            validate,
+            required_receipt_handles=(trial.receipt_handle,),
         )
-        findings = validate_assessment(assessed.output, rubric, prepared[1])
         return completed_result(request, AUTHOR_REQUIREMENT, findings)
     except TrialPlanError as exc:
         return infrastructure_result(request, _plan_failure(str(exc)))
@@ -83,8 +103,13 @@ def execute_author_accuracy_check(
         return infrastructure_result(request, _trial_failure(exc.failure_code))
     except (TrialTransportError, ModelCallUnavailable, ModelSessionError, RubricError):
         return infrastructure_result(request, "implementation_unavailable")
-    except AssessmentError:
-        return infrastructure_result(request, "invalid_output")
+    except AssessmentError as exc:
+        return infrastructure_result(
+            request,
+            "capacity_exceeded"
+            if str(exc) == "capacity_exceeded"
+            else "invalid_output",
+        )
     except (KeyError, TypeError, ValueError):
         return infrastructure_result(request, "invalid_output")
     except (MemoryError, RecursionError):
@@ -92,13 +117,11 @@ def execute_author_accuracy_check(
 
 
 def _validate_request(request: dict[str, object]) -> None:
+    validate_requirement_identity(request)
     configuration = request["configuration"]
-    input_value = request["input"]
     if (
         type(configuration) is not dict
-        or type(input_value) is not dict
         or configuration.get("check") != AUTHOR_REQUIREMENT
-        or input_value.get("requirement_id") != AUTHOR_REQUIREMENT
     ):
         raise ValueError("invalid_request")
     validate_trial_configuration(configuration)
@@ -109,6 +132,7 @@ def _prepare_assessment(
     rubric: Rubric,
     material_root: Path,
     trial: CompletedTrial,
+    sources: tuple,
 ) -> tuple[str, MaterialSnapshot]:
     material_rubric = Rubric(
         requirement_id=rubric.requirement_id,
@@ -138,7 +162,17 @@ def _prepare_assessment(
         content_utf8=receipt_bytes.decode("utf-8"),
         line_count=None,
     )
-    evidence = (*base.evidence, receipt)
+    instruction = next(item for item in sources if item.path == "instruction.md")
+    scope = MaterialEvidence(
+        evidence_id=instruction.evidence_id,
+        path=instruction.path,
+        kind="file",
+        byte_count=len(instruction.content.encode("utf-8")),
+        sha256=instruction.sha256,
+        content_utf8=instruction.content,
+        line_count=instruction.line_count,
+    )
+    evidence = (*base.evidence, scope, receipt)
     snapshot = MaterialSnapshot(
         digest=_digest(_canonical([item.prompt_value() for item in evidence])),
         evidence=evidence,
@@ -155,6 +189,7 @@ def _prepare_assessment(
         "observation_digest": trial.observations["observation_digest"],
         "required_receipt_count": 1,
     }
+    add_recovery_assessment_contract(prompt)
     encoded = _canonical(prompt)
     if len(encoded) > MAXIMUM_MODEL_PROMPT_BYTES:
         raise MaterialError("capacity_exceeded")

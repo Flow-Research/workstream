@@ -25,7 +25,7 @@ import time
 import tempfile
 import zipfile
 
-from smol_runtime import Proof, canonical, exchange
+from smol_runtime import Proof, canonical, exchange, smol_vm_inventory
 
 
 def wait_until(predicate, description, timeout=30):
@@ -395,18 +395,13 @@ class NestedTrialRecovery:
 
     def physical_clean(self):
         vms = Path(self.config["smol"]["home"]) / ".cache/smolvm/vms"
-        for entry in vms.iterdir() if vms.exists() else ():
-            if entry.name != ".artifact-cache.lock":
-                return False
-            identity = entry.lstat()
-            assert stat.S_ISREG(identity.st_mode) and stat.S_IMODE(identity.st_mode) == 0o600
-            assert (identity.st_uid, identity.st_gid, identity.st_nlink, identity.st_size) == (
-                os.geteuid(), os.getegid(), 1, 0,
-            )
-            observed = (identity.st_dev, identity.st_ino)
-            if self.cache_lock_identity is None:
-                self.cache_lock_identity = observed
+        children, observed = smol_vm_inventory(vms)
+        if children:
+            return False
+        if self.cache_lock_identity is not None:
             assert self.cache_lock_identity == observed, "engine cache lock identity changed"
+        elif observed is not None:
+            self.cache_lock_identity = observed
         return (
             not list(self.leases.iterdir())
             and not list(self.groups.glob("ws-*"))

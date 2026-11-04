@@ -12,7 +12,6 @@ from app.modules.authorization.api import (
     ActorIdentityFacts,
     ProjectGuideCompilationAuthorizationPort,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.model_usage.api import ModelProfileReaderPort
 from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationDelivery,
@@ -22,7 +21,10 @@ from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationExecutionPort,
     ProjectGuideSetupFinalizationCommand,
 )
-from app.modules.projects.api.guide_compilation_projections import ProjectGuideProjectionCommand
+from app.modules.projects.api.guide_compilation_projections import (
+    ProjectGuideProjectionCommand,
+    ProjectGuideProjectionError,
+)
 from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.api.task_examples import (
@@ -62,7 +64,6 @@ class LiveGuideCompilationCoordinator:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-        checker_capabilities: ExternalCheckerCapabilityProjection,
         request_authority: RequestAuthority,
         configuration_factory: Callable[[], ProjectGuideRuntimeConfiguration],
         model_profiles: Callable[[AsyncSession], ModelProfileReaderPort],
@@ -72,7 +73,6 @@ class LiveGuideCompilationCoordinator:
     ) -> None:
         self._sessions = session_factory
         self._material = material_factory
-        self._checker_capabilities = checker_capabilities
         self._request_authority = request_authority
         self._configuration = configuration_factory
         self._model_profiles = model_profiles
@@ -106,7 +106,6 @@ class LiveGuideCompilationCoordinator:
                         authority,
                         request_inputs=CompilationRequestInputs(
                             self._material(session),
-                            self._checker_capabilities,
                             configuration,
                         ),
                     ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)
@@ -143,18 +142,35 @@ class LiveGuideCompilationCoordinator:
                 raise GuideCompilationIntegrityError("persisted compilation unavailable")
             blocked = compilation.canonical_result["status"] == "guide_blocked"
         command = ProjectGuideProjectionCommand(attempt_id=outcome.attempt_id)
-        await self._projections.project_guide_sufficiency(command)
-        if not blocked:
-            await self._projections.project_submission_artifact_policy(command)
-        return await self._finalize(
-            ProjectGuideSetupFinalizationCommand(
-                project_id=delivery.project_id,
-                guide_id=delivery.guide_id,
-                setup_run_id=delivery.setup_run_id,
-                setup_generation=delivery.setup_generation,
-                compilation_id=outcome.compilation_id,
-            )
+        finalization = ProjectGuideSetupFinalizationCommand(
+            project_id=delivery.project_id,
+            guide_id=delivery.guide_id,
+            setup_run_id=delivery.setup_run_id,
+            setup_generation=delivery.setup_generation,
+            compilation_id=outcome.compilation_id,
         )
+        try:
+            await self._projections.project_guide_sufficiency(command)
+            if not blocked:
+                await self._projections.project_submission_artifact_policy(command)
+        except ProjectGuideProjectionError as exc:
+            if exc.code != "source_state_unavailable":
+                raise
+            # Another delivery may finish between either projection and this one.
+            # Only an exact retained outcome permits the existing authorized finalizer.
+            async with self._sessions() as session:
+                existing = await session.scalar(
+                    select(ProjectGuideSetupFinalization.id).where(
+                        ProjectGuideSetupFinalization.project_id == str(delivery.project_id),
+                        ProjectGuideSetupFinalization.guide_id == str(delivery.guide_id),
+                        ProjectGuideSetupFinalization.setup_run_id == str(delivery.setup_run_id),
+                        ProjectGuideSetupFinalization.setup_generation == delivery.setup_generation,
+                        ProjectGuideSetupFinalization.compilation_id == str(outcome.compilation_id),
+                    )
+                )
+            if existing is None:
+                raise
+        return await self._finalize(finalization)
 
     async def _admit(self, delivery: ProjectGuideCompilationDelivery):
         """Normalize only the exact transport claim, before any compilation effects."""

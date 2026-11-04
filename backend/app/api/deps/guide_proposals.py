@@ -21,8 +21,6 @@ from app.api.deps.authorization import (
 from app.core.api_controls import request_ids
 from app.db.session import get_db_session
 from app.modules.authorization.api import ActorIdentityFacts
-from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.adapters.auth import guide_proposal_authorization, human_guide_compilation_authorization
 from app.adapters.projects import project_guide_proposal_service, project_guide_correction_dispatch
 
@@ -32,11 +30,7 @@ class ProposalRequest:
     """One request's explicit authority and caller-owned SQL transaction."""
 
     session: AsyncSession
-    service: GuideProposalOperationsPort[
-        ActorIdentityFacts,
-        GuideDocumentManifestPort,
-        ExternalCheckerCapabilityProjection,
-    ]
+    service: GuideProposalOperationsPort[ActorIdentityFacts]
     actor: ActorIdentityFacts
     request_id: UUID
 
@@ -81,7 +75,6 @@ async def get_correction_dispatch(
 ) -> AsyncIterator[CorrectionDispatchRequest]:
     """Compose the existing human compilation request port without a runtime."""
     from app.adapters.artifacts import guide_document_manifest_port
-    from app.adapters.checkers import external_checker_capability_projection
     from app.api.deps.authorization import prepared_authorization_service
     from app.core.config import get_settings
     from app.core.project_agents import project_guide_runtime_configuration
@@ -94,14 +87,11 @@ async def get_correction_dispatch(
         # Capture the immutable AUTH context before rollback expires the ORM
         # identity rows; dispatch still owns a fresh product transaction.
         await session.rollback()
-        async with session.begin():
-            capabilities = await external_checker_capability_projection(session)
         yield CorrectionDispatchRequest(
             project_guide_correction_dispatch(
                 session,
                 human_guide_compilation_authorization(prepared),
                 material=guide_document_manifest_port(session),
-                capabilities=capabilities,
                 configuration=project_guide_runtime_configuration(
                     settings,
                     adapter_profile_builder=partial(

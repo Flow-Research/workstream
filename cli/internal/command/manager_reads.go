@@ -25,7 +25,7 @@ func (f *projectFlags) query(cmd *cobra.Command) api.ProjectWorkQuery {
 
 func taskCounts(counts api.TaskStatusCounts) string {
 	parts := make([]string, 0, len(counts))
-	for _, status := range []string{"draft", "screening", "ready", "claimed", "in_progress", "submitted",
+	for _, status := range []string{"draft", "screening", "ready", "in_progress", "submitted",
 		"evaluation_pending", "review_pending", "needs_revision", "accepted"} {
 		parts = append(parts, count(counts[status])+" "+strings.ReplaceAll(status, "_", " "))
 	}

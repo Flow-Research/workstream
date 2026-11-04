@@ -32,8 +32,8 @@ from app.modules.projects.models import (
 )
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
-from .contracts import AcceptedCompilationResult
 from .custody_payloads import policy_digest, report_digest, source_state
+from .retained_evidence import verified_compilation_result
 from .models import (
     ProjectGuideCompilation,
     ProjectGuideCompilationAttempt,
@@ -153,12 +153,10 @@ def compose_facts(
 ) -> ProjectSetupFinalizationFacts:
     """Validate accepted content and its complete exact existing projection set."""
     c, a, s = view.compilation, view.attempt, view.setup
-    accepted = AcceptedCompilationResult(
-        canonical_result=c.canonical_result,
-        result_hash=c.result_hash,
-        component_hashes=c.component_hashes,
-    )
-    result = accepted.canonical_result
+    try:
+        result = verified_compilation_result(c)
+    except ValueError:
+        deny()
     classification = result["status"]
     expected = (
         {"guide_sufficiency"}

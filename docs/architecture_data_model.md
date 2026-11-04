@@ -361,7 +361,7 @@ guide-policy approval flow before the guide can activate.
 
 Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before contributors see the task.
 
-When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
+When a task is claimed and moves to `in_progress`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
 
 Material changes require a new guide version or policy version. They include
 guide source material, submission artifact policy, pre-submit checker
@@ -515,9 +515,9 @@ Statuses:
 
 The run references downstream truth by id/hash. Operators can read the latest
 run through the project setup API to understand whether setup is still queued,
-blocked by guide sufficiency, waiting on policy approval, compiling post-submit
-policy, blocked by unsupported checker requirements, or failed at the Celery
-queue layer. Retained error summaries and post-submit derivation summaries are
+blocked by guide sufficiency, waiting on policy approval, deriving the approved
+post-submit policy, or failed at the Celery queue layer. Setup does not inspect
+checker availability; human image attachments are supplied during approval. Retained error summaries and post-submit derivation summaries are
 bounded and redacted. Operational diagnostics use fixed safe events plus
 validated request and correlation IDs; they do not retain sensitive messages or
 bodies. See the [observability operator guide](engineering/observability.md) for
@@ -885,7 +885,7 @@ policy or newly compiled checker.
 
 ARCH-03B8 adds no storage: its bounded task audit evidence page projects fixed
 shared audit fields with exact project/task scope in one SQL statement. Typed
-claim/start references bind assignment and authorization decision without raw
+claim and retained historical start references bind assignment and authorization decision without raw
 payload exposure. ARCH-03C7 exposes the page to exact covered Audit Authority
 using existing TASK/AUTH locks and atomic ALLOW evidence. Draft and empty history
 need no policy body. Migration 0005 extends only the existing authorization
@@ -1035,7 +1035,7 @@ Blocking pre-submit failures prevent submission creation, create no submission
 row, no submission version, no task transition to `submitted`, and no
 submission-created audit event. ART constructs an audit-ready projection;
 publication as a task event named `pre_submission_check_failed` remains pending.
-That event must use bounded identifiers, catalogue identity,
+That event must use bounded default and approved image identities,
 stable codes, counts and categories for project operators. It excludes paths,
 filenames, scratch/provider references, raw output, evidence contents,
 credentials and free-form checker messages. Pre-submit results never return
@@ -1052,15 +1052,17 @@ and `policy_hash`; required/warning checker and blocking-severity sidecars;
 
 `policy_body` is the sole execution body. Its hash is
 `sha256(canonical_json(policy_body))`; sidecars must match it. Lifecycle is
-`compiled`, `approved` or `superseded`. POL-06A derives a compiled policy only
-from a finalized unified result with the current approved artifact/effective/
-pre-submit chain. Separate exact-target manager approval records its receipt.
+`compiled`, `approved` or `superseded`. POL-06A derives a compiled policy from
+the approved human-selected POST attachments with the finalized unified result
+and current approved artifact/effective/pre-submit chain as provenance.
+Separate exact-target manager approval records its receipt.
 Both compiled and approved policies may be corrected while their setup is current.
 
 The append-only `project_post_policy_operations` family records derive, approve
 and correction receipts with exact actor, identity link, grant or fixed service,
-authorization decision, finalization, source/result, upstream approval, catalogue
-and policy commitments. Active-guide readers require that custody. Historical
+authorization decision, finalization, source/result, upstream approval,
+human-selected phase attachments and policy commitments. Active-guide readers
+require that custody. Historical
 role-string approval/supersession columns remain inert retained data; they do not
 authorize operations and receive no new writes.
 
@@ -1071,11 +1073,13 @@ It may have the same canonical hash: new generation/approval custody identifies
 the replacement. A general unified correction also invalidates the predecessor's
 current upstream; subsequent post-policy derivation supersedes it atomically.
 
-The policy operations consume the saved result without model, document or checker
-calls. AUTH-12G supplies authorization; POL-06B connects public manager decisions
+The policy operations consume the approved phase selections and saved result
+provenance without model, document or checker calls. AUTH-12G supplies
+authorization; POL-06B connects public manager decisions
 and approval-driven automatic derivation/recovery. Setup remains
-immutable. The existing complete proposal retains requirements, exact registered
-bindings, safe findings and non-executable capability suggestions. Evidence binds
+immutable. The existing complete proposal retains source-cited PRE/POST
+suggestions, artifact requirements and safe findings, without registered images
+or runtime availability choices. Evidence binds
 assigned original-document versions and hashes; model page/section attributions
 do not become verified judgments. Review display excludes credentials, private
 storage locators, signed URLs and raw source excerpts. No second derivation
@@ -1091,13 +1095,15 @@ The current compiler projects the exact approved external POST policy. Its
 canonical body contains:
 
 - `schema_version`: `external_post_submit_policy.v1`
-- ordered `entries` containing the exact approved external POST bindings
+- ordered `entries` containing the exact approved human-selected external POST images
 - `policy_sha256`, committing the canonical body without that digest field
 
-Each binding contains its `requirement_id`, `stage`, immutable `registry`
-publication, `configuration` and `configuration_sha256`. Registry phase,
-configuration schema, exact selected identities and hashes are validated. All
-approved POST entries are required; an empty approved binding set is valid.
+Each policy member contains its external-protocol `requirement_id`, `stage`,
+immutable `registry` publication, `configuration` and `configuration_sha256`.
+This execution key is independent of setup `suggestion_id`; no one-to-one
+mapping is required. Registry phase, configuration schema, exact selected
+identities and hashes are validated. All approved POST entries are required;
+an explicit empty approved attachment list is valid human intent.
 The [current checker framework](architecture_checker_framework.md#post-submit-compiler-boundary)
 defines this contract.
 
@@ -1450,7 +1456,6 @@ Status:
 - draft
 - screening
 - ready
-- claimed
 - in_progress
 - submitted
 - evaluation_pending
@@ -1510,9 +1515,10 @@ Fields:
 - `started_at`
 - `updated_at`
 
-`assigned_at` is the claim time. The start transition sets `started_at` once,
-and PostgreSQL refuses it unless the assignment is active and its task is
-`in_progress` for that contributor. `updated_at` on TaskAssignment and
+`assigned_at` is the database claim time. Claim sets `started_at` to that same
+value once, after assigning the task and moving it to `in_progress`, within one
+transaction. PostgreSQL refuses the stamp unless the assignment is active and
+its task is `in_progress` for that contributor. `updated_at` on TaskAssignment and
 WorkstreamTask is PostgreSQL-owned on every committed change, including raw SQL
 updates.
 

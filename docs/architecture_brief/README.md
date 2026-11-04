@@ -10,8 +10,8 @@ The brief uses the C4-PlantUML diagrams from `docs/diagrams/` and packages them 
 
 The Markdown source describes current public ZIP preparation,
 admission-backed Submission entry and the bounded local public/Celery drill.
-The PDF is a retained prior render because
-the pinned PlantUML renderer is unavailable in this workspace; use the
+The PDF is a retained prior render; current Markdown and diagram sources
+include the atomic claim correction. Use the
 [roadmap](../roadmap_status.md) for current capability status. Lifecycle
 diagrams remain target views.
 

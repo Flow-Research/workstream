@@ -20,7 +20,7 @@ def expected(state, task_status, latest, revision):
     if state == "closed":
         return "none"
     return {
-        "claimed": "start", "in_progress": "prepare_submission",
+        "in_progress": "prepare_submission",
         "submitted": "awaiting_evaluation", "evaluation_pending": "awaiting_evaluation",
         "review_pending": "awaiting_evaluation",
     }.get(task_status, "revise" if (

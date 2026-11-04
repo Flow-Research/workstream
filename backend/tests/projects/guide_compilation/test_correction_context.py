@@ -44,14 +44,15 @@ def test_correction_materializes_exact_predecessor_without_changing_retained_ide
     assert json.loads(canonical) == historical
     assert "sha256:" + hashlib.sha256(canonical).hexdigest() == canonical_json_hash(historical)
     prompt = json.loads(project_guide_compilation_prompt_bytes(compilation))
-    assert prompt["correction_predecessor"] == compilation.correction_predecessor.model_dump(
-        mode="json"
+    assert set(prompt) == {"material", "task_examples", "manager_feedback"}
+    assert prompt["manager_feedback"] == compilation.correction_feedback.reason
+    assert "correction_predecessor" not in prompt
+    assert "correction_feedback" not in prompt
+    assert compilation.correction_feedback.predecessor_result_hash not in json.dumps(prompt)
+    assert compilation.correction_feedback.target_digest not in json.dumps(prompt)
+    assert canonical_json_hash(compilation.correction_predecessor.model_dump(mode="json")) == (
+        compilation.correction_feedback.predecessor_result_hash
     )
-    assert (
-        canonical_json_hash(prompt["correction_predecessor"])
-        == prompt["correction_feedback"]["predecessor_result_hash"]
-    )
-    assert "runtime_configuration" not in prompt
 
 
 @pytest.mark.parametrize("change", ["missing_predecessor", "missing_feedback", "substitution"])
@@ -87,9 +88,9 @@ def test_context_prompt_bound_applies_only_when_inference_will_run(no_inference)
         runtime_configuration,
     )
 
-    configuration = (
-        manager_runtime_configuration() if no_inference else runtime_configuration()
-    ).model_copy(update={"maximum_manifest_bytes": 1024})
+    configuration = manager_runtime_configuration() if no_inference else runtime_configuration()
+    limit = len(project_guide_compilation_prompt_bytes(context(ids(), configuration=configuration))) - 1
+    configuration = configuration.model_copy(update={"maximum_manifest_bytes": limit})
     original = context(ids(), configuration=configuration)
     material = original.material
     guide = SimpleNamespace(
@@ -110,10 +111,9 @@ def test_context_prompt_bound_applies_only_when_inference_will_run(no_inference)
         loaded=material,
         setup_run_id=original.setup_run_id,
         setup_generation=original.setup_generation,
-        checker_capabilities=original.checker_capabilities,
         runtime_configuration=configuration,
     )
-    assert len(project_guide_compilation_prompt_bytes(original)) > 1024
+    assert len(project_guide_compilation_prompt_bytes(original)) > limit
     if no_inference:
         assert compilation_context_from_material(**arguments) == original
     else:

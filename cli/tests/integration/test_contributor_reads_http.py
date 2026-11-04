@@ -219,6 +219,8 @@ def test_own_work_reads_reject_malformed_success(cli):
     malformed = (
         (("me", "assignments"), ASSIGNMENT_ROW | {"state": "closed"}),
         (("me", "assignments"), ASSIGNMENT_ROW | {"next_action": "celebrate"}),
+        (("me", "assignments"), ASSIGNMENT_ROW | {"next_action": "start"}),
+        (("me", "assignments"), ASSIGNMENT_ROW | {"task_status": "claimed"}),
         (("me", "assignments"), ASSIGNMENT_ROW | {"task_status": "invented"}),
         (
             ("me", "assignments"),

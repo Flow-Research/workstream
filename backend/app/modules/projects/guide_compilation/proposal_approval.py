@@ -8,8 +8,6 @@ from sqlalchemy import select
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
-from app.interfaces.project_agents import validate_project_guide_compilation_result
-from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
 from app.modules.authorization.api.guide_proposal_review import (
     GuideProposalAuthorizationFacts,
     GuideProposalAuthorizationLocator,
@@ -17,9 +15,10 @@ from app.modules.authorization.api.guide_proposal_review import (
 )
 from app.modules.checkers.api.policy_custody import CompiledPreSubmitCheckerPolicy
 from app.modules.checkers.api.external import ExternalCheckerRegistryPort
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.model_usage.api import ModelProfileReaderPort
 from app.modules.checkers.api.external_policy import (
+    ExternalCheckerPolicyCompileRequest,
+    ExternalCheckerPolicyError,
     LockedExternalCheckerPolicies,
     compile_external_checker_policy_bundle,
 )
@@ -41,7 +40,6 @@ from .proposal_authority import proposal_resource_json, require_proposal_authori
 from .custody_payloads import policy_digest
 from .models import ProjectGuideProposalApproval
 from .proposal_repository import GuideProposalRepository
-from .request_inputs import CompilationRequestInputs
 
 
 APPROVAL_ACTION = "project.submission_artifact_policy.approve"
@@ -62,8 +60,6 @@ async def approve_proposal(
     *,
     actor,
     request_id,
-    material,
-    capabilities: ExternalCheckerCapabilityProjection,
     registry: ExternalCheckerRegistryPort,
     profiles: ModelProfileReaderPort | None = None,
 ) -> GuideProposalApprovalReceipt:
@@ -102,15 +98,12 @@ async def approve_proposal(
             locked,
             package,
             command,
-            capabilities,
         )
         outputs = await _compile_approval(
             session,
             locked,
             command,
             new_record_id(),
-            material,
-            capabilities,
             registry,
             profiles,
         )
@@ -170,12 +163,10 @@ async def _validate_new_approval(
     locked,
     package,
     command,
-    capabilities,
 ):
     """Validate current proposal and predecessor facts before compiling outputs."""
     if not locked.current:
         raise GuideProposalError("proposal_stale")
-    require_capabilities(command.target, capabilities)
     if (
         locked.result.status == "guide_blocked"
         or locked.view.policy is None
@@ -207,29 +198,26 @@ async def _compile_approval(
     locked,
     command,
     operation_id,
-    material,
-    capabilities,
     registry,
     profiles,
 ) -> _CompiledApproval:
     target = command.target
-    inputs = CompilationRequestInputs(
-        material,
-        capabilities,
-        ProjectGuideRuntimeConfiguration.model_validate(locked.view.attempt.runtime_configuration),
-    )
-    context = await inputs.context_for_setup(session, locked.view.setup)
-    validate_project_guide_compilation_result(context, locked.result)
     effective_body = ProjectService(session)._merge_effective_submission_artifact_policy(
         locked.view.policy.policy_body,
     )
     effective_hash = canonical_json_hash(effective_body)
-    policies = await compile_external_checker_policy_bundle(
-        locked.result,
-        registry,
-        project_id=target.project_id,
-        profiles=profiles,
-    )
+    try:
+        policies = await compile_external_checker_policy_bundle(
+            ExternalCheckerPolicyCompileRequest(
+                pre_submit_attachments=command.pre_submit_attachments,
+                post_submit_attachments=command.post_submit_attachments,
+            ),
+            registry,
+            project_id=target.project_id,
+            profiles=profiles,
+        )
+    except (ExternalCheckerPolicyError, ValueError) as exc:
+        raise GuideProposalError("approval_blocked") from exc
     external_pre = policies.pre_submit
     compiled = CompiledPreSubmitCheckerPolicy(
         compiler_version="external_checker_policy.v1",
@@ -332,33 +320,6 @@ def _facts(locator, target, request_digest, receipt, command):
         current_approval_operation_id=command.expected_previous_approval_operation_id,
         current_approval_output_digest=command.expected_previous_approval_output_digest,
     )
-
-
-def require_capabilities(target, capabilities):
-    """Bind approval to the exact registry-backed compiler input snapshot."""
-    capabilities = ExternalCheckerCapabilityProjection.model_validate(capabilities)
-    if (
-        "workstream.external_checker_capabilities",
-        "v1",
-        capabilities.schema_version,
-        capabilities.manifest_sha256,
-    ) != (
-        target.pre_catalogue_id,
-        target.pre_catalogue_version,
-        target.pre_catalogue_schema_version,
-        target.pre_catalogue_manifest_hash,
-    ) or (
-        "workstream.external_checker_capabilities",
-        "v1",
-        capabilities.schema_version,
-        capabilities.manifest_sha256,
-    ) != (
-        target.post_catalogue_id,
-        target.post_catalogue_version,
-        target.post_catalogue_schema_version,
-        target.post_catalogue_manifest_hash,
-    ):
-        raise GuideProposalError("proposal_stale")
 
 
 def _provenance(authority):
@@ -513,6 +474,7 @@ async def _commit_provenance(
             compilation_id=target.compilation_id,
             finalization_id=target.finalization_id,
             target_json=target.model_dump(mode="json"),
+            request_json=command.model_dump(mode="json"),
             target_digest=target.digest,
             request_digest=request_digest,
             resource_context_digest=facts.digest,

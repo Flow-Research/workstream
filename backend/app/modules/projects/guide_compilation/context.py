@@ -18,7 +18,6 @@ from app.interfaces.project_agents import (
     canonical_project_guide_compilation_context_bytes,
     project_guide_compilation_prompt_bytes,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.projects.models import GuideSourceSnapshot, ProjectGuide
 from app.modules.projects.api.task_examples import require_task_example_commitment
 
@@ -32,7 +31,6 @@ async def build_project_guide_compilation_context(
     *,
     state: CompilationExecutionState,
     material: GuideDocumentManifestPort,
-    checker_capabilities: ExternalCheckerCapabilityProjection,
 ) -> ProjectGuideCompilationContext:
     """Return an immutable context only when every current fact matches custody."""
     if session.in_transaction():
@@ -77,7 +75,6 @@ async def build_project_guide_compilation_context(
             loaded=loaded,
             setup_run_id=identity.setup_run_id,
             setup_generation=identity.setup_generation,
-            checker_capabilities=checker_capabilities,
             runtime_configuration=state.runtime_configuration,
             correction_input=await _correction_input(session, identity.setup_run_id),
         )
@@ -93,7 +90,6 @@ def compilation_context_from_material(
     loaded,
     setup_run_id,
     setup_generation,
-    checker_capabilities: ExternalCheckerCapabilityProjection,
     runtime_configuration: ProjectGuideRuntimeConfiguration,
     correction_input=None,
 ) -> ProjectGuideCompilationContext:
@@ -127,7 +123,6 @@ def compilation_context_from_material(
         agent_identity=PROJECT_GUIDE_COMPILATION_AGENT_IDENTITY,
         agent_version=PROJECT_GUIDE_COMPILATION_AGENT_VERSION,
         runtime_configuration=runtime_configuration,
-        checker_capabilities=checker_capabilities,
     )
     if (
         len(canonical_project_guide_compilation_context_bytes(context))

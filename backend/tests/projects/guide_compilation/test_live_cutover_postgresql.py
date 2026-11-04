@@ -5,8 +5,6 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import text
 
-from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDelivery
-from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDeliveryError
 from tests.committed_guide_fixtures import create_committed_document_fixture
 from tests.projects.client_fixtures import (
@@ -17,55 +15,12 @@ from .test_automatic_request import automatic_source as automatic_source
 from .helpers import generated_result
 from .runtime_fixtures import (
     ScriptedGuideRuntime,
-    scripted_document_access_runtime,
-    scripted_guide_document_parser_factory,
     scripted_model_profile,  # noqa: F401 - registered pytest fixture
     scripted_runtime_configuration,
 )
 
 
-@pytest.fixture(autouse=True)
-def scripted_document_port(monkeypatch):
-    monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "memory://")
-    monkeypatch.setenv("WORKSTREAM_CELERY_RESULT_BACKEND", "cache+memory://")
-    from app.core.config import get_settings
-    get_settings.cache_clear()
-    from app.workers import project_setup as worker
-    monkeypatch.setattr(
-        worker, "guide_document_access_runtime", scripted_document_access_runtime
-    )
-    monkeypatch.setattr(
-        worker, "guide_document_parser_factory", scripted_guide_document_parser_factory
-    )
-
-
-async def _delivery(factory, setup_id):
-    async with factory() as session, session.begin():
-        row = (
-            await session.execute(
-                text(
-                    "select project_id,guide_id,source_snapshot_id,setup_generation from project_setup_runs where id=:id"
-                ),
-                {"id": str(setup_id)},
-            )
-        ).one()
-        task_id = project_guide_compilation_task_id(str(setup_id), row.setup_generation)
-        await session.execute(
-            text(
-                "update project_setup_runs set status='dispatch_pending',current_step='dispatch',celery_task_id=:task where id=:id"
-            ),
-            {"id": str(setup_id), "task": task_id},
-        )
-    return ProjectGuideCompilationDelivery(
-        project_id=row.project_id,
-        guide_id=row.guide_id,
-        source_snapshot_id=row.source_snapshot_id,
-        setup_run_id=setup_id,
-        setup_generation=row.setup_generation,
-        task_id=task_id,
-    )
-
-
+from .live_fixtures import _delivery, scripted_document_port as scripted_document_port
 
 
 @pytest.mark.usefixtures("scripted_model_profile")
@@ -100,6 +55,7 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
                 "submission_artifact_policy": None
                 if status == "guide_blocked"
                 else base_outcome.submission_artifact_policy,
+                "requirements": () if status == "guide_blocked" else base_outcome.requirements,
             }
         )
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
@@ -346,8 +302,12 @@ async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_
         "compilation_invalid_terminal" if outcome == "invalid" else "provider_outcome_unresolved"
     )
     assert first["error_code"] == (
-        "schema_invalid" if outcome == "invalid" else "provider_outcome_unresolved"
+        "schema_invalid" if outcome == "invalid" else None
     )
+    if outcome == "invalid":
+        assert first["error_summary"] == "Guide compilation returned an invalid result."
+    else:
+        assert first["error_summary"] is None
     assert (first["finished_at"] is not None) == (outcome == "invalid")
     assert "private-provider-detail" not in str(first)
     from tests.projects.client_fixtures import auth_headers
@@ -757,10 +717,11 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
 
 
 @pytest.mark.usefixtures("scripted_model_profile")
+@pytest.mark.parametrize("duplicate_observation", ["before_persist", "after_finalization"])
 async def test_concurrent_live_deliveries_converge_on_one_finalization(
-    automatic_source, monkeypatch
+    automatic_source, monkeypatch, duplicate_observation
 ):
-    """Scripted resumptions converge; paid-effect dedupe has a separate owner proof."""
+    """Both overlapping-delivery observations converge on one retained finalization."""
     import asyncio
     from app.core.config import get_settings
 
@@ -771,7 +732,9 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    entered, both_entered, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    entered, both_entered = asyncio.Event(), asyncio.Event()
+    first_provider_release, duplicate_provider_release = asyncio.Event(), asyncio.Event()
+    persist_entered, persist_release = asyncio.Event(), asyncio.Event()
     active = 0
     runtime = ScriptedGuideRuntime()
     original = runtime.compile_project_guide
@@ -779,6 +742,7 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     async def blocked_provider(context, capabilities):
         nonlocal active
         active += 1
+        release = first_provider_release if active == 1 else duplicate_provider_release
         entered.set()
         if active == 2:
             both_entered.set()
@@ -790,24 +754,53 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", scripted_runtime_configuration
     )
-    first = asyncio.create_task((await worker._coordinator(factory)).run(delivery))
+    coordinator = await worker._coordinator(factory)
+    persist = coordinator._execution._backend.persist
+
+    async def blocked_persist(*args, **kwargs):
+        persist_entered.set()
+        await persist_release.wait()
+        return await persist(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator._execution._backend, "persist", blocked_persist)
+    first = asyncio.create_task(coordinator.run(delivery))
+    duplicate = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=20)
         duplicate = asyncio.create_task(
             (await worker._coordinator(factory)).run(delivery)
         )
         await asyncio.wait_for(both_entered.wait(), timeout=20)
+        first_provider_release.set()
+        await asyncio.wait_for(persist_entered.wait(), timeout=20)
+        if duplicate_observation == "after_finalization":
+            persist_release.set()
+            receipt = await asyncio.wait_for(first, timeout=30)
+        duplicate_provider_release.set()
+        duplicate_receipt = await asyncio.wait_for(duplicate, timeout=30)
+        if duplicate_observation == "before_persist":
+            assert duplicate_receipt["status"] == "provider_result_accepted_not_persisted"
+            persist_release.set()
+            receipt = await asyncio.wait_for(first, timeout=30)
+        else:
+            assert duplicate_receipt == receipt
     finally:
-        release.set()
-    receipt, duplicate_receipt = await asyncio.wait_for(
-        asyncio.gather(first, duplicate), timeout=30
-    )
+        first_provider_release.set()
+        duplicate_provider_release.set()
+        persist_release.set()
+        tasks = [task for task in (first, duplicate) if task is not None]
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
     assert receipt["status"] == "policy_draft_ready"
-    assert duplicate_receipt["status"] == "provider_result_accepted_not_persisted"
-    assert duplicate_receipt["attempt_id"]
     assert runtime.calls == 2
     assert await (await worker._coordinator(factory)).run(delivery) == receipt
+    assert runtime.calls == 2
     async with factory() as session:
+        attempt_id = await session.scalar(text("select id from project_guide_compilation_attempts"))
+        if duplicate_observation == "before_persist":
+            assert duplicate_receipt["attempt_id"] == str(attempt_id)
         for table in [
             "project_guide_compilation_attempts",
             "project_guide_compilations",
@@ -1014,7 +1007,23 @@ _RULES_LABEL = "workstream-rules.json"
 def _manager_rules(**overrides) -> bytes:
     """A manager-authored rules document citing the PDF original by SHA-256."""
     import json
-    from .helpers import SOURCE_SHA256
+    from .helpers import SOURCE_SHA256, valid_specification
+
+    pre_specification = valid_specification().model_dump(mode="json")
+    pre_specification["evaluation_method"] = "Inspect the candidate package manifest before submission."
+    pre_specification["inputs"][0].update(
+        input_id="candidate_package", purpose="Candidate package to inspect before submission."
+    )
+    pre_specification["check_steps"] = [
+        "Inspect the candidate package manifest for the submission artifact."
+    ]
+    post_specification = valid_specification().model_dump(mode="json")
+    post_specification["evaluation_method"] = (
+        "Inspect the immutable submitted package manifest after submission."
+    )
+    post_specification["check_steps"] = [
+        "Inspect the immutable package manifest for the submission artifact."
+    ]
 
     return json.dumps({
         "format": "workstream.project_guide_rules.v1",
@@ -1024,16 +1033,25 @@ def _manager_rules(**overrides) -> bytes:
         "submission_artifact_policy": {"maximum_file_size_bytes": 1000,
                                        "maximum_package_size_bytes": 10000,
                                        "required_artifacts": ["submission"]},
-        "requirements": [{
-            "requirement_id": "guide.context",
-            "statement": "Use the project guide.",
-            "disposition": "informational",
-            "platform_coverage": None,
-            "classification_rationale": "This identifies the governing guide for the work.",
-            "check_specification": None,
-            "evidence_refs": [],
-        }], "pre_submit_bindings": [], "post_submit_bindings": [],
-        "capability_suggestions": [], "setup_notes": [],
+        "requirements": [
+            {
+                "suggestion_id": "submission_present_before_intake",
+                "statement": "The package must include the submission artifact before intake.",
+                "stage": "pre_submit",
+                "classification_rationale": "The required artifact can be checked before Submission creation.",
+                "check_specification": pre_specification,
+                "evidence_refs": [],
+            },
+            {
+                "suggestion_id": "submission_present_after_intake",
+                "statement": "The submitted package must retain the submission artifact.",
+                "stage": "post_submit",
+                "classification_rationale": "The immutable submitted package can be evaluated after intake.",
+                "check_specification": post_specification,
+                "evidence_refs": [],
+            },
+        ],
+        "setup_notes": [],
     } | overrides).encode()
 
 
@@ -1151,3 +1169,12 @@ async def test_manager_authored_rules_compile_through_the_live_worker_without_in
     [finding] = compilation["findings"]
     assert [ref["sha256"] for ref in finding["evidence_refs"]] == [SOURCE_SHA256, rules_sha256]
     assert finding["evidence_refs"][1]["source_item_id"] == str(rules_item.source_item_id)
+    assert [(item["suggestion_id"], item["stage"]) for item in compilation["requirements"]] == [
+        ("submission_present_before_intake", "pre_submit"),
+        ("submission_present_after_intake", "post_submit"),
+    ]
+    for suggestion in compilation["requirements"]:
+        [evidence] = suggestion["evidence_refs"]
+        assert evidence["sha256"] == rules_sha256
+        assert evidence["source_item_id"] == str(rules_item.source_item_id)
+        assert suggestion["check_specification"]["check_steps"]

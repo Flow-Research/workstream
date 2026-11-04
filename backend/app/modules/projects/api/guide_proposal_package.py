@@ -7,11 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.interfaces.project_agents import (
     AtomicGuideRequirement,
-    CapabilitySuggestion,
     CompilationFinding,
     MAXIMUM_COMPILATION_FINDINGS,
     MAXIMUM_COMPILATION_REQUIREMENTS,
-    MAXIMUM_COMPILATION_SUGGESTIONS,
     MAXIMUM_EVIDENCE_REFS,
     ProjectGuideCompilationResult,
 )
@@ -46,15 +44,6 @@ class GuideProposalRequirement(AtomicGuideRequirement):
     )
 
 
-class GuideProposalSuggestion(CapabilitySuggestion):
-    """An engineering suggestion retains its evidence's display location."""
-
-    evidence_refs: tuple[GuideProposalEvidenceLocation, ...] = Field(
-        min_length=1,
-        max_length=MAXIMUM_EVIDENCE_REFS,
-    )
-
-
 class GuideProposalDisplayResult(ProjectGuideCompilationResult):
     """The complete validated proposal with only source handles projected away."""
 
@@ -65,10 +54,6 @@ class GuideProposalDisplayResult(ProjectGuideCompilationResult):
     requirements: tuple[GuideProposalRequirement, ...] = Field(
         default=(),
         max_length=MAXIMUM_COMPILATION_REQUIREMENTS,
-    )
-    capability_suggestions: tuple[GuideProposalSuggestion, ...] = Field(
-        default=(),
-        max_length=MAXIMUM_COMPILATION_SUGGESTIONS,
     )
 
 

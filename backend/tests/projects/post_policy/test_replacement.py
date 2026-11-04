@@ -53,7 +53,7 @@ async def test_corrected_generation_replaces_policy_and_retains_original_receipt
             }
         )
         setup = service_actor(values)
-        derive, first = await prepare_post_policy(factory, command, actor, grant, setup)
+        derive, first = await prepare_post_policy(factory, command, actor, grant, setup, values)
         approval = PostPolicyApproval(target=first.target, idempotency_key=uuid4())
         approved = await operate(factory, actor, command.project_id, grant, 'approve', approval)
         if origin == 'post_policy':
@@ -71,6 +71,8 @@ async def test_corrected_generation_replaces_policy_and_retains_original_receipt
         package = await read_package(factory, next_command, actor, grant)
         upstream = await approve(factory, next_command, actor, grant, GuideProposalApproval(
             target=package.target, idempotency_key=uuid4(),
+            pre_submit_attachments=values["pre_submit_attachments"],
+            post_submit_attachments=values["post_submit_attachments"],
             expected_previous_approval_operation_id=package.current_approval_operation_id,
             expected_previous_approval_output_digest=package.current_approval_output_digest))
         next_derive = PostPolicyDerive(selection=GuideProposalSelection(
@@ -124,13 +126,15 @@ async def test_fresh_predecessor_decisions_reject_after_successor_upstream_appro
 
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         setup = service_actor(values)
-        _, first = await prepare_post_policy(factory, command, actor, grant, setup)
+        _, first = await prepare_post_policy(factory, command, actor, grant, setup, values)
         successor = await correct(factory, command, actor, grant, GuideProposalCorrection(
             target=first.target.proposal, idempotency_key=uuid4(), reason='Reconsider the complete guide proposal'))
         next_command = await finalize_corrected_attempt(factory, values, actor, successor)
         package = await read_package(factory, next_command, actor, grant)
         upstream = await approve(factory, next_command, actor, grant, GuideProposalApproval(
             target=package.target, idempotency_key=uuid4(),
+            pre_submit_attachments=values["pre_submit_attachments"],
+            post_submit_attachments=values["post_submit_attachments"],
             expected_previous_approval_operation_id=package.current_approval_operation_id,
             expected_previous_approval_output_digest=package.current_approval_output_digest))
         before = await state(factory)

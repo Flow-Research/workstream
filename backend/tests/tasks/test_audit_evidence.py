@@ -12,11 +12,6 @@ from sqlalchemy import event as sql_events, select
 
 from app.db import session as db_session
 from app.modules.audit.repository import AuditRepository, LIFECYCLE_AUTH_SOURCE
-from app.modules.audit.schemas import (
-    LifecycleAuditEntityType, LifecycleAuditEventInput, LifecycleAuditEventType,
-    LifecycleAuditReason, LifecycleAuditReferenceKind,
-)
-from app.modules.audit.service import LifecycleAuditParticipant
 from app.modules.tasks.api import (
     AuditTaskEvidence, AuditTaskEvidencePage, AuditTaskEvidenceRequest,
     TaskEvidenceCursor, TaskEvidenceInvalid,
@@ -37,16 +32,16 @@ def request(project, task, **kwargs):
     return AuditTaskEvidenceRequest(UUID(project["id"]), UUID(task["id"]), **kwargs)
 
 
-async def store_event(session, task_id, *, when=NOW, event_type="fixture_event", entity_type="task", payload=None, typed_source=False):
+async def store_event(session, task_id, *, when=NOW, event_type="fixture_event", entity_type="task", payload=None, typed_source=False, from_status=None, to_status=None):
     value = AuditEvent(
         id=str(new_record_id()), entity_type=entity_type, entity_id=task_id, event_type=event_type,
         actor_id="recorded-actor", external_subject="private-subject", external_issuer="private-issuer",
         actor_roles=["private-role"], claim_snapshot={"secret": "private-claim"},
         auth_source=LIFECYCLE_AUTH_SOURCE if typed_source else "flow_jwt", reason="private-reason", event_payload=payload or {"private": "private-payload"},
-        created_at=when,
+        created_at=when, from_status=from_status, to_status=to_status,
     )
     if typed_source:
-        # Faulty-writer counterexample: bypass Python validation, keep every DB guard.
+        # Retained-history and faulty-writer fixtures keep every database guard.
         session.add(value)
         await session.flush()
         return value
@@ -105,7 +100,7 @@ async def test_task_evidence_project_scope(task_client):
     project = await create_active_project(task_client)
     foreign = await create_active_project(task_client, slug="foreign-evidence")
     outsider = await create_draft_task(task_client, foreign["id"])
-    states = {"draft", "screening", "ready", "claimed", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision"}
+    states = {"draft", "screening", "ready", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision"}
     tasks = {status: await (create_draft_task if status == "draft" else create_ready_task)(task_client, project["id"]) for status in states}
     factory = db_session.get_session_factory()
     async with factory() as session, session.begin():
@@ -186,14 +181,13 @@ async def test_task_evidence_transition_references(task_client):
     factory = db_session.get_session_factory()
     for event_type in ("TaskClaimed", "TaskStarted", "TaskStartOverridden"):
         async with factory() as session:
-            event = await LifecycleAuditParticipant(session).add_event(LifecycleAuditEventInput(
-                event_id=new_record_id(), entity_type=LifecycleAuditEntityType.TASK, entity_id=value.task_id, event_type=LifecycleAuditEventType(event_type),
-                actor_id=new_record_id(), from_status="ready" if event_type == "TaskClaimed" else "claimed",
+            # Retained historical transition shapes remain readable after writer removal.
+            event = await store_event(
+                session, task["id"], event_type=event_type, typed_source=True,
+                from_status="ready" if event_type == "TaskClaimed" else "claimed",
                 to_status="claimed" if event_type == "TaskClaimed" else "in_progress",
-                task_reason="reasoned override" if event_type == "TaskStartOverridden" else None,
-                reason=LifecycleAuditReason.STATE_CHANGED,
-                references={LifecycleAuditReferenceKind(key): val for key, val in refs.items()},
-            ))
+                payload={"references": {key: str(val) for key, val in refs.items()}},
+            )
             page = await read_once(session, replace(value, after=None))
             item = next(item for item in page.items if item.event_id == UUID(event.id))
             assert (item.assignment_id, item.authorization_decision_id) == (refs["assignment_id"], refs["authorization_decision_id"])

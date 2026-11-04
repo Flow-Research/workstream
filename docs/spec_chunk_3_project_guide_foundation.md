@@ -235,6 +235,25 @@ Finance policy bodies or draft selectors. Missing inputs are explicit, not defau
 One UUID Idempotency-Key and the original body recover the receipt with fresh
 authority; response serialization and validation precede commit.
 
+## Exact selected POST revision inputs
+
+A checker specification declares `kind: evaluation_context` with an exact sorted
+`evaluation_context_roles` list drawn from `predecessor_findings` and
+`predecessor_submission_archive`. Only that input kind carries the role field;
+other inputs omit it. The matching dependency is
+`evaluation_context/current_runner` with `material_unavailable`, and requires POST
+background execution. Model evaluation and isolated trial checks may both use it.
+
+The binding must select the same roles using
+`workstream_evaluation_context_version: v1` and
+`workstream_evaluation_context_roles`; its immutable registered configuration
+schema must declare both keys. Proposal validation and approval-time resolution
+check exact agreement, including absent declaration versus absent selection.
+These declarations grant no access. Existing verified runtime custody supplies
+only selected evidence, while broad `task_context` and `guide_context` remain
+unavailable runtime gaps. Registry publication and a descriptive specification
+alone do not approve or activate a policy.
+
 ## Lifecycle Impact
 
 No task lifecycle transitions are implemented.

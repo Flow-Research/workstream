@@ -107,7 +107,7 @@ async def test_sql_and_python_request_digests_are_byte_identical(
                 python_digest = project_guide_compilation_facts_digest(
                     replace(facts, **{field_name: mutated})
                 )
-                assert sql_digest == python_digest
+                assert sql_digest == python_digest, field_name
                 assert sql_digest != base_facts
 
             authority_values = {

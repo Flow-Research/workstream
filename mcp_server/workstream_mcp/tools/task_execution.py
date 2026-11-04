@@ -30,8 +30,7 @@ _DESCRIPTIONS = {
     "task_submission_requirements_get": "Read submission requirements for one task.",
     "task_screen": "Screen one task for release readiness.",
     "task_release": "Release one screened task to the contributor queue.",
-    "task_claim": "Claim one ready task without starting it.",
-    "task_start": "Start one claimed task.",
+    "task_claim": "Claim and start one ready task atomically.",
     "task_work_context_get": "Read the current contributor work context for one task.",
     "task_guide_document_content_get": "Read one assigned guide document as bounded bytes.",
     "submission_create": "Create one submission from a ready admission.",
@@ -54,7 +53,6 @@ _MUTATIONS = frozenset(
         "task_screen",
         "task_release",
         "task_claim",
-        "task_start",
         "submission_create",
     }
 )

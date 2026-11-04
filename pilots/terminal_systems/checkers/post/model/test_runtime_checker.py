@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from copy import deepcopy
 from pathlib import Path
 import sys
@@ -17,7 +18,8 @@ from model_transport import CompletedModelCall  # noqa: E402
 from author_checker import AUTHOR_REQUIREMENT, execute_author_accuracy_check  # noqa: E402
 from runtime_checker import RUNTIME_REQUIREMENT, execute_runtime_check  # noqa: E402
 from trial_plan import project_trial_projection_selector  # noqa: E402
-from trial_transport import CompletedTrial, TrialUnavailable  # noqa: E402
+from trial_transport import CompletedTrial, TrialUnavailable, _validate_completed  # noqa: E402
+from test_trial_transport import metrics  # noqa: E402
 
 
 DIGEST = "sha256:" + "a" * 64
@@ -43,7 +45,7 @@ build_timeout_seconds = 30
 reference_timeout_seconds = 20
 verification_timeout_seconds = 10
 """
-INSTRUCTION = "# Task\nInspect status with `queue status`.\n"
+INSTRUCTION = "# Task\nInspect status with `queue status`.\nRecover interrupted work without duplicate effects.\n"
 AUTHOR_NOTES = """\
 # Reproduction
 Apply incomplete with `sh solution/incomplete.sh`.
@@ -79,7 +81,7 @@ def procedure(
     command_text: str,
     state_source: str,
     evidence_id: str,
-    line: int,
+    source_quote: str,
 ) -> dict[str, object]:
     return {
         "procedure_id": identifier,
@@ -89,15 +91,25 @@ def procedure(
         "working_directory": ".",
         "state_source": state_source,
         "evidence_id": evidence_id,
-        "start_line": line,
-        "end_line": line,
+        "source_quote": source_quote,
     }
 
 
 class FakeModelSession:
     def __init__(
-        self, *, coverage_complete: bool = True, exhausted: bool = False
+        self,
+        *,
+        coverage_complete: bool = True,
+        exhausted: bool = False,
+        recovery_required: bool = True,
+        assessed_recovery_required: bool | None = None,
     ) -> None:
+        self.recovery_required = recovery_required
+        self.assessed_recovery_required = (
+            recovery_required
+            if assessed_recovery_required is None
+            else assessed_recovery_required
+        )
         self.coverage_complete = coverage_complete
         self.exhausted = exhausted
         self.calls: list[tuple[str, tuple[str, ...]]] = []
@@ -108,7 +120,9 @@ class FakeModelSession:
         self.calls.append((prompt, required_receipt_handles))
         value = json.loads(prompt)
         index = len(self.calls) - 1
-        if index == 0:
+        if "original_prompt" in value:
+            value = json.loads(value["original_prompt"])
+        if "untrusted_source_evidence" in value:
             output = self._plan(value)
         else:
             output = self._assessment(value)
@@ -120,6 +134,13 @@ class FakeModelSession:
         )
 
     def _plan(self, prompt: dict[str, object]) -> dict[str, object]:
+        source_lines = {
+            item["evidence_id"]: [
+                line.split(" | ", 1)[1]
+                for line in item["numbered_content"].splitlines()
+            ]
+            for item in prompt["untrusted_source_evidence"]
+        }
         procedures = [
             procedure(
                 "inspect_status",
@@ -127,7 +148,7 @@ class FakeModelSession:
                 "queue status",
                 "fresh",
                 "source_1",
-                2,
+                source_lines["source_1"][1],
             )
         ]
         remaining = [
@@ -156,7 +177,7 @@ class FakeModelSession:
                 "interrupt_work",
                 "controlled_interruption",
                 "sh tests/interrupt.sh",
-                "fresh",
+                "reference_baseline",
                 5,
             ),
             (
@@ -167,9 +188,18 @@ class FakeModelSession:
                 6,
             ),
         ]
+        if not self.recovery_required:
+            remaining = remaining[:-2]
         if self.coverage_complete:
             procedures.extend(
-                procedure(identifier, purpose, command, state, "source_2", line)
+                procedure(
+                    identifier,
+                    purpose,
+                    command,
+                    state,
+                    "source_2",
+                    source_lines["source_2"][line - 1],
+                )
                 for identifier, purpose, command, state, line in remaining
             )
             gaps = []
@@ -184,16 +214,25 @@ class FakeModelSession:
                 for _, purpose, _, _, _ in remaining
             ]
         return {
-            "schema_version": "terminal_systems.trial_plan_proposal.v1",
+            "schema_version": "terminal_systems.trial_plan_proposal.v2",
             "material_digest": prompt["material_digest"],
+            "recovery_applicability": {
+                "required": self.recovery_required,
+                "evidence_id": "source_1",
+                "start_line": 1,
+                "end_line": next(
+                    item["line_count"]
+                    for item in prompt["untrusted_source_evidence"]
+                    if item["path"] == "instruction.md"
+                ),
+            },
             "coverage_complete": self.coverage_complete,
             "procedures": procedures,
             "coverage_gaps": gaps,
         }
 
-    @staticmethod
-    def _assessment(prompt: dict[str, object]) -> dict[str, object]:
-        return {
+    def _assessment(self, prompt: dict[str, object]) -> dict[str, object]:
+        assessment = {
             "schema_version": "terminal_systems.model_assessment.v1",
             "requirement_id": prompt["rubric"]["requirement_id"],
             "material_digest": prompt["untrusted_evidence_data"]["material_digest"],
@@ -207,6 +246,20 @@ class FakeModelSession:
                 for item in prompt["rubric"]["pass_conditions"]
             ],
             "findings": [],
+        }
+        instruction = next(
+            item
+            for item in prompt["untrusted_evidence_data"]["evidence"]
+            if item["path"] == "instruction.md"
+        )
+        return {
+            "recovery_applicability": {
+                "required": self.assessed_recovery_required,
+                "evidence_id": instruction["evidence_id"],
+                "start_line": 1,
+                "end_line": instruction["line_count"],
+            },
+            "assessment": assessment,
         }
 
 
@@ -256,9 +309,16 @@ def trial_from_plan(
         "terminal_state": "completed_work",
         "profile_digest": DIGEST,
         "engine_identity_digest": DIGEST,
-        "plan_digest": DIGEST,
+        "plan_digest": "sha256:"
+        + hashlib.sha256(
+            json.dumps(trial_plan, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
         "observation_digest": DIGEST,
-        "build": {"terminal_state": "completed_work", "outcome": "succeeded"},
+        "build": {
+            **metrics(),
+            "candidate_image_digest": DIGEST,
+            "candidate_archive_digest": DIGEST,
+        },
         "steps": steps,
     }
     encoded = json.dumps(observations, sort_keys=True, separators=(",", ":")).encode()
@@ -267,6 +327,34 @@ def trial_from_plan(
         receipt_digest="sha256:" + "b" * 64,
         observations=observations,
         canonical_observations=encoded,
+    )
+
+
+def failed_build_trial(plan, *, export_capacity):
+    trial = trial_from_plan(plan)
+    build = trial.observations["build"]
+    build.update(
+        outcome="disk_exceeded",
+        exit_code=0 if export_capacity else None,
+        export_outcome="capacity_exceeded" if export_capacity else "unavailable",
+        candidate_image_digest=None,
+        candidate_archive_digest=None,
+        written_bytes=0 if export_capacity else plan["resources"]["disk_bytes"],
+    )
+    for step in trial.observations["steps"]:
+        step.update(
+            outcome="dependency_skipped", exit_code=None, export_outcome="not_started"
+        )
+    return _validate_completed(
+        {
+            "protocol_version": "workstream.checker_trial.v1",
+            "outcome": "completed",
+            "receipt_handle": trial.receipt_handle,
+            "receipt_digest": trial.receipt_digest,
+            "observations": trial.observations,
+            "failure_code": None,
+        },
+        plan,
     )
 
 
@@ -294,9 +382,103 @@ class RuntimeCheckerTests(unittest.TestCase):
             (result["outcome"], result["verdict"]), ("completed", "passed")
         )
         self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["resources"]["maximum_entries"], 100_000)
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(session.calls[0][1], ())
         self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
+
+    def test_corrected_plan_and_assessment_use_four_calls_but_exactly_one_trial(self):
+        class Corrected(FakeModelSession):
+            def call(self, prompt, *, required_receipt_handles=()):
+                completed = super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+                value = json.loads(prompt)
+                raw = completed.output
+                if "original_prompt" not in value:
+                    if "untrusted_source_evidence" in value:
+                        output = json.loads(raw)
+                        del output["schema_version"]
+                        raw = json.dumps(output)
+                    else:
+                        # Raw duplicate members must reach the strict decoder;
+                        # this is not a last-wins Python dictionary fixture.
+                        raw = raw.replace(
+                            '"assessment":', '"assessment": {}, "assessment":', 1
+                        )
+                return CompletedModelCall(
+                    completed.call_index, raw, completed.receipt_digest, False
+                )
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = Corrected()
+                plans = []
+
+                def trial(plan):
+                    plans.append(plan)
+                    return trial_from_plan(plan)
+
+                result = execute(request(check), self.root, session, trial)
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(plans), 1)
+                self.assertEqual(plans[0]["resources"]["maximum_entries"], 100_000)
+                self.assertEqual(len(session.calls), 4)
+                self.assertEqual(
+                    [h for _, h in session.calls],
+                    [
+                        (),
+                        (),
+                        ("trial_receipt_" + "b" * 32,),
+                        ("trial_receipt_" + "b" * 32,),
+                    ],
+                )
+                for first, correction in ((0, 1), (2, 3)):
+                    envelope = json.loads(session.calls[correction][0])
+                    self.assertEqual(
+                        envelope["original_prompt"], session.calls[first][0]
+                    )
+                    self.assertEqual(envelope["validation_error"], "invalid_output")
+                    self.assertTrue(envelope["untrusted_prior_output"])
+
+    def test_corrected_exhausted_planner_cannot_launch_a_trial(self):
+        class Exhausted(FakeModelSession):
+            def call(self, prompt, *, required_receipt_handles=()):
+                completed = super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+                output = json.loads(completed.output)
+                if len(self.calls) == 1:
+                    del output["schema_version"]
+                return CompletedModelCall(
+                    completed.call_index,
+                    json.dumps(output),
+                    completed.receipt_digest,
+                    len(self.calls) == 2,
+                )
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = Exhausted()
+                result = execute(
+                    request(check),
+                    self.root,
+                    session,
+                    lambda _: self.fail("no remaining assessment call means no trial"),
+                )
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "implementation_unavailable"
+                )
+                self.assertEqual(len(session.calls), 2)
 
     def test_cited_incomplete_coverage_is_a_work_finding_without_execution(self):
         session = FakeModelSession(coverage_complete=False)
@@ -336,6 +518,120 @@ class RuntimeCheckerTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "infrastructure_failed")
         self.assertEqual(result["findings"], [])
 
+    def test_build_export_capacity_is_infrastructure_without_assessment_or_receipt_changes(
+        self,
+    ):
+        class PlanningOnly(FakeModelSession):
+            def _assessment(self, prompt):
+                raise AssertionError("unavailable candidate must not reach assessment")
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = PlanningOnly()
+                retained = []
+
+                def trial(plan):
+                    completed = failed_build_trial(plan, export_capacity=True)
+                    retained.append(
+                        (
+                            completed,
+                            deepcopy(completed.observations),
+                            completed.canonical_observations,
+                        )
+                    )
+                    return completed
+
+                result = execute(request(check), self.root, session, trial)
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "capacity_exceeded"
+                )
+                self.assertEqual(result["findings"], [])
+                self.assertEqual(len(session.calls), 1)
+                self.assertEqual(len(retained), 1)
+                completed, observations, raw = retained[0]
+                self.assertEqual(completed.observations, observations)
+                self.assertEqual(completed.canonical_observations, raw)
+
+    def test_task_disk_limit_and_step_export_capacity_still_reach_work_assessment(self):
+        class FailedWork(FakeModelSession):
+            def _assessment(self, prompt):
+                value = super()._assessment(prompt)
+                assessment = value["assessment"]
+                for condition, rule in zip(
+                    assessment["conditions"],
+                    prompt["rubric"]["pass_conditions"],
+                    strict=True,
+                ):
+                    assessment["findings"].append(
+                        {
+                            "code": rule["allowed_finding_codes"][0],
+                            "evidence_id": "trial_receipt",
+                            "line": None,
+                        }
+                    )
+                    condition.update(
+                        status="not_satisfied",
+                        finding_numbers=[len(assessment["findings"])],
+                    )
+                return value
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            for failure in ("task_disk_limit", "step_export_capacity"):
+                with self.subTest(check=check, failure=failure):
+                    session = FailedWork()
+                    retained = []
+
+                    def trial(plan):
+                        if failure == "task_disk_limit":
+                            completed = failed_build_trial(plan, export_capacity=False)
+                        else:
+                            base = trial_from_plan(plan)
+                            base.observations["steps"][0].update(
+                                outcome="disk_exceeded",
+                                exit_code=0,
+                                export_outcome="capacity_exceeded",
+                            )
+                            completed = _validate_completed(
+                                {
+                                    "protocol_version": "workstream.checker_trial.v1",
+                                    "outcome": "completed",
+                                    "receipt_handle": base.receipt_handle,
+                                    "receipt_digest": base.receipt_digest,
+                                    "observations": base.observations,
+                                    "failure_code": None,
+                                },
+                                plan,
+                            )
+                        retained.append(
+                            (
+                                completed,
+                                deepcopy(completed.observations),
+                                completed.canonical_observations,
+                            )
+                        )
+                        return completed
+
+                    result = execute(request(check), self.root, session, trial)
+                    self.assertEqual(
+                        (result["outcome"], result["verdict"]), ("completed", "failed")
+                    )
+                    self.assertIsNone(result["infrastructure_failure_code"])
+                    self.assertTrue(result["findings"])
+                    self.assertEqual(len(session.calls), 2)
+                    self.assertEqual(
+                        session.calls[1][1], (retained[0][0].receipt_handle,)
+                    )
+                    completed, observations, raw = retained[0]
+                    self.assertEqual(completed.observations, observations)
+                    self.assertEqual(completed.canonical_observations, raw)
+
     def test_model_cannot_pass_a_failed_reference_observation(self):
         result = execute_runtime_check(
             request(),
@@ -359,15 +655,118 @@ class RuntimeCheckerTests(unittest.TestCase):
             ),
         ):
             selected = deepcopy(request())
+            selected["input"]["requirement_id"] = "reference_and_verifier_trials"
             mutate(selected)
+            session = FakeModelSession()
             result = execute_runtime_check(
                 selected,
                 self.root,
-                FakeModelSession(),
+                session,
                 lambda value: trial_from_plan(value),
             )
             self.assertEqual(result["outcome"], "infrastructure_failed")
             self.assertEqual(result["infrastructure_failure_code"], "invalid_output")
+            self.assertEqual(session.calls, [])
+
+    def test_non_recovery_runtime_and_author_use_four_purpose_trial_and_independent_scope(
+        self,
+    ):
+        (self.root / "instruction.md").write_text(
+            "# Event correlation\nInspect output with `queue status`.\n"
+            "Normalize timestamps, deduplicate event identities and emit deterministic summaries.\n"
+        )
+        (self.root / "AUTHOR_NOTES.md").write_text(
+            "\n".join(AUTHOR_NOTES.splitlines()[:4]) + "\n"
+        )
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            session = FakeModelSession(recovery_required=False)
+            plans = []
+
+            def run(plan):
+                plans.append(plan)
+                return trial_from_plan(plan)
+
+            result = execute(request(check), self.root, session, run)
+            with self.subTest(check=check):
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(session.calls), 2)
+                self.assertFalse(
+                    any(
+                        step["slot_kind"]
+                        in {
+                            "controlled_interruption",
+                            "restart",
+                            "restart_verification",
+                        }
+                        for step in plans[0]["steps"]
+                    )
+                )
+                self.assertNotIn(
+                    "recovery_applicability",
+                    json.loads(session.calls[1][0])["untrusted_evidence_data"],
+                )
+
+    def test_false_cited_planner_scope_cannot_get_all_pass_from_independent_required_scope(
+        self,
+    ):
+        # The source still explicitly promises recovery; citation validity does
+        # not make the planner's false classification trusted.
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            session = FakeModelSession(
+                recovery_required=False, assessed_recovery_required=True
+            )
+            result = execute(request(check), self.root, session, trial_from_plan)
+            with self.subTest(check=check):
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "invalid_output"
+                )
+                self.assertEqual(len(session.calls), 3)
+                self.assertEqual(
+                    json.loads(session.calls[2][0])["original_prompt"],
+                    session.calls[1][0],
+                )
+                self.assertEqual(session.calls[2][1], session.calls[1][1])
+
+    def test_independently_observed_missing_promised_recovery_is_a_work_finding(self):
+        class MissingRecovery(FakeModelSession):
+            def _assessment(self, prompt):
+                value = super()._assessment(prompt)
+                value["assessment"]["conditions"][10].update(
+                    status="not_satisfied",
+                    evidence_ids=["source_1"],
+                    finding_numbers=[1],
+                )
+                value["assessment"]["findings"] = [
+                    {
+                        "code": "behavioral_coverage_incomplete",
+                        "evidence_id": "source_1",
+                        "line": None,
+                    }
+                ]
+                return value
+
+        session = MissingRecovery(
+            recovery_required=False, assessed_recovery_required=True
+        )
+        result = execute_runtime_check(request(), self.root, session, trial_from_plan)
+        self.assertEqual(
+            (result["outcome"], result["verdict"]), ("completed", "failed")
+        )
+        self.assertEqual(
+            [item["code"] for item in result["findings"]],
+            ["behavioral_coverage_incomplete"],
+        )
+
+        self.assertEqual(len(session.calls), 2)
 
     def test_author_accuracy_executes_same_invocation_trial_before_assessment(self):
         session = FakeModelSession()
@@ -382,6 +781,27 @@ class RuntimeCheckerTests(unittest.TestCase):
         )
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
+        prompt = json.loads(session.calls[1][0])
+        self.assertEqual(
+            [item["condition_number"] for item in prompt["rubric"]["pass_conditions"]],
+            [1, 2, 3, 4, 5],
+        )
+        self.assertTrue(
+            any("complete instruction.md" in item for item in prompt["security"])
+        )
+        for instruction in prompt["security"]:
+            self.assertNotIn("condition 11", instruction)
+            self.assertNotIn("behavioral_coverage_incomplete", instruction)
+        self.assertEqual(
+            set(prompt["output_contract"]), {"recovery_applicability", "assessment"}
+        )
+        instruction = next(
+            item
+            for item in prompt["untrusted_evidence_data"]["evidence"]
+            if item["path"] == "instruction.md"
+        )
+        self.assertEqual(instruction["content_utf8"], INSTRUCTION)
+        self.assertEqual(instruction["line_count"], len(INSTRUCTION.splitlines()))
 
     def test_author_plan_gap_uses_fresh_proposal_finding_without_trial(self):
         session = FakeModelSession(coverage_complete=False)
@@ -399,6 +819,84 @@ class RuntimeCheckerTests(unittest.TestCase):
             [item["code"] for item in result["findings"]],
             ["reproduction_procedure_unavailable"],
         )
+
+    def test_policy_requirement_aliases_preserve_runtime_and_author_trials(self):
+        for check, alias, execute in (
+            (
+                RUNTIME_REQUIREMENT,
+                "reference_and_verifier_trials",
+                execute_runtime_check,
+            ),
+            (
+                AUTHOR_REQUIREMENT,
+                "author_evidence_accurate",
+                execute_author_accuracy_check,
+            ),
+        ):
+            with self.subTest(check=check):
+                selected = request(check)
+                selected["input"]["requirement_id"] = alias
+                session = FakeModelSession()
+                plans = []
+
+                def trial(plan):
+                    plans.append(plan)
+                    return trial_from_plan(plan)
+
+                result = execute(selected, self.root, session, trial)
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "passed")
+                )
+                self.assertEqual(len(plans), 1)
+                self.assertEqual(len(session.calls), 2)
+                self.assertEqual(
+                    json.loads(session.calls[1][0])["rubric"]["requirement_id"], check
+                )
+                self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
+
+                gap = execute(
+                    selected,
+                    self.root,
+                    FakeModelSession(coverage_complete=False),
+                    lambda _plan: self.fail(
+                        "incomplete coverage must not execute a trial"
+                    ),
+                )
+                self.assertEqual(
+                    (gap["outcome"], gap["verdict"]), ("completed", "failed")
+                )
+                self.assertEqual(gap["findings"][0]["check_id"], check)
+
+    def test_runtime_and_author_refuse_bad_identity_or_wrong_selector_before_effects(
+        self,
+    ):
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            for mutation in (
+                lambda value: value["input"].update(requirement_id="bad identity"),
+                lambda value: value["input"].pop("requirement_id"),
+                lambda value: value["configuration"].update(
+                    check="solver_brief_and_extension_disclosure"
+                ),
+            ):
+                with self.subTest(check=check, mutation=mutation):
+                    selected = request(check)
+                    mutation(selected)
+                    session = FakeModelSession()
+                    result = execute(
+                        selected,
+                        self.root / "missing",
+                        session,
+                        lambda _plan: self.fail(
+                            "invalid selection must not execute a trial"
+                        ),
+                    )
+                    self.assertEqual(
+                        result["infrastructure_failure_code"], "invalid_output"
+                    )
+                    self.assertEqual(session.calls, [])
 
 
 if __name__ == "__main__":

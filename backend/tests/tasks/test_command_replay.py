@@ -47,27 +47,23 @@ async def _counts(task_id):
                       )])
 
 
-@pytest.mark.parametrize("operation", ["claim", "start"])
-async def test_committed_task_response_replays_once(task_client, monkeypatch, operation):
+async def test_committed_task_response_replays_once(task_client, monkeypatch):
     _, task, _ = await _setup(task_client, monkeypatch)
-    if operation == "start":
-        claimed = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
-        assert claimed.status_code == 200, claimed.text
     headers = auth_headers()
-    path = f"/api/v1/tasks/{task['id']}/{operation}"
+    path = f"/api/v1/tasks/{task['id']}/claim"
     first = await task_client.post(path, headers=headers, json={"reason": "Exact request"})
     assert first.status_code == 200, first.text
     before = await _counts(task["id"])
     replayed = await task_client.post(path, headers=headers, json={"reason": "Exact request"})
     assert replayed.status_code == 200, replayed.text
     assert replayed.json() == first.json()
-    assert await _counts(task["id"]) == before == (1, 1 if operation == "claim" else 2, 1 if operation == "claim" else 2)
+    assert await _counts(task["id"]) == before == (1, 1, 1)
     async with db_session.get_session_factory()() as session:
         receipt = await session.scalar(select(TaskCommandReceipt).where(
             TaskCommandReceipt.idempotency_key == UUID(headers["Idempotency-Key"]),
         ))
         assert receipt.status == "committed" and receipt.assignment_id
-        decisions = list(await session.scalars(select(AuditEvent).where(AuditEvent.action_id == f"task.{operation}")))
+        decisions = list(await session.scalars(select(AuditEvent).where(AuditEvent.action_id == "task.claim")))
         assert len(decisions) == 2 and all(row.after_facts["allowed"] for row in decisions)
 
 
@@ -87,18 +83,6 @@ async def test_task_key_mismatch_rejects_reason_and_target(task_client, monkeypa
     assert await _counts(other_task["id"]) == (0, 0, 0)
 
 
-async def test_task_key_namespace_is_per_operation(task_client, monkeypatch):
-    _, task, _ = await _setup(task_client, monkeypatch)
-    headers = auth_headers()
-    for operation in ("claim", "start", "start"):
-        response = await task_client.post(f"/api/v1/tasks/{task['id']}/{operation}", headers=headers)
-        assert response.status_code == 200, response.text
-    assert await _counts(task["id"]) == (1, 2, 2)
-    stale_claim = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=headers)
-    assert stale_claim.status_code == 403, stale_claim.text
-    assert await _counts(task["id"]) == (1, 2, 2)
-
-
 async def test_task_key_namespace_is_per_actor(task_client, monkeypatch):
     project = await create_active_project(task_client)
     first = await create_ready_task(task_client, project["id"])
@@ -113,7 +97,7 @@ async def test_task_key_namespace_is_per_actor(task_client, monkeypatch):
     assert await _counts(first["id"]) == await _counts(second["id"]) == (1, 1, 1)
 
 
-@pytest.mark.parametrize("target", ["task", "assignment", "locked_context"])
+@pytest.mark.parametrize("target", ["task", "assignment", "locked_context", "historical_claimed"])
 async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, monkeypatch, target):
     _, task, _ = await _setup(task_client, monkeypatch)
     headers = auth_headers()
@@ -128,7 +112,10 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
             set_committed_value(receipt, "locked_context_hash", "sha256:" + "0" * 64)
         else:
             snapshot = deepcopy(receipt.response)
-            snapshot[target]["id"] = str(uuid4())
+            if target == "historical_claimed":
+                snapshot["task"]["status"] = "claimed"
+            else:
+                snapshot[target]["id"] = str(uuid4())
             set_committed_value(receipt, "response", snapshot)
         return original(receipt, *args, **kwargs)
     with monkeypatch.context() as patch:
@@ -141,18 +128,14 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
 
 
 @pytest.mark.parametrize("transition", ["suspend", "revoke_link", "revoke_grant"])
-@pytest.mark.parametrize("operation", ["claim", "start"])
-async def test_replay_rechecks_current_authority(task_client, monkeypatch, transition, operation):
+async def test_replay_rechecks_current_authority(task_client, monkeypatch, transition):
     project, task, grant = await _setup(task_client, monkeypatch)
-    if operation == "start":
-        claimed = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
-        assert claimed.status_code == 200, claimed.text
     headers = auth_headers()
-    path = f"/api/v1/tasks/{task['id']}/{operation}"
+    path = f"/api/v1/tasks/{task['id']}/claim"
     first = await task_client.post(path, headers=headers)
     assert first.status_code == 200, first.text
     before = await _counts(task["id"])
-    assert before == (1, 1 if operation == "claim" else 2, 1 if operation == "claim" else 2)
+    assert before == (1, 1, 1)
     if transition == "revoke_grant":
         set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
         revoked = await task_client.post(
@@ -276,16 +259,12 @@ async def test_receipt_sql_shape_and_assignment_ownership(task_client, monkeypat
         await session.rollback()
 
 
-@pytest.mark.parametrize("operation", ["claim", "start"])
-async def test_receipt_failure_rolls_back_and_retry_succeeds(task_client, monkeypatch, operation):
-    _, task, grant = await _setup(task_client, monkeypatch)
-    if operation == "start":
-        claimed = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
-        assert claimed.status_code == 200, claimed.text
+async def test_receipt_failure_rolls_back_and_retry_succeeds(task_client, monkeypatch):
+    _, task, _ = await _setup(task_client, monkeypatch)
     before = await _counts(task["id"])
-    assert before == ((0, 0, 0) if operation == "claim" else (1, 1, 1))
+    assert before == (0, 0, 0)
     headers = auth_headers()
-    path = f"/api/v1/tasks/{task['id']}/{operation}"
+    path = f"/api/v1/tasks/{task['id']}/claim"
     original = TaskCommandReplay.complete
     def fail_after_staging(*args):
         original(*args)
@@ -297,14 +276,14 @@ async def test_receipt_failure_rolls_back_and_retry_succeeds(task_client, monkey
     assert await _counts(task["id"]) == before
     async with db_session.get_session_factory()() as session:
         row = await session.get(WorkstreamTask, task["id"])
-        assert row.status == ("ready" if operation == "claim" else "claimed")
-        assert row.assigned_to == (None if operation == "claim" else grant["actor_profile_id"])
+        assert row.status == "ready"
+        assert row.assigned_to is None
         assert await session.scalar(select(func.count()).select_from(AuditEvent).where(
-            AuditEvent.action_id == f"task.{operation}",
+            AuditEvent.action_id == "task.claim",
         )) == 0
     retried = await task_client.post(path, headers=headers)
     assert retried.status_code == 200, retried.text
-    assert await _counts(task["id"]) == (1, 1 if operation == "claim" else 2, 1 if operation == "claim" else 2)
+    assert await _counts(task["id"]) == (1, 1, 1)
 
 
 async def test_same_actor_distinct_receipts_do_not_invert_authority_locks(task_client, monkeypatch):
@@ -344,9 +323,8 @@ async def test_task_key_validated_before_provisioning(task_client, monkeypatch, 
         headers += [("Idempotency-Key", str(uuid4()) if key == "duplicate" else key)]
     if key == "duplicate":
         headers += [("Idempotency-Key", str(uuid4()))]
-    for prefix, operation in (("tasks", "claim"), ("tasks", "start"), ("operations/tasks", "start")):
-        result = await task_client.post(f"/api/v1/{prefix}/{uuid4()}/{operation}", headers=headers, json={"reason": "test"})
-        assert result.status_code == 422, result.text
+    result = await task_client.post(f"/api/v1/tasks/{uuid4()}/claim", headers=headers, json={"reason": "test"})
+    assert result.status_code == 422, result.text
     async with db_session.get_session_factory()() as session:
         assert await session.scalar(select(func.count()).select_from(ActorProfile)) == before
 

@@ -24,6 +24,8 @@ import zipfile
 
 from sqlalchemy import select
 
+from smol_runtime import assert_smol_vm_inventory, smol_vm_inventory
+
 from app.adapters.artifacts import checker_output_binding, checker_output_storage
 from app.adapters.artifacts import post_submission_materialization
 from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
@@ -47,7 +49,13 @@ from app.interfaces.checker_model_provider import (
     CheckerModelResponseReference,
     CheckerModelUsage,
 )
-from app.interfaces.project_agents import CapabilityParameter, CheckSpecification
+from app.interfaces.project_agents import (
+    CheckFailureFinding,
+    CheckInabilityToEvaluate,
+    CheckInput,
+    CheckNegativeTest,
+    CheckSpecification,
+)
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
@@ -87,16 +95,12 @@ from tests.checkers.external.test_trial_evidence import _owner
 from tests.checkers.external.test_revision_materialization import (
     DiagnosticMaterialization,
 )
-from tests.checkers.external.test_trial_policy import trial_specification
-from tests.checkers_model_calls.test_composed_execution import (
-    model_review_specification,
-)
 from tests.checkers_model_calls.test_public_api import profile_spec
 import tests.post_submit_materialization_helpers as material_helpers
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from tests.test_s3_artifact_store import minio_settings
-from tests.projects.guide_activation.source_fixtures import PostSubmitBindingCase
+from tests.projects.guide_activation.source_fixtures import PostSubmitAttachmentCase
 from tests.test_checker_materialization import _limits
 
 
@@ -303,8 +307,9 @@ def _assert_idle_trial_roots(root: Path, service_root: Path, child_home_root: Pa
             }
 
 
-async def _retained_trial_summary(session, retained, receipts):
-    """Retain exact verified content/binding identities without provider coordinates."""
+async def _retained_trial_summary(session, retained, receipts, *, expected_count):
+    """Retain exact custody for the explicitly selected trial requirement count."""
+    assert type(expected_count) is int and expected_count > 0
     rows = tuple(
         await session.execute(
             select(
@@ -330,12 +335,12 @@ async def _retained_trial_summary(session, retained, receipts):
             )
         )
     )
-    assert len(rows) == len(retained) == len(receipts) == 2
+    assert len(rows) == len(retained) == len(receipts) == expected_count
     bindings = {
         binding.resource_id: (binding, content, attempt, verification)
         for binding, content, attempt, verification in rows
     }
-    assert len(bindings) == 2
+    assert len(bindings) == expected_count
     by_digest = {external_checker_json_hash(receipt): receipt for receipt in receipts}
     result = []
     for item in sorted(retained, key=lambda item: item.id):
@@ -437,7 +442,7 @@ def _trial_authority(
         # provisioned inputs below; Rust independently charges expanded facts.
         maximum_disk_bytes=TRIAL_DISK_CEILING_BYTES,
         maximum_disk_overrun_bytes=4 * 1024 * 1024,
-        maximum_entries=20_000,
+        maximum_entries=100_000,
         maximum_entries_overrun=32,
         maximum_step_output_bytes=64 * 1024,
         maximum_observation_bytes=512 * 1024,
@@ -493,10 +498,11 @@ def _trial_authority(
         child_runs_as_non_root=True,
         limits=limits,
     )
+    selector = project_trial_projection_selector(revision=revision)
     projection = make_trial_execution_projection(
         selector=TrialProjectionSelector(
             UUID(REVISION_PROJECTION_ID if revision else RUNTIME_PROJECTION_ID),
-            1,
+            selector["trial_projection_version"],
             "sha256:" + "0" * 64,
         ),
         trial_kind=projected["trial_kind"],
@@ -582,20 +588,52 @@ def _registry_spec(image_digest: str, profile, projection):
 
 
 def _trial_model_specification() -> CheckSpecification:
-    """Declare both the nested sandbox and the bounded semantic assessment."""
-    trial = trial_specification()
-    model = model_review_specification()
-    model_dependency = next(
-        item for item in model.runtime_dependencies if item.kind == "model_service"
-    )
-    return CheckSpecification.model_validate(
-        trial.model_dump(mode="json")
-        | {
-            "runtime_dependencies": [
-                *trial.model_dump(mode="json")["runtime_dependencies"],
-                model_dependency.model_dump(mode="json"),
-            ]
-        }
+    """Propose observable work checks independently of registered execution images."""
+    return CheckSpecification(
+        evaluation_method="Compare contributor claims with isolated execution evidence.",
+        inputs=(
+            CheckInput(
+                input_id="submitted_package",
+                kind="package",
+                purpose="Documented procedures, reference implementation and verification suite.",
+            ),
+        ),
+        check_steps=(
+            "Read the documented commands and expected verification outcomes.",
+            "Observe starter rejection, three fresh reference passes and negative controls.",
+            "Compare author claims and recovery behavior with authenticated trial evidence.",
+        ),
+        pass_conditions=(
+            "Documented claims agree with the observed execution outcomes.",
+        ),
+        failure_findings=(
+            CheckFailureFinding(
+                code="trial_evidence_disagrees",
+                level="error",
+                condition="A required observed execution outcome contradicts the documented claim.",
+                message="Repair the implementation or unsupported claim and rerun verification.",
+            ),
+        ),
+        positive_tests=(
+            "A reference passes three fresh runs and its negative controls fail.",
+        ),
+        negative_tests=(
+            CheckNegativeTest(
+                name="unsupported_execution_claim",
+                scenario="A reference fails verification while its author claims all checks pass.",
+                expected_verdict="failed",
+                expected_finding_codes=("trial_evidence_disagrees",),
+            ),
+        ),
+        implementation_needs=(
+            "Inspect submitted sources and assess isolated execution evidence.",
+        ),
+        inability_to_evaluate=(
+            CheckInabilityToEvaluate(
+                code="trial_evidence_unavailable",
+                condition="Authenticated execution evidence cannot be obtained or read.",
+            ),
+        ),
     )
 
 
@@ -617,7 +655,7 @@ def _manifest(bindings, profile, projection) -> dict[str, object]:
     return json.loads(json.dumps(value, default=str))
 
 
-def _procedure(identifier, purpose, command, state_source, evidence_id, line):
+def _procedure(identifier, purpose, command, state_source, evidence_id, source_quote):
     return {
         "procedure_id": identifier,
         "purpose": purpose,
@@ -626,15 +664,21 @@ def _procedure(identifier, purpose, command, state_source, evidence_id, line):
         "working_directory": ".",
         "state_source": state_source,
         "evidence_id": evidence_id,
-        "start_line": line,
-        "end_line": line,
+        "source_quote": source_quote,
     }
 
 
 def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
     value = json.loads(prompt)
-    if value.get("schema_version") == "terminal_systems.trial_plan_proposal.v1":
+    if value.get("schema_version") == "terminal_systems.trial_plan_proposal.v2":
         observations.append({"planner_prompt": value})
+        source_lines = {
+            item["evidence_id"]: [
+                line.split(" | ", 1)[1]
+                for line in item["numbered_content"].splitlines()
+            ]
+            for item in value["untrusted_source_evidence"]
+        }
         procedures = [
             _procedure(
                 "qualification_status",
@@ -642,7 +686,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["qualification-status"],
                 "fresh",
                 "source_1",
-                5,
+                source_lines["source_1"][4],
             ),
             _procedure(
                 "apply_incomplete",
@@ -650,7 +694,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "solution/incomplete.sh"],
                 "fresh",
                 "source_2",
-                3,
+                source_lines["source_2"][2],
             ),
             _procedure(
                 "remove_output",
@@ -658,7 +702,7 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/remove-output.sh"],
                 "reference_baseline",
                 "source_2",
-                4,
+                source_lines["source_2"][3],
             ),
             _procedure(
                 "fabricate_output",
@@ -666,15 +710,15 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/fabricate-output.sh"],
                 "reference_baseline",
                 "source_2",
-                5,
+                source_lines["source_2"][4],
             ),
             _procedure(
                 "interrupt_work",
                 "controlled_interruption",
                 ["sh", "tests/interrupt.sh"],
-                "fresh",
+                "reference_baseline",
                 "source_2",
-                6,
+                source_lines["source_2"][5],
             ),
             _procedure(
                 "restart_work",
@@ -682,13 +726,23 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
                 ["sh", "tests/restart.sh"],
                 "interrupt_work",
                 "source_2",
-                7,
+                source_lines["source_2"][6],
             ),
         ]
         return json.dumps(
             {
-                "schema_version": "terminal_systems.trial_plan_proposal.v1",
+                "schema_version": "terminal_systems.trial_plan_proposal.v2",
                 "material_digest": value["material_digest"],
+                "recovery_applicability": {
+                    "required": True,
+                    "evidence_id": "source_1",
+                    "start_line": 1,
+                    "end_line": next(
+                        item["line_count"]
+                        for item in value["untrusted_source_evidence"]
+                        if item["path"] == "instruction.md"
+                    ),
+                },
                 "coverage_complete": True,
                 "procedures": procedures,
                 "coverage_gaps": [],
@@ -701,21 +755,35 @@ def _provider_output(prompt: str, index: int, observations: list[dict]) -> str:
     receipt = value["trusted_receipts"][0]["receipt"]
     observations.append({"receipt": receipt})
     assessment = json.loads(value["prompt"])
+    result = {
+        "schema_version": "terminal_systems.model_assessment.v1",
+        "requirement_id": assessment["rubric"]["requirement_id"],
+        "material_digest": assessment["untrusted_evidence_data"]["material_digest"],
+        "conditions": [
+            {
+                "condition_number": item["condition_number"],
+                "status": "satisfied",
+                "evidence_ids": ["trial_receipt"],
+                "finding_numbers": [],
+            }
+            for item in assessment["rubric"]["pass_conditions"]
+        ],
+        "findings": [],
+    }
+    instruction = next(
+        item
+        for item in assessment["untrusted_evidence_data"]["evidence"]
+        if item["path"] == "instruction.md"
+    )
     return json.dumps(
         {
-            "schema_version": "terminal_systems.model_assessment.v1",
-            "requirement_id": assessment["rubric"]["requirement_id"],
-            "material_digest": assessment["untrusted_evidence_data"]["material_digest"],
-            "conditions": [
-                {
-                    "condition_number": item["condition_number"],
-                    "status": "satisfied",
-                    "evidence_ids": ["trial_receipt"],
-                    "finding_numbers": [],
-                }
-                for item in assessment["rubric"]["pass_conditions"]
-            ],
-            "findings": [],
+            "recovery_applicability": {
+                "required": True,
+                "evidence_id": instruction["evidence_id"],
+                "start_line": 1,
+                "end_line": instruction["line_count"],
+            },
+            "assessment": result,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -780,13 +848,11 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
     )
     model_profiles = []
 
-    async def binding_cases(_factory, project_id, registry):
+    async def attachment_cases(_factory, project_id, _registry):
         selected = ProjectModelProfileSpec.model_validate(
             profile_spec(project_id)
             .model_copy(
                 update={
-                    "registry_entry_id": registry.registry_entry_id,
-                    "registry_entry_digest": registry.entry_digest,
                     "maximum_request_bytes": 512 * 1024,
                     "maximum_output_bytes": 64 * 1024,
                     "maximum_response_bytes": 1024 * 1024,
@@ -830,31 +896,12 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             "model_profile_version": response.json()["spec"]["profile_version"],
             "model_profile_digest": response.json()["profile_digest"],
         }
-        specification = _trial_model_specification()
         return tuple(
-            PostSubmitBindingCase(
+            PostSubmitAttachmentCase(
                 requirement_id=requirement_id,
-                statement=statement,
-                classification_rationale=(
-                    "A project image evaluates immutable material through bounded model and "
-                    "isolated trial dependencies."
-                ),
-                specification=specification,
-                parameters=tuple(
-                    CapabilityParameter(name=key, value=value)
-                    for key, value in (shared | {"check": requirement_id}).items()
-                ),
+                configuration=shared | {"check": requirement_id},
             )
-            for requirement_id, statement in (
-                (
-                    AUTHOR_REQUIREMENT,
-                    "Compare author claims with authenticated trial evidence.",
-                ),
-                (
-                    REQUIREMENT,
-                    "Evaluate runtime and verification behavior in isolated trials.",
-                ),
-            )
+            for requirement_id in (AUTHOR_REQUIREMENT, REQUIREMENT)
             if recovery is None or requirement_id == REQUIREMENT
         )
 
@@ -877,7 +924,8 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             }
         ),
         post_submit_registry_spec=registry_spec,
-        post_submit_bindings_setup=binding_cases,
+        post_submit_configurations_setup=attachment_cases,
+        post_submit_specification=_trial_model_specification(),
         post_scratch_root=post_scratch,
         scratch_limits=_limits(
             aggregate_reserved_bytes=5 * HARD_MAXIMUM_ARTIFACT_BYTES,
@@ -1055,7 +1103,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
         service_log = (root / "service.stderr").open("w", encoding="utf-8")
         vms_root = Path(node["smol"]["home"]) / ".cache/smolvm/vms"
         cgroup_root = Path(node["smol"]["cgroup_root"])
-        before_vms = _directory_children(vms_root)
+        before_vms = smol_vm_inventory(vms_root)
         before_cgroups = _directory_children(cgroup_root)
         service = None
         try:
@@ -1138,7 +1186,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     )
                     _assert_idle_trial_roots(root, service_root, child_home_root)
                     assert _directory_children(service_root / "smol-leases") == set()
-                    assert _directory_children(vms_root) == before_vms
+                    before_vms = assert_smol_vm_inventory(vms_root, before_vms)
                     assert _directory_children(cgroup_root) == before_cgroups
                     return
                 result = await executor.evaluate_post_submission(h.request)
@@ -1230,7 +1278,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     external_checker_json_hash(receipt) for receipt in receipts
                 }
                 trial_summary = await _retained_trial_summary(
-                    session, retained, receipts
+                    session, retained, receipts, expected_count=len(expected_requirements)
                 )
                 model_summary = [
                     {
@@ -1243,7 +1291,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                 ]
             _assert_idle_trial_roots(root, service_root, child_home_root)
             assert _directory_children(service_root / "smol-leases") == set()
-            assert _directory_children(vms_root) == before_vms
+            before_vms = assert_smol_vm_inventory(vms_root, before_vms)
             assert _directory_children(cgroup_root) == before_cgroups
         finally:
             if recovery is not None:

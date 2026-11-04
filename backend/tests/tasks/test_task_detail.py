@@ -87,7 +87,7 @@ async def read_once(session, method, request):
 
 
 def test_task_detail_contracts():
-    assert STATES == {"draft", "screening", "ready", "claimed", "in_progress", "submitted",
+    assert STATES == {"draft", "screening", "ready", "in_progress", "submitted",
                       "evaluation_pending", "review_pending", "needs_revision"}
     now, project, task, contributor = datetime.now(UTC), new_record_id(), new_record_id(), new_record_id()
     for request in (ManagementTaskDetailRequest(project, task), ContributorTaskDetailRequest(project, task, contributor)):
@@ -163,20 +163,20 @@ async def test_task_detail_scope(task_client, method):
 
 async def test_task_detail_visibility(task_client, monkeypatch):
     project = await create_active_project(task_client)
-    names = ("claimed", "wrong_contributor", "wrong_assignee", "active_only", "unrelated", "released", "released_ready", "assignee_only")
+    names = ("in_progress", "wrong_contributor", "wrong_assignee", "active_only", "unrelated", "released", "released_ready", "assignee_only")
     tasks = {name: await create_ready_task(task_client, project["id"]) for name in names}
     other = await seed_task_test_actor("detail-other")
     grant = await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "detail-owner")
     owner = grant["actor_profile_id"]
-    claimed = await task_client.post(f"/api/v1/tasks/{tasks['claimed']['id']}/claim", headers=auth_headers())
+    claimed = await task_client.post(f"/api/v1/tasks/{tasks['in_progress']['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
     # status, task assignee, assignment contributor, assignment status.
     cases = {
-        "wrong_contributor": ("claimed", owner, other, "active"),
-        "wrong_assignee": ("claimed", other, owner, "active"),
+        "wrong_contributor": ("in_progress", owner, other, "active"),
+        "wrong_assignee": ("in_progress", other, owner, "active"),
         "active_only": ("ready", None, owner, "active"),
-        "unrelated": ("claimed", owner, None, None),
-        "released": ("claimed", owner, owner, "released"),
+        "unrelated": ("in_progress", owner, None, None),
+        "released": ("in_progress", owner, owner, "released"),
         "released_ready": ("ready", None, owner, "released"),
         "assignee_only": ("ready", owner, None, None),
     }
@@ -197,12 +197,12 @@ async def test_task_detail_visibility(task_client, monkeypatch):
             assignment = await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == row.id))
             assert (row.status, row.assigned_to, assignment.contributor_id if assignment else None,
                     assignment.status if assignment else None) == expected
-        own = await session.get(WorkstreamTask, tasks["claimed"]["id"])
+        own = await session.get(WorkstreamTask, tasks["in_progress"]["id"])
         own_assignment = await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == own.id))
         assert own.assigned_to == own_assignment.contributor_id == owner and own_assignment.status == "active"
-        for name in ("claimed", "unrelated", *(name for name in names if name not in {"claimed", "unrelated"})):
+        for name in ("in_progress", "unrelated", *(name for name in names if name not in {"in_progress", "unrelated"})):
             result = await read_once(session, READS[0], request_for(READS[0], project["id"], tasks[name]["id"], UUID(owner)))
-            if name in {"claimed", "released_ready"}:
+            if name in {"in_progress", "released_ready"}:
                 assert result.task_id == UUID(tasks[name]["id"])
             else:
                 assert result is None, name
@@ -223,7 +223,7 @@ async def test_task_detail_management_states(task_client):
                 row.status = state  # Read fixture only, not execution of later lifecycle operations.
     async with factory() as session:
         stored = (await session.scalars(select(WorkstreamTask).where(WorkstreamTask.project_id == project["id"]))).all()
-        assert {row.status for row in stored} == states and len(stored) == 9
+        assert {row.status for row in stored} == states and len(stored) == 8
         for row in stored:
             result = await read_once(session, READS[1], request_for(READS[1], project["id"], row.id))
             assert (result.task_id, result.status) == (UUID(row.id), row.status)
@@ -254,7 +254,7 @@ async def test_task_detail_owned_states(task_client, monkeypatch):
             result = await read_once(session, READS[0], request_for(READS[0], project["id"], row.id, UUID(row.assigned_to)))
             assert result is not None and (result.task_id, result.status) == (UUID(row.id), state)
             seen.add(result.status)
-    assert seen == STATES and len(seen) == len(seen_tasks) == 9
+    assert seen == STATES and len(seen) == len(seen_tasks) == 8
 
 
 @pytest.mark.parametrize("method", READS)

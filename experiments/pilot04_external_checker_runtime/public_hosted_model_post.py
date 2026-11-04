@@ -55,9 +55,16 @@ def specification():
     value = original['check_specification']
     require(all(value[key] == expected for key, expected in rubric['check_specification'].items()),
             'model image rubric differs from retained project handoff')
-    value['runtime_dependencies'] = [{**dependency, 'provisioning': 'model_proxy'}
-                                     for dependency in value['runtime_dependencies']]
-    return CheckSpecification.model_validate(value), original['statement']
+    proposal = {key: value[key] for key in (
+        'inputs', 'check_steps', 'pass_conditions', 'failure_findings',
+        'positive_tests', 'negative_tests',
+    )}
+    proposal.update(
+        evaluation_method='Apply the qualitative solver brief and extension disclosure rubric to the submitted materials.',
+        implementation_needs=[value['runtime_dependencies'][0]['purpose']],
+        inability_to_evaluate=value['infrastructure_failures'],
+    )
+    return CheckSpecification.model_validate(proposal), original['statement']
 
 
 def profile_spec(project_id, pricing_id):
@@ -296,28 +303,41 @@ class ModelPostQualification:
     def guide_bytes(self):
         _, statement = specification()
         return ('# Hosted model POST engineering qualification\n\n'
-                'This manager-authored guide selects only the production Terminal Systems '
+                'This manager-authored guide describes only the Terminal Systems '
                 f'`{CHECK}` model rubric. It does not claim setup inference, a real pilot or runtime trials.\n\n'
                 + statement + '\n').encode()
 
-    def rules(self, original, capabilities, count):
+    def rules(self, original, count):
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import manager_rules
 
-        require(count == 0, 'model qualification must not grant a PRE model capability')
-        body = json.loads(manager_rules(original, capabilities, 0))
+        require(count == 0, 'model qualification must not propose a PRE check')
+        body = json.loads(manager_rules(original, 0))
         spec, statement = specification()
-        body['requirements'] = [{'requirement_id': CHECK, 'statement': statement,
-            'disposition': 'supported_post_submit', 'classification_rationale': 'Production model rubric through authorized hosted POST.',
+        body['requirements'] = [{'suggestion_id': 'suggested.solver_brief_and_extension_disclosure',
+            'statement': statement, 'stage': 'post_submit',
+            'classification_rationale': 'The rubric evaluates the submitted task after intake.',
             'evidence_refs': body['findings'][0]['evidence_refs'], 'check_specification': spec.model_dump(mode='json')}]
-        configuration = {'check': CHECK, **self.profile.selector.model_dump(mode='json')}
-        body['post_submit_bindings'] = [{'requirement_id': CHECK, 'stage': 'post_submit',
-            'capability_id': self.registry['capability_id'], 'capability_version': self.registry['capability_version'],
-            'parameters': [{'name': name, 'value': value} for name, value in sorted(configuration.items())]}]
-        # Selector DTO uses profile_* names; binding configuration uses reserved model_profile_* names.
-        for parameter in body['post_submit_bindings'][0]['parameters']:
-            if parameter['name'].startswith('profile_'):
-                parameter['name'] = 'model_' + parameter['name']
+
         return canonical(body)
+
+    def approval_attachments(self):
+        """Select the exact published model image and profile as the human manager."""
+        from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+
+        require(hasattr(self, 'registry') and hasattr(self, 'profile'),
+                'model image and profile must be published before approval')
+        configuration = {'check': CHECK, **self.profile.selector.model_dump(mode='json')}
+        # The selector DTO uses profile_* names; image configuration reserves model_profile_* names.
+        configuration = {('model_' + key if key.startswith('profile_') else key): value
+                         for key, value in configuration.items()}
+        entry = ExternalCheckerImageAttachment.model_validate({
+            'requirement_id': CHECK,
+            'registry_entry_id': self.registry['registry_entry_id'],
+            'registry_entry_digest': self.registry['entry_digest'],
+            'configuration': configuration,
+        })
+        return {'pre_submit_attachments': [],
+                'post_submit_attachments': [entry.model_dump(mode='json')]}
 
 
 async def account_snapshot(factory, project_id):

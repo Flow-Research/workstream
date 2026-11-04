@@ -10,7 +10,7 @@
   exact-project inspection with server-owned full/minimal disclosure;
   [WS-CLI-001-04](WS-CLI-001-04.md), public manager task pagination and detail;
   [WS-CLI-001-05](WS-CLI-001-05.md), contributor ready-task discovery and instructions;
-  [WS-CLI-001-06](WS-CLI-001-06.md), public contributor claim/start with explicit retry keys;
+  [WS-CLI-001-06](WS-CLI-001-06.md), public contributor claim with explicit retry keys;
   [WS-CLI-001-07](WS-CLI-001-07.md), contributor governing context and locked intake requirements;
   [WS-CLI-001-08](WS-CLI-001-08.md), draft project shell creation with explicit caller-owned replay;
   [WS-CLI-001-09](WS-CLI-001-09.md), guide declaration, illustrative tasks and document upload selectors;
@@ -40,7 +40,7 @@
   [WS-CLI-001-34](WS-CLI-001-34.md), exact-project task audit context and bounded cursor-based evidence reads;
   [WS-CLI-001-35](WS-CLI-001-35.md), deliberate exact-source manager revision-context repair;
   [WS-CLI-001-36](WS-CLI-001-36.md), status-only Operator task browsing,
-  exact locked-context inspection and explicit reasoned start override;
+  exact locked-context inspection; claim now starts contributor work atomically;
   [WS-CLI-001-38](WS-CLI-001-38.md), keyed human guide sufficiency diagnostics
   and eligible warning acknowledgement through existing public POSTs;
   [WS-CLI-001-41](WS-CLI-001-41.md), explicit manual artifact-policy draft
@@ -66,7 +66,7 @@ ordered locked-guide selection with explicit verified single-document download.
 [WS-CLI-001-50](WS-CLI-001-50.md) replaces their contributor presentation with
 visible collections/sections, readable instructions and truthful page/evidence
 states; it changes no public operation or lifecycle authority.
-Contribution evidence remains an inert CLI handoff. Claim/start is bounded by
+Contribution evidence remains an inert CLI handoff. Claim is bounded by
 -51 below; other product mutations, management screens and their recovery remain
 separate TUI boundaries; this
 interface does not depend on first binary publication or system-wide discovery.
@@ -79,7 +79,7 @@ Presentation proof is not completion of the contributor journey. Continue in
 the existing TUI and typed API client, not a second client or simulated demo.
 
 1. [WS-CLI-001-51](WS-CLI-001-51.md): direct collection navigation and deliberate
-   claim/start using existing public writes, exact confirmation, caller-owned
+   claim using existing public writes, exact confirmation, caller-owned
    replay keys and uncertain-outcome recovery. This is the current bounded work.
 2. ZIP preparation: explicit local package selection, summary/attestation,
    actual intake feedback and exact replay. Preparation is not Submission.
@@ -97,7 +97,7 @@ contract must not become an unsafe in-memory TUI retry token.
 
 Risk is L1 for mutation, cancellation, disclosure and local artifact handling.
 Preserve backend authority, locked lineage, immutable evidence and atomicity.
-No new API is required for claim/start. Backend gaps discovered for subsequent
+No new API is required for claim. Backend gaps discovered for subsequent
 steps must be named and independently implemented, never hidden by a UI mock.
 
 ## Current boundary
@@ -118,11 +118,10 @@ and Audit project-reader grants can discover bounded ID/name/status pages.
 `me projects` remains exact-grant membership; catalogue reads neither confer
 guide/management access nor implement the optional TUI.
 
-The Operator commands `operations task list`, `operations task locked-context`
-and `operations task start` use three existing public routes. Their restricted
-read projections remain observations; the backend rechecks the distinct
-Operator authority on every start and exact-key replay. These commands do not
-create assignments or fall back to contributor authority.
+The Operator commands `operations task list` and `operations task locked-context`
+use two existing public reads. Their restricted projections remain observations;
+the backend rechecks current Operator authority. These commands do not create
+assignments or fall back to contributor authority.
 
 [WS-CLI-001-32](WS-CLI-001-32.md) adds read-only active-guide and exact-guide
 sufficiency/artifact/effective/pre-submit inspection through seven existing
@@ -217,7 +216,7 @@ revision-context presentation correction.
 | [#606](https://github.com/Flow-Research/workstream/issues/606) | Actor/admin authority inspection — delivered by [WS-CLI-001-28](WS-CLI-001-28.md) | 6 |
 | [#607](https://github.com/Flow-Research/workstream/issues/607) | Actor/identity lifecycle and administrative writes | 8 |
 | [#608](https://github.com/Flow-Research/workstream/issues/608) | External-checker registry and explicit retry, delivered by [WS-CLI-001-29](WS-CLI-001-29.md) | 4 |
-| [#609](https://github.com/Flow-Research/workstream/issues/609) | Operator task inspection/start override, delivered by [WS-CLI-001-36](WS-CLI-001-36.md) | 3 |
+| [#609](https://github.com/Flow-Research/workstream/issues/609) | Operator task inspection, delivered by [WS-CLI-001-36](WS-CLI-001-36.md); the historical baseline included the now-removed start override | 3 historical / 2 current |
 | [#610](https://github.com/Flow-Research/workstream/issues/610) | Task audit context/evidence — delivered by [WS-CLI-001-34](WS-CLI-001-34.md) | 2 |
 | [#611](https://github.com/Flow-Research/workstream/issues/611) | Artifact Operator inspection/recovery CLI in [WS-CLI-001-43](WS-CLI-001-43.md), consuming the exact-authorized backend prerequisite [AUTH-ART-02D-OPERATOR](../WS-AUTH-001/WS-AUTH-001-ART02DOPERATOR.md) | 9 |
 
@@ -256,8 +255,7 @@ reads only the existing public project's server-selected disclosure shape.
 manager queue/detail journey with server-owned authority on each page.
 `task ready PROJECT_ID` and `task show TASK_ID` add the contributor projection
 with exact Submitter authority and server-owned assignment visibility.
-`task claim TASK_ID --idempotency-key UUID` and `task start` add the public
-contributor writes, with server-owned fresh authority, assignment and lineage.
+`task claim TASK_ID --idempotency-key UUID` assigns and starts work atomically, with server-owned fresh authority, assignment and lineage.
 Exact caller keys support manual replay; uncertainty never triggers automatic retries.
 `task context TASK_ID` and `task requirements TASK_ID` read governing guide,
 policy selectors, server action hints and locked intake rules. Hints are not
@@ -388,8 +386,8 @@ CLIs. Keep the package independent of backend and MCP runtime dependencies.
    detail, passing opaque continuation unchanged without automatic pagination.
 5. **WS-CLI-001-05:** Discover one ready-task page and inspect contributor
    instructions through public reads, without management metadata or task writes.
-6. **WS-CLI-001-06:** Claim ready work and start the caller's assignment through
-   public POSTs with caller-supplied keys, exact response validation and explicit
+6. **WS-CLI-001-06:** Claim ready work through one public POST that assigns
+   and starts work atomically, with caller-supplied keys, exact response validation and explicit
    uncertain outcomes. No local authority decisions or operator override.
 7. **WS-CLI-001-07:** Inspect contributor work context and exact submission
    requirements through public reads. Preserve historical selectors, server

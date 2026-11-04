@@ -1722,6 +1722,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/projects/api/retained_activation.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/projects/api/setup_identity.py"
     },
     {
@@ -1863,6 +1867,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/projects/guide_compilation/request_inputs.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/projects/guide_compilation/retained_evidence.py"
     },
     {
       "group": "lifecycle",
@@ -2581,7 +2589,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "1b6b2fc869377e7fcc2b65f9981fb4154aa91d2cf69a65ca8c1356f5f16931e7",
+  "authority_digest": "ff4288cd9de5d876c8e5aac2cbd428a2b43ee5a2b63ba7aa62892029d1c7d8f0",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

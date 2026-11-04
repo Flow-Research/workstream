@@ -85,7 +85,7 @@ async def test_management_queue_pagination(task_client, monkeypatch, method):
             row.created_at = now + timedelta(seconds=offset)
     async with factory() as session:
         local = (await session.scalars(select(WorkstreamTask).where(WorkstreamTask.project_id == project["id"]))).all()
-        assert {row.status for row in local} == {"draft", "ready", "claimed"}
+        assert {row.status for row in local} == {"draft", "ready", "in_progress"}
         assignment = await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == claimed["id"]))
         assert assignment.status == "active" and assignment.contributor_id is not None
         assert (await session.get(WorkstreamTask, claimed["id"])).assigned_to == assignment.contributor_id
@@ -125,7 +125,7 @@ async def test_management_queue_pagination(task_client, monkeypatch, method):
 @pytest.mark.parametrize("method", READS)
 async def test_management_queue_all_states(task_client, monkeypatch, method):
     """Later statuses are read fixtures, not claims that later lifecycle commands ran."""
-    states = {"draft", "screening", "ready", "claimed", "in_progress", "submitted",
+    states = {"draft", "screening", "ready", "in_progress", "submitted",
               "evaluation_pending", "review_pending", "needs_revision"}
     assert states == {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
     project = await create_active_project(task_client)
@@ -133,18 +133,18 @@ async def test_management_queue_all_states(task_client, monkeypatch, method):
     for status in sorted(states - {"draft"}):
         rows[status] = await create_ready_task(task_client, project["id"])
     await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "all-states-contributor")
-    response = await task_client.post(f"/api/v1/tasks/{rows['claimed']['id']}/claim", headers=auth_headers())
+    response = await task_client.post(f"/api/v1/tasks/{rows['in_progress']['id']}/claim", headers=auth_headers())
     assert response.status_code == 200, response.text
     factory = db_session.get_session_factory()
     async with factory() as session, session.begin():
-        for status in states - {"draft", "ready", "claimed"}:
+        for status in states - {"draft", "ready", "in_progress"}:
             row = await session.get(WorkstreamTask, rows[status]["id"])
             assert row.locked_contribution_policy_version_id is not None
             row.status = status  # Fully locked fixture; no database guards disabled.
     async with factory() as session:
         stored = (await session.scalars(select(WorkstreamTask).where(WorkstreamTask.project_id == project["id"]))).all()
         expected = {UUID(row.id): row.status for row in stored}
-        assert set(expected.values()) == states and len(expected) == 9
+        assert set(expected.values()) == states and len(expected) == 8
         page = await getattr(TaskRepository(session), method)(TaskQueueRequest(UUID(project["id"])))
         assert {item.task_id: item.status for item in page.items} == expected
         assert page.next_cursor is None

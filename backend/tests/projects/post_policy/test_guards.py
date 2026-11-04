@@ -40,7 +40,7 @@ async def test_valid_finalization_without_upstream_approval_cannot_project(clean
 
 async def test_missing_approval_receipt_hits_the_specific_deferred_guard(clean_postgres_database, monkeypatch):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         payload = PostPolicyApproval(target=projected.target, idempotency_key=uuid4())
         async with factory() as session:
             await session.begin()
@@ -86,7 +86,7 @@ async def test_direct_sql_rejects_one_substituted_external_policy_commitment(
         clean_postgres_database,
         post_submit_registry_spec=selected_spec,
     ) as (values, factory, command, actor, grant):
-        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         async with factory() as session:
             stored = (
                 await session.execute(
@@ -198,7 +198,7 @@ async def test_direct_sql_rejects_one_substituted_external_policy_commitment(
 
 async def test_revoked_manager_cannot_approve_or_replay(clean_postgres_database):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         payload = PostPolicyApproval(target=projected.target, idempotency_key=uuid4())
         approved = await operate(factory, actor, command.project_id, grant, 'approve', payload)
         await revoke_review_grant(factory, actor, grant)
@@ -219,7 +219,7 @@ async def test_revoked_manager_cannot_approve_or_replay(clean_postgres_database)
 ])
 async def test_retained_policy_and_operation_evidence_is_immutable(clean_postgres_database, statement):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         with pytest.raises(DBAPIError, match='immutable'):
             async with factory() as session, session.begin():
                 await session.execute(text(statement))
@@ -228,7 +228,7 @@ async def test_retained_policy_and_operation_evidence_is_immutable(clean_postgre
 @pytest.mark.parametrize('change', ['upstream', 'project', 'link', 'policy_hash'])
 async def test_exact_source_and_authority_substitutions_reject_without_writes(clean_postgres_database, change):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        derive, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        derive, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         payload = PostPolicyApproval(target=projected.target, idempotency_key=uuid4())
         if change == 'upstream':
             # A complete saved source with only its approved-output commitment substituted.
@@ -254,7 +254,7 @@ async def test_changed_approval_key_and_correction_reason_do_not_repeat_effects(
     from app.modules.projects.api.post_policy import PostPolicyCorrection
 
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values))
+        _, projected = await prepare_post_policy(factory, command, actor, grant, service_actor(values), values)
         approval = PostPolicyApproval(target=projected.target, idempotency_key=uuid4())
         await operate(factory, actor, command.project_id, grant, 'approve', approval)
         with pytest.raises(GuideProposalError, match='proposal_stale'):

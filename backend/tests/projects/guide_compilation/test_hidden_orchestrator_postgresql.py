@@ -44,7 +44,6 @@ from app.modules.projects.guide_compilation.orchestrator import (
     project_guide_compilation_execution_port,
 )
 from app.modules.projects.guide_compilation import runtime_resources
-from tests.checkers.external.support import capability_projection
 
 from .helpers import (
     context,
@@ -122,17 +121,15 @@ def _backend(factory):
         factory,
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
-        checker_capabilities=capability_projection(),
         authorization_context=_fixed_service_authorization,
     )
 
 
-def _port(factory, runtime, *, checker_capabilities=None, model_session_factory=None):
+def _port(factory, runtime, *, model_session_factory=None):
     return project_guide_compilation_execution_port(
         factory,
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
-        checker_capabilities=checker_capabilities or capability_projection(),
         authorization_context=_fixed_service_authorization,
         runtime_factory=lambda configuration: runtime,
         model_session_factory=model_session_factory,
@@ -704,10 +701,16 @@ async def test_no_inference_run_ignores_the_model_prompt_limit(
 
     configuration = manager_runtime_configuration().model_copy(
         update={"maximum_manifest_bytes": 1024})
-    values = await seed_database(clean_postgres_database)
-    assert len(project_guide_compilation_prompt_bytes(
-        context(values, configuration=configuration))) > 1024
-    requested = await _authorized_attempt(clean_postgres_database, values, configuration)
+    examples = [{"content": "Assess the submitted claim against the guide. " * 40}]
+    values = await seed_database(clean_postgres_database, task_examples=examples)
+    compilation_context = context(
+        values, configuration=configuration, task_examples=examples,
+    )
+    assert len(project_guide_compilation_prompt_bytes(compilation_context)) > 1024
+    requested = await _authorized_attempt(
+        clean_postgres_database, values, configuration,
+        compilation_context=compilation_context,
+    )
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     runtime = _ManagerRuntime(ProjectGuideCompilationInvalidOutputError("schema_invalid"))
@@ -782,7 +785,6 @@ async def test_unavailable_authority_returns_only_the_safe_public_code(
             factory,
             material_factory=guide_document_manifest_port,
             document_tools_factory=document_tools(factory),
-            checker_capabilities=capability_projection(),
             authorization_context=_unavailable_service_authorization,
             runtime_factory=lambda configuration: runtime,
         )
@@ -806,7 +808,7 @@ async def test_unavailable_authority_returns_only_the_safe_public_code(
         ("schema", {"path": ["status"], "code": "schema_enum"}),
         (
             "unsafe",
-            {"path": ["findings", 0, "message"], "code": "canonical_constraint"},
+            {"path": ["findings", 0, "message"], "code": "unsafe_text"},
         ),
     ],
 )
@@ -844,6 +846,7 @@ async def test_sdk_parser_rejection_persists_terminal_without_reinvocation(
             assert feedback["phase"] == "checker_specification"
             assert feedback["validation_errors"] == [expected_issue]
             assert "token=secret123" not in prompt
+            assert "untrusted_candidate_proposal" not in feedback
         return SimpleNamespace(final_output=agent.output_type.validate_json(raw))
 
     monkeypatch.setattr(Runner, "run", run)

@@ -18,7 +18,7 @@ from .pg_support import ready_case, operate, manager_command
 
 async def test_setup_service_derives_with_exact_evidence(clean_postgres_database):
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        payload = await prepare_upstream(factory, command, actor, grant)
+        payload = await prepare_upstream(factory, command, actor, grant, values)
         receipt = await operate(factory, service_actor(values), "derive", payload)
         async with factory() as session:
             row = (
@@ -278,7 +278,7 @@ async def test_stale_upstream_denies_through_live_authority(clean_postgres_datab
     )
 
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
-        payload = await prepare_upstream(factory, command, actor, grant)
+        payload = await prepare_upstream(factory, command, actor, grant, values)
         first = await operate(factory, service_actor(values), "derive", payload)
         successor = await correct(
             factory,
@@ -300,6 +300,8 @@ async def test_stale_upstream_denies_through_live_authority(clean_postgres_datab
             grant,
             GuideProposalApproval(
                 target=package.target,
+                pre_submit_attachments=values["pre_submit_attachments"],
+                post_submit_attachments=values["post_submit_attachments"],
                 idempotency_key=uuid4(),
                 expected_previous_approval_operation_id=package.current_approval_operation_id,
                 expected_previous_approval_output_digest=package.current_approval_output_digest,

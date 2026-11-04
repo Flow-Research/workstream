@@ -22,7 +22,7 @@ async def test_all_task_states(admin_access, monkeypatch):
         raise AssertionError("history tried to validate a policy body")
     monkeypatch.setattr(TaskService, "_load_locked_task_context", no_policy_read)
     states = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
-    assert len(states) == 9
+    assert len(states) == 8
     # Arrange retained states without pretending that a needs-revision window
     # can be closed by an unaudited fixture UPDATE back to ready.
     for state in sorted(states - {"needs_revision"}) + ["needs_revision"]:
@@ -44,7 +44,7 @@ async def test_state_guard_probe(admin_access, monkeypatch):
     def ready_only(action, resource):
         return original(action, resource) and (action is not ActionId.AUDIT_TASK_EVIDENCE_READ or resource.task_status == "ready")
     monkeypatch.setattr(owner, "task_resource_guard", ready_only)
-    with pytest.raises(AssertionError, match="claimed") as error:
+    with pytest.raises(AssertionError, match="draft") as error:
         await test_all_task_states(admin_access, monkeypatch)
     assert "404 == 200" in str(error.value)
 

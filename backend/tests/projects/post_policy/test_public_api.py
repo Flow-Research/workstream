@@ -8,7 +8,6 @@ from sqlalchemy import text
 from app.main import create_app
 from app.modules.projects.post_policy.compiler import compile_saved_post_policy
 from app.modules.checkers.api.external_policy import validate_stored_external_checker_policies
-from app.interfaces.project_agents import ProjectGuideCompilationResult
 from tests.projects.guide_compilation.proposals.pg_support import revoke_review_grant, seed_review_actor
 from tests.projects.guide_compilation.proposals.public_support import proposal_client, proposal_path
 from .public_support import public_approved_case, deliver
@@ -80,12 +79,10 @@ async def test_public_policy_body_separate_approval_replay_and_revocation(
             assert body["approval_operation_id"] is None
             assert body["target"]["upstream"]["operation_id"] == str(approval_id)
             async with factory() as session:
-                saved = await session.scalar(text("SELECT canonical_result FROM project_guide_compilations WHERE id=:id"), {"id":command.compilation_id})
                 approved_plan = await session.scalar(text(
                     "SELECT effective_pre_submit_plan FROM project_guide_proposal_approvals WHERE operation_id=:id"
                 ), {"id": approval_id})
                 expected = compile_saved_post_policy(
-                    result=ProjectGuideCompilationResult.model_validate(saved),
                     policies=validate_stored_external_checker_policies(approved_plan),
                 )
                 assert body["policy"] == expected.model_dump(mode="json")

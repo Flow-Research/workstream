@@ -3,10 +3,15 @@
 from __future__ import annotations
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import smol_recovery
+import smol_runtime
 
 SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts/qualify_terminal_systems_smol.py"
@@ -158,6 +163,124 @@ class QualificationEvidenceTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 qualifier.write_new(path, {"status": "passed"})
             self.assertEqual(json.loads(path.read_text()), {"status": "failed"})
+
+
+class SmolVMInventoryTests(unittest.TestCase):
+    def lock(self, root):
+        root.mkdir(parents=True, exist_ok=True)
+        lock = root / ".artifact-cache.lock"
+        with lock.open("x") as output:
+            os.fchmod(output.fileno(), 0o600)
+        return lock
+
+    def test_fresh_home_permits_only_valid_engine_sentinel_then_tracks_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "vms"
+            before = smol_runtime.smol_vm_inventory(root)
+            self.assertEqual(before, (set(), None))
+            lock = self.lock(root)
+            observed = smol_runtime.assert_smol_vm_inventory(root, before)
+            self.assertEqual(
+                observed, (set(), (lock.stat().st_dev, lock.stat().st_ino))
+            )
+            self.assertEqual(
+                smol_runtime.assert_smol_vm_inventory(root, observed), observed
+            )
+            lock.rename(Path(temporary) / "retained-original-lock")
+            self.lock(root)
+            with self.assertRaisesRegex(AssertionError, "identity changed"):
+                smol_runtime.assert_smol_vm_inventory(root, observed)
+
+    def test_unexpected_file_and_vm_directory_still_break_exact_inventory(self):
+        for name, directory in ((".unexpected.lock", False), ("ws-owned-vm", True)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "vms"
+                self.lock(root)
+                before = smol_runtime.smol_vm_inventory(root)
+                if directory:
+                    (root / name).mkdir()
+                else:
+                    (root / name).write_bytes(b"")
+                self.assertEqual(smol_runtime.smol_vm_inventory(root)[0], {name})
+                with self.assertRaisesRegex(
+                    AssertionError, "execution children changed"
+                ):
+                    smol_runtime.assert_smol_vm_inventory(root, before)
+
+    def test_invalid_cache_sentinel_is_never_excluded(self):
+        for kind in (
+            "content",
+            "mode",
+            "symlink",
+            "dangling_symlink",
+            "directory",
+            "hardlink",
+        ):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "vms"
+                lock = self.lock(root)
+                if kind == "content":
+                    lock.write_bytes(b"not a coordination sentinel")
+                elif kind == "mode":
+                    lock.chmod(0o644)
+                elif kind in {"symlink", "dangling_symlink"}:
+                    lock.unlink()
+                    target = Path(temporary) / "other"
+                    if kind == "symlink":
+                        target.write_bytes(b"")
+                        target.chmod(0o600)
+                    lock.symlink_to(target)
+                elif kind == "directory":
+                    lock.unlink()
+                    lock.mkdir(mode=0o600)
+                else:
+                    os.link(lock, Path(temporary) / "extra-link")
+                with self.assertRaises(AssertionError):
+                    smol_runtime.smol_vm_inventory(root)
+
+    def test_wrong_owner_and_disappearing_observed_lock_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "vms"
+            lock = self.lock(root)
+            before = smol_runtime.smol_vm_inventory(root)
+            expected_uid, expected_gid = os.geteuid(), os.getegid()
+            for attribute, other in (
+                ("geteuid", expected_uid + 1),
+                ("getegid", expected_gid + 1),
+            ):
+                with (
+                    self.subTest(attribute=attribute),
+                    patch.object(smol_runtime.os, attribute, return_value=other),
+                ):
+                    with self.assertRaisesRegex(AssertionError, "custody changed"):
+                        smol_runtime.smol_vm_inventory(root)
+            lock.unlink()
+            with self.assertRaisesRegex(AssertionError, "identity changed"):
+                smol_runtime.assert_smol_vm_inventory(root, before)
+
+    def test_existing_recovery_owner_uses_same_inventory_and_stable_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recovery = smol_recovery.NestedTrialRecovery("caller_disconnect")
+            recovery.config = {"smol": {"home": str(root / "home")}}
+            recovery.leases, recovery.groups, recovery.child_root = (
+                root / "leases",
+                root / "groups",
+                root / "children",
+            )
+            for directory in (recovery.leases, recovery.groups, recovery.child_root):
+                directory.mkdir()
+            self.assertTrue(recovery.physical_clean())
+            vms = root / "home/.cache/smolvm/vms"
+            lock = self.lock(vms)
+            self.assertTrue(recovery.physical_clean())
+            (vms / "ws-owned-vm").mkdir()
+            self.assertFalse(recovery.physical_clean())
+            (vms / "ws-owned-vm").rmdir()
+            lock.rename(root / "retained-original-lock")
+            self.lock(vms)
+            with self.assertRaisesRegex(AssertionError, "identity changed"):
+                recovery.physical_clean()
 
 
 if __name__ == "__main__":

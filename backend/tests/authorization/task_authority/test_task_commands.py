@@ -9,13 +9,12 @@ from sqlalchemy.exc import OperationalError
 from app.db import session as db_session
 from app.modules.actors.models import ActorIdentityLink, ActorProfile, LegacyWorkflowEligibility
 from app.modules.actors.service import ActorService, IdentityLinkRevoked
-from app.modules.authorization.models import AdminRoleGrant, AuthorityControl, ProjectRoleGrant
+from app.modules.authorization.models import ProjectRoleGrant
 from app.modules.authorization.runtime import AuthorizationEvidenceUnavailable
 from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.tasks.api import TaskAuthorityDenied
 from app.modules.audit.service import AuditService, LifecycleAuditParticipant
-from app.modules.tasks.models import AuditEvent, TaskAssignment, TaskCommandReceipt, WorkstreamTask
-from app.modules.tasks.command_replay import TaskCommandReplay
+from app.modules.tasks.models import AuditEvent, TaskAssignment, WorkstreamTask
 from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
 from app.modules.tasks.service import TaskServiceError
 from tests.test_tasks import (
@@ -78,7 +77,7 @@ async def test_retired_worker_endpoint_cannot_admit_or_self_authorize(task_clien
     assert after == before
 
 
-async def test_project_grant_drives_claim_start_and_current_action_hints(task_client, monkeypatch):
+async def test_project_grant_drives_claim_and_current_action_hints(task_client, monkeypatch):
     project = await create_active_project(task_client)
     task = await create_ready_task(task_client, project["id"])
     task_id = task["id"]
@@ -120,11 +119,11 @@ async def test_project_grant_drives_claim_start_and_current_action_hints(task_cl
     claimed = await task_client.post(f"/api/v1/tasks/{task_id}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
     assert claimed.json()["assignment"]["contributor_id"] == actor_id
-    assert claimed.json()["task"]["status"] == "claimed"
+    assert claimed.json()["task"]["status"] == "in_progress"
     assert {"base_amount", "currency", "payout_type", "locked_payment_policy_version"}.isdisjoint(claimed.json()["task"])
     context = await task_client.get(f"/api/v1/tasks/{task_id}/work-context", headers=auth_headers())
     assert context.status_code == 200, context.text
-    assert context.json()["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": ["start"]}
+    assert context.json()["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": []}
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     revoked = await task_client.post(
         f"/api/v1/projects/{project['id']}/role-grants/{authority['grant_id']}/revoke",
@@ -133,20 +132,16 @@ async def test_project_grant_drives_claim_start_and_current_action_hints(task_cl
     )
     assert revoked.status_code == 200, revoked.text
     set_dev_actor(monkeypatch, roles="viewer", subject="explicit-submitter")
-    blocked = await task_client.post(f"/api/v1/tasks/{task_id}/start", headers=auth_headers())
-    assert blocked.status_code == 403, blocked.text
+    blocked = await task_client.get(f"/api/v1/tasks/{task_id}/work-context", headers=auth_headers())
+    assert blocked.status_code == 404, blocked.text
     async with db_session.get_session_factory()() as session:
         unchanged = await session.get(WorkstreamTask, task_id)
-        assert unchanged.status == "claimed" and unchanged.assigned_to == actor_id
+        assert unchanged.status == "in_progress" and unchanged.assigned_to == actor_id
         assignment = await session.get(TaskAssignment, claimed.json()["assignment"]["id"])
         assert assignment.status == "active" and assignment.contributor_id == actor_id
     await admit_and_grant_project_submitter(
         task_client, monkeypatch, project["id"], "explicit-submitter"
     )
-    started = await task_client.post(f"/api/v1/tasks/{task_id}/start", headers=auth_headers())
-    assert started.status_code == 200, started.text
-    assert {"base_amount", "currency", "payout_type", "locked_payment_policy_version"}.isdisjoint(started.json())
-    assert started.json()["status"] == "in_progress"
     context = await task_client.get(f"/api/v1/tasks/{task_id}/work-context", headers=auth_headers())
     assert context.status_code == 200, context.text
     assert context.json()["lifecycle"] == {"assigned_to_current_actor": True, "next_actions": []}
@@ -168,11 +163,11 @@ async def test_project_grant_drives_claim_start_and_current_action_hints(task_cl
             await session.scalars(
                 select(AuditEvent).where(
                     AuditEvent.entity_id == task_id,
-                    AuditEvent.to_status.in_(["claimed", "in_progress"]),
+                    AuditEvent.to_status == "in_progress",
                 )
             )
         )
-        assert {event.to_status for event in transitions} == {"claimed", "in_progress"}
+        assert {event.to_status for event in transitions} == {"in_progress"}
         for event in transitions:
             assert event.actor_id == actor_id
             assert event.actor_roles == [] and event.claim_snapshot == {}
@@ -184,8 +179,6 @@ async def test_task_command_routes_preserve_structured_errors(task_client, monke
     task_id, project_id = uuid4(), uuid4()
     routes = [
         ("claim", "POST", f"/api/v1/tasks/{task_id}/claim"),
-        ("start", "POST", f"/api/v1/tasks/{task_id}/start"),
-        ("start", "POST", f"/api/v1/operations/tasks/{task_id}/start"),
         ("contributor_work_context", "GET", f"/api/v1/tasks/{task_id}/work-context"),
         ("management_work_context", "GET", f"/api/v1/projects/{project_id}/tasks/{task_id}/work-context"),
     ]
@@ -337,7 +330,7 @@ async def test_claim_rolls_back_and_retries_once_after_evidence_failure(
     # Repeat the identical request, including its key, after storage recovers.
     retried = await task_client.post(path, headers=headers)
     assert retried.status_code == 200, retried.text
-    assert retried.json()["task"]["status"] == "claimed"
+    assert retried.json()["task"]["status"] == "in_progress"
     async with db_session.get_session_factory()() as session:
         assignments = list(await session.scalars(
             select(TaskAssignment).where(TaskAssignment.task_id == task["id"])
@@ -346,14 +339,14 @@ async def test_claim_rolls_back_and_retries_once_after_evidence_failure(
         assert assignments[0].id == retried.json()["assignment"]["id"]
         assert assignments[0].status == "active"
         claimed = await session.get(WorkstreamTask, task["id"])
-        assert claimed.status == "claimed"
+        assert claimed.status == "in_progress"
         assert claimed.assigned_to == assignments[0].contributor_id
         decisions = list(await session.scalars(
             select(AuditEvent).where(AuditEvent.action_id == "task.claim")
         ))
         transitions = list(await session.scalars(
             select(AuditEvent).where(
-                AuditEvent.entity_id == task["id"], AuditEvent.to_status == "claimed",
+                AuditEvent.entity_id == task["id"], AuditEvent.to_status == "in_progress",
             )
         ))
         assert len(decisions) == len(transitions) == 1
@@ -361,182 +354,19 @@ async def test_claim_rolls_back_and_retries_once_after_evidence_failure(
         assert decision.after_facts["allowed"] is True
         assert decision.actor_id == transition.actor_id == assignments[0].contributor_id
         assert decision.project_id == project["id"]
-        assert (transition.from_status, transition.to_status) == ("ready", "claimed")
+        assert (transition.from_status, transition.to_status) == ("ready", "in_progress")
         assert transition.event_payload["references"]["authorization_decision_id"] == decision.id
         assert await session.get(AuditEvent, staged[0]) is None
 
 
-async def test_manager_context_and_system_operator_override_are_distinct(task_client, monkeypatch):
+async def test_removed_start_routes_have_no_fallback(task_client, task_database_env, monkeypatch):
     project = await create_active_project(task_client)
     task = await create_ready_task(task_client, project["id"])
-    task_id = task["id"]
-    manager_context = await task_client.get(
-        f"/api/v1/projects/{project['id']}/tasks/{task_id}/work-context",
-        headers=auth_headers(),
-    )
-    assert manager_context.status_code == 200, manager_context.text
-    assert "lifecycle" not in manager_context.json()
-    contributor_context = await task_client.get(
-        f"/api/v1/tasks/{task_id}/work-context", headers=auth_headers()
-    )
-    assert contributor_context.status_code == 404, contributor_context.text
-    assert contributor_context.json()["error"]["code"] == "project_authorization_resource_not_found"
-    owner = await admit_and_grant_project_submitter(
-        task_client, monkeypatch, project["id"], "assigned-contributor"
-    )
-    claimed = await task_client.post(f"/api/v1/tasks/{task_id}/claim", headers=auth_headers())
+    await admit_and_grant_project_submitter(task_client, monkeypatch, project["id"], "owner")
+    claimed = await task_client.post(f"/api/v1/tasks/{task['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
-
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    denied = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start",
-        headers=auth_headers(),
-        json={"reason": "Manager is not Operator"},
-    )
-    assert denied.status_code == 403, denied.text
-    set_dev_actor(monkeypatch, roles="admin", subject="explicit-operator")
-    admitted = await task_client.get("/api/v1/actors/me", headers=auth_headers())
-    assert admitted.status_code == 200, admitted.text
-    operator_id = admitted.json()["actor_profile_id"]
-    denied = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start",
-        headers=auth_headers(),
-        json={"reason": "Token role is not authority"},
-    )
-    assert denied.status_code == 403, denied.text
-
-    # Use the existing project fixture's bootstrap identity to issue a real
-    # Operator grant. This test does not claim to prove bootstrap provisioning.
-    async with db_session.get_session_factory()() as session:
-        control = await session.get(AuthorityControl, 1)
-        bootstrap_grant = await session.get(AdminRoleGrant, control.bootstrap_grant_id)
-        bootstrap_link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.actor_profile_id == bootstrap_grant.target_actor_profile_id,
-            )
-        )
-        bootstrap_subject, bootstrap_issuer = bootstrap_link.subject, bootstrap_link.issuer
-    set_dev_actor(monkeypatch, roles="viewer", subject=bootstrap_subject, issuer=bootstrap_issuer)
-    issued = await task_client.post(
-        "/api/v1/admin-role-grants",
-        headers=auth_headers(),
-        json={
-            "target_actor_profile_id": operator_id,
-            "role": "operator",
-            "scope_type": "system",
-            "scope_project_id": None,
-            "reason": "Assign operations responsibility",
-        },
-    )
-    assert issued.status_code == 201, issued.text
-    set_dev_actor(monkeypatch, roles="viewer", subject="explicit-operator")
-    normal = await task_client.post(f"/api/v1/tasks/{task_id}/start", headers=auth_headers())
-    assert normal.status_code == 403, normal.text
-    for body in ({}, {"reason": " "}):
-        no_reason = await task_client.post(
-            f"/api/v1/operations/tasks/{task_id}/start", headers=auth_headers(), json=body
-        )
-        assert no_reason.status_code == 422, no_reason.text
-    reason = "Operator verified assigned contributor started work"
-    start_headers = auth_headers()
-    await _assert_operator_failure_rollback(
-        task_client, monkeypatch, task_id, owner, claimed, start_headers, reason,
-    )
-    started = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start",
-        headers=start_headers,
-        json={"reason": reason},
-    )
-    assert started.status_code == 200, started.text
-    assert {"base_amount", "currency", "payout_type", "locked_payment_policy_version"}.isdisjoint(started.json())
-    replayed = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start", headers=start_headers, json={"reason": reason},
-    )
-    assert replayed.status_code == 200, replayed.text
-    assert replayed.json() == started.json()
-    mismatch = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start", headers=start_headers, json={"reason": "Changed reason"},
-    )
-    assert mismatch.status_code == 409 and mismatch.json()["error"]["code"] == "idempotency_mismatch"
-    async with db_session.get_session_factory()() as session:
-        row = await session.get(WorkstreamTask, task_id)
-        assert row.status == "in_progress" and row.assigned_to == owner["actor_profile_id"]
-        assignment = await session.get(TaskAssignment, claimed.json()["assignment"]["id"])
-        assert assignment.contributor_id == owner["actor_profile_id"]
-        event = await session.scalar(
-            select(AuditEvent).where(
-                AuditEvent.entity_id == task_id,
-                AuditEvent.event_type == "TaskStartOverridden",
-            )
-        )
-        assert event is not None and event.actor_id == operator_id
-        assert event.reason == reason
-        decision = await session.get(
-            AuditEvent, event.event_payload["references"]["authorization_decision_id"]
-        )
-        assert decision.action_id == "operations.task.start_override"
-        assert decision.matched_grant_id == issued.json()["resource_id"]
-        assert await session.scalar(select(func.count()).select_from(AuditEvent).where(
-            AuditEvent.entity_id == task_id, AuditEvent.event_type == "TaskStartOverridden",
-        )) == 1
-    await _assert_operator_revocation_denies_replay(
-        task_client, monkeypatch, task_id, owner, issued, start_headers, reason,
-        bootstrap_subject, bootstrap_issuer,
-    )
-
-
-async def _assert_operator_failure_rollback(
-    task_client, monkeypatch, task_id, owner, claimed, start_headers, reason,
-):
-    original_complete = TaskCommandReplay.complete
-    def fail_after_operator_staging(*args):
-        original_complete(*args)
-        raise OperationalError("operator receipt failure", None, RuntimeError("injected"))
-    with monkeypatch.context() as patch:
-        patch.setattr(TaskCommandReplay, "complete", staticmethod(fail_after_operator_staging))
-        failed = await task_client.post(
-            f"/api/v1/operations/tasks/{task_id}/start", headers=start_headers, json={"reason": reason},
-        )
-    assert failed.status_code == 503, failed.text
-    async with db_session.get_session_factory()() as session:
-        unchanged = await session.get(WorkstreamTask, task_id)
-        assert unchanged.status == "claimed" and unchanged.assigned_to == owner["actor_profile_id"]
-        assignment = await session.get(TaskAssignment, claimed.json()["assignment"]["id"])
-        assert assignment.status == "active" and assignment.contributor_id == owner["actor_profile_id"]
-        assert await session.scalar(select(func.count()).select_from(TaskCommandReceipt).where(
-            TaskCommandReceipt.task_id == task_id,
-            TaskCommandReceipt.action_id == "operations.task.start_override",
-        )) == 0
-        assert await session.scalar(select(func.count()).select_from(AuditEvent).where(
-            AuditEvent.entity_id == task_id, AuditEvent.event_type == "TaskStartOverridden",
-        )) == 0
-        decisions = list(await session.scalars(select(AuditEvent).where(
-            AuditEvent.action_id == "operations.task.start_override",
-        )))
-        assert all(not event.after_facts["allowed"] for event in decisions)
-
-
-async def _assert_operator_revocation_denies_replay(
-    task_client, monkeypatch, task_id, owner, issued, start_headers, reason, bootstrap_subject, bootstrap_issuer,
-):
-    set_dev_actor(monkeypatch, roles="viewer", subject=bootstrap_subject, issuer=bootstrap_issuer)
-    revoked = await task_client.post(
-        f"/api/v1/admin-role-grants/{issued.json()['resource_id']}/revoke",
-        headers=auth_headers(), json={"reason": "Remove operator authority before retry"},
-    )
-    assert revoked.status_code == 200, revoked.text
-    set_dev_actor(monkeypatch, roles="viewer", subject="explicit-operator")
-    denied_replay = await task_client.post(
-        f"/api/v1/operations/tasks/{task_id}/start", headers=start_headers, json={"reason": reason},
-    )
-    assert denied_replay.status_code == 403, denied_replay.text
-    async with db_session.get_session_factory()() as session:
-        unchanged = await session.get(WorkstreamTask, task_id)
-        assert unchanged.status == "in_progress" and unchanged.assigned_to == owner["actor_profile_id"]
-        assert await session.scalar(select(func.count()).select_from(TaskCommandReceipt).where(
-            TaskCommandReceipt.task_id == task_id,
-            TaskCommandReceipt.action_id == "operations.task.start_override",
-        )) == 1
-        assert await session.scalar(select(func.count()).select_from(AuditEvent).where(
-            AuditEvent.entity_id == task_id, AuditEvent.event_type == "TaskStartOverridden",
-        )) == 1
+    before = await _read_task_contributor_race_snapshot(task_database_env, task["id"])
+    for prefix in ("tasks", "operations/tasks"):
+        response = await task_client.post(f"/api/v1/{prefix}/{task['id']}/start", headers=auth_headers(), json={"reason": "Old owner probe"})
+        assert response.status_code == 404, response.text
+    assert await _read_task_contributor_race_snapshot(task_database_env, task["id"]) == before

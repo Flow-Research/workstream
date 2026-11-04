@@ -684,11 +684,12 @@ lock TASK Submission/current routing state before the CHECKERS currentness
 fence using existing ARCH-04E order. Revalidate the exact locked guide,
 ReviewPolicy, contribution-policy/assignment lineage, complete successful
 required-check evidence and all required output bindings before staging
-acceptance. For false, the exact approved requirement inventory must contain
-zero applicable `human_review` dispositions, both at guide activation and
-again at acceptance. Such a disposition is not a failed executable check and
-cannot be silently relabeled `supported_post_submit` or ignored because all
-executable checks passed. Never read the project's newest policy to choose the branch.
+acceptance. For false, activation requires explicit approved PRE and POST image
+attachments, including intentional empty lists, under the existing policy and
+authority guards. Acceptance rechecks the task's exact locked ReviewPolicy,
+approved image policies and complete required-check evidence. Setup suggestions
+cannot select human review or be relabeled to change the branch. Never read the
+project's newest policy to choose the branch.
 ARCH-04E1B-B1 enforces TASK-before-CHECKERS custody for reservation and
 current-result reads. Review queue/admission INSERT guards acquire the exact
 project-qualified TASK before checker fences and foreign keys. Admission UPDATE
@@ -713,8 +714,8 @@ Extract foundations from existing owner work, not a new initiative:
    accepted-effects Protocol are delivered after CHECKERS-04C facts, without a
    general routing publication writer/reader, current pointer or handler. Its
    bounded exact-source verifier is used by REV-04C. One manifest stores the locked `human_review_required` branch; it is
-   not restricted to human admission. False activation is admitted only for a
-   complete approved requirement inventory and supported exact checkers. This
+   not restricted to human admission. False activation requires complete,
+   explicitly approved PRE and POST image selections under existing guards. This
    schema precedes the REV source FK.
 2. [ART-07A1](../.commitrail/initiatives/WS-ART-001/WS-ART-001-07A1.md) supplies
    the metadata-only packet contract. REV-03B normalized packet persistence is
@@ -756,9 +757,9 @@ Extract foundations from existing owner work, not a new initiative:
    Pre-authority outcomes are refused on upgrade without rewriting them.
    The ARCH-04E1B-B8 completion handler consumes this operation and acknowledges
    only after commit. Remediation is delivered, selected request/completion
-   handlers are registered in production composition, and a complete supported
-   false guide can activate when its approved inventory contains no `human_review`
-   disposition. New false/pass effects require a live REV generation; a typed
+   handlers are registered in production composition, and a complete false
+   guide can activate with approved phase selections. New false/pass effects
+   require a live REV generation; a typed
    pre-effect non-live refusal rolls back and uses bounded retry. Live
    human review/revision and fulfillment remain separate work.
 
@@ -773,12 +774,12 @@ Remaining implementation tests:
 | Owner / future test | Required discriminating proof |
 |---|---|
 | REV `test_final_acceptance_source_constraints` | Direct SQL rejects both/neither source, unknown discriminator, wrong project/policy, non-accept Review, false-policy Review source and true-policy checker source; rejects reviewer/recorded_by mismatch, human event not the exact review.decision allow for that Review/reviewer/request, manifest service/AUTH-event mismatch, wrong submitter vs Submission/Assignment, and crossed same-project/policy manifest; valid sources persist |
-| TASK `test_post_submit_false_uses_shared_acceptance` | Real composition with true/false locked controls, same FinalAcceptance/CON participant, and no Review/lease/reviewer contribution on false; passing checks plus an approved human_review disposition denies with zero effects |
+| TASK `test_post_submit_false_uses_shared_acceptance` | Real composition with true/false locked controls, same FinalAcceptance/CON participant, and no Review/lease/reviewer contribution on false; wrong or incomplete locked phase policy denies with zero effects |
 | TASK `test_acceptance_races_supersession_and_redelivery` | Independent sessions in both orders; one terminal acceptance and no stale run, duplicate award or invalidated accepted history |
 | AUTH `test_post_submit_route_acceptance_custody` | Wrong service/action/resource, unavailable authority, copied event and wrong transaction deny before product effects |
 | REV/AUTH `test_shared_acceptance_lifecycle_activation_and_drain` | Same registered Operator command establishes a generation through legal adjacent transitions; real enabled-writer observations, cutoff races, restart and safe stop; fabricated zero observations, unlisted writer or human-surface exposure denies |
 | CON `test_shared_acceptance_atomic_rollback` | Fail after staged task/acceptance/contribution/award/audit/outbox writes; every row/effect rolls back in both branches; valid control commits once |
-| PROJECTS false activation and locked-context tests | An approved `human_review` requirement disposition, missing exact checker coverage or unavailable activation authority blocks activation; no silent reclassification; a complete supported guide activates through the real authority and PostgreSQL custody path. At false/pass execution, the locked approved inventory is rechecked and economic effects still require a live REV generation |
+| PROJECTS false activation and locked-context tests | Missing or substituted human phase attachments, missing required execution configuration or unavailable activation authority block activation; explicit empty lists retain their approved meaning. A complete guide activates through real authority and PostgreSQL custody. At false/pass execution, locked approved image policies and required evidence are rechecked; economic effects still require a live REV generation |
 
 Proposed test homes are `backend/tests/test_shared_final_acceptance.py` (REV),
 `backend/tests/test_task_post_submit_routing.py` (TASK),

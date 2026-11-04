@@ -21,6 +21,7 @@ from .models import (
     ProjectGuideSetupFinalization,
 )
 from .repository import GuideCompilationIntegrityError
+from .retained_evidence import retained_target, verified_compilation_result
 
 
 @dataclass(frozen=True)
@@ -35,11 +36,24 @@ def correction_feedback(
     operation: ProjectGuideProposalCorrection,
 ) -> ProjectGuideCorrectionFeedback:
     """Validate the exact predecessor commitment and normalized manager input."""
-    target = GuideProposalTarget.model_validate(operation.target_json)
-    request = GuideProposalCorrection(
-        target=target,
-        idempotency_key=operation.idempotency_key,
-        reason=operation.reason,
+    retained = "pre_catalogue_id" in operation.target_json
+    target = (
+        retained_target(operation.target_json)
+        if retained
+        else GuideProposalTarget.model_validate(operation.target_json)
+    )
+    request_json = (
+        {
+            "target": operation.target_json,
+            "idempotency_key": str(operation.idempotency_key),
+            "reason": operation.reason,
+        }
+        if retained
+        else GuideProposalCorrection(
+            target=target,
+            idempotency_key=operation.idempotency_key,
+            reason=operation.reason,
+        ).model_dump(mode="json")
     )
     if (
         target.digest != operation.target_digest
@@ -48,8 +62,7 @@ def correction_feedback(
         or str(target.project_id) != operation.project_id
         or str(target.guide_id) != operation.guide_id
         or target.setup_generation + 1 != operation.successor_setup_generation
-        or request.reason != operation.reason
-        or canonical_json_hash(request.model_dump(mode="json")) != operation.request_digest
+        or canonical_json_hash(request_json) != operation.request_digest
     ):
         raise GuideCompilationIntegrityError("correction input custody mismatch")
     feedback = ProjectGuideCorrectionFeedback(
@@ -77,7 +90,11 @@ async def load_correction_input(
     if operation is None:
         return None
     feedback = correction_feedback(operation)
-    target = GuideProposalTarget.model_validate(operation.target_json)
+    target = (
+        retained_target(operation.target_json)
+        if "pre_catalogue_id" in operation.target_json
+        else GuideProposalTarget.model_validate(operation.target_json)
+    )
     successor = await session.get(ProjectSetupRun, str(setup_run_id))
     predecessor = await session.scalar(
         select(ProjectGuideCompilation).where(
@@ -116,6 +133,11 @@ async def load_correction_input(
         or successor.setup_generation != target.setup_generation + 1
     ):
         raise GuideCompilationIntegrityError("correction predecessor generation mismatch")
+    if predecessor.result_schema_version is None:
+        # Old correction requests remain evidence. The retired provider result
+        # cannot be replayed into the current correction execution contract.
+        verified_compilation_result(predecessor)
+        raise GuideCompilationIntegrityError("retained correction cannot execute")
     try:
         accepted = AcceptedCompilationResult(
             canonical_result=predecessor.canonical_result,

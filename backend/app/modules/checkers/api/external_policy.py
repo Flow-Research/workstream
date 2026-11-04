@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import Literal, Self
+from typing import Literal, Self, get_args
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
@@ -16,6 +16,7 @@ from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_CHECKER_VERSION,
 )
 from app.modules.checkers.api.external import (
+    MAX_CONFIGURATION_BYTES,
     EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS,
     ExternalCheckerPhase,
     ExternalCheckerRegistryEntry,
@@ -57,7 +58,8 @@ SELECTED_POST_DELIVERY_LEASE_SECONDS = 3_600
 
 EVALUATION_CONTEXT_VERSION_KEY = "workstream_evaluation_context_version"
 EVALUATION_CONTEXT_ROLES_KEY = "workstream_evaluation_context_roles"
-EVALUATION_CONTEXT_ROLES = ("predecessor_findings", "predecessor_submission_archive")
+EvaluationContextRole = Literal["predecessor_findings", "predecessor_submission_archive"]
+EVALUATION_CONTEXT_ROLES = get_args(EvaluationContextRole)
 FORGE_FACTS_VERSION_KEY = "workstream_forge_facts_version"
 FORGE_FACTS_FORGE_KEY = "forge"
 FORGE_FACTS_ORIGIN_KEY = "forge_origin"
@@ -107,6 +109,17 @@ def validated_evaluation_context_roles(
         }.issubset(properties):
             raise ExternalCheckerPolicyError("checker schema does not declare evaluation context")
     return selected
+
+
+def require_evaluation_context_agreement(
+    declared_roles: tuple[EvaluationContextRole, ...] | None,
+    configuration: dict[str, JsonValue],
+    registry: ExternalCheckerRegistryEntry,
+) -> None:
+    """Match descriptive setup inputs to the exact supported registry selection."""
+    selected = validated_evaluation_context_roles(configuration, registry)
+    if declared_roles != selected:
+        raise ExternalCheckerPolicyError("evaluation context declaration and selection disagree")
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +190,40 @@ def validated_trial_configuration(configuration, registry):
 
 class _PolicyValue(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+
+class ExternalCheckerImageAttachment(_PolicyValue):
+    """One human-selected execution member of a project's PRE or POST phase."""
+
+    requirement_id: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,99}$", strict=True)
+    registry_entry_id: UUID
+    registry_entry_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$", strict=True)
+    configuration: dict[str, JsonValue]
+
+    @model_validator(mode="after")
+    def validate_attachment(self) -> Self:
+        if self.requirement_id.startswith("workstream."):
+            raise ExternalCheckerPolicyError("platform checker key cannot be selected")
+        if self.registry_entry_id.version != 7:
+            raise ExternalCheckerPolicyError("selected registry entry ID must be UUIDv7")
+        if len(json.dumps(self.configuration, ensure_ascii=False, allow_nan=False).encode("utf-8")) > MAX_CONFIGURATION_BYTES:
+            raise ExternalCheckerPolicyError("selected checker configuration exceeds byte limit")
+        return self
+
+
+class ExternalCheckerPolicyCompileRequest(_PolicyValue):
+    """Phase-separated project images, independent of setup suggestions."""
+
+    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+
+    @model_validator(mode="after")
+    def validate_order(self) -> Self:
+        for attachments in (self.pre_submit_attachments, self.post_submit_attachments):
+            keys = [item.requirement_id for item in attachments]
+            if keys != sorted(set(keys)):
+                raise ExternalCheckerPolicyError("image attachments must have unique canonical order")
+        return self
 
 
 class LockedExternalCheckerBinding(_PolicyValue):
@@ -320,39 +367,26 @@ def _validate_entries(
         raise ExternalCheckerPolicyError("checker policy order is not canonical")
     if len(identities) != len(set(identities)):
         raise ExternalCheckerPolicyError("checker policy binding is duplicated")
+    if len({item.requirement_id for item in entries}) != len(entries):
+        raise ExternalCheckerPolicyError("checker execution member key is duplicated")
 
 
 async def compile_external_checker_policies(
-    result: object,
+    request: ExternalCheckerPolicyCompileRequest,
     registry: ExternalCheckerRegistryPort,
     *,
     project_id: UUID | None = None,
     profiles: ModelProfileReaderPort | None = None,
 ) -> tuple[LockedExternalPreSubmitPolicy, LockedExternalPostSubmitPolicy]:
-    """Resolve every supported binding to exact immutable registry custody."""
-    from app.interfaces.project_agents import ProjectGuideCompilationResult
-
-    result = ProjectGuideCompilationResult.model_validate(result)
-    if result.status == "guide_blocked":
-        raise ExternalCheckerPolicyError("checker capability coverage is incomplete")
-    requirements = {item.requirement_id: item for item in result.requirements}
-    if len(requirements) != len(result.requirements):
-        raise ExternalCheckerPolicyError("checker requirements are duplicated")
-    pre = await _resolve(
-        result.pre_submit_bindings,
-        requirements,
-        registry,
-        "pre_submit",
-        project_id=project_id,
-        profiles=profiles,
+    """Resolve exact human image attachments, independent of setup suggestions."""
+    request = ExternalCheckerPolicyCompileRequest.model_validate(request)
+    pre = await _resolve_attachments(
+        request.pre_submit_attachments, registry, "pre_submit",
+        project_id=project_id, profiles=profiles,
     )
-    post = await _resolve(
-        result.post_submit_bindings,
-        requirements,
-        registry,
-        "post_submit",
-        project_id=project_id,
-        profiles=profiles,
+    post = await _resolve_attachments(
+        request.post_submit_attachments, registry, "post_submit",
+        project_id=project_id, profiles=profiles,
     )
     return _make_policy(LockedExternalPreSubmitPolicy, pre), _make_policy(
         LockedExternalPostSubmitPolicy, post
@@ -360,7 +394,7 @@ async def compile_external_checker_policies(
 
 
 async def compile_external_checker_policy_bundle(
-    result: object,
+    request: ExternalCheckerPolicyCompileRequest,
     registry: ExternalCheckerRegistryPort,
     *,
     project_id: UUID | None = None,
@@ -368,10 +402,7 @@ async def compile_external_checker_policy_bundle(
 ) -> LockedExternalCheckerPolicies:
     """Lock both execution phases into one immutable approval-time value."""
     pre, post = await compile_external_checker_policies(
-        result,
-        registry,
-        project_id=project_id,
-        profiles=profiles,
+        request, registry, project_id=project_id, profiles=profiles,
     )
     body = {
         "schema_version": "external_checker_policies.v1",
@@ -385,95 +416,55 @@ async def compile_external_checker_policy_bundle(
     )
 
 
-async def _resolve(
-    bindings,
-    requirements,
-    registry,
-    phase,
+async def _resolve_attachments(
+    attachments: tuple[ExternalCheckerImageAttachment, ...],
+    registry: ExternalCheckerRegistryPort,
+    phase: ExternalCheckerPhase,
     *,
     project_id: UUID | None,
     profiles: ModelProfileReaderPort | None,
-):
-    from app.interfaces.project_agents import (
-        RequirementDisposition,
-    )
+) -> tuple[LockedExternalCheckerBinding, ...]:
+    from app.modules.checkers.api.external import ExternalCheckerRegistryUnavailable
 
-    expected = (
-        RequirementDisposition.SUPPORTED_PRE_SUBMIT
-        if phase == "pre_submit"
-        else RequirementDisposition.SUPPORTED_POST_SUBMIT
-    )
     resolved = []
-    for binding in sorted(
-        bindings,
-        key=lambda item: (item.requirement_id, item.capability_id, item.capability_version),
-    ):
-        requirement = requirements.get(binding.requirement_id)
+    for attachment in attachments:
+        try:
+            entry = await registry.read_exact(
+                attachment.registry_entry_id, attachment.registry_entry_digest,
+            )
+        except ExternalCheckerRegistryUnavailable as exc:
+            raise ExternalCheckerPolicyError("selected checker registry entry is unavailable") from exc
         if (
-            requirement is None
-            or requirement.disposition is not expected
-            or binding.stage.value != phase
-        ):
-            raise ExternalCheckerPolicyError("checker binding does not cover requirement")
-        entry = await registry.read_identity(
-            capability_id=binding.capability_id,
-            capability_version=binding.capability_version,
-            phase=phase,
-        )
-        if (
-            entry.capability_id != binding.capability_id
-            or entry.capability_version != binding.capability_version
+            entry.registry_entry_id != attachment.registry_entry_id
+            or entry.entry_digest != attachment.registry_entry_digest
             or entry.phase != phase
         ):
-            raise ExternalCheckerPolicyError("checker registry identity mismatch")
-        configuration = {
-            parameter.name: parameter.model_dump(mode="json")["value"]
-            for parameter in binding.parameters
-        }
-        trial_selector = validated_trial_configuration(configuration, entry)
-        specification = requirement.check_specification
-        trial_required = specification is not None and any(
-            dependency.provisioning == "trial_proxy"
-            for dependency in specification.runtime_dependencies
-        )
-        if trial_required != (trial_selector is not None):
-            raise ExternalCheckerPolicyError("trial dependency profile configuration is invalid")
+            raise ExternalCheckerPolicyError("selected checker registry identity or phase mismatch")
+        configuration = attachment.configuration
+        entry.configuration_schema.validate_instance(configuration)
+        validated_evaluation_context_roles(configuration, entry)
+        validated_forge_facts(configuration, entry)
+        validated_trial_configuration(configuration, entry)
         try:
             selector = configured_model_profile_selector(configuration, stage=phase)
-            model_required = specification is not None and any(
-                dependency.kind == "model_service"
-                for dependency in specification.runtime_dependencies
-            )
-            if model_required != (selector is not None):
-                raise ModelProfileConfigurationError(
-                    "model evaluation profile configuration is invalid"
-                )
             if selector is not None:
                 if project_id is None:
                     raise ModelProfileConfigurationError("model profile project is unavailable")
                 await require_model_profile_configuration(
-                    configuration,
-                    stage=phase,
-                    project_id=project_id,
-                    registry=entry,
-                    profiles=profiles,
+                    configuration, stage=phase, project_id=project_id,
+                    registry=entry, profiles=profiles,
                 )
         except ModelProfileConfigurationError as exc:
             raise ExternalCheckerPolicyError(str(exc)) from exc
         resolved.append(
             LockedExternalCheckerBinding(
-                requirement_id=binding.requirement_id,
+                requirement_id=attachment.requirement_id,
                 stage=phase,
                 registry=entry,
                 configuration=configuration,
                 configuration_sha256=external_checker_json_hash(configuration),
             )
         )
-    expected_ids = {
-        item.requirement_id for item in requirements.values() if item.disposition is expected
-    }
-    if {item.requirement_id for item in resolved} != expected_ids:
-        raise ExternalCheckerPolicyError("checker requirement coverage is incomplete")
     return tuple(resolved)
 
 

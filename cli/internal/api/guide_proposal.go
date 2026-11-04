@@ -33,6 +33,7 @@ type ProposalTarget struct {
 	ProjectID                      string         `json:"project_id"`
 	GuideID                        string         `json:"guide_id"`
 	CompilationID                  string         `json:"compilation_id"`
+	ResultSchemaVersion            string         `json:"result_schema_version"`
 	GuideVersion                   string         `json:"guide_version"`
 	SourceSnapshotID               string         `json:"source_snapshot_id"`
 	SourceSnapshotHash             string         `json:"source_snapshot_hash"`
@@ -42,14 +43,6 @@ type ProposalTarget struct {
 	FinalizationFactsDigest        string         `json:"finalization_facts_digest"`
 	ResultHash                     string         `json:"result_hash"`
 	ComponentHashes                ProposalHashes `json:"component_hashes"`
-	PreCatalogueID                 string         `json:"pre_catalogue_id"`
-	PreCatalogueVersion            string         `json:"pre_catalogue_version"`
-	PreCatalogueSchemaVersion      string         `json:"pre_catalogue_schema_version"`
-	PreCatalogueManifestHash       string         `json:"pre_catalogue_manifest_hash"`
-	PostCatalogueID                string         `json:"post_catalogue_id"`
-	PostCatalogueVersion           string         `json:"post_catalogue_version"`
-	PostCatalogueSchemaVersion     string         `json:"post_catalogue_schema_version"`
-	PostCatalogueManifestHash      string         `json:"post_catalogue_manifest_hash"`
 	ArtifactPolicyID               *string        `json:"artifact_policy_id"`
 	ArtifactPolicyHash             *string        `json:"artifact_policy_hash"`
 	ArtifactProjectionOperationID  *string        `json:"artifact_projection_operation_id"`
@@ -57,13 +50,12 @@ type ProposalTarget struct {
 }
 
 type ProposalHashes struct {
-	SufficiencyHash           string `json:"sufficiency_hash"`
-	ArtifactPolicyHash        string `json:"artifact_policy_hash"`
-	RequirementInventoryHash  string `json:"requirement_inventory_hash"`
-	PreSubmitHash             string `json:"pre_submit_hash"`
-	PostSubmitHash            string `json:"post_submit_hash"`
-	CapabilitySuggestionsHash string `json:"capability_suggestions_hash"`
-	SetupNotesHash            string `json:"setup_notes_hash"`
+	SchemaVersion            string `json:"schema_version"`
+	SufficiencyHash          string `json:"sufficiency_hash"`
+	ArtifactPolicyHash       string `json:"artifact_policy_hash"`
+	RequirementInventoryHash string `json:"requirement_inventory_hash"`
+	PreSubmitHash            string `json:"pre_submit_hash"`
+	PostSubmitHash           string `json:"post_submit_hash"`
 }
 
 type ProposalResult struct {
@@ -71,9 +63,6 @@ type ProposalResult struct {
 	Findings                 []ProposalFinding     `json:"findings"`
 	SubmissionArtifactPolicy *ProposalIntakePolicy `json:"submission_artifact_policy"`
 	Requirements             []ProposalRequirement `json:"requirements"`
-	PreSubmitBindings        []ProposalPreBinding  `json:"pre_submit_bindings"`
-	PostSubmitBindings       []ProposalPostBinding `json:"post_submit_bindings"`
-	CapabilitySuggestions    []ProposalSuggestion  `json:"capability_suggestions"`
 	SetupNotes               []string              `json:"setup_notes"`
 	AgentName                string                `json:"agent_name"`
 	AgentVersion             string                `json:"agent_version"`
@@ -95,28 +84,24 @@ type ProposalFinding struct {
 }
 
 type ProposalRequirement struct {
-	RequirementID           string                      `json:"requirement_id"`
-	Statement               string                      `json:"statement"`
-	Disposition             string                      `json:"disposition"`
-	ClassificationRationale *string                     `json:"classification_rationale"`
-	CheckSpecification      *ProposalCheckSpecification `json:"check_specification"`
-	PlatformCoverage        *ProposalPlatformCoverage   `json:"platform_coverage"`
-	EvidenceRefs            []ProposalEvidence          `json:"evidence_refs"`
+	SuggestionID            string                     `json:"suggestion_id"`
+	Statement               string                     `json:"statement"`
+	Stage                   string                     `json:"stage"`
+	ClassificationRationale string                     `json:"classification_rationale"`
+	CheckSpecification      ProposalCheckSpecification `json:"check_specification"`
+	EvidenceRefs            []ProposalEvidence         `json:"evidence_refs"`
 }
 
 type ProposalCheckSpecification struct {
-	EvaluationMethod       string                               `json:"evaluation_method"`
-	ExecutionMode          string                               `json:"execution_mode"`
-	MaximumDurationSeconds *big.Int                             `json:"maximum_duration_seconds"`
-	StageRationale         string                               `json:"stage_rationale"`
-	Inputs                 []ProposalCheckInput                 `json:"inputs"`
-	CheckSteps             []string                             `json:"check_steps"`
-	PassConditions         []string                             `json:"pass_conditions"`
-	FailureFindings        []ProposalCheckFailureFinding        `json:"failure_findings"`
-	PositiveTests          []string                             `json:"positive_tests"`
-	NegativeTests          []ProposalCheckNegativeTest          `json:"negative_tests"`
-	RuntimeDependencies    []ProposalCheckRuntimeDependency     `json:"runtime_dependencies"`
-	InfrastructureFailures []ProposalCheckInfrastructureFailure `json:"infrastructure_failures"`
+	EvaluationMethod    string                        `json:"evaluation_method"`
+	Inputs              []ProposalCheckInput          `json:"inputs"`
+	CheckSteps          []string                      `json:"check_steps"`
+	PassConditions      []string                      `json:"pass_conditions"`
+	FailureFindings     []ProposalCheckFailureFinding `json:"failure_findings"`
+	PositiveTests       []string                      `json:"positive_tests"`
+	NegativeTests       []ProposalCheckNegativeTest   `json:"negative_tests"`
+	ImplementationNeeds []string                      `json:"implementation_needs"`
+	InabilityToEvaluate []ProposalCheckInability      `json:"inability_to_evaluate"`
 }
 
 type ProposalCheckInput struct {
@@ -140,48 +125,9 @@ type ProposalCheckNegativeTest struct {
 	ExpectedFindingCodes []string `json:"expected_finding_codes"`
 }
 
-type ProposalCheckRuntimeDependency struct {
-	DependencyID    string `json:"dependency_id"`
-	Kind            string `json:"kind"`
-	Provisioning    string `json:"provisioning"`
-	Purpose         string `json:"purpose"`
-	UnavailableCode string `json:"unavailable_code"`
-}
-
-type ProposalCheckInfrastructureFailure struct {
+type ProposalCheckInability struct {
 	Code      string `json:"code"`
 	Condition string `json:"condition"`
-}
-
-type ProposalPlatformCoverage struct {
-	CapabilityID      string `json:"capability_id"`
-	CapabilityVersion string `json:"capability_version"`
-	Stage             string `json:"stage"`
-}
-
-type ProposalPreBinding struct {
-	RequirementID     string              `json:"requirement_id"`
-	CapabilityID      string              `json:"capability_id"`
-	CapabilityVersion string              `json:"capability_version"`
-	Stage             string              `json:"stage"`
-	Parameters        []ProposalParameter `json:"parameters"`
-}
-
-type ProposalPostBinding struct {
-	ProposalPreBinding
-}
-
-type ProposalParameter struct {
-	Name  string          `json:"name"`
-	Value json.RawMessage `json:"value"`
-}
-
-type ProposalSuggestion struct {
-	RequirementID string             `json:"requirement_id"`
-	Stage         string             `json:"stage"`
-	Title         string             `json:"title"`
-	Rationale     string             `json:"rationale"`
-	EvidenceRefs  []ProposalEvidence `json:"evidence_refs"`
 }
 
 type ProposalIntakePolicy struct {
@@ -251,23 +197,20 @@ func proposalDigests(values []string) bool {
 
 func validateProposalTarget(raw json.RawMessage, value *ProposalTarget) error {
 	fields, err := contextObject(raw, value, []string{
-		"project_id", "guide_id", "compilation_id", "guide_version", "source_snapshot_id", "source_snapshot_hash",
+		"project_id", "guide_id", "compilation_id", "result_schema_version", "guide_version", "source_snapshot_id", "source_snapshot_hash",
 		"setup_run_id", "setup_generation", "finalization_id", "finalization_facts_digest", "result_hash", "component_hashes",
-		"pre_catalogue_id", "pre_catalogue_version", "pre_catalogue_schema_version", "pre_catalogue_manifest_hash",
-		"post_catalogue_id", "post_catalogue_version", "post_catalogue_schema_version", "post_catalogue_manifest_hash",
 	}, nil)
-	if err != nil {
-		return err
+	if err != nil || value.ResultSchemaVersion != "project_guide_check_specification.v1" {
+		return errors.New("invalid proposal target")
 	}
 	for _, key := range []string{"artifact_policy_id", "artifact_policy_hash", "artifact_projection_operation_id", "artifact_projection_output_digest"} {
 		if _, present := fields[key]; !present {
 			return errors.New("missing nullable target")
 		}
 	}
-	if value.SetupGeneration.Sign() <= 0 {
+	if value.SetupGeneration == nil || value.SetupGeneration.Sign() <= 0 {
 		return errors.New("invalid generation")
 	}
-	// This tuple is one nullable response identity, not four independent facts.
 	present := 0
 	for _, field := range []*string{value.ArtifactPolicyID, value.ArtifactPolicyHash, value.ArtifactProjectionOperationID, value.ArtifactProjectionOutputDigest} {
 		if field != nil {
@@ -292,39 +235,35 @@ func validateProposalTarget(raw json.RawMessage, value *ProposalTarget) error {
 			return errors.New("invalid policy digest")
 		}
 	}
-	if !proposalDigests([]string{value.SourceSnapshotHash, value.FinalizationFactsDigest, value.ResultHash, value.PreCatalogueManifestHash, value.PostCatalogueManifestHash}) {
+	if !proposalDigests([]string{value.SourceSnapshotHash, value.FinalizationFactsDigest, value.ResultHash}) {
 		return errors.New("invalid target digest")
 	}
 	_, err = contextObject(fields["component_hashes"], &value.ComponentHashes, []string{
-		"sufficiency_hash", "artifact_policy_hash", "requirement_inventory_hash", "pre_submit_hash", "post_submit_hash", "capability_suggestions_hash", "setup_notes_hash",
+		"schema_version", "sufficiency_hash", "artifact_policy_hash", "requirement_inventory_hash", "pre_submit_hash", "post_submit_hash",
 	}, nil)
-	if err != nil || !proposalDigests([]string{value.ComponentHashes.SufficiencyHash, value.ComponentHashes.ArtifactPolicyHash, value.ComponentHashes.RequirementInventoryHash, value.ComponentHashes.PreSubmitHash, value.ComponentHashes.PostSubmitHash, value.ComponentHashes.CapabilitySuggestionsHash, value.ComponentHashes.SetupNotesHash}) {
+	if err != nil || value.ComponentHashes.SchemaVersion != "project_guide_check_specification_hashes.v1" || !proposalDigests([]string{
+		value.ComponentHashes.SufficiencyHash, value.ComponentHashes.ArtifactPolicyHash, value.ComponentHashes.RequirementInventoryHash,
+		value.ComponentHashes.PreSubmitHash, value.ComponentHashes.PostSubmitHash,
+	}) {
 		return errors.New("invalid component identities")
 	}
 	return nil
 }
 
 func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
-	fields, err := contextObject(raw, value, []string{"status", "agent_version"}, []string{"setup_notes"})
+	fields, err := contextObject(raw, value, []string{
+		"status", "agent_version", "agent_name", "schema_version", "findings", "requirements",
+	}, []string{"setup_notes"})
 	if err != nil {
 		return err
 	}
 	if value.Status != "guide_blocked" && value.Status != "draft_ready" && value.Status != "draft_ready_with_warnings" {
 		return errors.New("invalid proposal classification")
 	}
-	// Defaults mirror the public response model, not provider-input completeness.
-	if _, present := fields["agent_name"]; !present {
-		value.AgentName = "ProjectGuideCompilationAgent"
+	if _, present := fields["submission_artifact_policy"]; !present {
+		return errors.New("missing result policy")
 	}
-	if _, present := fields["schema_version"]; !present {
-		value.SchemaVersion = "project_guide_compilation_result.v1"
-	}
-	for _, key := range []string{"agent_name", "schema_version"} {
-		if string(fields[key]) == "null" {
-			return errors.New("null result field")
-		}
-	}
-	if value.AgentName != "ProjectGuideCompilationAgent" || value.SchemaVersion != "project_guide_compilation_result.v1" {
+	if value.AgentName != "ProjectGuideCompilationAgent" || value.SchemaVersion != "project_guide_check_specification.v1" {
 		return errors.New("invalid proposal protocol")
 	}
 	if policy := fields["submission_artifact_policy"]; len(policy) > 0 && string(policy) != "null" {
@@ -352,68 +291,28 @@ func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
 			return errors.New("invalid packaging type")
 		}
 	}
-	for _, key := range []string{"findings", "requirements", "pre_submit_bindings", "post_submit_bindings", "capability_suggestions"} {
-		if _, present := fields[key]; !present {
-			continue
-		}
+	for _, key := range []string{"findings", "requirements"} {
 		var members []json.RawMessage
 		if jsonv2.Unmarshal(fields[key], &members) != nil || members == nil {
 			return errors.New("invalid result array")
 		}
 		for _, member := range members {
 			var nested map[string]json.RawMessage
-			switch key {
-			case "findings":
+			if key == "findings" {
 				var item ProposalFinding
 				nested, err = contextObject(member, &item, []string{"severity", "code", "message"}, nil)
 				if err == nil && item.Severity != "blocking_gap" && item.Severity != "warning" && item.Severity != "info" {
 					err = errors.New("invalid finding type")
 				}
-			case "requirements":
+			} else {
 				var item ProposalRequirement
-				nested, err = contextObject(member, &item, []string{"requirement_id", "statement", "disposition"}, nil)
-				if err == nil {
-					switch item.Disposition {
-					case "platform_covered", "supported_pre_submit", "pre_submit_capability_gap", "supported_post_submit", "post_submit_capability_gap", "human_review", "project_lifecycle_policy", "guide_blocker", "informational":
-					default:
-						err = errors.New("invalid requirement classification")
-					}
-				}
-				if err == nil && item.PlatformCoverage != nil {
-					_, err = contextObject(nested["platform_coverage"], item.PlatformCoverage, []string{"capability_id", "capability_version", "stage"}, nil)
-					if err == nil && !proposalStage(item.PlatformCoverage.Stage) {
-						err = errors.New("invalid coverage stage")
-					}
+				nested, err = contextObject(member, &item, []string{"suggestion_id", "statement", "stage", "classification_rationale", "check_specification", "evidence_refs"}, nil)
+				if err == nil && (!proposalIdentifier.MatchString(item.SuggestionID) || !proposalStage(item.Stage) ||
+					!proposalProse(item.Statement) || !proposalProse(item.ClassificationRationale) || len(item.EvidenceRefs) == 0) {
+					err = errors.New("invalid check suggestion")
 				}
 				if err == nil {
-					err = validateProposalRequirementSpecification(nested, &item)
-				}
-			case "capability_suggestions":
-				var item ProposalSuggestion
-				nested, err = contextObject(member, &item, []string{"requirement_id", "stage", "title", "rationale", "evidence_refs"}, nil)
-				if err == nil && len(item.EvidenceRefs) == 0 {
-					err = errors.New("missing suggestion evidence")
-				}
-				if err == nil && !proposalStage(item.Stage) {
-					err = errors.New("invalid suggestion stage")
-				}
-			case "pre_submit_bindings":
-				var item ProposalPreBinding
-				nested, err = contextObject(member, &item, []string{"requirement_id", "capability_id", "capability_version", "stage"}, nil)
-				if err == nil && item.Stage != "pre_submit" {
-					err = errors.New("invalid binding stage")
-				}
-				if err == nil {
-					err = validateProposalParameters(nested["parameters"])
-				}
-			case "post_submit_bindings":
-				var item ProposalPostBinding
-				nested, err = contextObject(member, &item, []string{"requirement_id", "capability_id", "capability_version", "stage"}, nil)
-				if err == nil && item.Stage != "post_submit" {
-					err = errors.New("invalid binding stage")
-				}
-				if err == nil {
-					err = validateProposalParameters(nested["parameters"])
+					err = validateProposalCheckSpecification(nested["check_specification"], &item.CheckSpecification)
 				}
 			}
 			if err != nil {
@@ -429,124 +328,73 @@ func validateProposalResult(raw json.RawMessage, value *ProposalResult) error {
 
 var proposalIdentifier = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,99}$`)
 
-func validateProposalRequirementSpecification(fields map[string]json.RawMessage, value *ProposalRequirement) error {
-	rationaleRaw, rationalePresent := fields["classification_rationale"]
-	if rationalePresent {
-		if string(rationaleRaw) == "null" || value.ClassificationRationale == nil || !proposalProse(*value.ClassificationRationale) {
-			return errors.New("invalid classification rationale")
-		}
-	}
-	raw, present := fields["check_specification"]
-	if present && (string(raw) == "null" || value.CheckSpecification == nil) {
-		return errors.New("invalid check specification")
-	}
-	checkerStage := ""
-	supported := false
-	switch value.Disposition {
-	case "supported_pre_submit":
-		checkerStage, supported = "pre_submit", true
-	case "pre_submit_capability_gap":
-		checkerStage = "pre_submit"
-	case "supported_post_submit":
-		checkerStage, supported = "post_submit", true
-	case "post_submit_capability_gap":
-		checkerStage = "post_submit"
-	default:
-		if present {
-			return errors.New("check specification on non-checker requirement")
-		}
-	}
-	if present && (!rationalePresent || len(value.EvidenceRefs) == 0) {
-		return errors.New("incomplete typed check requirement")
-	}
-	if checkerStage != "" && rationalePresent && !present {
-		return errors.New("typed check requirement lacks specification")
-	}
-	if !present {
-		return nil // Retained results predate the typed specification fields.
-	}
-	return validateProposalCheckSpecification(raw, value.CheckSpecification, checkerStage, supported)
-}
-
-func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalCheckSpecification, stage string, supported bool) error {
+func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalCheckSpecification) error {
 	fields, err := contextObject(raw, value, []string{
-		"evaluation_method", "execution_mode", "maximum_duration_seconds", "stage_rationale", "inputs", "check_steps",
-		"pass_conditions", "failure_findings", "positive_tests", "negative_tests", "runtime_dependencies", "infrastructure_failures",
+		"evaluation_method", "inputs", "check_steps", "pass_conditions", "failure_findings",
+		"positive_tests", "negative_tests", "implementation_needs", "inability_to_evaluate",
 	}, nil)
-	if err != nil || stage == "" || value.MaximumDurationSeconds == nil || value.MaximumDurationSeconds.Sign() <= 0 || value.MaximumDurationSeconds.Cmp(big.NewInt(3600)) > 0 || !proposalProse(value.StageRationale) {
+	if err != nil || !proposalProse(value.EvaluationMethod) {
 		return errors.New("invalid check specification")
 	}
-	if (stage == "pre_submit" && (value.ExecutionMode != "bounded_pre_submit" || value.MaximumDurationSeconds.Cmp(big.NewInt(60)) > 0)) ||
-		(stage == "post_submit" && value.ExecutionMode != "background") {
-		return errors.New("check stage conflicts with execution budget")
+	for _, field := range []string{"check_steps", "pass_conditions", "positive_tests", "implementation_needs"} {
+		maximum := 20
+		if field == "positive_tests" || field == "implementation_needs" {
+			maximum = 10
+		}
+		if err := validateProposalStringList(fields[field], 1, maximum); err != nil {
+			return err
+		}
 	}
-	if value.EvaluationMethod != "static_inspection" && value.EvaluationMethod != "isolated_execution" && value.EvaluationMethod != "model_evaluation" {
-		return errors.New("invalid evaluation method")
-	}
-	if stage == "pre_submit" && value.EvaluationMethod == "model_evaluation" {
-		return errors.New("model evaluation must run after submission")
-	}
-	if err = validateProposalStringList(fields["check_steps"], 1, 20); err != nil {
-		return err
-	}
-	if err = validateProposalStringList(fields["pass_conditions"], 1, 20); err != nil {
-		return err
-	}
-	if err = validateProposalStringList(fields["positive_tests"], 1, 10); err != nil {
-		return err
-	}
-
-	inputKinds := make(map[string]bool)
-	inputIDs := make(map[string]bool)
 	inputs, err := proposalObjectMembers(fields["inputs"], 1, 20)
 	if err != nil {
 		return err
 	}
+	inputIDs := make(map[string]bool)
 	for index, member := range inputs {
 		item := &value.Inputs[index]
 		itemFields, decodeErr := contextObject(member, item, []string{"input_id", "kind", "purpose"}, nil)
-		if decodeErr != nil || !proposalIdentifier.MatchString(item.InputID) || inputIDs[item.InputID] || !proposalProse(item.Purpose) {
+		if decodeErr != nil || !proposalIdentifier.MatchString(item.InputID) || !proposalIdentifier.MatchString(item.Kind) ||
+			inputIDs[item.InputID] || !proposalProse(item.Purpose) {
 			return errors.New("invalid check input")
 		}
-		inputIDs[item.InputID] = true
-		switch item.Kind {
-		case "package", "manifest", "request_metadata", "task_context", "guide_context", "prepared_material":
-			if _, hasPath := itemFields["relative_path"]; hasPath {
-				return errors.New("unexpected input path")
-			}
-		case "relative_file", "relative_directory":
-			pathRaw, hasPath := itemFields["relative_path"]
-			if !hasPath || string(pathRaw) == "null" || item.RelativePath == nil || !proposalRelativePath(*item.RelativePath) {
-				return errors.New("invalid input path")
-			}
-		default:
-			return errors.New("invalid input kind")
+		if rawPath, present := itemFields["relative_path"]; present && (string(rawPath) == "null" || item.RelativePath == nil || !proposalRelativePath(*item.RelativePath)) {
+			return errors.New("invalid input path")
 		}
-		inputKinds[item.Kind] = true
+		inputIDs[item.InputID] = true
 	}
-
 	findingLevels := make(map[string]string)
-	findingMembers, err := proposalObjectMembers(fields["failure_findings"], 1, 20)
+	findings, err := proposalObjectMembers(fields["failure_findings"], 1, 20)
 	if err != nil {
 		return err
 	}
-	for index, member := range findingMembers {
+	for index, member := range findings {
 		item := &value.FailureFindings[index]
 		if _, decodeErr := contextObject(member, item, []string{"code", "level", "condition", "message"}, nil); decodeErr != nil ||
-			!proposalIdentifier.MatchString(item.Code) || findingLevels[item.Code] != "" || proposalInfraCode(item.Code) ||
-			!proposalProse(item.Condition) || !proposalProse(item.Message) ||
-			(item.Level != "warning" && item.Level != "error" && item.Level != "coverage_incomplete") {
+			!proposalIdentifier.MatchString(item.Code) || findingLevels[item.Code] != "" ||
+			!proposalProse(item.Condition) || !proposalProse(item.Message) || (item.Level != "warning" && item.Level != "error") {
 			return errors.New("invalid failure finding")
 		}
 		findingLevels[item.Code] = item.Level
 	}
-
-	negativeNames := make(map[string]bool)
-	negativeMembers, err := proposalObjectMembers(fields["negative_tests"], 1, 10)
+	inabilityCodes := make(map[string]bool)
+	inabilities, err := proposalObjectMembers(fields["inability_to_evaluate"], 1, 10)
 	if err != nil {
 		return err
 	}
-	for index, member := range negativeMembers {
+	for index, member := range inabilities {
+		item := &value.InabilityToEvaluate[index]
+		if _, decodeErr := contextObject(member, item, []string{"code", "condition"}, nil); decodeErr != nil ||
+			!proposalIdentifier.MatchString(item.Code) || inabilityCodes[item.Code] || findingLevels[item.Code] != "" || !proposalProse(item.Condition) {
+			return errors.New("invalid inability to evaluate")
+		}
+		inabilityCodes[item.Code] = true
+	}
+	negativeNames := make(map[string]bool)
+	negativeTests, err := proposalObjectMembers(fields["negative_tests"], 1, 10)
+	if err != nil {
+		return err
+	}
+	for index, member := range negativeTests {
 		item := &value.NegativeTests[index]
 		if _, decodeErr := contextObject(member, item, []string{"name", "scenario", "expected_verdict", "expected_finding_codes"}, []string{"expected_finding_codes"}); decodeErr != nil ||
 			!proposalIdentifier.MatchString(item.Name) || negativeNames[item.Name] || !proposalProse(item.Scenario) ||
@@ -566,77 +414,6 @@ func validateProposalCheckSpecification(raw json.RawMessage, value *ProposalChec
 		}
 		if (item.ExpectedVerdict == "failed") != hasError {
 			return errors.New("negative test verdict conflicts with findings")
-		}
-	}
-
-	dependencyKinds := make(map[string]bool)
-	dependencyIDs := make(map[string]bool)
-	usesTrial := false
-	dependencyMembers, err := proposalObjectMembers(fields["runtime_dependencies"], 0, 10)
-	if err != nil {
-		return err
-	}
-	for index, member := range dependencyMembers {
-		item := &value.RuntimeDependencies[index]
-		if _, decodeErr := contextObject(member, item, []string{"dependency_id", "kind", "provisioning", "purpose", "unavailable_code"}, nil); decodeErr != nil ||
-			!proposalIdentifier.MatchString(item.DependencyID) || dependencyIDs[item.DependencyID] || !proposalProse(item.Purpose) || !proposalInfraCode(item.UnavailableCode) {
-			return errors.New("invalid runtime dependency")
-		}
-		expected := map[string][2]string{
-			"checker_tool":       {"checker_implementation", "implementation_unavailable"},
-			"isolated_execution": {"current_runner", "implementation_unavailable"},
-			"nested_sandbox":     {"runtime_gap", "implementation_unavailable"},
-			"task_context":       {"runtime_gap", "material_unavailable"},
-			"guide_context":      {"runtime_gap", "material_unavailable"},
-			"execution_capacity": {"runtime_gap", "capacity_exceeded"},
-			"prepared_material":  {"runtime_gap", "material_unavailable"},
-		}[item.Kind]
-		valid := expected != [2]string{} && item.Provisioning == expected[0] && item.UnavailableCode == expected[1]
-		if item.Kind == "model_service" {
-			valid = item.UnavailableCode == "implementation_unavailable" &&
-				(item.Provisioning == "model_proxy" || (!supported && item.Provisioning == "runtime_gap"))
-		}
-		if (item.Kind == "nested_sandbox" || item.Kind == "prepared_material") && item.Provisioning == "trial_proxy" {
-			valid = stage == "post_submit" && item.UnavailableCode == expected[1]
-			usesTrial = true
-		}
-		if !valid || (supported && item.Provisioning == "runtime_gap") {
-			return errors.New("invalid runtime dependency provisioning")
-		}
-		dependencyIDs[item.DependencyID], dependencyKinds[item.Kind] = true, true
-	}
-	if usesTrial && !dependencyKinds["nested_sandbox"] {
-		return errors.New("trial material requires an isolated trial dependency")
-	}
-	for _, kind := range []string{"task_context", "guide_context", "prepared_material"} {
-		if inputKinds[kind] != dependencyKinds[kind] {
-			return errors.New("material inputs and dependencies must match")
-		}
-	}
-	if (value.EvaluationMethod == "model_evaluation" && !dependencyKinds["model_service"]) ||
-		(value.EvaluationMethod == "isolated_execution" && !dependencyKinds["isolated_execution"]) {
-		return errors.New("missing runtime dependency")
-	}
-	if stage == "pre_submit" && dependencyKinds["model_service"] {
-		return errors.New("model service must run after submission")
-	}
-
-	infraCodes := make(map[string]bool)
-	infraMembers, err := proposalObjectMembers(fields["infrastructure_failures"], 1, 5)
-	if err != nil {
-		return err
-	}
-	for index, member := range infraMembers {
-		item := &value.InfrastructureFailures[index]
-		if _, decodeErr := contextObject(member, item, []string{"code", "condition"}, nil); decodeErr != nil ||
-			!proposalInfraCode(item.Code) || infraCodes[item.Code] || !proposalProse(item.Condition) {
-			return errors.New("invalid infrastructure failure")
-		}
-		infraCodes[item.Code] = true
-	}
-	for _, dependency := range value.RuntimeDependencies {
-		if !infraCodes[dependency.UnavailableCode] {
-			return errors.New("dependency failure is not specified")
 		}
 	}
 	return nil
@@ -666,15 +443,6 @@ func validateProposalStringList(raw json.RawMessage, minimum, maximum int) error
 func proposalProse(value string) bool {
 	length := utf8.RuneCountInString(value)
 	return utf8.ValidString(value) && length >= 1 && length <= 1000
-}
-
-func proposalInfraCode(value string) bool {
-	switch value {
-	case "capacity_exceeded", "deadline_exceeded", "material_unavailable", "implementation_unavailable", "invalid_output":
-		return true
-	default:
-		return false
-	}
 }
 
 func proposalRelativePath(value string) bool {
@@ -719,45 +487,6 @@ func validateProposalEvidence(raw json.RawMessage) error {
 			if _, present := fields[key]; !present {
 				return errors.New("missing evidence field")
 			}
-		}
-	}
-	return nil
-}
-
-func validateProposalParameters(raw json.RawMessage) error {
-	if len(raw) == 0 {
-		return nil
-	}
-	var members []json.RawMessage
-	if jsonv2.Unmarshal(raw, &members) != nil || members == nil || len(members) > 50 {
-		return errors.New("invalid parameters")
-	}
-	names := make(map[string]bool)
-	for _, member := range members {
-		var value ProposalParameter
-		if _, err := contextObject(member, &value, []string{"name", "value"}, nil); err != nil || !proposalIdentifier.MatchString(value.Name) || names[value.Name] {
-			return errors.New("invalid parameter")
-		}
-		names[value.Name] = true
-		var scalar any
-		if jsonv2.Unmarshal(value.Value, &scalar) != nil {
-			return errors.New("invalid scalar")
-		}
-		switch item := scalar.(type) {
-		case string, bool, float64:
-		case []any:
-			if len(item) == 0 || len(item) > 50 {
-				return errors.New("empty parameter array")
-			}
-			for _, atom := range item {
-				switch atom.(type) {
-				case string, bool, float64:
-				default:
-					return errors.New("invalid scalar array")
-				}
-			}
-		default:
-			return errors.New("invalid parameter value")
 		}
 	}
 	return nil

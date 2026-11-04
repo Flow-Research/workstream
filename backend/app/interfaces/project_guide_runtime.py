@@ -101,7 +101,7 @@ class ProjectGuideRuntimeConfiguration(BaseModel):
     instructions: str = Field(min_length=1, max_length=16_000)
     instructions_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     timeout_seconds: StrictInt = Field(ge=1, le=7200)
-    maximum_manifest_bytes: StrictInt = Field(default=256_000, ge=1024, le=1_000_000)
+    maximum_manifest_bytes: StrictInt = Field(default=512_000, ge=1024, le=1_000_000)
     maximum_documents: StrictInt = Field(default=100, ge=1, le=100)
     maximum_document_bytes: StrictInt = Field(default=64 * 1024 * 1024, ge=1, le=512 * 1024 * 1024)
     maximum_total_document_bytes: StrictInt = Field(default=512 * 1024 * 1024, ge=1)

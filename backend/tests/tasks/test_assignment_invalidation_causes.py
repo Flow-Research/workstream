@@ -225,7 +225,7 @@ async def test_committed_cause_cannot_target_another_valid_assignment(
     cause = await committed_authority_invalidation(s.sessions).read_invalidation(s.invalidation_id)
     assert cause is not None and before[1][0]["assigned_at"] <= cause.recorded_at
     assert (
-        before[0]["status"] == "claimed" and before[0]["assigned_to"] == grant["actor_profile_id"]
+        before[0]["status"] == "in_progress" and before[0]["assigned_to"] == grant["actor_profile_id"]
     )
     assert before[1][0]["status"] == "active" and before[1][0]["released_at"] is None
     assert await s.h.delivery.observe_invocation(envelope) is not None

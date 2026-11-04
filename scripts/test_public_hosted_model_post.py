@@ -23,6 +23,7 @@ from app.modules.model_usage.api import ProjectModelProfile  # noqa: E402
 from experiments.pilot04_external_checker_runtime.public_hosted_model_post import (  # noqa: E402
     CEILING, CHECK, MODEL, ModelPostQualification, canonical, digest, fixture_archive,
     profile_spec, registry_spec, require_completed_effect, specification, POST_IMAGE, POST_CONFIG, POST_ARCHIVE,
+    POST_CONTEXT_TREE,
     account_snapshot, validate_runtime_window, observe_model_post, paid_custody, model_grant_snapshot,
 )
 
@@ -194,6 +195,8 @@ class HostedModelAuthority(unittest.TestCase):
                 ))
 
     def test_cache_requires_exact_qualified_production_image_not_a_substitute(self):
+        from experiments.pilot04_external_checker_runtime import public_hosted_attachment as hosted
+
         qualification = self.qualification()
         binding = {'node_config': {'cache': [{'repository': 'workstream/terminal-systems-post',
             'platform_manifest_digest': POST_IMAGE.rsplit('@', 1)[1], 'config_image_id': POST_CONFIG,
@@ -201,15 +204,43 @@ class HostedModelAuthority(unittest.TestCase):
         (self.root / 'node-binding.json').write_bytes(canonical(binding))
         attachment = SimpleNamespace(node_root=self.root, values={'WORKSTREAM_MODEL_PROXY_ENABLED': 'true'},
                                      custody={'model-proxy': {'image_id': 'verified-by-attachment'}})
-        qualification.verify_cache(attachment)
-        qualification.image_config_digest = 'sha256:' + '0' * 64
-        with self.assertRaisesRegex(RuntimeError, 'image identity differs'):
+        # Supply the qualified source fact independently of this checkout's
+        # model-tree content; historical image qualification is not refreshed.
+        with patch.object(hosted, '_command', return_value=(POST_CONTEXT_TREE + '\n').encode()) as command:
             qualification.verify_cache(attachment)
-        qualification.image_config_digest = POST_CONFIG
-        binding['node_config']['cache'][0]['smol']['archive_sha256'] = 'sha256:' + '0' * 64
+            command.assert_called_once_with(['git', 'rev-parse', 'HEAD:pilots/terminal_systems/checkers/post/model'])
+            self.assertEqual(qualification.state['image_context_tree'], POST_CONTEXT_TREE)
+            qualification.image_config_digest = 'sha256:' + '0' * 64
+            with self.assertRaisesRegex(RuntimeError, 'image identity differs'):
+                qualification.verify_cache(attachment)
+            self.assertEqual(command.call_count, 1)
+            qualification.image_config_digest = POST_CONFIG
+            binding['node_config']['cache'][0]['smol']['archive_sha256'] = 'sha256:' + '0' * 64
+            (self.root / 'node-binding.json').write_bytes(canonical(binding))
+            with self.assertRaisesRegex(RuntimeError, 'absent or substituted'):
+                qualification.verify_cache(attachment)
+            self.assertEqual(command.call_count, 2)
+
+    def test_cache_rejects_changed_source_tree_before_checkpoint(self):
+        from experiments.pilot04_external_checker_runtime import public_hosted_attachment as hosted
+
+        qualification = self.qualification()
+        binding = {'node_config': {'cache': [{'repository': 'workstream/terminal-systems-post',
+            'platform_manifest_digest': POST_IMAGE.rsplit('@', 1)[1], 'config_image_id': POST_CONFIG,
+            'smol': {'archive_sha256': POST_ARCHIVE}}]}}
         (self.root / 'node-binding.json').write_bytes(canonical(binding))
-        with self.assertRaisesRegex(RuntimeError, 'absent or substituted'):
-            qualification.verify_cache(attachment)
+        attachment = SimpleNamespace(node_root=self.root, values={'WORKSTREAM_MODEL_PROXY_ENABLED': 'true'},
+                                     custody={'model-proxy': {'image_id': 'verified-by-attachment'}})
+        retained = qualification.proof_state.read_bytes()
+        state = copy.deepcopy(qualification.state)
+        with patch.object(hosted, '_command', return_value=('0' * 40 + '\n').encode()) as command, \
+                patch.object(qualification, 'checkpoint') as checkpoint:
+            with self.assertRaisesRegex(RuntimeError, 'production model image context changed after qualification'):
+                qualification.verify_cache(attachment)
+            command.assert_called_once_with(['git', 'rev-parse', 'HEAD:pilots/terminal_systems/checkers/post/model'])
+            checkpoint.assert_not_called()
+        self.assertEqual(qualification.state, state)
+        self.assertEqual(qualification.proof_state.read_bytes(), retained)
 
     def test_one_literal_profile_reserves_full_context_within_the_total_authorization(self):
         profile = profile_spec(new_record_id(), new_record_id())
@@ -321,23 +352,32 @@ class HostedModelAuthority(unittest.TestCase):
         self.assertEqual(budget['lifetime_limit_nanodollars'], CEILING)
         self.assertEqual(budget['configuration_version'], 1)
         self.assertEqual(qualification.state['historical_charge']['status'], 'unresolved_separate')
-        original = qualification.guide_bytes()
-        capabilities = {stage: {'capability_id': 'fixture.' + stage, 'capability_version': 'v1'}
-                        for stage in ('pre_submit', 'post_submit')}
-        rules = json.loads(qualification.rules(original, capabilities, 0))
-        binding = rules['post_submit_bindings'][0]
-        configuration = {item['name']: item['value'] for item in binding['parameters']}
+        selected = qualification.approval_attachments()
+        self.assertEqual(selected['pre_submit_attachments'], [])
+        [attachment] = selected['post_submit_attachments']
+        self.assertEqual(attachment['requirement_id'], CHECK)
+        self.assertEqual(attachment['registry_entry_id'], qualification.registry['registry_entry_id'])
+        self.assertEqual(attachment['registry_entry_digest'], qualification.registry['entry_digest'])
+        configuration = attachment['configuration']
         registry_spec('sha256:' + 'a' * 64).configuration_schema.validate_instance(configuration)
         self.assertEqual(configuration['check'], CHECK)
         self.assertEqual(configuration['model_profile_id'], str(profile_id))
-        self.assertEqual(rules['pre_submit_bindings'], [])
+        self.assertEqual(configuration['model_profile_digest'], qualification.profile.profile_digest)
+        original = qualification.guide_bytes()
+        rules = json.loads(qualification.rules(original, 0))
+        self.assertNotIn('pre_submit_bindings', rules)
+        self.assertNotIn('post_submit_bindings', rules)
         doc = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(original))
         authored = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(canonical(rules)))
         result = _compile_rules(SimpleNamespace(agent_version='v1', material=SimpleNamespace(documents=[doc, authored])), [(authored, rules)])
-        self.assertEqual(result.requirements[0].check_specification, specification()[0])
-        self.assertEqual(result.requirements[0].check_specification.runtime_dependencies[0].provisioning, 'model_proxy')
-        with self.assertRaisesRegex(RuntimeError, 'PRE model'):
-            qualification.rules(original, capabilities, 1)
+        [suggestion] = result.requirements
+        self.assertEqual(suggestion.stage, 'post_submit')
+        self.assertNotEqual(suggestion.suggestion_id, attachment['requirement_id'])
+        self.assertEqual([ref.sha256 for ref in suggestion.evidence_refs], [doc.sha256, authored.sha256])
+        self.assertEqual(suggestion.check_specification, specification()[0])
+        self.assertTrue(suggestion.check_specification.implementation_needs)
+        with self.assertRaisesRegex(RuntimeError, 'must not propose a PRE check'):
+            qualification.rules(original, 1)
 
     def test_ambiguous_effect_or_outstanding_reservation_cannot_claim_model_proof(self):
         good = {'reserved_nanodollars': 0, 'effects': [{'state': 'completed', 'provider_response_known': True,

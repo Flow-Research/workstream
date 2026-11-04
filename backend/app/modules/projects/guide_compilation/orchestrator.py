@@ -20,7 +20,6 @@ from app.interfaces.project_agents import (
     ProjectGuideCompilationInvalidOutputError,
     ProjectGuideCompilationResult,
     project_guide_compilation_prompt_bytes,
-    require_complete_generated_specifications,
     require_complete_project_guide_compilation_result,
     validate_project_guide_compilation_result,
 )
@@ -36,7 +35,6 @@ from app.modules.authorization.api import (
     PreparedAuthorizationInvalid,
     ProjectGuideCompilationAuthorizationPort,
 )
-from app.modules.checkers.api.external import ExternalCheckerCapabilityProjection
 from app.modules.projects.api import (
     ProjectGuideCompilationExecutionClassification,
     ProjectGuideCompilationExecutionCommand,
@@ -58,6 +56,7 @@ from .contracts import (
     CompilationOutcomeReceipt,
     CompilationPersistenceReceipt,
     CompilationRecoveryClassification,
+    uses_metered_setup_model_custody,
 )
 from .repository import GuideCompilationIntegrityError, GuideCompilationStorageError
 from .service import (
@@ -91,7 +90,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-        checker_capabilities: ExternalCheckerCapabilityProjection,
         authorization_context: GuideCompilationAuthorizationContext,
         document_tools_factory: GuideDocumentToolsFactory,
         model_session_factory: Callable[
@@ -102,7 +100,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
         """Store the owner-supplied ports used by each short transaction."""
         self._session_factory = session_factory
         self._material_factory = material_factory
-        self._checker_capabilities = checker_capabilities
         self._authorization_context = authorization_context
         self._document_tools_factory = document_tools_factory
         self._model_session_factory = model_session_factory or _no_model_session
@@ -144,7 +141,6 @@ class SqlAlchemyGuideCompilationExecutionBackend:
                     session,
                     state=state,
                     material=self._material_factory(session),
-                    checker_capabilities=self._checker_capabilities,
                 )
         except GuideDocumentUnavailable:
             raise ProjectGuideCompilationExecutionError("context_unavailable") from None
@@ -234,7 +230,6 @@ def project_guide_compilation_execution_port(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-    checker_capabilities: ExternalCheckerCapabilityProjection,
     authorization_context: GuideCompilationAuthorizationContext,
     runtime_factory: Callable[[ProjectGuideRuntimeConfiguration], ProjectGuideAgentRuntime],
     document_tools_factory: GuideDocumentToolsFactory,
@@ -247,7 +242,6 @@ def project_guide_compilation_execution_port(
     backend = SqlAlchemyGuideCompilationExecutionBackend(
         session_factory,
         material_factory=material_factory,
-        checker_capabilities=checker_capabilities,
         authorization_context=authorization_context,
         document_tools_factory=document_tools_factory,
         model_session_factory=model_session_factory,
@@ -448,14 +442,9 @@ class GuideCompilationOrchestrator(ProjectGuideCompilationExecutionPort):
 
 def _metered_setup_resume(state: CompilationExecutionState) -> bool:
     """Resume only attempts whose every provider effect is guarded by MODEL-USAGE."""
-    configuration = state.runtime_configuration
     return (
         state.classification is CompilationRecoveryClassification.PROVIDER_UNCERTAIN
-        and configuration is not None
-        and configuration.uses_inference
-        and configuration.model_profile_id is not None
-        and configuration.model_profile_version is not None
-        and configuration.model_profile_digest is not None
+        and uses_metered_setup_model_custody(state.runtime_configuration)
     )
 
 
@@ -466,7 +455,6 @@ def _require_valid_result(
     """Reject incomplete, inconsistent, or wrong-version provider output."""
     require_complete_project_guide_compilation_result(result)
     validate_project_guide_compilation_result(context, result)
-    require_complete_generated_specifications(context, result)
     if result.agent_version != context.agent_version:
         raise ValueError("compilation result agent version is invalid")
 

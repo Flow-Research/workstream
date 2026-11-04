@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// MutationTask is the contributor-safe TaskResponse of the two public writes,
+// MutationTask is the contributor-safe TaskResponse returned by claim,
 // not the management detail or contributor read projection.
 type MutationTask struct {
 	ID                                string   `json:"id"`
@@ -105,7 +105,7 @@ func (c *Client) ClaimTask(ctx context.Context, selector, key string, reason *st
 	var value ClaimedTask
 	err = decode(raw, &envelope, []string{"task", "assignment"}, nil)
 	if err == nil {
-		value.Task, err = decodeMutationTask(envelope.Task, selector, "claimed")
+		value.Task, err = decodeMutationTask(envelope.Task, selector, "in_progress")
 	}
 	if err == nil {
 		err = decodeTaskFields(envelope.Assignment, &value.Assignment,
@@ -119,19 +119,6 @@ func (c *Client) ClaimTask(ctx context.Context, selector, key string, reason *st
 		return result, taskWriteFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
 	}
 	return Result[ClaimedTask]{Raw: raw, Value: value}, nil
-}
-
-func (c *Client) StartTask(ctx context.Context, selector, key string, reason *string) (Result[MutationTask], error) {
-	var result Result[MutationTask]
-	raw, err := c.taskWrite(ctx, selector, "start", key, reason, maxResponseBytes)
-	if err != nil {
-		return result, err
-	}
-	value, err := decodeMutationTask(raw, selector, "in_progress")
-	if err != nil {
-		return result, taskWriteFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
-	}
-	return Result[MutationTask]{Raw: raw, Value: value}, nil
 }
 
 func decodeMutationTask(raw json.RawMessage, selector, status string) (MutationTask, error) {

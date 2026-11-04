@@ -1673,8 +1673,12 @@ a genuinely empty original satisfy initial observation. Search and offset-only
 reads remain audited and budgeted but cannot substitute for initial observation.
 The phase evidence is cleared before each invocation. Validated findings and
 proposals cite exact source versions; ready proposals account for every assigned
-document. Known invalid completed inference output receives at most two value-free
-corrections across draft and review within the original budgets. Exhaustion is
+document. Known invalid completed inference output receives at most two corrections
+per draft or review phase within the original shared budgets. Corrections carry closed,
+value-free diagnostics and, when safe, the bounded rejected candidate as untrusted
+data. The complete correction envelope remains byte-bounded; unsafe candidates
+are omitted. Correction requests retain the existing private model-request
+evidence custody. Exhaustion is
 invalid-terminal; uncertain provider execution is never replayed as correction or
 by redelivering the job.
 

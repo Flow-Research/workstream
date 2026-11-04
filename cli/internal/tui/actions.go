@@ -75,9 +75,6 @@ func (m *Model) actionName() string {
 	if m.tab == ready && m.task != nil && m.task.Status == "ready" {
 		return "Claim"
 	}
-	if m.tab == mine && m.section == 0 && m.task != nil && m.task.Status == "claimed" {
-		return "Start"
-	}
 	return ""
 }
 
@@ -175,7 +172,7 @@ func (m *Model) beginWrite() tea.Cmd {
 	packet := m.write.packet
 	if m.closed || m.ctx.Err() != nil || m.blocked || m.write.replayDisabled || m.loading || m.tooSmall() ||
 		m.write.mode != writeConfirm || !m.write.acknowledged ||
-		(packet.action != "claim" && packet.action != "start") ||
+		packet.action != "claim" ||
 		!replayUUID.MatchString(packet.key) || !sameID(packet.actor, m.actor) {
 		if m.write.mode == writeConfirm {
 			m.write.mode, m.write.acknowledged, m.write.replay = writeOutcome, false, false
@@ -201,18 +198,8 @@ func (m *Model) beginWrite() tea.Cmd {
 					err: &api.Failure{Code: "request_failed", OutcomeUnknown: true}}
 			}
 		}()
-		var value any
-		var err error
-		if packet.action == "claim" {
-			var result api.Result[api.ClaimedTask]
-			result, err = client.ClaimTask(ctx, packet.task, packet.key, nil)
-			value = result.Value
-		} else {
-			var result api.Result[api.MutationTask]
-			result, err = client.StartTask(ctx, packet.task, packet.key, nil)
-			value = result.Value
-		}
-		return writeResponse{packet: packet, generation: generation, sequence: sequence, value: value, err: err}
+		result, err := client.ClaimTask(ctx, packet.task, packet.key, nil)
+		return writeResponse{packet: packet, generation: generation, sequence: sequence, value: result.Value, err: err}
 	}
 }
 
@@ -233,15 +220,12 @@ func (m *Model) receiveWrite(msg writeResponse) {
 		switch v := msg.value.(type) {
 		case api.ClaimedTask:
 			valid = packet.action == "claim" && sameID(v.Task.ID, packet.task) &&
-				sameID(v.Task.ProjectID, packet.project) && v.Task.Status == "claimed" &&
+				sameID(v.Task.ProjectID, packet.project) && v.Task.Status == "in_progress" &&
 				sameID(v.Assignment.TaskID, packet.task) && sameID(v.Assignment.ProjectID, packet.project) &&
 				sameID(v.Assignment.ContributorID, packet.actor)
-		case api.MutationTask:
-			valid = packet.action == "start" && sameID(v.ID, packet.task) &&
-				sameID(v.ProjectID, packet.project) && v.Status == "in_progress"
 		}
 		if valid {
-			m.write.outcome, m.write.notice = outcomeConfirmed, "Validated receipt. A later read is a separate observation."
+			m.write.outcome, m.write.notice = outcomeConfirmed, "Validated receipt: task in progress. A later read is a separate observation."
 			m.observed = time.Now()
 			m.viewport.GotoTop()
 			return
@@ -295,6 +279,7 @@ func (m *Model) writeText() string {
 		d.note("Enter reviews; Esc cancels. No write has been sent.")
 	case writeConfirm:
 		d.heading("Confirm " + p.action)
+		d.note("Claim immediately starts work.")
 		d.line("Action", strings.Title(p.action))
 		d.line("Actor", p.actor)
 		d.line("Project", p.project)
@@ -367,10 +352,7 @@ func (m *Model) writeSummary() string {
 	case outcomeNone:
 		return "Not sent"
 	case outcomeConfirmed:
-		if m.write.packet.action == "claim" {
-			return "Claim confirmed"
-		}
-		return "Start confirmed"
+		return "Claim confirmed"
 	case outcomeDenied:
 		return "Request denied"
 	case outcomeUnknown:

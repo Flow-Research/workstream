@@ -27,7 +27,11 @@ async def test_review_package_audit_requires_catalogue_manager_permission(
             command,
             actor,
             grant,
-            GuideProposalApproval(target=package.target, idempotency_key=uuid4()),
+            GuideProposalApproval(
+                target=package.target,
+                pre_submit_attachments=(), post_submit_attachments=(),
+                idempotency_key=uuid4(),
+            ),
         )
         async with factory() as session:
             source_event = await session.scalar(

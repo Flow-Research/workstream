@@ -1,13 +1,9 @@
 """Invalid activation selections preserve the complete prior state."""
 
-from tests.projects.guide_compilation.helpers import manager_runtime_configuration
-
 from uuid import uuid4
-from dataclasses import replace
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 
 from app.modules.projects.api.guide_proposals import GuideProposalError
 from app.modules.projects.models import ProjectGuide
@@ -155,53 +151,6 @@ async def test_complete_false_review_setting_activates_with_real_authority(clean
             assert guide.status == "active"
             assert guide.activation_operation_id == receipt.operation_id
         assert await activate(factory, actor, command) == receipt
-
-
-async def test_false_mode_rejects_approved_human_requirement_in_python_and_sql(
-    clean_postgres_database, monkeypatch,
-):
-    """A real authority receipt cannot override a human-only approved requirement."""
-    from app.interfaces.project_agents import AtomicGuideRequirement
-    from app.modules.projects.guide_activation.service import GuideActivationService
-    from tests.authorization.guide_activation.pg_support import activate
-    from tests.projects.guide_compilation.helpers import generated_result
-
-    outcome = generated_result()
-    requirement = AtomicGuideRequirement(
-        requirement_id="human_quality",
-        statement="An authorized reviewer must assess the final quality.",
-        disposition="human_review",
-        classification_rationale="The guide requires an authorized human decision.",
-        evidence_refs=outcome.findings[0].evidence_refs,
-    )
-    outcome = outcome.model_copy(update={"requirements": (requirement,)})
-    async with activation_case(
-        clean_postgres_database, human_review_required=False,
-        compilation_outcome=outcome, configuration=manager_runtime_configuration(),
-    ) as (factory, command, actor, _, _, _):
-        with pytest.raises(GuideProposalError, match="approval_blocked"):
-            await activate(factory, actor, command)
-
-        original = GuideActivationService._readiness
-
-        async def omit_python_disposition_check(self, selected, locked, *args):
-            # Discriminator only: keep real authority and all SQL triggers on.
-            other = replace(locked, result=locked.result.model_copy(update={"requirements": ()}))
-            await original(self, selected, other, *args)
-
-        monkeypatch.setattr(GuideActivationService, "_readiness", omit_python_disposition_check)
-        with pytest.raises(DBAPIError, match="guide activation approved generation unavailable"):
-            await activate(factory, actor, command)
-        async with factory() as session:
-            guide = await session.get(ProjectGuide, str(command.target.proposal.guide_id))
-            assert guide.status == "draft" and guide.activation_operation_id is None
-            assert await session.scalar(text(
-                "SELECT count(*) FROM guide_mutation_idempotency_records "
-                "WHERE action_id='project.guide.activate'"
-            )) == 0
-            assert await session.scalar(text(
-                "SELECT count(*) FROM audit_events WHERE action_id='project.guide.activate'"
-            )) == 0
 
 
 async def test_retired_con_policy_cannot_form_a_new_binding(clean_postgres_database):

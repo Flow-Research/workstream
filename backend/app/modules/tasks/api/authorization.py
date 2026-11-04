@@ -20,8 +20,6 @@ class TaskAuthorityOperation(StrEnum):
     AUDIT_LOCKED_CONTEXT = "audit.task.locked_context.read"
     AUDIT_EVIDENCE = "audit.task.evidence.read"
     CLAIM = "task.claim"
-    START = "task.start"
-    START_OVERRIDE = "operations.task.start_override"
     WORK_CONTEXT = "task.work_context.read"
     GUIDE_READ = "task.guide.read"
     MANAGEMENT_WORK_CONTEXT = "project.task.work_context.read"

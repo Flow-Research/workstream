@@ -274,7 +274,7 @@ historical_permissions = frozenset(
 new_permissions = frozenset(
     """
     task.revision.expire task.revision.recover task.post_submit.route checker.pre_submit.execute checker.pre_submit.finalize checker.post_submit.execute checker.post_submit.finalize task.assignment.authority_reconcile outbox.dispatch project.setup_diagnostic.read project.effective_policy.read
-    operations.task.start_override operations.submission_gate.repair
+    operations.submission_gate.repair
     operations.checker.retry artifact.binding.read artifact.replica.read
     artifact.receipt.read artifact.verification_job.read
     artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
@@ -381,12 +381,7 @@ expected = {
     "outbox.dispatch": ("outbox.dispatch", "WS-AUTH-001-OUTBOX-01"),
     "actor.profile.read_self": ("actor.profile.read_self", "WS-AUTH-001-07B"),
     "actor.profile.update_self": ("actor.profile.update_self", "WS-AUTH-001-07B"),
-    "operations.task.start_override": (
-        "operations.task.start_override",
-        "task-project-grant-authorization",
-    ),
     "task.claim": ("task.claim", "task-project-grant-authorization"),
-    "task.start": ("task.claim", "task-project-grant-authorization"),
     "task.work_context.read": ("task.queue.read", "task-project-grant-authorization"),
     "task.guide.read": ("task.queue.read", "PILOT-13"),
     "task.read": ("task.queue.read", "WS-ARCH-001-03C5"),
@@ -650,7 +645,6 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "project.guide_compilation.correction.request",
     "project.submission_artifact_policy.approve",
     "task.claim",
-    "task.start",
     "task.work_context.read",
     "task.guide.read",
     "task.read",
@@ -674,7 +668,6 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "project.task.release",
     "project.task.revision.repair",
     "project.task.work_context.read",
-    "operations.task.start_override",
     "actor.admin_role_grant_history.read",
     "actor.authorization_context.read",
     "actor.identity_link.reactivate",
@@ -760,7 +753,7 @@ ADMIN_ROLE_PERMISSION_EXPECTATIONS = {
     AdminRole.OPERATOR: """project.read project.setup_diagnostic.read
         project.effective_policy.read review.queue.inspect review.lease.force_release
         contribution.read_project operations.status.read operations.timer.run operations.reconcile.run operations.outbox.retry
-        operations.projection.rebuild operations.task.start_override
+        operations.projection.rebuild
         operations.submission_gate.repair operations.checker.retry
         project.model_profile.manage project.model_budget.manage
         project.model_call.recovery_child.authorize artifact.binding.read

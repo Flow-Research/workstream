@@ -26,7 +26,7 @@ def test_task_read_guards(kind):
         assignment_id=None, assignment_contributor_id=None, locked_context_hash="sha256:" + "a" * 64, reason=None)
     assert task_resource_guard(action, resource)
     states = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
-    assert len(states) == 9
+    assert len(states) == 8
     for state in states:
         assert task_resource_guard(action, resource.model_copy(update={"task_status": state})) is (not contributor or state == "ready")
         owned = resource.model_copy(update={"task_status": state, "assignment_id": new_record_id(), "assigned_to": actor, "assignment_contributor_id": actor})

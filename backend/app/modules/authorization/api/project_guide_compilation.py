@@ -67,17 +67,10 @@ class ProjectGuideCompilationRequestFacts:
     operation_id: UUID
     request_id: UUID
     idempotency_key: UUID
-    pre_catalogue_id: str
-    pre_catalogue_version: str
-    pre_catalogue_schema_version: str
-    pre_catalogue_manifest_hash: str
-    post_catalogue_id: str
-    post_catalogue_version: str
-    post_catalogue_schema_version: str
-    post_catalogue_manifest_hash: str
     agent_identity: str
     agent_version: str
     instruction_version: str
+    result_schema_version: str = "project_guide_check_specification.v1"
     expected_predecessor_compilation_id: UUID | None = None
 
     def __post_init__(self) -> None:
@@ -102,8 +95,6 @@ class ProjectGuideCompilationExecutePersistFacts(ProjectGuideCompilationExecuteP
     requirement_inventory_component_hash: str
     pre_submit_policy_component_hash: str
     post_submit_policy_component_hash: str
-    capability_suggestions_component_hash: str
-    setup_notes_component_hash: str
     resource_context_digest: str
 
 

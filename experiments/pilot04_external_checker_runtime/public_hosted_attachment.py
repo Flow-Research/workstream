@@ -7,9 +7,10 @@ rules prove runtime wiring, not a setup-agent rehearsal or a real pilot project.
 Invoke the existing run_public_journey_probe module with --hosted-attachment,
 --database-url and --broker-url. The private JSON attachment names origin,
 release_env, identity_directory, node_root, fixture_ca_sha256 and capabilities
-({pre_submit,post_submit}, each with capability_id/capability_version). Baseline
-setup registers those exact immutable capabilities through the public Operator
-registry after its initial Operator grant. The fixture-only derived release images must already contain the public CA
+({pre_submit,post_submit}, each with capability_id/capability_version). These
+identities name the baseline registry publications; they are not guide setup
+inputs. The manager selects the exact published images at policy approval.
+The fixture-only derived release images must already contain the public CA
 appended to their ordinary certifi bundle and pass the canonical image verifier.
 
 The driver environment supplies the same isolated database/broker settings for
@@ -232,6 +233,7 @@ class HostedAttachment:
     custody: dict = field(default_factory=dict)
     docker_environment: dict = field(default_factory=dict)
     native_binding: dict = field(default_factory=dict)
+    registered_images: dict = field(default_factory=dict)
     model_post: object | None = None
 
     @classmethod
@@ -406,6 +408,28 @@ class HostedAttachment:
                     and str(registered.registration_operation_id) == operation_id
                     and registered.registered_by_actor_profile_id == self.actors['operator'].actor_profile_id,
                     'public baseline registration substituted specification or authority')
+            self.registered_images[spec.phase] = registered
+
+    def approval_attachments(self, pre_requirements):
+        """Select exact published fixture images as the human manager."""
+        from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+
+        require(pre_requirements in (0, 1, 2), 'unsupported hosted PRE fixture count')
+        require(set(self.registered_images) == {'pre_submit', 'post_submit'},
+                'baseline registry publications are incomplete')
+
+        def attach(phase, requirement_id):
+            entry = self.registered_images[phase]
+            return ExternalCheckerImageAttachment(
+                requirement_id=requirement_id, registry_entry_id=entry.registry_entry_id,
+                registry_entry_digest=entry.entry_digest, configuration={},
+            ).model_dump(mode='json')
+
+        pre_ids = ('project.pre_submit.01', 'project.pre_submit.02') if pre_requirements == 2 else (
+            ('project.pre_submit',) if pre_requirements == 1 else ()
+        )
+        return {'pre_submit_attachments': [attach('pre_submit', key) for key in pre_ids],
+                'post_submit_attachments': [attach('post_submit', 'project.post_submit')]}
 
     async def provision_services(self, client):
         from provision_local_service_actors import JOURNEY_SERVICE_IDENTITIES, idempotency_key, subject_for
@@ -457,21 +481,21 @@ class HostedAttachment:
                                        event_id, project_id)
 
 
-def manager_rules(original, capabilities, count):
-    """Author explicit synthetic marker rules; do not install a recorded runtime."""
+def manager_rules(original, count):
+    """Describe synthetic marker checks without selecting an implementation."""
     from experiments.pilot04_external_checker_runtime.guide_runtime import _recorded_specification
 
     refs = [{'document': 'sha256:' + hashlib.sha256(original).hexdigest(), 'start_page': 1, 'end_page': 1}]
-    requirements, bindings = [], {'pre_submit': [], 'post_submit': []}
-    for stage in bindings:
+    requirements = []
+    for stage in ('pre_submit', 'post_submit'):
         total = count if stage == 'pre_submit' else 1
         for index in range(total):
-            key = 'project.' + stage + (f'.{index + 1:02d}' if total == 2 else '')
-            requirements.append({'requirement_id': key, 'statement': 'Apply the registered fixture marker rule.',
-                                 'disposition': 'supported_' + stage, 'evidence_refs': refs,
-                                 'classification_rationale': 'Explicit manager-authored runtime fixture.',
+            key = 'suggested.' + stage + (f'.{index + 1:02d}' if total == 2 else '')
+            requirements.append({'suggestion_id': key, 'statement': 'Check the fixture marker rule.',
+                                 'stage': stage, 'evidence_refs': refs,
+                                 'classification_rationale': 'Inspect the intake fixture before submission.'
+                                    if stage == 'pre_submit' else 'Evaluate the submitted fixture after intake.',
                                  'check_specification': _recorded_specification(stage, index=index).model_dump(mode='json')})
-            bindings[stage].append({'requirement_id': key, **capabilities[stage], 'stage': stage})
     return json.dumps({'format': 'workstream.project_guide_rules.v1', 'status': 'draft_ready',
                        'findings': [{'severity': 'info', 'code': 'probe.runtime_fixture',
                                     'message': 'Synthetic hosted runtime proof, not setup-agent inference.',
@@ -479,8 +503,7 @@ def manager_rules(original, capabilities, count):
                        'submission_artifact_policy': {'maximum_file_size_bytes': 1_000_000,
                             'maximum_package_size_bytes': 5_000_000, 'required_artifacts': ['task.toml'],
                             'required_evidence': ['results'], 'attestation_terms': ['rights_confirmed']},
-                       'requirements': requirements, 'pre_submit_bindings': bindings['pre_submit'],
-                       'post_submit_bindings': bindings['post_submit'], 'capability_suggestions': [],
+                       'requirements': requirements,
                        'setup_notes': []}, sort_keys=True, separators=(',', ':')).encode()
 
 

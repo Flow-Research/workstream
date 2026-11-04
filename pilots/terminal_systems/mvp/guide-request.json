@@ -1,0 +1,20 @@
+{
+  "version": "terminal-systems-mvp-1",
+  "change_summary": "Add one fixed incident summary terminal task and exact data checks for the first complete backend lifecycle pilot.",
+  "task_examples": [
+    {
+      "title": "Summarize incident events in the terminal",
+      "content": "# Summarize the incident events\n\nInspect `events.jsonl` in the terminal. Produce `summary.json` with exact per-service total and error counts using the format and rules in the project guide. Submit the two root files as a ZIP. You may use any terminal command or editor; the checker reads the output data and never executes a submitted script.\n",
+      "labels": [
+        "operations",
+        "event-summary"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "label": "guide.md",
+      "media_type": "text/markdown"
+    }
+  ]
+}

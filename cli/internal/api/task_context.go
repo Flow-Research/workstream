@@ -170,7 +170,7 @@ func (c *Client) WorkContext(ctx context.Context, selector string) (Result[WorkC
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	for _, action := range value.Lifecycle.NextActions {
-		if action != "claim" && action != "start" {
+		if action != "claim" {
 			return result, &Failure{Code: "invalid_api_response"}
 		}
 	}

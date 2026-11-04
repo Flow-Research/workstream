@@ -23,6 +23,14 @@ from app.modules.checkers.api.external_policy import (
 
 from .custody_payloads import policy_digest
 from .models import ProjectGuideProposalApproval
+from .retained_evidence import retained_target
+
+
+def _stored_approval_target(view, operation):
+    """Read an old approval commitment solely for existing custody proof."""
+    if view.compilation.result_schema_version is not None:
+        return GuideProposalTarget.model_validate(operation.target_json)
+    return retained_target(operation.target_json)
 
 
 @dataclass(frozen=True)
@@ -45,7 +53,8 @@ async def load_approval_custody(session, policy_id: str | None) -> ApprovalCusto
         .where(
             ProjectGuideProposalApproval.artifact_policy_id == policy_id,
         )
-        .with_for_update().execution_options(populate_existing=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if operation is None:
         return None
@@ -54,25 +63,42 @@ async def load_approval_custody(session, policy_id: str | None) -> ApprovalCusto
         .where(
             SubmissionPolicyMutationIdempotencyRecord.operation_id == operation.operation_id,
         )
-        .with_for_update().execution_options(populate_existing=True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     effective = await session.get(
-        EffectiveProjectSubmissionArtifactPolicy, operation.effective_policy_id, populate_existing=True, with_for_update=True
+        EffectiveProjectSubmissionArtifactPolicy,
+        operation.effective_policy_id,
+        populate_existing=True,
+        with_for_update=True,
     )
-    pre = await session.get(PreSubmitCheckerPolicy, operation.pre_submit_policy_id, populate_existing=True, with_for_update=True)
+    pre = await session.get(
+        PreSubmitCheckerPolicy,
+        operation.pre_submit_policy_id,
+        populate_existing=True,
+        with_for_update=True,
+    )
     if reservation is None or effective is None or pre is None:
         raise ValueError("approval custody is incomplete")
     successor = await session.scalar(
-        select(ProjectGuideProposalApproval).where(
+        select(ProjectGuideProposalApproval)
+        .where(
             ProjectGuideProposalApproval.prior_approval_operation_id == operation.operation_id,
-        ).execution_options(populate_existing=True)
+        )
+        .execution_options(populate_existing=True)
     )
     if successor is not None:
-        next_policy = await session.get(SubmissionArtifactPolicy, successor.artifact_policy_id, populate_existing=True)
-        next_effective = await session.get(
-            EffectiveProjectSubmissionArtifactPolicy, successor.effective_policy_id, populate_existing=True
+        next_policy = await session.get(
+            SubmissionArtifactPolicy, successor.artifact_policy_id, populate_existing=True
         )
-        next_pre = await session.get(PreSubmitCheckerPolicy, successor.pre_submit_policy_id, populate_existing=True)
+        next_effective = await session.get(
+            EffectiveProjectSubmissionArtifactPolicy,
+            successor.effective_policy_id,
+            populate_existing=True,
+        )
+        next_pre = await session.get(
+            PreSubmitCheckerPolicy, successor.pre_submit_policy_id, populate_existing=True
+        )
         if (
             next_policy is None
             or next_effective is None
@@ -87,9 +113,7 @@ async def load_approval_custody(session, policy_id: str | None) -> ApprovalCusto
     return ApprovalCustody(operation, reservation, effective, pre, successor)
 
 
-def _approval_projection_matches(
-    view, custody, target, receipt, policy, external_policies
-) -> bool:
+def _approval_projection_matches(view, custody, target, receipt, policy, external_policies) -> bool:
     """Compare every immutable target, receipt, reservation and policy fact."""
     operation, reservation, effective, pre = (
         custody.operation,
@@ -97,11 +121,20 @@ def _approval_projection_matches(
         custody.effective,
         custody.pre,
     )
+    target_hashes = (
+        operation.target_json["component_hashes"]
+        if view.compilation.result_schema_version is None
+        else target.component_hashes.model_dump()
+    )
     if (
         target.digest != operation.target_digest
         or target.compilation_id != view.compilation.id
         or target.result_hash != view.compilation.result_hash
-        or target.component_hashes.model_dump() != view.compilation.component_hashes
+        or (
+            view.compilation.result_schema_version is not None
+            and target.result_schema_version != view.compilation.result_schema_version
+        )
+        or target_hashes != view.compilation.component_hashes
         or target.setup_run_id != UUID(view.setup.id)
         or target.setup_generation != view.setup.setup_generation
         or target.artifact_policy_id != UUID(policy.id)
@@ -160,14 +193,12 @@ def approved_projection_digest(view) -> str:
         custody.effective,
         custody.pre,
     )
-    target = GuideProposalTarget.model_validate(operation.target_json)
+    target = _stored_approval_target(view, operation)
     receipt = GuideProposalApprovalReceipt.model_validate(operation.receipt_json)
     external_policies = validate_stored_external_checker_policies(
         operation.effective_pre_submit_plan
     )
-    if not _approval_projection_matches(
-        view, custody, target, receipt, policy, external_policies
-    ):
+    if not _approval_projection_matches(view, custody, target, receipt, policy, external_policies):
         raise ValueError("approved proposal custody mismatch")
     lifecycle = (policy.lifecycle_status, effective.lifecycle_status, pre.lifecycle_status)
     if custody.successor is None:
@@ -205,9 +236,7 @@ def _require_plan_and_provenance(view, custody, target) -> None:
         custody.pre,
         view.policy,
     )
-    policies = validate_stored_external_checker_policies(
-        operation.effective_pre_submit_plan
-    )
+    policies = validate_stored_external_checker_policies(operation.effective_pre_submit_plan)
     if policies.pre_submit.model_dump(mode="json") != pre.compiled_bundle:
         raise ValueError("approved external checker policy mismatch")
     for name in (
@@ -220,7 +249,9 @@ def _require_plan_and_provenance(view, custody, target) -> None:
         "post_catalogue_schema_version",
         "post_catalogue_manifest_hash",
     ):
-        if getattr(target, name) != getattr(view.attempt, name):
+        if view.compilation.result_schema_version is None and (
+            getattr(target, name) != getattr(view.attempt, name)
+        ):
             raise ValueError("approved proposal catalogue mismatch")
     for row, prefix in ((policy, "approval"), (effective, "creation"), (pre, "creation")):
         actor_prefix = "approved" if row is policy else "created"
@@ -301,7 +332,7 @@ async def lock_policy_approval(session, guide, snapshot, policy, effective, pre)
         policy,
         custody,
     )
-    target = GuideProposalTarget.model_validate(operation.target_json)
+    target = _stored_approval_target(view, operation)
     command = ProjectGuideSetupFinalizationCommand(
         project_id=target.project_id,
         guide_id=target.guide_id,

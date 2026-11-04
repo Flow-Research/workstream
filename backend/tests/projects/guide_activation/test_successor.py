@@ -21,7 +21,12 @@ from .source_fixtures import create_compiled_guide
 
 
 async def successor_command(factory, command, actor, grant, policy):
-    values = {**ids(), "project": command.target.proposal.project_id}
+    values = {
+        **ids(),
+        "project": command.target.proposal.project_id,
+        "pre_submit_attachments": (),
+        "post_submit_attachments": (),
+    }
     async with factory() as session:
         actor_id, link_id = (
             await session.execute(
@@ -34,7 +39,7 @@ async def successor_command(factory, command, actor, grant, policy):
     values, finalization = await create_compiled_guide(factory, values, actor, version="v2")
     await seed_selected_review_revision_inputs(factory, finalization, actor)
     _, derived = await prepare_post_policy(
-        factory, finalization, actor, grant, service_actor(values)
+        factory, finalization, actor, grant, service_actor(values), values
     )
     approved = await operate(
         factory,

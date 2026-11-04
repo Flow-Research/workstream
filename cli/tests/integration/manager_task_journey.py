@@ -1,4 +1,4 @@
-"""One real manager preparation journey reused by contributor claim/start proof."""
+"""One real manager preparation journey reused by contributor claim proof."""
 
 import json
 from uuid import uuid4
@@ -184,14 +184,18 @@ async def exercise_manager_task_preparation(
     assert len(commands) == 3 and all(c["status"] == "committed" for c in commands)
     for command in commands:
         action = command["action_id"].rsplit(".", 1)[-1]
-        assert {
-            k: v for k, v in command["response"].items() if v is not None
-        } == receipts[action]
+        assert command["response"] == receipts[action]
     for field, value in receipts["release"].items():
         if field.startswith("locked_"):
             assert str(row[field]) == str(value)
             assert receipts["screen"][field] == value
-    assert not any(k.startswith("locked_") for k in receipts["create"])
+    locked_keys = {key for key in receipts["release"] if key.startswith("locked_")}
+    assert "locked_guide_version" in locked_keys
+    assert {
+        key: value
+        for key, value in receipts["create"].items()
+        if key.startswith("locked_")
+    } == dict.fromkeys(locked_keys)
 
     foreign = await post(f"/api/v1/projects/{foreign_project}/tasks", payload, system)
     for action in ("create", "screen", "release"):

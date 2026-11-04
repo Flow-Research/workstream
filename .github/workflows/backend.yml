@@ -205,6 +205,17 @@ jobs:
             --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
           uv run --frozen python -m scripts.behavior_ownership validate
 
+      - name: Collect canonical native Smol qualification fixtures
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=.:tests uv run --frozen python -m pytest \
+            --collect-only -q -p pytest_asyncio.plugin \
+            -p conftest -p tests.checkers.external.conftest \
+            ../external_checkers/workstream-checker-service/tests/terminal_systems_smol_composition.py \
+            ../external_checkers/workstream-checker-service/tests/terminal_systems_smol_recovery.py
+
       - name: Lint and check docstring coverage once
         working-directory: backend
         shell: bash

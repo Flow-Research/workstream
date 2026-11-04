@@ -37,7 +37,7 @@ from app.modules.tasks.schemas import (
     TaskResponse,
     TaskTransitionRequest,
     TaskRevisionRepairRequest,
-    TaskWithAssignmentResponse,
+    TaskClaimResponse,
     AdmissionBackedSubmissionCreate, AdmissionBackedSubmissionResponse,
 )
 from app.modules.tasks.api.revision import ContributorRevisionContext
@@ -196,7 +196,6 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.CREATE.value,
                    "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
     response_model=TaskResponse,
-    response_model_exclude_none=True,
     status_code=201,
 )
 async def create_task(
@@ -232,7 +231,7 @@ def task_read_error(request: Request, exc: TaskServiceError):
 
 
 @router.get(
-    "/tasks/{task_id}", response_model=ContributorTaskDetail, response_model_exclude_none=True,
+    "/tasks/{task_id}", response_model=ContributorTaskDetail,
     dependencies=[Depends(enforce_human_authorization_read)],
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.READ.value},
 )
@@ -249,7 +248,7 @@ async def get_task(
 
 @router.get(
     "/projects/{project_id}/tasks/{task_id}", response_model=ManagementTaskDetail,
-    response_model_exclude_none=True, dependencies=[Depends(enforce_human_authorization_read)],
+    dependencies=[Depends(enforce_human_authorization_read)],
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.MANAGEMENT_READ.value},
 )
 async def get_management_task(
@@ -353,7 +352,6 @@ async def get_audit_task_locked_context(
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.SCREEN.value,
                    "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
     response_model=TaskResponse,
-    response_model_exclude_none=True,
 )
 async def screen_task(
     task_id: UUID,
@@ -373,7 +371,6 @@ async def screen_task(
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.RELEASE.value,
                    "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
     response_model=TaskResponse,
-    response_model_exclude_none=True,
 )
 async def release_task(
     task_id: UUID,
@@ -457,7 +454,7 @@ async def get_task_evidence(
 
 
 @router.post(
-    "/tasks/{task_id}/claim", response_model=TaskWithAssignmentResponse, response_model_exclude_none=True,
+    "/tasks/{task_id}/claim", response_model=TaskClaimResponse,
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.CLAIM.value,
                    "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
 )
@@ -466,49 +463,17 @@ async def claim_task(
     idempotency_key: Annotated[UUID, Depends(require_task_command_key)],
     commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
     payload: TaskTransitionRequest | None = None,
-) -> TaskWithAssignmentResponse:
+) -> TaskClaimResponse:
+    """Claim ready work and atomically enter in_progress with started_at=assigned_at."""
     try:
-        return await commands.claim(task_id, payload.reason if payload else None, idempotency_key=idempotency_key)
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/tasks/{task_id}/start", response_model=TaskResponse, response_model_exclude_none=True,
-    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.START.value,
-                   "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
-)
-async def start_task(
-    task_id: UUID,
-    idempotency_key: Annotated[UUID, Depends(require_task_command_key)],
-    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
-    payload: TaskTransitionRequest | None = None,
-) -> TaskResponse:
-    try:
-        return await commands.start(task_id, payload.reason if payload else None, idempotency_key=idempotency_key)
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/operations/tasks/{task_id}/start", response_model=TaskResponse, response_model_exclude_none=True,
-    openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.START_OVERRIDE.value,
-                   "parameters": [TASK_IDEMPOTENCY_PARAMETER]},
-)
-async def override_task_start(
-    task_id: UUID,
-    idempotency_key: Annotated[UUID, Depends(require_task_command_key)],
-    commands: Annotated[AuthorizedTaskCommands, Depends(get_task_commands)],
-    payload: TaskTransitionRequest,
-) -> TaskResponse:
-    try:
-        return await commands.start(task_id, payload.reason, idempotency_key=idempotency_key, operator_override=True)
+        result = await commands.claim(task_id, payload.reason if payload else None, idempotency_key=idempotency_key)
+        return TaskClaimResponse.model_validate(result)
     except TaskServiceError as exc:
         raise task_http_error(exc) from exc
 
 
 @router.get(
-    "/tasks/{task_id}/work-context", response_model=ContributorTaskWorkContext, response_model_exclude_none=True,
+    "/tasks/{task_id}/work-context", response_model=ContributorTaskWorkContext,
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.WORK_CONTEXT.value},
     responses=TASK_LOCKED_CONTEXT_RESPONSES,
 )
@@ -570,7 +535,7 @@ async def get_task_guide_document(read: Annotated[VerifiedTaskGuideRead, Depends
 
 
 @router.get(
-    "/projects/{project_id}/tasks/{task_id}/work-context", response_model=ManagementTaskWorkContext, response_model_exclude_none=True,
+    "/projects/{project_id}/tasks/{task_id}/work-context", response_model=ManagementTaskWorkContext,
     openapi_extra={"x-workstream-action-id": TaskAuthorityOperation.MANAGEMENT_WORK_CONTEXT.value},
     responses=TASK_LOCKED_CONTEXT_RESPONSES,
 )

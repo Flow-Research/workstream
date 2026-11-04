@@ -299,7 +299,7 @@ func decodeContributorAssignment(raw json.RawMessage) (ContributorAssignment, bo
 		!oneOf(value.AssignmentStatus, "active", "completed", "revision_expired", "revision_exhausted", "authority_revoked") ||
 		(value.State == "active") != (value.AssignmentStatus == "active") || (value.State == "closed" && value.TaskStatus != nil) ||
 		(value.TaskStatus != nil && !oneOf(*value.TaskStatus, taskStatuses...)) ||
-		!oneOf(value.NextAction, "start", "prepare_submission", "awaiting_evaluation", "revise", "none") ||
+		!oneOf(value.NextAction, "prepare_submission", "awaiting_evaluation", "revise", "none") ||
 		!validTime(value.ClaimedAt) || !validTime(value.UpdatedAt) || !ValidCompensation(value.Compensation) ||
 		(value.StartedAt != nil && !validTime(*value.StartedAt)) || (value.ReleasedAt != nil && !validTime(*value.ReleasedAt)) {
 		return value, false

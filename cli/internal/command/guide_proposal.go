@@ -61,43 +61,28 @@ func writeGuideProposal(stdout io.Writer, proposal api.GuideProposal) error {
 	}
 
 	writeProposalPolicy(&text, proposal.Result.SubmissionArtifactPolicy)
-	groups := []struct {
-		title        string
-		dispositions map[string]bool
-	}{
-		{"PRE requirements", map[string]bool{"supported_pre_submit": true, "pre_submit_capability_gap": true}},
-		{"POST requirements", map[string]bool{"supported_post_submit": true, "post_submit_capability_gap": true}},
-		{"Non-checker requirements", map[string]bool{
-			"platform_covered": true, "human_review": true, "project_lifecycle_policy": true,
-			"guide_blocker": true, "informational": true,
-		}},
-	}
-	for _, group := range groups {
+	for _, stage := range []string{"pre_submit", "post_submit"} {
+		title := "PRE check suggestions"
+		if stage == "post_submit" {
+			title = "POST check suggestions"
+		}
 		count := 0
-		for _, requirement := range proposal.Result.Requirements {
-			if group.dispositions[requirement.Disposition] {
+		for _, suggestion := range proposal.Result.Requirements {
+			if suggestion.Stage == stage {
 				count++
 			}
 		}
-		line("\n%s (%d)\n", group.title, count)
+		line("\n%s (%d)\n", title, count)
 		if count == 0 {
 			line("  None\n")
-			continue
 		}
-		for _, requirement := range proposal.Result.Requirements {
-			if group.dispositions[requirement.Disposition] {
-				writeProposalRequirement(&text, requirement, proposal.Result.PreSubmitBindings, proposal.Result.PostSubmitBindings)
+		for _, suggestion := range proposal.Result.Requirements {
+			if suggestion.Stage == stage {
+				writeProposalRequirement(&text, suggestion)
 			}
 		}
 	}
 
-	line("\nCapability suggestions (%d)\n", len(proposal.Result.CapabilitySuggestions))
-	for _, suggestion := range proposal.Result.CapabilitySuggestions {
-		line("  %s [%s] %s: %s%s\n", suggestion.RequirementID, suggestion.Stage, suggestion.Title, suggestion.Rationale, proposalEvidenceText(suggestion.EvidenceRefs))
-	}
-	if len(proposal.Result.CapabilitySuggestions) == 0 {
-		line("  None\n")
-	}
 	line("\nSetup notes (%d)\n", len(proposal.Result.SetupNotes))
 	for _, note := range proposal.Result.SetupNotes {
 		line("  - %s\n", note)
@@ -135,7 +120,7 @@ func writeProposalPolicy(text *strings.Builder, policy *api.ProposalIntakePolicy
 	line("  Attestation terms: %s\n", proposalList(policy.AttestationTerms))
 }
 
-func writeProposalRequirement(text *strings.Builder, requirement api.ProposalRequirement, pre []api.ProposalPreBinding, post []api.ProposalPostBinding) {
+func writeProposalRequirement(text *strings.Builder, suggestion api.ProposalRequirement) {
 	line := func(format string, values ...any) {
 		for index, value := range values {
 			if stringValue, ok := value.(string); ok {
@@ -144,29 +129,11 @@ func writeProposalRequirement(text *strings.Builder, requirement api.ProposalReq
 		}
 		fmt.Fprintf(text, format, values...)
 	}
-	line("  %s [%s]%s\n", requirement.RequirementID, requirement.Disposition, proposalEvidenceText(requirement.EvidenceRefs))
-	line("    Requirement: %s\n", requirement.Statement)
-	line("    Classification rationale: %s\n", nullableText(requirement.ClassificationRationale, "not recorded (retained proposal)"))
-	if requirement.PlatformCoverage != nil {
-		line("    Platform coverage: %s %s (%s)\n", requirement.PlatformCoverage.CapabilityID, requirement.PlatformCoverage.CapabilityVersion, requirement.PlatformCoverage.Stage)
-	}
-	for _, binding := range pre {
-		if binding.RequirementID == requirement.RequirementID {
-			writeProposalBinding(text, binding.CapabilityID, binding.CapabilityVersion, binding.Stage, binding.Parameters)
-		}
-	}
-	for _, binding := range post {
-		if binding.RequirementID == requirement.RequirementID {
-			writeProposalBinding(text, binding.CapabilityID, binding.CapabilityVersion, binding.Stage, binding.Parameters)
-		}
-	}
-	if requirement.CheckSpecification == nil {
-		line("    Check specification: not recorded\n")
-		return
-	}
-	spec := requirement.CheckSpecification
-	line("    Check: %s | %s | maximum %s seconds\n", spec.EvaluationMethod, spec.ExecutionMode, spec.MaximumDurationSeconds.String())
-	line("    Stage rationale: %s\n", spec.StageRationale)
+	line("  %s [%s]%s\n", suggestion.SuggestionID, suggestion.Stage, proposalEvidenceText(suggestion.EvidenceRefs))
+	line("    Suggested check: %s\n", suggestion.Statement)
+	line("    Classification rationale: %s\n", suggestion.ClassificationRationale)
+	spec := suggestion.CheckSpecification
+	line("    Evaluation method: %s\n", spec.EvaluationMethod)
 	line("    Inputs\n")
 	for _, input := range spec.Inputs {
 		path := ""
@@ -186,33 +153,11 @@ func writeProposalRequirement(text *strings.Builder, requirement api.ProposalReq
 	for _, test := range spec.NegativeTests {
 		line("      - %s (%s): %s; findings: %s\n", test.Name, test.ExpectedVerdict, test.Scenario, proposalList(test.ExpectedFindingCodes))
 	}
-	line("    Runtime dependencies\n")
-	if len(spec.RuntimeDependencies) == 0 {
-		line("      None\n")
+	writeProposalStrings(text, "Implementation needs", spec.ImplementationNeeds)
+	line("    Cannot evaluate when\n")
+	for _, inability := range spec.InabilityToEvaluate {
+		line("      - %s: %s\n", inability.Code, inability.Condition)
 	}
-	for _, dependency := range spec.RuntimeDependencies {
-		line("      - %s (%s, %s; unavailable=%s): %s\n", dependency.DependencyID, dependency.Kind, dependency.Provisioning, dependency.UnavailableCode, dependency.Purpose)
-	}
-	line("    Infrastructure failures\n")
-	for _, failure := range spec.InfrastructureFailures {
-		line("      - %s: %s\n", failure.Code, failure.Condition)
-	}
-}
-
-func writeProposalBinding(text *strings.Builder, capabilityID, version, stage string, parameters []api.ProposalParameter) {
-	fmt.Fprintf(text, "    Binding: %s %s (%s)", safeText(capabilityID), safeText(version), safeText(stage))
-	if len(parameters) == 0 {
-		text.WriteString("\n")
-		return
-	}
-	text.WriteString("; parameters: ")
-	for index, parameter := range parameters {
-		if index > 0 {
-			text.WriteString(", ")
-		}
-		fmt.Fprintf(text, "%s=%s", safeText(parameter.Name), safeText(string(parameter.Value)))
-	}
-	text.WriteString("\n")
 }
 
 func writeProposalStrings(text *strings.Builder, title string, values []string) {
@@ -261,6 +206,10 @@ func proposalList(values []string) string {
 	if len(values) == 0 {
 		return "none"
 	}
-	encoded, _ := json.Marshal(values)
+	safe := make([]string, len(values))
+	for index, value := range values {
+		safe[index] = safeText(value)
+	}
+	encoded, _ := json.Marshal(safe)
 	return string(encoded)
 }
