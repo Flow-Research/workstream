@@ -49,7 +49,7 @@ retaining one paid effect and unchanged accounting on replay. Approved callbacks
 require their pinned authority configuration. PRE model selectors remain
 unsupported. Production Flow identity, substantive grading quality and the full
 project journey remain separate. The [current Terminal Systems checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md)
-records current release `ee22e22e`, backend `466faca5`/schema `0066`, incident-summary image `4e5b9c71` and native PID `2781660`. All predecessors remain retained across 84 registrations/30 contexts/14 cache entries. The earlier benchmark image `52659960` and profile v2 remain available with their original 64 MiB runtime identity.
+records current release `26591f3e`, backend `1b947dfe`/schema `0067`, incident-summary image `4e5b9c71` and native PID `2781660`. All predecessors remain retained across 84 registrations/30 contexts/14 cache entries. The earlier benchmark image `52659960` and profile v2 remain available with their original 64 MiB runtime identity.
 Guide 26 completed source-only setup, independent human attachments, separate
 approvals, activation and immediate claim into work. Selected-PRE negative/replay
 and verified S3 admission/immutable Submission v1/replay passed. Its POST ended
