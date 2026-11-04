@@ -144,7 +144,7 @@ async def exercise_manager_task_reads(
         assert detail["task_id"] == task_ids[0] and detail["project_id"] == project_id
         assert detail["created_by"] == profiles["cli-manager"]["actor_profile_id"]
         assert (
-            "assigned_to" not in detail
+            detail["assigned_to"] is None
             and detail["description"] == "Inspect the supplied evidence."
         )
 

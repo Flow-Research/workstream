@@ -206,7 +206,7 @@ def test_context_reads_preserve_wire_complete_output_and_optional_fields(cli):
                 assert displayed == expected
             assert len(requests) == (5 if command == "context" else 10)
 
-        # Nullable omissions are normal FastAPI exclude_none output, not missing facts.
+        # Exercise the CLI's optional-value decoder; the API emits explicit nulls.
         context = deepcopy(CONTEXT)
         del context["project"]["description"]
         del context["guide"]["change_summary"]
