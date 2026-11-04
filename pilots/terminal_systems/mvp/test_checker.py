@@ -54,13 +54,19 @@ class CheckerTests(unittest.TestCase):
         self.assertEqual([x["code"] for x in result["findings"]], ["summary_missing"])
 
     def test_malformed_required_files_fail_pre(self):
-        for name, code in (("events.jsonl", "events_invalid"), ("summary.json", "summary_invalid")):
+        cases = (
+            ("events.jsonl", "events_invalid"),
+            ("summary.json", "summary_invalid"),
+        )
+        for name, code in cases:
             with self.subTest(name=name):
                 shutil.copyfile(ROOT / "events.jsonl", self.root / "events.jsonl")
                 self.summary("correct")
                 (self.root / name).write_text("{not valid JSON}")
                 result = checker.evaluate(request("pre_submit"), self.root)
-                self.assertEqual((result["outcome"], result["verdict"]), ("completed", "failed"))
+                self.assertEqual(
+                    (result["outcome"], result["verdict"]), ("completed", "failed")
+                )
                 self.assertEqual([x["code"] for x in result["findings"]], [code])
 
     def test_structurally_valid_wrong_summary_fails_only_post(self):

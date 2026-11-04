@@ -1,5 +1,11 @@
 # Terminal Systems project setup
 
+The current MVP lifecycle drill uses the [small incident-summary task](mvp/README.md).
+It retains real API/storage/worker/checker behavior and genuinely wrong/correct
+work, with no model in POST. The broader benchmark-authoring inputs below remain
+available and their earlier drill evidence is retained; they are not a prerequisite
+for the first lifecycle demonstration. See the [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+
 Start with [the contributor guide](guide.md) and [one illustrative task](task-example.md).
 These are original project inputs for a fresh onboarding run. They are not a
 checker implementation, an approved policy or a record of completed work.
@@ -121,13 +127,20 @@ correctness guarantee. This is required drill practice; activation does not
 automatically enforce this example suite.
 
 The project-owned [checker implementation](checkers/README.md) has qualified
-PRE and POST images. At the November 4 checkpoint, additive release `0f46f3ea`
-selects POST image `4d8de652` built and physically qualified from `24b974b3`,
-with backend `466faca5`/schema `0066` unchanged and native PID `2298844`.
+PRE and POST images. The retained guide 27 release `6ec9fb8d` selected POST image
+`52659960` built from `6af3c7ee` and qualified on `adcf35a5`, with backend
+`466faca5`/schema `0066` unchanged and native PID `2633053`. Profile v2 permits
+100,000 entries while retaining the original 64 MiB archive limit/runtime identity.
+Eight public registration/read/replays and sealed-cache read proof passed; all
+predecessors remain across 82 registrations, 30 authority contexts and 13 cache
+entries. AWS/data/health checks passed before commit; two earlier timer-proof
+commit holds remain retained. This repair/deployment made no paid calls.
 Controlled native qualification passed two isolated trials, four controlled model
 effects, no additional provider call on replay and owned-service cleanup.
 
-Guide 26 normal setup produced three PRE/six POST advisory suggestions and zero
+Guide 26 ran under predecessor release `0f46f3ea` and remains locked to image
+`4d8de652`/profile v1 and its original evidence. Its normal setup produced three
+PRE/six POST advisory suggestions and zero
 warnings; actual ART request evidence proves input keys exactly `material` and
 `task_examples`. Independent human two PRE/eight POST attachments, separate
 approvals, activation and immediate claim into work passed with replay. Selected-PRE
@@ -136,12 +149,12 @@ package reached verified S3 admission, immutable Submission v1 and exact replay.
 POST ended `infrastructure_failed / invalid_output` after nine paid model calls.
 Two trial receipts exist, but build export capacity failed and all 17 dependent
 work-test steps were skipped. No work verdict, Revision, FinalAcceptance or
-ContributionRecord resulted. The pending repair raises the default maximum-entry
+ContributionRecord resulted. The now-deployed repair raises the default maximum-entry
 limit to 100,000. Only a build with exit code zero, no signal,
 `export_outcome=capacity_exceeded` and both candidate image/archive digests null
 is classified as infrastructure capacity before assessment. Task-disk-limit and
 step-export-capacity results remain assessable. This changes no native contract
-and is not deployed or live-proven.
+and establishes no live work verdict.
 
 A separate image `52659960` negative capacity probe passed with only plan/profile entries
 raised to 100,000: the original 64 MiB archive limit and 2 GiB disk were unchanged.
@@ -156,15 +169,12 @@ fixture repairs remain separately attributed. Separate standard canonical positi
 qualification on exact `adcf35a5` passed in 173.08 seconds: two isolated trials,
 four controlled model effects, exit zero, no paid inference and zero additional
 replay calls. Owned runtime resources and isolated PostgreSQL/MinIO containers
-were removed. Fresh immutable profile/image approval and live semantic
-acceptance remain unproven; no 256 MiB deployment or production runtime-identity
-change is needed for the demonstrated capacity.
+were removed. Image/profile runtime adoption is committed. Guide 27 reached POST and one authorized retry; both retained incomplete model responses. The small MVP pilot above subsequently reached real POST failure, corrected v2, automatic acceptance and matching public contribution exports on supplemental release `ee22e22e`. No 256 MiB deployment or production runtime-identity change was needed for the earlier capacity proof.
 
 Guide 24/25 failures and guide 25's explicit PM-feedback correction remain
 immutable. Earlier five default-negative/replay controls created no admission or
 Submission; the size case proves compression ratio only. Exact source `942aa11a`
-passed CI with 11,528 tests, excluding the pending repair. Live work verdicts,
-recovery and exact contribution evidence remain pending. This input package and
+passed CI with 11,528 tests, excluding the later repair/fixtures; exact `a4afa8d75` later passed 11,533 completed tests with zero skips/deselections; later MVP edits need fresh CI. The small pilot proves wrong/correct work verdicts and exact contribution evidence; broader recovery and restore verification remain pending. This input package and
 its controlled image qualification do not claim a complete hosted journey; use
 the linked report for source pins, timestamped accounting and historical scope.
 

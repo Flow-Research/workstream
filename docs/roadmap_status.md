@@ -49,22 +49,25 @@ retaining one paid effect and unchanged accounting on replay. Approved callbacks
 require their pinned authority configuration. PRE model selectors remain
 unsupported. Production Flow identity, substantive grading quality and the full
 project journey remain separate. The [current Terminal Systems checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md)
-records backend `466faca5`/schema `0066`, POST image `4d8de652` from
-`24b974b3`, and native PID `2298844` under additive release `0f46f3ea`.
+records current release `6ec9fb8d`, backend `466faca5`/schema `0066`, POST
+image `52659960` from `6af3c7ee` qualified on `adcf35a5`, and native PID
+`2633053`. Profile v2 permits 100,000 entries with the original 64 MiB runtime
+identity. All predecessors remain retained across 82 registrations/30 contexts/13 cache entries.
 Guide 26 completed source-only setup, independent human attachments, separate
 approvals, activation and immediate claim into work. Selected-PRE negative/replay
 and verified S3 admission/immutable Submission v1/replay passed. Its POST ended
 `infrastructure_failed / invalid_output` after nine paid calls: two trial receipts
 exist, but build export capacity failed and all 17 work-test steps were skipped.
 There is no work verdict, Revision, FinalAcceptance or ContributionRecord.
-The pending project-checker capacity/assessment repair is not deployed or covered
-by the exact `942aa11a` CI pass. A separate image `52659960` negative capacity
-probe passed with 100,000 entries/original 64 MiB: ten executed steps, seven grounded work
+The capacity/assessment repair is now deployed prospectively, but is not covered
+by the earlier `942aa11a` CI pass. Exact `a4afa8d75` subsequently passed 11,533 completed tests; later MVP edits need fresh CI. A separate
+image `52659960` negative capacity probe passed with 100,000 entries/original
+64 MiB: ten executed steps, seven grounded work
 skips, no resource failures, controlled replay and cleanup. Separate standard
 positive qualification on `adcf35a5` passed with two trials/four controlled model
 effects/no paid calls/no additional replay calls and complete owned runtime/
-PostgreSQL/MinIO cleanup. Prospective adoption remains pending. Guide 24/25 failures and
-earlier default-intake proof remain retained; live work outcome, recovery and contribution evidence remain.
+PostgreSQL/MinIO cleanup. Runtime adoption is committed without paid calls;
+guide 27 reached automatic POST, but its model response and one authorized retry exhausted the output allowance. The current MVP drill uses the [small incident-summary task](../pilots/terminal_systems/mvp/README.md), with real wrong/correct output and no model in POST. Its live path reached PRE rejection, a genuine POST failure, corrected v2, shared automatic acceptance and matching public contribution exports. Guide 24/25 failures and earlier default-intake proof remain retained. Broader recovery/isolation and final-data restore remain to verify.
 See [WS-EXEC-001](../.commitrail/initiatives/WS-EXEC-001/OVERVIEW.md).
 
 The artifact diagnosis API uses exact,
@@ -632,7 +635,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | CLI and terminal interface | **Public CLI clients and contributor workbench with deliberate claim** | Explicit commands retain text/JSON/noninteractive behavior. [WS-CLI-001-48](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-48.md) supplies scoped contributor reads; [WS-CLI-001-49](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-49.md) adds verified guide downloads/findings; [WS-CLI-001-50](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md) improves presentation. [WS-CLI-001-51](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md) adds direct navigation and exact confirmed claim with caller-owned saved keys, explicit replay and honest unknown outcomes | ZIP preparation/Submission, automatic crash recovery and management remain separate TUI boundaries. Contribution Evidence remains an inert CLI handoff pending a typed single-page port. Protected publication and hosted journey proof remain separate operational claims |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
 | Runtime diagnostics | **Implemented foundation; release configuration prepared** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional typed OTLP export; hosted composition accepts only an optional HTTPS collector origin and keeps exporter outage outside product correctness | Restrict broker publishers and secure log access, encryption and finite deletion; prove actual-service privacy/correlation. Recorded hosted configuration disables export. If an approved collector is enabled, qualify its access, egress, retention and outage behavior; absence is not an outage pass and optional collector deployment is not a first-journey prerequisite |
-| Frontend and pilot | **Partial hosted backend journey; live POST work pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. The earlier five-task import remains historical; guide 24 used a fresh task claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Guide 26 reached approved policies, activation, claim, selected-PRE feedback/replay and verified S3 admission/immutable Submission v1/replay. POST ended infrastructure_failed/invalid_output; two trial receipts with export capacity failure/all 17 steps skipped do not prove completed work tests. Pending project-checker repair is not deployed. Controlled image `52659960` capacity probe passed with 100,000 entries/original 64 MiB, ten executed steps/seven grounded work skips and no resource failures. Separate standard positive qualification passed on `adcf35a5` with two trials/four controlled effects/no paid calls; zero additional replay calls and complete owned-service cleanup. Live work verdict remains pending. Guide 24/25 failures remain immutable; live work outcome/recovery/exact contribution evidence remain. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). Optional clients do not replace backend proof. |
+| Frontend and pilot | **Small hosted backend journey proven; operational release checks remain** | The [incident-summary pilot](../pilots/terminal_systems/mvp/README.md) exercised real source-only setup, separate human-selected PRE/POST approvals, guide activation, task creation and immediate claim, PRE rejection without a Submission, verified S3 intake, POST failure and a genuine corrected v2. Passing POST reached shared FinalAcceptance and one submitter ContributionRecord. Contributor/manager exports agree on exact artifact, assignment and locked policy; unpaid policy creates no awards or fabricated review. | Complete scoped recovery, isolation, final-data restore and final-head verification. Earlier complex benchmark/model failures remain retained and do not block this small project; their grading quality is not certified. Live human review, paid fulfillment and frontend remain deferred. [Current drill evidence](reports/terminal-systems-hosted-drill-2026-10-27.md). |
 
 ## What Has Been Completed
 
@@ -1519,13 +1522,18 @@ PR #697 setup seam (guide 26 source-only setup + independent human approvals pro
   -> guide 26 activation + fresh manual task screen/release/claim/replay
   -> selected-PRE negative/replay -> verified S3 admission -> Submission v1/replay
   -> POST infrastructure_failed/invalid_output: export capacity failure, all 17 test steps skipped
-  Pending repair: default 100,000 entries; infrastructure capacity before assessment only
+  Deployed image5265/profile v2: 100,000 entries/original64MiB; infrastructure capacity only
     for exit0/no-signal/exportcapacity/null image+archive; task-disk/step-capacity still assessed
   Controlled negative capacity probe: image `52659960` + 100,000 entries/original 64 MiB passed
     ten steps ran/seven grounded work skips/no resource failures
   Separate standard positive: adcf fixture/image5265 passed in 173.08 s: two trials/four controlled effects
-    no paid calls/no additional replay calls/owned-service cleanup passed; prospective adoption pending
-  Next: qualified repair -> live work verdict -> recovery -> exact contribution evidence
+    no paid calls/no additional replay calls/owned-service cleanup passed
+  Runtime release6ec9 committed: backend466/schema0066/PID2633053/82registry/30contexts/13cache
+  Guide27 POST/retry: incomplete model output; no work verdict
+  Current incident-summary pilot: real setup/approval/claim -> PRE negative -> v1 POST failure
+    -> corrected v2 POST pass -> shared acceptance + exact public submitter contribution
+  Remaining: scoped recovery/isolation/restore evidence and final PR verification
+  Exact a4afa CI passed; subsequent MVP edits require fresh checks
   Preserved: guide 25 PM correction + five default-negative/replay controls (ratio-only size case)
 
 Proven bounded local first-layer drill (public guide inputs, recorded inference, local Flow-compatible auth)
@@ -1593,20 +1601,20 @@ v0.1 is not ready until all of the following are true:
   Guide 26 source-only setup, independent human attachments/approvals, activation,
   immediate claim, selected-PRE negative/replay and verified Submission v1/replay
   passed. POST ended infrastructure_failed/invalid_output: export capacity failed
-  and all 17 dependent work-test steps were skipped. The pending repair raises the
+  and all 17 dependent work-test steps were skipped. The deployed repair raises the
   default maximum-entry limit to 100,000 and classifies only exit-code-zero,
   no-signal builds with capacity-exceeded export and null candidate image/archive
   digests as infrastructure capacity before assessment. Task-disk-limit and
   step-export-capacity results remain assessable. It changes no native contract
-  and is not deployed/live-proven. Controlled image `52659960` retry2 proves capacity with
+  and establishes no live work verdict. Controlled image `52659960` retry2 proves capacity with
   100,000 entries and the original 64 MiB archive limit: ten steps ran, seven grounded
   work skips, no resource failures, controlled replay and cleanup. The first two
   probe tests remain failed; repaired custody-count/skip assertions do not turn
   them into passes. Separate standard positive qualification on `adcf35a5` passed
   in 173.08 seconds with two trials/four controlled effects/no paid inference; its
-  owned-service cleanup completed with no additional replay calls; prospective adoption remains pending. Guide 24/25 failures
-  remain immutable. Live work verification, recovery and exact acceptance/contribution
-  evidence remain. Preserve default-true human review and the locked automatic branch.
+  owned-service cleanup completed with no additional replay calls. Runtime adoption
+  is committed. Guide 27 POST/retry failed on incomplete model output. The incident-summary pilot reached real POST failure, corrected v2 and automatic acceptance with identical contributor/manager contribution exports. Guide 24/25 failures
+  remain immutable. Broader recovery, isolation and final-data restore verification remain. Preserve default-true human review and the locked automatic branch.
   The bounded local drill now covers original upload, task examples, recorded
   async inference, public review/revision configuration, separate PRE/POST
   approvals, Finance publication, activation and both policy outcomes. It does not establish live
@@ -1814,9 +1822,11 @@ failed restart verifier despite model approval. Its registered real26 image is
 selected by guide 17's approved POST policy, but real-project trial qualification
 remains outstanding. The [current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md)
 records exact source/image pins, retained data, current accounting and historical
-failures. Current additive release `0f46f3ea` retains backend `466faca5` and schema
-`0066`, selects POST image `4d8de652` built and physically qualified from
-`24b974b3`, and restarts the unchanged native binary as PID `2298844`. AWS proof,
+failures. Current additive release `6ec9fb8d` retains backend `466faca5` and schema
+`0066`, selects POST image `52659960` built from `6af3c7ee` and qualified on
+`adcf35a5`, and restarts the unchanged native binary as PID `2633053`. Profile v2
+allows 100,000 entries with the unchanged 64 MiB runtime identity; 82 registrations,
+30 authority contexts and 13 cache entries retain all predecessors. AWS proof,
 retained-data cutoff and five-service health passed; no migration or row reset
 occurred. Its controlled qualification passed two isolated trials/four controlled
 model effects/no additional provider call on replay and cleanup; this is separate
@@ -1832,8 +1842,8 @@ costing US$0.133162800. Two trial receipts exist, but builder exit code 0 plus
 export capacity failure and all 17 dependent steps skipped prove no completed work
 tests, work verdict, Revision, FinalAcceptance or ContributionRecord. The 64 MiB node candidate-archive
 limit, 20,000-entry profile and immutable-base lower bound of 36,596 component
-charges do not identify the first capacity branch. The pending project-checker
-capacity/assessment repair is not deployed and changes no native contract.
+charges do not identify the first capacity branch. The deployed project-checker
+capacity/assessment repair changes no native contract or guide 26 lock.
 Controlled image `52659960` retry2 then passed the retained negative-package capacity
 probe with 100,000 entries and original 64 MiB/2 GiB disk: archive 45,435,904 bytes,
 ten executed steps/seven graph-grounded work skips/no resource failures, two
@@ -1843,23 +1853,20 @@ and skip-assertion repairs. Semantic assessment was disabled. No 256 MiB deploym
 or production runtime-identity change is required by this proof. Separate standard
 positive qualification on `adcf35a5` passed in 173.08 seconds with two trials/four
 controlled effects/no paid inference/no additional replay calls and complete
-owned runtime/PostgreSQL/MinIO cleanup; fresh immutable profile/image approval
-remains pending.
+owned runtime/PostgreSQL/MinIO cleanup. Image/profile runtime adoption is now
+committed. Guide 27 reached POST and recovery but no work verdict. The incident-summary pilot now runs image `4e5b9c71` on release `ee22e22e`: wrong counts produced real POST feedback; corrected v2 reached shared acceptance and one publicly readable submitter contribution. It uses no model in POST.
 Image `52659960` was built from `6af3c7ee` with 125 focused tests; `e6935430`/`adcf35a5`
 are later fixture repairs, separate from image source and the `942aa11a` aggregate.
 
 At 02:52:03 UTC November 4, the unchanged US$10 account had US$8.757024460
 settled, zero reserved and US$1.242975540 remaining. Exact source `942aa11a`
 passed 11,528 unique tests across 17 lanes with zero skips/deselections and cleanup;
-that aggregate does not cover the pending repair, which requires fresh verification.
+that aggregate does not cover later repairs. Exact `a4afa8d75` subsequently passed 11,533 completed tests with zero skips/deselections and cleanup; later MVP edits require fresh checks.
 Guide 24/25 infrastructure failures, PM correction, exact request separation and
 five default-negative/replay proofs remain retained; the size case proves compression
-ratio only. Substantive work tests/verdict, feedback-governed correction, actual
-recovery/replay without extra effects and shared acceptance with exact contribution
-facts remain the connected gates. Current public setup recovery does not reset
+ratio only. The small pilot proves substantive wrong/correct counts, feedback-linked replacement, exact submission replay and shared acceptance with public contribution facts. Wider recovery/isolation and final-data restore remain release checks. Current public setup recovery does not reset
 terminal attempts or revise locked submissions.
-Preserve both ReviewPolicy branches; the complete real-project contribution
-outcome is not yet proven.
+Preserve both ReviewPolicy branches. The incident-summary automatic contribution outcome is proven; live human review, paid awards and broad benchmark quality are not established by that result.
 An earlier controlled-provider gVisor qualification applies only to its recorded
 historical implementation; it does not qualify the Smol deployment target.
 Native Smol KVM composition 013 passed on native build `b2ce3fa45`, using the production Rust
