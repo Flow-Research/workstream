@@ -141,8 +141,19 @@ Submission creation and exact 201 replay passed with immutable v1
 `evaluation_pending` and checker `queued`. The subsequent bounded read-only SQL
 observation found run `01a1a409-a755-7869-bab5-b4f8072c8cb5` ended
 `infrastructure_failed / invalid_output` at 00:52:36 UTC. No work verdict or
-Revision resulted. Retained output is under diagnosis; no retry or successor is
-claimed. Submission creation supersedes the zero-Submission snapshot at 00:49:21,
+Revision resulted. Offline replay of the ART-verified retained output identifies
+a mixed validation failure: the first plan omitted `schema_version` and contained
+two non-verbatim source quotes. Early structural rejection hid the citation
+indices from the single correction request; its response fixed the schema but
+not the quotes. No trial ran. The source repair shares one citation checker
+between strict validation and bounded diagnostics, so independently checkable
+quote failures reach correction even when another field is invalid. It preserves
+closed-plan rejection and the two-call limit. Synthetic regressions pass, and
+removing diagnostic enrichment makes the mixed-error regression fail; replay of
+both historical responses still rejects them. The repair is not yet image-qualified
+or deployed. Adoption requires a new guide/task with human-approved image
+attachments; guide 25's locked Submission and failure remain unchanged. No retry
+or successor is claimed. Submission creation supersedes the zero-Submission snapshot at 00:49:21,
 but this infrastructure failure does not establish the intended negative work
 result. Substantive POST, governed correction, acceptance and exact
 ContributionRecord evidence remain pending.

@@ -38,7 +38,7 @@ REVISION_PROJECTION_ID = "019a14ee-5f61-7f21-8dd8-11d4d41a0002"
 
 
 class TrialPlanError(ValueError):
-    """A plan failure; only structurally valid plans expose citation failure indices."""
+    """A plan failure with independently checked, bounded citation failure indices."""
 
     def __init__(self, code: str, *, procedure_indices: tuple[int, ...] = ()) -> None:
         super().__init__(code)
@@ -424,6 +424,88 @@ def _source_quote_span(source: SourceEvidence, quote: str) -> tuple[int, int] | 
     return match
 
 
+def _procedure_citation_span(
+    procedure: object, by_id: dict[str, SourceEvidence]
+) -> tuple[int, int] | None:
+    """Reject malformed citation inputs; return None for a diagnosable mismatch."""
+    if type(procedure) is not dict or set(procedure) != {
+        "procedure_id",
+        "purpose",
+        "command_text",
+        "command",
+        "working_directory",
+        "state_source",
+        "evidence_id",
+        "source_quote",
+    }:
+        raise TrialPlanError("invalid_output")
+    if any(
+        type(procedure[field]) is not str
+        for field in ("procedure_id", "purpose", "working_directory", "state_source")
+    ):
+        raise TrialPlanError("invalid_output")
+    command_text = procedure["command_text"]
+    command = procedure["command"]
+    evidence_id = procedure["evidence_id"]
+    cited = by_id.get(evidence_id) if type(evidence_id) is str else None
+    quote = procedure["source_quote"]
+    if (
+        type(command_text) is not str
+        or not command_text
+        or len(command_text) > 8192
+        or "\x00" in command_text
+        or type(command) is not list
+        or not command
+        or len(command) > 64
+        or any(
+            type(item) is not str or not item or len(item) > 4096 or "\x00" in item
+            for item in command
+        )
+        or cited is None
+        or type(quote) is not str
+        or not quote
+    ):
+        raise TrialPlanError("invalid_output")
+    try:
+        if len(quote.encode("utf-8")) > MAXIMUM_SOURCE_QUOTE_BYTES:
+            raise TrialPlanError("invalid_output")
+    except UnicodeError as exc:
+        raise TrialPlanError("invalid_output") from exc
+    try:
+        parsed_command = shlex.split(command_text, posix=True)
+    except ValueError as exc:
+        raise TrialPlanError("invalid_output") from exc
+    if parsed_command != command:
+        raise TrialPlanError("invalid_output")
+    span = _source_quote_span(cited, quote)
+    if span is None or span[1] > cited.line_count:
+        return None
+    start, end = span
+    cited_text = "\n".join(cited.content.splitlines()[start - 1 : end])
+    return span if command_text in cited_text else None
+
+
+def _citation_failure_indices(
+    value: object, evidence: tuple[SourceEvidence, ...]
+) -> tuple[int, ...]:
+    """Diagnose eligible citations without accepting any part of a rejected plan."""
+    if type(value) is not dict:
+        return ()
+    procedures = value.get("procedures")
+    if type(procedures) is not list or len(procedures) > MAXIMUM_PROCEDURES:
+        return ()
+    by_id = {item.evidence_id: item for item in evidence}
+    failures = []
+    for index, procedure in enumerate(procedures):
+        try:
+            span = _procedure_citation_span(procedure, by_id)
+        except TrialPlanError:
+            continue
+        if span is None:
+            failures.append(index)
+    return tuple(failures)
+
+
 def validate_plan_proposal(
     raw: str,
     material_digest: str,
@@ -437,6 +519,23 @@ def validate_plan_proposal(
         )
     except (TypeError, json.JSONDecodeError, TrialPlanError) as exc:
         raise TrialPlanError("invalid_output") from exc
+    try:
+        return _validate_plan_value(value, material_digest, evidence)
+    except TrialPlanError as exc:
+        if str(exc) != "invalid_output" or exc.procedure_indices:
+            raise
+        raise TrialPlanError(
+            "invalid_output",
+            procedure_indices=_citation_failure_indices(value, evidence),
+        ) from exc
+
+
+def _validate_plan_value(
+    value: object,
+    material_digest: str,
+    evidence: tuple[SourceEvidence, ...],
+) -> TrialPlanProposal:
+    """Validate the complete closed plan before constructing an executable proposal."""
     if type(value) is not dict or set(value) != {
         "schema_version",
         "material_digest",
@@ -470,25 +569,10 @@ def validate_plan_proposal(
     normalized = []
     citation_failures = []
     for procedure_index, procedure in enumerate(procedures):
-        if type(procedure) is not dict or set(procedure) != {
-            "procedure_id",
-            "purpose",
-            "command_text",
-            "command",
-            "working_directory",
-            "state_source",
-            "evidence_id",
-            "source_quote",
-        }:
-            raise TrialPlanError("invalid_output")
+        span = _procedure_citation_span(procedure, by_id)
         identifier = procedure["procedure_id"]
         purpose = procedure["purpose"]
-        command_text = procedure["command_text"]
-        command = procedure["command"]
         source = procedure["state_source"]
-        evidence_id = procedure["evidence_id"]
-        cited = by_id.get(evidence_id) if type(evidence_id) is str else None
-        quote = procedure["source_quote"]
         if (
             type(identifier) is not str
             or not identifier
@@ -497,48 +581,19 @@ def validate_plan_proposal(
             or identifier in ids
             or type(purpose) is not str
             or purpose not in required_purposes
-            or type(command_text) is not str
-            or not command_text
-            or len(command_text) > 8192
-            or "\x00" in command_text
-            or type(command) is not list
-            or not command
-            or len(command) > 64
-            or any(
-                type(item) is not str or not item or len(item) > 4096 or "\x00" in item
-                for item in command
-            )
             or not _safe_relative(procedure["working_directory"], allow_dot=True)
             or type(source) is not str
             or type(source) is str
             and source != "fresh"
             and source != "reference_baseline"
             and source not in ids
-            or cited is None
-            or type(quote) is not str
-            or not quote
         ):
             raise TrialPlanError("invalid_output")
-        try:
-            if len(quote.encode("utf-8")) > MAXIMUM_SOURCE_QUOTE_BYTES:
-                raise TrialPlanError("invalid_output")
-        except UnicodeError as exc:
-            raise TrialPlanError("invalid_output") from exc
-        try:
-            parsed_command = shlex.split(command_text, posix=True)
-        except ValueError as exc:
-            raise TrialPlanError("invalid_output") from exc
-        if parsed_command != command:
-            raise TrialPlanError("invalid_output")
-        span = _source_quote_span(cited, quote)
         item = dict(procedure)
-        if span is None or span[1] > cited.line_count:
+        if span is None:
             citation_failures.append(procedure_index)
         else:
             start, end = span
-            cited_text = "\n".join(cited.content.splitlines()[start - 1 : end])
-            if command_text not in cited_text:
-                citation_failures.append(procedure_index)
             item.update(start_line=start, end_line=end)
         ids.add(identifier)
         purposes.append(purpose)

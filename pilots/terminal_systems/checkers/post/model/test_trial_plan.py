@@ -19,6 +19,7 @@ sys.path.insert(0, str(HERE))
 
 from trial_plan import (  # noqa: E402
     MAXIMUM_DOCUMENTED_COMMANDS,
+    MAXIMUM_PROCEDURES,
     MAXIMUM_SOURCE_QUOTE_BYTES,
     PURPOSE_ORDER,
     TrialPlanError,
@@ -208,7 +209,7 @@ class TrialPlanTests(unittest.TestCase):
             self.validated(value)
         self.assertEqual(caught.exception.procedure_indices, ())
 
-    def test_all_independent_citation_failures_are_reported_after_structural_validation(
+    def test_independent_citation_failures_survive_other_plan_rejections(
         self,
     ):
         value = self.proposal()
@@ -232,17 +233,122 @@ class TrialPlanTests(unittest.TestCase):
                 self.assertRaises(TrialPlanError) as caught,
             ):
                 self.validated(invalid)
-            self.assertEqual(caught.exception.procedure_indices, ())
+            # A malformed sibling still rejects the whole plan, but no longer
+            # hides independently attributable citation failures elsewhere.
+            self.assertEqual(caught.exception.procedure_indices, (1, 2, 3))
         invalid = deepcopy(value)
         invalid["procedures"][4] = None
         with self.assertRaises(TrialPlanError) as caught:
             self.validated(invalid)
-        self.assertEqual(caught.exception.procedure_indices, ())
+        self.assertEqual(caught.exception.procedure_indices, (1, 2, 3))
         invalid = deepcopy(value)
         invalid["coverage_gaps"] = [{"purpose": "restart", "evidence_id": "unknown"}]
         with self.assertRaises(TrialPlanError) as caught:
             self.validated(invalid)
-        self.assertEqual(caught.exception.procedure_indices, ())
+        self.assertEqual(caught.exception.procedure_indices, (1, 2, 3))
+
+    def test_top_level_schema_types_coverage_and_state_do_not_hide_citation_failures(
+        self,
+    ):
+        value = self.proposal()
+        value["procedures"][1]["source_quote"] = "absent exact source line"
+        value["procedures"][2]["source_quote"] = "flattened source paragraph"
+        missing_schema = deepcopy(value)
+        del missing_schema["schema_version"]
+        cases = [missing_schema]
+        for field, wrong in (
+            ("schema_version", "unknown"),
+            ("material_digest", []),
+            ("coverage_complete", "true"),
+            ("coverage_gaps", None),
+            ("recovery_applicability", {"required": "true"}),
+        ):
+            invalid = deepcopy(value)
+            invalid[field] = wrong
+            cases.append(invalid)
+        invalid = deepcopy(value)
+        invalid["procedures"][-1]["state_source"] = "fresh"
+        cases.append(invalid)
+        invalid = deepcopy(value)
+        invalid["procedures"][-1]["purpose"] = "documented_command"
+        cases.append(invalid)
+        for index, invalid in enumerate(cases):
+            with self.subTest(case=index):
+                with self.assertRaises(TrialPlanError) as caught:
+                    self.validated(invalid)
+                self.assertEqual(caught.exception.procedure_indices, (1, 2))
+
+    def test_diagnostics_skip_only_malformed_citation_candidates(self):
+        for change in (
+            {"procedure_id": []},
+            {"purpose": True},
+            {"working_directory": None},
+            {"state_source": {}},
+            {"evidence_id": []},
+            {"evidence_id": "unknown_source"},
+            {"source_quote": None},
+            {"source_quote": ""},
+            {"source_quote": "\ud800"},
+            {"source_quote": "x" * (MAXIMUM_SOURCE_QUOTE_BYTES + 1)},
+            {"command_text": []},
+            {"command_text": "'unterminated"},
+            {"command_text": "x" * 8193},
+            {"command_text": "bad\x00command"},
+            {"command": []},
+            {"command": [True]},
+            {"command": ["invented"]},
+            {"command": ["x"] * 65},
+            {"command": ["x" * 4097]},
+            {"extra": "member"},
+        ):
+            value = self.proposal()
+            value["procedures"][1]["source_quote"] = "absent exact source line"
+            value["procedures"][2]["source_quote"] = "flattened source paragraph"
+            value["procedures"][1].update(change)
+            with self.subTest(fields=tuple(change)):
+                with self.assertRaises(TrialPlanError) as caught:
+                    self.validated(value)
+                self.assertEqual(caught.exception.procedure_indices, (2,))
+
+    def test_unparseable_or_unbounded_proposals_have_no_citation_diagnostics(self):
+        value = self.proposal()
+        value["procedures"][1]["source_quote"] = "absent exact source line"
+        encoded = json.dumps(value)
+        cases = [
+            "{",
+            "null",
+            "[]",
+            encoded.replace('"coverage_complete": true', '"coverage_complete": NaN'),
+            encoded.replace(
+                '"coverage_complete": true', '"coverage_complete": Infinity'
+            ),
+            encoded.replace('"procedures": [', '"procedures": [], "procedures": ['),
+            encoded.replace(
+                '"source_quote":', '"source_quote": "duplicate", "source_quote":', 1
+            ),
+        ]
+        for procedures in (
+            None,
+            {},
+            "not an array",
+            [value["procedures"][1]] * (MAXIMUM_PROCEDURES + 1),
+        ):
+            invalid = deepcopy(value)
+            invalid["procedures"] = procedures
+            cases.append(json.dumps(invalid))
+        for index, raw in enumerate(cases):
+            with self.subTest(case=index):
+                with self.assertRaises(TrialPlanError) as caught:
+                    validate_plan_proposal(raw, self.material_digest, self.evidence)
+                self.assertEqual(caught.exception.procedure_indices, ())
+        # Exactly the bounded number of candidates is diagnosable, even though
+        # duplicated procedure identities still make the complete plan invalid.
+        value["procedures"] = [value["procedures"][1]] * MAXIMUM_PROCEDURES
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validated(value)
+        self.assertEqual(
+            caught.exception.procedure_indices, tuple(range(MAXIMUM_PROCEDURES))
+        )
 
     def test_non_recovery_scope_allows_four_purposes_without_recovery_steps(self):
         """A controlled batch-correlation contract, not a live qualified package."""

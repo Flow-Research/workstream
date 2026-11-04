@@ -288,6 +288,74 @@ class ModelPhaseTests(unittest.TestCase):
             3,
         )
 
+    def test_missing_schema_and_multiple_wrapped_quotes_share_one_correction(self):
+        # Synthetic version of the hosted failure: schema omission previously
+        # hid both independently diagnosable quotes from the only correction.
+        value = deepcopy(self.value)
+        notes = ["# Reproduction"]
+        for index, item in enumerate(value["procedures"][1:], start=1):
+            if index <= 2:
+                notes.extend(
+                    ["Use this documented", "procedure.", item["command_text"]]
+                )
+                item["source_quote"] = item["command_text"]
+            else:
+                notes.append(item["source_quote"])
+        (self.case.root / "AUTHOR_NOTES.md").write_text("\n".join(notes) + "\n")
+        self.case.material_digest, self.case.evidence = plan_tests.collect_plan_sources(
+            self.case.root
+        )
+        value["material_digest"] = self.case.material_digest
+        valid = json.dumps(value)
+        for item in value["procedures"][1:3]:
+            item["source_quote"] = (
+                "Use this documented procedure.\n" + item["command_text"]
+            )
+        schema_only = json.dumps(value)
+        del value["schema_version"]
+        invalid = json.dumps(value)
+        with self.assertRaises(TrialPlanError) as caught:
+            self.validate(invalid)
+        self.assertEqual(caught.exception.procedure_indices, (1, 2))
+        expected = {
+            "reason": "source_quote_or_command_text_not_in_unique_source_lines",
+            "procedure_indices": [1, 2],
+        }
+
+        class CitationAwareSession(Session):
+            def call(self, prompt, *, required_receipt_handles=()):
+                if self.calls:
+                    correction = json.loads(prompt)
+                    self.outputs = iter(
+                        [
+                            valid
+                            if correction.get("validation_feedback") == expected
+                            else schema_only
+                        ]
+                    )
+                return super().call(
+                    prompt, required_receipt_handles=required_receipt_handles
+                )
+
+        prompt = build_plan_prompt(
+            self.case.metadata, self.case.material_digest, self.case.evidence
+        )
+        session = CitationAwareSession([invalid])
+        proposal, completed = run_model_phase(session, prompt, self.validate)
+        self.assertEqual(proposal, self.validate(valid))
+        self.assertEqual(completed.call_index, 1)
+        self.assertEqual(len(session.calls), 2)
+        correction = json.loads(session.calls[1][0])
+        self.assertEqual(correction["validation_feedback"], expected)
+        self.assertEqual(correction["original_prompt"], prompt)
+        self.assertEqual(correction["untrusted_prior_output"], invalid)
+        # Feedback is diagnostic, never authority to accept a partial repair.
+        session = Session([invalid, schema_only])
+        with self.assertRaises(TrialPlanError) as caught:
+            run_model_phase(session, prompt, self.validate)
+        self.assertEqual(caught.exception.procedure_indices, (1, 2))
+        self.assertEqual(len(session.calls), 2)
+
     def test_fenced_command_is_resolved_without_model_line_arithmetic(self):
         lines = plan_tests.AUTHOR_NOTES.splitlines()
         notes = (
