@@ -109,29 +109,44 @@ select implementations, approve policies or establish a work outcome. The PM
 and engineering must check that any proposed attachment implements the intended
 project rules before the authorized approval locks it.
 
+For this drill, [checker qualification](checkers/README.md#post-prerequisites)
+must exercise realistic valid, invalid and edge-case examples through the actual
+Workstream intake and post-submission execution paths. Retain each exact image
+digest/configuration hash, expected and observed outcomes, and bounded evidence
+in the [drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+Infrastructure failure never establishes a work verdict. The PM judges whether
+the rules express the intended project standard; engineering proves observed
+checker behavior on those examples. That evidence is bounded, not a universal
+correctness guarantee. This is required drill practice; activation does not
+automatically enforce this example suite.
+
 The project-owned [checker implementation](checkers/README.md) has qualified
-PRE and POST images. At the November 4 checkpoint, repaired POST image
-`real-e1908427` passed controlled native qualification, public registration/read/replay
-and additive deployment; current backend source `466faca5`, POST image source `e1908427`
-and qualification source `a05c962f` are distinct. Guide 25 completed normal
-source-only setup and explicit PM correction, independently chosen two PRE/eight
-POST attachments, separate approvals, activation and task claim/replays. Its
-corrected proposal has two PRE/seven POST advisory suggestions. Retained outbound
-request bytes prove guide material/examples only, plus feedback for correction.
-After the deployed wire/prompt repair, fresh raw work-context JSON passes strict
-validation. Five default-negative cases and exact replays passed, preserving the
-assignment and creating no admission, Submission or POST/model dispatch. The size
-case proves compression ratio only. Selected-PRE negative and outcome replay
-passed: baseline checks succeeded and the external layout check rejected missing
-`instruction.md`; at the negative cutoff, public/read-only SQL confirmed the
-same working assignment and no admission/Submission/POST/model effects. A later
-package reached ready admission and immutable Submission v1 with exact replay.
-POST then ended infrastructure_failed/invalid_output without a work verdict or
-Revision. Offline replay identifies mixed schema/citation errors. The source repair is not
-yet image-qualified or deployed; no retry or successor is claimed.
-Guide 24's infrastructure-failed POST remains unchanged. Live work verdicts, recovery and exact contribution evidence remain pending.
-This input package and its image qualification do not claim a complete hosted
-journey; use the linked report for current results and historical scope.
+PRE and POST images. At the November 4 checkpoint, additive release `0f46f3ea`
+selects POST image `4d8de652` built and physically qualified from `24b974b3`,
+with backend `466faca5`/schema `0066` unchanged and native PID `2298844`.
+Controlled native qualification passed two isolated trials, four controlled model
+effects, no additional provider call on replay and owned-service cleanup.
+
+Guide 26 normal setup produced three PRE/six POST advisory suggestions and zero
+warnings; actual ART request evidence proves input keys exactly `material` and
+`task_examples`. Independent human two PRE/eight POST attachments, separate
+approvals, activation and immediate claim into work passed with replay. Selected-PRE
+missing-instruction feedback created no Submission and passed replay. A later
+package reached verified S3 admission, immutable Submission v1 and exact replay.
+POST ended `infrastructure_failed / invalid_output` after nine paid model calls.
+Two trial receipts exist, but build export capacity failed and all 17 dependent
+work-test steps were skipped. No work verdict, Revision, FinalAcceptance or
+ContributionRecord resulted. The pending project-checker repair adds capacity
+diagnostics and stops before assessment when required trial execution is incomplete;
+it changes no native contract and is not deployed or live-proven.
+
+Guide 24/25 failures and guide 25's explicit PM-feedback correction remain
+immutable. Earlier five default-negative/replay controls created no admission or
+Submission; the size case proves compression ratio only. Exact source `942aa11a`
+passed CI with 11,528 tests, excluding the pending repair. Live work verdicts,
+recovery and exact contribution evidence remain pending. This input package and
+its controlled image qualification do not claim a complete hosted journey; use
+the linked report for source pins, timestamped accounting and historical scope.
 
 The inference runtime derives suggestions from this original guide and its
 example. The separate [manager-authored rules runtime](../../docs/operations_project_operating_manual.md#manager-authored-guide-rules)

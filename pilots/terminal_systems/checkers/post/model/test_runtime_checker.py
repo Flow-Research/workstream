@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from copy import deepcopy
 from pathlib import Path
 import sys
@@ -17,7 +18,8 @@ from model_transport import CompletedModelCall  # noqa: E402
 from author_checker import AUTHOR_REQUIREMENT, execute_author_accuracy_check  # noqa: E402
 from runtime_checker import RUNTIME_REQUIREMENT, execute_runtime_check  # noqa: E402
 from trial_plan import project_trial_projection_selector  # noqa: E402
-from trial_transport import CompletedTrial, TrialUnavailable  # noqa: E402
+from trial_transport import CompletedTrial, TrialUnavailable, _validate_completed  # noqa: E402
+from test_trial_transport import metrics  # noqa: E402
 
 
 DIGEST = "sha256:" + "a" * 64
@@ -307,9 +309,16 @@ def trial_from_plan(
         "terminal_state": "completed_work",
         "profile_digest": DIGEST,
         "engine_identity_digest": DIGEST,
-        "plan_digest": DIGEST,
+        "plan_digest": "sha256:"
+        + hashlib.sha256(
+            json.dumps(trial_plan, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
         "observation_digest": DIGEST,
-        "build": {"terminal_state": "completed_work", "outcome": "succeeded"},
+        "build": {
+            **metrics(),
+            "candidate_image_digest": DIGEST,
+            "candidate_archive_digest": DIGEST,
+        },
         "steps": steps,
     }
     encoded = json.dumps(observations, sort_keys=True, separators=(",", ":")).encode()
@@ -318,6 +327,34 @@ def trial_from_plan(
         receipt_digest="sha256:" + "b" * 64,
         observations=observations,
         canonical_observations=encoded,
+    )
+
+
+def failed_build_trial(plan, *, export_capacity):
+    trial = trial_from_plan(plan)
+    build = trial.observations["build"]
+    build.update(
+        outcome="disk_exceeded",
+        exit_code=0 if export_capacity else None,
+        export_outcome="capacity_exceeded" if export_capacity else "unavailable",
+        candidate_image_digest=None,
+        candidate_archive_digest=None,
+        written_bytes=0 if export_capacity else plan["resources"]["disk_bytes"],
+    )
+    for step in trial.observations["steps"]:
+        step.update(
+            outcome="dependency_skipped", exit_code=None, export_outcome="not_started"
+        )
+    return _validate_completed(
+        {
+            "protocol_version": "workstream.checker_trial.v1",
+            "outcome": "completed",
+            "receipt_handle": trial.receipt_handle,
+            "receipt_digest": trial.receipt_digest,
+            "observations": trial.observations,
+            "failure_code": None,
+        },
+        plan,
     )
 
 
@@ -345,6 +382,7 @@ class RuntimeCheckerTests(unittest.TestCase):
             (result["outcome"], result["verdict"]), ("completed", "passed")
         )
         self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["resources"]["maximum_entries"], 100_000)
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(session.calls[0][1], ())
         self.assertEqual(session.calls[1][1], ("trial_receipt_" + "b" * 32,))
@@ -389,6 +427,7 @@ class RuntimeCheckerTests(unittest.TestCase):
                     (result["outcome"], result["verdict"]), ("completed", "passed")
                 )
                 self.assertEqual(len(plans), 1)
+                self.assertEqual(plans[0]["resources"]["maximum_entries"], 100_000)
                 self.assertEqual(len(session.calls), 4)
                 self.assertEqual(
                     [h for _, h in session.calls],
@@ -478,6 +517,120 @@ class RuntimeCheckerTests(unittest.TestCase):
         )
         self.assertEqual(result["outcome"], "infrastructure_failed")
         self.assertEqual(result["findings"], [])
+
+    def test_build_export_capacity_is_infrastructure_without_assessment_or_receipt_changes(
+        self,
+    ):
+        class PlanningOnly(FakeModelSession):
+            def _assessment(self, prompt):
+                raise AssertionError("unavailable candidate must not reach assessment")
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            with self.subTest(check=check):
+                session = PlanningOnly()
+                retained = []
+
+                def trial(plan):
+                    completed = failed_build_trial(plan, export_capacity=True)
+                    retained.append(
+                        (
+                            completed,
+                            deepcopy(completed.observations),
+                            completed.canonical_observations,
+                        )
+                    )
+                    return completed
+
+                result = execute(request(check), self.root, session, trial)
+                self.assertEqual(result["outcome"], "infrastructure_failed")
+                self.assertEqual(
+                    result["infrastructure_failure_code"], "capacity_exceeded"
+                )
+                self.assertEqual(result["findings"], [])
+                self.assertEqual(len(session.calls), 1)
+                self.assertEqual(len(retained), 1)
+                completed, observations, raw = retained[0]
+                self.assertEqual(completed.observations, observations)
+                self.assertEqual(completed.canonical_observations, raw)
+
+    def test_task_disk_limit_and_step_export_capacity_still_reach_work_assessment(self):
+        class FailedWork(FakeModelSession):
+            def _assessment(self, prompt):
+                value = super()._assessment(prompt)
+                assessment = value["assessment"]
+                for condition, rule in zip(
+                    assessment["conditions"],
+                    prompt["rubric"]["pass_conditions"],
+                    strict=True,
+                ):
+                    assessment["findings"].append(
+                        {
+                            "code": rule["allowed_finding_codes"][0],
+                            "evidence_id": "trial_receipt",
+                            "line": None,
+                        }
+                    )
+                    condition.update(
+                        status="not_satisfied",
+                        finding_numbers=[len(assessment["findings"])],
+                    )
+                return value
+
+        for check, execute in (
+            (RUNTIME_REQUIREMENT, execute_runtime_check),
+            (AUTHOR_REQUIREMENT, execute_author_accuracy_check),
+        ):
+            for failure in ("task_disk_limit", "step_export_capacity"):
+                with self.subTest(check=check, failure=failure):
+                    session = FailedWork()
+                    retained = []
+
+                    def trial(plan):
+                        if failure == "task_disk_limit":
+                            completed = failed_build_trial(plan, export_capacity=False)
+                        else:
+                            base = trial_from_plan(plan)
+                            base.observations["steps"][0].update(
+                                outcome="disk_exceeded",
+                                exit_code=0,
+                                export_outcome="capacity_exceeded",
+                            )
+                            completed = _validate_completed(
+                                {
+                                    "protocol_version": "workstream.checker_trial.v1",
+                                    "outcome": "completed",
+                                    "receipt_handle": base.receipt_handle,
+                                    "receipt_digest": base.receipt_digest,
+                                    "observations": base.observations,
+                                    "failure_code": None,
+                                },
+                                plan,
+                            )
+                        retained.append(
+                            (
+                                completed,
+                                deepcopy(completed.observations),
+                                completed.canonical_observations,
+                            )
+                        )
+                        return completed
+
+                    result = execute(request(check), self.root, session, trial)
+                    self.assertEqual(
+                        (result["outcome"], result["verdict"]), ("completed", "failed")
+                    )
+                    self.assertIsNone(result["infrastructure_failure_code"])
+                    self.assertTrue(result["findings"])
+                    self.assertEqual(len(session.calls), 2)
+                    self.assertEqual(
+                        session.calls[1][1], (retained[0][0].receipt_handle,)
+                    )
+                    completed, observations, raw = retained[0]
+                    self.assertEqual(completed.observations, observations)
+                    self.assertEqual(completed.canonical_observations, raw)
 
     def test_model_cannot_pass_a_failed_reference_observation(self):
         result = execute_runtime_check(

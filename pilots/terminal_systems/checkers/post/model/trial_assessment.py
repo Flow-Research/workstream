@@ -81,6 +81,19 @@ class RuntimeAssessmentInput:
     recovery_required: bool
 
 
+def require_build_export_capacity(trial: CompletedTrial) -> None:
+    """Capacity-limited candidate export makes project assessment unavailable."""
+    build = trial.observations["build"]
+    if (
+        build["exit_code"] == 0
+        and build["signal"] is None
+        and build["export_outcome"] == "capacity_exceeded"
+        and build["candidate_image_digest"] is None
+        and build["candidate_archive_digest"] is None
+    ):
+        raise TrialAssessmentError("capacity_exceeded")
+
+
 def load_runtime_rubric(path: Path = HANDOFF_PATH) -> tuple[dict[str, str], Rubric]:
     """Load the exact retained source rule without treating it as policy authority."""
     return _load_execution_rubric(RUNTIME_REQUIREMENT, _CONDITION_FINDINGS, path=path)
@@ -442,5 +455,6 @@ __all__ = (
     "load_revision_rerun_rubric",
     "load_runtime_rubric",
     "prepare_runtime_assessment",
+    "require_build_export_capacity",
     "validate_runtime_assessment",
 )

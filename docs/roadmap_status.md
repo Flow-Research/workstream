@@ -49,20 +49,17 @@ retaining one paid effect and unchanged accounting on replay. Approved callbacks
 require their pinned authority configuration. PRE model selectors remain
 unsupported. Production Flow identity, substantive grading quality and the full
 project journey remain separate. The [current Terminal Systems checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md)
-records the deployed backend, live source-only setup and PM correction input
-proof, qualified POST image, historical accounting cutoff and unfinished connected
-journey. Guide 25 completed source-only setup, explicit PM correction, independent
-human attachments, separate approvals, activation and claim with exact replay.
-The deployed `466faca5` backend repair passes fresh strict public context reads.
-Five default-negative cases and exact replays passed without admission,
-Submission or POST/model dispatch; the size case proves compression ratio only.
-Selected-PRE negative/outcome replay passed with intended missing-file feedback.
-A subsequent package reached ready admission and immutable Submission v1 with
-exact replay. POST then ended infrastructure_failed/invalid_output without a
-work verdict or Revision; offline replay identifies mixed schema/citation errors. The source repair is not
-yet image-qualified or deployed; no retry is claimed.
-Guide 24's failed POST remains immutable. Live work outcome,
-recovery and contribution evidence remain.
+records backend `466faca5`/schema `0066`, POST image `4d8de652` from
+`24b974b3`, and native PID `2298844` under additive release `0f46f3ea`.
+Guide 26 completed source-only setup, independent human attachments, separate
+approvals, activation and immediate claim into work. Selected-PRE negative/replay
+and verified S3 admission/immutable Submission v1/replay passed. Its POST ended
+`infrastructure_failed / invalid_output` after nine paid calls: two trial receipts
+exist, but build export capacity failed and all 17 work-test steps were skipped.
+There is no work verdict, Revision, FinalAcceptance or ContributionRecord.
+The pending project-checker capacity/assessment repair is not deployed or covered
+by the exact `942aa11a` CI pass. Guide 24/25 failures and earlier default-intake
+proof remain retained; live work outcome, recovery and contribution evidence remain.
 See [WS-EXEC-001](../.commitrail/initiatives/WS-EXEC-001/OVERVIEW.md).
 
 The artifact diagnosis API uses exact,
@@ -611,7 +608,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; exact-project, privacy-safe candidate read now consumed by the CLI; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence; CLI scope-filtered administrative grant/catalogue reads and explicit keyed grant issue/revoke consume existing public APIs without local authority decisions | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
 | System project catalogue | **Bounded public API and CLI read** | WS-CLI-001-46 adds `GET /api/v1/projects` and `workstream project list` for current system Project Manager, Operator, Finance or Audit `project.read` grants; each signed page exposes only ID, name and status. `me projects` retains exact-grant membership semantics. | System-catalogue TUI picker integration, deployed CLI and hosted conformance remain separate |
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; draft guide and review/revision policy writes with fresh-authorized exact replay of original receipts; exact run-scoped setup reads and assigned-task locked-original reads; S3-backed originals and isolated agent document inspection; exact document generation through separate manager approvals and public exact-authorized CP07 activation; Project Manager guide list, guide detail, activation readiness dry run and verified original read-back (PILOT-READ-3); the CLI exposes existing administrative active-chain and retained sufficiency/artifact-policy reads, keyed human sufficiency writes, and separate manual artifact-policy draft create/update with backend-owned policy decisions | Hosted original upload/read-back, task examples and Celery inference are proven. The current guide has independent human attachments, separate approvals and activation; earlier guide approvals remain retained history. Complete reader/isolation and contribution-journey scenarios; manual drafts are not compiled activation proposals and deployed CLI remains separate |
-| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; typed per-requirement classification and checker specifications; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody. Neutral read/search tools support statically registered OpenAI Agents SDK and OmniCoreAgent adapters in mutually exclusive inference images, while provider-free `manager_authored` compiles a manager-uploaded rules document with no inference or provider resources ([runtime initiative](../.commitrail/initiatives/WS-AGENT-001/OVERVIEW.md), [manager-authored record](../.commitrail/changes/manager-authored-guide-runtime.md)). Inference attempts snapshot an exact immutable model profile and use the shared project-funded proxy; fixed document-tool limits must fit that profile and provider credentials remain outside the setup process. PR #697 supplies a source-sufficient proposal even without registered implementations; retained prior results keep exact hashes and reads and cannot execute through a compatibility path. Exact Omni SDK, mutually exclusive release-image, parser-isolation and real-MinIO proofs pass. Both inference adapters pass the same original-guide public API, durable Celery, real-parser and MinIO path; the Omni run stopped at a warning-ready manager draft with no bindings, approval or activation. The Terminal Systems handoff has project-owned PRE and POST implementations. POST uses the shared bounded model session, isolated trial capability and approved revision material. PR #697 removes registry, image and runtime choices from model input and output; human-selected phase attachments are validated at approval. Initial setup receives assigned guide documents and task examples only, apart from trusted system instructions. Explicit corrections additionally receive the PM's bounded written feedback, without prior proposals or image selections. Project semantics remain outside the generic Rust service. The [checker implementation](../pilots/terminal_systems/checkers/README.md) separates rule, service-image, storage and trial qualification. | Guide 25 retained outbound request bytes prove source-only initial input and explicit PM feedback-only correction: two PRE/seven POST suggestions, separately chosen two PRE/eight POST attachments. Exact image-policy match, approvals, activation and claim/replays passed. Guide 24's failed POST remains immutable. The deployed `466faca5` wire/prompt repair passes fresh strict raw context. Five default negatives/replays passed with no admission/Submission/POST/model dispatch; compression ratio alone is the size-case scope. Selected-PRE negative/outcome replay passed without admission or downstream evaluation. Subsequent preparation reached ready admission and immutable Submission v1/replay; POST ended infrastructure_failed/invalid_output without work verdict or Revision; no retry or successor is claimed. Live work verification and contribution evidence remain. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). |
+| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; typed per-requirement classification and checker specifications; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody. Neutral read/search tools support statically registered OpenAI Agents SDK and OmniCoreAgent adapters in mutually exclusive inference images, while provider-free `manager_authored` compiles a manager-uploaded rules document with no inference or provider resources ([runtime initiative](../.commitrail/initiatives/WS-AGENT-001/OVERVIEW.md), [manager-authored record](../.commitrail/changes/manager-authored-guide-runtime.md)). Inference attempts snapshot an exact immutable model profile and use the shared project-funded proxy; fixed document-tool limits must fit that profile and provider credentials remain outside the setup process. PR #697 supplies a source-sufficient proposal even without registered implementations; retained prior results keep exact hashes and reads and cannot execute through a compatibility path. Exact Omni SDK, mutually exclusive release-image, parser-isolation and real-MinIO proofs pass. Both inference adapters pass the same original-guide public API, durable Celery, real-parser and MinIO path; the Omni run stopped at a warning-ready manager draft with no bindings, approval or activation. The Terminal Systems handoff has project-owned PRE and POST implementations. POST uses the shared bounded model session, isolated trial capability and approved revision material. PR #697 removes registry, image and runtime choices from model input and output; human-selected phase attachments are validated at approval. Initial setup receives assigned guide documents and task examples only, apart from trusted system instructions. Explicit corrections additionally receive the PM's bounded written feedback, without prior proposals or image selections. Project semantics remain outside the generic Rust service. The [checker implementation](../pilots/terminal_systems/checkers/README.md) separates rule, service-image, storage and trial qualification. | Guide 26 actual ART request evidence confirms original material/task_examples only; normal setup produced three PRE/six POST suggestions with zero warnings. Independent human two PRE/eight POST attachments, approvals, activation and claim/replays passed. Selected-PRE negative/replay and verified Submission v1/replay passed. POST ended infrastructure_failed/invalid_output after export capacity failure and all 17 dependent steps skipped; no work verdict or contribution. Guide 25 correction and default-intake proof remain historical. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). |
 | Contribution policy administration | **Public Finance policy workflow; binding administration internal** | Internal Finance Authority adapter-binding lifecycle; public ContributionPolicy discovery/read/create/update/publish/retire with exact Finance Authority and recoverable draft selectors, and a Finance list of every version (PILOT-READ-3); immutable operation and event history; internal exact selected-version validation; CP07 binding with live exact-project manager authority of the selected published version to the active guide generation | The bounded local drill and hosted unpaid-policy publication/read-back passed. Remaining policy branches and complete contribution effects need qualification; publication alone creates no contribution |
 | Task readiness and claim | **Foundation with grant-backed manager and contributor commands** | Task records, assignments and locked work context; guide-bound ContributionPolicyVersion locked before `READY` and copied to TaskAssignment; detached project/guide display; public project-scoped ready, management and operational queues with distinct current grant authority and signed bounded live pagination, with typed task status and manager filters by status, assignee, native import batch and update time (PILOT-READ-2); contributor cross-project own-assignment, attempt and summary reads under current Submitter grants (PILOT-READ-2); Project Manager project-wide attempt, claim, summary and import-batch reads (PILOT-READ-3); public contributor/management detail with exact project and assignment authority; separate current live work-context projections with exact receipt-selected review/revision/ContributionPolicy identities and no obsolete economic fields; explicit management/operational/audit locked-context projections using one historical resolver, with separate public manager, system-Operator and Audit Authority access; immutable contributor/management requirements using one historical translator, with public exact Contributor and Manager authority; the CLI exposes the three exact manager requirements/context reads separately from contributor commands (WS-CLI-001-27); bounded public Audit Authority lifecycle evidence with atomic project/task scoping and exact transition references; separate CLI audit commands consume those two existing Audit Authority GETs with explicit continuation; public manager create/screen/release use exact covered Project Manager authority, atomic audit and replay; claim/contributor context use exact-project Submitter grants; assigned context lists documents only and distinct `task.guide.read` verifies locked originals before delivery; separate manager context; durable claim retry receipts with fresh authority and exact assignment checks; hidden exact-assignment invalidation with committed cause verification, delivery fencing, exact fixed-service authority and decision-bound immutable release evidence; atomic authority-loss publication and registered prefork delivery; PILOT-14 exposes both locked contribution types in ready rows and Contributor detail for active exact-project Submitters or Reviewers as unpaid or exact instrument/unit/quantity awards, without Finance binding facts; claim remain Submitter-only | The bounded local journey passed; hosted import, screening, release, immediate claim and exact Claim replay passed for queue recovery. Complete the remaining authority/recovery matrix and contribution journey |
 | Operator task CLI | **Existing public task operations consumed by the CLI** | The Operator CLI provides separate status-only project pages and exact-project locked-reference reads. Backend Operator authority, assignment consistency, locked lineage and audit remain decisive. Claim starts contributor work atomically; there is no Operator start command. | Native public-API proof is bounded to existing fixtures; hosted/deployed operation, other Operator workflows and published binary remain separate |
@@ -630,7 +627,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | CLI and terminal interface | **Public CLI clients and contributor workbench with deliberate claim** | Explicit commands retain text/JSON/noninteractive behavior. [WS-CLI-001-48](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-48.md) supplies scoped contributor reads; [WS-CLI-001-49](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-49.md) adds verified guide downloads/findings; [WS-CLI-001-50](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-50.md) improves presentation. [WS-CLI-001-51](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md) adds direct navigation and exact confirmed claim with caller-owned saved keys, explicit replay and honest unknown outcomes | ZIP preparation/Submission, automatic crash recovery and management remain separate TUI boundaries. Contribution Evidence remains an inert CLI handoff pending a typed single-page port. Protected publication and hosted journey proof remain separate operational claims |
 | Fulfillment, reconciliation, and audit | **Planned** | Shared audit foundations, provider-neutral adapter convention, AUTH-OUTBOX-02 live dispatcher authority, retained phase audit decisions, Celery delivery/recovery scans and CON-02B custody | Feature-specific handlers and authority, conditional award fulfillment, callbacks, idempotent recovery, reconciliation, bounded operational reads, and release controls |
 | Runtime diagnostics | **Implemented foundation; release configuration prepared** | Closed structured logging, explicit API/Celery tracing, bounded metrics, safe correlation and optional typed OTLP export; hosted composition accepts only an optional HTTPS collector origin and keeps exporter outage outside product correctness | Restrict broker publishers and secure log access, encryption and finite deletion; prove actual-service privacy/correlation. Recorded hosted configuration disables export. If an approved collector is enabled, qualify its access, egress, retention and outage behavior; absence is not an outage pass and optional collector deployment is not a first-journey prerequisite |
-| Frontend and pilot | **Partial hosted backend journey; live POST work pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. The earlier five-task import remains historical; guide 24 used a fresh task claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Guide 25 reached independent image attachments, separate approvals, activation and claim/replays. After the deployed `466faca5` wire repair, fresh strict context and all five default-negative/replay cases passed with no admission/Submission/POST/model dispatch. The size case proves compression ratio only. Selected-PRE negative/outcome replay passed. A subsequent package reached ready admission, immutable Submission v1 and exact replay; POST ended infrastructure_failed/invalid_output without work verdict or Revision. Guide 24 Submission/failed POST remain retained; live work verdict, recovery and exact contribution evidence remain. Historical account cutoffs and distinct source pins are in the [current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md). Optional clients do not replace backend proof. |
+| Frontend and pilot | **Partial hosted backend journey; live POST work pending** | Original [Terminal Systems inputs](../pilots/terminal_systems/README.md) drove real setup and manager correction, separate approvals, unpaid Finance policy publication and guide activation. The earlier five-task import remains historical; guide 24 used a fresh task claimed directly into work. PRE-negative feedback/replay and verified immutable Submission creation/replay passed. Automatic durable POST ran but ended as infrastructure failure before a work verdict. [The current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md) binds the exact deployed source, artifacts, retained data and accounting. Existing local Compose, native Smol and separately qualified agent-loop foundations remain available; web/frontend expansion is deferred. | Guide 26 reached approved policies, activation, claim, selected-PRE feedback/replay and verified S3 admission/immutable Submission v1/replay. POST ended infrastructure_failed/invalid_output; two trial receipts with export capacity failure/all 17 steps skipped do not prove completed work tests. Pending project-checker repair is not deployed. Guide 24/25 failures remain immutable; live work outcome/recovery/exact contribution evidence remain. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). Optional clients do not replace backend proof. |
 
 ## What Has Been Completed
 
@@ -1510,16 +1507,16 @@ Delivered foundations (bounded local journey proven; no deployment claim)
          submissions/assignments/summary, import batches, failed preparations;
          summary award totals under the Project Manager grant; read-only
 
-PR #697 setup seam (guide 25 source-only input, correction and human approvals proven)
-  Assigned guide + task examples -> source-cited PRE/POST suggestions
-  -> engineering image push/registration -> human PRE/POST attachment approval
+PR #697 setup seam (guide 26 source-only setup + independent human approvals proven)
+  Assigned guide + task examples -> source-cited advisory PRE/POST suggestions
+  -> engineering image qualification/registration -> human PRE/POST attachment approval
   -> locked default-plus-project PRE and project POST policies
-  Repaired image: controlled native qualification + registration + deployment passed
-  -> guide 25 activation + task screen/release/claim with exact replay
-  -> deployed `466faca5` wire repair: strict raw context + five default-negative/replay passes
-  -> selected-PRE negative/outcome replay -> subsequent ready admission
-  -> immutable Submission v1 + exact replay -> POST infrastructure_failed/invalid_output
-  Next: live work verdict -> recovery -> exact contribution evidence
+  -> guide 26 activation + fresh manual task screen/release/claim/replay
+  -> selected-PRE negative/replay -> verified S3 admission -> Submission v1/replay
+  -> POST infrastructure_failed/invalid_output: export capacity failure, all 17 test steps skipped
+  Pending source repair: capacity diagnostics + required-execution gate before assessment
+  Next: qualified repair -> live work verdict -> recovery -> exact contribution evidence
+  Preserved: guide 25 PM correction + five default-negative/replay controls (ratio-only size case)
 
 Proven bounded local first-layer drill (public guide inputs, recorded inference, local Flow-compatible auth)
   Original guide + examples -> recorded Celery setup -> separate PRE/POST approval
@@ -1583,16 +1580,14 @@ v0.1 is not ready until all of the following are true:
 - Finish PR #697 proposal/attachment separation verification and reproduce the
   connected guide-to-contribution journey
   with the intended hosted identity, inference provider and infrastructure.
-  Guide 25 reached source-backed proposals, explicit PM correction, independent
-  human image attachments, separate approvals, activation and claim/replays.
-  The deployed `466faca5` wire/prompt repair passes strict raw context reads. Five default
-  negatives and exact replays passed without admission/Submission/POST/model
-  dispatch; size coverage is compression ratio only. Selected-PRE negative
-  and outcome replay passed without downstream evaluation. A subsequent package
-  reached ready admission and immutable Submission v1/replay. POST then ended
-  infrastructure_failed/invalid_output without work verdict or Revision. Guide 24's
-  failed POST remains retained. Live work verification, recovery and contribution
-  evidence remain.
+  Guide 26 source-only setup, independent human attachments/approvals, activation,
+  immediate claim, selected-PRE negative/replay and verified Submission v1/replay
+  passed. POST ended infrastructure_failed/invalid_output: export capacity failed
+  and all 17 dependent work-test steps were skipped. The pending project-checker
+  repair adds capacity diagnostics and a required-execution gate before assessment;
+  it changes no native contract and is not deployed/live-proven. Guide 24/25 failures
+  remain immutable. Live work verification, recovery and exact acceptance/contribution
+  evidence remain. Preserve default-true human review and the locked automatic branch.
   The bounded local drill now covers original upload, task examples, recorded
   async inference, public review/revision configuration, separate PRE/POST
   approvals, Finance publication, activation and both policy outcomes. It does not establish live
@@ -1799,44 +1794,39 @@ uses retained reference-repaired state for interruption/restart and rejects a
 failed restart verifier despite model approval. Its registered real26 image is
 selected by guide 17's approved POST policy, but real-project trial qualification
 remains outstanding. The [current drill report](reports/terminal-systems-hosted-drill-2026-10-27.md)
-records the exact deployed backend, retained data, qualified POST image,
-live proposal-only input and explicit PM feedback proof, current guide
-proposals, accounting cutoff and CI state. It also retains guide 23's terminal
-failure and the earlier guide 19–22 outcomes as historical evidence. Guide 24
-has human attachments, approved policies, activation, claim, PRE feedback and
-an immutable Submission with exact replay. Its automatic POST remains
-`infrastructure_failed` before any trial, work findings or work verdict. The
-repaired `real-e1908427` image passed controlled native qualification, eight
-public registration/read/replays and additive deployment with the backend and
-schema unchanged. The subsequent `466faca5` backend-only rollout passed AWS proof,
-retained-data cutoff and five-service health with no native restart or migration.
-Backend source `466faca5`, POST image source `e1908427` and qualification source
-`a05c962f` are distinct. Guide 25 has completed normal setup,
-explicit PM correction, human approvals, activation and task claim/replays.
-Actual retained S3 request bytes confirm guide/examples only, plus feedback for
-correction; unchanged original facts bind distinct run handles/manifests.
-The corrected proposal has two PRE/seven POST suggestions; human policy selection
-has two PRE/eight POST attachments with exact qualified-image readback. Its
-original observer stop is retained; after the deployed wire repair, fresh raw
-context passes strict JSON validation. Five default-negative/replay cases passed
-without admission/Submission/POST/model dispatch and retained the assignment;
-the size case proves compression ratio only. Selected-PRE negative and outcome replay passed; public/read-only SQL confirm
-no admission/Submission/dispatch/POST/model effects at the 00:49:21 UTC negative
-cutoff. A subsequent package reached ready admission, immutable Submission v1
-and exact replay. POST ended infrastructure_failed/invalid_output without a
-work verdict or Revision; offline replay identifies mixed schema/citation errors. The source repair is not
-yet image-qualified or deployed; no retry or successor is claimed. No FinalAcceptance or ContributionRecord exists yet. The exact
-`a05c962f` CI pass
-(11,520 tests/17 lanes, zero skipped/deselected) is parent-source evidence only.
-Earlier `e822a022` shares deployed `466faca5` backend/app trees; its backend run41746851816
-exposed stale nullable-field assertions in three test callers and is superseded
-without a passing aggregate. The assertions are corrected without changing product
-behavior; fresh aggregate validation remains required. Current public recovery still
-needs a fresh guide version after a terminal setup attempt; retained attempts are
-not reset. Substantive POST/trials,
-feedback-governed correction, actual recovery/replay without extra effects and
-shared authorized acceptance with exact contribution evidence remain the
-connected journey gates.
+records exact source/image pins, retained data, current accounting and historical
+failures. Current additive release `0f46f3ea` retains backend `466faca5` and schema
+`0066`, selects POST image `4d8de652` built and physically qualified from
+`24b974b3`, and restarts the unchanged native binary as PID `2298844`. AWS proof,
+retained-data cutoff and five-service health passed; no migration or row reset
+occurred. Its controlled qualification passed two isolated trials/four controlled
+model effects/no additional provider call on replay and cleanup; this is separate
+from the real-project result.
+
+Guide 26 normal setup produced three PRE/six POST suggestions and zero warnings;
+actual ART request evidence proves input keys exactly material/task_examples.
+The PM independently approved two PRE/eight POST attachments. Activation,
+create/screen/release/claim, selected-PRE negative/no-Submission and exact replays
+passed. Verified S3 admission yielded immutable Submission v1 and exact replay.
+POST then ended infrastructure_failed/invalid_output after nine paid model calls
+costing US$0.133162800. Two trial receipts exist, but builder exit code 0 plus
+export capacity failure and all 17 dependent steps skipped prove no completed work
+tests, work verdict,
+Revision, FinalAcceptance or ContributionRecord. The 64 MiB node candidate-archive
+limit, 20,000-entry profile and immutable-base lower bound of 36,596 component
+charges do not identify the first capacity branch. The pending project-checker
+capacity/assessment repair is not deployed and changes no native contract.
+
+At 02:52:03 UTC November 4, the unchanged US$10 account had US$8.757024460
+settled, zero reserved and US$1.242975540 remaining. Exact source `942aa11a`
+passed 11,528 unique tests across 17 lanes with zero skips/deselections and cleanup;
+that aggregate does not cover the pending repair, which requires fresh verification.
+Guide 24/25 infrastructure failures, PM correction, exact request separation and
+five default-negative/replay proofs remain retained; the size case proves compression
+ratio only. Substantive work tests/verdict, feedback-governed correction, actual
+recovery/replay without extra effects and shared acceptance with exact contribution
+facts remain the connected gates. Current public setup recovery does not reset
+terminal attempts or revise locked submissions.
 Preserve both ReviewPolicy branches; the complete real-project contribution
 outcome is not yet proven.
 An earlier controlled-provider gVisor qualification applies only to its recorded

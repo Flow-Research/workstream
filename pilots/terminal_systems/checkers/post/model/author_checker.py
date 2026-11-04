@@ -39,6 +39,7 @@ from trial_transport import CompletedTrial, TrialTransportError, TrialUnavailabl
 from trial_assessment import (
     add_recovery_assessment_contract,
     decode_recovery_assessment,
+    require_build_export_capacity,
 )
 
 
@@ -71,6 +72,7 @@ def execute_author_accuracy_check(
         if plan is None:
             raise TrialPlanError("invalid_output")
         trial = trial_execute(plan)
+        require_build_export_capacity(trial)
         source, rubrics = load_rubrics()
         rubric = rubrics[AUTHOR_REQUIREMENT]
         prepared = _prepare_assessment(source, rubric, material_root, trial, sources)

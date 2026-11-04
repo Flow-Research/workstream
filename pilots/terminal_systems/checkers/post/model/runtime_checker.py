@@ -22,6 +22,7 @@ from trial_assessment import (
     TrialAssessmentError,
     load_runtime_rubric,
     prepare_runtime_assessment,
+    require_build_export_capacity,
     validate_runtime_assessment,
 )
 from trial_plan import (
@@ -39,7 +40,7 @@ from trial_transport import CompletedTrial, TrialTransportError, TrialUnavailabl
 
 RUNTIME_REQUIREMENT = "runtime_environment_and_verification_trials"
 DEFAULT_TRIAL_LIMITS = TrialPlanLimits(
-    maximum_entries=20_000,
+    maximum_entries=100_000,
     pids=64,
     maximum_steps=35,
 )
@@ -71,6 +72,7 @@ def execute_runtime_check(
         if plan is None:
             raise TrialPlanError("invalid_output")
         trial = trial_execute(plan)
+        require_build_export_capacity(trial)
         prepared = prepare_runtime_assessment(
             metadata,
             material_digest,
