@@ -38,10 +38,10 @@ class CheckerTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        shutil.copy(ROOT / "events.jsonl", self.root / "events.jsonl")
+        shutil.copyfile(ROOT / "events.jsonl", self.root / "events.jsonl")
 
     def summary(self, kind):
-        shutil.copy(
+        shutil.copyfile(
             ROOT / "fixtures" / kind / "summary.json", self.root / "summary.json"
         )
 
@@ -52,6 +52,16 @@ class CheckerTests(unittest.TestCase):
             ("pre_submit", "completed", "failed"),
         )
         self.assertEqual([x["code"] for x in result["findings"]], ["summary_missing"])
+
+    def test_malformed_required_files_fail_pre(self):
+        for name, code in (("events.jsonl", "events_invalid"), ("summary.json", "summary_invalid")):
+            with self.subTest(name=name):
+                shutil.copyfile(ROOT / "events.jsonl", self.root / "events.jsonl")
+                self.summary("correct")
+                (self.root / name).write_text("{not valid JSON}")
+                result = checker.evaluate(request("pre_submit"), self.root)
+                self.assertEqual((result["outcome"], result["verdict"]), ("completed", "failed"))
+                self.assertEqual([x["code"] for x in result["findings"]], [code])
 
     def test_structurally_valid_wrong_summary_fails_only_post(self):
         self.summary("incorrect")
