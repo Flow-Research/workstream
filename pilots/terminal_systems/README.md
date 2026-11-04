@@ -136,9 +136,12 @@ package reached verified S3 admission, immutable Submission v1 and exact replay.
 POST ended `infrastructure_failed / invalid_output` after nine paid model calls.
 Two trial receipts exist, but build export capacity failed and all 17 dependent
 work-test steps were skipped. No work verdict, Revision, FinalAcceptance or
-ContributionRecord resulted. The pending project-checker repair adds capacity
-diagnostics and stops before assessment when required trial execution is incomplete;
-it changes no native contract and is not deployed or live-proven.
+ContributionRecord resulted. The pending repair raises the default maximum-entry
+limit to 100,000. Only a build with exit code zero, no signal,
+`export_outcome=capacity_exceeded` and both candidate image/archive digests null
+is classified as infrastructure capacity before assessment. Task-disk-limit and
+step-export-capacity results remain assessable. This changes no native contract
+and is not deployed or live-proven.
 
 Guide 24/25 failures and guide 25's explicit PM-feedback correction remain
 immutable. Earlier five default-negative/replay controls created no admission or

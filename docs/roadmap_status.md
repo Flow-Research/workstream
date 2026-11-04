@@ -1514,7 +1514,8 @@ PR #697 setup seam (guide 26 source-only setup + independent human approvals pro
   -> guide 26 activation + fresh manual task screen/release/claim/replay
   -> selected-PRE negative/replay -> verified S3 admission -> Submission v1/replay
   -> POST infrastructure_failed/invalid_output: export capacity failure, all 17 test steps skipped
-  Pending source repair: capacity diagnostics + required-execution gate before assessment
+  Pending repair: default 100,000 entries; infrastructure capacity before assessment only
+    for exit0/no-signal/exportcapacity/null image+archive; task-disk/step-capacity still assessed
   Next: qualified repair -> live work verdict -> recovery -> exact contribution evidence
   Preserved: guide 25 PM correction + five default-negative/replay controls (ratio-only size case)
 
@@ -1583,9 +1584,12 @@ v0.1 is not ready until all of the following are true:
   Guide 26 source-only setup, independent human attachments/approvals, activation,
   immediate claim, selected-PRE negative/replay and verified Submission v1/replay
   passed. POST ended infrastructure_failed/invalid_output: export capacity failed
-  and all 17 dependent work-test steps were skipped. The pending project-checker
-  repair adds capacity diagnostics and a required-execution gate before assessment;
-  it changes no native contract and is not deployed/live-proven. Guide 24/25 failures
+  and all 17 dependent work-test steps were skipped. The pending repair raises the
+  default maximum-entry limit to 100,000 and classifies only exit-code-zero,
+  no-signal builds with capacity-exceeded export and null candidate image/archive
+  digests as infrastructure capacity before assessment. Task-disk-limit and
+  step-export-capacity results remain assessable. It changes no native contract
+  and is not deployed/live-proven. Guide 24/25 failures
   remain immutable. Live work verification, recovery and exact acceptance/contribution
   evidence remain. Preserve default-true human review and the locked automatic branch.
   The bounded local drill now covers original upload, task examples, recorded
@@ -1811,8 +1815,7 @@ passed. Verified S3 admission yielded immutable Submission v1 and exact replay.
 POST then ended infrastructure_failed/invalid_output after nine paid model calls
 costing US$0.133162800. Two trial receipts exist, but builder exit code 0 plus
 export capacity failure and all 17 dependent steps skipped prove no completed work
-tests, work verdict,
-Revision, FinalAcceptance or ContributionRecord. The 64 MiB node candidate-archive
+tests, work verdict, Revision, FinalAcceptance or ContributionRecord. The 64 MiB node candidate-archive
 limit, 20,000-entry profile and immutable-base lower bound of 36,596 component
 charges do not identify the first capacity branch. The pending project-checker
 capacity/assessment repair is not deployed and changes no native contract.

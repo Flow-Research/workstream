@@ -49,9 +49,12 @@ The node's candidate archive limit is 64 MiB; the selected trial profile permits
 a lower bound of 36,596 charged path components, not the actual candidate archive
 or the first failing capacity branch. Launcher archive bytes versus host-expanded
 archive/entry rejection remain undiscriminated; no host free-space cause is
-claimed for this project trial. The pending project-checker repair adds precise
-capacity diagnostics and stops before assessment when required trial execution
-is incomplete. It changes no native contract and is not deployed or live-proven.
+claimed for this project trial. The pending project-checker repair raises the
+default maximum-entry limit to 100,000. Only a build with exit code zero, no signal,
+`export_outcome=capacity_exceeded` and both candidate image/archive digests null
+is classified as infrastructure capacity before assessment. Task-disk-limit and
+step-export-capacity results remain assessable. This changes no native contract
+and is not deployed or live-proven.
 Guide 25's earlier infrastructure failure remains immutable.
 
 At **02:52:03 UTC on November 4**, read-only accounting records the unchanged
