@@ -307,8 +307,9 @@ def _assert_idle_trial_roots(root: Path, service_root: Path, child_home_root: Pa
             }
 
 
-async def _retained_trial_summary(session, retained, receipts):
-    """Retain exact verified content/binding identities without provider coordinates."""
+async def _retained_trial_summary(session, retained, receipts, *, expected_count):
+    """Retain exact custody for the explicitly selected trial requirement count."""
+    assert type(expected_count) is int and expected_count > 0
     rows = tuple(
         await session.execute(
             select(
@@ -334,12 +335,12 @@ async def _retained_trial_summary(session, retained, receipts):
             )
         )
     )
-    assert len(rows) == len(retained) == len(receipts) == 2
+    assert len(rows) == len(retained) == len(receipts) == expected_count
     bindings = {
         binding.resource_id: (binding, content, attempt, verification)
         for binding, content, attempt, verification in rows
     }
-    assert len(bindings) == 2
+    assert len(bindings) == expected_count
     by_digest = {external_checker_json_hash(receipt): receipt for receipt in receipts}
     result = []
     for item in sorted(retained, key=lambda item: item.id):
@@ -1277,7 +1278,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     external_checker_json_hash(receipt) for receipt in receipts
                 }
                 trial_summary = await _retained_trial_summary(
-                    session, retained, receipts
+                    session, retained, receipts, expected_count=len(expected_requirements)
                 )
                 model_summary = [
                     {
