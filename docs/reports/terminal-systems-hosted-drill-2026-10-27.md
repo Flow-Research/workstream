@@ -132,7 +132,7 @@ FinalAcceptance and ContributionRecord linkage. The temporary container was
 removed. Private proof fingerprint:
 `sha256:5e8f730d381f4e83738e4d381c880a7bdee0a9f454b7aa98eee2db18f74c10af`.
 This proves database restoration; it does not replace S3 custody or the remaining
-worker-interruption proofs.
+Celery process-interruption proofs.
 
 The repaired backend was deployed from `1b947dfe2819ad9d66d265e9aa1383900eb0dbbd`
 at release `sha256:26591f3e5021b2c3a7f1a8af77688d8384a4a140e57ab7f1732576e116ccfb6b`.
@@ -145,7 +145,7 @@ public contributor and manager exports still matched the original accepted
 record exactly; Submission and checker history reads returned 200. Public-read
 proof fingerprint:
 `sha256:7670a58982c863cca4156105e96cccbb758bc499a900371b8973910aad19abb4`.
-This is a controlled drain/restart proof, not an abrupt-worker-loss proof.
+This is a controlled drain/restart proof, not an abrupt Celery process-loss proof.
 
 ## Retained guide 26 checkpoint and repair qualification — November 4
 
