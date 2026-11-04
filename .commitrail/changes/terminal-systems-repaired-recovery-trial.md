@@ -4,6 +4,38 @@
 - Durable disposition: Planned
 - Intended merge outcome: Repair demonstrated Terminal Systems checker/setup integration defects and report the actual public API and durable-worker journey with exact release evidence and explicit remaining limits.
 
+## Current adopted MVP boundary
+
+The user selected a small realistic incident-summary task for the first complete
+backend demonstration. Its project-owned PRE/POST images use deterministic data
+checks, without a model judge. Earlier benchmark/model repair sections below
+remain scoped history and are not prerequisites for this demonstration.
+
+The current outcome is source-only advisory setup, independent human policy/image
+approval, immediate claim into work, ZIP/PRE rejection or verified Submission,
+real POST failure, genuine correction, shared automatic acceptance and exact
+public contribution evidence. The locked unpaid policy requires no award, and
+no Review or reviewer contribution is fabricated. A fresh task also proves
+native transport infrastructure failure, authorized same-Submission retry,
+stable replay and automatic acceptance after recovery.
+
+The same PR repairs four SQL function search paths exposed by ordinary database
+restore. Allowed affected files are migration
+`backend/alembic/versions/0067_canonical_json_restore_path.py`,
+`backend/alembic/env.py`, the existing `backend/tests/test_alembic.py` regressions,
+and the exact schema fingerprint in `backend/tests/conftest.py`. Preserve function
+bodies, authorization, immutable evidence and all retained rows; downgrade still
+refuses. Focused PostgreSQL proofs and security/QA review, full hosted CI, ordinary
+134-table restore and post-restart public reads support the repair.
+
+The [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
+is authoritative for exact deployment, proof and limitations. Wider ART same-job,
+UNKNOWN/lost-ack interruption and isolation scenarios remain explicitly unproven;
+live human review, paid fulfillment, real Flow issuer integration and general
+benchmark grading are not certified by this pilot. The review focus is the
+advisory setup boundary, independent external checker ownership, retained lineage,
+and honest separation of the proven demonstration from broader release gates.
+
 ## Intent
 
 A real restart-safe repair must be tested after reference application. Starting

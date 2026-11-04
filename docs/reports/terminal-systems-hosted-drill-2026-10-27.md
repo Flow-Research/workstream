@@ -1,6 +1,6 @@
 # Terminal Systems hosted first-journey drill — 2026-10-27
 
-**November 4: the small hosted task reached automatic acceptance and a publicly readable submitter contribution. Final replay/recovery reconciliation and PR verification remain in progress.**
+**November 4: the small hosted journey, genuine correction, infrastructure retry, exact public contribution, controlled restart and ordinary database restore are proven. Broader release fault scenarios remain explicitly unproven below.**
 
 ## Retained guide 27 deployment and model failure
 
@@ -146,6 +146,55 @@ record exactly; Submission and checker history reads returned 200. Public-read
 proof fingerprint:
 `sha256:7670a58982c863cca4156105e96cccbb758bc499a900371b8973910aad19abb4`.
 This is a controlled drain/restart proof, not an abrupt Celery process-loss proof.
+
+## Native transport failure and authorized recovery — November 4
+
+A fresh task used the same approved guide and deterministic external images.
+Its correct ZIP passed PRE and S3 verification before Submission creation. A
+bounded socket-access fault then prevented the unprivileged application from
+reaching the native service. An independent restoration timer and final cleanup
+preserved the exact socket inode, owner, mode and native process.
+
+The first attempt missed the normal 60-second outbox scan: access was restored
+before POST began, and that task completed normally. It is not a recovery pass.
+A separate fresh task used a 150-second observation window with a 240-second
+restoration deadline. It finalized `infrastructure_failed / material_unavailable`
+while access was denied. Trusted POST material preparation uses this native
+service before the project image executes; the initial test expectation of
+`implementation_unavailable` was too narrow. The original failed test observation
+remains retained. No product guard, stored outcome or failure classification was
+changed to make the proof pass.
+
+Submission `01a1a5f8-7765-7c19-886c-747490a05c73` remained version 1 with its
+assignment active and task `evaluation_pending`. The failed run retained no work
+verdict, blocking findings or completion event. No acceptance, contribution or
+Review existed before retry. A contributor received concealed 404 from retry
+source discovery. After restoration, the public system Operator discovered the
+exact finalized source and created one reason-bound generation-2 retry; replay
+returned the same receipt and successor identities.
+
+Automatic POST then passed on that same Submission. FinalAcceptance
+`01a1a5fd-641a-79c3-b33b-d112d050a20e` and submitter ContributionRecord
+`01a1a5fd-65a6-76a2-8c6e-7492f250991c` are publicly readable. Contributor and
+manager exports match exactly. SQL confirms one Submission, one acceptance, one
+contribution and zero Reviews for this task; the original failure digest is
+unchanged. The unpaid policy has no awards. Post-acceptance retry replay retains
+the same receipt and generation-2 identities. All five application services are
+healthy, both owned fault timers are inactive, and the socket/native process are
+restored unchanged. Additional inference spend was zero; the project remains at
+$8.917426660 settled and $0 reserved.
+
+Private combined evidence fingerprint:
+`sha256:421bb4f019b53205d765948eb07173dd82151ca36733a608f45b938d6fbbc519`.
+This proves native transport failure and same-Submission Operator recovery. It
+does not prove process death during execution, ART same-job verification recovery,
+or lost-ack UNKNOWN reconciliation; those separate matrix entries remain open.
+
+Exact head `be275023d` passed every required hosted check. Independent artifact
+reconciliation found 11,538 unique completed backend tests across 17 lanes, zero
+skips/deselections and completed cleanup. Tested merge `86115a18` has the same
+Git tree as the PR head. The diagnostic timing target remains unmet. Later
+report-only updates still require their own final-head checks.
 
 ## Retained guide 26 checkpoint and repair qualification — November 4
 
@@ -1277,7 +1326,7 @@ missing current-project outcomes.
 | Work failure and corrected replacement ZIP | Exact cause routes needs_revision when allowed; successor preserves predecessor/history and locked rules | PASS | Guide 28 v1 needs_revision and ready revision context were read publicly. A genuinely recounted ZIP preserved source bytes and linked v2 to v1 and actual feedback; v2 was accepted. |
 | Revision limits/windows: zero/positive caps, final failure, setup pause/repair and timeout/reclaim | Correct assignment rounds/database-clock window; final failure or timeout retains evidence and returns ready; no artificial renewal | NOT RUN | — |
 | Coverage-incomplete routing | No false auto-acceptance; false returns needs_revision without spent round, true retains review_pending | NOT RUN | — |
-| Known infrastructure failure: discover and reason-bound Operator retry | Original Submission retained, no contributor revision spent; fresh authority and stable replay | IN PROGRESS | Earlier public retry/replay reused the original completed paid effect without revision penalty. Guide 17 and guide 19 retain separate invalid-output runs without a work verdict; guide 24's failed run also remains immutable. No guide 19 or guide 24 retry or model resampling is claimed. Wider failure/recovery variants remain. |
+| Known infrastructure failure: discover and reason-bound Operator retry | Original Submission retained, no contributor revision spent; fresh authority and stable replay | PASS | The November 4 native transport outage retained an infrastructure failure without contributor findings or completion effects. Public Operator discovery/retry and replay created exactly generation 2 on the same Submission; POST then reached acceptance and one public contribution. Contributor discovery denied. Original failure unchanged; no model calls. Other failure classes are not certified by this case. |
 | ART verification failure and same-job recovery | Bound one actual interruption before terminal commit, then normal retry yields the same job and exact receipt/admission lineage | NOT RUN | Guide 17's observer aborted on query-proof mismatch. The later guide 19 task's observer rejected PostgreSQL's full-mask address representation before cancellation. Independent observation confirmed the holder was gone and both original queues restored; its job verified normally at generation 1/attempt 1 with one receipt and admission. Neither abort proves recovery. |
 | UNKNOWN request interruption | Source-specific inspection classifies committed/no-effect/unresolved; only proven-safe recovery invokes existing owner | NOT RUN | — |
 | UNKNOWN completion interruption | Committed outcome verified without repeated effects; unresolved source/UNKNOWN child remains held | NOT RUN | — |
@@ -1311,11 +1360,11 @@ Keep keys, JWTs, subjects, request headers, credentials, connection/provider coo
 | Gate | Current-run disposition |
 |---|---|
 | #576: actual PM agreement, fresh proposal and independently checked packages/material | PASS for the small project — guide 28 source-only setup, human image attachments and separate approvals/activation passed; real wrong/correct packages produced expected POST outcomes. Earlier complex-project/correction evidence remains retained. |
-| #581: terminal retry and full request/completion/acceptance interruption matrix | IN PROGRESS — claim/Submission replay and earlier governed retry evidence remain retained. The guide 17 ART fault aborted before cancellation with successful queue cleanup; its recovery is NOT RUN. Actual UNKNOWN request/completion/acceptance and applicable failure/retry proof remain. |
+| #581: terminal retry and full request/completion/acceptance interruption matrix | IN PROGRESS — same-Submission native-outage recovery to acceptance and post-acceptance retry replay now pass; claim/Submission replay and earlier governed retry evidence remain retained. The guide 17 ART fault aborted before cancellation with successful queue cleanup; its recovery is NOT RUN. Actual UNKNOWN request/completion/acceptance and applicable failure/retry proof remain. |
 | #582: candidate AWS activation, public exact-byte custody, failure recovery and final-data restore | IN PROGRESS — canonical AWS proof, verified S3 intake and exact replay passed. Forward migration 0067, controlled restart and ordinary final-data database restore preserved accepted guide 28 facts. Artifact interruption/recovery and wider isolation remain. |
 | #583: exact native deployment, limits, readiness/cleanup, diagnostics/outage and operations | IN PROGRESS — current release26591f3e runs backend1b947dfe/schema0067 with unchanged incident-summary image4e5b9c71 and native process. AWS/health/retention and controlled restart proofs passed; guide 28 accepted facts remain publicly readable. Earlier image52659960 qualification remains retained. Remaining abrupt-interruption/operating scenarios are not certified. |
 | #555: connected real-project public/durable journey and exact final facts | PASS for the incident-summary path — guide 28 setup/activation/claim, PRE rejection/noSubmission, v1 POST failure, genuine corrected v2, shared FinalAcceptance and exact public JSON/CSV contribution evidence passed. No fabricated Review; unpaid/no awards. Wider release/recovery checks remain under their own rows. |
-| Exact candidate's required CI, focused defect regressions and applicable internal reviews | IN PROGRESS — exact a4afa8d75 passed 11,533 unique tests with zero skips/deselections and completed cleanup. Later MVP changes have six passing local/packaged tests and focused review; fresh final-head CI is required. Earlier evidence does not certify this candidate. CodeRabbit substantive review is not inferred. |
+| Exact candidate's required CI, focused defect regressions and applicable internal reviews | Exact be275023d passed all checks, including 11,538 unique backend tests, zero skips/deselections and cleanup. Later report updates require fresh final-head checks. Focused checker, SQL repair and documentation reviews retain their exact scopes; CodeRabbit substantive review is not inferred. |
 | Stale wording/Markdown links, affected roadmap reconciliation and local sheet constraints if exports exist | Current documentation checks passed; affected roadmap claims reconciled. No local sheet exports are present. Recheck after further changes. |
 
 No issue is closed by this draft or by a child implementation merge. Complete release reporting requires every applicable outcome above to have current evidence, no unresolved journey blocker, and documented operating/recovery limits. Unimplemented/deferred human review, payment fulfillment and reputation must remain clearly identified; they are not silently certified by the automated contribution path.
