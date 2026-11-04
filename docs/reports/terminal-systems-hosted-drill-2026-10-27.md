@@ -108,6 +108,24 @@ generation 2. Recreating its already-dispatched paid child returned the intended
 409 superseded-parent conflict; no additional child was created. No further retry
 of that locked profile is planned.
 
+## Final-data restore diagnostic — November 4
+
+A snapshot-consistent custom backup of the actual pilot database retained all
+134 public tables, including accepted v2 and its contribution. The ordinary
+isolated restore failed: existing CHECK validators depended on the caller's
+search path. The observed sequence exposed the canonical JSON helper, the
+outbox outcome validator, and two project-role reference validators. This is a
+restore defect, not loss of or a change to the live accepted outcome.
+
+Using the same retained backup, an isolated diagnostic bound those four
+functions to their existing owners before loading data. All 134 table row counts
+and digests then matched the source snapshot, including the exact acceptance and
+contribution linkage. No validator was disabled; each temporary container used
+no network and was removed. The diagnostic is **not** an ordinary restore pass.
+A forward migration, focused regressions and a fresh ordinary backup/restore
+remain required before closing this gate. The live database was not modified by
+these probes.
+
 ## Retained guide 26 checkpoint and repair qualification — November 4
 
 Guide 26 ran with backend source `466faca5e0e7e4c640c2f94e4472562618f1da71`,
@@ -1243,14 +1261,14 @@ missing current-project outcomes.
 | UNKNOWN request interruption | Source-specific inspection classifies committed/no-effect/unresolved; only proven-safe recovery invokes existing owner | NOT RUN | — |
 | UNKNOWN completion interruption | Committed outcome verified without repeated effects; unresolved source/UNKNOWN child remains held | NOT RUN | — |
 | Acceptance commit/ack loss and duplicate broker delivery | Exact acceptance/contribution/award set unchanged; retained original attempts immutable | IN PROGRESS | Exact public submission replay before and after acceptance returns the same admission, Submission v2 and evaluation request. Explicit lost-ack/broker-redelivery injection is not claimed. |
-| Public contribution JSON/CSV and task audit reads | Exact source/award facts, current self/export/audit authority and complete bounded traversal; no external-payment claim | IN PROGRESS | Contributor and manager JSON exports agree exactly for accepted v2, including FinalAcceptance/routing, artifact hash, assignment and locked policy. Public Submission/checker history remains readable after acceptance; active work-context correctly closes with concealed 404. Contributor/manager CSV exports also agree exactly with the JSON identities and hashes; task audit reads remain. |
+| Public contribution JSON/CSV and task audit reads | Exact source/award facts, current self/export/audit authority and complete bounded traversal; no external-payment claim | PASS | Contributor and manager JSON exports agree exactly for accepted v2, including FinalAcceptance/routing, artifact hash, assignment and locked policy. Public Submission/checker history remains readable after acceptance; active work-context correctly closes with concealed 404. Contributor/manager CSV exports also agree exactly with the JSON identities and hashes. A dedicated project Audit Authority grant exposed all six task events; before grant, foreign contributor and after revocation returned concealed 404. The owned temporary grant was revoked. |
 | Artifact diagnosis/verification retry on AWS | Supported bounded Operator reads/retry preserve original custody and do not disclose private coordinates | IN PROGRESS | On d01, 29 public reads passed, including exact Operator DTOs and paired contributor denials for binding/content/replica/receipt/job/timeline surfaces. Actual verification interruption and same-job recovery remain NOT RUN. |
 | AWS failure/isolation/retention | Intended access only; denied/uncertain writes/reads and interrupted verification remain recoverable; retained facts survive | IN PROGRESS | Exact-release canonical readiness/runtime-immutability/negative-access probes passed; submission bytes reached verified artifact custody. Wider interruption/retention matrix remains. |
 | Native deployment and representative limits | Exact Smol/images, read-only verified material, measured CPU/memory/PID/disk/output/time and bounded admission | IN PROGRESS | Current release `ee22e22e` retains backend `466faca5`/schema `0066` and runs the unchanged native binary as PID `2781660`; supplemental image `4e5b9c71` passed the real small-task PRE/POST path. Retry2 controlled proof exported 45,435,904 bytes below original 64 MiB with 100,000 entries and unchanged 2 GiB disk; no 256 MiB deployment is needed. Separate standard positive qualification and owned-service cleanup passed; immutable profile v2/image `52659960` runtime adoption is committed; guide 27 ran POST and one retry, both infrastructure failed. Guide 28 subsequently reached the accepted small-project outcome. |
 | Missing runtime/cache, cancellation and service recovery | Correct infrastructure classification, no false completion, owned scratch/VM/cgroup cleanup and capacity reuse | NOT RUN | — |
 | Secured diagnostics and collector outage | API/job correlation without documents/tokens/model bodies; enabled-export outage preserves product correctness | NOT RUN | Recorded release configuration disables OTLP export; absence is not outage proof. Current-service privacy/correlation remains unexercised. Optional collector deployment is not a first-journey prerequisite; exporter failure tests remain source-level evidence. |
 | Drain/restart and forward recovery | Producers and Celery workers drain in supported order; immutable facts survive; no protected migration downgrade | IN PROGRESS | Historical rollouts and current additive rollout preserved retained rows, restored five services and resumed Beat after the verified cutoff. Full final-journey drain/recovery remains. |
-| Final-data backup/ordinary isolated restore | Guide/Submission bytes, audit, policies, task history, effects and contribution/award facts remain intact | NOT RUN | — |
+| Final-data backup/ordinary isolated restore | Guide/Submission bytes, audit, policies, task history, effects and contribution/award facts remain intact | FAIL | Snapshot-consistent final-data backup succeeded (134 tables); ordinary restore exposed four caller-search-path dependencies. Same-backup diagnostic with owner-bound resolution preserved all table digests and accepted lineage, with isolated cleanup. Forward migration and a fresh unmodified ordinary restore are required; no live data was changed by the diagnostic. |
 
 CLI, MCP and TUI surfaces are implemented separately. Record any exercised client and binary/source identity explicitly; backend scenarios do not certify every client surface. Optional interfaces are not additional first-journey prerequisites.
 
