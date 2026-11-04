@@ -62,7 +62,7 @@ packaged test run exposed a read-only copied fixture; `0d60241ce` repairs only
 the fixture copy and adds the malformed-input proof. The checker image is
 unchanged.
 
-The supplemental runtime is now committed at release
+The supplemental runtime used for the accepted task was committed at release
 `sha256:ee22e22e8236d5990418a43a856388a395458ed40fc497f4dd6dcdcac223f940`,
 marker `1e0dc836cc94f2e9d97dc8cf093269828ba3bcdb8faf718accd1746801da3423`.
 Backend source and schema remain unchanged. Canonical AWS proof, application
@@ -122,9 +122,30 @@ functions to their existing owners before loading data. All 134 table row counts
 and digests then matched the source snapshot, including the exact acceptance and
 contribution linkage. No validator was disabled; each temporary container used
 no network and was removed. The diagnostic is **not** an ordinary restore pass.
-A forward migration, focused regressions and a fresh ordinary backup/restore
-remain required before closing this gate. The live database was not modified by
-these probes.
+The diagnostic did not modify the live database. Forward migration
+`0067_canonical_json_restore_path` subsequently passed on the drill database;
+the migration comparison preserved every business row. A fresh 8,071,378-byte
+snapshot-consistent backup then passed ordinary `pg_restore --exit-on-error`
+into a network-isolated PostgreSQL container, without special SQL patches or
+disabled guards. All 134 table counts and digests matched, including the exact
+FinalAcceptance and ContributionRecord linkage. The temporary container was
+removed. Private proof fingerprint:
+`sha256:5e8f730d381f4e83738e4d381c880a7bdee0a9f454b7aa98eee2db18f74c10af`.
+This proves database restoration; it does not replace S3 custody or the remaining
+worker-interruption proofs.
+
+The repaired backend was deployed from `1b947dfe2819ad9d66d265e9aa1383900eb0dbbd`
+at release `sha256:26591f3e5021b2c3a7f1a8af77688d8384a4a140e57ab7f1732576e116ccfb6b`.
+The API and durable workers drained before the migration. All retained business
+rows matched through the pre-resumption cutoff; the three exact pending notices
+were preserved, not deleted or marked delivered. Canonical AWS proof passed,
+all five application services returned healthy, and scheduled work resumed.
+The native checker process and external image remained unchanged. After restart,
+public contributor and manager exports still matched the original accepted
+record exactly; Submission and checker history reads returned 200. Public-read
+proof fingerprint:
+`sha256:7670a58982c863cca4156105e96cccbb758bc499a900371b8973910aad19abb4`.
+This is a controlled drain/restart proof, not an abrupt-worker-loss proof.
 
 ## Retained guide 26 checkpoint and repair qualification — November 4
 
@@ -1264,11 +1285,11 @@ missing current-project outcomes.
 | Public contribution JSON/CSV and task audit reads | Exact source/award facts, current self/export/audit authority and complete bounded traversal; no external-payment claim | PASS | Contributor and manager JSON exports agree exactly for accepted v2, including FinalAcceptance/routing, artifact hash, assignment and locked policy. Public Submission/checker history remains readable after acceptance; active work-context correctly closes with concealed 404. Contributor/manager CSV exports also agree exactly with the JSON identities and hashes. A dedicated project Audit Authority grant exposed all six task events; before grant, foreign contributor and after revocation returned concealed 404. The owned temporary grant was revoked. |
 | Artifact diagnosis/verification retry on AWS | Supported bounded Operator reads/retry preserve original custody and do not disclose private coordinates | IN PROGRESS | On d01, 29 public reads passed, including exact Operator DTOs and paired contributor denials for binding/content/replica/receipt/job/timeline surfaces. Actual verification interruption and same-job recovery remain NOT RUN. |
 | AWS failure/isolation/retention | Intended access only; denied/uncertain writes/reads and interrupted verification remain recoverable; retained facts survive | IN PROGRESS | Exact-release canonical readiness/runtime-immutability/negative-access probes passed; submission bytes reached verified artifact custody. Wider interruption/retention matrix remains. |
-| Native deployment and representative limits | Exact Smol/images, read-only verified material, measured CPU/memory/PID/disk/output/time and bounded admission | IN PROGRESS | Current release `ee22e22e` retains backend `466faca5`/schema `0066` and runs the unchanged native binary as PID `2781660`; supplemental image `4e5b9c71` passed the real small-task PRE/POST path. Retry2 controlled proof exported 45,435,904 bytes below original 64 MiB with 100,000 entries and unchanged 2 GiB disk; no 256 MiB deployment is needed. Separate standard positive qualification and owned-service cleanup passed; immutable profile v2/image `52659960` runtime adoption is committed; guide 27 ran POST and one retry, both infrastructure failed. Guide 28 subsequently reached the accepted small-project outcome. |
+| Native deployment and representative limits | Exact Smol/images, read-only verified material, measured CPU/memory/PID/disk/output/time and bounded admission | IN PROGRESS | Current release `26591f3e` runs backend `1b947dfe`/schema `0067` and runs the unchanged native binary as PID `2781660`; supplemental image `4e5b9c71` passed the real small-task PRE/POST path. Retry2 controlled proof exported 45,435,904 bytes below original 64 MiB with 100,000 entries and unchanged 2 GiB disk; no 256 MiB deployment is needed. Separate standard positive qualification and owned-service cleanup passed; immutable profile v2/image `52659960` runtime adoption is committed; guide 27 ran POST and one retry, both infrastructure failed. Guide 28 subsequently reached the accepted small-project outcome. |
 | Missing runtime/cache, cancellation and service recovery | Correct infrastructure classification, no false completion, owned scratch/VM/cgroup cleanup and capacity reuse | NOT RUN | — |
 | Secured diagnostics and collector outage | API/job correlation without documents/tokens/model bodies; enabled-export outage preserves product correctness | NOT RUN | Recorded release configuration disables OTLP export; absence is not outage proof. Current-service privacy/correlation remains unexercised. Optional collector deployment is not a first-journey prerequisite; exporter failure tests remain source-level evidence. |
-| Drain/restart and forward recovery | Producers and Celery workers drain in supported order; immutable facts survive; no protected migration downgrade | IN PROGRESS | Historical rollouts and current additive rollout preserved retained rows, restored five services and resumed Beat after the verified cutoff. Full final-journey drain/recovery remains. |
-| Final-data backup/ordinary isolated restore | Guide/Submission bytes, audit, policies, task history, effects and contribution/award facts remain intact | FAIL | Snapshot-consistent final-data backup succeeded (134 tables); ordinary restore exposed four caller-search-path dependencies. Same-backup diagnostic with owner-bound resolution preserved all table digests and accepted lineage, with isolated cleanup. Forward migration and a fresh unmodified ordinary restore are required; no live data was changed by the diagnostic. |
+| Controlled drain/restart and forward migration | Producers and Celery workers drain in supported order; immutable facts survive; no protected migration downgrade | PASS | The final accepted journey survived migration 0067 and restart of all five application services. Full retained-row comparison passed before Beat resumption; exact public contribution and history reads passed afterward. Abrupt interruption/recovery remains separately unproven. |
+| Final-data backup/ordinary isolated restore | Database metadata, audit, policies, task history, effects and contribution/award facts remain intact; object bytes retain separate S3 custody | PASS | After forward migration 0067, a fresh snapshot-consistent backup restored normally without SQL patches or disabled guards. All 134 table counts/digests and exact accepted contribution lineage matched; isolated container cleanup passed. See the November 4 restore evidence above. |
 
 CLI, MCP and TUI surfaces are implemented separately. Record any exercised client and binary/source identity explicitly; backend scenarios do not certify every client surface. Optional interfaces are not additional first-journey prerequisites.
 
