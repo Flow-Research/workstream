@@ -460,6 +460,7 @@ PROJECT_MODULES = (
     "tests/projects/guide_compilation/test_hidden_orchestrator.py",
     "tests/projects/guide_compilation/test_hidden_orchestrator_postgresql.py",
     "tests/projects/guide_compilation/test_live_cutover_postgresql.py",
+    "tests/projects/guide_compilation/test_live_finalization_replay_postgresql.py",
     "tests/projects/guide_compilation/test_live_worker.py",
     "tests/projects/guide_compilation/test_worker_topology.py",
     "tests/projects/guide_compilation/test_runtime_configuration_schema.py",

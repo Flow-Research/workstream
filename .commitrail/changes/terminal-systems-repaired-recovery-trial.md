@@ -40,8 +40,11 @@ against an already finalized setup. The existing coordinator in
 projection `source_state_unavailable` error when an exact retained finalization
 matches the original project, guide, setup generation and compilation. It must
 use the existing finalizer, which rechecks authority, locked lineage and terminal
-custody; never return an unchecked stored receipt. These two files and this
-record are allowed. Projection source rules, authorization, database guards and
+custody; never return an unchecked stored receipt. These files, the focused
+`test_live_finalization_replay_postgresql.py`, shared `live_fixtures.py`,
+`backend/scripts/test_lane_catalogue.py` registration, and this record are allowed.
+The late-projection tests stay in a focused module to preserve the existing test
+structure limits; shared setup moves without changing its behavior or assertions. Projection source rules, authorization, database guards and
 CI gates remain unchanged; unrelated errors and missing/mismatched finalizations
 must still reject.
 Acceptance requires both real-PostgreSQL timing cases, cleanup of pending test
