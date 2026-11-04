@@ -303,8 +303,8 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
             "dd4f190833ff4f3cc779db50c5153cb5be66ae7d6ee4509b4eabcb2f2da95b25",
         ),
         "project": (
-            251,
-            "f8784ea3980543fd5f3d6e44161efa1680edcf9a590c96ad56d958f142da29dc",
+            252,
+            "1a407534e6c67adedbe6c5b172c6c1cf5b533ec8154a23c9f442afe5028092cf",
         ),
         "task": (
             94,
@@ -376,9 +376,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 251
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 252
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "3a09684656eff5bd097dc1f506cb443df2ff3a77f9c89ec79662656e8103aa75"
+        "921fdc0130de8b9e64bcf6d4bca99654b8f5010080bcbd844830a1aa8b6c6551"
     )
 
 
