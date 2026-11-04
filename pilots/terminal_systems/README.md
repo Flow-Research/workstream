@@ -127,7 +127,8 @@ passed: baseline checks succeeded and the external layout check rejected missing
 same working assignment and no admission/Submission/POST/model effects. A later
 package reached ready admission and immutable Submission v1 with exact replay.
 POST then ended infrastructure_failed/invalid_output without a work verdict or
-Revision. Retained output is under diagnosis; no retry or successor is claimed.
+Revision. Offline replay identifies mixed schema/citation errors. The source repair is not
+yet image-qualified or deployed; no retry or successor is claimed.
 Guide 24's infrastructure-failed POST remains unchanged. Live work verdicts, recovery and exact contribution evidence remain pending.
 This input package and its image qualification do not claim a complete hosted
 journey; use the linked report for current results and historical scope.

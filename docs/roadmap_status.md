@@ -59,7 +59,8 @@ Submission or POST/model dispatch; the size case proves compression ratio only.
 Selected-PRE negative/outcome replay passed with intended missing-file feedback.
 A subsequent package reached ready admission and immutable Submission v1 with
 exact replay. POST then ended infrastructure_failed/invalid_output without a
-work verdict or Revision; retained output is under diagnosis without retry.
+work verdict or Revision; offline replay identifies mixed schema/citation errors. The source repair is not
+yet image-qualified or deployed; no retry is claimed.
 Guide 24's failed POST remains immutable. Live work outcome,
 recovery and contribution evidence remain.
 See [WS-EXEC-001](../.commitrail/initiatives/WS-EXEC-001/OVERVIEW.md).
@@ -1823,8 +1824,8 @@ the size case proves compression ratio only. Selected-PRE negative and outcome r
 no admission/Submission/dispatch/POST/model effects at the 00:49:21 UTC negative
 cutoff. A subsequent package reached ready admission, immutable Submission v1
 and exact replay. POST ended infrastructure_failed/invalid_output without a
-work verdict or Revision; retained output is under diagnosis without retry or
-successor. No FinalAcceptance or ContributionRecord exists yet. The exact
+work verdict or Revision; offline replay identifies mixed schema/citation errors. The source repair is not
+yet image-qualified or deployed; no retry or successor is claimed. No FinalAcceptance or ContributionRecord exists yet. The exact
 `a05c962f` CI pass
 (11,520 tests/17 lanes, zero skipped/deselected) is parent-source evidence only.
 Current `e822a022` shares deployed `466faca5` backend/app trees; its backend run41746851816
