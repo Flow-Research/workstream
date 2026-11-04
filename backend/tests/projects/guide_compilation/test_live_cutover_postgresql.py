@@ -762,10 +762,11 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
 
 
 @pytest.mark.usefixtures("scripted_model_profile")
+@pytest.mark.parametrize("duplicate_observation", ["before_persist", "after_finalization"])
 async def test_concurrent_live_deliveries_converge_on_one_finalization(
-    automatic_source, monkeypatch
+    automatic_source, monkeypatch, duplicate_observation
 ):
-    """Scripted resumptions converge; paid-effect dedupe has a separate owner proof."""
+    """Both overlapping-delivery observations converge on one retained finalization."""
     import asyncio
     from app.core.config import get_settings
 
@@ -776,7 +777,9 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     factory, actor, setup_id, snapshot = automatic_source
     await create_committed_document_fixture(snapshot["id"])
     delivery = await _delivery(factory, setup_id)
-    entered, both_entered, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    entered, both_entered = asyncio.Event(), asyncio.Event()
+    first_provider_release, duplicate_provider_release = asyncio.Event(), asyncio.Event()
+    persist_entered, persist_release = asyncio.Event(), asyncio.Event()
     active = 0
     runtime = ScriptedGuideRuntime()
     original = runtime.compile_project_guide
@@ -784,6 +787,7 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     async def blocked_provider(context, capabilities):
         nonlocal active
         active += 1
+        release = first_provider_release if active == 1 else duplicate_provider_release
         entered.set()
         if active == 2:
             both_entered.set()
@@ -795,30 +799,186 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     monkeypatch.setattr(
         worker, "project_guide_runtime_configuration", scripted_runtime_configuration
     )
-    first = asyncio.create_task((await worker._coordinator(factory)).run(delivery))
+    coordinator = await worker._coordinator(factory)
+    persist = coordinator._execution._backend.persist
+
+    async def blocked_persist(*args, **kwargs):
+        persist_entered.set()
+        await persist_release.wait()
+        return await persist(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator._execution._backend, "persist", blocked_persist)
+    first = asyncio.create_task(coordinator.run(delivery))
+    duplicate = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=20)
         duplicate = asyncio.create_task(
             (await worker._coordinator(factory)).run(delivery)
         )
         await asyncio.wait_for(both_entered.wait(), timeout=20)
+        first_provider_release.set()
+        await asyncio.wait_for(persist_entered.wait(), timeout=20)
+        if duplicate_observation == "after_finalization":
+            persist_release.set()
+            receipt = await asyncio.wait_for(first, timeout=30)
+        duplicate_provider_release.set()
+        duplicate_receipt = await asyncio.wait_for(duplicate, timeout=30)
+        if duplicate_observation == "before_persist":
+            assert duplicate_receipt["status"] == "provider_result_accepted_not_persisted"
+            persist_release.set()
+            receipt = await asyncio.wait_for(first, timeout=30)
+        else:
+            assert duplicate_receipt == receipt
     finally:
-        release.set()
-    receipt, duplicate_receipt = await asyncio.wait_for(
-        asyncio.gather(first, duplicate), timeout=30
-    )
+        first_provider_release.set()
+        duplicate_provider_release.set()
+        persist_release.set()
+        tasks = [task for task in (first, duplicate) if task is not None]
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
     assert receipt["status"] == "policy_draft_ready"
-    assert duplicate_receipt["status"] == "provider_result_accepted_not_persisted"
-    assert duplicate_receipt["attempt_id"]
     assert runtime.calls == 2
     assert await (await worker._coordinator(factory)).run(delivery) == receipt
+    assert runtime.calls == 2
     async with factory() as session:
+        attempt_id = await session.scalar(text("select id from project_guide_compilation_attempts"))
+        if duplicate_observation == "before_persist":
+            assert duplicate_receipt["attempt_id"] == str(attempt_id)
         for table in [
             "project_guide_compilation_attempts",
             "project_guide_compilations",
             "project_guide_setup_finalizations",
         ]:
             assert await session.scalar(text("select count(*) from " + table)) == 1
+
+
+@pytest.mark.usefixtures("scripted_model_profile")
+@pytest.mark.parametrize(
+    "failure", [None, "storage_unavailable", "service_authority_denied", "revoked"]
+)
+async def test_finalization_between_projections_replays_only_with_current_authority(
+    automatic_source, monkeypatch, failure
+):
+    """A late policy projection reuses only the exact, freshly authorized finalizer."""
+    import asyncio
+    from app.core.config import get_settings
+    from app.modules.projects.api import ProjectGuideSetupFinalizationError
+    from app.modules.projects.api.guide_compilation_projections import ProjectGuideProjectionError
+    from app.workers import project_setup as worker
+
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    factory, actor, setup_id, snapshot = automatic_source
+    await create_committed_document_fixture(snapshot["id"])
+    delivery = await _delivery(factory, setup_id)
+    runtime = ScriptedGuideRuntime()
+    monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
+    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
+    primary, duplicate = await worker._coordinator(factory), await worker._coordinator(factory)
+    finalize_entered, finalize_release = asyncio.Event(), asyncio.Event()
+    policy_entered, policy_release = asyncio.Event(), asyncio.Event()
+    primary_finalize = primary._finalize
+    duplicate_finalize = duplicate._finalize
+    project_policy = duplicate._projections.project_submission_artifact_policy
+    replay_calls = 0
+
+    async def held_finalization(command):
+        finalize_entered.set()
+        await finalize_release.wait()
+        return await primary_finalize(command)
+
+    async def held_policy(command):
+        policy_entered.set()
+        await policy_release.wait()
+        if failure in {"storage_unavailable", "service_authority_denied"}:
+            raise ProjectGuideProjectionError(failure)
+        return await project_policy(command)
+
+    async def fresh_finalization(command):
+        nonlocal replay_calls
+        replay_calls += 1
+        if failure == "revoked":
+            async with factory() as session, session.begin():
+                await session.execute(
+                    text("update actor_identity_links set status='revoked',revoked_at=now(),"
+                         "revoked_by='test',revoked_reason='late replay' where id=:id"),
+                    {"id": str(actor.identity_link_id)},
+                )
+        return await duplicate_finalize(command)
+
+    monkeypatch.setattr(primary, "_finalize", held_finalization)
+    monkeypatch.setattr(duplicate, "_finalize", fresh_finalization)
+    monkeypatch.setattr(duplicate._projections, "project_submission_artifact_policy", held_policy)
+    tasks = [asyncio.create_task(primary.run(delivery))]
+    try:
+        await asyncio.wait_for(finalize_entered.wait(), timeout=30)
+        tasks.append(asyncio.create_task(duplicate.run(delivery)))
+        await asyncio.wait_for(policy_entered.wait(), timeout=30)
+        finalize_release.set()
+        receipt = await asyncio.wait_for(tasks[0], timeout=30)
+        policy_release.set()
+        if failure is None:
+            assert await asyncio.wait_for(tasks[1], timeout=30) == receipt
+        else:
+            error_type = (
+                ProjectGuideSetupFinalizationError if failure == "revoked"
+                else ProjectGuideProjectionError
+            )
+            with pytest.raises(error_type) as error:
+                await asyncio.wait_for(tasks[1], timeout=30)
+            assert error.value.code == (
+                "service_authority_denied" if failure == "revoked" else failure
+            )
+        assert replay_calls == (1 if failure in {None, "revoked"} else 0)
+    finally:
+        finalize_release.set()
+        policy_release.set()
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    assert runtime.calls == 1
+    async with factory() as session:
+        assert await session.scalar(text("select count(*) from project_guide_compilations")) == 1
+        assert await session.scalar(text("select count(*) from project_guide_setup_finalizations")) == 1
+
+
+@pytest.mark.usefixtures("scripted_model_profile")
+async def test_projection_source_error_without_finalization_is_not_recovered(
+    automatic_source, monkeypatch
+):
+    """A source error cannot create a finalization or conceal missing projections."""
+    from app.core.config import get_settings
+    from app.modules.projects.api.guide_compilation_projections import ProjectGuideProjectionError
+    from app.workers import project_setup as worker
+
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    factory, _actor, setup_id, snapshot = automatic_source
+    await create_committed_document_fixture(snapshot["id"])
+    delivery = await _delivery(factory, setup_id)
+    runtime = ScriptedGuideRuntime()
+    monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
+    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
+    coordinator = await worker._coordinator(factory)
+
+    async def source_unavailable(command):
+        raise ProjectGuideProjectionError("source_state_unavailable")
+
+    async def unexpected_finalization(command):
+        pytest.fail("source failure without retained finalization reached the finalizer")
+
+    monkeypatch.setattr(coordinator._projections, "project_guide_sufficiency", source_unavailable)
+    monkeypatch.setattr(coordinator, "_finalize", unexpected_finalization)
+    with pytest.raises(ProjectGuideProjectionError) as error:
+        await coordinator.run(delivery)
+    assert error.value.code == "source_state_unavailable"
+    assert runtime.calls == 1
+    async with factory() as session:
+        assert await session.scalar(text("select count(*) from project_guide_compilations")) == 1
+        assert await session.scalar(text("select count(*) from project_guide_setup_finalizations")) == 0
 
 
 @pytest.mark.parametrize(

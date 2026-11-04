@@ -28,6 +28,29 @@ bodies, authorization, immutable evidence and all retained rows; downgrade still
 refuses. Focused PostgreSQL proofs and security/QA review, full hosted CI, ordinary
 134-table restore and post-restart public reads support the repair.
 
+The final merge-gate run also exposed a scheduling assumption in
+`backend/tests/projects/guide_compilation/test_live_cutover_postgresql.py`:
+an overlapping duplicate can observe either the accepted-but-unpersisted state
+or the completed setup, depending on when its diagnostic read occurs. The
+bounded regression repair explicitly synchronizes both observations and retains
+exact attempt identity, one compilation/finalization, and stable replay without
+another provider call. The controlled late-delivery case also exposed projection
+against an already finalized setup. The existing coordinator in
+`backend/app/modules/projects/guide_compilation/live.py` may recover only a
+projection `source_state_unavailable` error when an exact retained finalization
+matches the original project, guide, setup generation and compilation. It must
+use the existing finalizer, which rechecks authority, locked lineage and terminal
+custody; never return an unchecked stored receipt. These two files and this
+record are allowed. Projection source rules, authorization, database guards and
+CI gates remain unchanged; unrelated errors and missing/mismatched finalizations
+must still reject.
+Acceptance requires both real-PostgreSQL timing cases, cleanup of pending test
+tasks, and a before/after proof that the unrepaired coordinator rejects the
+valid completed observation. This is a bounded L1 workflow replay repair;
+focused security/architecture and QA/test-delta review must confirm fresh
+authority and the once-only proof are preserved. It fixes an existing recovery
+claim rather than adding a capability or changing roadmap exposure/dependencies.
+
 The [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
 is authoritative for exact deployment, proof and limitations. Wider ART same-job,
 UNKNOWN/lost-ack interruption and isolation scenarios remain explicitly unproven;
