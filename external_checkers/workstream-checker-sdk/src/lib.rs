@@ -429,10 +429,7 @@ pub fn validate_forge_locator_result(
         Value::String(url)
             if !url.is_empty()
                 && url.chars().count() <= 2048
-                && !url.chars().any(char::is_control) =>
-        {
-            ()
-        }
+                && !url.chars().any(char::is_control) => {}
         _ => return Err(ContractError("locator change URL is invalid")),
     }
     let mut body = object.clone();
