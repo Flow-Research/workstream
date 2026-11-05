@@ -121,3 +121,27 @@ async def test_duplicate_mismatch_and_read_denial_are_concealed_without_mutation
             async with session.begin():
                 await binding_service.suspend(request)
     assert authorization.prepared == prepared
+
+
+async def test_create_replay_requires_create_scope_before_read_authorization(
+    compensation_database_env: str, binding_seed: BindingSeed,
+) -> None:
+    from app.modules.compensation.api import AdapterBindingUnavailable
+
+    project, adapter, actor = await binding_seed()
+    request = AdapterBindingCreateRequest(
+        operation_id=new_record_id(), actor_profile_id=actor, project_id=project,
+        instrument_type="money", adapter_actor_id=adapter, route_key="adapter.primary",
+    )
+    async with db_session.get_session_factory()() as session, session.begin():
+        await service(session, Authorization()).create(request)
+
+    class DeniedCreate(Authorization):
+        async def lock_adapter_binding_mutation_scope(self, **scope):
+            raise AdapterBindingUnavailable("create_denied")
+
+    denied = DeniedCreate()
+    with pytest.raises(AdapterBindingUnavailable, match="create_denied"):
+        async with db_session.get_session_factory()() as session, session.begin():
+            await service(session, denied).create(request)
+    assert denied.read_available and denied.read_authorized == 0

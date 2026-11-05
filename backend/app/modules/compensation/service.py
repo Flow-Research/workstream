@@ -101,12 +101,12 @@ class AdapterBindingService:
         action: AdapterBindingAction = "compensation.adapter_binding.create"
         digest = _request_digest(action, request)
         await self._repository.lock_operation(request.operation_id)
-        recovered = await self._recover(action, request, digest)
-        if recovered is not None:
-            return recovered
         await self._mutation_authorization.lock_adapter_binding_mutation_scope(
             action=action, actor_profile_id=request.actor_profile_id, project_id=request.project_id,
         )
+        recovered = await self._recover(action, request, digest)
+        if recovered is not None:
+            return recovered
         if self._projects is None or self._actors is None:
             raise AdapterBindingUnavailable("compensation_adapter_binding_unavailable")
         binding_id = new_record_id()

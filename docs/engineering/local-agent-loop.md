@@ -483,47 +483,50 @@ project-scoped in Workstream, so each Flow project gets its own `FLOW` unit
 with the same code; equal codes in different projects are still different
 units, and Workstream does not add them together.
 
-A `project_points` award rule needs three things for the project: the
-`workstream.compensation.adapter` service actor, the project's `FLOW` unit and
-an active `project_points` adapter binding. The unit and the binding have no
-public route. The script below creates each one that is missing, in this order
-and through the owners' authorized commands:
+A `project_points` award rule needs a `workstream.compensation.adapter`
+service actor, the project's points unit and an active `project_points` adapter
+binding. An Access Administrator first provisions the adapter actor through
+`POST /api/v1/service-actors`, using its actual trusted service identity. Record
+the returned actor UUID as `ADAPTER_ID`. Actor registration establishes identity;
+it does not implement external award delivery.
 
-1. the adapter actor through `POST /api/v1/service-actors` with the Access
-   Administrator's authority (the same call as `provision_local_service_actors.py`);
-2. the unit through `contribution.compensation_unit.create` with the Finance
-   Authority's AUTH decision;
-3. the binding through `compensation.adapter_binding.create` with the same
-   Finance Authority.
+The unit and binding have no public route. The operator script composes their
+authorized owner commands using a real Finance Authority's Flow token. It
+supports configured Flow authentication in local and hosted environments, with
+no development identity or caller-UUID bypass. Put a short-lived token in an
+absolute, caller-owned regular file with mode `0400` or `0600`, visible inside
+the operator process. Symlinks and hard links are rejected. Do not pass the token
+itself as a command argument or print it. For example, with the token file
+mounted at `/run/secrets/finance-token`:
 
 ```bash
 docker compose exec -T backend python scripts/provision_project_points.py \
-  --project-id "$PROJECT_ID" --finance-actor-profile-id "$FINANCE_ID" \
-  --admin-subject local-access-admin
+  --project-id "$PROJECT_ID" \
+  --finance-token-file /run/secrets/finance-token \
+  --adapter-actor-id "$ADAPTER_ID" --route-key flow_points.recording
 ```
 
-The script prints one JSON line. Record `adapter_binding_id` as `BINDING_ID`:
+Hosted operators use the deployed release's configured database and Flow
+verifier settings with a private token-file mount. This command does not change
+running services' configuration. `--unit-code` defaults to `FLOW`.
+`--route-key` is required and identifies the binding's route; it does not enable
+an external delivery implementation.
 
-```json
-{"adapter_actor": "provisioned", "adapter_actor_id": "...", "adapter_binding_id": "...",
- "binding": "created", "project_id": "...", "result_code": "ready", "unit": "created",
- "unit_code": "FLOW"}
-```
+The JSON result contains actual unit creation and binding event IDs, operation
+IDs and request digests. On `result_code: ready`, record `adapter_binding_id`
+as `BINDING_ID`. Each step commits separately. Before each step the script
+verifies the token again, resolves its exact issuer and subject to actual human
+actor rows, and checks current Finance authority. Exact retries use the same
+owner operation keys and return the original receipts after fresh authorization
+and active-resource checks. A resource created under another operation or a
+changed request conflicts instead of being reported ready.
 
-Each step commits on its own, so a rerun reports `existing` for what is already
-there and changes nothing. If a step
-fails, the output lists the steps that already committed; fix the cause and run
-the script again. It exits 3 with `result_code: unavailable` when the adapter
-actor is missing and `--admin-subject` is absent, or when the Finance actor
-does not have exactly one active identity link. An AUTH denial (for example, an
-actor without a Finance Authority grant covering the project) exits 1 with
-`error_type`; the failed step creates nothing, and an adapter actor provisioned
-earlier in the run stays. An active binding with another adapter actor or route
-key exits 3 with `active_binding_mismatch`. The script refuses to run when
-`WORKSTREAM_ENVIRONMENT` is production-like (`staging`, `preview`, `prod`,
-`production`). `--unit-code` and `--route-key`
-(default `flow_points.local`) override the defaults. Like the lifecycle script,
-it does not authenticate its caller and is a local operator tool only.
+Expired credentials, identity changes, revoked grants, inactive adapters or
+bindings stop the affected step. Output retains receipts for earlier committed
+steps so an authorized retry can resume. Exit 3 reports a bounded `unavailable`
+reason; exit 1 reports an exception type without credentials or provider detail.
+The script provisions neither the adapter actor nor external fulfillment,
+and it does not publish a contribution policy.
 
 A compensated policy then names the unit and binding. For example, 10 Flow
 Points for an accepted submission and 3 for a completed review:

@@ -242,8 +242,13 @@ unit; test fixtures and the PILOT-04 probe still insert unit rows directly. It a
 policy commands, under `compensation.policy.manage`. It creates only
 `project_points` units; money-unit enablement and unit retirement are not
 implemented. The command has no public route: like adapter-binding
-administration it is composed internally, and the local operator script
-`backend/scripts/provision_project_points.py` is its only caller. Each creation
+administration it is composed internally. The operator entrypoint
+`backend/scripts/provision_project_points.py` verifies configured Flow credentials
+from a private token file and resolves actual human actor rows in local or hosted
+environments. It requires a separately provisioned adapter actor and freshly
+authorizes each committed step and replay; it has no caller-UUID or development
+authentication bypass. It records unit and binding readiness without invoking
+external fulfillment. Each creation
 appends one immutable `ProjectCompensationUnitCreationEvent` keyed by the
 caller's operation identifier and request digest. An identical retry returns
 the stored result after re-checking current authority; a changed retry, an

@@ -209,3 +209,35 @@ Human focus: no implicit model invocation, a usable direct PM route, exact task
 association without project parsing in core, and honest live-drill limitations.
 One PR contains implementation, repairs and evidence; human merge remains
 required. Readiness and current CI state belong in the PR, not this record.
+
+### Authenticated project-points operator prerequisite
+
+The approved 100 project-points drill requires supported hosted provisioning of
+its unit and binding. This bounded auth repair replaces the existing local
+script's trusted Finance UUID/local admin-subject assumptions with one standard:
+a private bounded bearer-token file, the configured Flow verifier, exact ACTORS
+issuer/subject resolution and canonical AUTH/PREP Finance create-scope fences
+before every discovery/replay and committed step. Adapter identity is provisioned
+separately through the existing Access Administrator public route; no adapter
+runtime or external delivery capability is fabricated.
+
+Allowed files for this repair are `backend/scripts/provision_project_points.py`,
+`backend/tests/test_provision_project_points.py`,
+`backend/app/modules/compensation/service.py` and the existing focused binding
+recovery tests (the existing create-scope fence moves after the operation lock
+and before replay; read authorization remains), the project-points sections of
+`docs/engineering/local-agent-loop.md`, `docs/operations_project_operating_manual.md`
+and `docs/spec_contribution_compensation.md`, and this record. No new public
+route, authorization action, compatibility mode, environment bypass, migration,
+fulfillment behavior or direct product-row insert is allowed. Risk is L1
+(identity/Finance authorization); focused security/architecture plan review
+passed with root review of the final implementation still required.
+
+Acceptance requires actual verified human identity and current Finance scope for
+new and existing resources, token re-verification for each committed step,
+owner-mediated exact replay, current active unit/binding/adapter eligibility,
+private secret-free errors/receipts, and unchanged atomic award ownership.
+Verification uses focused pure token-file/Flow checks plus the existing isolated
+PostgreSQL provisioner suite for permissions, isolation, replay, expiry/revocation,
+rollback and committed-step reporting; lint and diff checks follow. Hosted
+mutations and publication remain separate explicitly invoked operator actions.

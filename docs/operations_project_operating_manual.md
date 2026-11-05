@@ -216,8 +216,12 @@ requires no adapter binding. A compensated `project_points` definition needs
 the project's active points unit and its active `project_points` adapter
 binding. Neither has a public route: Finance Authority creates both through
 internal commands (`contribution.compensation_unit.create` and
-`compensation.adapter_binding.create`). Locally, run
-`backend/scripts/provision_project_points.py`; see
+`compensation.adapter_binding.create`). The authenticated operator entrypoint
+`backend/scripts/provision_project_points.py` supports configured Flow
+authentication in local and hosted environments. Supply a private Finance token
+file and an adapter actor already provisioned through the public Access
+Administrator route. Each committed step and exact replay requires current
+Finance authority; no caller-supplied actor UUID confers that authority. See
 [the local agent loop guide](engineering/local-agent-loop.md#enable-project-points).
 Public unit and binding administration remain pending, and money units cannot
 be created yet.

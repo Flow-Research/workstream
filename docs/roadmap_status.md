@@ -1219,10 +1219,14 @@ cannot be reused as post-submission review-gate evidence. See the
 - Finance Authority can create a project's `project_points` compensation unit
   through the internal `contribution.compensation_unit.create` command, so a
   published policy can award project points without direct database writes.
-  Like binding administration it has no public route; the local operator
-  script `backend/scripts/provision_project_points.py` composes it with the
-  adapter actor and binding. Money-unit enablement and unit retirement remain
-  unimplemented.
+  Like binding administration it has no public route. The operator script
+  `backend/scripts/provision_project_points.py` verifies a private Finance token
+  through configured Flow authentication and composes the existing unit/binding
+  commands in local or hosted environments, rechecking authority on each step
+  and replay. The adapter actor must first be provisioned through the existing
+  Access Administrator API. This enables award-policy prerequisites; it does
+  not activate external fulfillment. Money-unit enablement and unit retirement
+  remain unimplemented.
 - CP06 supplies internal caller-transaction validation of the exact selected
   ContributionPolicy version and its complete graph/resources. New guide binding
   requires the active current published selector. Controlled revision validates
