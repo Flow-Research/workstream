@@ -60,13 +60,19 @@ async def inspect_role_history(
         assert response.status_code == 200, response.text
         row = response.json()
         assert (row["id"], row["project_id"], row["actor_profile_id"], row["role"]) == (
-            issued["id"], project, issued["actor_profile_id"], issued["role"]
+            issued["id"],
+            project,
+            issued["actor_profile_id"],
+            issued["role"],
         )
         granted.append(row)
     expected_order = [
-        row["id"] for row in sorted(
-            granted, key=lambda row: (
-                datetime.fromisoformat(row["granted_at"]), UUID(row["id"])
+        row["id"]
+        for row in sorted(
+            granted,
+            key=lambda row: (
+                datetime.fromisoformat(row["granted_at"]),
+                UUID(row["id"]),
             ),
         )
     ]
@@ -84,7 +90,9 @@ async def inspect_role_history(
             assert cursor is not None
             first_cursor = cursor
     assert seen == expected_order and cursor is None, (
-        seen, [(row["id"], row["granted_at"]) for row in granted], cursor is not None
+        seen,
+        [(row["id"], row["granted_at"]) for row in granted],
+        cursor is not None,
     )
     selected = role_read(
         cli, origin, token, project, "show", first["id"].replace("-", "")
