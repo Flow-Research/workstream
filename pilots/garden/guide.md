@@ -15,8 +15,9 @@ the Project Manager can create the task directly in Workstream.
 
 ## Engineering rules
 
-Read the task, Garden's `CONTRIBUTING.md`, the relevant source and its existing
-tests before editing. Keep the change scoped to the task and preserve existing
+Start from current `dev`. Read the task, Garden's `CONTRIBUTING.md`,
+`.agents/skills/contribute/SKILL.md`, `docs/development/maintainer-workflow.md`,
+the relevant source and its existing tests before editing. Keep the change scoped to the task and preserve existing
 behavior outside it. Update shared schemas before their consumers. Add meaningful
 regression coverage for behavior changes and update affected documentation.
 Never commit credentials, private customer data, local resource overlays, build
@@ -24,9 +25,12 @@ caches or generated dependency directories. Preserve license and attribution
 notices; Garden contributions use its AGPL-3.0-only license.
 
 Use Garden's documented frozen dependency installation and run the checks relevant
-to the change. Its main contribution checks are `pnpm lint`, `pnpm typecheck`,
-`pnpm test` and `pnpm build`; the full test suite needs Docker for PostgreSQL
-Testcontainers. Connector changes additionally follow the connector contribution
+to the change. CONTRIBUTING lists `pnpm format`, `pnpm lint`, `pnpm typecheck`,
+`pnpm test`, `pnpm build` and `pnpm verify:deploy-config`; the full test suite
+needs Docker for PostgreSQL Testcontainers. CI also verifies generated design
+tokens, connector coverage and committed Worker types, and runs a separate
+migration check/application job. Do not alter CI or generated files merely to
+make this documentation task pass. Connector changes additionally follow the connector contribution
 guide and its verification, typecheck and test commands. Task instructions may
 require a more focused reproducer, but cannot waive required repository CI.
 
@@ -56,7 +60,7 @@ accountable for the submission; do not submit another person's work as your own.
 
 ## Review and merge the Garden change
 
-Open a focused PR targeting `main` in `Flow-Research/garden`. Explain what changed,
+Open a focused PR targeting `dev` in `Flow-Research/garden`. Explain what changed,
 why it fulfills the task, and the checks performed. Obtain independent current-head
 human approval with the repository authority required by the checker and Garden's
 own rules. Required CI checks must pass on that head with their trusted producer.
@@ -118,9 +122,15 @@ policy to the result; the checker itself cannot accept a task or pay anyone.
 
 ## Source baseline and changes
 
-This guide was prepared from Garden commit
-`6526cfdbcaf4e1cf4fe58120896243eb82e6f614`: README, CONTRIBUTING,
-`docs/development/onboarding.md`, `compose.dev.yaml`, the CI workflows and code
-ownership rules. The PM must reconcile later repository changes before activating
+This guide was reconciled against Garden `dev` commit
+`c61609fc4170ea76238b1fb53b1c00177448dad5`: README, CONTRIBUTING,
+`docs/development/onboarding.md`, `docs/development/maintainer-workflow.md`,
+`.agents/skills/contribute/SKILL.md`, `compose.dev.yaml`, the CI workflow and
+code ownership rules. This replaces the original `main` preparation baseline
+`6526cfdbcaf4e1cf4fe58120896243eb82e6f614`. Garden's default branch is `main`,
+but its contribution workflow targets `dev`; merged PR #261 confirms that path.
+The locked POST binding must therefore use `base_branch=dev`, not the default
+branch. A later promotion from `dev` to `main` is separate Garden release work.
+The PM must reconcile later repository changes before activating
 a new guide version. Existing claimed tasks keep their locked Workstream policies;
 do not silently change their requirements because a repository document changed.

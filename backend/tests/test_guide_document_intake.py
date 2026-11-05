@@ -244,12 +244,27 @@ async def _assert_inactive_resolver_replay_denied(
         assert denials[0].denial_code == "actor_deactivated"
 
 
+async def _provision_put_resolver(project_client):
+    from app.modules.actors.api import ServiceIdentity
+
+    provision = await project_client.post(
+        "/api/v1/service-actors",
+        headers=auth_headers(),
+        json={
+            "service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value,
+            "subject": "guide-intake-test-put-resolver",
+            "reason": "Isolated guide upload proof.",
+        },
+    )
+    assert provision.status_code == 201, provision.text
+    return provision
+
+
 @pytest.mark.parametrize("recover_callback", [False, True])
 async def test_all_documents_stored_and_recovery_never_dispatch_without_pm_request(
     project_client, monkeypatch, recover_callback
 ):
     from app.core.config import get_settings
-    from app.modules.actors.api import ServiceIdentity
     from app.workers import project_setup as worker
     from app.workers.project_setup import run_project_guide_compilation
     from app.adapters.artifacts import internal_workers
@@ -266,16 +281,7 @@ async def test_all_documents_stored_and_recovery_never_dispatch_without_pm_reque
         return SimpleNamespace(id=task_id)
 
     monkeypatch.setattr(run_project_guide_compilation, "apply_async", publish)
-    provision = await project_client.post(
-        "/api/v1/service-actors",
-        headers=auth_headers(),
-        json={
-            "service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value,
-            "subject": "guide-intake-test-put-resolver",
-            "reason": "Isolated guide upload proof.",
-        },
-    )
-    assert provision.status_code == 201, provision.text
+    provision = await _provision_put_resolver(project_client)
     project = await create_project(project_client)
     created = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides",

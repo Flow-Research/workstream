@@ -32,8 +32,14 @@ Passing intake creates no acceptance evidence about the external work.
 POST configuration selects the existing scoped forge capability:
 
 ```json
-{"workstream_forge_facts_version":"v1","forge":"github","forge_origin":"https://github.com","repository":"Flow-Research/garden","base_branch":"main"}
+{"workstream_forge_facts_version":"v1","forge":"github","forge_origin":"https://github.com","repository":"Flow-Research/garden","base_branch":"dev"}
 ```
+
+Garden's contribution workflow targets `dev` even though the repository default
+is `main`. The pilot was reconciled against `dev` commit
+`c61609fc4170ea76238b1fb53b1c00177448dad5` (merged PR #261); this configuration
+must match the actual engineering target, not the default branch. Changing the
+base requires a new approved policy context, not relabelling retained evidence.
 
 POST reuses Harnessy's merge, landed commit, repository/base, CI producer,
 independent current-head human review, and protected-path rules. Its offline

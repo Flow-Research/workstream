@@ -1,15 +1,15 @@
 {
   "version": "garden-engineering-drill-1",
-  "change_summary": "Define small Garden engineering contributions with independently verified pull-request evidence and task association.",
+  "change_summary": "Define Garden dev-branch engineering contributions with independently verified pull-request evidence and task association.",
   "task_examples": [
     {
       "title": "Correct the local PostgreSQL port-conflict instructions",
-      "content": "Garden README currently suggests changing only DATABASE_URL if host port 55432 is occupied. Align it with onboarding: change the compose.dev.yaml host mapping and DATABASE_URL together, keep container port 5432 distinct, and link the detailed instructions. Do not change runtime configuration or delete data volumes.",
+      "content": "At dev c61609fc4170ea76238b1fb53b1c00177448dad5, Garden README still suggests changing only DATABASE_URL if host port 55432 is occupied. Align it with onboarding: change the compose.dev.yaml host mapping and DATABASE_URL together, keep container port 5432 distinct, and link the detailed instructions. Do not change runtime configuration or delete data volumes. Start from and target dev.",
       "labels": ["documentation", "developer-experience"]
     },
     {
       "title": "Document the Garden Workstream contribution handoff",
-      "content": "Add a concise contributor page for the approved Workstream project: claim, task trailer before final review, required GitHub checks and merge, proof.json ZIP and PRE/POST feedback. Link it from CONTRIBUTING without replacing the ordinary GitHub contribution path. Use explicit placeholders and no credentials.",
+      "content": "Add a concise contributor page for the approved Workstream project: claim, task trailer before final review, required GitHub checks and merge, proof.json ZIP and PRE/POST feedback. Link it from CONTRIBUTING without replacing the ordinary GitHub contribution path. Use explicit placeholders and no credentials. Start from and target dev.",
       "labels": ["documentation", "contribution-workflow"]
     }
   ],

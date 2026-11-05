@@ -86,7 +86,6 @@ def configure_manual_dispatch(monkeypatch, tmp_path, broker_failure):
     get_settings.cache_clear()
     from app.workers import project_setup as worker
     monkeypatch.setattr(project_agents, "project_guide_runtime_configuration", scripted_runtime_configuration)
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
     monkeypatch.setattr(worker, "guide_document_access_runtime", scripted_document_access_runtime)
     monkeypatch.setattr(
         worker, "guide_document_parser_factory", scripted_guide_document_parser_factory

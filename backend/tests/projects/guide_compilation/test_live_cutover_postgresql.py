@@ -548,11 +548,7 @@ async def test_phase_crash_recovers_same_attempt_without_reinference(
                 {"id": str(setup_id)},
             )
         assert delivery.source_snapshot_id not in await _published_continuation_snapshots(factory)
-        from app.modules.projects.guide_compilation.repository import GuideCompilationIntegrityError
-
-        with pytest.raises(
-            GuideCompilationIntegrityError, match="compilation runtime configuration unavailable"
-        ):
+        with pytest.raises(ProjectGuideCompilationDeliveryError):
             await coordinator.run(delivery)
         async with factory() as session:
             assert (
@@ -782,7 +778,6 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
         ("error_summary", "stale"),
         ("started_at", "2026-01-01T00:00:00+00:00"),
         ("finished_at", "2026-01-01T00:00:00+00:00"),
-        ("documents_ready_at", None),
         ("post_submit_derivation_summary", {"status": "stale"}),
     ],
 )
@@ -819,6 +814,28 @@ async def test_dirty_delivery_rejects_before_provider_and_preserves_request(
             "project_guide_setup_finalizations",
         ):
             assert await session.scalar(text("select count(*) from " + table)) == (1 if table in {"project_guide_compilation_request_operations", "project_guide_compilation_attempts"} else 0)
+
+
+async def test_committed_document_readiness_cannot_be_cleared(pending_source):
+    """The database preserves source readiness before any delivery can be forged."""
+    from sqlalchemy.exc import IntegrityError
+    from app.modules.projects.models import ProjectSetupRun
+
+    factory, _, setup_id, snapshot = pending_source
+    await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, runtime_configuration())
+    async with factory() as session:
+        original = (await session.get(ProjectSetupRun, str(setup_id))).documents_ready_at
+    with pytest.raises(IntegrityError, match="guide document readiness is immutable"):
+        async with factory() as session, session.begin():
+            setup = await session.get(ProjectSetupRun, str(setup_id))
+            setup.documents_ready_at = None
+    async with factory() as session:
+        assert (await session.get(ProjectSetupRun, str(setup_id))).documents_ready_at == original
+        assert await session.scalar(text("select count(*) from project_guide_compilation_request_operations")) == 1
+        assert await session.scalar(text("select count(*) from project_guide_compilation_attempts")) == 1
+        assert await session.scalar(text("select count(*) from project_guide_component_projection_operations")) == 0
+        assert await session.scalar(text("select count(*) from project_guide_setup_finalizations")) == 0
 
 
 async def test_stale_queued_delivery_uses_retained_configuration_after_settings_change(

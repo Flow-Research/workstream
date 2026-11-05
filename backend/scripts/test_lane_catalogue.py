@@ -499,6 +499,7 @@ PROJECT_MODULES = (
 
 # Broad project intake uses the same deterministic project-family partition.
 PROJECT_INTAKE_MODULES = (
+    "tests/projects/test_setup_queue_recovery.py",
     "tests/test_guide_document_intake.py",
     "tests/test_projects.py",
 )

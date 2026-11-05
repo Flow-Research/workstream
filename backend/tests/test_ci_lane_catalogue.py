@@ -159,6 +159,7 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
 
 def test_project_intake_partitions_across_the_project_family() -> None:
     expected = {
+        "tests/projects/test_setup_queue_recovery.py",
         "tests/test_guide_document_intake.py",
         "tests/test_projects.py",
     }
@@ -305,8 +306,8 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
             "e60476b197a07efb56937368fb61f43e78d4acc8bddf7910b5e613520157a6af",
         ),
         "project": (
-            254,
-            "e6c91d927d71e1b13367be7719c4b1c19fc838826d95cd8a46c39ab69c97fae2",
+            255,
+            "8e8f8155a5e3929613fb81e5b6bc8d5ac858aa2578dab559b8f403de6298d87a",
         ),
         "task": (
             94,
@@ -378,9 +379,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 254
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 255
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "020daf4608379b80ee207120bf74689fd969037f8ed36250312cab19563a43cd"
+        "3782b6f2df688f48755b50db0295f9660d9960ec7c58e1c1e3659f874f27f909"
     )
 
 

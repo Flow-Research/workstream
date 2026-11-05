@@ -52,10 +52,29 @@ The listed member must be the root `proof.json`. Follow the
 qualification and separate PRE/POST configuration; local qualification does not
 register or approve a production image.
 
+## Engineering branch and source evidence
+
+Garden's default branch is `main`; its active contribution target is `dev`.
+Read-only inspection of `dev` at
+[`c61609fc4170ea76238b1fb53b1c00177448dad5`](https://github.com/Flow-Research/garden/tree/c61609fc4170ea76238b1fb53b1c00177448dad5)
+found that the maintainer workflow and contribution skill both require starting
+from and targeting `dev`. [Merged PR #261](https://github.com/Flow-Research/garden/pull/261)
+has base `dev` and landed at that SHA. CI covers PRs into both `dev` and `main`;
+that does not make `main` the engineering target. Lock the POST configuration to
+`base_branch=dev` and obtain fresh review/checks on the actual task head.
+
+At that SHA, README's PostgreSQL troubleshooting paragraph still tells readers
+to override only `DATABASE_URL`; onboarding's matching paragraph requires both
+the URL and `compose.dev.yaml` mapping. Compose maps host `55432` to container
+`5432`. The first task therefore remains a useful documentation repair on `dev`,
+rather than replaying a fix already delivered. This read-only source check does
+not establish required-check protection, an eligible review or a completed drill.
+
 ## Initial task candidates
 
-**First drill: fix local PostgreSQL port-conflict instructions.** At the source
-baseline in the guide, README says to override only `DATABASE_URL` when host port
+**First drill: fix local PostgreSQL port-conflict instructions.** Rechecked on
+`dev` at `c61609fc4170ea76238b1fb53b1c00177448dad5`, README still says to override
+only `DATABASE_URL` when host port
 55432 is occupied. Onboarding correctly requires changing both that URL and the
 `compose.dev.yaml` host mapping. Update the README to describe the matching changes,
 keep container port 5432 distinct from the chosen host port, and link onboarding.
@@ -68,7 +87,7 @@ PRE versus POST feedback. Link it from CONTRIBUTING without replacing ordinary
 GitHub contribution instructions. Examples must contain obvious placeholders,
 never copied private tokens or a claim that a sample PR is real accepted work.
 
-Both are genuine small documentation contributions. Recheck current Garden main
+Both are genuine small documentation contributions. Recheck current Garden `dev`
 before creating tasks; if another contributor already fixed the issue, select a
 new useful change rather than replaying completed work. Open UI/auth issues are
 not automatically part of this drill.

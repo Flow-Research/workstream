@@ -1286,7 +1286,7 @@ promises no future automatic mode. Retained automatic-request receipts remain
 readable evidence but cannot authorize a new inference attempt. Both initial
 routes require current human exact-project Project Manager request authority;
 service delivery requires their exact committed request. Upload and source scans
-cannot manufacture a request. The fixed worker executes, projects and finalizes
+cannot manufacture a request. The fixed service actor executes, projects and finalizes
 the authorized attempt, stopping at findings or draft proposals. Manager review,
 correction, separate PRE/POST approvals and activation remain distinct operations.
 AUTH-12F4 supplies exact-project Project Manager authority; POL-05B supplies public composition and manual dispatch. Complete

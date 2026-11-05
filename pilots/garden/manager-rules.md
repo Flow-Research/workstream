@@ -149,7 +149,7 @@
           }
         ],
         "check_steps": [
-          "Require the claimed PR to be merged into Garden main at the claimed landed commit.",
+          "Require the claimed PR to be merged into Garden dev at the claimed landed commit.",
           "Require successful trusted required checks and independent current-head human review under the locked checker configuration.",
           "Require exactly one canonical Workstream-Task trailer on the reviewed head commit and compare it with the trusted task UUID.",
           "Reject mismatched URLs, repository, commit, CI or task association and preserve actionable findings."

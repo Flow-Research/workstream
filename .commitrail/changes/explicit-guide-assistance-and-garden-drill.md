@@ -40,7 +40,12 @@ The ZIP contains claims in `proof.json`, not another copy of the repository.
    retrieval and its response hash. Only the external image interprets the
    trailer. Reuse existing PR/CI/review comparisons. Republish affected images
    explicitly; no old-image fallback and no rewrite of retained evidence.
-5. Exercise public guide/upload/request/approval/task/submission APIs and durable
+5. Connect the existing GitHub App adapter to the hosted release using the
+   existing private secret-file mechanism. Forward only required App settings
+   only to the outbox worker that retrieves forge facts; never expose the key to checker
+   images, model proxy, release metadata or logs. Validate complete optional
+   configuration and preserve releases that do not use forge checking.
+6. Exercise public guide/upload/request/approval/task/submission APIs and durable
    workers for the Garden drill. Distinguish controlled composition proof from
    a real GitHub PR with eligible independent review and merge. Record any human
    step still pending; never fabricate it or claim the live drill passed early.
@@ -78,8 +83,15 @@ foreign task markers reject. It must exist before the final checks and review.
 - Existing forge facts contract and GitHub adapter; project-owned external
   checker code, image build definitions, fixtures and composition tests.
 - `pilots/garden/` guide/task/ZIP fixtures and bounded drill helpers.
+- Hosted Compose/preflight/entrypoint and existing deployment tests for the
+  missing GitHub App secret-file wiring; reuse existing secret validation.
+  Use one conditional worker-only Compose overlay; API/migration, beat, parser,
+  model proxy and proof roles receive neither the key nor its selectors.
 - Focused existing/new tests for these owners, their necessary inventories and
-  OpenAPI snapshots. No CI gate or test-selection weakening.
+  OpenAPI snapshots. No CI gate or test-selection weakening. Refresh exact UUID-generation and
+  AUTH test-structure inventories after reconciling affected owner call sites;
+  keep test payloads out of parameter IDs so exact selected nodes fit process
+  argument limits without changing assertions or execution selection.
 - This record, affected current README/spec/runbook/roadmap claims and local
   roadmap exports if present. A migration only if an identified persisted
   invariant needs enforcement; preserve retained records.
@@ -106,6 +118,9 @@ approval, merge, contribution or evaluation facts invented for the drill.
 - A valid Garden PR proof passes its trusted task and fails another; missing,
   duplicate or malformed task trailers and failed CI reject with findings.
   This proves reviewed task association, not GitHub/Workstream actor identity.
+- Hosted forge configuration requires paired App identity and private key,
+  admits only the intended consuming roles, and does not disclose secret bytes
+  through rendered configuration, errors or release evidence.
 - Actual offline image composition covers locator and evaluation. Live drill
   evidence identifies exact images, guide/policies, artifact and durable outcome;
   an accepted path must yield the actual submitter ContributionRecord.

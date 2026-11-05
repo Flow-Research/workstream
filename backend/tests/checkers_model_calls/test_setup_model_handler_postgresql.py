@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 import json
 import os
 from types import SimpleNamespace
@@ -58,7 +58,6 @@ from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.authorization.api import (
     ActorIdentityFacts,
     ActorKind,
-    ProjectGuideCompilationExecutePreflightFacts,
     ProjectGuideCompilationRequestOrigin,
 )
 from app.modules.model_usage.api import (
@@ -79,9 +78,6 @@ from tests.artifact_store_helpers import (
 from tests.checkers.execution.support import provision_post_submit_service
 from tests.checkers_model_calls.test_model_call_contract import profile_spec
 from tests.projects.guide_compilation.helpers import (
-    context,
-    identity,
-    persistence_facts,
     runtime_configuration,
     seed_database,
     service_actor,
@@ -174,36 +170,41 @@ def _runtime(profile: ProjectModelProfile):
     )
 
 
-def _preflight(values, requested, configuration):
-    attempt_identity = identity(context(values, configuration=configuration))
-    complete = replace(
-        persistence_facts(values, requested.attempt_id, attempt_identity),
-        operation_id=requested.operation_id,
-    )
-    names = ProjectGuideCompilationExecutePreflightFacts.__dataclass_fields__
-    return ProjectGuideCompilationExecutePreflightFacts(
-        **{name: asdict(complete)[name] for name in names}
-    )
-
-
-async def _fence_setup_attempt(database_url, values, configuration):
+async def _fence_setup_attempt(database_url, values, configuration, namespace_fingerprint):
     human, link, _grant = await _seed_human(database_url, values)
     actor = ActorIdentityFacts(human, link, ActorKind.HUMAN)
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        from app.adapters.artifacts import guide_document_manifest_port
+        from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
+        from app.modules.projects.guide_compilation.contracts import CompilationAttemptIdentity
+        from app.modules.projects.models import ProjectSetupRun
+
+        async with factory() as session, session.begin():
+            inputs = CompilationRequestInputs(guide_document_manifest_port(session), configuration)
+            setup = await session.get(ProjectSetupRun, str(values["setup_1"]))
+            actual_context = await inputs.context_for_setup(session, setup)
+            assert actual_context.material.documents[0].namespace_fingerprint == namespace_fingerprint
+            assert actual_context.runtime_configuration == configuration
+            attempt_identity = CompilationAttemptIdentity.from_context(actual_context)
+            facts = replace(_request(values, configuration), **attempt_identity.model_dump())
         async with factory() as session:
-            requested = await _authorized_service(session, actor).authorize_request(
+            requested = await _authorized_service(session, actor, configuration=configuration).authorize_request(
                 origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
                 actor=actor,
-                facts=_request(values, configuration),
-                identity=identity(context(values, configuration=configuration)),
+                facts=facts,
+                identity=attempt_identity,
                 runtime_configuration=configuration,
             )
+        from tests.projects.guide_compilation.helpers import acknowledge_requested_setup
+        await acknowledge_requested_setup(factory, requested)
+        async with factory() as session:
+            state = await load_compilation_execution_state(session, requested.attempt_id)
         async with factory() as session:
             fenced = await _execution_service(session, service_actor(values)).fence_dispatch(
                 actor=service_actor(values),
-                facts=_preflight(values, requested, configuration),
+                facts=state.preflight_facts,
             )
         assert fenced.dispatch_permitted is True
         return requested
@@ -637,7 +638,9 @@ class _ObservedBindings:
 async def _journey(storage: _StorageCase, access) -> _Journey:
     profile = await _publish_profile(access, storage.values["project"])
     configuration = _runtime(profile)
-    requested = await _fence_setup_attempt(storage.database_url, storage.values, configuration)
+    requested = await _fence_setup_attempt(
+        storage.database_url, storage.values, configuration, storage.namespace.namespace_fingerprint
+    )
     async with storage.factory() as session:
         state = await load_compilation_execution_state(session, requested.attempt_id)
     assert state.runtime_configuration == configuration

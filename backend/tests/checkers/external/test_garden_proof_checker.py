@@ -97,7 +97,8 @@ def test_failed_ci_still_fails_even_with_correct_task():
 
 
 @pytest.mark.parametrize(
-    "raw,code", [(None, "missing"), (b"{", "invalid_json"), (b"x" * 65_537, "too_large")]
+    "raw,code", [(None, "missing"), (b"{", "invalid_json"), (b"x" * 65_537, "too_large")],
+    ids=["missing", "invalid-json", "oversized"],
 )
 def test_intake_rejects_unusable_proof_without_facts(raw, code):
     assert [f["code"] for f in checker.evaluate_intake(raw, checker.PRE_CONFIGURATION)] == [
@@ -139,7 +140,10 @@ def test_registry_specs_select_distinct_authority(phase):
         )
 
 
-@pytest.mark.parametrize("message", [None, 3, "x" * 65_537, "é" * 32_769, "\ud800"])
+@pytest.mark.parametrize(
+    "message", [None, 3, "x" * 65_537, "é" * 32_769, "\ud800"],
+    ids=["missing", "non-string", "oversized-ascii", "oversized-utf8", "invalid-surrogate"],
+)
 def test_malformed_message_facts_fail_closed(message):
     raw, value = control()
     assert checker.evaluate_post(raw, CONFIG, value) == []
