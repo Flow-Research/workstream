@@ -75,18 +75,25 @@ async def _seed_human(database_url: str, values: dict[str, UUID]) -> tuple[UUID,
                     "now": datetime.now(UTC),
                 },
             )
+            bootstrap = (await connection.execute(text(
+                "select grant_row.id,grant_row.target_actor_profile_id from authority_control control "
+                "join admin_role_grants grant_row on grant_row.id=control.bootstrap_grant_id "
+                "where control.id=1 and control.bootstrap_completed"
+            ))).one_or_none()
             await connection.execute(text("alter table admin_role_grants disable trigger user"))
             await connection.execute(
                 text(
                     "insert into admin_role_grants(id,target_actor_profile_id,role,scope_type,"
-                    "scope_project_id,status,version,granted_by_system_principal,grant_reason) "
+                    "scope_project_id,status,version,granted_by_system_principal,"
+                    "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason) "
                     "values(:grant,:human,'project_manager','project',:project,'active',1,"
-                    "'workstream:system:bootstrap','authorized compilation test')"
+                    ":principal,:grantor_actor,:grantor_grant,'authorized compilation test')"
                 ),
                 {
-                    "grant": grant,
-                    "human": str(human),
-                    "project": str(values["project"]),
+                    "grant": grant, "human": str(human), "project": str(values["project"]),
+                    "principal": None if bootstrap else "workstream:system:bootstrap",
+                    "grantor_actor": bootstrap.target_actor_profile_id if bootstrap else None,
+                    "grantor_grant": bootstrap.id if bootstrap else None,
                 },
             )
             await connection.execute(text("alter table admin_role_grants enable trigger user"))
@@ -132,7 +139,7 @@ async def test_request_rejects_caller_identity_drift_before_authority(
 
 
 def _authorized_service(
-    session: AsyncSession, actor: ActorIdentityFacts
+    session: AsyncSession, actor: ActorIdentityFacts, *, request_inputs=None, configuration=None
 ) -> GuideCompilationService:
     context_value = HumanAuthorizationContext(
         actor_profile_id=actor.actor_profile_id,
@@ -147,7 +154,14 @@ def _authorized_service(
     authorization = AuthorizationService(session, context_value, admin_repository=repository)
     prepared = PreparedAuthorizationService(session, context_value, authorization, repository)
     adapter = ProjectGuideCompilationAuthorizationAdapter(authorization, prepared)
-    return GuideCompilationService(session, adapter)
+    if request_inputs is None:
+        from app.adapters.artifacts import guide_document_manifest_port
+        from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
+
+        request_inputs = CompilationRequestInputs(
+            guide_document_manifest_port(session), configuration or runtime_configuration()
+        )
+    return GuideCompilationService(session, adapter, request_inputs=request_inputs)
 
 
 @pytest.mark.asyncio

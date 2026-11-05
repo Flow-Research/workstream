@@ -120,7 +120,7 @@ with an empty client configuration, for example
 
 Rebuilding the proof checker changes its digest. The registry holds one
 immutable entry per phase, capability and version, so rerun `publish_local.py`
-with a new `--capability-version` (the default is `v3`; use, for example, `v4`), recreate the checker with
+with a new `--capability-version` (the default is `v4`; use, for example, `v5`), recreate the checker with
 `docker compose up --wait --force-recreate checker`, and register the new
 body. Registering a new digest under an existing version returns
 `external_checker_registry_conflict`.
@@ -216,7 +216,7 @@ run the checker for any project.
 
 ### What the proof checker checks
 
-`external_checkers/harnessy_proof/checker.py` (capability version `v3`,
+`external_checkers/harnessy_proof/checker.py` (capability version `v4`,
 [WS-GHPROOF-001](../../.commitrail/initiatives/WS-GHPROOF-001/OVERVIEW.md)) is a
 post-submission checker with one mode, and it fails closed. It reads
 `proof.json` at the root of the submitted ZIP, compares it with forge facts
@@ -255,7 +255,11 @@ WorkStream places the facts in the request `input` under `forge_facts`, so the
 request digest binds them. Each forge provider maps its host into the same
 `workstream.forge_change_facts.v1` facts; anything a provider cannot prove is
 null or absent, and the checker then fails closed. The facts are bound to one
-change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
+change state (`head_sha`, `landed_commit_sha`). The exact head commit's message
+is retrieved independently as `head_commit_message` with its response hash. The
+expanded strict shape requires rebuilding and explicitly registering affected
+images; retained evidence and old pinned images are not rewritten or used as a
+fallback. A commit id is 40 (SHA-1) or 64
 (SHA-256) lowercase hexadecimal characters:
 
 ```json
@@ -272,6 +276,7 @@ change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
     "landed_commit_sha": "<commit id; null unless merged>",
     "base_ref": "main",
     "head_sha": "<commit id>",
+    "head_commit_message": "Repair the assigned documentation\n\nWorkstream-Task: 01900000-0000-7000-8000-000000000001",
     "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
     "reviews": [{"id": "61", "reviewer": {"login": "reviewer", "id": 7, "kind": "user"},
                  "reviewer_write_access": true,
@@ -284,7 +289,8 @@ change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
                          "judged": [{"producer": "github_app:15368", "sha": "<head sha>"}],
                          "run_url": "https://github.com/Flow-Research/harnessy-v2/actions/runs/345"}],
     "fetched_at": "2026-10-24T12:00:00Z",
-    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"}]
+    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"},
+                  {"request": "head_commit", "sha256": "sha256:<64 hex>"}]
   }
 }
 ```
@@ -362,7 +368,11 @@ its web origin follows the API URL (`https://github.com` for the public API,
 the Enterprise host otherwise), and a binding whose `forge_origin` differs ends
 as an infrastructure failure. For reviewers who approved the head commit, the
 App also reads their current repository permission, so an approval counts only
-from someone with write access. A missing, oversized or malformed `proof.json`
+from someone with write access. The App additionally needs repository Contents
+read permission for the exact-head Git commit endpoint. That response is streamed
+with a 256 KiB cap; the message is bounded to 64 KiB of UTF-8. Malformed,
+inconsistent or oversized responses are infrastructure failures, never truncated
+facts. A missing, oversized or malformed `proof.json`
 fails with the checker's `missing`, `too_large` or `invalid_json` finding. A
 claim that names another repository, a change the forge does not have, a
 change into another base branch, or one with more changed files, reviews or
@@ -372,6 +382,24 @@ unreachable, refuses the credential, cannot read the configured repository or
 answers outside its protocol, or the App is not configured, the evaluation ends
 as an infrastructure failure that an Operator can retry; it never passes.
 There is deliberately no shape-only mode.
+
+### Garden task association
+
+The [Garden image](../../external_checkers/garden_proof/README.md) registers
+`garden.work_proof` version `v1` separately for PRE and POST. PRE validates the
+bounded `proof.json` claims; POST compares independently retrieved facts and
+requires exactly one standalone `Workstream-Task: <canonical lowercase UUID>`
+line in the immutable head commit's final trailer block. Duplicate reserved
+occurrences anywhere, missing, malformed or foreign task markers fail. Add it
+before final CI and independent review: changing the message changes the head.
+Only the external image interprets this project marker. It proves reviewed task
+association, not GitHub-to-Workstream contributor identity.
+
+See the [Garden guide](../../pilots/garden/guide.md) and
+[uploaded manager rules](../../pilots/garden/manager-rules.md). These source
+fixtures and controlled image tests do not establish publication, deployment or
+a real GitHub review/merge/contribution drill. Register the exact new image and
+approve its separate phase attachments before use.
 
 ## Create the manager project and the agent submitter
 

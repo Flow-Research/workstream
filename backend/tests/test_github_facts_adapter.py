@@ -117,6 +117,8 @@ class FakeGitHub:
         self.route("POST", "/app/installations/77/access_tokens", self._token)
         self.route("GET", f"/repos/{REPOSITORY}", {"full_name": REPOSITORY})
         self.route("GET", f"/repos/{REPOSITORY}/pulls/12", _pull())
+        self.route("GET", f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}",
+                   {"sha": HEAD_SHA, "message": "Improve documentation"})
         self.route("GET", f"/repos/{REPOSITORY}/pulls/12/reviews", REVIEWS)
         self.route(
             "GET",
@@ -263,6 +265,7 @@ async def test_happy_path_returns_facts_with_response_digests() -> None:
         "landed_commit_sha": MERGE_SHA,
         "base_ref": "main",
         "head_sha": HEAD_SHA,
+        "head_commit_message": "Improve documentation",
         "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
         "reviews": [
             {
@@ -325,6 +328,10 @@ async def test_happy_path_returns_facts_with_response_digests() -> None:
                         "required_status_checks"
                     ]
                 ),
+            },
+            {
+                "request": "head_commit",
+                "sha256": _sha(fake.bodies[f"{API}/repos/{REPOSITORY}/git/commits/{HEAD_SHA}"]),
             },
             {
                 "request": "reviews.page.1",
@@ -423,7 +430,7 @@ async def test_pagination_follows_same_origin_next_links() -> None:
     facts = await _fetch(_adapter(fake))
 
     assert facts.required_checks[0].conclusion == "failure"
-    assert [item.request for item in facts.responses][6:8] == [
+    assert [item.request for item in facts.responses][7:9] == [
         "check_runs.page.1",
         "check_runs.page.2",
     ]
@@ -894,7 +901,7 @@ async def test_reviews_and_files_paginate_and_reviews_are_returned_unfiltered() 
         ("63", "changes_requested"),
     ]
     assert len(facts.changed_files) == facts.changed_files_count == 101
-    assert [item.request for item in facts.responses][3:8] == [
+    assert [item.request for item in facts.responses][4:9] == [
         "reviews.page.1",
         "reviews.page.2",
         "reviewer_permission",
@@ -973,6 +980,8 @@ async def test_head_that_keeps_moving_fails_closed_as_inconsistent() -> None:
     fake = FakeGitHub()
     shas = [f"{index:x}" * 40 for index in range(1, 8)]
     for sha in shas:
+        fake.route("GET", f"/repos/{REPOSITORY}/git/commits/{sha}",
+                   {"sha": sha, "message": "Improve documentation"})
         fake.route("GET", f"/repos/{REPOSITORY}/commits/{sha}/check-runs", {"check_runs": []})
         fake.route("GET", f"/repos/{REPOSITORY}/commits/{sha}/status", {"sha": sha, "statuses": []})
     fake.route("GET", f"/repos/{REPOSITORY}/pulls/12", *(_pull(head={"sha": sha}) for sha in shas))
@@ -1397,6 +1406,7 @@ def test_facts_model_rejects_a_noncanonical_repository() -> None:
             "landed_commit_sha": MERGE_SHA,
             "base_ref": "main",
             "head_sha": HEAD_SHA,
+            "head_commit_message": "Improve documentation",
             "author": {"login": "a", "id": 1, "kind": "user"},
             "reviews": [],
             "changed_files_count": 0,
@@ -1494,6 +1504,7 @@ def test_facts_model_binds_the_file_count_and_accepts_sha256_object_names() -> N
         "landed_commit_sha": None,
         "base_ref": "main",
         "head_sha": "c" * 64,
+        "head_commit_message": "Improve documentation",
         "author": {"login": "a", "id": 1, "kind": "user"},
         "reviews": [],
         "changed_files_count": 0,
@@ -1698,6 +1709,7 @@ def test_facts_model_binds_landed_commit_and_forge_origin(changes: dict, valid: 
         "landed_commit_sha": MERGE_SHA,
         "base_ref": "main",
         "head_sha": HEAD_SHA,
+        "head_commit_message": "Improve documentation",
         "author": {"login": "a", "id": 1, "kind": "user"},
         "reviews": [],
         "changed_files_count": 0,
@@ -1796,3 +1808,72 @@ def test_api_without_an_https_web_origin_is_refused_when_configured() -> None:
 def test_enterprise_web_origin_is_lowercased() -> None:
     adapter = _adapter(FakeGitHub(), api="https://GHE.Example/api/v3")
     assert adapter.forge_origin == "https://ghe.example"
+
+
+@pytest.mark.parametrize("body", [
+    {"sha": "c" * 40, "message": "message"},
+    {"sha": HEAD_SHA}, {"sha": HEAD_SHA, "message": None},
+    {"sha": HEAD_SHA, "message": 1},
+    {"sha": HEAD_SHA, "message": "a" * 65_537},
+    {"sha": HEAD_SHA, "message": "é" * 32_769},
+    {"sha": HEAD_SHA, "message": "\ud800"},
+])
+async def test_head_commit_message_rejects_wrong_sha_or_invalid_bytes(body: dict) -> None:
+    fake = FakeGitHub()
+    fake.route("GET", f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}",
+               httpx.Response(200, content=json.dumps(body).encode()))
+    with pytest.raises(ForgeFactsProtocolError):
+        await _fetch(_adapter(fake))
+
+
+async def test_head_commit_message_accepts_exact_utf8_byte_bound() -> None:
+    fake = FakeGitHub()
+    message = "é" * 32_768
+    fake.route("GET", f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}",
+               {"sha": HEAD_SHA, "message": message})
+    assert (await _fetch(_adapter(fake))).head_commit_message == message
+
+
+async def test_head_commit_read_denied_is_infrastructure_not_missing_work() -> None:
+    fake = FakeGitHub()
+    fake.route("GET", f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}", httpx.Response(403))
+    with pytest.raises(ForgeFactsAccessDeniedError):
+        await _fetch(_adapter(fake))
+
+
+async def test_head_commit_response_bound_stops_stream_and_closes_it() -> None:
+    class Oversized(httpx.AsyncByteStream):
+        consumed = 0
+        closed = False
+
+        async def __aiter__(self):
+            for _ in range(100):
+                self.consumed += 1
+                yield b"x" * 16_384
+
+        async def aclose(self):
+            self.closed = True
+
+    fake = FakeGitHub()
+    stream = Oversized()
+    # Return the stream directly: the usual recording fake would preload content.
+    original_handler = fake.handler
+    def handler(request):
+        if request.url.path == f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}":
+            return httpx.Response(200, stream=stream)
+        return original_handler(request)
+    fake.handler = handler
+    with pytest.raises(ForgeFactsProtocolError):
+        await _fetch(_adapter(fake))
+    assert stream.consumed == 17
+    assert stream.closed is True
+
+
+async def test_head_commit_response_refuses_compression_before_decoding() -> None:
+    fake = FakeGitHub()
+    fake.route("GET", f"/repos/{REPOSITORY}/git/commits/{HEAD_SHA}",
+               httpx.Response(200, headers={"content-encoding": "gzip"}, content=b""))
+    with pytest.raises(ForgeFactsProtocolError):
+        await _fetch(_adapter(fake))
+    commit_request = next(r for r in fake.requests if "/git/commits/" in r.url.path)
+    assert commit_request.headers["accept-encoding"] == "identity"

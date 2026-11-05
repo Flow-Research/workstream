@@ -292,7 +292,6 @@ async def finalize_corrected_attempt(
     from app.adapters.auth import (
         artifact_policy_projection_authorization,
         guide_compilation_execution_authority,
-        guide_compilation_request_authority,
         guide_sufficiency_projection_authorization,
         setup_finalization_authorization,
     )
@@ -328,10 +327,7 @@ async def finalize_corrected_attempt(
         material_factory=guide_document_manifest_port,
         document_tools_factory=document_tools(factory),
         model_session_factory=no_model_session,
-        request_authority=guide_compilation_request_authority,
         execution_authority=guide_compilation_execution_authority,
-        configuration_factory=lambda: configuration,
-        model_profiles=lambda _session: None,
         runtime_factory=lambda configuration: runtime,
         sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
         policy_authorization_factory=artifact_policy_projection_authorization,

@@ -714,7 +714,7 @@ closed:
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
-| `workstream.project.setup` | `project.guide_compilation.request_automatic`, `project.guide_compilation.execute`, `project.guide_compilation.model.prepare`, `project.guide_compilation.model.dispatch`, `project.guide_compilation.model.observe`, `project.guide_compilation.model.complete`, `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
+| `workstream.project.setup` | `project.guide_compilation.execute`, `project.guide_compilation.model.prepare`, `project.guide_compilation.model.dispatch`, `project.guide_compilation.model.observe`, `project.guide_compilation.model.complete`, `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
 | `workstream.review.preference_expiry` | `review.preference_expiry.run` |
 | `workstream.review.lease_expiry` | `review.lease_expiry.run` |
 | `workstream.review.authority_invalidation_reconciliation` | `review.reconcile.run` |
@@ -1396,8 +1396,14 @@ There is no separate public source-snapshot creation operation.
 The create response supplies document IDs. The manager uploads each original
 through `POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`.
 Exact membership and current ingest authority are checked before body reads.
-Only committed bytes for every declared document can trigger automatic setup.
-Broker dispatch happens after commit and never carries a prepared handle.
+Committed bytes for every declared document establish source readiness only.
+Only a current human exact-project Project Manager's committed explicit request
+can authorize compilation. `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`
+selects inference assistance;
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
+selects provider-free uploaded manager rules. Both require a UUID `Idempotency-Key` and
+no body, using `project.guide_compilation.request` authority. Broker dispatch
+happens after request commit and never carries a prepared handle.
 Guide-create replay reauthorizes both original actions against current authority
 and returns the original document IDs and initial setup response.
 
@@ -1462,7 +1468,7 @@ execution task, calls no provider, and does not make the hidden POL workflow liv
 | `project.revision_policy.update` (active) | `project.review_policy.manage` | `WS-XINT-003-02B` |
 | `project.guide_sufficiency_report.create` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
 | `project.guide_sufficiency.run` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
-| `project.guide_compilation.request_automatic` (active) | `project.guide_compilation.execute` | `WS-AUTH-001-12I` |
+| `project.guide_compilation.request_automatic` (inactive historical identifier) | `project.guide_compilation.execute` | `WS-AUTH-001-12I` |
 | `project.guide_compilation.request` (active) | `project.guide_compilation.request` | `WS-AUTH-001-12I` |
 | `project.guide_compilation.execute` (active) | `project.guide_compilation.execute` | `WS-AUTH-001-12I` |
 | `project.guide_sufficiency.warnings.acknowledge` (active) | `project.guide.manage` | `WS-AUTH-001-12E` |
@@ -1703,19 +1709,23 @@ frontend, enable blockchain settlement, add source adapters, automate routing,
 or create an agent workspace.
 
 
-### Automatic compilation request origin
+### Explicit compilation request origin
 
-`project.guide_compilation.request_automatic` requires current fixed
-`workstream.project.setup` authority and the existing compilation execution
-permission. The request records `automatic_source_ready` plus the exact committed
-source mutation operation and source authorization event. Human requests record
-`project_manager` with neither source selector. Mixed or incomplete tuples deny.
-Source consent is immutable; later revocation of its original manager does not
-turn the service into that manager. Request replay still requires the requesting
-actor's current authority, held through receipt classification. Automatic input
-is resolved from owned source/setup rows and verified ART material; callers
-cannot supply provider input or claimed context hashes. Neither trigger approves
-or activates guide policies.
+The public initial assistance and provider-free rules routes both require current
+human exact-project Project Manager authority for
+`project.guide_compilation.request`. The owner binds immutable guide/source/setup
+custody and the selected mode before reservation. Same-key mode substitution
+conflicts after fresh authorization. Composition owns provider/runtime settings;
+public callers cannot supply them. Recovery republishes committed requests only,
+and delivery rejects absent exact PM request custody.
+
+`project.guide_compilation.request_automatic` remains a readable historical
+identifier with inactive availability (the typed catalogue uses `planned`). It
+cannot authorize new execution; that catalogue value promises no future automatic
+mode. Historical `automatic_source_ready` receipts remain retained evidence and
+cannot be converted into PM requests. Upload readiness creates no request.
+Execution, validation, independent PRE/POST approvals and activation retain their
+existing authority boundaries. Neither initial mode approves or activates policies.
 
 
 ### Complete guide activation custody

@@ -117,6 +117,7 @@ _FACTS_KEYS = frozenset(
         "landed_commit_sha",
         "base_ref",
         "head_sha",
+        "head_commit_message",
         "author",
         "reviews",
         "changed_files_count",
@@ -154,17 +155,25 @@ def evaluate_proof(
     input_value: object,
 ) -> list[dict[str, object]]:
     """Return findings for one proof; it passes only when it matches the forge facts."""
+    proof, findings = parse_proof(raw)
+    if proof is None:
+        return findings
+    return findings + claim_findings(proof) + compare_forge_facts(proof, configuration, input_value)
+
+
+def parse_proof(raw: bytes | None) -> tuple[dict | None, list[dict[str, object]]]:
+    """Read bounded project claims without requesting forge facts or accepting work."""
     if raw is None:
-        return [_finding("missing", "The submission must contain proof.json at its root.")]
+        return None, [_finding("missing", "The submission must contain proof.json at its root.")]
     if len(raw) > MAX_PROOF_BYTES:
-        return [_finding("too_large", "proof.json must be at most 64 KiB.")]
+        return None, [_finding("too_large", "proof.json must be at most 64 KiB.")]
     try:
         proof = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError, RecursionError):
-        return [_finding("invalid_json", "proof.json must be valid UTF-8 JSON.")]
+        return None, [_finding("invalid_json", "proof.json must be valid UTF-8 JSON.")]
     if not isinstance(proof, dict):
-        return [_finding("invalid_json", "proof.json must contain a JSON object.")]
-    return claim_findings(proof) + compare_forge_facts(proof, configuration, input_value)
+        return None, [_finding("invalid_json", "proof.json must contain a JSON object.")]
+    return proof, []
 
 
 def claim_findings(proof: dict) -> list[dict[str, object]]:
@@ -343,6 +352,16 @@ def _response(value: object) -> bool:
     )
 
 
+def _bounded_commit_message(value: object) -> bool:
+    """A forge message is bounded UTF-8 text, never a truncated claim."""
+    if not isinstance(value, str):
+        return False
+    try:
+        return len(value.encode("utf-8")) <= 65_536
+    except UnicodeEncodeError:
+        return False
+
+
 def valid_facts(facts: object) -> bool:
     """Accept only the exact ``workstream.forge_change_facts.v1`` shape."""
     if not _record(facts, _FACTS_KEYS) or facts["schema_version"] != FORGE_FACTS_SCHEMA:
@@ -365,6 +384,7 @@ def valid_facts(facts: object) -> bool:
         and (not merged or facts["state"] == "closed")
         and isinstance(facts["base_ref"], str)
         and _sha(facts["head_sha"])
+        and _bounded_commit_message(facts["head_commit_message"])
         and _actor(facts["author"])
         and isinstance(facts["reviews"], list)
         and all(_review(review) for review in facts["reviews"])

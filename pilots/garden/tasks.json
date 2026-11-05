@@ -1,0 +1,16 @@
+[
+  {
+    "title": "Correct Garden's local PostgreSQL port-conflict instructions",
+    "description": "The project guide applies. At the guide's Garden source baseline, README says changing only DATABASE_URL resolves a conflict on host port 55432. Onboarding correctly says the compose.dev.yaml host mapping must change too. Recheck current main, then update README with consistent instructions and a link to onboarding. Distinguish the alternative host port from PostgreSQL's container port 5432. Keep this a documentation-only change: do not change deployed configuration, credentials or volumes. Explain the verified compose mapping in the PR and run required repository checks. Include this Workstream task's actual UUID as the final head-commit trailer before obtaining review. Submit the merged PR's proof ZIP described by the project guide.",
+    "task_type": "engineering_documentation",
+    "skill_tags": ["documentation", "docker", "postgresql"],
+    "source_type": "manual"
+  },
+  {
+    "title": "Document Garden's Workstream contribution handoff",
+    "description": "The project guide applies. Once the Garden Workstream guide and checker contract are approved, add a concise contributor page explaining the native Workstream task, claim, task marker before final GitHub review, required checks and merge, root proof.json ZIP, and the difference between PRE feedback and POST evidence. Link the page from CONTRIBUTING while preserving ordinary GitHub contributions. State that credentials never belong in the ZIP and use obvious placeholders for task IDs, PR numbers and commit SHAs. Keep this documentation-only; do not build issue synchronization, a UI or a new authentication flow. Verify links and consistency with the approved guide, obtain independent review and merge, then submit this task's real proof ZIP.",
+    "task_type": "engineering_documentation",
+    "skill_tags": ["documentation", "contribution-workflow"],
+    "source_type": "manual"
+  }
+]

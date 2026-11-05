@@ -194,9 +194,6 @@ async def test_manual_dispatch_retains_one_human_request_and_one_execution(
                 "setup_generation": row.setup_generation,
                 "task_id": project_guide_compilation_task_id(row.setup_run_id, row.setup_generation),
             }
-            def forbidden_automatic(*args):
-                pytest.fail("manual delivery invoked automatic request authority")
-            monkeypatch.setattr(worker, "guide_compilation_request_authority", forbidden_automatic)
             async def deliver():
                 return await worker._run_project_guide_compilation(
                     ProjectGuideCompilationDelivery(**payload)

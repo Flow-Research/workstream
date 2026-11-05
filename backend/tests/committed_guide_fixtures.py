@@ -247,9 +247,8 @@ async def create_compiled_report_fixture(
     post_submit_registry_spec=None,
     document_access_factory=None,
 ) -> str:
-    """Project a scripted unified result under real service authority and custody."""
+    """Request as the PM, then project a scripted result under service custody."""
     from app.adapters.auth import (
-        guide_compilation_request_authority,
         guide_compilation_execution_authority,
         guide_sufficiency_projection_authorization,
         artifact_policy_projection_authorization,
@@ -259,12 +258,6 @@ async def create_compiled_report_fixture(
         ProjectGuideProjectionCommand,
         ProjectGuideCompilationExecutionClassification,
     )
-    from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
-    from app.modules.projects.guide_compilation.request_inputs import (
-        CompilationRequestInputs,
-        automatic_request_selector,
-    )
-    from app.modules.projects.guide_compilation.service import GuideCompilationService
     from app.modules.projects.guide_compilation.orchestrator import (
         project_guide_compilation_execution_port,
     )
@@ -305,23 +298,22 @@ async def create_compiled_report_fixture(
                 raise
 
         selected_document_access_factory = observed_document_access
+    from app.db.session import get_database_url
+    from app.modules.authorization.models import AdminRoleGrant
+    from tests.projects.guide_compilation.test_authorized_request_service import _seed_human
+    from tests.projects.guide_compilation.pending_source import request_pending_source
+
     async with sessions() as session:
-        setup = await session.get(ProjectSetupRun, str(manifest.setup_run_id))
-        setup.status = setup.current_step = "queued"
-        setup.celery_task_id = project_guide_compilation_task_id(setup.id, setup.setup_generation)
-        await session.commit()
-    async with sessions() as session:
-        async with guide_compilation_request_authority(
-            session,
-            automatic_request_selector(manifest.setup_run_id, manifest.setup_generation),
-        ) as (authority, actor):
-            request = await GuideCompilationService(
-                session,
-                authority,
-                request_inputs=CompilationRequestInputs(
-                    guide_document_manifest_port(session), configuration
-                ),
-            ).request_automatic(actor=actor, setup_run_id=manifest.setup_run_id)
+        grant = await session.scalar(select(AdminRoleGrant.id).where(
+            AdminRoleGrant.scope_project_id == str(manifest.project_id),
+            AdminRoleGrant.role == "project_manager", AdminRoleGrant.status == "active",
+        ))
+    if grant is None:
+        await _seed_human(get_database_url(), {"project": manifest.project_id})
+    request = await request_pending_source(sessions, manifest.setup_run_id, configuration)
+    from tests.projects.guide_compilation.helpers import acknowledge_requested_setup
+
+    await acknowledge_requested_setup(sessions, request)
 
     class Runtime:
         identity = configuration.adapter_identity

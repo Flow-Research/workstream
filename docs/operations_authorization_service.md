@@ -733,9 +733,8 @@ unavailable. Dispatcher authority grants no feature permission. Do not create a
 shared review service or a database service-grant table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
-`workstream.project.setup`, now with exactly six static memberships:
+`workstream.project.setup`. Its execution memberships include:
 `project.guide_sufficiency.run`,
-`project.guide_compilation.request_automatic`,
 `project.guide_compilation.execute`,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
@@ -1197,12 +1196,15 @@ decisions and returns the original document IDs and initial setup response.
 Upload each declared document through
 `POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`
 with its declared content type and a UUID replay key. Exact membership and
-current ingest authority are checked before reading bytes. Only committed
-readiness of every declared document can dispatch setup. Celery receives
-identifiers after commit; prepared authorization handles must never appear in
-task arguments, logs or serialized state. The existing bounded continuation
-and dispatch recovery paths handle post-commit failures without another upload
-or compilation attempt.
+current ingest authority are checked before reading bytes. Committed readiness
+of every declared document creates no compilation request. The current human
+exact-project Project Manager explicitly calls the guide's `/setup` route for
+assistance or `/requirements/compile` for uploaded provider-free rules, with a
+UUID `Idempotency-Key` and no body. Both use
+`project.guide_compilation.request`; callers supply no runtime/model settings.
+Celery receives identifiers after request commit; prepared authorization handles
+must never appear in task arguments, logs or serialized state. Bounded recovery
+republishes only committed explicit requests, without another upload or attempt.
 
 The ordered task-example list and document declarations are immutable guide
 metadata in PostgreSQL; changes require a new guide version. Original document
@@ -1278,14 +1280,15 @@ authorization evidence to force rollback. A populated rollback requires an
 explicit reviewed data-retention and migration plan.
 
 
-POL-04B1 adds the hidden `project.guide_compilation.request_automatic` action
-under the existing `project.guide_compilation.execute` permission, restricted to
-`workstream.project.setup`. It binds the exact committed source mutation and its
-authorization event to one setup generation. Both human and automatic request
-replays recheck current authority inside the receipt transaction. POL-04B
-composes this authority with execution, projections and finalization in the live
-Celery worker. The automatic operation stops at findings or draft proposals;
-POL-05A owns manager review, correction and pre-submit approval.
+The historical `project.guide_compilation.request_automatic` identifier is
+inactive (catalogue availability `planned`); it grants no current authority and
+promises no future automatic mode. Retained automatic-request receipts remain
+readable evidence but cannot authorize a new inference attempt. Both initial
+routes require current human exact-project Project Manager request authority;
+service delivery requires their exact committed request. Upload and source scans
+cannot manufacture a request. The fixed worker executes, projects and finalizes
+the authorized attempt, stopping at findings or draft proposals. Manager review,
+correction, separate PRE/POST approvals and activation remain distinct operations.
 AUTH-12F4 supplies exact-project Project Manager authority; POL-05B supplies public composition and manual dispatch. Complete
 proposal content requires current exact-project manager authority; Operator and
 Audit diagnostic permissions do not grant it. Proposal services require explicit

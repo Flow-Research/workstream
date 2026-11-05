@@ -766,6 +766,8 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}": "project.read",
         "POST /api/v1/projects": "project.create",
         "POST /api/v1/projects/{project_id}/guides": "project.guide.create",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/setup": "project.guide_compilation.request",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile": "project.guide_compilation.request",
         "PATCH /api/v1/projects/{project_id}/guides/{guide_id}": "project.guide.update",
         "PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy": (
             "project.review_policy.update"

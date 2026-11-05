@@ -108,6 +108,7 @@ FACTS = {
     "landed_commit_sha": MERGE,
     "base_ref": "main",
     "head_sha": HEAD,
+    "head_commit_message": "Improve documentation",
     "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
     "reviews": [_review("61", "approved")],
     "changed_files_count": 1,
@@ -744,12 +745,12 @@ def test_operator_only_approval_is_a_non_blocking_warning() -> None:
 
 def test_published_registry_body_is_post_only_and_backend_valid() -> None:
     digest = "sha256:" + "d" * 64
-    spec = ExternalCheckerRegistrySpec.model_validate(publish_local.registry_spec(digest, "v3"))
+    spec = ExternalCheckerRegistrySpec.model_validate(publish_local.registry_spec(digest, "v4"))
     assert (spec.phase, spec.image_digest, spec.capability_id, spec.capability_version) == (
         "post_submit",
         digest,
         "harnessy.work_proof",
-        "v3",
+        "v4",
     )
     full = {
         **CONFIGURATION,
@@ -992,7 +993,7 @@ def test_locator_reads_actual_proof_and_emits_bound_selector(
     }
     assert result == {**body, "locator_digest": publish_local._hash(body)}
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+        publish_local.registry_spec("sha256:" + "d" * 64, "v4")
     )
     spec.input_schema.validate_instance(request["input"])
     spec.output_schema.validate_instance(result)
@@ -1042,14 +1043,14 @@ def test_final_invocation_reads_actual_proof_and_judges_facts(
     assert [finding.code for finding in parsed.findings] == expected_codes
     assert parsed.verdict == ("failed" if expected_codes else "passed")
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+        publish_local.registry_spec("sha256:" + "d" * 64, "v4")
     )
     spec.output_schema.validate_instance({key: value for key, value in result.items() if key != "result_digest"})
 
 
 def test_published_schema_distinguishes_locator_final_and_infrastructure() -> None:
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+        publish_local.registry_spec("sha256:" + "d" * 64, "v4")
     )
     assert spec.input_schema.document["properties"]["workstream_forge_facts_stage"] == {
         "const": "locate"
@@ -1089,7 +1090,7 @@ def test_published_registry_validates_actual_normal_execution_result_request() -
     from tests.checkers.external.support import execution_identity, execution_material, registry_entry
 
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+        publish_local.registry_spec("sha256:" + "d" * 64, "v4")
     )
     values = registry_entry("post_submit").model_dump()
     values.update(spec.model_dump(), entry_digest=spec.spec_digest)

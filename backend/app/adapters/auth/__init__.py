@@ -264,7 +264,6 @@ __all__ = (
     "compensation_adapter_binding_authorization",
     "contribution_policy_authorization",
     "guide_compilation_execution_authority",
-    "guide_compilation_request_authority",
     "guide_sufficiency_projection_authorization",
     "setup_finalization_authorization",
     "task_authorization",
@@ -273,7 +272,7 @@ __all__ = (
 
 
 @asynccontextmanager
-async def guide_compilation_request_authority(session, operation_id):
+async def _guide_compilation_execution_context(session, operation_id):
     """Compose fresh fixed-service AUTH without constructing a human actor."""
     try:
         async with fixed_service_prepared_authorization(
@@ -301,7 +300,7 @@ async def guide_compilation_request_authority(session, operation_id):
 @asynccontextmanager
 async def guide_compilation_execution_authority(session, state):
     """Reuse the same explicit service composition for an exact execution operation."""
-    async with guide_compilation_request_authority(
+    async with _guide_compilation_execution_context(
         session, state.preflight_facts.operation_id
     ) as composed:
         yield composed

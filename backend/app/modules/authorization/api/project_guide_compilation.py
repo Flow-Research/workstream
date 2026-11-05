@@ -240,7 +240,11 @@ def project_guide_compilation_automatic_request_authority_digest(
 
 
 class ProjectGuideCompilationAuthorizationPort(Protocol[PreparedHandleT]):
-    """Prepare and consume exact inactive compilation authority."""
+    """Prepare and consume exact compilation authority."""
+
+    async def lock_request_scope(self, *, actor: ActorIdentityFacts, project_id: UUID) -> None:
+        """Hold current PM authority before inspecting source availability."""
+        ...
 
     async def prepare_request(
         self, *, actor: ActorIdentityFacts, facts: ProjectGuideCompilationRequestFacts,

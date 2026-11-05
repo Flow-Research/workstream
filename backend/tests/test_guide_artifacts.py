@@ -315,12 +315,7 @@ def _service(
     async def runtime():
         yield preparation, admission, orchestrator
 
-    async def on_document_stored(attempt_id):
-        assert not authority.transaction_active
-        assert preparation.pending_cleanup_count == 0
-        orchestrator.continuations.append(attempt_id)
-
-    return GuideArtifactIngestService(runtime, authority, on_document_stored)
+    return GuideArtifactIngestService(runtime, authority)
 
 
 @pytest.mark.asyncio
@@ -556,7 +551,7 @@ async def test_guide_ingest_uses_server_commitment_and_existing_put_path(
         result = await command.ingest(authorization_context=authority.context, project_id=PROJECT_ID, guide_id=GUIDE_ID, source_item_id=ITEM_ID, idempotency_key=uuid4(), byte_source=_bytes(DOCUMENT_BYTES[:7], DOCUMENT_BYTES[7:]), content_type='application/pdf', content_length=None)
         assert result.sha256 == authority.admissions[0].sha256
         assert result.byte_count == len(DOCUMENT_BYTES)
-        assert orchestrator.continuations == [ATTEMPT_ID]
+        assert orchestrator.continuations == []
         assert result.status == "document_stored"
         assert orchestrator.puts == 1
         assert orchestrator.resolutions == 0

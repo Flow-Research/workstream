@@ -212,7 +212,7 @@ automated acceptance. Human review/revision still belongs to the complete v0.1 r
 
 ## Executive Snapshot
 
-Identity, authorization, guide ingestion, automatic unified compilation and
+Identity, authorization, guide ingestion, unified compilation and
 public manager proposal/approval operations and terminal guide activation are
 implemented. Compilation uses bounded source read/search tools behind the chosen
 runtime adapter. The OpenAI Agents SDK and OmniCoreAgent adapters are statically
@@ -224,7 +224,14 @@ the bounded runtime swap for Project Guide compilation, not deployed Flow/AWS
 operation or an independently interoperable protocol implementation. Compilation
 runs either through inference or
 through the provider-free `manager_authored` runtime, which converts a
-manager-uploaded rules document with no inference. Managers discover exact activation selections through the authorized
+manager-uploaded rules document with no inference. The intended merged behavior
+of [explicit guide assistance and Garden drill](../.commitrail/changes/explicit-guide-assistance-and-garden-drill.md)
+is custody-only upload followed by an exact-project PM request: `/guides/{guide_id}/setup`
+for assistance or `/guides/{guide_id}/requirements/compile` for provider-free
+rules. These routes take no model/runtime settings and retain separate approvals
+and activation. Historical automatic-start drill reports remain historical
+evidence; deployment of the explicit request flow and the real Garden GitHub
+review/merge/contribution journey require fresh evidence. Managers discover exact activation selections through the authorized
 draft post-policy read; Finance publication remains separate. Task policy
 lineage, public ZIP preparation and admission-backed immutable Submission creation
 are implemented for initial work and exact checker remediation. Their complete
@@ -615,7 +622,7 @@ cannot be reused as post-submission review-gate evidence. See the
 | Authorization kernel | **Live foundation** | Closed action/permission catalogues; deny-by-default evaluation; grants; exact-project, privacy-safe candidate read now consumed by the CLI; fixed services; rate controls; opaque transaction-bound PREP; atomic decision evidence; CLI scope-filtered administrative grant/catalogue reads and explicit keyed grant issue/revoke consume existing public APIs without local authority decisions | Activate only the remaining owner-proven TASK, checker, REV, and CON boundaries; remove obsolete authority after replacement paths are live |
 | System project catalogue | **Bounded public API and CLI read** | WS-CLI-001-46 adds `GET /api/v1/projects` and `workstream project list` for current system Project Manager, Operator, Finance or Audit `project.read` grants; each signed page exposes only ID, name and status. `me projects` retains exact-grant membership semantics. | System-catalogue TUI picker integration, deployed CLI and hosted conformance remain separate |
 | Project Guide source custody | **Live foundation** | Guide creation declares documents and task examples; public document upload; immutable internal metadata snapshots; draft guide and review/revision policy writes with fresh-authorized exact replay of original receipts; exact run-scoped setup reads and assigned-task locked-original reads; S3-backed originals and isolated agent document inspection; exact document generation through separate manager approvals and public exact-authorized CP07 activation; Project Manager guide list, guide detail, activation readiness dry run and verified original read-back (PILOT-READ-3); the CLI exposes existing administrative active-chain and retained sufficiency/artifact-policy reads, keyed human sufficiency writes, and separate manual artifact-policy draft create/update with backend-owned policy decisions | Hosted original upload/read-back, task examples and Celery inference are proven. The current guide has independent human attachments, separate approvals and activation; earlier guide approvals remain retained history. Complete reader/isolation and contribution-journey scenarios; manual drafts are not compiled activation proposals and deployed CLI remains separate |
-| Unified Project Guide compilation | **Live setup and manager proposal operations** | Committed original-document readiness dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; typed per-requirement classification and checker specifications; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody. Neutral read/search tools support statically registered OpenAI Agents SDK and OmniCoreAgent adapters in mutually exclusive inference images, while provider-free `manager_authored` compiles a manager-uploaded rules document with no inference or provider resources ([runtime initiative](../.commitrail/initiatives/WS-AGENT-001/OVERVIEW.md), [manager-authored record](../.commitrail/changes/manager-authored-guide-runtime.md)). Inference attempts snapshot an exact immutable model profile and use the shared project-funded proxy; fixed document-tool limits must fit that profile and provider credentials remain outside the setup process. PR #697 supplies a source-sufficient proposal even without registered implementations; retained prior results keep exact hashes and reads and cannot execute through a compatibility path. Exact Omni SDK, mutually exclusive release-image, parser-isolation and real-MinIO proofs pass. Both inference adapters pass the same original-guide public API, durable Celery, real-parser and MinIO path; the Omni run stopped at a warning-ready manager draft with no bindings, approval or activation. The Terminal Systems handoff has project-owned PRE and POST implementations. POST uses the shared bounded model session, isolated trial capability and approved revision material. PR #697 removes registry, image and runtime choices from model input and output; human-selected phase attachments are validated at approval. Initial setup receives assigned guide documents and task examples only, apart from trusted system instructions. Explicit corrections additionally receive the PM's bounded written feedback, without prior proposals or image selections. Project semantics remain outside the generic Rust service. The [checker implementation](../pilots/terminal_systems/checkers/README.md) separates rule, service-image, storage and trial qualification. | Source-only setup and explicit PM correction are live-proven. Guide 28 suggestions were independently mapped by the manager to one external PRE and POST image; separate approvals/activation led to the small task's accepted v2 and public contribution. Earlier guide 25/26 evidence remains retained. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). |
+| Unified Project Guide compilation | **Live setup and manager proposal operations** | Upload commits custody only; an explicit exact-project PM request selects assistance (`/setup`) or provider-free uploaded manager rules (`/requirements/compile`) and dispatches one immutable attempt through Celery; complete result and crash/recovery custody; distinct pre/post proposals; typed per-requirement classification and checker specifications; deterministic sufficiency and submission-artifact-policy projections; immutable authorized setup finalization; public exact manager review, pre-submit approval and manual correction dispatch; automatic deterministic post-policy derivation, public complete policy read, separate approval and shared correction custody. Neutral read/search tools support statically registered OpenAI Agents SDK and OmniCoreAgent adapters in mutually exclusive inference images, while provider-free `manager_authored` compiles a manager-uploaded rules document with no inference or provider resources ([runtime initiative](../.commitrail/initiatives/WS-AGENT-001/OVERVIEW.md), [manager-authored record](../.commitrail/changes/manager-authored-guide-runtime.md)). Inference attempts snapshot an exact immutable model profile and use the shared project-funded proxy; fixed document-tool limits must fit that profile and provider credentials remain outside the setup process. PR #697 supplies a source-sufficient proposal even without registered implementations; retained prior results keep exact hashes and reads and cannot execute through a compatibility path. Exact Omni SDK, mutually exclusive release-image, parser-isolation and real-MinIO proofs pass. Both inference adapters pass the same original-guide public API, durable Celery, real-parser and MinIO path; the Omni run stopped at a warning-ready manager draft with no bindings, approval or activation. The Terminal Systems handoff has project-owned PRE and POST implementations. POST uses the shared bounded model session, isolated trial capability and approved revision material. PR #697 removes registry, image and runtime choices from model input and output; human-selected phase attachments are validated at approval. Initial setup receives assigned guide documents and task examples only, apart from trusted system instructions. Explicit corrections additionally receive the PM's bounded written feedback, without prior proposals or image selections. Project semantics remain outside the generic Rust service. The [checker implementation](../pilots/terminal_systems/checkers/README.md) separates rule, service-image, storage and trial qualification. | Historical source-only setup and explicit PM correction are live-proven. The new initial-request routes and Garden live GitHub journey need fresh deployed evidence; controlled composition cannot establish eligible human review or merge. Guide 28 suggestions were independently mapped by the manager to one external PRE and POST image; separate approvals/activation led to the small task's accepted v2 and public contribution. Earlier guide 25/26 evidence remains retained. [Current checkpoint](reports/terminal-systems-hosted-drill-2026-10-27.md). |
 | Contribution policy administration | **Public Finance policy workflow; binding administration internal** | Internal Finance Authority adapter-binding lifecycle; public ContributionPolicy discovery/read/create/update/publish/retire with exact Finance Authority and recoverable draft selectors, and a Finance list of every version (PILOT-READ-3); immutable operation and event history; internal exact selected-version validation; CP07 binding with live exact-project manager authority of the selected published version to the active guide generation | The bounded local drill and hosted unpaid-policy publication/read-back passed. Remaining policy branches and complete contribution effects need qualification; publication alone creates no contribution |
 | Task readiness and claim | **Foundation with grant-backed manager and contributor commands** | Task records, assignments and locked work context; guide-bound ContributionPolicyVersion locked before `READY` and copied to TaskAssignment; detached project/guide display; public project-scoped ready, management and operational queues with distinct current grant authority and signed bounded live pagination, with typed task status and manager filters by status, assignee, native import batch and update time (PILOT-READ-2); contributor cross-project own-assignment, attempt and summary reads under current Submitter grants (PILOT-READ-2); Project Manager project-wide attempt, claim, summary and import-batch reads (PILOT-READ-3); public contributor/management detail with exact project and assignment authority; separate current live work-context projections with exact receipt-selected review/revision/ContributionPolicy identities and no obsolete economic fields; explicit management/operational/audit locked-context projections using one historical resolver, with separate public manager, system-Operator and Audit Authority access; immutable contributor/management requirements using one historical translator, with public exact Contributor and Manager authority; the CLI exposes the three exact manager requirements/context reads separately from contributor commands (WS-CLI-001-27); bounded public Audit Authority lifecycle evidence with atomic project/task scoping and exact transition references; separate CLI audit commands consume those two existing Audit Authority GETs with explicit continuation; public manager create/screen/release use exact covered Project Manager authority, atomic audit and replay; claim/contributor context use exact-project Submitter grants; assigned context lists documents only and distinct `task.guide.read` verifies locked originals before delivery; separate manager context; durable claim retry receipts with fresh authority and exact assignment checks; hidden exact-assignment invalidation with committed cause verification, delivery fencing, exact fixed-service authority and decision-bound immutable release evidence; atomic authority-loss publication and registered prefork delivery; PILOT-14 exposes both locked contribution types in ready rows and Contributor detail for active exact-project Submitters or Reviewers as unpaid or exact instrument/unit/quantity awards, without Finance binding facts; claim remain Submitter-only | The bounded local journey passed; hosted import, screening, release, immediate claim and exact Claim replay passed for queue recovery. Complete the remaining authority/recovery matrix and contribution journey |
 | Operator task CLI | **Existing public task operations consumed by the CLI** | The Operator CLI provides separate status-only project pages and exact-project locked-reference reads. Backend Operator authority, assignment consistency, locked lineage and audit remain decisive. Claim starts contributor work atomically; there is no Operator start command. | Native public-API proof is bounded to existing fixtures; hosted/deployed operation, other Operator workflows and published binary remain separate |
@@ -667,8 +674,16 @@ cannot be reused as post-submission review-gate evidence. See the
   locked repository scope, retrieves facts and invokes the image for evaluation;
   it does not parse project proof files. Completed evaluation retains the selector,
   input/facts hashes and verified material identities. Missing facts never pass.
-  Selecting the checker into guide rules, hosted credentials, separate storage of
-  fetched response bytes and the Garden project drill remain separate work.
+  The intended expanded facts include the independently retrieved exact-head
+  commit message and response hash, requiring GitHub App Contents read permission
+  and explicit republishing of affected strict images. The
+  [Garden image](../external_checkers/garden_proof/README.md) supplies separate PRE
+  and POST configurations; only its external POST interprets the exact task
+  trailer, without mapping GitHub authors to Workstream identities. The
+  [Garden fixture](../pilots/garden/README.md) prepares guide/rules/task inputs.
+  Publishing/registration, hosted credentials, separate storage of fetched response
+  bytes and a real reviewed/merged Garden PR through durable public APIs to exact
+  contribution evidence remain distinct from controlled image composition proof.
 - AWS S3 is the hosted artifact target, MinIO proves the storage protocol in
   development and CI, and all storage access stays behind `ArtifactStore`.
   Development/CI MinIO uses a shared pinned-source build; existing artifact
@@ -1076,8 +1091,10 @@ cannot be reused as post-submission review-gate evidence. See the
   and checks bounded format, digest and size.
   Committed originals do not bypass the separate verification required for
   submission ZIPs. Embedded document bodies and extractors are removed.
-- Committed original-document readiness automatically runs one unified compilation
-  through Celery. It persists sufficiency findings and separate pre-submit and
+- Committed original-document readiness stores custody only. An exact-project
+  Project Manager explicitly calls `/guides/{guide_id}/setup` for assistance or
+  `/guides/{guide_id}/requirements/compile` for uploaded manager-authored rules;
+  the committed request runs one unified compilation through Celery. It persists sufficiency findings and separate pre-submit and
   post-submit proposals, then projects the sufficiency and artifact-policy
   components and atomically finalizes the setup at draft output. A blocked guide
   ends at sufficiency evidence, with no policy projection. Missing checker
@@ -1092,7 +1109,10 @@ cannot be reused as post-submission review-gate evidence. See the
   PM's written feedback, never prior proposals or image selections; exact document grants exclude other projects
   and runs. The provider-free
   `manager_authored` runtime instead converts one manager-uploaded rules
-  document into the same untrusted result; it reads every original through the
+  document into the same untrusted result. Its complete `text/markdown` body is
+  the `workstream.project_guide_rules.v1` JSON object, not ordinary prose; see the
+  [Garden fixture](../pilots/garden/manager-rules.md). Changed rules require a new
+  guide version. No global toggle is needed for the public rules route. It reads every original through the
   same grant, records those reads without provider resources, and stores
   provider, API and model `none` on the attempt. Known invalid inference output
   receives at most two corrections per drafting or review phase within the original
@@ -1419,7 +1439,10 @@ Delivered foundations (bounded local journey proven; no deployment claim)
   WS-EXEC-001-02 public Smol API/Celery proof + required hosted intake configuration
     -> locked true: review_pending; locked false: shared acceptance + contribution + applicable award
     -> intended hosted deployment proof with actual Flow/AWS identities remains separate
-  automatic unified setup + separate manager pre/post approvals
+  verified guide originals -> explicit PM assistance OR provider-free uploaded rules
+    -> unified compilation -> separate manager pre/post approvals
+    -> existing activation guards (human review defaults true; approved false supported)
+    -> Garden live GitHub review/merge/contribution proof remains separate
   public Finance ContributionPolicy administration + exact selected-version validation
   public manager activation context + exact guide activation/binding
   WS-CLI-001-38 keyed human guide sufficiency diagnostic + warning acknowledgement
@@ -1623,6 +1646,12 @@ v0.1 is not ready until all of the following are true:
   async inference, public review/revision configuration, separate PRE/POST
   approvals, Finance publication, activation and both policy outcomes. It does not establish live
   model quality or deployment readiness. See the [connected proof](../.commitrail/changes/public-guide-to-contribution-proof.md).
+  Fresh deployment proof must cover custody-only upload, both explicit initial
+  PM request routes and committed-request recovery. The Garden drill additionally
+  needs the republished exact image, a real task-linked GitHub PR with eligible
+  independent review and merge, durable public-API processing and the exact
+  submitter ContributionRecord; source fixtures and controlled facts are not
+  that evidence. See the [current change](../.commitrail/changes/explicit-guide-assistance-and-garden-drill.md).
   The provider-free `manager_authored` runtime removes the inference dependency
   from local and hosted setup and selects no provider credential. It proves
   nothing about model quality. Both inference runtimes now pass the bounded

@@ -1,0 +1,20 @@
+{
+  "version": "garden-engineering-drill-1",
+  "change_summary": "Define small Garden engineering contributions with independently verified pull-request evidence and task association.",
+  "task_examples": [
+    {
+      "title": "Correct the local PostgreSQL port-conflict instructions",
+      "content": "Garden README currently suggests changing only DATABASE_URL if host port 55432 is occupied. Align it with onboarding: change the compose.dev.yaml host mapping and DATABASE_URL together, keep container port 5432 distinct, and link the detailed instructions. Do not change runtime configuration or delete data volumes.",
+      "labels": ["documentation", "developer-experience"]
+    },
+    {
+      "title": "Document the Garden Workstream contribution handoff",
+      "content": "Add a concise contributor page for the approved Workstream project: claim, task trailer before final review, required GitHub checks and merge, proof.json ZIP and PRE/POST feedback. Link it from CONTRIBUTING without replacing the ordinary GitHub contribution path. Use explicit placeholders and no credentials.",
+      "labels": ["documentation", "contribution-workflow"]
+    }
+  ],
+  "documents": [
+    {"label": "guide.md", "media_type": "text/markdown"},
+    {"label": "manager-rules.md", "media_type": "text/markdown"}
+  ]
+}

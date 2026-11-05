@@ -26,6 +26,7 @@ from app.modules.projects.guide_compilation.service import (
     load_compilation_execution_state,
 )
 
+from .helpers import acknowledge_requested_setup
 from .helpers import context, identity, seed_database, DOCUMENT_VERSION_ID, PUT_ATTEMPT_ID
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
 
@@ -48,6 +49,7 @@ async def test_context_rebuilds_the_exact_authorized_art_backed_identity(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, request)
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
         async with factory() as session:
@@ -83,6 +85,7 @@ async def test_context_drift_fails_before_dispatch(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, request)
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
         drifted = replace(
@@ -118,6 +121,7 @@ async def test_context_requires_fresh_session_and_current_lineage(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, request)
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
         async with factory() as session, session.begin():
@@ -161,6 +165,7 @@ async def test_context_enforces_the_canonical_prompt_limit(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, request)
         async with factory() as session:
             state = await load_compilation_execution_state(session, request.attempt_id)
         monkeypatch.setattr(

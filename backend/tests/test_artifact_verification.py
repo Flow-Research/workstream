@@ -250,7 +250,7 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         job_id,
         submission_task_contexts=task_contexts,
     )
-    continuation_delay.assert_called_once_with(str(attempt_id))
+    continuation_delay.assert_not_called()
     celery_module = importlib.import_module("app.workers.celery_app")
     worker_module = importlib.import_module("app.workers.artifacts")
     celery_app = celery_module.celery_app

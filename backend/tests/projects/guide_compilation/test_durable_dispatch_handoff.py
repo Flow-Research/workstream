@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.projects.guide_compilation.service import GuideCompilationService
 
+from .helpers import acknowledge_requested_setup
 from .helpers import context, identity, seed_database, service_actor
 from .test_authorized_execution_service import _execution_service, _preflight
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
@@ -38,6 +39,7 @@ async def _requested(database_url: str):
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, receipt)
     finally:
         await engine.dispose()
     return values, receipt

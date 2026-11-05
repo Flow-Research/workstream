@@ -142,8 +142,12 @@ API-only development remains supported, but starting a native Celery process
 alone does not provide the isolated parser. The parser supports bounded read and
 search over the exact assigned Markdown, PDF, DOCX and PPTX originals; it exposes
 no shell or model-selected storage paths. Rebuild the local image after changing
-parser code. Committed original-document readiness runs one compilation and
-stops at findings and proposals; manager review and approval remain separate.
+parser code. Upload commits source custody only. After every original is ready,
+a current exact-project PM explicitly requests assistance at
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-free
+uploaded rules compilation at the same prefix's `requirements/compile` suffix.
+Both require a UUID `Idempotency-Key` and no body; manager review and separate
+approvals remain required. See the [local pilot](local-pilot.md#declare-and-upload-a-real-guide-document).
 
 ## Logs, Shutdown, And Reset
 

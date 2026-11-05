@@ -8,6 +8,7 @@ wire, grant and sandbox composition, not a GitHub read or durable ART custody.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import importlib.util
 import json
 import os
@@ -53,6 +54,7 @@ PUBLISH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PUBLISH)
 
 REGISTRY_ID = str(new_record_id())
+TASK_ID = str(new_record_id())
 URL = "https://github.com/acme/widgets/pull/12"
 RUN_URL = "https://github.com/acme/widgets/actions/runs/345"
 HEAD, MERGE = "e" * 40, "d" * 40
@@ -76,6 +78,7 @@ FACTS = {
     "landed_commit_sha": MERGE,
     "base_ref": "main",
     "head_sha": HEAD,
+    "head_commit_message": "Improve documentation",
     "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
     "reviews": [
         {
@@ -112,16 +115,27 @@ CONFIGURATION = {
 }
 
 
-def invocation(material_root, image_digest, *, locate):
+def invocation(material_root, image_digest, *, locate, garden=False, task_id=TASK_ID):
     """Give each pass its own exact request-bound grant over the same proof bytes."""
     grant_id = "extract_" + os.urandom(16).hex()
     grant_root = material_root / "workspaces" / grant_id
     workspace = grant_root / "materials/submission_archive"
     workspace.mkdir(parents=True, mode=0o700)
     proof_path = workspace / "proof.json"
-    proof_path.write_bytes(canonical(PROOF))
+    proof, facts, configuration = deepcopy(PROOF), deepcopy(FACTS), dict(CONFIGURATION)
+    if garden:
+        old, new = "acme/widgets", "Flow-Research/garden"
+        proof = {key: value.replace(old, new) if isinstance(value, str) else value
+                 for key, value in proof.items()}
+        facts.update(repository=new, change_url=proof["pr_url"],
+                     head_commit_message="Improve docs\n\nWorkstream-Task: " + TASK_ID + "\n")
+        facts["required_checks"][0]["run_url"] = proof["ci_run_url"]
+        configuration["repository"] = new
+    proof_path.write_bytes(canonical(proof))
     proof_path.chmod(0o400)
     request, manifest = request_and_manifest(image_digest, workspace)
+    if garden:
+        request["identity"]["task_id"] = task_id
     metadata = {
         key: request["registry"][key]
         for key in (
@@ -133,13 +147,24 @@ def invocation(material_root, image_digest, *, locate):
         )
     }
     metadata["registry_entry_id"] = REGISTRY_ID
-    spec = PUBLISH.registry_spec(image_digest, "v3")
+    if garden:
+        spec = importlib.util.spec_from_file_location(
+            "garden_publish", ROOT / "external_checkers/garden_proof/publish_local.py"
+        )
+        assert spec is not None and spec.loader is not None
+        publisher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(publisher)
+        spec = publisher.registry_spec(image_digest, "v1", "post_submit")
+    else:
+        spec = PUBLISH.registry_spec(image_digest, "v4")
     request["registry"] = {**spec, **metadata, "entry_digest": digest(spec)}
-    request["configuration"] = CONFIGURATION
-    request["configuration_sha256"] = digest(CONFIGURATION)
+    request["configuration"] = configuration
+    request["configuration_sha256"] = digest(configuration)
     request["input"] = (
-        {"workstream_forge_facts_stage": "locate"} if locate else {"forge_facts": FACTS}
+        {"workstream_forge_facts_stage": "locate"} if locate else {"forge_facts": facts}
     )
+    if garden:
+        request["input"]["task_id"] = task_id
     request["input_sha256"] = digest(request["input"])
     request = make_external_checker_execution_request(
         registry=ExternalCheckerRegistryEntry.model_validate_json(
@@ -206,6 +231,7 @@ def read_inspections(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--service", required=True, type=Path)
+    parser.add_argument("--garden-proof", action="store_true", help="qualify Garden task association using its image")
     parser.add_argument("--checker-image", default="ws-harnessy-forge:qualification")
     parser.add_argument("--registry-image", default="registry:2")
     args = parser.parse_args()
@@ -292,7 +318,7 @@ def main():
             )
             wait_for_service(service_process, address)
             locate_request, locate_grant = invocation(
-                material_root, image_digest, locate=True
+                material_root, image_digest, locate=True, garden=args.garden_proof
             )
             located = invoke(
                 address, locate_request, locate_grant, "locate_forge_change"
@@ -305,10 +331,10 @@ def main():
                     canonical(locate_request)
                 )
             )
-            if locator.change_url != URL or located["isolation"] is None:
+            if locator.change_url != (URL.replace("acme/widgets", "Flow-Research/garden") if args.garden_proof else URL) or located["isolation"] is None:
                 raise RuntimeError(f"image locator failed: {located}")
             final_request, final_grant = invocation(
-                material_root, image_digest, locate=False
+                material_root, image_digest, locate=False, garden=args.garden_proof
             )
             replay = invoke(address, final_request, locate_grant, "execute")
             if (
@@ -329,8 +355,18 @@ def main():
                 "isolation"
             ] is None:
                 raise RuntimeError(f"image evaluation failed: {evaluated}")
+            if args.garden_proof:
+                foreign_request, foreign_grant = invocation(
+                    material_root, image_digest, locate=False, garden=True,
+                    task_id=str(new_record_id()),
+                )
+                foreign = invoke(address, foreign_request, foreign_grant, "execute")
+                negative = ExternalCheckerExecutionResult.model_validate_json(canonical(foreign["result"]))
+                negative.validate_request(ExternalCheckerExecutionRequest.model_validate_json(canonical(foreign_request)))
+                if negative.verdict != "failed" or [item.code for item in negative.findings] != ["garden.proof.task_mismatch"]:
+                    raise RuntimeError("same PR passed for a different trusted task")
             inspections = read_inspections(inspection)
-            if len(inspections) != 2:
+            if len(inspections) != (3 if args.garden_proof else 2):
                 raise RuntimeError("unexpected sandbox invocation count")
             for inspected in inspections:
                 checker_ids.append(inspected["Id"])
@@ -359,9 +395,12 @@ def main():
                         status="PASS",
                         boundary="production-service-main/docker-dev/controlled-forge-facts",
                         platform_manifest_digest=image_digest,
+                        registry_endpoint=f"http://127.0.0.1:{port}",
+                        service_socket=str(address),
                         locator_digest=locator.locator_digest,
                         result_digest=result.result_digest,
-                        invocation_count=2,
+                        invocation_count=len(inspections),
+                        foreign_task_rejected=args.garden_proof,
                         grant_replay_rejected=True,
                         network_none=True,
                         material_read_only=True,

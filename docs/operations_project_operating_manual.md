@@ -31,7 +31,10 @@ remaining setup/activation work:
 - project guide metadata created with at least one ordinary-text task example and
   the complete PDF/DOCX/PPTX or UTF-8 Markdown (`.md`) document list
 - every declared original uploaded to ArtifactStore/S3 using its returned document ID
-- automatic setup starts after all declared documents have committed bytes
+- all declared originals have committed bytes, without triggering inference
+- the exact-project Project Manager explicitly requests assistance through
+  `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or submits uploaded
+  manager rules through `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
 - project owner setup material captured
 - latest project setup run visible through covered Project Manager or authorized
   Operator/Audit projection
@@ -126,8 +129,9 @@ a UUID `Idempotency-Key` on every request:
 
 Issuer role claims, contributor grants, and service tokens cannot invoke these
 public routes. A manual report is not an agent-run replay and does not occupy
-the authoritative verified-report slot. Committed original-document readiness dispatches one unified compilation under
-the fixed setup service. Its report binds exact opened document versions; a
+the authoritative verified-report slot. Only an explicit committed Project Manager
+request permits compilation under the fixed setup service; upload and recovery
+cannot manufacture that request. Its report binds exact opened document versions; a
 manual diagnostic report is neither reused nor linked as compilation output.
 The three former inference steps and sufficiency-run endpoint are removed.
 
@@ -136,6 +140,12 @@ suggestions and stops at a draft. Missing implementations do not block a
 source-sufficient proposal or create a warning. Humans choose the external images
 later during approval. An insufficient guide with an actual guide blocker or
 blocking finding stops without draft policy projection.
+Before an initial request reserves an attempt, the latest setup diagnostic
+projects both `status` and `current_step` as `not_requested`. The guide-create
+response and retained upload-custody row use `awaiting_documents`; that value
+does not mean compilation is queued. Document readiness and compilation request
+state are separate. Invalid task-example evidence can instead report
+`setup_input_invalid`.
 The latest setup diagnostic reflects durable invalid or unresolved provider
 outcomes without rewriting setup evidence. An uncertain attempt is never
 invoked again. Transport failures retry the same task and attempt. After bounded Celery retries
@@ -388,30 +398,37 @@ idempotency UUID does not establish provider support.
 
 ### Manager-authored guide rules
 
-An operator may select the provider-free `manager_authored` runtime
-(`WORKSTREAM_PROJECT_AGENT_RUNTIME=manager_authored` with
-`WORKSTREAM_PROJECT_AGENT_MODEL_PROVIDER`, `..._MODEL_API` and `..._MODEL` all set
-to `none`). The compilation then runs no inference: the Project Manager
-supplies the compilation result in a rules document uploaded with the guide.
+After uploading every declared original, the exact-project Project Manager calls
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile` to
+select provider-free `manager_authored` compilation. This requires no global
+runtime toggle. The Project Manager supplies the compilation result in a rules
+document uploaded with the guide. Ordinary Markdown prose is not a rules object;
+the complete original body must use the JSON format below.
 The rules can come from a person, a deterministic generator or any AI tool
 outside Workstream. Workstream treats them exactly like model output.
 The rules document is an ordinary guide original, so every reader of the
 locked guide, including contributors, can open it; keep internal notes out of
-it. The hosted release guide describes the provider-key file requirement;
-manager-authored compilation itself makes no inference call. All document reads
+it. Manager-authored compilation makes no inference call and requires no provider
+credentials for that attempt. All document reads
 use the same isolated parser and exact source-access custody.
 
 The runtime identifies the rules document by content, because guide manifests
 carry no source filenames and JSON is not an admitted guide media type:
 
-- Declare it as `text/markdown`. Label it `workstream-rules.json` so people can
-  find it.
+- Declare it as `text/markdown`. A label such as `manager-rules.md` helps people
+  find it; the format is identified by its JSON content.
 - Its whole UTF-8 body must be one JSON object whose `format` is
   `workstream.project_guide_rules.v1`.
 - Exactly one guide document may match. None, two, or an invalid body ends the
   attempt as invalid output with failure code `schema_invalid` (or
   `unsafe_text` when prose fails the shared safe-text rule). Fix the rules and
   create a new guide version; the failed attempt is not retried.
+
+The [Garden rules fixture](../pilots/garden/manager-rules.md) accompanies the
+[Garden guide](../pilots/garden/guide.md). Retain the complete uploaded
+original; changed rules require a new guide version, rather than inference
+correction feedback. Both compilation paths retain current manager authority,
+validation, separate phase approvals and activation.
 
 Besides `format`, the object has exactly the result fields `status`,
 `findings`, `submission_artifact_policy`, `requirements` and `setup_notes`.
@@ -813,6 +830,21 @@ Output:
 
 
 ## Review, approve or correct a guide proposal
+
+First upload every declared original. Upload stores custody only. Then call one
+initial operation as a current human exact-project Project Manager, with a UUID
+`Idempotency-Key` and no request body:
+
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup` requests optional
+  inference assistance using deployment-owned runtime settings.
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
+  compiles the uploaded manager-authored rules without a provider.
+
+Both return 202 with `operation_id`, `setup_run_id`, `setup_generation` and
+`status`. Preserve the key for replay; substituting another mode under the same
+key conflicts. Neither route accepts model settings or a model catalogue.
+Recovery republishes only committed explicit requests; it cannot create one
+from upload readiness. PM feedback enters only an explicit inference correction.
 
 Poll the existing guide setup status until `finalized_compilation_id` is present.
 An invalid or uncertain provider outcome has no finalized proposal to approve or

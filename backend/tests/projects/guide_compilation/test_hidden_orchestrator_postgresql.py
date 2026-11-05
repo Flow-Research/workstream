@@ -154,13 +154,16 @@ async def _authorized_attempt(database_url: str, values, configuration=None, *, 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            return await _authorized_service(session, actor).authorize_request(
+            receipt = await _authorized_service(session, actor, configuration=configuration).authorize_request(
                 origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
                 actor=actor,
                 facts=request_facts,
                 identity=selected_identity,
                 runtime_configuration=configuration or runtime_configuration(),
             )
+        from .helpers import acknowledge_requested_setup
+        await acknowledge_requested_setup(factory, receipt)
+        return receipt
     finally:
         await engine.dispose()
 

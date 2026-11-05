@@ -1,18 +1,17 @@
-"""Project-owned dispatch after all exact guide document uploads have committed."""
+"""Recovery publication for already authorized explicit guide compilation."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, or_, func, select
 from sqlalchemy.sql.elements import ColumnElement
 from app.interfaces.project_guide_runtime import NO_INFERENCE_IDENTITY
-from .guide_compilation.models import ProjectGuideCompilationAttempt, ProjectGuideSetupFinalization
+from .guide_compilation.models import ProjectGuideCompilationAttempt, ProjectGuideSetupFinalization, ProjectGuideCompilationRequestOperation
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.projects.api.guide_documents import GuideDocumentManifestRequest, GuideDocumentUnavailable
-from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.models import ProjectSetupRun
 
 
@@ -54,10 +53,14 @@ def retryable_compilation_dispatch_predicate() -> ColumnElement[bool]:
         .exists()
     )
     return and_(
+        select(ProjectGuideCompilationRequestOperation.operation_id).where(
+            ProjectGuideCompilationRequestOperation.setup_run_id == ProjectSetupRun.id,
+            ProjectGuideCompilationRequestOperation.setup_generation == ProjectSetupRun.setup_generation,
+            ProjectGuideCompilationRequestOperation.request_trigger == "project_manager",
+        ).exists(),
         recoverable,
         unfinished,
         or_(
-            ProjectSetupRun.status == "awaiting_documents",
             and_(
                 ProjectSetupRun.status == "queued",
                 ProjectSetupRun.current_step == "queued",
@@ -79,7 +82,7 @@ def retryable_compilation_dispatch_predicate() -> ColumnElement[bool]:
 async def continue_setup_after_stored_guide_item(
     source_snapshot_id: UUID, *, session_factory: async_sessionmaker[AsyncSession], manifest_factory,
 ) -> None:
-    """Claim one current generation only after every assigned original is committed."""
+    """Recover an explicit request after all exact originals remain available."""
     async with session_factory() as session:
         run = await session.scalar(select(ProjectSetupRun).where(
             ProjectSetupRun.source_snapshot_id == str(source_snapshot_id),
@@ -104,12 +107,6 @@ async def continue_setup_after_stored_guide_item(
                                       .where(ProjectSetupRun.guide_id == guide_id))
         if run is None or run.setup_generation != latest:
             return
-        if run.status == "awaiting_documents":
-            claimed_task_id = project_guide_compilation_task_id(run.id, run.setup_generation)
-            run.status, run.current_step = "dispatch_pending", "dispatch"
-            run.celery_task_id = claimed_task_id
-            if run.documents_ready_at is None:
-                run.documents_ready_at = datetime.now(timezone.utc)
     from app.modules.projects.setup_queue import dispatch_project_guide_compilation_after_commit
     async with session_factory() as session:
         await dispatch_project_guide_compilation_after_commit(

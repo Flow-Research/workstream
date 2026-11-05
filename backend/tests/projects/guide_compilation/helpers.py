@@ -48,7 +48,6 @@ from app.modules.projects.guide_compilation.contracts import (
     CompilationAttemptIdentity,
     accepted_compilation_result,
 )
-from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
@@ -403,16 +402,13 @@ async def _seed_project_rows(
                     "source_snapshot_id,source_snapshot_hash,setup_generation,status,"
                     "current_step,celery_task_id,documents_ready_at,created_by) values("
                     ":setup,:project,:guide,:guide_version,:snapshot,:hash,:generation,"
-                    "'queued','queued',:task_id,now(),'test')"
+                    "'awaiting_documents','awaiting_documents',NULL,NULL,'test')"
                 ),
                 {
                     **sql_values,
                     "setup": str(values[f"setup_{generation}"]),
                     "hash": snapshot_hash,
                     "generation": generation,
-                    "task_id": project_guide_compilation_task_id(
-                        str(values[f"setup_{generation}"]), generation
-                    ),
                 },
             )
         for table in reversed(("project_guides", "guide_source_snapshots", "project_setup_runs")):
@@ -619,3 +615,22 @@ async def insert_authorization_evidence(
     finally:
         await engine.dispose()
     return event_id
+
+
+async def acknowledge_requested_setup(factory, receipt) -> None:
+    """Arrange a broker acknowledgement only for the exact committed PM request."""
+    from app.modules.projects.guide_compilation.models import ProjectGuideCompilationRequestOperation
+    from app.modules.projects.models import ProjectSetupRun
+    from sqlalchemy import select
+
+    async with factory() as session, session.begin():
+        operation = await session.scalar(select(ProjectGuideCompilationRequestOperation).where(
+            ProjectGuideCompilationRequestOperation.operation_id == receipt.operation_id,
+            ProjectGuideCompilationRequestOperation.attempt_id == receipt.attempt_id,
+            ProjectGuideCompilationRequestOperation.request_trigger == "project_manager",
+        ))
+        assert operation is not None
+        setup = await session.get(ProjectSetupRun, str(operation.setup_run_id), with_for_update=True)
+        assert setup.status == "dispatch_pending" and setup.current_step == "dispatch"
+        assert setup.documents_ready_at is not None
+        setup.status, setup.current_step = "queued", "queued"

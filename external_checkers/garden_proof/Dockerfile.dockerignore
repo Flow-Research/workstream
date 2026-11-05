@@ -1,0 +1,7 @@
+**
+!harnessy_proof/
+!harnessy_proof/checker.py
+!garden_proof/
+!garden_proof/checker.py
+!garden_proof/Dockerfile
+!garden_proof/Dockerfile.dockerignore

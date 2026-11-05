@@ -233,14 +233,17 @@ def _docker(*arguments: str) -> str:
     return subprocess.run(["docker", *arguments], check=True, capture_output=True, text=True).stdout
 
 
-def publish(registry: str, repository: str) -> dict[str, object]:
+def publish(
+    registry: str, repository: str, *, build_context: Path = HERE, dockerfile: Path | None = None
+) -> dict[str, object]:
     """Build, push and resolve one single-platform manifest by digest."""
     if re.fullmatch(r"(localhost|127\.0\.0\.1):[0-9]{1,5}", registry) is None:
         raise SystemExit("the proof checker publishes only to a loopback registry")
     tagged = f"{registry}/{repository}:local"
     # Docker progress goes to stderr so stdout carries only the final JSON summary.
     subprocess.run(
-        ["docker", "build", "--provenance=false", "--sbom=false", "--tag", tagged, str(HERE)],
+        ["docker", "build", "--provenance=false", "--sbom=false", "--tag", tagged,
+         *(["--file", str(dockerfile)] if dockerfile is not None else []), str(build_context)],
         check=True,
         stdout=sys.stderr,
     )
@@ -286,9 +289,9 @@ def main(argv: list[str] | None = None) -> int:
         help="emit fixed local proxy and daemon-visible relay paths",
     )
     # The registry holds one immutable entry per phase, capability and version,
-    # so a rebuilt image (new digest) needs a new version. v3 adds project-owned
-    # proof location before the final comparison with scoped forge facts.
-    parser.add_argument("--capability-version", default="v3")
+    # so a rebuilt image (new digest) needs a new version. v4 consumes the
+    # bounded head commit message in the expanded forge facts contract.
+    parser.add_argument("--capability-version", default="v4")
     args = parser.parse_args(argv)
     image = publish(args.registry, args.repository)
     args.out_dir.mkdir(parents=True, exist_ok=True)

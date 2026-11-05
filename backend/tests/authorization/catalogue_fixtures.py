@@ -719,7 +719,6 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "project.guide.update",
     "project.guide_compilation.execute",
     "project.guide_compilation.request",
-    "project.guide_compilation.request_automatic",
     "project.guide_source_snapshot.create",
     "project.guide_sufficiency.run",
     "project.guide_sufficiency.warnings.acknowledge",

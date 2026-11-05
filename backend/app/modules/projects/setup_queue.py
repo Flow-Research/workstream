@@ -1,4 +1,4 @@
-"""Queue boundary for automatic project setup jobs."""
+"""Queue boundary for explicitly authorized project setup requests."""
 
 from __future__ import annotations
 
@@ -84,6 +84,17 @@ async def dispatch_project_guide_compilation_after_commit(
     setup_run = await repository.lock_project_setup_run(setup_run_id)
     if setup_run is None:
         raise ProjectSetupQueueError("project setup run missing before dispatch")
+    from app.modules.projects.guide_compilation.models import ProjectGuideCompilationRequestOperation
+    operation = await session.scalar(select(ProjectGuideCompilationRequestOperation.operation_id).where(
+        ProjectGuideCompilationRequestOperation.setup_run_id == setup_run.id,
+        ProjectGuideCompilationRequestOperation.setup_generation == setup_generation,
+        ProjectGuideCompilationRequestOperation.project_id == project_id,
+        ProjectGuideCompilationRequestOperation.guide_id == guide_id,
+        ProjectGuideCompilationRequestOperation.source_snapshot_id == source_snapshot_id,
+        ProjectGuideCompilationRequestOperation.request_trigger == "project_manager",
+    ))
+    if operation is None:
+        raise ProjectSetupQueueError("explicit project setup request missing before dispatch")
     fresh_initial_claim = False
     if setup_run.status in {"dispatch_pending", "queued"} and setup_run.celery_task_id is not None:
         if setup_run.celery_task_id != expected_task_id:

@@ -42,6 +42,7 @@ FORGE_FACTS_SCHEMA_VERSION = "workstream.forge_change_facts.v1"
 GITHUB_FORGE = "github"
 Forge = Literal["github"]
 SUPPORTED_FORGES: tuple[str, ...] = (GITHUB_FORGE,)
+MAXIMUM_HEAD_COMMIT_MESSAGE_BYTES = 65_536
 # The absolute upper bound of one facts read; provider settings stay within it
 # and the selected POST budget reserves it for each binding that reads facts.
 FORGE_FACTS_MAXIMUM_READ_SECONDS = 120
@@ -196,6 +197,7 @@ class ForgeChangeFacts(_FactsValue):
     landed_commit_sha: GitSha | None
     base_ref: Annotated[StrictStr, Field(min_length=1, max_length=255)]
     head_sha: GitSha
+    head_commit_message: Annotated[StrictStr, Field(max_length=MAXIMUM_HEAD_COMMIT_MESSAGE_BYTES)]
     author: ForgeActorFact
     reviews: tuple[ForgeReviewFact, ...]
     changed_files_count: Annotated[StrictInt, Field(ge=0)]
@@ -207,6 +209,8 @@ class ForgeChangeFacts(_FactsValue):
     @model_validator(mode="after")
     def validate_facts(self) -> Self:
         """Bind the listing to its count, the change to one merge state."""
+        if len(self.head_commit_message.encode("utf-8")) > MAXIMUM_HEAD_COMMIT_MESSAGE_BYTES:
+            raise ValueError("head commit message exceeds its byte bound")
         if self.changed_files_count != len(self.changed_files):
             raise ValueError("changed file count differs from the listed files")
         if not is_repository_path(self.repository) or not is_forge_origin(self.forge_origin):

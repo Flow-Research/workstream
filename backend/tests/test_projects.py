@@ -322,8 +322,8 @@ def test_project_setup_queue_normalizes_broker_failure(
 @pytest.mark.parametrize(
     ("setup_run", "expected"),
     [
-        (SimpleNamespace(status="running", celery_task_id="existing"), "existing"),
-        (SimpleNamespace(status="running", celery_task_id=None), None),
+        (SimpleNamespace(id=str(uuid4()), status="running", celery_task_id="existing"), "existing"),
+        (SimpleNamespace(id=str(uuid4()), status="running", celery_task_id=None), None),
     ],
 )
 async def test_project_setup_dispatch_returns_terminal_state_without_publish(
@@ -339,6 +339,9 @@ async def test_project_setup_dispatch_returns_terminal_state_without_publish(
             return setup_run
 
     class Session:
+        async def scalar(self, _statement):
+            return uuid4()
+
         async def commit(self) -> None:
             raise AssertionError("terminal state must not be mutated")
 
@@ -390,11 +393,14 @@ async def test_project_setup_dispatch_reuses_exact_queued_task_without_republish
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     expected = project_setup_identity.project_guide_compilation_task_id("run-1", 1)
-    setup_run = SimpleNamespace(status="queued", celery_task_id=expected, updated_at=datetime.now(UTC))
+    setup_run = SimpleNamespace(id=str(uuid4()), status="queued", celery_task_id=expected, updated_at=datetime.now(UTC))
 
     repository = SimpleNamespace(lock_project_setup_run=AsyncMock(return_value=setup_run))
 
     class Session:
+        async def scalar(self, _statement):
+            return uuid4()
+
         async def commit(self) -> None:
             raise AssertionError("existing queue custody must not be mutated")
 
@@ -2642,8 +2648,8 @@ async def test_project_setup_waits_for_verified_guide_material_before_outputs(
 
     assert setup_run_response.status_code == 200, setup_run_response.text
     setup_run = setup_run_response.json()
-    assert setup_run["status"] == "awaiting_documents"
-    assert setup_run["current_step"] == "awaiting_documents"
+    assert setup_run["status"] == "not_requested"
+    assert setup_run["current_step"] == "not_requested"
     assert setup_run["celery_task_id"] is None
     assert setup_run["output_sufficiency_report_id"] is None
     assert setup_run["output_submission_artifact_policy_id"] is None
@@ -2675,7 +2681,7 @@ async def test_pre_submit_visibility_requires_compiled_policy(
     assert response.status_code == 404
 
 
-async def test_document_ready_setup_enqueue_failure_is_sanitized_and_retryable(
+async def test_explicit_setup_request_enqueue_failure_is_sanitized_and_retryable(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2707,11 +2713,16 @@ async def test_document_ready_setup_enqueue_failure_is_sanitized_and_retryable(
         source_snapshot_id = run.source_snapshot_id
         await session.commit()
         await create_committed_document_fixture(source_snapshot_id)
-        from app.modules.projects.guide_setup_continuation import continue_setup_after_stored_guide_item
-        from app.adapters.artifacts import guide_document_manifest_port
-        await continue_setup_after_stored_guide_item(
-            UUID(source_snapshot_id), session_factory=db_session.get_session_factory(),
-            manifest_factory=guide_document_manifest_port,
+        from tests.projects.guide_compilation.pending_source import request_pending_source
+        from tests.projects.guide_compilation.helpers import manager_runtime_configuration
+        await request_pending_source(
+            db_session.get_session_factory(), UUID(run.id), manager_runtime_configuration()
+        )
+        await project_setup_queue_module.dispatch_project_guide_compilation_after_commit(
+            session, project_id=run.project_id, guide_id=run.guide_id,
+            source_snapshot_id=run.source_snapshot_id, setup_run_id=run.id,
+            setup_generation=run.setup_generation,
+            claimed_task_id=project_setup_identity.project_guide_compilation_task_id(run.id, run.setup_generation),
         )
 
     response = await project_client.get(
@@ -2782,6 +2793,14 @@ async def test_dispatch_pending_republishes_only_after_stale_cutoff(
             select(ProjectSetupRun).where(ProjectSetupRun.guide_id == guide["id"])
         )
         assert run is not None
+        from tests.projects.guide_compilation.pending_source import request_pending_source
+        from tests.projects.guide_compilation.helpers import manager_runtime_configuration
+        await session.commit()
+        await create_committed_document_fixture(run.source_snapshot_id)
+        await request_pending_source(
+            db_session.get_session_factory(), UUID(run.id), manager_runtime_configuration()
+        )
+        await session.refresh(run)
         run.status = "dispatch_pending"
         run.celery_task_id = project_setup_identity.project_guide_compilation_task_id(
             run.id, run.setup_generation

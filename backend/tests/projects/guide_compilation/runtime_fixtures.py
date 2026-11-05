@@ -91,7 +91,7 @@ def scripted_runtime_configuration(
     *,
     adapter_profile_builder: Callable[[Mapping[str, object]], Mapping[str, object]],
 ) -> ProjectGuideRuntimeConfiguration:
-    """Accept the current composition signature and return fixed test settings."""
+    """Supply fixed request-composition settings through the typed factory seam."""
     assert callable(adapter_profile_builder)
     return runtime_configuration()
 
@@ -152,10 +152,10 @@ def configure_scripted_model_transport(monkeypatch, socket_path: Path) -> None:
 
 
 @pytest.fixture
-async def scripted_model_profile(automatic_source, project_client, monkeypatch, tmp_path):
-    """Publish the exact inference profile selected by live coordinator tests."""
+async def scripted_model_profile(pending_source, project_client, monkeypatch, tmp_path):
+    """Publish the exact inference profile retained by explicit PM requests."""
     configure_scripted_model_transport(monkeypatch, tmp_path / "unused-model-proxy.sock")
-    factory, _actor, setup_id, _snapshot = automatic_source
+    factory, _actor, setup_id, _snapshot = pending_source
     async with factory() as session:
         project_id = await session.scalar(
             select(ProjectSetupRun.project_id).where(ProjectSetupRun.id == str(setup_id))
@@ -208,7 +208,14 @@ async def scripted_model_profile(automatic_source, project_client, monkeypatch, 
         issuer="flow-test",
         token="project-token",
     )
-    yield
+    from app.adapters.model_usage import model_profile_reader
+    from app.modules.projects.guide_compilation.request_inputs import select_model_runtime_configuration
+
+    async with factory() as session, session.begin():
+        bound = await select_model_runtime_configuration(
+            configuration, model_profile_reader(session), project_id
+        )
+    yield bound
 
 
 def document_tools(session_factory, *, document_access_factory=None):

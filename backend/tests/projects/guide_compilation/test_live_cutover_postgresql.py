@@ -11,22 +11,20 @@ from tests.projects.client_fixtures import (
     project_client as project_client,
     project_database_env as project_database_env,
 )
-from .test_automatic_request import automatic_source as automatic_source
-from .helpers import generated_result
+from .pending_source import pending_source as pending_source, request_pending_source
+from .helpers import generated_result, runtime_configuration, manager_runtime_configuration
 from .runtime_fixtures import (
     ScriptedGuideRuntime,
-    scripted_model_profile,  # noqa: F401 - registered pytest fixture
-    scripted_runtime_configuration,
+    scripted_model_profile as scripted_model_profile,
 )
 
 
 from .live_fixtures import _delivery, scripted_document_port as scripted_document_port
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 @pytest.mark.parametrize("status", ["draft_ready", "draft_ready_with_warnings", "guide_blocked"])
 async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
-    automatic_source, monkeypatch, status, project_client
+    pending_source, scripted_model_profile, monkeypatch, status, project_client
 ):  # noqa: F811
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     from app.core.config import get_settings
@@ -34,8 +32,9 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     if status != "draft_ready":
@@ -59,9 +58,6 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
             }
         )
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
     first = await coordinator.run(delivery)
     assert first["status"] == (
@@ -107,13 +103,7 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
     def forbidden_runtime(_configuration):
         pytest.fail("finalized replay reached request configuration or runtime construction")
 
-    def forbidden_configuration(_settings, *, adapter_profile_builder):
-        pytest.fail("finalized replay reached request configuration or runtime construction")
-
     monkeypatch.setattr(worker, "create_project_guide_runtime", forbidden_runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", forbidden_configuration
-    )
     replay = await (await worker._coordinator(factory)).run(delivery)
     assert replay == first
     assert runtime.calls == 1
@@ -135,10 +125,9 @@ async def test_pending_exact_delivery_compiles_once_and_replays_finalization(
     assert runtime.calls == 1
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 @pytest.mark.parametrize("phase", ["compilation", "sufficiency", "finalization"])
 async def test_compilation_phase_and_public_setup_read_share_parent_lock_order(
-    automatic_source, project_client, project_database_env, monkeypatch, phase
+    pending_source, scripted_model_profile, project_client, project_database_env, monkeypatch, phase
 ):
     """A status read during a phase's child INSERT cannot deadlock its parent FK."""
     import asyncio
@@ -155,12 +144,12 @@ async def test_compilation_phase_and_public_setup_read_share_parent_lock_order(
 
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
-    factory, _actor, setup_id, snapshot = automatic_source
+    factory, _actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
     coordinator = await worker._coordinator(factory)
     target = {"compilation": ProjectGuideCompilation, "sufficiency": GuideSufficiencyReport,
               "finalization": ProjectGuideSetupFinalization}[phase]
@@ -221,7 +210,7 @@ async def test_compilation_phase_and_public_setup_read_share_parent_lock_order(
     ["project_id", "guide_id", "source_snapshot_id", "setup_run_id", "setup_generation", "task_id"],
 )
 async def test_stale_delivery_rejects_before_any_compilation_effect(
-    automatic_source, monkeypatch, field
+    pending_source, monkeypatch, field
 ):
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     from app.core.config import get_settings
@@ -229,20 +218,15 @@ async def test_stale_delivery_rejects_before_any_compilation_effect(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, runtime_configuration())
     delivery = await _delivery(factory, setup_id)
 
     def forbidden_runtime(_configuration):
         pytest.fail("stale delivery reached configuration or runtime")
 
-    def forbidden_configuration(_settings, *, adapter_profile_builder):
-        pytest.fail("stale delivery reached configuration or runtime")
-
     monkeypatch.setattr(worker, "create_project_guide_runtime", forbidden_runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", forbidden_configuration
-    )
     changed = delivery.model_copy(update={field: 2 if field == "setup_generation" else uuid4()})
     async with factory() as session:
         before = await session.scalar(text("select count(*) from audit_events"))
@@ -256,13 +240,12 @@ async def test_stale_delivery_rejects_before_any_compilation_effect(
             "project_guide_component_projection_operations",
             "project_guide_setup_finalizations",
         ]:
-            assert await session.scalar(text("select count(*) from " + table)) == 0
+            assert await session.scalar(text("select count(*) from " + table)) == (1 if table in {"project_guide_compilation_request_operations", "project_guide_compilation_attempts"} else 0)
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 @pytest.mark.parametrize("outcome", ["invalid", "uncertain"])
 async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_projection(
-    automatic_source, monkeypatch, outcome, project_client
+    pending_source, scripted_model_profile, monkeypatch, outcome, project_client
 ):
     from app.core.config import get_settings
     from app.interfaces.project_agents import (
@@ -276,8 +259,9 @@ async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     runtime.outcome = (
@@ -286,9 +270,6 @@ async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_
         else ProjectAgentRuntimeError("private-provider-detail")
     )
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
     # Beat selects the exact delivery before terminal provider custody exists.
     await _select_stale_delivery(factory, delivery)
@@ -354,18 +335,15 @@ async def test_invalid_or_uncertain_attempt_reports_durable_diagnostics_without_
             assert await session.scalar(text("select count(*) from " + table)) == 0
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
-async def test_finalized_receipt_excludes_every_recovery_shape(automatic_source, monkeypatch):
+async def test_finalized_receipt_excludes_every_recovery_shape(pending_source, scripted_model_profile, monkeypatch):
     from app.workers import project_setup as worker
 
-    factory, _actor, setup_id, snapshot = automatic_source
+    factory, _actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     await _select_stale_delivery(factory, delivery)
     receipt = await (await worker._coordinator(factory)).run(delivery)
     assert receipt["status"] == "policy_draft_ready"
@@ -446,9 +424,8 @@ async def _assert_terminal_not_reclaimable(factory, delivery, monkeypatch, *, fi
             )
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 async def test_publisher_acknowledgement_cannot_overwrite_worker_finalization(
-    automatic_source, monkeypatch
+    pending_source, scripted_model_profile, monkeypatch
 ):
     import asyncio
     import threading
@@ -459,8 +436,9 @@ async def test_publisher_acknowledgement_cannot_overwrite_worker_finalization(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     async with factory() as session, session.begin():
         await session.execute(
@@ -482,9 +460,6 @@ async def test_publisher_acknowledgement_cannot_overwrite_worker_finalization(
     monkeypatch.setattr(setup_queue, "enqueue_project_guide_compilation", publish)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
 
     async def dispatch():
         async with factory() as session:
@@ -526,9 +501,8 @@ async def test_publisher_acknowledgement_cannot_overwrite_worker_finalization(
 @pytest.mark.parametrize(
     "boundary", ["persisted", "sufficiency", "both_projections", "retained_unconfigured"]
 )
-@pytest.mark.usefixtures("scripted_model_profile")
 async def test_phase_crash_recovers_same_attempt_without_reinference(
-    automatic_source, monkeypatch, boundary
+    pending_source, scripted_model_profile, monkeypatch, boundary
 ):
     from app.core.config import get_settings
 
@@ -536,14 +510,12 @@ async def test_phase_crash_recovers_same_attempt_without_reinference(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
     projections = coordinator._projections
 
@@ -617,10 +589,9 @@ async def test_phase_crash_recovers_same_attempt_without_reinference(
         )
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
-@pytest.mark.parametrize("phase", ["request", "fence", "sufficiency", "policy", "finalization"])
+@pytest.mark.parametrize("phase", ["delivery", "fence", "sufficiency", "policy", "finalization"])
 async def test_each_phase_rechecks_service_authority_and_restoration_reuses_attempt(
-    automatic_source, monkeypatch, phase
+    pending_source, scripted_model_profile, monkeypatch, phase
 ):
     from app.core.config import get_settings
     from app.modules.authorization.api import AuthorizationDenied
@@ -634,14 +605,12 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
 
     async def revoke():
@@ -659,7 +628,7 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
         "policy": (coordinator._projections, "project_submission_artifact_policy"),
         "finalization": (coordinator, "_finalize"),
     }
-    if phase == "request":
+    if phase == "delivery":
         await revoke()
     else:
         owner, name = owners[phase]
@@ -679,9 +648,9 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
         )
     ) as error:
         await coordinator.run(delivery)
-    if phase != "request":
+    if phase != "delivery":
         assert error.value.code == "service_authority_denied"
-    assert runtime.calls == (0 if phase in {"request", "fence"} else 1)
+    assert runtime.calls == (0 if phase in {"delivery", "fence"} else 1)
     async with factory() as session:
         assert (
             await session.scalar(text("select count(*) from project_guide_setup_finalizations"))
@@ -691,9 +660,9 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
             await session.scalar(
                 text("select count(*) from project_guide_component_projection_operations")
             )
-            == {"request": 0, "fence": 0, "sufficiency": 0, "policy": 1, "finalization": 2}[phase]
+            == {"delivery": 0, "fence": 0, "sufficiency": 0, "policy": 1, "finalization": 2}[phase]
         )
-    if phase != "request":
+    if phase != "delivery":
         monkeypatch.setattr(owner, name, original)
     async with factory() as session, session.begin():
         await session.execute(
@@ -716,10 +685,9 @@ async def test_each_phase_rechecks_service_authority_and_restoration_reuses_atte
         )
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 @pytest.mark.parametrize("duplicate_observation", ["before_persist", "after_finalization"])
 async def test_concurrent_live_deliveries_converge_on_one_finalization(
-    automatic_source, monkeypatch, duplicate_observation
+    pending_source, scripted_model_profile, monkeypatch, duplicate_observation
 ):
     """Both overlapping-delivery observations converge on one retained finalization."""
     import asyncio
@@ -729,8 +697,9 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     entered, both_entered = asyncio.Event(), asyncio.Event()
     first_provider_release, duplicate_provider_release = asyncio.Event(), asyncio.Event()
@@ -751,9 +720,6 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
 
     monkeypatch.setattr(runtime, "compile_project_guide", blocked_provider)
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda config: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
     persist = coordinator._execution._backend.persist
 
@@ -820,8 +786,8 @@ async def test_concurrent_live_deliveries_converge_on_one_finalization(
         ("post_submit_derivation_summary", {"status": "stale"}),
     ],
 )
-async def test_dirty_setup_rejects_before_request_or_provider(
-    automatic_source, monkeypatch, field, value
+async def test_dirty_delivery_rejects_before_provider_and_preserves_request(
+    pending_source, monkeypatch, field, value
 ):
     from datetime import datetime
     from app.core.config import get_settings
@@ -831,7 +797,9 @@ async def test_dirty_setup_rejects_before_request_or_provider(
     get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
+    await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, runtime_configuration())
     delivery = await _delivery(factory, setup_id)
     async with factory() as session, session.begin():
         setup = await session.get(ProjectSetupRun, str(setup_id))
@@ -840,13 +808,7 @@ async def test_dirty_setup_rejects_before_request_or_provider(
     def forbidden_runtime(_configuration):
         pytest.fail("dirty setup reached configuration or provider")
 
-    def forbidden_configuration(_settings, *, adapter_profile_builder):
-        pytest.fail("dirty setup reached configuration or provider")
-
     monkeypatch.setattr(worker, "create_project_guide_runtime", forbidden_runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", forbidden_configuration
-    )
     with pytest.raises(ProjectGuideCompilationDeliveryError):
         await (await worker._coordinator(factory)).run(delivery)
     async with factory() as session:
@@ -856,41 +818,33 @@ async def test_dirty_setup_rejects_before_request_or_provider(
             "project_guide_component_projection_operations",
             "project_guide_setup_finalizations",
         ):
-            assert await session.scalar(text("select count(*) from " + table)) == 0
+            assert await session.scalar(text("select count(*) from " + table)) == (1 if table in {"project_guide_compilation_request_operations", "project_guide_compilation_attempts"} else 0)
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
-async def test_stale_queued_configuration_failure_is_reclaimed_and_finishes_same_delivery(
-    automatic_source, monkeypatch
+async def test_stale_queued_delivery_uses_retained_configuration_after_settings_change(
+    pending_source, scripted_model_profile, monkeypatch
 ):
     from app.core.config import get_settings
-
-    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
-    get_settings.cache_clear()
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, _actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    configuration = scripted_model_profile
+    await request_pending_source(factory, setup_id, configuration)
     delivery = await _delivery(factory, setup_id)
-
-    def unavailable(_settings, *, adapter_profile_builder):
-        raise ValueError("missing runtime configuration")
-
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", unavailable)
-    for _ in range(4):
-        with pytest.raises(ValueError, match="missing runtime configuration"):
-            await (await worker._coordinator(factory)).run(delivery)
-    async with factory() as session:
-        assert (
-            await session.scalar(text("select count(*) from project_guide_compilation_attempts"))
-            == 0
-        )
     await _reclaim_exact_delivery(factory, delivery, monkeypatch)
-    runtime = ScriptedGuideRuntime()
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
-    monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
+    # Admission has frozen the runtime. A later deployment setting cannot select
+    # a new provider or make this retained delivery depend on fresh selection.
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME", "manager_authored")
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_MODEL", "changed-after-request")
+    get_settings.cache_clear()
+    runtime = ScriptedGuideRuntime(configuration)
+
+    def retained_runtime(actual):
+        assert actual == configuration
+        return runtime
+
+    monkeypatch.setattr(worker, "create_project_guide_runtime", retained_runtime)
     first = await (await worker._coordinator(factory)).run(delivery)
     assert first["status"] == "policy_draft_ready"
     assert await (await worker._coordinator(factory)).run(delivery) == first
@@ -1063,11 +1017,7 @@ async def manager_authored_source(project_client, project_database_env, monkeypa
     from app.core.config import get_settings
     from app.modules.projects.models import ProjectSetupRun
     from tests.projects.guide_fixtures import create_guide, create_project, read_guide_source_snapshot
-    from .test_automatic_request import acknowledge_automatic_setup
 
-    for name, value in {"RUNTIME": "manager_authored", "MODEL_PROVIDER": "none",
-                        "MODEL_API": "none", "MODEL": "none"}.items():
-        monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_" + name, value)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
@@ -1085,8 +1035,6 @@ async def manager_authored_source(project_client, project_database_env, monkeypa
         setup = await session.scalar(
             select(ProjectSetupRun).where(ProjectSetupRun.source_snapshot_id == snapshot["id"]))
         setup_id = UUID(setup.id)
-        acknowledge_automatic_setup(setup)
-        await session.commit()
     try:
         yield factory, setup_id, snapshot
     finally:
@@ -1131,6 +1079,7 @@ async def test_manager_authored_rules_compile_through_the_live_worker_without_in
     rules_sha256 = "sha256:" + hashlib.sha256(rules).hexdigest()
     assert {item.sha256 for item in manifest.documents} == {SOURCE_SHA256, rules_sha256}
     _serve_documents(monkeypatch, worker, {SOURCE_SHA256: SOURCE_BYTES, rules_sha256: rules})
+    await request_pending_source(factory, setup_id, manager_runtime_configuration())
     delivery = await _delivery(factory, setup_id)
 
     outcome = await (await worker._coordinator(factory)).run(delivery)

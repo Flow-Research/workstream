@@ -1,4 +1,4 @@
-"""Celery composition for automatic unified project-guide compilation."""
+"""Celery composition for explicitly requested guide compilation."""
 
 from functools import partial
 from pathlib import Path
@@ -10,18 +10,15 @@ from app.adapters.artifacts import guide_document_access_runtime, guide_document
 from app.adapters.auth import (
     artifact_policy_projection_authorization,
     guide_compilation_execution_authority,
-    guide_compilation_request_authority,
     guide_sufficiency_projection_authorization,
     setup_finalization_authorization,
 )
-from app.adapters.checkers import model_profile_reader
 from app.adapters.guide_document_tools import (
     GUIDE_DOCUMENT_PARSER_PROVIDER_KEY,
     guide_document_parser_factory,
 )
 from app.adapters.project_agents import (
     RETAINED_OPENAI_GUIDE_RUNTIME_KEY,
-    build_project_guide_adapter_profile,
     create_guide_runtime_cleanup_factory,
     create_project_guide_runtime,
 )
@@ -31,9 +28,6 @@ from app.adapters.projects import (
     project_guide_document_tools_factory,
 )
 from app.core.config import get_settings
-from app.core.project_agents import (
-    project_guide_runtime_configuration,
-)
 from app.db.session import get_database_url
 from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationDelivery,
@@ -68,15 +62,7 @@ async def _coordinator(session_factory):
             sessions=session_factory,
             socket_path=settings.checker_model_proxy_socket,
         ),
-        request_authority=guide_compilation_request_authority,
         execution_authority=guide_compilation_execution_authority,
-        configuration_factory=lambda: project_guide_runtime_configuration(
-            settings,
-            adapter_profile_builder=partial(
-                build_project_guide_adapter_profile, settings.project_agent_runtime
-            ),
-        ),
-        model_profiles=model_profile_reader,
         runtime_factory=create_project_guide_runtime,
         sufficiency_authorization_factory=guide_sufficiency_projection_authorization,
         policy_authorization_factory=artifact_policy_projection_authorization,

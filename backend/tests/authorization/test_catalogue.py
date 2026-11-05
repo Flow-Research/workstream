@@ -118,8 +118,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 166,
-        ActionAvailability.PLANNED: 24,
+        ActionAvailability.ACTIVE: 165,
+        ActionAvailability.PLANNED: 25,
     }
     assert (
         resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id
@@ -187,7 +187,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC: (
             PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
             ActionOwner.AUTH_12I,
-            ActionAvailability.ACTIVE,
+            ActionAvailability.PLANNED,
         ),
         ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE: (
             PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
@@ -265,7 +265,6 @@ def test_active_fixed_service_actions_are_exact():
         ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         ActionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
-        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC,
         ActionId.PROJECT_GUIDE_COMPILATION_MODEL_PREPARE,
         ActionId.PROJECT_GUIDE_COMPILATION_MODEL_DISPATCH,
         ActionId.PROJECT_GUIDE_COMPILATION_MODEL_OBSERVE,

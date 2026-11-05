@@ -36,16 +36,13 @@ from app.modules.projects.api.guide_documents import (
     ProjectGuideDocumentScopePort,
 )
 from app.modules.projects.api.guide_proposals import (
-    GuideCorrectionDispatchPort,
+    GuideCompilationDispatchPort,
     GuideProposalOperationsPort,
 )
 from app.modules.projects.api.guide_reads import ProjectGuideReadPort
 from app.modules.projects.api.post_policy import PostPolicyDeliveryPort, PostPolicyOperationsPort
 from app.modules.projects.contribution_policy import ProjectContributionPolicyEligibility
-from app.modules.projects.guide_compilation.live import (
-    LiveGuideCompilationCoordinator,
-    RequestAuthority,
-)
+from app.modules.projects.guide_compilation.live import LiveGuideCompilationCoordinator
 from app.modules.projects.guide_compilation.orchestrator import (
     GuideCompilationAuthorizationContext,
     project_guide_compilation_execution_port,
@@ -82,10 +79,7 @@ def project_guide_compilation_delivery_port(
     material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
     document_tools_factory: GuideDocumentToolsFactory,
     model_session_factory,
-    request_authority: RequestAuthority,
     execution_authority: GuideCompilationAuthorizationContext,
-    configuration_factory: Callable[[], ProjectGuideRuntimeConfiguration],
-    model_profiles,
     runtime_factory: Callable[[ProjectGuideRuntimeConfiguration], ProjectGuideAgentRuntime],
     sufficiency_authorization_factory: Callable[
         [AsyncSession], GuideSufficiencyProjectionAuthorizationPort
@@ -100,10 +94,6 @@ def project_guide_compilation_delivery_port(
     """Compose the existing PROJECTS owners from explicit external capability ports."""
     return LiveGuideCompilationCoordinator(
         session_factory,
-        material_factory=material_factory,
-        request_authority=request_authority,
-        configuration_factory=configuration_factory,
-        model_profiles=model_profiles,
         execution=project_guide_compilation_execution_port(
             session_factory,
             material_factory=material_factory,
@@ -210,22 +200,22 @@ def project_guide_proposal_service(
     )
 
 
-def project_guide_correction_dispatch(
+def project_guide_compilation_dispatch(
     session: AsyncSession,
     authorization: ProjectGuideCompilationAuthorizationPort,
     *,
     material: GuideDocumentManifestPort,
     configuration: ProjectGuideRuntimeConfiguration,
-) -> GuideCorrectionDispatchPort[ActorIdentityFacts]:
+) -> GuideCompilationDispatchPort[ActorIdentityFacts]:
     """Compose human correction admission and existing queue dispatch without inference."""
     from app.modules.projects.guide_compilation.correction_dispatch import (
-        GuideCorrectionDispatchService,
+        GuideCompilationDispatchService,
     )
     from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
 
     from app.adapters.model_usage import model_profile_reader
 
-    return GuideCorrectionDispatchService(
+    return GuideCompilationDispatchService(
         session,
         authorization,
         CompilationRequestInputs(material, configuration),
