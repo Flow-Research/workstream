@@ -1,8 +1,9 @@
 # Explicit guide assistance and Garden drill
 
-Initiative: None
-Status: Planned
-Risk: L1 — authorization, immutable guide inputs and external evidence
+- Initiative: None
+- Durable disposition: Planned
+- Intended merge outcome: Explicit PM setup requests and provider-free rules use one authorized pipeline; Garden has a small documented contribution drill and independently verified task-associated PR evidence.
+- Risk: L1 — authorization, immutable guide inputs and external evidence
 
 ## Intent
 
@@ -66,7 +67,9 @@ The Garden marker grammar is exactly one standalone
 block. Duplicate reserved occurrences anywhere, malformed values, missing or
 foreign task markers reject. It must exist before the final checks and review.
 
-## Allowed files and ownership
+## Bounded change
+
+### Allowed files and ownership
 
 - PROJECTS guide compilation, setup continuation, guide routes/schemas and their
   composition roots; affected worker dispatch and ART continuation wiring.
@@ -81,7 +84,7 @@ foreign task markers reject. It must exist before the final checks and review.
   roadmap exports if present. A migration only if an identified persisted
   invariant needs enforcement; preserve retained records.
 
-## Prohibited changes
+### Prohibited changes
 
 No issue synchronization, source-adapter framework, TUI/CLI expansion, new
 acceptance workflow, contributor/GitHub identity mapping, automatic AI approval,
@@ -89,7 +92,7 @@ unrestricted sandbox networking or repository-wide cleanup. No new auto/manual
 policy flag. No model spend beyond the already authorized budget. No GitHub
 approval, merge, contribution or evaluation facts invented for the drill.
 
-## Acceptance and proof
+## Acceptance criteria
 
 - Completed uploads and periodic recovery invoke no provider without an explicit
   authorized PM request. Forged worker deliveries cannot create that authority.
@@ -110,18 +113,30 @@ approval, merge, contribution or evaluation facts invented for the drill.
   immutable evidence and data-preservation proof. Tests must discriminate the
   reported defects, not fail on unrelated validation first.
 
-## Review and human focus
+## Evidence
 
-Planned executable checks: focused pytest selections for PROJECTS request,
+Verification uses focused pytest selections for PROJECTS request,
 delivery, recovery and public dispatch; manager-authored runtime tests; worker
 topology tests; `backend/tests/test_github_facts_adapter.py`; external image unit
 tests and existing actual-image forge composition; module-boundary, markdown-link
-and Commitrail checks; `git diff --check`; full hosted suite. New tests are future
-implementation work, not passing evidence. Public-API fixture sequence is upload
+and Commitrail checks; `git diff --check`; full hosted suite. Local PostgreSQL
+proof covers explicit request/replay, source and authority isolation, shared
+execution, broker recovery and provider-free compilation. Real MinIO proofs
+cover original-byte upload and concurrent delivery without automatic admission.
+Actual offline image and native-service composition prove controlled Garden
+facts and foreign-task rejection, not live GitHub access. Full public-API
+fixture sequence is upload
 all originals -> assert no attempt/provider call -> explicit authorized request
 -> durable worker -> proposal -> separate policy approvals -> activation. Forge
 negative controls first satisfy merge, CI producer, independent current-head
 review and proof comparisons, then vary only the marker or trusted task UUID.
+
+The hosted Garden proof requires the read-only GitHub App, a candidate deployment
+and a real task-associated PR with independent review and authorized merge. It
+must not be inferred from the controlled local facts. Exact check/review freshness
+and operational completion evidence belong in the PR.
+
+## Risk and review routing
 
 Plan review before implementation. Focused security/architecture, QA/test-delta,
 product-operations and documentation review on the frozen candidate; CI review
