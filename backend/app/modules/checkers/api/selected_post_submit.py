@@ -359,7 +359,9 @@ class SelectedPostSubmissionEvaluationResult(CheckerValue):
             ):
                 forge = selected_forge_facts(binding.configuration, binding.stage)
                 forge_receipt = member.forge_receipt
-                if (forge_receipt is not None) != (forge is not None):
+                # New results require receipts at the ART issuance boundary.
+                # Retained completed evidence may predate this optional field.
+                if forge_receipt is not None and forge is None:
                     raise ValueError("selected POST forge receipt selection differs")
                 if forge_receipt is not None:
                     current = forge_receipt.materials[0]

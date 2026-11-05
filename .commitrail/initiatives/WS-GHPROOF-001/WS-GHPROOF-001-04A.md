@@ -114,7 +114,10 @@ backend/.venv/bin/python external_checkers/workstream-checker-service/tests/harn
 The Garden deployment/drill still requires its guide, locked image binding and
 configured read-only forge credential. No GitHub issue import or project lifecycle
 changes are included. Retained policy records remain readable without altering
-hashes; new forge bindings must declare locator support. An existing image without
+hashes, including completed results that predate the optional receipt. New
+executions must retain the receipt, enforced against ART-issued requests; a
+missing receipt is rejected before completed evidence is saved. New forge
+bindings must declare locator support. An existing image without
 that support cannot execute through the new protocol and has no fallback parser.
 
 ## Reconciliation

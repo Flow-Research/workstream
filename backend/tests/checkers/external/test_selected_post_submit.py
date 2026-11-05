@@ -1029,3 +1029,39 @@ async def test_locator_failure_never_fetches_or_evaluates(options, code) -> None
         await _evaluate(_forge_policy(), _SelectorView(execution_material(identity)), forge, execution)
     assert raised.value.code == code
     assert forge.reads == [] and execution.requests == []
+
+
+@pytest.mark.asyncio
+async def test_retained_forge_result_without_receipt_replays_unchanged_through_owner() -> None:
+    """A completed pre-receipt result remains readable without rewriting its hash."""
+    from app.modules.checkers.execution_repository import request_text, stored_result
+
+    identity, policy = execution_identity("post_submit"), _forge_policy()
+    request = _request(identity, policy)
+    execution = await SelectedPostSubmitProcessor(
+        policy=policy, identity=identity, execution=_ForgeExecution(),
+        forge_facts=_Forge(facts=_facts()),
+    ).evaluate(request, _SelectorView(execution_material(identity)))
+    # Persist the actual earlier member shape, with its own correct retained digest.
+    execution = replace(execution, external_members=(
+        replace(execution.external_members[0], forge_receipt=None),
+    ))
+    original = make_selected_post_submit_result(
+        request_id=request.evaluation_request_id, request_digest=request.request_sha256,
+        attempt_id=identity.attempt_id, evaluation_generation=request.evaluation_generation,
+        result_id=identity.result_id, outcome="completed", execution=execution,
+        infrastructure_failure_code=None,
+    )
+    original_json = original.model_dump_json(exclude={"result_digest"})
+    assert "forge_receipt" not in original_json
+    run = SimpleNamespace(
+        id=str(identity.attempt_id), result_id=str(identity.result_id),
+        request_json=request_text(request), request_digest=request.request_sha256,
+        result_json=original_json, result_digest=original.result_digest,
+    )
+    for _ in range(2):
+        recovered = stored_result(run)
+        assert recovered == original
+        assert recovered.result_digest == run.result_digest
+        assert recovered.model_dump_json(exclude={"result_digest"}) == original_json
+    assert run.result_json == original_json

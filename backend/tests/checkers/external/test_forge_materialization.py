@@ -173,7 +173,7 @@ async def test_forge_receipt_survives_real_art_grants_and_executor_replay(
         assert not any((h.scratch / "workspaces").iterdir())
 
 
-@pytest.mark.parametrize("field", ["facts", "locator_input", "final_input", "material", "locator"])
+@pytest.mark.parametrize("field", ["facts", "locator_input", "final_input", "material", "locator", "missing"])
 async def test_real_art_rejects_tampered_forge_receipt_before_retaining_completed_result(
     tmp_path, isolated_database_env, monkeypatch, field,
 ):
@@ -183,7 +183,9 @@ async def test_real_art_rejects_tampered_forge_receipt_before_retaining_complete
         execution = await original(self, request, material)
         member = execution.external_members[0]
         receipt = member.forge_receipt
-        if field == "material":
+        if field == "missing":
+            receipt = None
+        elif field == "material":
             altered = receipt.materials[0].model_copy(update={"semantic_manifest_sha256": "sha256:" + "f" * 64})
             receipt = receipt.model_copy(update={"materials": (altered,)})
         elif field == "locator":
