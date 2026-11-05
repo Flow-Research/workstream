@@ -1458,3 +1458,42 @@ async def test_manager_authored_runtime_refuses_a_substituted_document_version(m
     with pytest.raises(ProjectAgentRuntimeError, match="document access failed"):
         await _manager_compile(compilation_context, grant)
     assert grant.recorded == []
+
+
+@pytest.mark.parametrize("omit_guide_citations", [False, True])
+async def test_documented_garden_rules_cover_both_uploaded_originals(omit_guide_citations):
+    """The documented upload pair compiles; dropping guide citations reproduces its defect."""
+    from pathlib import Path
+
+    pilot = Path(__file__).resolve().parents[2] / "pilots" / "garden"
+    guide = (pilot / "guide.md").read_bytes()
+    rules = (pilot / "manager-rules.md").read_bytes()
+    if omit_guide_citations:
+        authored = json.loads(rules)
+        for requirement in authored["requirements"]:
+            requirement["evidence_refs"] = []
+        rules = json.dumps(authored).encode()
+    compilation_context, _bodies = _manager_material(rules)
+    guide_digest = "sha256:" + hashlib.sha256(guide).hexdigest()
+    guide_document = compilation_context.material.documents[0].model_copy(update={
+        "sha256": guide_digest, "byte_count": len(guide), "media_type": "text/markdown",
+    })
+    rules_document = compilation_context.material.documents[1]
+    material = GuideDocumentManifest.model_validate(
+        compilation_context.material.model_copy(update={
+            "documents": (guide_document, rules_document),
+        }).model_dump()
+    )
+    compilation_context = compilation_context.model_copy(update={"material": material})
+    grant = _DirectGrant(compilation_context, {guide_digest: guide, rules_document.sha256: rules})
+    if omit_guide_citations:
+        with pytest.raises(ProjectGuideCompilationInvalidOutputError) as caught:
+            await _manager_compile(compilation_context, grant)
+        assert caught.value.failure_code == "schema_invalid"
+        return
+    result = await _manager_compile(compilation_context, grant)
+    assert result.status == "draft_ready"
+    assert {ref.source_item_id for item in result.requirements for ref in item.evidence_refs} == {
+        guide_document.source_item_id, rules_document.source_item_id,
+    }
+    assert set(grant.recorded) == {material.handle_for(item) for item in material.documents}

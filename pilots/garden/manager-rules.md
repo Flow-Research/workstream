@@ -121,7 +121,12 @@
           }
         ]
       },
-      "evidence_refs": []
+      "evidence_refs": [
+        {
+          "document": "sha256:9d15f211624878f08fb100b65c0bb91501d98c2fb96332640cf6b8130eff576c",
+          "section": "Submit one small ZIP"
+        }
+      ]
     },
     {
       "suggestion_id": "garden_reviewed_task_proof",
@@ -260,7 +265,12 @@
           }
         ]
       },
-      "evidence_refs": []
+      "evidence_refs": [
+        {
+          "document": "sha256:9d15f211624878f08fb100b65c0bb91501d98c2fb96332640cf6b8130eff576c",
+          "section": "What PRE and POST mean"
+        }
+      ]
     }
   ],
   "setup_notes": [

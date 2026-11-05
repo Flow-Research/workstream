@@ -35,6 +35,13 @@ the explicit requirements compilation operation. For optional AI assistance,
 declare/upload the guide alone and explicitly request setup; the task examples
 remain the same. Neither upload invokes a model on its own.
 
+The rules cite the exact SHA-256 of this `guide.md` original; the manager-authored
+runtime also cites the rules original itself. This gives the ready proposal
+coverage of both uploaded documents. If the guide changes, update those rule
+citations to its new digest before creating and uploading a new guide version.
+Do not edit retained originals or rely on an empty citation list: reading a
+document alone does not establish the required source coverage.
+
 [tasks.json](tasks.json) contains two individual manual-task request bodies.
 Submit each through the existing project task API after activation; this array
 is a local preparation file, not a new bulk-import API.
