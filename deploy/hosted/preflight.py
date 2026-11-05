@@ -17,7 +17,7 @@ import subprocess
 import sys
 import time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
@@ -1017,6 +1017,8 @@ def run_compose(
     environment_path: Path, values: dict[str, str], compose_arguments: list[str]
 ) -> int:
     """Run one documented Compose operation with no ambient interpolation."""
+    if compose_arguments and compose_arguments[0] == "provision-project-points":
+        return _run_points_operator(environment_path, values, compose_arguments)
     command_timeout = None
     if compose_arguments == ["migrate"]:
         compose_arguments = [
@@ -1072,6 +1074,82 @@ def run_compose(
     except OSError as exc:
         raise PreflightError("hosted Compose operation could not start") from exc
     return completed.returncode
+
+
+def _points_operator_arguments(arguments: list[str], values: dict[str, str]) -> list[str]:
+    """Admit only fixed selectors and one private token-file mount source."""
+    keys = {
+        "--project-id", "--adapter-actor-id", "--unit-code", "--route-key",
+        "--finance-token-file",
+    }
+    if len(arguments) != 11 or set(arguments[1::2]) != keys:
+        raise PreflightError("points provisioning requires exactly five named inputs")
+    inputs = dict(zip(arguments[1::2], arguments[2::2], strict=True))
+    try:
+        project = str(UUID(inputs["--project-id"]))
+        adapter = str(UUID(inputs["--adapter-actor-id"]))
+    except ValueError as exc:
+        raise PreflightError("points provisioning selectors must be UUIDs") from exc
+    unit, route = inputs["--unit-code"], inputs["--route-key"]
+    if (
+        re.fullmatch(r"[A-Za-z][A-Za-z0-9._:-]{0,31}", unit) is None
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9._:-]{0,119}", route) is None
+        or ".." in route
+    ):
+        raise PreflightError("points provisioning unit or route is invalid")
+    path = Path(inputs["--finance-token-file"])
+    try:
+        metadata = path.lstat()
+        if (
+            not path.is_absolute() or path.resolve(strict=True) != path
+            or any(character.isspace() or character in ":," for character in str(path))
+            or not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+            or metadata.st_uid != _positive_id(values, "WORKSTREAM_RUNTIME_UID")
+            or metadata.st_gid != _positive_id(values, "WORKSTREAM_RUNTIME_GID")
+            or stat.S_IMODE(metadata.st_mode) not in {0o400, 0o600}
+            or not 0 < metadata.st_size <= 16_384
+        ):
+            raise ValueError
+    except (OSError, ValueError):
+        raise PreflightError("points Finance token file is unavailable or unsafe") from None
+    return [
+        "--volume", f"{path}:/run/secrets/points_finance_token:ro", "api",
+        "/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "120s",
+        "python", "scripts/provision_project_points.py",
+        "--project-id", project, "--adapter-actor-id", adapter,
+        "--unit-code", unit, "--route-key", route,
+        "--finance-token-file", "/run/secrets/points_finance_token",
+    ]
+
+
+def _run_points_operator(
+    environment_path: Path, values: dict[str, str], arguments: list[str],
+) -> int:
+    """Run only the image-owned provisioner; clean only this invocation on failure."""
+    fixed_arguments = _points_operator_arguments(arguments, values)
+    name = "workstream-points-" + uuid4().hex
+    environment = compose_environment(values)
+    try:
+        return subprocess.run(
+            [
+                "docker", "compose", "--env-file", str(environment_path),
+                *_compose_file_arguments(values), "run", "--rm", "--no-deps", "-T",
+                "--pull", "never", "--name", name, *fixed_arguments,
+            ],
+            check=False, env=environment, timeout=150,
+        ).returncode
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        try:
+            cleanup = subprocess.run(
+                ["docker", "rm", "--force", name], check=False, env=environment,
+                capture_output=True, timeout=10,
+            )
+            removed = cleanup.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            removed = False
+        if not removed:
+            print(f"points operator cleanup uncertain; owned container: {name}", file=sys.stderr)
+        raise PreflightError("points operator did not complete; no automatic retry") from exc
 
 
 def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:

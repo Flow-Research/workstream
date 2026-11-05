@@ -507,8 +507,12 @@ docker compose exec -T backend python scripts/provision_project_points.py \
 ```
 
 Hosted operators use the deployed release's configured database and Flow
-verifier settings with a private token-file mount. This command does not change
-running services' configuration. `--unit-code` defaults to `FLOW`.
+verifier settings through the fixed
+[`provision-project-points` hosted command](../../deploy/hosted/README.md#provision-project-points-prerequisites),
+using a released image containing the authenticated provisioner and replay fence.
+It accepts structured selectors and one private token-file mount; it does not
+change running services' configuration. In the direct script above,
+`--unit-code` defaults to `FLOW`.
 `--route-key` is required and identifies the binding's route; it does not enable
 an external delivery implementation.
 

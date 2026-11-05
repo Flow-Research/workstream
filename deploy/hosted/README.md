@@ -458,6 +458,49 @@ reloads the node configuration and requires static custody plus both typed nativ
 health checks before releasing API/worker services. `pull`, `ps` and fixed `stop`
 remain usable while a node is unavailable.
 
+### Provision project-points prerequisites
+
+Use the fixed `provision-project-points` operation for the authenticated Finance
+operator command. Before hosted use, the selected digest-qualified backend image
+must contain the reviewed `scripts/provision_project_points.py` and current
+adapter-binding replay authority fence. Older deployed images do not acquire
+these changes from the host checkout. Build and release the intended backend
+image first; do not mount replacement source or override the image/entrypoint.
+
+An Access Administrator separately provisions the actual compensation-adapter
+actor through the public service-actor route. Supply that actor UUID and the
+project UUID. Store a short-lived real Finance Flow token in a canonical absolute
+host file owned by `10001:10001`, mode `0400` or `0600`, with one hard link and no
+symbolic links. The nonempty file must be at most 16,384 bytes; its path cannot
+contain whitespace, colons or commas. Never put the bearer itself in argv or the
+release environment file.
+
+```bash
+sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
+  provision-project-points --project-id "$PROJECT_ID" \
+  --adapter-actor-id "$ADAPTER_ID" --unit-code FLOW \
+  --route-key flow_points.recording \
+  --finance-token-file /etc/workstream/operator/finance-token
+```
+
+All five inputs are required. The wrapper validates the release and static host
+inputs, then runs only the configured API image's embedded provisioner, retaining
+the API role's entrypoint, secrets, network and TLS trust. It adds one read-only
+mount at `/run/secrets/points_finance_token`; it does not publish API ports, start
+dependencies, run migrations or launch a checker. Generic `run`, arbitrary
+commands, environment/entrypoint overrides and source/image mounts are rejected.
+
+The operator verifies the token and current Finance authority separately for each
+committed step and exact replay. Its result contains actual owner receipts;
+unit and binding commits are separate. Execution has a 120-second inner deadline
+with five seconds to kill, a 150-second outer wait and a ten-second cleanup bound.
+Normal completion removes the one-off container. Exceptional cleanup targets
+only its generated name; uncertainty reports that name without claiming removal.
+A timeout or start failure remains a failure even if a step committed. Retain
+the receipts and inspect the outcome before an explicitly chosen retry; the
+wrapper never retries automatically or infers readiness. No award, policy
+publication or external fulfillment is performed by this operation.
+
 Cold startup has explicit prerequisite stages to avoid a schema/activation/proxy/
 node dependency cycle. `migrate` runs only the existing API image's Alembic command
 with no dependencies. The fixed AWS `proof` sequence and exactly

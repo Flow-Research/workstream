@@ -241,3 +241,54 @@ Verification uses focused pure token-file/Flow checks plus the existing isolated
 PostgreSQL provisioner suite for permissions, isolation, replay, expiry/revocation,
 rollback and committed-step reporting; lint and diff checks follow. Hosted
 mutations and publication remain separate explicitly invoked operator actions.
+
+### Fixed hosted points operator invocation
+
+The authenticated provisioner also needs the deployed API role's Docker network,
+file-backed secrets and Flow TLS trust. A standalone host interpreter does not
+supply that environment. Extend the existing hosted Compose command allowlist
+with exactly `provision-project-points`, taking required structured
+`--project-id`, `--adapter-actor-id`, `--unit-code`, `--route-key` and
+`--finance-token-file` inputs. No caller command, entrypoint, image, source mount,
+Compose override, arbitrary environment or generic `run` is admitted.
+
+Hosted feasibility requires an immutable backend image containing the reviewed
+authenticated provisioner and binding replay fence. An older deployed backend
+image is insufficient; no source mount, entrypoint override or image substitution
+is permitted to work around that prerequisite.
+
+Allowed files are `deploy/hosted/compose.py`, `deploy/hosted/preflight.py`,
+`scripts/test_hosted_release_config.py`, `deploy/hosted/README.md`, the hosted-use
+paragraph of `docs/engineering/local-agent-loop.md`, and this record. Risk remains
+L1 (deployment/Finance authentication). Security/architecture plan review precedes
+implementation, then focused source/QA review binds the final candidate. Human
+focus is one fixed immutable-image command and token-only mount, preserving the
+existing application/native identities and caller-owned Finance transactions.
+
+The wrapper validates the same release environment, rendered API topology and
+static private host inputs as the fixed migration operation; it does not require
+or start checker execution. It constructs only an API-role one-off invocation
+with `--rm`, `--no-deps`, `--pull never`, the existing release entrypoint, and
+`python scripts/provision_project_points.py` with the validated selectors.
+The sole extra mount is the selected token file read-only at the fixed container
+path `/run/secrets/points_finance_token`. Its host path must be canonical,
+absolute, free of Compose-volume delimiters, a bounded nonempty single-link
+regular file owned by runtime UID/GID 10001:10001, mode 0400 or 0600, with no
+symlink traversal. The provisioner independently rechecks token custody and Flow
+identity inside the container. The wrapper does not read, log or interpolate the
+token. The existing hosted proof pattern supplies a generated, non-caller-chosen
+container name, an inner 120-second TERM deadline with a five-second kill grace,
+a 150-second outer wait, and a ten-second exact owned-container cleanup reserve.
+Normal completion uses Compose `--rm`; exceptional cleanup targets only that
+invocation's name, and a timeout never means ready.
+
+Acceptance requires rejecting unknown, duplicate, malformed or missing arguments
+before operator execution; immutable backend image and inherited API role,
+secrets/network/TLS remain unchanged; no dependency/service startup or application
+source/image override is possible. Tests assert the exact generated argv,
+allowlisted subprocess environment, fixed mount target and read-only mode,
+private-file failure boundaries, bounded cleanup, absence of credentials in
+argv/errors, and continued rejection of generic `run`/entrypoint/source controls.
+Verification uses the existing hosted configuration test module plus targeted
+script/entrypoint contracts, lint, Markdown links and diff checks. No live
+provisioning or deployment is part of this implementation proof.

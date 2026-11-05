@@ -1808,6 +1808,133 @@ class HostedReleaseConfigTests(unittest.TestCase):
             ],
         )
 
+    def _points_inputs(self):
+        token = self.root / "finance-token"
+        token.write_text("private-finance-bearer", encoding="ascii")
+        token.chmod(0o400)
+        values = self.environment | {
+            "WORKSTREAM_RUNTIME_UID": str(os.getuid()),
+            "WORKSTREAM_RUNTIME_GID": str(os.getgid()),
+        }
+        arguments = [
+            "provision-project-points",
+            "--project-id", "00000000-0000-4000-8000-000000000001",
+            "--adapter-actor-id", "00000000-0000-4000-8000-000000000002",
+            "--unit-code", "FLOW", "--route-key", "flow_points.recording",
+            "--finance-token-file", str(token),
+        ]
+        return values, arguments, token
+
+    def test_points_operator_uses_only_fixed_image_owned_command_and_private_mount(self):
+        values, arguments, token = self._points_inputs()
+        with patch.object(preflight.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            self.assertEqual(preflight.run_compose(self.environment_path, values, arguments), 0)
+        command = run.call_args.args[0]
+        name = command[command.index("--name") + 1]
+        self.assertRegex(name, r"^workstream-points-[0-9a-f]{32}$")
+        self.assertEqual(command[command.index("run"):], [
+            "run", "--rm", "--no-deps", "-T", "--pull", "never", "--name", name,
+            "--volume", f"{token}:/run/secrets/points_finance_token:ro", "api",
+            "/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "120s",
+            "python", "scripts/provision_project_points.py",
+            *arguments[1:9], "--finance-token-file", "/run/secrets/points_finance_token",
+        ])
+        self.assertEqual(run.call_args.kwargs["env"], preflight.compose_environment(values))
+        self.assertEqual(run.call_args.kwargs["timeout"], 150)
+        self.assertNotIn("private-finance-bearer", repr(run.call_args))
+        self.assertNotIn("--entrypoint", command)
+        self.assertNotIn("--service-ports", command)
+
+    def test_points_operator_rejects_extra_or_malformed_selectors_before_launch(self):
+        values, original, _ = self._points_inputs()
+        cases = [original[:-2], original + ["--entrypoint", "sh"], ["run", "api", "sh"]]
+        for index, value in ((1, "--entrypoint"), (3, "--project-id"), (2, "invalid"),
+                             (4, "invalid"), (6, "--help"), (8, "../route"), (8, "--help")):
+            changed = list(original)
+            changed[index] = value
+            cases.append(changed)
+        for arguments in cases:
+            with self.subTest(arguments=arguments), patch.object(preflight.subprocess, "run") as run:
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.run_compose(self.environment_path, values, arguments)
+                run.assert_not_called()
+
+    def test_points_operator_rejects_unsafe_token_mounts(self):
+        for unsafe in ("symlink", "parent-link", "hardlink", "public", "directory",
+                       "empty", "oversized", "owner", "group", "delimiter"):
+            with self.subTest(unsafe=unsafe):
+                values, arguments, token = self._points_inputs()
+                if unsafe == "symlink":
+                    token = self.root / "token-link"
+                    token.symlink_to(arguments[-1])
+                elif unsafe == "parent-link":
+                    parent = self.root / "parent-link"
+                    parent.symlink_to(self.root, target_is_directory=True)
+                    token = parent / token.name
+                elif unsafe == "hardlink":
+                    os.link(token, self.root / "hardlink")
+                elif unsafe == "public":
+                    token.chmod(0o644)
+                elif unsafe == "directory":
+                    token = self.root
+                elif unsafe in {"empty", "oversized"}:
+                    token.chmod(0o600)
+                    token.write_text("" if unsafe == "empty" else "x" * 16_385)
+                elif unsafe in {"owner", "group"}:
+                    key = "WORKSTREAM_RUNTIME_UID" if unsafe == "owner" else "WORKSTREAM_RUNTIME_GID"
+                    values[key] = str(int(values[key]) + 1)
+                else:
+                    token = self.root / "token:mount"
+                    token.write_text("private-finance-bearer")
+                    token.chmod(0o400)
+                arguments[-1] = str(token)
+                with patch.object(preflight.subprocess, "run") as run:
+                    with self.assertRaises(preflight.PreflightError):
+                        preflight.run_compose(self.environment_path, values, arguments)
+                    run.assert_not_called()
+                # Restore the shared token before the next independent subcase.
+                (self.root / "finance-token").chmod(0o600)
+                if unsafe == "hardlink":
+                    (self.root / "hardlink").unlink()
+
+    def test_points_operator_timeout_and_start_failure_clean_only_owned_container(self):
+        values, arguments, _ = self._points_inputs()
+        for error in (subprocess.TimeoutExpired([], 150), OSError("private-provider-detail")):
+            for cleanup_ok in (True, False):
+                errors = io.StringIO()
+                cleanup = subprocess.CompletedProcess([], 0 if cleanup_ok else 1)
+                with (
+                    self.subTest(error=type(error), cleanup_ok=cleanup_ok),
+                    patch.object(preflight.subprocess, "run", side_effect=[error, cleanup]) as run,
+                    redirect_stderr(errors),
+                ):
+                    with self.assertRaisesRegex(preflight.PreflightError, "no automatic retry"):
+                        preflight.run_compose(self.environment_path, values, arguments)
+                launch, removal = run.call_args_list
+                name = launch.args[0][launch.args[0].index("--name") + 1]
+                self.assertEqual(removal.args[0], ["docker", "rm", "--force", name])
+                self.assertEqual(removal.kwargs["timeout"], 10)
+                self.assertEqual(removal.kwargs["env"], preflight.compose_environment(values))
+                self.assertNotIn("private-provider-detail", errors.getvalue())
+                self.assertEqual(bool(errors.getvalue()), not cleanup_ok)
+                if not cleanup_ok:
+                    self.assertIn(name, errors.getvalue())
+
+    def test_points_operator_preflight_requires_static_inputs_without_checker_execution(self):
+        _, arguments, _ = self._points_inputs()
+        with (
+            patch.object(compose, "validate_private_host_inputs") as private,
+            patch.object(compose, "validate_smol_runtime") as native,
+            patch.object(compose, "validate_trusted_intake") as intake,
+            patch.object(compose, "run_compose", return_value=0) as run,
+        ):
+            self.assertEqual(self._compose_main(*arguments), (0, ""))
+            private.assert_called_once_with(self.environment, require_node=False)
+            native.assert_not_called()
+            intake.assert_not_called()
+            run.assert_called_once_with(self.environment_path, self.environment, arguments)
+
     def test_checker_model_paths_require_enabled_exact_proxy_topology(self) -> None:
         for key in ("model_proxy_socket", "model_relay_root"):
             for replacement in (None, "/tmp/substituted"):
