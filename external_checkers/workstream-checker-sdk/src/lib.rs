@@ -365,6 +365,88 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
     })
 }
 
+/// Locator requests remain v1 requests and carry an explicit, schema-declared stage.
+pub fn is_forge_locator_request(request: &ValidatedRequest) -> bool {
+    request.value["input"]
+        .get("workstream_forge_facts_stage")
+        .is_some()
+}
+
+pub fn require_forge_locator_request(request: &ValidatedRequest) -> Result<(), ContractError> {
+    if request.phase != "post_submit"
+        || request.value["input"]["workstream_forge_facts_stage"] != "locate"
+        || request.value["configuration"]["workstream_forge_facts_version"] != "v1"
+        || !request.value["registry"]["input_schema"]["document"]["properties"]
+            .as_object()
+            .is_some_and(|properties| {
+                properties
+                    .get("workstream_forge_facts_stage")
+                    .is_some_and(|stage| {
+                        stage.get("const").and_then(Value::as_str) == Some("locate")
+                    })
+            })
+    {
+        return Err(ContractError("forge locator request is invalid"));
+    }
+    Ok(())
+}
+
+/// Only the closed locator response or an ordinary infrastructure failure is valid.
+pub fn validate_forge_locator_result(
+    value: &Value,
+    request: &ValidatedRequest,
+) -> Result<(), ContractError> {
+    require_forge_locator_request(request)?;
+    if value.get("schema_version").and_then(Value::as_str) == Some(RESULT_SCHEMA_VERSION) {
+        validate_result(value, request)?;
+        if value.get("outcome").and_then(Value::as_str) != Some("infrastructure_failed") {
+            return Err(ContractError("locator cannot return a work verdict"));
+        }
+        return Ok(());
+    }
+    let object = exact_object(
+        value,
+        &[
+            "schema_version",
+            "request_digest",
+            "registry_entry_id",
+            "registry_entry_digest",
+            "phase",
+            "change_url",
+            "locator_digest",
+        ],
+    )?;
+    if string(object, "schema_version")? != "external_checker_forge_locator.v1"
+        || digest(object, "request_digest")? != request.request_digest
+        || string(object, "registry_entry_id")? != request.registry_entry_id
+        || digest(object, "registry_entry_digest")? != request.registry_entry_digest
+        || string(object, "phase")? != "post_submit"
+    {
+        return Err(ContractError("locator request identity differs"));
+    }
+    match &object["change_url"] {
+        Value::Null => (),
+        Value::String(url)
+            if !url.is_empty()
+                && url.chars().count() <= 2048
+                && !url.chars().any(char::is_control) =>
+        {
+            ()
+        }
+        _ => return Err(ContractError("locator change URL is invalid")),
+    }
+    let mut body = object.clone();
+    body.remove("locator_digest");
+    if canonical_hash(&Value::Object(body))? != digest(object, "locator_digest")? {
+        return Err(ContractError("locator digest differs"));
+    }
+    let encoded = canonical_json(value)?;
+    if encoded.len() > MAX_RESULT_BYTES || encoded.len() > request.maximum_output_bytes {
+        return Err(ContractError("locator exceeds output bound"));
+    }
+    Ok(())
+}
+
 pub fn completed_result(
     request: &ValidatedRequest,
     findings: Vec<Finding>,
@@ -949,6 +1031,9 @@ pub fn validate_result(value: &Value, request: &ValidatedRequest) -> Result<(), 
             return Err(ContractError("infrastructure result is invalid"));
         }
     } else if outcome == "completed" {
+        if is_forge_locator_request(request) {
+            return Err(ContractError("locator cannot return a work verdict"));
+        }
         let passed = verdict
             .as_str()
             .ok_or(ContractError("completed result is invalid"))?;
@@ -1324,6 +1409,119 @@ mod tests {
                 serde_json::json!([current])
             };
         resign_request(request)
+    }
+
+    fn locator_request() -> ValidatedRequest {
+        let mut value = post_context_request("initial", &[]);
+        value["configuration"]["workstream_forge_facts_version"] = serde_json::json!("v1");
+        value["input"]["workstream_forge_facts_stage"] = serde_json::json!("locate");
+        value["registry"]["input_schema"]["document"]["properties"]
+            ["workstream_forge_facts_stage"] =
+            serde_json::json!({"type": "string", "const": "locate"});
+        parse_request(&serde_json::to_vec(&resign_request(value)).unwrap()).unwrap()
+    }
+
+    fn locator_result(request: &ValidatedRequest, url: Value) -> Value {
+        let mut value = serde_json::json!({
+            "schema_version": "external_checker_forge_locator.v1",
+            "request_digest": request.request_digest,
+            "registry_entry_id": request.registry_entry_id,
+            "registry_entry_digest": request.registry_entry_digest,
+            "phase": "post_submit", "change_url": url,
+        });
+        value["locator_digest"] = Value::String(canonical_hash(&value).unwrap());
+        value
+    }
+
+    #[test]
+    fn forge_locator_binds_request_registry_digest_and_output_bounds() {
+        let mut request = locator_request();
+        require_forge_locator_request(&request).unwrap();
+        for url in [
+            Value::Null,
+            serde_json::json!("https://forge.test/o/r/pull/1"),
+            serde_json::json!("汉".repeat(2048)),
+        ] {
+            let value = locator_result(&request, url);
+            validate_forge_locator_result(&value, &request).unwrap();
+            assert!(validate_result(&value, &request).is_err());
+        }
+        for key in [
+            "request_digest",
+            "registry_entry_id",
+            "registry_entry_digest",
+            "phase",
+        ] {
+            let mut value = locator_result(&request, Value::Null);
+            value[key] = match key {
+                "request_digest" | "registry_entry_digest" => {
+                    serde_json::json!(format!("sha256:{}", "0".repeat(64)))
+                }
+                "registry_entry_id" => serde_json::json!("00000000-0000-4000-8000-000000000000"),
+                _ => serde_json::json!("pre_submit"),
+            };
+            value.as_object_mut().unwrap().remove("locator_digest");
+            value["locator_digest"] = Value::String(canonical_hash(&value).unwrap());
+            assert!(
+                validate_forge_locator_result(&value, &request).is_err(),
+                "{key}"
+            );
+        }
+        let mut value = locator_result(&request, Value::Null);
+        value["locator_digest"] = serde_json::json!(format!("sha256:{}", "0".repeat(64)));
+        assert!(validate_forge_locator_result(&value, &request).is_err());
+        for url in [
+            "x".repeat(2049),
+            "bad\nurl".into(),
+            "bad\u{85}url".into(),
+            String::new(),
+        ] {
+            assert!(validate_forge_locator_result(
+                &locator_result(&request, serde_json::json!(url)),
+                &request
+            )
+            .is_err());
+        }
+        let failure = infrastructure_result(&request, "invalid_output").unwrap();
+        validate_forge_locator_result(&failure, &request).unwrap();
+        assert!(completed_result(&request, vec![]).is_err());
+        let mut ordinary = request.clone();
+        ordinary.value["input"]
+            .as_object_mut()
+            .unwrap()
+            .remove("workstream_forge_facts_stage");
+        let completed = completed_result(&ordinary, vec![]).unwrap();
+        assert!(validate_forge_locator_result(&completed, &request).is_err());
+        let mut extra = locator_result(&request, Value::Null);
+        extra["unexpected"] = Value::Null;
+        assert!(validate_forge_locator_result(&extra, &request).is_err());
+        let value = locator_result(&request, Value::Null);
+        request.maximum_output_bytes = 1;
+        assert!(validate_forge_locator_result(&value, &request).is_err());
+    }
+
+    #[test]
+    fn forge_locator_requires_post_phase_version_marker_and_explicit_schema() {
+        let original = locator_request();
+        for field in ["phase", "version", "marker", "schema", "schema_const"] {
+            let mut request = original.clone();
+            match field {
+                "phase" => request.phase = "pre_submit".into(),
+                "version" => {
+                    request.value["configuration"]["workstream_forge_facts_version"] = Value::Null
+                }
+                "marker" => request.value["input"]["workstream_forge_facts_stage"] = Value::Null,
+                "schema" => {
+                    request.value["registry"]["input_schema"]["document"]["properties"] =
+                        Value::Null
+                }
+                _ => {
+                    request.value["registry"]["input_schema"]["document"]["properties"]
+                        ["workstream_forge_facts_stage"]["const"] = serde_json::json!("evaluate")
+                }
+            }
+            assert!(require_forge_locator_request(&request).is_err(), "{field}");
+        }
     }
 
     #[test]

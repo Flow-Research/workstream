@@ -662,9 +662,13 @@ cannot be reused as post-submission review-gate evidence. See the
   The opt-in [local agent loop overlay](engineering/local-agent-loop.md) adds
   the existing checker service in `docker-dev` mode with a networkless
   proof checker that compares proofs with forge facts (GitHub today).
-  POST evaluation reads those facts for bindings that select them and fails
-  closed without them; selecting the checker into guide rules, hosted
-  credentials and durable facts custody remain separate work.
+  For bindings selecting forge facts, the same offline image first extracts a
+  bounded selector from its own submission format. Shared POST validates the
+  locked repository scope, retrieves facts and invokes the image for evaluation;
+  it does not parse project proof files. Completed evaluation retains the selector,
+  input/facts hashes and verified material identities. Missing facts never pass.
+  Selecting the checker into guide rules, hosted credentials, separate storage of
+  fetched response bytes and the Garden project drill remain separate work.
 - AWS S3 is the hosted artifact target, MinIO proves the storage protocol in
   development and CI, and all storage access stays behind `ArtifactStore`.
   Development/CI MinIO uses a shared pinned-source build; existing artifact

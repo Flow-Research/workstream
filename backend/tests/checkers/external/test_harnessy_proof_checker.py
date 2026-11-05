@@ -744,12 +744,12 @@ def test_operator_only_approval_is_a_non_blocking_warning() -> None:
 
 def test_published_registry_body_is_post_only_and_backend_valid() -> None:
     digest = "sha256:" + "d" * 64
-    spec = ExternalCheckerRegistrySpec.model_validate(publish_local.registry_spec(digest, "v2"))
+    spec = ExternalCheckerRegistrySpec.model_validate(publish_local.registry_spec(digest, "v3"))
     assert (spec.phase, spec.image_digest, spec.capability_id, spec.capability_version) == (
         "post_submit",
         digest,
         "harnessy.work_proof",
-        "v2",
+        "v3",
     )
     full = {
         **CONFIGURATION,
@@ -933,3 +933,176 @@ def test_entrypoint_fails_closed_without_proof_material() -> None:
     result = json.loads(completed.stdout)
     assert result["verdict"] == "failed"
     assert [item["code"] for item in result["findings"]] == ["harnessy.proof.missing"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (_encoded(), PR_URL),
+        (json.dumps({"pr_url": "https://forge.example/other/change/1"}).encode(),
+         "https://forge.example/other/change/1"),
+        (json.dumps({"pr_url": "x" * 2048}).encode(), "x" * 2048),
+        (None, None),
+        (b"{}", None),
+        (b"null", None),
+        (b"[]", None),
+        (b"{bad-json", None),
+        (b"\xff", None),
+        (b'{"nested":' + b"[" * 2000 + b"0" + b"]" * 2000 + b"}", None),
+        (b" " * (checker.MAX_PROOF_BYTES + 1), None),
+        (json.dumps({"pr_url": "x" * 2049}).encode(), None),
+        (b'{"pr_url":12}', None),
+        (b'{"pr_url":""}', None),
+        (b'{"pr_url":"https://forge.example/\\nchange"}', None),
+        (b'{"pr_url":"https://forge.example/\\u007fchange"}', None),
+        (b'{"pr_url":"https://forge.example/\\u0085change"}', None),
+        (b'{"pr_url":"https://forge.example/\\u202echange"}', None),
+        (b'{"pr_url":"https://forge.example/\\ud800change"}', None),
+    ],
+    ids=("valid", "project-owned-url", "max-url", "missing", "missing-url", "null",
+         "array", "malformed", "invalid-utf8", "deep-json", "large-proof", "large-url",
+         "non-string", "empty", "newline", "delete", "unicode-control", "format", "surrogate"),
+)
+def test_locator_reads_actual_proof_and_emits_bound_selector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    raw: bytes | None,
+    expected: str | None,
+) -> None:
+    """The real image parser owns extraction; unusable proof is a null selector."""
+    if raw is not None:
+        (tmp_path / "proof.json").write_bytes(raw)
+    request = {
+        **_request(),
+        "configuration": CONFIGURATION,
+        "input": {"workstream_forge_facts_stage": "locate"},
+    }
+    monkeypatch.setattr(checker, "Path", lambda _path: tmp_path)
+    monkeypatch.setattr(checker.sys, "stdin", io.StringIO(json.dumps(request)))
+    assert checker.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    body = {
+        "schema_version": "external_checker_forge_locator.v1",
+        "request_digest": request["request_digest"],
+        "registry_entry_id": request["registry"]["registry_entry_id"],
+        "registry_entry_digest": request["registry"]["entry_digest"],
+        "phase": "post_submit",
+        "change_url": expected,
+    }
+    assert result == {**body, "locator_digest": publish_local._hash(body)}
+    spec = ExternalCheckerRegistrySpec.model_validate(
+        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+    )
+    spec.input_schema.validate_instance(request["input"])
+    spec.output_schema.validate_instance(result)
+    with pytest.raises(ValueError):
+        ExternalCheckerExecutionResult.model_validate_json(json.dumps(result))
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory", "fifo"])
+def test_locator_rejects_non_regular_proof(tmp_path: Path, kind: str) -> None:
+    proof = tmp_path / "proof.json"
+    if kind == "symlink":
+        target = tmp_path / "outside.json"
+        target.write_bytes(_encoded())
+        proof.symlink_to(target)
+    elif kind == "directory":
+        proof.mkdir()
+    else:
+        os.mkfifo(proof)
+    assert checker.build_locator(_request(), checker.read_proof(tmp_path))["change_url"] is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "input_value", "expected_codes"),
+    [
+        (_encoded(), _input(), []),
+        (_encoded(), _input(base_ref="dev"), _forge("base_branch")),
+        (_encoded(), {}, _forge("facts_missing")),
+        (b"[" * 2000 + b"0" + b"]" * 2000, _input(), ["harnessy.proof.invalid_json"]),
+    ],
+    ids=("matching", "facts-mismatch", "no-proof-only-fallback", "deep-json-finding"),
+)
+def test_final_invocation_reads_actual_proof_and_judges_facts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    raw: bytes,
+    input_value: dict,
+    expected_codes: list[str],
+) -> None:
+    (tmp_path / "proof.json").write_bytes(raw)
+    request = {**_request(), "configuration": CONFIGURATION, "input": input_value}
+    monkeypatch.setattr(checker, "Path", lambda _path: tmp_path)
+    monkeypatch.setattr(checker.sys, "stdin", io.StringIO(json.dumps(request)))
+    assert checker.main() == 0
+    result = json.loads(capsys.readouterr().out)
+    parsed = ExternalCheckerExecutionResult.model_validate_json(json.dumps(result))
+    assert [finding.code for finding in parsed.findings] == expected_codes
+    assert parsed.verdict == ("failed" if expected_codes else "passed")
+    spec = ExternalCheckerRegistrySpec.model_validate(
+        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+    )
+    spec.output_schema.validate_instance({key: value for key, value in result.items() if key != "result_digest"})
+
+
+def test_published_schema_distinguishes_locator_final_and_infrastructure() -> None:
+    spec = ExternalCheckerRegistrySpec.model_validate(
+        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+    )
+    assert spec.input_schema.document["properties"]["workstream_forge_facts_stage"] == {
+        "const": "locate"
+    }
+    with pytest.raises(ExternalCheckerContractError):
+        spec.input_schema.validate_instance({"workstream_forge_facts_stage": "evaluate"})
+    request = _request()
+    locator = checker.build_locator(request, _encoded())
+    final = checker.build_result(request, [])
+    infrastructure = {
+        **final,
+        "outcome": "infrastructure_failed",
+        "verdict": None,
+        "findings": [],
+        "infrastructure_failure_code": "deadline_exceeded",
+    }
+    for response in (locator, final, infrastructure):
+        spec.output_schema.validate_instance({key: value for key, value in response.items() if key != "result_digest"})
+    for invalid in (
+        {**locator, "verdict": "passed"},
+        {**final, "change_url": PR_URL},
+        {**locator, "schema_version": "unknown.v1"},
+        {**locator, "change_url": "x" * 2049},
+        {key: value for key, value in locator.items() if key != "locator_digest"},
+    ):
+        with pytest.raises(ExternalCheckerContractError):
+            spec.output_schema.validate_instance(invalid)
+
+
+
+def test_published_registry_validates_actual_normal_execution_result_request() -> None:
+    from app.modules.checkers.api.external import (
+        ExternalCheckerRegistryEntry,
+        external_checker_json_hash,
+        make_external_checker_execution_request,
+    )
+    from tests.checkers.external.support import execution_identity, execution_material, registry_entry
+
+    spec = ExternalCheckerRegistrySpec.model_validate(
+        publish_local.registry_spec("sha256:" + "d" * 64, "v3")
+    )
+    values = registry_entry("post_submit").model_dump()
+    values.update(spec.model_dump(), entry_digest=spec.spec_digest)
+    entry = ExternalCheckerRegistryEntry.model_validate(values)
+    identity = execution_identity("post_submit")
+    input_value = _input()
+    request = make_external_checker_execution_request(
+        registry=entry, identity=identity, configuration=CONFIGURATION,
+        configuration_sha256=external_checker_json_hash(CONFIGURATION),
+        input=input_value, input_sha256=external_checker_json_hash(input_value),
+        materials=(execution_material(identity),),
+    )
+    result = ExternalCheckerExecutionResult.model_validate_json(json.dumps(
+        checker.build_result(request.model_dump(mode="json"), [])
+    ))
+    result.validate_request(request)

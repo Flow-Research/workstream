@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionResponse,
+    ExternalCheckerForgeLocatorResponse,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
     ExternalCheckerModelGrant,
@@ -27,6 +28,12 @@ from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
+)
+
+from app.modules.checkers.api.forge_locator import (
+    FORGE_LOCATOR_STAGE_KEY,
+    ExternalCheckerForgeLocator,
+    require_forge_locator_request,
 )
 
 EXTERNAL_CHECKER_CAPABILITY_KEY = "external_checker_execution"
@@ -67,9 +74,21 @@ class UnixSocketExternalCheckerAdapter:
         *,
         model_grant: ExternalCheckerModelGrant | None = None,
     ) -> ExternalCheckerExecutionResponse:
+        """Execute evaluation only; locator messages cannot become work verdicts."""
+        if FORGE_LOCATOR_STAGE_KEY in request.input:
+            raise ExternalServiceProtocolError(self._identity)
+        return await self._exchange(request, grant, model_grant=model_grant, locate=False)
+
+    async def locate_forge_change(self, request, grant) -> ExternalCheckerForgeLocatorResponse:
+        """Use the same bounded transport without issuing model or trial authority."""
+        return await self._exchange(request, grant, model_grant=None, locate=True)
+
+    async def _exchange(self, request, grant, *, model_grant, locate):
         """Exchange one bounded request and revalidate every returned fact."""
         try:
             checked = ExternalCheckerExecutionRequest.model_validate(request)
+            if locate:
+                require_forge_locator_request(checked)
             if type(grant) is not ExternalCheckerMaterialGrant:
                 raise ValueError("external checker material grant is invalid")
             if model_grant is not None and (
@@ -81,7 +100,7 @@ class UnixSocketExternalCheckerAdapter:
             payload = json.dumps(
                 {
                     "protocol_version": _PROTOCOL,
-                    "operation": "execute",
+                    "operation": "locate_forge_change" if locate else "execute",
                     "request": checked.model_dump(mode="json"),
                     "grant": {
                         "grant_id": grant.grant_id,
@@ -134,12 +153,20 @@ class UnixSocketExternalCheckerAdapter:
                 type(body) is not dict
                 or set(body) != {"protocol_version", "result", "isolation"}
                 or body["protocol_version"] != _PROTOCOL
+                or not isinstance(body["result"], dict)
             ):
                 raise ValueError("external checker service response is invalid")
-            result = ExternalCheckerExecutionResult.model_validate_json(
+            locator = (
+                locate
+                and body["result"].get("schema_version") == "external_checker_forge_locator.v1"
+            )
+            result_type = ExternalCheckerForgeLocator if locator else ExternalCheckerExecutionResult
+            result = result_type.model_validate_json(
                 json.dumps(body["result"], ensure_ascii=False, allow_nan=False)
             )
             result.validate_request(checked)
+            if locate and not locator and result.outcome != "infrastructure_failed":
+                raise ValueError("forge locator returned a work verdict")
             isolation = (
                 None
                 if body["isolation"] is None
@@ -149,9 +176,12 @@ class UnixSocketExternalCheckerAdapter:
                 isolation.platform_manifest_digest != checked.registry.image_digest
             ):
                 raise ValueError("external checker isolation receipt is invalid")
-            if result.outcome == "completed" and isolation is None:
+            if (locator or result.outcome == "completed") and isolation is None:
                 raise ValueError("completed checker result lacks isolation receipt")
-            return ExternalCheckerExecutionResponse(result=result, isolation=isolation)
+            response_type = (
+                ExternalCheckerForgeLocatorResponse if locate else ExternalCheckerExecutionResponse
+            )
+            return response_type(result=result, isolation=isolation)
         except (TypeError, ValueError, ValidationError, ExternalCheckerContractError) as exc:
             raise ExternalServiceProtocolError(self._identity) from exc
 
@@ -213,6 +243,7 @@ class UnixSocketExternalCheckerAdapter:
             )
         except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
             raise ExternalServiceProtocolError(self._identity) from exc
+
 
 __all__ = (
     "EXTERNAL_CHECKER_CAPABILITY_KEY",

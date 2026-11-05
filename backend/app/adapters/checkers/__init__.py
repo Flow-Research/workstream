@@ -181,6 +181,10 @@ class _ConfiguredExternalCheckerExecution:
             EXTERNAL_CHECKER_PROVIDER_KEY
         )
 
+    async def locate_forge_change(self, request, grant):
+        """Resolve the same provider for the isolated locator operation."""
+        return await self._resolve().locate_forge_change(request, grant)
+
     async def execute(
         self,
         request: ExternalCheckerExecutionRequest,

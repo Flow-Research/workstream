@@ -101,12 +101,64 @@ CONFIGURATION_SCHEMA: dict[str, object] = {
 INPUT_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
+        "workstream_forge_facts_stage": {"const": "locate"},
         "forge_facts": {
             "type": "object",
             "required": ["schema_version"],
             "properties": {"schema_version": {"const": "workstream.forge_change_facts.v1"}},
         }
     },
+}
+
+
+# JSON Schema oneOf is supported by registry validation and the offline runner.
+# Ordinary results validate their body without result_digest; locators validate
+# their complete response. Both responses share request identity; their distinct schema tags and closed
+# shapes prevent a locator from masquerading as a completed work verdict.
+_RESPONSE_IDENTITY = {
+    "request_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "registry_entry_id": {"type": "string"},
+    "registry_entry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "phase": {"const": "post_submit"},
+}
+_LOCATOR_PROPERTIES = {
+    **_RESPONSE_IDENTITY,
+    "schema_version": {"const": "external_checker_forge_locator.v1"},
+    "change_url": {
+        "oneOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1, "maxLength": 2048},
+        ]
+    },
+    "locator_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+}
+_RESULT_PROPERTIES = {
+    **_RESPONSE_IDENTITY,
+    "schema_version": {"const": "external_checker_result.v1"},
+    "outcome": {"enum": ["completed", "infrastructure_failed"]},
+    "verdict": {"enum": ["passed", "failed", None]},
+    "findings": {"type": "array", "maxItems": 256, "items": {"type": "object"}},
+    "infrastructure_failure_code": {
+        "enum": [
+            None,
+            "capacity_exceeded",
+            "deadline_exceeded",
+            "material_unavailable",
+            "implementation_unavailable",
+            "invalid_output",
+        ]
+    },
+}
+OUTPUT_SCHEMA: dict[str, object] = {
+    "oneOf": [
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(properties),
+            "properties": properties,
+        }
+        for properties in (_LOCATOR_PROPERTIES, _RESULT_PROPERTIES)
+    ]
 }
 
 
@@ -131,7 +183,7 @@ def registry_spec(image_digest: str, capability_version: str) -> dict[str, objec
             "harnessy.work_proof.configuration", CONFIGURATION_SCHEMA
         ),
         "input_schema": _schema(INPUT_SCHEMA_ID, INPUT_SCHEMA),
-        "output_schema": _schema("external_checker_result"),
+        "output_schema": _schema("external_checker_result", OUTPUT_SCHEMA),
         "resources": {
             "cpu_millis": 500,
             "memory_bytes": 134_217_728,
@@ -234,9 +286,9 @@ def main(argv: list[str] | None = None) -> int:
         help="emit fixed local proxy and daemon-visible relay paths",
     )
     # The registry holds one immutable entry per phase, capability and version,
-    # so a rebuilt image (new digest) needs a new version. v2 compares the
-    # proof with forge facts and is post-submission only.
-    parser.add_argument("--capability-version", default="v2")
+    # so a rebuilt image (new digest) needs a new version. v3 adds project-owned
+    # proof location before the final comparison with scoped forge facts.
+    parser.add_argument("--capability-version", default="v3")
     args = parser.parse_args(argv)
     image = publish(args.registry, args.repository)
     args.out_dir.mkdir(parents=True, exist_ok=True)

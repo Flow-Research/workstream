@@ -443,7 +443,15 @@ async def _resolve_attachments(
         configuration = attachment.configuration
         entry.configuration_schema.validate_instance(configuration)
         validated_evaluation_context_roles(configuration, entry)
-        validated_forge_facts(configuration, entry)
+        if validated_forge_facts(configuration, entry) is not None:
+            # New bindings must support location; retained policy facts keep their locked shape.
+            inputs = entry.input_schema.document.get("properties", {})
+            if (
+                not isinstance(inputs, dict)
+                or not isinstance(inputs.get("workstream_forge_facts_stage"), dict)
+                or inputs["workstream_forge_facts_stage"].get("const") != "locate"
+            ):
+                raise ExternalCheckerPolicyError("checker input schema does not declare forge locator")
         validated_trial_configuration(configuration, entry)
         try:
             selector = configured_model_profile_selector(configuration, stage=phase)
@@ -544,6 +552,8 @@ def selected_post_submit_execution_budget_ms(
         + EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
         + (
             SELECTED_POST_FORGE_FACTS_BUDGET_MS
+            + binding.registry.resources.deadline_ms
+            + EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS
             if selected_forge_facts(binding.configuration, binding.stage) is not None
             else 0
         )

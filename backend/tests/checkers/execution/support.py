@@ -166,7 +166,7 @@ async def provision_post_submit_service(factory, identity=ServiceIdentity.CHECKE
         return actor_id
 
 
-def live_executor(h, *, outbox=None, selected_execution=None):
+def live_executor(h, *, outbox=None, selected_execution=None, forge_facts=None):
     from app.adapters.auth import post_submit_execution_authority
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
@@ -178,6 +178,7 @@ def live_executor(h, *, outbox=None, selected_execution=None):
         execute_authority=post_submit_execution_authority,
         finalize_authority=post_submit_execution_authority,
         selected_execution=selected_execution or ControlledSelectedExecution(),
+        forge_facts=forge_facts,
         outbox=outbox if outbox is not None else outbox_append,
         review_modes=project_locked_policy_context_port,
     )

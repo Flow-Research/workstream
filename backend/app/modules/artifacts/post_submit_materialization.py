@@ -81,6 +81,8 @@ from app.modules.checkers.api.execution import (
 from app.modules.tasks.api.submitted_bundle import SubmittedBundlePort, SubmittedBundleUnavailable
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
+    ExternalCheckerContractError,
+    external_checker_json_hash,
     PostSubmitExternalCheckerIdentity,
     PostSubmitExternalCheckerMaterial,
 )
@@ -89,6 +91,7 @@ from app.modules.tasks.api.evaluation_revision import (
     TaskEvaluationRevisionContext,
     TaskEvaluationRevisionPort,
 )
+from app.modules.checkers.api.forge_locator import FORGE_LOCATOR_STAGE_KEY
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleRequest
 from app.modules.checkers.api.evaluation_context import (
     PostSubmitEvaluationContext,
@@ -97,6 +100,7 @@ from app.modules.checkers.api.evaluation_context import (
 from app.modules.checkers.api.external_policy import (
     LockedExternalCheckerBinding,
     selected_evaluation_context_roles,
+    selected_forge_facts,
 )
 from app.modules.checkers.api.revision_feedback import RevisionFeedbackPort, RevisionFeedbackRequest
 from app.modules.checkers.api.selected_post_submit import SelectedPostSubmitCurrentResultReference
@@ -157,11 +161,13 @@ class _MaterialView:
                     "predecessor_submission_archive",
                 ),
             )
+        self._issued_requests = {}
         self._closed = False
 
     def close(self):
         """Revoke every view before the aggregate projection is cleaned."""
         self._closed = True
+        self._issued_requests.clear()
 
     def _require_open(self):
         if self._closed:
@@ -300,6 +306,7 @@ class _MaterialView:
         with self._preparation.post_external_material_grant(
             self._sources, self._workspace, grant_request
         ) as grant:
+            self._issued_requests[checked.request_digest] = checked
             yield ExternalCheckerMaterialGrant(
                 grant_id=grant.grant_id, binding_digest=grant.binding_digest
             )
@@ -314,6 +321,41 @@ class _MaterialView:
         for binding, member in zip(
             self._execution.request.policy.entries, result.execution.external_members, strict=True
         ):
+            forge_receipt = member.forge_receipt
+            if (forge_receipt is not None) != (
+                selected_forge_facts(binding.configuration, binding.stage) is not None
+            ):
+                raise PostSubmissionMaterializationFailure("post_submit_input_receipt_mismatch")
+            if forge_receipt is not None:
+                locator_request = self._issued_requests.get(forge_receipt.locator.request_digest)
+                final_request = self._issued_requests.get(member.request_digest)
+                if locator_request is None or final_request is None:
+                    raise PostSubmissionMaterializationFailure("post_submit_input_receipt_mismatch")
+                try:
+                    forge_receipt.locator.validate_request(locator_request)
+                except ExternalCheckerContractError:
+                    raise PostSubmissionMaterializationFailure(
+                        "post_submit_input_receipt_mismatch"
+                    ) from None
+                initial = dict(locator_request.input)
+                initial.pop(FORGE_LOCATOR_STAGE_KEY, None)
+                final = dict(final_request.input)
+                facts = final.pop("forge_facts", None)
+                if (
+                    initial != final
+                    or locator_request.identity != final_request.identity
+                    or locator_request.materials != final_request.materials
+                    or forge_receipt.materials != final_request.materials
+                    or locator_request.registry != binding.registry
+                    or final_request.registry != binding.registry
+                    or forge_receipt.configuration_sha256 != binding.configuration_sha256
+                    or forge_receipt.locator_input_sha256 != locator_request.input_sha256
+                    or forge_receipt.final_input_sha256 != final_request.input_sha256
+                    or forge_receipt.facts_sha256 != external_checker_json_hash(facts)
+                    or forge_receipt.locator_isolation.platform_manifest_digest
+                    != binding.registry.image_digest
+                ):
+                    raise PostSubmissionMaterializationFailure("post_submit_input_receipt_mismatch")
             if selected_evaluation_context_roles(binding.configuration, binding.stage) is None:
                 continue
             context, materials = self.evaluation_material(binding)

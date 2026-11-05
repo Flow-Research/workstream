@@ -120,7 +120,7 @@ with an empty client configuration, for example
 
 Rebuilding the proof checker changes its digest. The registry holds one
 immutable entry per phase, capability and version, so rerun `publish_local.py`
-with a new `--capability-version` (the default is `v2`; use, for example, `v3`), recreate the checker with
+with a new `--capability-version` (the default is `v3`; use, for example, `v4`), recreate the checker with
 `docker compose up --wait --force-recreate checker`, and register the new
 body. Registering a new digest under an existing version returns
 `external_checker_registry_conflict`.
@@ -216,7 +216,7 @@ run the checker for any project.
 
 ### What the proof checker checks
 
-`external_checkers/harnessy_proof/checker.py` (capability version `v2`,
+`external_checkers/harnessy_proof/checker.py` (capability version `v3`,
 [WS-GHPROOF-001](../../.commitrail/initiatives/WS-GHPROOF-001/OVERVIEW.md)) is a
 post-submission checker with one mode, and it fails closed. It reads
 `proof.json` at the root of the submitted ZIP, compares it with forge facts
@@ -339,10 +339,24 @@ may earn points but may not be paid in money until an independent reviewer
 confirms it. The verdict does not change.
 
 **Where the facts come from.** For a POST binding that selects forge facts,
-WorkStream's POST evaluation reads the claimed `pr_url` from `proof.json`,
-and, when it names a change in the configured repository on the configured
-`forge_origin`, reads that change's facts from the forge before running the
-checker (initiative chunk 04). GitHub is read as the read-only GitHub App
+Workstream first runs the selected image in a bounded, offline locator pass.
+The Harnessy image reads its own `proof.json` and returns the claimed `pr_url`
+as a typed selector; shared POST never parses that project format. The provider
+accepts only a change in the locked repository and `forge_origin`, retrieves its
+facts, and Workstream invokes the same pinned image for evaluation. The two
+invocations use separate request-bound grants over the same verified material.
+Neither model nor trial execution is available during selection.
+
+The input schema declares `workstream_forge_facts_stage` with `const: locate`;
+the output schema declares the separate `external_checker_forge_locator.v1`
+response as well as evaluation results. The locator schema includes its
+`locator_digest`; ordinary result schemas validate the result body without its
+separately verified `result_digest`. Publish and register the updated image
+and schemas together. A completed evaluation retains the locator, its isolation
+receipt, both input hashes, the facts hash and exact material identities.
+This is checked against the requests actually granted by ART.
+
+GitHub is read as the read-only GitHub App
 configured by the `WORKSTREAM_GITHUB_APP_*` settings in `backend/.env.example`;
 its web origin follows the API URL (`https://github.com` for the public API,
 the Enterprise host otherwise), and a binding whose `forge_origin` differs ends

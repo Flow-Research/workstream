@@ -16,7 +16,9 @@ from app.modules.checkers.api.external import (
 from app.modules.checkers.api.external_policy import (
     LockedExternalPostSubmitPolicy,
     selected_evaluation_context_roles,
+    selected_forge_facts,
 )
+from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.canonical_values import (
     ByteCount,
     CheckerValue,
@@ -149,6 +151,18 @@ class ExternalPostSubmitInputReceipt:
             raise ValueError("selected POST input receipt material roles differ")
 
 
+class ExternalPostSubmitForgeReceipt(CheckerValue):
+    """Successful locator and exact provider input commitments, without credentials."""
+
+    locator: ExternalCheckerForgeLocator
+    locator_isolation: ExternalPostSubmitIsolationFacts
+    configuration_sha256: Sha256
+    locator_input_sha256: Sha256
+    final_input_sha256: Sha256
+    facts_sha256: Sha256
+    materials: tuple[PostSubmitExternalCheckerMaterial, ...] = Field(min_length=1, max_length=2)
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalPostSubmitMemberFacts:
     """One normalized POST image result in exact locked policy order."""
@@ -161,6 +175,7 @@ class ExternalPostSubmitMemberFacts:
     result: ExternalCheckerExecutionResult
     isolation: ExternalPostSubmitIsolationFacts
     input_receipt: ExternalPostSubmitInputReceipt | None = None
+    forge_receipt: ExternalPostSubmitForgeReceipt | None = None
 
     @model_serializer(mode="wrap")
     def serialize_retained_fields(self, handler):
@@ -168,6 +183,8 @@ class ExternalPostSubmitMemberFacts:
         values = handler(self)
         if self.input_receipt is None:
             values.pop("input_receipt", None)
+        if self.forge_receipt is None:
+            values.pop("forge_receipt", None)
         return values
 
     def __post_init__(self) -> None:
@@ -221,6 +238,11 @@ class SelectedPostSubmitExecutionFacts:
                     "request_digest": member.request_digest,
                     "result": member.result.model_dump(mode="json"),
                     "isolation": asdict(member.isolation),
+                    **(
+                        {"forge_receipt": member.forge_receipt.model_dump(mode="json")}
+                        if member.forge_receipt is not None
+                        else {}
+                    ),
                     **(
                         {
                             "input_receipt": {
@@ -335,6 +357,38 @@ class SelectedPostSubmissionEvaluationResult(CheckerValue):
             for binding, member in zip(
                 request.policy.entries, result.execution.external_members, strict=True
             ):
+                forge = selected_forge_facts(binding.configuration, binding.stage)
+                forge_receipt = member.forge_receipt
+                if (forge_receipt is not None) != (forge is not None):
+                    raise ValueError("selected POST forge receipt selection differs")
+                if forge_receipt is not None:
+                    current = forge_receipt.materials[0]
+                    if (
+                        forge_receipt.configuration_sha256 != binding.configuration_sha256
+                        or forge_receipt.locator.registry_entry_id
+                        != binding.registry.registry_entry_id
+                        or forge_receipt.locator.registry_entry_digest
+                        != binding.registry.entry_digest
+                        or forge_receipt.locator_isolation.platform_manifest_digest
+                        != binding.registry.image_digest
+                        or (
+                            current.submission_id,
+                            current.submission_version,
+                            current.binding_id,
+                            current.content_id,
+                            current.content_sha256,
+                            current.byte_count,
+                        )
+                        != (
+                            request.submission_id,
+                            request.submission_version,
+                            request.binding_id,
+                            request.content_id,
+                            request.content_sha256,
+                            request.byte_count,
+                        )
+                    ):
+                        raise ValueError("selected POST forge receipt identity differs")
                 selected = selected_evaluation_context_roles(binding.configuration, binding.stage)
                 receipt = member.input_receipt
                 if (receipt is not None) != (selected is not None):
