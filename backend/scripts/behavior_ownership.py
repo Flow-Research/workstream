@@ -935,6 +935,7 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",
     "backend/app/interfaces/forge_facts.py",
+    "backend/app/modules/checkers/api/forge_locator.py",
 })
 # WS-GHPROOF-001-04 replaced the GitHub-named port with the forge-neutral one.
 FORGE_PROOF_FACTS_REMOVED_TARGETS = frozenset({"backend/app/interfaces/github_facts.py"})

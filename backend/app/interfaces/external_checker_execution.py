@@ -7,6 +7,7 @@ import re
 from typing import Protocol
 
 from app.interfaces.external_services import ExternalServiceAdapter
+from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
@@ -87,9 +88,8 @@ class ExternalCheckerIsolationReceipt:
             or re.fullmatch(r"sha256:[0-9a-f]{64}", self.config_image_id) is None
             or re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,31}", self.operating_system) is None
             or re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,31}", self.architecture) is None
-            or (self.runtime, self.isolation_mode) not in {
-                ("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")
-            }
+            or (self.runtime, self.isolation_mode)
+            not in {("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")}
             or type(self.sandbox_uid) is not int
             or type(self.sandbox_gid) is not int
             or self.sandbox_uid <= 0
@@ -103,6 +103,14 @@ class ExternalCheckerExecutionResponse:
     """Strict normalized result plus the service's bounded isolation receipt."""
 
     result: ExternalCheckerExecutionResult
+    isolation: ExternalCheckerIsolationReceipt | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalCheckerForgeLocatorResponse:
+    """Image selector or infrastructure failure; never a completed work verdict."""
+
+    result: ExternalCheckerForgeLocator | ExternalCheckerExecutionResult
     isolation: ExternalCheckerIsolationReceipt | None
 
 
@@ -123,9 +131,8 @@ class ExternalCheckerServiceHealth:
         if (
             re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,31}", self.operating_system) is None
             or re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,31}", self.architecture) is None
-            or (self.runtime, self.isolation_mode) not in {
-                ("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")
-            }
+            or (self.runtime, self.isolation_mode)
+            not in {("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")}
             or type(self.cached_platform_manifests) is not int
             or self.cached_platform_manifests <= 0
             or type(self.sandbox_uid) is not int
@@ -138,6 +145,14 @@ class ExternalCheckerServiceHealth:
 
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
     """Execute one normalized request through the trusted checker service."""
+
+    async def locate_forge_change(
+        self,
+        request: ExternalCheckerExecutionRequest,
+        grant: ExternalCheckerMaterialGrant,
+    ) -> ExternalCheckerForgeLocatorResponse:
+        """Read a project-owned selector inside the same bounded offline image."""
+        ...
 
     async def execute(
         self,

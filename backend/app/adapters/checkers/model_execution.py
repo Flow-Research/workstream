@@ -44,6 +44,10 @@ class ModelAwareExternalExecution:
         """Use the existing external execution health contract."""
         return await self._execution.health()
 
+    async def locate_forge_change(self, request, grant):
+        """Locator gets no model grant, paid slot or trial callback."""
+        return await self._execution.locate_forge_change(request, grant)
+
     async def execute(self, request, grant, *, model_grant=None):
         """Ordinary images run directly; model images must complete their exact call."""
         from app.adapters.auth import checker_model_service_authorization

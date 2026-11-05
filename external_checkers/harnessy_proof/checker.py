@@ -5,9 +5,11 @@ verified, read-only Submission material under ``/work/input``. It compares the
 claims in ``proof.json`` with ``workstream.forge_change_facts.v1`` facts that
 WorkStream read from the git host ("forge"; GitHub today) and placed in the
 request input under ``forge_facts``, and writes one
-``external_checker_result.v1`` envelope.
+``external_checker_result.v1`` envelope. An explicit locator invocation instead
+writes ``external_checker_forge_locator.v1`` without judging the work.
 
-There is one mode and it fails closed (owner decisions 20 and 21): the binding
+A locator invocation extracts only a bounded change URL from the proof. The
+ordinary evaluation fails closed (owner decisions 20 and 21): the binding
 configuration must select the facts version and name the forge, the forge
 instance origin, repository and base branch, and the facts must be present and
 well formed. Otherwise the verdict is ``failed``. A proof is never passed on
@@ -34,6 +36,7 @@ from pathlib import Path
 import re
 import stat
 import sys
+import unicodedata
 
 PROOF_PATH = "proof.json"
 PROOF_SCHEMA = "harnessy.work.proof.v1"
@@ -157,7 +160,7 @@ def evaluate_proof(
         return [_finding("too_large", "proof.json must be at most 64 KiB.")]
     try:
         proof = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         return [_finding("invalid_json", "proof.json must be valid UTF-8 JSON.")]
     if not isinstance(proof, dict):
         return [_finding("invalid_json", "proof.json must contain a JSON object.")]
@@ -668,6 +671,40 @@ def _canonical(value: object) -> str:
     )
 
 
+def locate_change_url(raw: bytes | None) -> str | None:
+    """Interpret this project's proof without granting authority to fetch its URL."""
+    if raw is None or len(raw) > MAX_PROOF_BYTES:
+        return None
+    try:
+        proof = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return None
+    if not isinstance(proof, dict):
+        return None
+    url = proof.get("pr_url")
+    if (
+        not isinstance(url, str)
+        or not 1 <= len(url) <= 2048
+        or any(unicodedata.category(character) in {"Cc", "Cf", "Cs"} for character in url)
+    ):
+        return None
+    return url
+
+
+def build_locator(request: dict, raw: bytes | None) -> dict[str, object]:
+    """Bind one untrusted project selector to the exact offline invocation."""
+    body = {
+        "schema_version": "external_checker_forge_locator.v1",
+        "request_digest": request["request_digest"],
+        "registry_entry_id": request["registry"]["registry_entry_id"],
+        "registry_entry_digest": request["registry"]["entry_digest"],
+        "phase": "post_submit",
+        "change_url": locate_change_url(raw),
+    }
+    digest = hashlib.sha256(_canonical(body).encode("utf-8")).hexdigest()
+    return {**body, "locator_digest": f"sha256:{digest}"}
+
+
 def build_result(request: dict, findings: list[dict[str, object]]) -> dict[str, object]:
     """Bind a completed verdict to the exact request; failed iff an error exists."""
     has_error = any(item["level"] == "error" for item in findings)
@@ -688,12 +725,17 @@ def build_result(request: dict, findings: list[dict[str, object]]) -> dict[str, 
 
 def main() -> int:
     request = json.load(sys.stdin)
-    findings = evaluate_proof(
-        read_proof(Path("/work/input")),
-        configuration=request.get("configuration"),
-        input_value=request.get("input"),
-    )
-    result = build_result(request, findings)
+    raw = read_proof(Path("/work/input"))
+    input_value = request.get("input")
+    if isinstance(input_value, dict) and input_value.get("workstream_forge_facts_stage") == "locate":
+        result = build_locator(request, raw)
+    else:
+        findings = evaluate_proof(
+            raw,
+            configuration=request.get("configuration"),
+            input_value=input_value,
+        )
+        result = build_result(request, findings)
     sys.stdout.write(_canonical(result))
     return 0
 

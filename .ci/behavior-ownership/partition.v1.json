@@ -1290,6 +1290,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/forge_locator.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/history.py"
     },
     {
@@ -2589,7 +2593,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "ff4288cd9de5d876c8e5aac2cbd428a2b43ee5a2b63ba7aa62892029d1c7d8f0",
+  "authority_digest": "a35f53b2939c6ce611f86f44336bfe43f0aec5e08fcfa9d688804b57661d3b46",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

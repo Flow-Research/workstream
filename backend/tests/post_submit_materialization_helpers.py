@@ -256,6 +256,7 @@ async def _material_fixture(
     post_submit_configurations_setup=None,
     post_submit_specification=None,
     post_scratch_root=None,
+    artifact_deadline_ms=120_000,
 ):
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -306,7 +307,7 @@ async def _material_fixture(
             store=counted,
             namespace=namespace,
             preparation=preparation,
-            intake=LocalIntakeAdapter(inspector), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=120_000,
+            intake=LocalIntakeAdapter(inspector), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=artifact_deadline_ms,
         )
         yield SimpleNamespace(
             replica_id=replica_id,

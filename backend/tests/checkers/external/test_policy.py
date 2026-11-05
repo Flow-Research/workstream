@@ -20,6 +20,8 @@ from app.modules.checkers.api.external_policy import (
     LockedExternalCheckerBinding, LockedExternalPostSubmitPolicy,
     LockedWorkstreamDefault, compile_external_checker_policies, selected_forge_facts,
     selected_post_submit_execution_budget_ms,
+    compile_external_checker_policy_bundle,
+    validate_stored_external_post_policy,
 )
 from app.modules.model_usage.api import (
     ModelGenerationSettings, ModelPricing, ProjectModelProfile, ProjectModelProfileSpec,
@@ -54,10 +56,13 @@ def _entry(
     configuration_schema=None,
     *,
     deadline_ms: int | None = None,
+    input_schema=None,
 ) -> ExternalCheckerRegistryEntry:
     changes = {"capability_id": capability_id}
     if configuration_schema is not None:
         changes["configuration_schema"] = configuration_schema
+    if input_schema is not None:
+        changes["input_schema"] = input_schema
     spec = registry_spec(phase).model_copy(update=changes)
     if deadline_ms is not None:
         spec = spec.model_copy(
@@ -319,7 +324,7 @@ def test_locked_default_refuses_substituted_behavior_digest():
         LockedWorkstreamDefault(behavior_sha256="sha256:" + "0" * 64)
 
 
-def _forge_binding(configuration, *, declared=True, phase="post_submit"):
+def _forge_binding(configuration, *, declared=True, phase="post_submit", locator_declared=True):
     """A binding over a published schema that does or does not declare forge facts."""
     properties = {
         "repository": {"type": "string"},
@@ -335,10 +340,19 @@ def _forge_binding(configuration, *, declared=True, phase="post_submit"):
         document=document,
         schema_sha256=external_checker_json_hash(document),
     )
+    input_document = {"type": "object"}
+    if locator_declared:
+        input_document["properties"] = {
+            "workstream_forge_facts_stage": {"type": "string", "const": "locate"},
+        }
+    input_schema = ExternalCheckerSchema(
+        schema_id=POST_SUBMIT_INPUT_SCHEMA_ID, schema_version="v1",
+        document=input_document, schema_sha256=external_checker_json_hash(input_document),
+    )
     return LockedExternalCheckerBinding(
         requirement_id="harnessy.work_proof",
         stage=phase,
-        registry=_entry("harnessy.work_proof", phase, configuration_schema=schema),
+        registry=_entry("harnessy.work_proof", phase, configuration_schema=schema, input_schema=input_schema),
         configuration=configuration,
         configuration_sha256=external_checker_json_hash(configuration),
     )
@@ -422,4 +436,51 @@ def test_selected_post_budget_reserves_the_forge_facts_read():
             )
         )
 
-    assert budget(selected) - budget(plain) == SELECTED_POST_FORGE_FACTS_BUDGET_MS
+    assert budget(selected) - budget(plain) == (
+        SELECTED_POST_FORGE_FACTS_BUDGET_MS
+        + selected.registry.resources.deadline_ms
+        + 60_000
+    )
+
+
+def test_retained_forge_policy_without_locator_declaration_preserves_locked_json_and_hash():
+    binding = _forge_binding(_FORGE_SELECTION, locator_declared=False)
+    body = {
+        "schema_version": "external_post_submit_policy.v1",
+        "entries": [binding.model_dump(mode="json")],
+    }
+    original_digest = canonical_json_hash(body)
+    retained = {**body, "policy_sha256": original_digest}
+
+    restored = validate_stored_external_post_policy(retained)
+
+    assert restored.model_dump(mode="json") == retained
+    assert restored.policy_sha256 == original_digest
+    assert restored.entries[0].registry.entry_digest == binding.registry.entry_digest
+    assert selected_forge_facts(restored.entries[0].configuration, "post_submit") is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("compiler", [
+    compile_external_checker_policies,
+    compile_external_checker_policy_bundle,
+])
+async def test_new_forge_binding_without_locator_declaration_cannot_compile(compiler):
+    binding = _forge_binding(_FORGE_SELECTION, locator_declared=False)
+    entry = binding.registry
+    request = _request(post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
+
+    with pytest.raises(ExternalCheckerPolicyError, match="does not declare forge locator"):
+        await compiler(request, _Registry((entry,)))
+
+
+@pytest.mark.asyncio
+async def test_new_forge_binding_with_locator_declaration_compiles_in_approval_bundle():
+    binding = _forge_binding(_FORGE_SELECTION)
+    entry = binding.registry
+    request = _request(post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
+
+    policies = await compile_external_checker_policy_bundle(request, _Registry((entry,)))
+
+    assert policies.post_submit.entries == (binding,)
+    assert policies.post_submit.entries[0].registry.entry_digest == entry.entry_digest

@@ -6,8 +6,9 @@
   required-check facts from the forge (the git host) with a read-only
   credential, outside the checker sandbox, and the networkless
   `harnessy.work_proof` checker compares the proof with those facts.
-- Current change: [WS-GHPROOF-001-04](WS-GHPROOF-001-04.md) makes the facts
-  capability forge-neutral and wires it into POST evaluation.
+- Current change: [WS-GHPROOF-001-04A](WS-GHPROOF-001-04A.md) moves proof
+  interpretation into the selected external image and binds its selector and
+  retrieved facts to verified material. Chunk 04 delivered the scoped provider.
 - Product behavior changed: Yes, for POST bindings that select forge facts.
 - Integrity: see [Integrity requirements](#integrity-requirements); every layer
   fails closed.
@@ -57,7 +58,9 @@ enter a container that runs submitted material.
    be present; otherwise it fails. It reports one error finding for each
    mismatch. It builds no URL: `pr_url` must equal the facts' `change_url`,
    and `ci_run_url` must equal a required check's `run_url`.
-6. One canonical change identity: chunk 04 takes the change number from the
+6. The selected image returns a bounded change URL in an offline locator pass.
+   Shared POST never reads project-specific proof fields. One canonical change
+   identity: Workstream takes the change number from the
    provider's own `parse_change_url`, reads only the configured instance and
    repository, and the checker re-asserts exact equality of the claimed URL
    and instance origin with the facts. Every fact is bound to one change state
@@ -136,8 +139,10 @@ them to forge-neutral terms:
 - "CI passed" uses the base branch's required checks. For GitHub these are the
   classic branch-protection contexts and checks; check runs and commit
   statuses both count.
-- Facts reach the checker in the request `input`, bound by its digest. Durable
-  ART custody as a `service_identity` checker-run binding is a later chunk.
+- Facts reach the checker in the request `input`, bound by its digest. Chunk
+  04A retains locator/facts/input hashes and material identities in completed
+  evaluation evidence, validated against both ART-granted requests. Separate
+  ART custody of the fetched response bytes remains a later chunk.
 - When the forge is unavailable, the provider retries a bounded number of times
   within an absolute time limit that the selected POST budget reserves, then
   raises a typed facts-unavailable error. Missing facts never pass. Chunk 04

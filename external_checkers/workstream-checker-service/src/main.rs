@@ -38,8 +38,9 @@ use trial_profiles::TrialProfileCatalog;
 use trial_relay::{TrialEngine, TrialProfile, TrialRelay, TrialRequestIdentity};
 use trial_smol::{SmolTrialBackend, SmolTrialConfiguration};
 use workstream_checker_sdk::{
-    canonical_hash, infrastructure_result, parse_request, validate_result, ValidatedRequest,
-    MAX_REQUEST_BYTES,
+    canonical_hash, infrastructure_result, is_forge_locator_request, parse_request,
+    require_forge_locator_request, validate_forge_locator_result, validate_result,
+    ValidatedRequest, MAX_REQUEST_BYTES,
 };
 
 const PROTOCOL: &str = "external_checker_service.v1";
@@ -1067,11 +1068,21 @@ fn handle_frame(
     }
     let envelope: ExecuteEnvelope =
         serde_json::from_value(value).map_err(|_| "request envelope invalid")?;
-    if envelope.protocol_version != PROTOCOL || envelope.operation != "execute" {
+    if envelope.protocol_version != PROTOCOL
+        || !matches!(
+            envelope.operation.as_str(),
+            "execute" | "locate_forge_change"
+        )
+    {
         return Err("request operation invalid".into());
     }
     let request_bytes = serde_json::to_vec(&envelope.request).map_err(|_| "request invalid")?;
     let request = parse_request(&request_bytes).map_err(|_| "request contract invalid")?;
+    validate_execution_operation(
+        &envelope.operation,
+        &request,
+        envelope.model_grant.0.is_some(),
+    )?;
     if let Some(model_grant) = envelope.model_grant.0.as_ref() {
         if !valid_model_grant(model_grant, &request.request_digest, &request.phase) {
             return Err("model grant invalid".into());
@@ -1117,7 +1128,7 @@ fn handle_frame(
                 stream,
                 &mut budget,
             ) {
-                Ok(output) if validate_result(&output.value, &request).is_ok() => {
+                Ok(output) if validate_execution_result(&output.value, &request).is_ok() => {
                     (output.value, Some(isolation))
                 }
                 Ok(_) => (
@@ -1146,8 +1157,37 @@ fn handle_frame(
             None,
         ),
     };
-    validate_result(&result, &request).map_err(|_| "result contract invalid")?;
+    validate_execution_result(&result, &request).map_err(|_| "result contract invalid")?;
     encode_response(result, isolation)
+}
+
+fn validate_execution_operation(
+    operation: &str,
+    request: &ValidatedRequest,
+    has_model_grant: bool,
+) -> Result<(), String> {
+    match operation {
+        "locate_forge_change" => {
+            require_forge_locator_request(request).map_err(|_| "locator request invalid")?;
+            if has_model_grant {
+                return Err("locator model grant forbidden".into());
+            }
+            Ok(())
+        }
+        "execute" if !is_forge_locator_request(request) => Ok(()),
+        _ => Err("request operation invalid".into()),
+    }
+}
+
+fn validate_execution_result(
+    value: &Value,
+    request: &ValidatedRequest,
+) -> Result<(), workstream_checker_sdk::ContractError> {
+    if is_forge_locator_request(request) {
+        validate_forge_locator_result(value, request)
+    } else {
+        validate_result(value, request)
+    }
 }
 
 fn runtime_ready(config: &ServiceConfig) -> Result<(), String> {
@@ -2004,6 +2044,37 @@ fn validate_inspected_image(
     Ok(())
 }
 
+fn selected_trial_profile<'a>(
+    config: &'a ServiceConfig,
+    request: &ValidatedRequest,
+) -> Result<Option<&'a TrialProfile>, ExecutionFailure> {
+    Ok(if is_forge_locator_request(request) {
+        None
+    } else {
+        match config.trial_profiles.as_ref() {
+            Some(catalog) => catalog
+                .resolve(request)
+                .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?,
+            None => {
+                let has_trial_selector = request
+                    .value
+                    .get("configuration")
+                    .and_then(Value::as_object)
+                    .is_some_and(|configuration| {
+                        configuration.keys().any(|key| key.starts_with("trial_"))
+                    });
+                if has_trial_selector {
+                    return Err(ExecutionFailure::ordinary(
+                        "implementation_unavailable",
+                        false,
+                    ));
+                }
+                None
+            }
+        }
+    })
+}
+
 fn execute_container(
     config: &ServiceConfig,
     cache: &CacheEntry,
@@ -2018,27 +2089,14 @@ fn execute_container(
     if grant.predecessor.is_some() != grant.predecessor_inventory.is_some() {
         return Err(ExecutionFailure::ordinary("material_unavailable", false));
     }
-    let selected_trial = match config.trial_profiles.as_ref() {
-        Some(catalog) => catalog
-            .resolve(request)
-            .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?,
-        None => {
-            let has_trial_selector = request
-                .value
-                .get("configuration")
-                .and_then(Value::as_object)
-                .is_some_and(|configuration| {
-                    configuration.keys().any(|key| key.starts_with("trial_"))
-                });
-            if has_trial_selector {
-                return Err(ExecutionFailure::ordinary(
-                    "implementation_unavailable",
-                    false,
-                ));
-            }
-            None
-        }
-    };
+    // The locator uses the same sandbox and ART grant, with no callback capability.
+    if is_forge_locator_request(request) && model_grant.is_some() {
+        return Err(ExecutionFailure::ordinary(
+            "implementation_unavailable",
+            false,
+        ));
+    }
+    let selected_trial = selected_trial_profile(config, request)?;
     let reservation = if config.runtime == "smolvm" {
         let result = match selected_trial {
             Some(profile) => smol::trial_peak_capacity(
@@ -3887,6 +3945,32 @@ exit 2
             validate_config(&config),
             Err("model relay configuration incomplete".into())
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn forge_locator_operation_rejects_mismatches_and_disables_callback_profiles() {
+        let (root, config) = test_config();
+        let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        assert!(validate_execution_operation("execute", &request, false).is_ok());
+        assert!(validate_execution_operation("locate_forge_change", &request, false).is_err());
+        request.phase = "post_submit".into();
+        request.value["input"]["workstream_forge_facts_stage"] = serde_json::json!("locate");
+        request.value["configuration"]["workstream_forge_facts_version"] = serde_json::json!("v1");
+        request.value["registry"]["input_schema"]["document"]["properties"]
+            ["workstream_forge_facts_stage"] =
+            serde_json::json!({"type": "string", "const": "locate"});
+        request.value["configuration"]["trial_profile"] = serde_json::json!("unavailable");
+        request.value["configuration"]["model_profile"] = serde_json::json!("unavailable");
+        assert!(validate_execution_operation("execute", &request, false).is_err());
+        assert!(validate_execution_operation("locate_forge_change", &request, true).is_err());
+        validate_execution_operation("locate_forge_change", &request, false).unwrap();
+        assert!(selected_trial_profile(&config, &request).unwrap().is_none());
+        request.value["input"]
+            .as_object_mut()
+            .unwrap()
+            .remove("workstream_forge_facts_stage");
+        assert!(selected_trial_profile(&config, &request).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 

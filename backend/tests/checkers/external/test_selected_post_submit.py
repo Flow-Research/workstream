@@ -16,6 +16,7 @@ from app.adapters.checkers import selected_submission_evaluation_content
 from app.core.hashing import canonical_json_hash
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionResponse,
+    ExternalCheckerForgeLocatorResponse,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
 )
@@ -40,6 +41,11 @@ from app.interfaces.forge_facts import (
     ForgeFactsProtocolError,
     ForgeFactsUnavailableError,
     ForgeRequiredChecksNotConfiguredError,
+)
+from app.modules.checkers.api.forge_locator import (
+    ExternalCheckerForgeLocator,
+    FORGE_LOCATOR_STAGE_KEY,
+    require_forge_locator_request,
 )
 from app.modules.checkers.api.external_policy import (
     FORGE_FACTS_VERSION_KEY,
@@ -610,6 +616,16 @@ def _open_input_entry(configuration_schema) -> ExternalCheckerRegistryEntry:
         update={
             "capability_id": "harnessy.work_proof",
             "configuration_schema": configuration_schema,
+            "input_schema": ExternalCheckerSchema(
+                schema_id=POST_SUBMIT_INPUT_SCHEMA_ID,
+                schema_version="v1",
+                document={"type": "object", "properties": {
+                    FORGE_LOCATOR_STAGE_KEY: {"const": "locate"},
+                }},
+                schema_sha256=external_checker_json_hash({"type": "object", "properties": {
+                    FORGE_LOCATOR_STAGE_KEY: {"const": "locate"},
+                }}),
+            ),
         }
     )
     spec = type(spec).model_validate(spec.model_dump())
@@ -654,25 +670,83 @@ def _forge_policy(
     )
 
 
-class _ProofView(_MaterialView):
-    """A material view whose submission holds one ``proof.json``."""
+class _SelectorView(_MaterialView):
+    """Core may enumerate material and issue grants, never interpret project bytes."""
 
-    def __init__(self, material, proof: bytes | None, *, entry_type: str = "file") -> None:
+    def __init__(self, material, *, filename="proof.json") -> None:
         super().__init__(material)
-        self.proof = proof
-        if proof is not None:
-            self.entries = (
-                *self.entries,
-                SubmissionMaterialEntry("proof.json", entry_type, len(proof), SHA, False),
+        self.entries = (SubmissionMaterialEntry(filename, "file", 17, SHA, False),)
+        self.grants = []
+
+    def read_file(self, *_args, **_kwargs):
+        raise AssertionError("shared POST must not read project files")
+
+    @contextmanager
+    def external_checker_grant(self, request):
+        self.requests.append(request)
+        grant = ExternalCheckerMaterialGrant(
+            grant_id="extract_" + uuid4().hex,
+            binding_digest=request.request_digest,
+        )
+        self.grants.append(grant)
+        yield grant
+
+
+class _ForgeExecution(_Execution):
+    """An image owns selection independently of the submission's storage format."""
+
+    def __init__(self, change_url=_CHANGE_URL, *, locator_error=None, mutation=None,
+                 locator_isolation=True, locator_infrastructure=False):
+        super().__init__()
+        self.change_url = change_url
+        self.locator_error = locator_error
+        self.mutation = mutation
+        self.locator_isolation = locator_isolation
+        self.locator_infrastructure = locator_infrastructure
+        self.locator_requests = []
+        self.locator_grants = []
+        self.final_grants = []
+
+    async def locate_forge_change(self, request, grant):
+        require_forge_locator_request(request)
+        self.locator_requests.append(request)
+        self.locator_grants.append(grant)
+        if self.locator_error is not None:
+            raise self.locator_error
+        body = {
+            "schema_version": "external_checker_forge_locator.v1",
+            "request_digest": request.request_digest,
+            "registry_entry_id": str(request.registry.registry_entry_id),
+            "registry_entry_digest": request.registry.entry_digest,
+            "phase": "post_submit",
+            "change_url": self.change_url,
+        }
+        locator = ExternalCheckerForgeLocator.model_validate_json(json.dumps({
+            **body, "locator_digest": external_checker_json_hash(body),
+        }))
+        if self.mutation:
+            locator = locator.model_copy(update=self.mutation)
+        if self.locator_infrastructure:
+            locator = make_external_checker_execution_result(
+                request_digest=request.request_digest,
+                registry_entry_id=request.registry.registry_entry_id,
+                registry_entry_digest=request.registry.entry_digest,
+                phase="post_submit", outcome="infrastructure_failed", verdict=None,
+                findings=(), infrastructure_failure_code="deadline_exceeded",
             )
+        isolation = ExternalCheckerIsolationReceipt(
+            repository="registry.example/workstream/checker",
+            platform_manifest_digest=request.registry.image_digest,
+            platform_manifest_media_type="application/vnd.oci.image.manifest.v1+json",
+            platform_manifest_byte_count=1024, operating_system="linux", architecture="amd64",
+            config_image_id=SHA, runtime="runsc", isolation_mode="gvisor",
+            sandbox_uid=65532, sandbox_gid=65532,
+        ) if self.locator_isolation else None
+        return ExternalCheckerForgeLocatorResponse(result=locator, isolation=isolation)
 
-    def read_file(self, normalized_path, *, maximum_bytes):
-        assert normalized_path == "proof.json" and len(self.proof) <= maximum_bytes
-        return self.proof
-
-
-def _proof(pr_url=_CHANGE_URL) -> bytes:
-    return json.dumps({"schema": "harnessy.work.proof.v1", "pr_url": pr_url}).encode()
+    async def execute(self, request, grant):
+        self.final_grants.append(grant)
+        return await super().execute(request, grant)
 
 
 _GITHUB_CHANGE_URL = re.compile(r"https://github\.com/([^/]+/[^/]+)/pull/([1-9][0-9]*)")
@@ -715,7 +789,7 @@ async def _evaluate(policy, view, forge, execution=None):
     return await SelectedPostSubmitProcessor(
         policy=policy,
         identity=identity,
-        execution=execution or _Execution(),
+        execution=execution or _ForgeExecution(),
         forge_facts=forge,
     ).evaluate(object(), view)
 
@@ -723,7 +797,7 @@ async def _evaluate(policy, view, forge, execution=None):
 @pytest.mark.asyncio
 async def test_selected_forge_facts_reach_the_checker_request_input() -> None:
     identity = execution_identity("post_submit")
-    view, execution, forge = _ProofView(execution_material(identity), _proof()), _Execution(), _Forge(facts=_facts())
+    view, execution, forge = _SelectorView(execution_material(identity)), _ForgeExecution(), _Forge(facts=_facts())
     await _evaluate(_forge_policy(), view, forge, execution)
 
     assert forge.forges == ["github"]
@@ -736,38 +810,28 @@ async def test_selected_forge_facts_reach_the_checker_request_input() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "proof",
-    [
-        None,
-        b"not json",
-        b"[" * 60_000,
-        b"[]",
-        _proof(pr_url=None),
-        _proof(pr_url="https://github.com/Other/repo/pull/169"),
-        _proof(pr_url=_CHANGE_URL + "/"),
-        _proof(pr_url="https://gitlab.com/Flow-Research/harnessy-v2/-/merge_requests/169"),
-    ],
-    ids=("no-proof", "not-json", "deep-json", "not-object", "no-url", "other-repo",
-         "trailing-slash", "other-forge"),
+    "change_url",
+    [None, "not-a-url", "https://github.com/Other/repo/pull/169", _CHANGE_URL + "/",
+     "https://gitlab.com/Flow-Research/harnessy-v2/-/merge_requests/169"],
+    ids=("image-found-no-claim", "malformed", "other-repo", "trailing-slash", "other-forge"),
 )
-async def test_unusable_claim_reads_no_facts_and_the_checker_fails_closed(proof) -> None:
+async def test_unusable_image_selector_reads_no_facts(change_url) -> None:
     identity = execution_identity("post_submit")
-    view, execution, forge = _ProofView(execution_material(identity), proof), _Execution(), _Forge(facts=_facts())
+    view = _SelectorView(execution_material(identity))
+    execution, forge = _ForgeExecution(change_url), _Forge(facts=_facts())
     await _evaluate(_forge_policy(), view, forge, execution)
-
     assert forge.reads == []
     assert "forge_facts" not in execution.requests[0].input
+    assert len(execution.locator_requests) == 1
 
 
 @pytest.mark.asyncio
 async def test_claimed_repository_matches_the_configuration_case_insensitively() -> None:
     identity = execution_identity("post_submit")
-    view = _ProofView(
-        execution_material(identity),
-        _proof(pr_url="https://github.com/flow-research/Harnessy-V2/pull/169"),
-    )
+    view = _SelectorView(execution_material(identity))
+    execution = _ForgeExecution("https://github.com/flow-research/Harnessy-V2/pull/169")
     forge = _Forge(facts=_facts())
-    await _evaluate(_forge_policy(), view, forge)
+    await _evaluate(_forge_policy(), view, forge, execution)
     assert forge.reads == [("Flow-Research/harnessy-v2", 169)]
 
 
@@ -778,31 +842,32 @@ async def test_facts_too_large_for_the_checker_input_are_withheld() -> None:
     large = SimpleNamespace(
         model_dump=lambda mode: {"changed_files": ["p" * 400] * 3000}
     )
-    execution, forge = _Execution(), _Forge(facts=large)
+    execution, forge = _ForgeExecution(), _Forge(facts=large)
     await _evaluate(
-        _forge_policy(), _ProofView(execution_material(identity), _proof()), forge, execution
+        _forge_policy(), _SelectorView(execution_material(identity)), forge, execution
     )
     assert forge.reads == [("Flow-Research/harnessy-v2", 169)]
     assert "forge_facts" not in execution.requests[0].input
 
 
 @pytest.mark.asyncio
-async def test_proof_that_is_not_a_file_reads_no_facts() -> None:
+async def test_alternate_project_filename_is_interpreted_only_by_the_image() -> None:
     identity = execution_identity("post_submit")
-    view = _ProofView(execution_material(identity), _proof(), entry_type="directory")
-    execution, forge = _Execution(), _Forge(facts=_facts())
+    view = _SelectorView(execution_material(identity), filename="delivery/change.yaml")
+    execution, forge = _ForgeExecution(), _Forge(facts=_facts())
     await _evaluate(_forge_policy(), view, forge, execution)
-    assert forge.reads == []
-    assert "forge_facts" not in execution.requests[0].input
+    assert forge.reads == [("Flow-Research/harnessy-v2", 169)]
+    assert execution.locator_requests[0].input["manifest"][0]["normalized_path"] == "delivery/change.yaml"
+    assert len(execution.requests) == 1
 
 
 @pytest.mark.asyncio
 async def test_each_selecting_binding_reads_its_own_facts() -> None:
     identity = execution_identity("post_submit")
-    execution, forge = _Execution(), _Forge(facts=_facts())
+    execution, forge = _ForgeExecution(), _Forge(facts=_facts())
     await _evaluate(
         _forge_policy(count=2),
-        _ProofView(execution_material(identity), _proof()),
+        _SelectorView(execution_material(identity)),
         forge,
         execution,
     )
@@ -814,10 +879,10 @@ async def test_each_selecting_binding_reads_its_own_facts() -> None:
 @pytest.mark.asyncio
 async def test_provider_for_another_forge_instance_is_infrastructure() -> None:
     identity = execution_identity("post_submit")
-    execution, forge = _Execution(), _Forge(facts=_facts(), origin="https://github.example")
+    execution, forge = _ForgeExecution(), _Forge(facts=_facts(), origin="https://github.example")
     with pytest.raises(SelectedPostSubmitInfrastructureUnavailable) as raised:
         await _evaluate(
-            _forge_policy(), _ProofView(execution_material(identity), _proof()), forge, execution
+            _forge_policy(), _SelectorView(execution_material(identity)), forge, execution
         )
     assert raised.value.code == "implementation_unavailable"
     assert forge.reads == [] and execution.requests == []
@@ -826,11 +891,11 @@ async def test_provider_for_another_forge_instance_is_infrastructure() -> None:
 @pytest.mark.asyncio
 async def test_unconfigured_provider_is_infrastructure() -> None:
     identity = execution_identity("post_submit")
-    execution = _Execution()
+    execution = _ForgeExecution()
     forge = _Forge(resolve_error=ExternalServiceConfigurationError())
     with pytest.raises(SelectedPostSubmitInfrastructureUnavailable) as raised:
         await _evaluate(
-            _forge_policy(), _ProofView(execution_material(identity), _proof()), forge, execution
+            _forge_policy(), _SelectorView(execution_material(identity)), forge, execution
         )
     assert raised.value.code == "implementation_unavailable"
     assert execution.requests == []
@@ -842,10 +907,10 @@ async def test_unconfigured_provider_is_infrastructure() -> None:
 )
 async def test_missing_change_reads_no_facts(error) -> None:
     identity = execution_identity("post_submit")
-    execution = _Execution()
+    execution = _ForgeExecution()
     forge = _Forge(error=error)
     await _evaluate(
-        _forge_policy(), _ProofView(execution_material(identity), _proof()), forge, execution
+        _forge_policy(), _SelectorView(execution_material(identity)), forge, execution
     )
     assert "forge_facts" not in execution.requests[0].input
 
@@ -865,11 +930,11 @@ async def test_missing_change_reads_no_facts(error) -> None:
 )
 async def test_forge_failure_is_infrastructure_never_a_pass(error, code) -> None:
     identity = execution_identity("post_submit")
-    execution = _Execution()
+    execution = _ForgeExecution()
     with pytest.raises(SelectedPostSubmitInfrastructureUnavailable) as raised:
         await _evaluate(
             _forge_policy(),
-            _ProofView(execution_material(identity), _proof()),
+            _SelectorView(execution_material(identity)),
             _Forge(error=error),
             execution,
         )
@@ -882,13 +947,121 @@ async def test_selected_forge_facts_without_a_provider_is_infrastructure() -> No
     identity = execution_identity("post_submit")
     with pytest.raises(SelectedPostSubmitInfrastructureUnavailable, match="implementation"):
         await _evaluate(
-            _forge_policy(), _ProofView(execution_material(identity), _proof()), None
+            _forge_policy(), _SelectorView(execution_material(identity)), None
         )
 
 
 @pytest.mark.asyncio
 async def test_unselected_binding_never_reads_forge_facts() -> None:
     identity = execution_identity("post_submit")
-    forge = _Forge(facts=_facts())
-    await _evaluate(_policy(), _ProofView(execution_material(identity), _proof()), forge)
+    forge, execution = _Forge(facts=_facts()), _ForgeExecution()
+    await _evaluate(_policy(), _SelectorView(execution_material(identity)), forge, execution)
     assert forge.forges == [] and forge.reads == []
+    assert execution.locator_requests == []
+    assert len(execution.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_forge_locator_and_final_use_separate_request_bound_grants_and_receipt() -> None:
+    identity = execution_identity("post_submit")
+    view = _SelectorView(execution_material(identity))
+    execution, forge, policy = _ForgeExecution(), _Forge(facts=_facts()), _forge_policy()
+    result = await _evaluate(policy, view, forge, execution)
+    locator_request, final_request = execution.locator_requests[0], execution.requests[0]
+    assert view.requests == [locator_request, final_request]
+    assert execution.locator_grants == [view.grants[0]]
+    assert execution.final_grants == [view.grants[1]]
+    assert view.grants[0].grant_id != view.grants[1].grant_id
+    assert locator_request.request_digest != final_request.request_digest
+    assert locator_request.registry == final_request.registry
+    assert locator_request.materials == final_request.materials
+    assert locator_request.configuration == final_request.configuration
+    assert locator_request.input[FORGE_LOCATOR_STAGE_KEY] == "locate"
+    assert FORGE_LOCATOR_STAGE_KEY not in final_request.input
+    assert "forge_facts" not in locator_request.input
+    receipt = result.external_members[0].forge_receipt
+    assert receipt is not None
+    assert receipt.locator.request_digest == locator_request.request_digest
+    assert receipt.locator.change_url == _CHANGE_URL
+    assert receipt.locator_isolation.platform_manifest_digest == locator_request.registry.image_digest
+    assert receipt.configuration_sha256 == policy.entries[0].configuration_sha256
+    assert receipt.locator_input_sha256 == locator_request.input_sha256
+    assert receipt.final_input_sha256 == final_request.input_sha256
+    assert receipt.facts_sha256 == external_checker_json_hash(final_request.input["forge_facts"])
+    assert receipt.materials == final_request.materials
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"request_digest": "sha256:" + "f" * 64},
+        {"registry_entry_id": uuid4()},
+        {"registry_entry_digest": "sha256:" + "f" * 64},
+        {"locator_digest": "sha256:" + "f" * 64},
+    ],
+    ids=("request", "registry-id", "registry-digest", "locator-digest"),
+)
+async def test_substituted_locator_is_infrastructure_before_provider_read(mutation) -> None:
+    identity = execution_identity("post_submit")
+    execution, forge = _ForgeExecution(mutation=mutation), _Forge(facts=_facts())
+    with pytest.raises(SelectedPostSubmitInfrastructureUnavailable) as raised:
+        await _evaluate(_forge_policy(), _SelectorView(execution_material(identity)), forge, execution)
+    assert raised.value.code == "invalid_output"
+    assert forge.reads == [] and execution.requests == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("options", "code"),
+    [
+        ({"locator_isolation": False}, "invalid_output"),
+        ({"locator_infrastructure": True}, "deadline_exceeded"),
+        ({"locator_error": ForgeFactsProtocolError()}, "invalid_output"),
+        ({"locator_error": ForgeFactsUnavailableError()}, "implementation_unavailable"),
+    ],
+    ids=("no-isolation", "sandbox-infrastructure", "protocol-error", "unavailable"),
+)
+async def test_locator_failure_never_fetches_or_evaluates(options, code) -> None:
+    identity = execution_identity("post_submit")
+    execution, forge = _ForgeExecution(**options), _Forge(facts=_facts())
+    with pytest.raises(SelectedPostSubmitInfrastructureUnavailable) as raised:
+        await _evaluate(_forge_policy(), _SelectorView(execution_material(identity)), forge, execution)
+    assert raised.value.code == code
+    assert forge.reads == [] and execution.requests == []
+
+
+@pytest.mark.asyncio
+async def test_retained_forge_result_without_receipt_replays_unchanged_through_owner() -> None:
+    """A completed pre-receipt result remains readable without rewriting its hash."""
+    from app.modules.checkers.execution_repository import request_text, stored_result
+
+    identity, policy = execution_identity("post_submit"), _forge_policy()
+    request = _request(identity, policy)
+    execution = await SelectedPostSubmitProcessor(
+        policy=policy, identity=identity, execution=_ForgeExecution(),
+        forge_facts=_Forge(facts=_facts()),
+    ).evaluate(request, _SelectorView(execution_material(identity)))
+    # Persist the actual earlier member shape, with its own correct retained digest.
+    execution = replace(execution, external_members=(
+        replace(execution.external_members[0], forge_receipt=None),
+    ))
+    original = make_selected_post_submit_result(
+        request_id=request.evaluation_request_id, request_digest=request.request_sha256,
+        attempt_id=identity.attempt_id, evaluation_generation=request.evaluation_generation,
+        result_id=identity.result_id, outcome="completed", execution=execution,
+        infrastructure_failure_code=None,
+    )
+    original_json = original.model_dump_json(exclude={"result_digest"})
+    assert "forge_receipt" not in original_json
+    run = SimpleNamespace(
+        id=str(identity.attempt_id), result_id=str(identity.result_id),
+        request_json=request_text(request), request_digest=request.request_sha256,
+        result_json=original_json, result_digest=original.result_digest,
+    )
+    for _ in range(2):
+        recovered = stored_result(run)
+        assert recovered == original
+        assert recovered.result_digest == run.result_digest
+        assert recovered.model_dump_json(exclude={"result_digest"}) == original_json
+    assert run.result_json == original_json

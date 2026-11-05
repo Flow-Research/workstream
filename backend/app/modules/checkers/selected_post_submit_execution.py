@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict
-import json
 
 from app.interfaces.external_checker_execution import ExternalCheckerExecutionAdapter
 from app.interfaces.external_services import (
@@ -19,12 +18,17 @@ from app.interfaces.forge_facts import (
 )
 from app.modules.checkers.api.external import (
     PostSubmitExternalCheckerIdentity,
+    ExternalCheckerContractError,
     external_checker_input_fits,
     external_checker_json_hash,
     make_external_checker_execution_request,
 )
+from app.modules.checkers.api.forge_locator import (
+    ExternalCheckerForgeLocator,
+    FORGE_LOCATOR_STAGE_KEY,
+    require_forge_locator_request,
+)
 from app.modules.checkers.api.external_policy import (
-    ForgeFactsSelection,
     LockedExternalPostSubmitPolicy,
     selected_evaluation_context_roles,
     selected_forge_facts,
@@ -33,43 +37,14 @@ from app.modules.checkers.api.selected_post_submit import (
     ExternalPostSubmitIsolationFacts,
     ExternalPostSubmitMemberFacts,
     ExternalPostSubmitInputReceipt,
+    ExternalPostSubmitForgeReceipt,
     SelectedPostSubmitExecutionFacts,
     SelectedPostSubmitInfrastructureUnavailable,
 )
 
 
-# The Harnessy proof (``harnessy.work.proof.v1``) names the change whose facts
-# are read in its ``pr_url`` claim.
-PROOF_PATH = "proof.json"
-PROOF_CHANGE_URL_KEY = "pr_url"
-MAX_PROOF_BYTES = 65_536
 FORGE_FACTS_INPUT_KEY = "forge_facts"
 ForgeFactsResolver = Callable[[str], ForgeFactsAdapter]
-
-
-def _claimed_change_number(
-    material_view, selection: ForgeFactsSelection, adapter: ForgeFactsAdapter
-) -> int | None:
-    """Return the claimed change in the selected repository, or None.
-
-    A missing, oversized or malformed claim, or one naming another repository,
-    yields no facts; the checker then fails closed with its own finding. Facts
-    are never read from a repository the locked configuration does not name.
-    The provider parses its own forge's change URL.
-    """
-    entry = next((item for item in material_view.entries if item.normalized_path == PROOF_PATH), None)
-    if entry is None or entry.entry_type != "file" or entry.byte_count > MAX_PROOF_BYTES:
-        return None
-    try:
-        proof = json.loads(material_view.read_file(PROOF_PATH, maximum_bytes=MAX_PROOF_BYTES))
-    except (ValueError, RecursionError):
-        return None
-    claimed = adapter.parse_change_url(
-        proof.get(PROOF_CHANGE_URL_KEY) if isinstance(proof, dict) else None
-    )
-    if claimed is None or claimed[0].lower() != selection.repository.lower():
-        return None
-    return claimed[1]
 
 
 def _input_body(*, requirement_id, identity, material, entries) -> dict[str, object]:
@@ -105,7 +80,7 @@ class SelectedPostSubmitProcessor:
         self._execution = execution
         self._forge_facts = forge_facts
 
-    async def _read_forge_facts(self, selection, material_view) -> dict[str, object] | None:
+    async def _read_forge_facts(self, selection, locator) -> dict[str, object] | None:
         """Read facts outside the checker sandbox; forge failures are infrastructure.
 
         The provider must serve the forge instance the binding names; a change
@@ -117,20 +92,18 @@ class SelectedPostSubmitProcessor:
             adapter = self._forge_facts(selection.forge)
             if adapter.forge_origin != selection.forge_origin:
                 raise SelectedPostSubmitInfrastructureUnavailable("implementation_unavailable")
-            number = _claimed_change_number(material_view, selection, adapter)
-            if number is None:
+            claimed = adapter.parse_change_url(locator.change_url)
+            if claimed is None or claimed[0].lower() != selection.repository.lower():
                 return None
             facts = await adapter.fetch_change_facts(
                 repository=selection.repository,
-                change_number=number,
+                change_number=claimed[1],
                 base_branch=selection.base_branch,
             )
         except (ForgeChangeNotFoundError, ForgeChangeNotEligibleError):
             return None
         except ExternalServiceConfigurationError as exc:
-            raise SelectedPostSubmitInfrastructureUnavailable(
-                "implementation_unavailable"
-            ) from exc
+            raise SelectedPostSubmitInfrastructureUnavailable("implementation_unavailable") from exc
         return facts.model_dump(mode="json")
 
     async def evaluate(self, _request, material_view) -> SelectedPostSubmitExecutionFacts:
@@ -145,22 +118,57 @@ class SelectedPostSubmitProcessor:
                     material=material,
                     entries=material_view.entries,
                 )
-                selection = selected_forge_facts(binding.configuration, binding.stage)
-                if selection is not None:
-                    facts = await self._read_forge_facts(selection, material_view)
-                    if facts is not None:
-                        input_value[FORGE_FACTS_INPUT_KEY] = facts
                 context, materials = None, (material,)
-                if selected_evaluation_context_roles(binding.configuration, binding.stage) is not None:
+                if (
+                    selected_evaluation_context_roles(binding.configuration, binding.stage)
+                    is not None
+                ):
                     context, materials = material_view.evaluation_material(binding)
                     input_value["evaluation_context"] = context.model_dump(mode="json")
-                # Facts are bounded by the forge's listing, not by the checker's
-                # input ceiling. Facts too large to carry are withheld, so the
-                # checker fails the proof rather than the request being invalid.
-                if FORGE_FACTS_INPUT_KEY in input_value and not external_checker_input_fits(
-                    input_value
-                ):
-                    del input_value[FORGE_FACTS_INPUT_KEY]
+                selection = selected_forge_facts(binding.configuration, binding.stage)
+                forge_receipt = None
+                if selection is not None:
+                    locator_input = {**input_value, FORGE_LOCATOR_STAGE_KEY: "locate"}
+                    locator_request = make_external_checker_execution_request(
+                        registry=binding.registry,
+                        identity=self._identity,
+                        configuration=binding.configuration,
+                        configuration_sha256=binding.configuration_sha256,
+                        input=locator_input,
+                        input_sha256=external_checker_json_hash(locator_input),
+                        materials=materials,
+                    )
+                    require_forge_locator_request(locator_request)
+                    with material_view.external_checker_grant(locator_request) as grant:
+                        located = await self._execution.locate_forge_change(locator_request, grant)
+                    locator = located.result
+                    if not isinstance(locator, ExternalCheckerForgeLocator):
+                        raise SelectedPostSubmitInfrastructureUnavailable(
+                            locator.infrastructure_failure_code or "invalid_output"
+                        )
+                    locator.validate_request(locator_request)
+                    if located.isolation is None or (
+                        located.isolation.platform_manifest_digest != binding.registry.image_digest
+                    ):
+                        raise SelectedPostSubmitInfrastructureUnavailable("invalid_output")
+                    facts = await self._read_forge_facts(selection, locator)
+                    if facts is not None:
+                        input_value[FORGE_FACTS_INPUT_KEY] = facts
+                    if not external_checker_input_fits(input_value):
+                        input_value.pop(FORGE_FACTS_INPUT_KEY, None)
+                    forge_receipt = ExternalPostSubmitForgeReceipt(
+                        locator=locator,
+                        locator_isolation=ExternalPostSubmitIsolationFacts(
+                            **asdict(located.isolation)
+                        ),
+                        configuration_sha256=binding.configuration_sha256,
+                        locator_input_sha256=locator_request.input_sha256,
+                        final_input_sha256=external_checker_json_hash(input_value),
+                        facts_sha256=external_checker_json_hash(
+                            input_value.get(FORGE_FACTS_INPUT_KEY)
+                        ),
+                        materials=materials,
+                    )
                 request = make_external_checker_execution_request(
                     registry=binding.registry,
                     identity=self._identity,
@@ -187,9 +195,8 @@ class SelectedPostSubmitProcessor:
                         registry_entry_digest=binding.registry.entry_digest,
                         request_digest=request.request_digest,
                         result=result,
-                        isolation=ExternalPostSubmitIsolationFacts(
-                            **asdict(response.isolation)
-                        ),
+                        isolation=ExternalPostSubmitIsolationFacts(**asdict(response.isolation)),
+                        forge_receipt=forge_receipt,
                         input_receipt=ExternalPostSubmitInputReceipt(
                             configuration_sha256=binding.configuration_sha256,
                             input_sha256=request.input_sha256,
@@ -197,14 +204,14 @@ class SelectedPostSubmitProcessor:
                                 context.model_dump(mode="json")
                             ),
                             materials=materials,
-                        ) if context is not None else None,
+                        )
+                        if context is not None
+                        else None,
                     )
                 )
         except ExternalServiceUnavailableError as exc:
-            raise SelectedPostSubmitInfrastructureUnavailable(
-                "implementation_unavailable"
-            ) from exc
-        except ExternalServiceProtocolError as exc:
+            raise SelectedPostSubmitInfrastructureUnavailable("implementation_unavailable") from exc
+        except (ExternalServiceProtocolError, ExternalCheckerContractError) as exc:
             raise SelectedPostSubmitInfrastructureUnavailable("invalid_output") from exc
         return SelectedPostSubmitExecutionFacts(
             policy_sha256=self._policy.policy_sha256,
