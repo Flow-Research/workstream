@@ -694,7 +694,7 @@ cannot be reused as post-submission review-gate evidence. See the
   Hosted release configuration supplies the GitHub App through an optional
   Celery worker secret-file mount; API/migration, checker images and model proxy
   receive no App key. The hosted drill verified that mount separation and direct
-  real-adapter access; the complete Garden POST worker path remains unproven.
+  real-adapter access; the complete Garden POST Celery execution path remains unproven.
   Version-2 image publishing/registration and an actually merged Garden PR
   satisfying its configured checks through durable public APIs to exact
   contribution evidence remain separate from controlled image composition proof.
