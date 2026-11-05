@@ -1,4 +1,4 @@
-"""Offline Garden claim intake and reviewed immutable task association.
+"""Offline Garden claim intake and immutable PR-to-task association.
 
 The existing Harnessy evaluator owns PR/CI/review integrity comparisons. Only
 this project image interprets the Workstream-Task commit trailer.
@@ -61,7 +61,7 @@ def task_findings(input_value: object) -> list[dict]:
         return [
             finding(
                 "task_trailer",
-                "The reviewed head commit must contain exactly one Workstream-Task trailer.",
+                "The PR head commit must contain exactly one Workstream-Task trailer.",
             )
         ]
     block = message.rstrip("\n").split("\n\n")[-1].split("\n")
@@ -71,14 +71,14 @@ def task_findings(input_value: object) -> list[dict]:
         return [
             finding(
                 "task_trailer",
-                "Put Workstream-Task: <canonical lowercase task UUID> in the final trailer block before checks and review.",
+                "Put Workstream-Task: <canonical lowercase task UUID> in the final trailer block before checks and any required review.",
             )
         ]
     if markers[0] != task:
         return [
             finding(
                 "task_mismatch",
-                "The reviewed head commit names another Workstream task.",
+                "The PR head commit names another Workstream task.",
             )
         ]
     return []
@@ -112,15 +112,26 @@ def evaluate_post(
     raw: bytes | None, configuration: object, input_value: object
 ) -> list[dict]:
     findings = shared.evaluate_proof(
-        raw, configuration=configuration, input_value=input_value
+        raw,
+        configuration=configuration,
+        input_value=input_value,
+        minimum_independent_approvals=0,
     )
-    if not isinstance(configuration, dict) or any(
-        configuration.get(key) != value for key, value in PRE_CONFIGURATION.items()
+    if (
+        not isinstance(configuration, dict)
+        or any(
+            configuration.get(key) != value for key, value in PRE_CONFIGURATION.items()
+        )
+        or (
+            type(configuration.get("required_independent_approvals")) is int
+            and configuration["required_independent_approvals"] > 10
+        )
     ):
         findings.append(
             finding(
                 "configuration",
-                "Garden evaluation must select its exact GitHub origin and repository.",
+                "Garden evaluation must select its exact GitHub origin and repository "
+                "and at most ten independent approvals.",
             )
         )
     return findings + task_findings(input_value)

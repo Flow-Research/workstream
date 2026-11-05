@@ -123,16 +123,16 @@
       },
       "evidence_refs": [
         {
-          "document": "sha256:9d15f211624878f08fb100b65c0bb91501d98c2fb96332640cf6b8130eff576c",
+          "document": "sha256:e637df3367b4b47510c9c43ef8ba60d40e44db31a45c34bc71017f6b3a35e578",
           "section": "Submit one small ZIP"
         }
       ]
     },
     {
-      "suggestion_id": "garden_reviewed_task_proof",
-      "statement": "Independent GitHub facts substantiate the submitted merged, reviewed and CI-passing Garden change for this exact Workstream task.",
+      "suggestion_id": "garden_task_proof",
+      "statement": "Independent GitHub facts substantiate the submitted merged and CI-passing Garden change for this exact Workstream task under the explicit test approval count.",
       "stage": "post_submit",
-      "classification_rationale": "Verifying remote PR, immutable commit, CI and review evidence belongs after immutable Submission creation.",
+      "classification_rationale": "Verifying remote PR, immutable commit, CI, task association and any configured reviews belongs after immutable Submission creation.",
       "check_specification": {
         "evaluation_method": "Compare submitted claims to scoped GitHub facts and the trusted task identity.",
         "inputs": [
@@ -145,7 +145,7 @@
           {
             "input_id": "forge_facts",
             "kind": "forge_facts",
-            "purpose": "Supplies independently retrieved PR, commit, review and required CI facts."
+            "purpose": "Supplies independently retrieved PR, commit, required CI and any review facts."
           },
           {
             "input_id": "task",
@@ -155,8 +155,8 @@
         ],
         "check_steps": [
           "Require the claimed PR to be merged into Garden dev at the claimed landed commit.",
-          "Require successful trusted required checks and independent current-head human review under the locked checker configuration.",
-          "Require exactly one canonical Workstream-Task trailer on the reviewed head commit and compare it with the trusted task UUID.",
+          "Require successful trusted required checks. For this test, the PM explicitly selects required_independent_approvals=0 in the Garden POST attachment; no independent GitHub review is required. Omission requires one, and positive counts require the corresponding eligible current-head approvals.",
+          "Require exactly one canonical Workstream-Task trailer on the immutable PR head commit and compare it with the trusted task UUID.",
           "Reject mismatched URLs, repository, commit, CI or task association and preserve actionable findings."
         ],
         "pass_conditions": [
@@ -166,14 +166,14 @@
           {
             "code": "garden.proof.task_mismatch",
             "level": "error",
-            "condition": "The reviewed head trailer identifies another Workstream task.",
-            "message": "Use a PR whose reviewed head identifies this claimed task."
+            "condition": "The PR head trailer identifies another Workstream task.",
+            "message": "Use a PR whose PR head identifies this claimed task."
           },
           {
             "code": "garden.proof.task_trailer",
             "level": "error",
-            "condition": "The reviewed head lacks one valid canonical task trailer.",
-            "message": "Add one canonical task trailer before obtaining fresh review and checks."
+            "condition": "The PR head lacks one valid canonical task trailer.",
+            "message": "Add one canonical task trailer before final checks and any required review."
           },
           {
             "code": "harnessy.proof.forge.change_url",
@@ -208,8 +208,8 @@
           {
             "code": "harnessy.proof.forge.independent_approval_missing",
             "level": "error",
-            "condition": "Independent human current-head approval is insufficient.",
-            "message": "Independent human current-head approval is insufficient. Resolve the finding before resubmission."
+            "condition": "A positive configured independent approval count is not met by eligible human approvals on the current head.",
+            "message": "Obtain the eligible current-head approvals required by the positive configured count. This finding does not apply when the count is explicitly zero."
           },
           {
             "code": "harnessy.proof.forge.repository",
@@ -243,12 +243,13 @@
           }
         ],
         "positive_tests": [
-          "A merged Garden PR with trusted passing checks, independent current-head approval and the exact task trailer passes."
+          "A merged Garden PR with trusted passing checks, the exact task trailer and no reviews passes when required_independent_approvals is explicitly zero.",
+          "The same no-review facts fail the independent-approval requirement when the setting is omitted or positive."
         ],
         "negative_tests": [
           {
             "name": "foreign_task",
-            "scenario": "Every PR, CI and review condition passes, but the immutable head trailer names a different Workstream task.",
+            "scenario": "Every required PR, merge and CI condition passes under the explicit zero-approval test configuration, but the immutable head trailer names a different Workstream task.",
             "expected_verdict": "failed",
             "expected_finding_codes": [
               "garden.proof.task_mismatch"
@@ -267,7 +268,7 @@
       },
       "evidence_refs": [
         {
-          "document": "sha256:9d15f211624878f08fb100b65c0bb91501d98c2fb96332640cf6b8130eff576c",
+          "document": "sha256:e637df3367b4b47510c9c43ef8ba60d40e44db31a45c34bc71017f6b3a35e578",
           "section": "What PRE and POST mean"
         }
       ]
@@ -275,6 +276,7 @@
   ],
   "setup_notes": [
     "These are PM-authored requirements, not model output or evidence of a successful drill.",
-    "The PM must separately approve PRE and POST image bindings and lifecycle policy. No image identity is selected by this document."
+    "The PM must separately approve PRE and POST image bindings and lifecycle policy. No image identity is selected by this document.",
+    "This replacement guide uses an explicit Garden POST approval count of zero for the test; omission still requires one. Workstream ReviewPolicy and separate PM approvals remain unchanged."
   ]
 }

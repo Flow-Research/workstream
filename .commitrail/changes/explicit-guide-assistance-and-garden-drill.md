@@ -19,6 +19,15 @@ owns task/assignment/submission/acceptance truth. Garden owns its code, project
 guide and external evaluation. GitHub supplies independently retrieved facts.
 The ZIP contains claims in `proof.json`, not another copy of the repository.
 
+The user subsequently clarified that this test drill does not require an
+independent GitHub review. Garden's image must support an explicitly selected
+zero-approval requirement while retaining real merge, trusted CI, repository,
+commit and task-association checks. Omission continues to require one approval;
+Harnessy's existing minimum remains one. This is a project-checker policy
+choice, not permission to manufacture review facts or bypass Workstream's
+locked ReviewPolicy. Previously registered images and activated guides remain
+immutable; publish the changed image and approve a new guide for the drill.
+
 ## Implementation plan
 
 1. Extend existing PM compilation request/dispatch custody for initial explicit
@@ -35,7 +44,7 @@ The ZIP contains claims in `proof.json`, not another copy of the repository.
    from current repository documentation. Prefer a genuine documentation fix
    for the first successful task; do not recycle an unrelated merged PR.
 4. Verify task association in Garden's external image using one canonical
-   `Workstream-Task: <task UUID>` trailer on the reviewed immutable head commit.
+   `Workstream-Task: <task UUID>` trailer on the immutable PR head commit.
    Extend the existing GitHub facts adapter with bounded head-commit-message
    retrieval and its response hash. Only the external image interprets the
    trailer. Reuse existing PR/CI/review comparisons. Republish affected images
@@ -47,8 +56,42 @@ The ZIP contains claims in `proof.json`, not another copy of the repository.
    configuration and preserve releases that do not use forge checking.
 6. Exercise public guide/upload/request/approval/task/submission APIs and durable
    workers for the Garden drill. Distinguish controlled composition proof from
-   a real GitHub PR with eligible independent review and merge. Record any human
+   a real GitHub PR with authorized merge and its configured approval count. Record any human
    step still pending; never fabricate it or claim the live drill passed early.
+
+For the clarified zero-approval drill, extend the shared evaluator with an
+explicit minimum-approval argument used only by the Garden entry point, keeping
+the Harnessy default and validation unchanged. Garden's registration schema
+allows zero; negative, boolean and excessive values reject. Test explicit zero
+against authentic-shaped facts with no reviews, omission against those same
+facts, and retained merge/CI/task failure boundaries. Update Garden's guide,
+rules and publisher fixtures together; no Workstream core or AUTH relaxation.
+Requalify the image and retain all previous deployed evidence under its actual
+identities. A new claimed task must bind the new guide; do not reinterpret the
+existing claimed task's policy.
+
+The revised drill also tests project-point awards. The first hosted Garden
+policy was unpaid and does not prove awards. Configure a fixed 100-point test
+award for `accepted_submission` through the existing authorized points-unit,
+adapter-binding and Finance policy operations before the new task locks its
+policy; leave `completed_review` unpaid. Preserve the prior published policy.
+On acceptance, verify the exact point unit and quantity, award-definition and
+ContributionRecord linkage, locked policy version and atomic FinalAcceptance.
+PRE/POST rejection must earn no award; exact submission/acceptance replay must
+not create another award or contribution. This proves an earned award, not
+external fulfillment, a wallet balance or a money payment. No new compensation
+subsystem or external payment delivery belongs in this repair.
+
+Two same-head hosted schema-lane runs reached the unchanged 1,500-second
+limit at different completed-test boundaries. Rebalance the existing post-submit
+authorization migration/receipt and review-packet storage modules into the
+existing shared-foundation partitions. Change only
+`backend/scripts/test_lane_catalogue.py` and its exact allocation tests; retain
+all 17 lanes, test nodes, execution kinds, timeouts and completeness/coverage
+collection. Compare full collection manifests before and after and prove that
+only the intended 33 existing nodes change lane ownership. Timing projections
+are estimates; only a complete hosted run can establish the repair. No test
+deletion, skips or timeout increase is authorized by this repair.
 
 ### Closed request and delivery contract
 
@@ -70,7 +113,7 @@ correction or fabricated feedback run. This is provider-free compilation.
 The Garden marker grammar is exactly one standalone
 `Workstream-Task: <canonical lowercase UUID>` line in the final commit trailer
 block. Duplicate reserved occurrences anywhere, malformed values, missing or
-foreign task markers reject. It must exist before the final checks and review.
+foreign task markers reject. It must exist before final checks and any reviews required by the locked count.
 
 ## Bounded change
 
@@ -92,6 +135,8 @@ foreign task markers reject. It must exist before the final checks and review.
   AUTH test-structure inventories after reconciling affected owner call sites;
   keep test payloads out of parameter IDs so exact selected nodes fit process
   argument limits without changing assertions or execution selection.
+- Existing CI lane catalogue and its allocation tests for the measured
+  three-module redistribution described above; no workflow/gate relaxation.
 - This record, affected current README/spec/runbook/roadmap claims and local
   roadmap exports if present. A migration only if an identified persisted
   invariant needs enforcement; preserve retained records.
@@ -117,7 +162,7 @@ approval, merge, contribution or evaluation facts invented for the drill.
   bounded before full response allocation, and rejects inconsistent facts.
 - A valid Garden PR proof passes its trusted task and fails another; missing,
   duplicate or malformed task trailers and failed CI reject with findings.
-  This proves reviewed task association, not GitHub/Workstream actor identity.
+  This proves declared head-commit task association, not GitHub/Workstream actor identity or a human review when the configured count is zero.
 - Hosted forge configuration requires paired App identity and private key,
   admits only the intended consuming roles, and does not disclose secret bytes
   through rendered configuration, errors or release evidence.
@@ -143,12 +188,16 @@ facts and foreign-task rejection, not live GitHub access. Full public-API
 fixture sequence is upload
 all originals -> assert no attempt/provider call -> explicit authorized request
 -> durable worker -> proposal -> separate policy approvals -> activation. Forge
-negative controls first satisfy merge, CI producer, independent current-head
-review and proof comparisons, then vary only the marker or trusted task UUID.
+negative controls first satisfy merge, CI producer, the configured approval
+count and proof comparisons, then vary only the marker or trusted task UUID.
 
 The hosted Garden proof requires the read-only GitHub App, a candidate deployment
-and a real task-associated PR with independent review and authorized merge. It
-must not be inferred from the controlled local facts. Exact check/review freshness
+and a real task-associated PR with authorized merge and configured checks. The
+explicit zero-approval test does not require or fabricate a GitHub review;
+omission/positive counts retain their review requirement. Guide v2 and capability
+v2 require new approvals and a new task; retain the earlier records and leave PR
+#287 open as requested. A successful outcome must not be inferred from controlled
+facts or open work. Exact check/review freshness
 and operational completion evidence belong in the PR.
 
 ## Risk and review routing

@@ -127,7 +127,7 @@ def test_intake_rejects_bad_claim_shape_and_foreign_urls(field, value):
 @pytest.mark.parametrize("phase", ["pre_submit", "post_submit"])
 def test_registry_specs_select_distinct_authority(phase):
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publisher.registry_spec("sha256:" + "f" * 64, "v1", phase)
+        publisher.registry_spec("sha256:" + "f" * 64, "v2", phase)
     )
     assert spec.phase == phase
     assert spec.capability_id == "garden.work_proof"
@@ -151,3 +151,94 @@ def test_malformed_message_facts_fail_closed(message):
     assert [f["code"] for f in checker.evaluate_post(raw, CONFIG, value)] == [
         "harnessy.proof.forge.facts_invalid"
     ]
+
+
+def test_zero_approvals_is_explicit_and_omission_still_requires_one():
+    raw, value = control()
+    value["forge_facts"]["reviews"] = []
+    assert checker.evaluate_post(raw, {**CONFIG, "required_independent_approvals": 0}, value) == []
+    assert [item["code"] for item in checker.evaluate_post(raw, CONFIG, value)] == [
+        "harnessy.proof.forge.independent_approval_missing"
+    ]
+    assert [
+        item["code"]
+        for item in checker.evaluate_post(
+            raw, {**CONFIG, "required_independent_approvals": 1}, value
+        )
+    ] == ["harnessy.proof.forge.independent_approval_missing"]
+
+
+@pytest.mark.parametrize(
+    "count,valid",
+    [
+        (0, True),
+        (1, True),
+        (10, True),
+        (True, False),
+        (False, False),
+        (-1, False),
+        (11, False),
+        (1.5, False),
+        ("0", False),
+    ],
+)
+def test_approval_configuration_matches_published_garden_schema(count, valid):
+    from app.modules.checkers.api.external import ExternalCheckerContractError
+
+    configuration = {**CONFIG, "required_independent_approvals": count}
+    spec = ExternalCheckerRegistrySpec.model_validate(
+        publisher.registry_spec("sha256:" + "f" * 64, "v2", "post_submit")
+    )
+    raw, value = control()
+    findings = checker.evaluate_post(raw, configuration, value)
+    assert (not any(item["code"].endswith(".configuration") for item in findings)) is valid
+    if valid:
+        spec.configuration_schema.validate_instance(configuration)
+    else:
+        with pytest.raises(ExternalCheckerContractError):
+            spec.configuration_schema.validate_instance(configuration)
+
+
+@pytest.mark.parametrize(
+    "guard,code",
+    [
+        ("merge", "harnessy.proof.forge.merged"),
+        ("ci", "harnessy.proof.forge.required_check"),
+        ("producer", "harnessy.proof.forge.producer_mismatch"),
+        ("unbound", "harnessy.proof.forge.unbound_required_check"),
+        ("protected", "harnessy.proof.forge.protected_path_changed"),
+        ("head", "harnessy.proof.forge.facts_binding"),
+        ("repository", "harnessy.proof.forge.repository"),
+        ("commit", "harnessy.proof.forge.landed_commit_sha"),
+        ("task", "garden.proof.task_mismatch"),
+    ],
+)
+def test_zero_approvals_retains_other_integrity_guards(guard, code):
+    raw, value = control()
+    value["forge_facts"]["reviews"] = []
+    configuration = {**CONFIG, "required_independent_approvals": 0}
+    assert checker.evaluate_post(raw, configuration, value) == []
+    facts = value["forge_facts"]
+    if guard == "merge":
+        facts["merged"] = False
+        facts["landed_commit_sha"] = None
+    elif guard == "ci":
+        facts["required_checks"][0]["conclusion"] = "failure"
+    elif guard == "producer":
+        facts["required_checks"][0]["judged"][0]["producer"] = "github_app:999"
+    elif guard == "unbound":
+        facts["required_checks"][0]["required_producer"] = None
+    elif guard == "protected":
+        facts["changed_files"][0]["path"] = ".github/workflows/ci.yml"
+    elif guard == "head":
+        facts["required_checks"][0]["judged"][0]["sha"] = "a" * 40
+    elif guard == "repository":
+        facts["repository"] = "other/repository"
+    elif guard == "commit":
+        proof = json.loads(raw)
+        proof["commit_sha"] = "a" * 40
+        raw = json.dumps(proof).encode()
+    else:
+        value["task_id"] = OTHER_TASK
+    findings = checker.evaluate_post(raw, configuration, value)
+    assert code in [item["code"] for item in findings]

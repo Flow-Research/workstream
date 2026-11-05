@@ -1,7 +1,7 @@
 [
   {
     "title": "Correct Garden's local PostgreSQL port-conflict instructions",
-    "description": "The project guide applies. At Garden dev c61609fc4170ea76238b1fb53b1c00177448dad5, README says changing only DATABASE_URL resolves a conflict on host port 55432. Onboarding correctly says the compose.dev.yaml host mapping must change too. Recheck current dev, then update README with consistent instructions and a link to onboarding. Distinguish the alternative host port from PostgreSQL's container port 5432. Keep this a documentation-only change: do not change deployed configuration, credentials or volumes. Explain the verified compose mapping in the PR and run required repository checks. Include this Workstream task's actual UUID as the final head-commit trailer before obtaining review. Submit the merged PR's proof ZIP described by the project guide. Start from dev and target dev in the PR, following Garden's contribution skill and maintainer workflow.",
+    "description": "The version-2 project guide applies. At Garden dev 458833c297382e679a9de3c4539b3c51239aac0d, README says changing only DATABASE_URL resolves a conflict on host port 55432. docs/guides/develop/fix-setup-problems.md correctly requires changing the compose.dev.yaml host mapping too. Recheck current dev and update README with consistent instructions and a link to that page. Distinguish the chosen host port from PostgreSQL's container port 5432. Keep this documentation-only: no configuration, credentials or volume changes. Run applicable repository checks including pnpm verify:docs. Put this newly claimed task's actual UUID in the final PR head trailer before final CI and any review required by the locked configuration. This test explicitly selects zero independent GitHub approvals; a real authorized merge and passing trusted CI are still required for successful proof. Existing guide/task records remain retained; do not assume an old head marker already identifies this task. Start from and target dev.",
     "task_type": "engineering_documentation",
     "skill_tags": [
       "documentation",
@@ -12,9 +12,12 @@
   },
   {
     "title": "Document Garden's Workstream contribution handoff",
-    "description": "The project guide applies. Once the Garden Workstream guide and checker contract are approved, add a concise contributor page explaining the native Workstream task, claim, task marker before final GitHub review, required checks and merge, root proof.json ZIP, and the difference between PRE feedback and POST evidence. Link the page from CONTRIBUTING while preserving ordinary GitHub contributions. State that credentials never belong in the ZIP and use obvious placeholders for task IDs, PR numbers and commit SHAs. Keep this documentation-only; do not build issue synchronization, a UI or a new authentication flow. Verify links and consistency with the approved guide, obtain independent review and merge, then submit this task's real proof ZIP. Start from dev and target dev in the PR.",
+    "description": "The version-2 project guide applies. Add a concise contributor page explaining native Workstream claim, the actual task marker before final GitHub checks and any required review, actual merge, root proof.json ZIP, and PRE feedback versus POST evidence. Explain this test explicitly sets required_independent_approvals=0, omission still requires one, and neither setting changes Workstream human_review_required=false or fabricates review facts. Link from CONTRIBUTING while preserving ordinary contributions. Use placeholders and no credentials; do not add issue synchronization, UI or auth. Run documentation checks, start from and target dev, and submit only actual merged-work proof.",
     "task_type": "engineering_documentation",
-    "skill_tags": ["documentation", "contribution-workflow"],
+    "skill_tags": [
+      "documentation",
+      "contribution-workflow"
+    ],
     "source_type": "manual"
   }
 ]

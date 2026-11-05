@@ -3,7 +3,9 @@
 This directory defines a small real project drill, not evidence that it has
 already passed. The [project guide](guide.md) describes the contributor contract;
 the task definitions will be created as native Workstream tasks. Garden's code
-and independent review stay in GitHub. No issue-sync integration is required.
+and merge/CI evidence stay in GitHub. This version-2 test explicitly requires
+zero independent GitHub approvals; omitting the Garden POST setting still
+requires one. This is not a general no-review default. No issue-sync integration is required.
 
 The intended sequence is:
 
@@ -12,13 +14,27 @@ The intended sequence is:
    provider-free rules input, then reviews requirements and approves separate
    pinned PRE/POST bindings and the project's activation.
 2. PM creates a bounded task. Contributor claims it and implements the change.
-3. Garden maintainer reviews and merges the exact task-associated PR with required
-   CI. This is a real human action, not something a drill script may fabricate.
+3. Required trusted CI passes and an authorized Garden maintainer actually merges
+   the task-associated PR. This test selects `required_independent_approvals=0`;
+   it does not require an independent GitHub review or invent one. An open PR
+   still fails the real-merge check.
 4. Contributor uploads the root `proof.json` ZIP. Exercise missing/malformed PRE
    input, valid intake, a controlled POST rejection and a real successful proof.
 5. Inspect immutable artifact/Submission, retained checker evidence, governed
    acceptance and exact submitter ContributionRecord through public APIs and
    durable workers. Retry the same operation and verify no duplicate effects.
+
+Use a new guide `garden-engineering-drill-2`, newly approved Garden capability
+`v2` PRE/POST bindings, and a new task locked to that guide. Previously activated
+guides, claimed tasks, image registrations and evidence remain retained under
+their original rules. This is a replacement policy version, not another runtime
+implementation or a rewrite of the earlier assignment.
+
+[Garden PR #287](https://github.com/Flow-Research/garden/pull/287) must remain open
+as the user requested. Preserve its original commit and existing task history.
+Do not assert that its head already identifies a newly claimed task: any later
+marker update must use the actual new UUID before final checks and any required
+review. No accepted work or contribution is established while it remains open.
 
 The external image implementation belongs under
 `external_checkers/garden_proof/`. The generic GitHub facts adapter only retrieves
@@ -63,41 +79,58 @@ register or approve a production image.
 
 Garden's default branch is `main`; its active contribution target is `dev`.
 Read-only inspection of `dev` at
-[`c61609fc4170ea76238b1fb53b1c00177448dad5`](https://github.com/Flow-Research/garden/tree/c61609fc4170ea76238b1fb53b1c00177448dad5)
-found that the maintainer workflow and contribution skill both require starting
-from and targeting `dev`. [Merged PR #261](https://github.com/Flow-Research/garden/pull/261)
-has base `dev` and landed at that SHA. CI covers PRs into both `dev` and `main`;
-that does not make `main` the engineering target. Lock the POST configuration to
-`base_branch=dev` and obtain fresh review/checks on the actual task head.
+[`458833c297382e679a9de3c4539b3c51239aac0d`](https://github.com/Flow-Research/garden/tree/458833c297382e679a9de3c4539b3c51239aac0d)
+confirmed the current contribution/development documentation paths. CI covers
+PRs into both `dev` and `main`; that does not make `main` the engineering target.
+Lock the POST configuration to `base_branch=dev` and explicitly set
+`required_independent_approvals=0` for this test. Positive counts require the
+corresponding eligible current-head approvals; omission requires one. Shared
+Harnessy retains its minimum of one.
 
 At that SHA, README's PostgreSQL troubleshooting paragraph still tells readers
-to override only `DATABASE_URL`; onboarding's matching paragraph requires both
-the URL and `compose.dev.yaml` mapping. Compose maps host `55432` to container
-`5432`. The first task therefore remains a useful documentation repair on `dev`,
-rather than replaying a fix already delivered. This read-only source check does
-not establish required-check protection, an eligible review or a completed drill.
+to override only `DATABASE_URL`. `docs/guides/develop/fix-setup-problems.md`
+correctly requires both the URL and `compose.dev.yaml` mapping. Compose maps host
+`55432` to container `5432`. The README repair therefore remains needed on `dev`;
+the pending work is not a completed contribution. The old onboarding page is now
+`docs/tutorials/get-started.md`, and maintainer workflow is
+`docs/guides/maintain/maintain-garden.md`.
 
 ## Initial task candidates
 
-**First drill: fix local PostgreSQL port-conflict instructions.** Rechecked on
-`dev` at `c61609fc4170ea76238b1fb53b1c00177448dad5`, README still says to override
-only `DATABASE_URL` when host port
-55432 is occupied. Onboarding correctly requires changing both that URL and the
-`compose.dev.yaml` host mapping. Update the README to describe the matching changes,
-keep container port 5432 distinct from the chosen host port, and link onboarding.
-Do not change deployed configuration or delete existing database volumes.
+**First drill: fix local PostgreSQL port-conflict instructions.** Recheck the
+current `dev` README against `docs/guides/develop/fix-setup-problems.md`; update
+README with matching host mapping and `DATABASE_URL` instructions and a link to
+that page. Keep container port `5432` distinct from the chosen host port. Preserve
+pending PR #287 and leave it open; do not delete database volumes or change
+configuration. Use the actual newly claimed task's marker only after that task
+exists. Run applicable checks including `pnpm verify:docs`.
 
-**Second drill: document the Garden Workstream contribution handoff.** Once the
-first guide and checker contract are approved, add a short Garden contributor
-page describing claim, task trailer, review/merge, proof ZIP and how to interpret
-PRE versus POST feedback. Link it from CONTRIBUTING without replacing ordinary
-GitHub contribution instructions. Examples must contain obvious placeholders,
-never copied private tokens or a claim that a sample PR is real accepted work.
+**Second drill: document the Garden Workstream contribution handoff.** After the
+guide and checker policy are approved, a small contributor page can explain
+claim, head trailer, configured GitHub approval count, required CI/merge, proof
+ZIP and PRE versus POST feedback. Preserve ordinary GitHub contributions and use
+obvious placeholders, never credentials or fabricated accepted work. This is an
+optional later task, not a reason to create another PR for the current test.
 
-Both are genuine small documentation contributions. Recheck current Garden `dev`
-before creating tasks; if another contributor already fixed the issue, select a
-new useful change rather than replaying completed work. Open UI/auth issues are
-not automatically part of this drill.
+Recheck current `dev` before creating tasks. If the requested work has already
+landed, do not recycle it as a new contribution. Existing assignments keep their
+locked rules; a new guide does not relabel their work or evidence.
+
+## Confirmed points policy preparation
+
+The revised drill awards **100 project points per accepted submission**. Before
+locking the new task, configure the authorized project-points unit and binding;
+Finance must publish the ContributionPolicy with `accepted_submission` set to those
+100 points and `completed_review` unpaid. Select that exact published policy
+through the existing guide/task binding flow. This is separate Finance policy,
+not setup-agent output or a change to the uploaded guide/rules. This preparation
+does not establish that the unit, binding or policy is provisioned or deployed.
+
+Verify that passing required checks commits the exact 100-point award, submitter
+ContributionRecord and FinalAcceptance atomically. Rejected work must create no
+award; exact replay must create no duplicate award or contribution. An earned
+project-points award is not cash, a wallet balance or proof of fulfillment.
+Garden PR #287 remains open; this policy preparation establishes no acceptance.
 
 ## Evidence boundaries
 
@@ -109,5 +142,7 @@ composition. Only a real authorized GitHub PR plus the public Workstream journey
 proves the hosted success path. Report these separately, with exact source/image
 digests and no credentials or private evidence bodies in this repository.
 
-No real task IDs, PR numbers, image digests or successful run receipts are asserted
-by these preparation documents. Record them after the corresponding real actions.
+The new zero-approval guide/image/task sequence remains separate from earlier
+hosted setup and claim evidence. PR #287 is referenced as retained open work,
+not a passed proof. Record actual new identities and outcomes only after they
+exist; source fixtures and controlled facts cannot establish acceptance.

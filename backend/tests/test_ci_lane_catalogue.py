@@ -254,9 +254,6 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
         "tests/migrations/test_contribution_export_snapshots.py",
         "tests/migrations/test_contribution_read_audit.py",
         "tests/test_database_reset.py",
-        "tests/authorization/post_submit/test_receipt_custody.py",
-        "tests/authorization/post_submit/test_migration.py",
-        "tests/reviews/packet/test_storage.py",
         "tests/reviews/lifecycle/test_contracts.py",
         "tests/reviews/lifecycle/test_storage.py",
         "tests/reviews/lifecycle/test_transition_storage.py",
@@ -269,6 +266,24 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
     } | schema_static_contracts | set(catalogue.OBSERVABILITY_MODULES) | set(
         catalogue.TASK_ROUTING_REQUEST_MODULES
     ) == modules_by_lane["schema_contracts"]
+
+
+def test_post_submit_and_packet_custody_share_foundations_without_losing_nodes() -> None:
+    modules = {
+        "tests/authorization/post_submit/test_receipt_custody.py",
+        "tests/authorization/post_submit/test_migration.py",
+        "tests/reviews/packet/test_storage.py",
+    }
+    for module in modules:
+        assert catalogue.PARTITION_LANES_BY_MODULE[module] == catalogue.PARTITIONED_SHARED_LANES
+        assert tuple(lane.name for lane in LANES if module in lane.modules) == (
+            catalogue.PARTITIONED_SHARED_LANES
+        )
+    nodes = [f"{module}::test_custody[{index}]" for module in modules for index in range(256)]
+    manifest = runner.build_manifest("a" * 40, nodes)
+    assert Counter(row["nodeid"] for row in manifest["nodes"]) == Counter(nodes)
+    assert {row["lane"] for row in manifest["nodes"]} == set(catalogue.PARTITIONED_SHARED_LANES)
+    assert {row["execution_kind"] for row in manifest["nodes"]} == {runner.ORDINARY_KIND}
 
 
 def test_static_architecture_inventory_partitions_only_in_shared_foundations() -> None:
@@ -302,8 +317,8 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            264,
-            "e60476b197a07efb56937368fb61f43e78d4acc8bddf7910b5e613520157a6af",
+            267,
+            "d079b1e1c395f627dc08c0e31540009e9d9dc258400e540bbe3e0dbe59133e76",
         ),
         "project": (
             255,

@@ -37,6 +37,7 @@ def registry_spec(image_digest: str, capability_version: str, phase: str) -> dic
     configuration = deepcopy(shared.CONFIGURATION_SCHEMA)
     configuration["properties"]["repository"] = {"const": "Flow-Research/garden"}
     configuration["properties"]["forge_origin"] = {"const": "https://github.com"}
+    configuration["properties"]["required_independent_approvals"]["minimum"] = 0
     if phase == "pre_submit":
         configuration = PRE_CONFIGURATION_SCHEMA
         spec["input_schema"] = shared._schema("external_checker_pre_submit_input")
@@ -57,7 +58,7 @@ def main() -> int:
     parser.add_argument("--sandbox-uid", type=int, required=True)
     parser.add_argument("--sandbox-gid", type=int, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--capability-version", default="v1")
+    parser.add_argument("--capability-version", default="v2")
     args = parser.parse_args()
     image = shared.publish(
         args.registry,

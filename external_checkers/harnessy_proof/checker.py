@@ -153,12 +153,22 @@ def evaluate_proof(
     *,
     configuration: object,
     input_value: object,
+    minimum_independent_approvals: int = 1,
 ) -> list[dict[str, object]]:
     """Return findings for one proof; it passes only when it matches the forge facts."""
     proof, findings = parse_proof(raw)
     if proof is None:
         return findings
-    return findings + claim_findings(proof) + compare_forge_facts(proof, configuration, input_value)
+    return (
+        findings
+        + claim_findings(proof)
+        + compare_forge_facts(
+            proof,
+            configuration,
+            input_value,
+            minimum_independent_approvals=minimum_independent_approvals,
+        )
+    )
 
 
 def parse_proof(raw: bytes | None) -> tuple[dict | None, list[dict[str, object]]]:
@@ -219,11 +229,14 @@ def _repository(value: object) -> bool:
     )
 
 
-def forge_configuration(configuration: object) -> dict | None:
+def forge_configuration(
+    configuration: object, *, minimum_independent_approvals: int = 1
+) -> dict | None:
     """Return the normalized configuration, or None when it is absent or invalid.
 
     Integrity options take safe defaults: unbound required checks are errors,
     the default protected paths apply, and one independent approval is needed.
+    The minimum is a trusted project-code parameter, never a configuration key.
     """
     if not isinstance(configuration, dict):
         return None
@@ -248,7 +261,7 @@ def forge_configuration(configuration: object) -> dict | None:
         or not isinstance(allow_unbound, bool)
         or not _strings(protected)
         or type(approvals) is not int
-        or approvals < 1
+        or approvals < minimum_independent_approvals
         or not _strings(operators)
     ):
         return None
@@ -590,10 +603,16 @@ def _integrity_findings(facts: dict, settings: dict) -> list[dict[str, object]]:
 
 
 def compare_forge_facts(
-    proof: dict, configuration: object, input_value: object
+    proof: dict,
+    configuration: object,
+    input_value: object,
+    *,
+    minimum_independent_approvals: int = 1,
 ) -> list[dict[str, object]]:
     """Compare proof claims with WorkStream-read forge facts; one finding per mismatch."""
-    settings = forge_configuration(configuration)
+    settings = forge_configuration(
+        configuration, minimum_independent_approvals=minimum_independent_approvals
+    )
     if settings is None:
         return [
             _finding(

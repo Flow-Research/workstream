@@ -115,7 +115,10 @@ CONFIGURATION = {
 }
 
 
-def invocation(material_root, image_digest, *, locate, garden=False, task_id=TASK_ID):
+def invocation(
+    material_root, image_digest, *, locate, garden=False, task_id=TASK_ID,
+    approval_count=0,
+):
     """Give each pass its own exact request-bound grant over the same proof bytes."""
     grant_id = "extract_" + os.urandom(16).hex()
     grant_root = material_root / "workspaces" / grant_id
@@ -130,7 +133,10 @@ def invocation(material_root, image_digest, *, locate, garden=False, task_id=TAS
         facts.update(repository=new, change_url=proof["pr_url"],
                      head_commit_message="Improve docs\n\nWorkstream-Task: " + TASK_ID + "\n")
         facts["required_checks"][0]["run_url"] = proof["ci_run_url"]
+        facts["reviews"] = []
         configuration["repository"] = new
+        if approval_count is not None:
+            configuration["required_independent_approvals"] = approval_count
     proof_path.write_bytes(canonical(proof))
     proof_path.chmod(0o400)
     request, manifest = request_and_manifest(image_digest, workspace)
@@ -154,7 +160,7 @@ def invocation(material_root, image_digest, *, locate, garden=False, task_id=TAS
         assert spec is not None and spec.loader is not None
         publisher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(publisher)
-        spec = publisher.registry_spec(image_digest, "v1", "post_submit")
+        spec = publisher.registry_spec(image_digest, "v2", "post_submit")
     else:
         spec = PUBLISH.registry_spec(image_digest, "v4")
     request["registry"] = {**spec, **metadata, "entry_digest": digest(spec)}
@@ -356,6 +362,23 @@ def main():
             ] is None:
                 raise RuntimeError(f"image evaluation failed: {evaluated}")
             if args.garden_proof:
+                default_request, default_grant = invocation(
+                    material_root, image_digest, locate=False, garden=True,
+                    approval_count=None,
+                )
+                default_response = invoke(address, default_request, default_grant, "execute")
+                default_result = ExternalCheckerExecutionResult.model_validate_json(
+                    canonical(default_response["result"])
+                )
+                default_result.validate_request(
+                    ExternalCheckerExecutionRequest.model_validate_json(canonical(default_request))
+                )
+                if (
+                    default_result.verdict != "failed"
+                    or [item.code for item in default_result.findings]
+                    != ["harnessy.proof.forge.independent_approval_missing"]
+                ):
+                    raise RuntimeError("omitted approval count accepted a PR without reviews")
                 foreign_request, foreign_grant = invocation(
                     material_root, image_digest, locate=False, garden=True,
                     task_id=str(new_record_id()),
@@ -366,7 +389,7 @@ def main():
                 if negative.verdict != "failed" or [item.code for item in negative.findings] != ["garden.proof.task_mismatch"]:
                     raise RuntimeError("same PR passed for a different trusted task")
             inspections = read_inspections(inspection)
-            if len(inspections) != (3 if args.garden_proof else 2):
+            if len(inspections) != (4 if args.garden_proof else 2):
                 raise RuntimeError("unexpected sandbox invocation count")
             for inspected in inspections:
                 checker_ids.append(inspected["Id"])
@@ -401,6 +424,7 @@ def main():
                         result_digest=result.result_digest,
                         invocation_count=len(inspections),
                         foreign_task_rejected=args.garden_proof,
+                        explicit_zero_approval_control=args.garden_proof,
                         grant_replay_rejected=True,
                         network_none=True,
                         material_read_only=True,

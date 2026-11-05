@@ -386,20 +386,26 @@ There is deliberately no shape-only mode.
 ### Garden task association
 
 The [Garden image](../../external_checkers/garden_proof/README.md) registers
-`garden.work_proof` version `v1` separately for PRE and POST. PRE validates the
+`garden.work_proof` version `v2` separately for PRE and POST. PRE validates the
 bounded `proof.json` claims; POST compares independently retrieved facts and
 requires exactly one standalone `Workstream-Task: <canonical lowercase UUID>`
 line in the immutable head commit's final trailer block. Duplicate reserved
 occurrences anywhere, missing, malformed or foreign task markers fail. Add it
-before final CI and independent review: changing the message changes the head.
-Only the external image interprets this project marker. It proves reviewed task
-association, not GitHub-to-Workstream contributor identity.
+before final CI and any required review: changing the message changes the head.
+Garden's test POST binding explicitly sets `required_independent_approvals=0`;
+omission requires one, positive values require the configured approvals, and
+shared Harnessy still requires at least one. Real merge, trusted CI and task
+association remain required. Workstream's separate false ReviewPolicy setting
+is unchanged. Only the external image interprets the marker; it proves declared
+head-commit task association, not contributor identity or a human review in
+zero-count mode.
 
 See the [Garden guide](../../pilots/garden/guide.md) and
 [uploaded manager rules](../../pilots/garden/manager-rules.md). These source
 fixtures and controlled image tests do not establish publication, deployment or
-a real GitHub review/merge/contribution drill. Register the exact new image and
-approve its separate phase attachments before use.
+a real GitHub merge/contribution drill. Register the exact new image and approve
+its separate phase attachments under a new guide/task context. Earlier records
+stay immutable; leave Garden PR #287 open and claim no successful proof for it.
 
 ## Create the manager project and the agent submitter
 

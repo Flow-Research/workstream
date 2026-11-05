@@ -18,7 +18,7 @@ Set only these repository permissions, all **read-only**:
 | Administration | Required checks on the protected target branch |
 | Checks | Check runs and trusted producer identity |
 | Commit statuses | Commit status results |
-| Contents | The Git commit object for the exact reviewed head |
+| Contents | The Git commit object for the exact PR head |
 | Pull requests | PR state, reviews and changed files |
 | Metadata | Repository facts and reviewers' current repository permissions |
 
@@ -56,8 +56,17 @@ After configuration, verify a bounded facts read for a real Garden PR through
 the actual adapter, including exact-head commit retrieval and required branch
 checks. Confirm installation scope and errors without printing credentials,
 private response bodies or tokens. A successful health endpoint alone does not
-prove GitHub access. The complete drill still needs the real task's independently
-reviewed and merged PR and the public Workstream submission/contribution journey.
+prove GitHub access. The version-2 test explicitly sets the Garden POST
+`required_independent_approvals` to zero; omission still requires one, and shared
+Harnessy still requires at least one. Keep the reader permissions for supported
+positive-count policies; zero does not manufacture approval facts or waive real
+merge, trusted CI or exact task association. Workstream's separate
+`human_review_required=false` setting remains unchanged.
+
+The complete success path still needs an actually merged task-associated PR and
+the public Submission/contribution journey. Leave PR #287 open as requested;
+no successful merged-work outcome is claimed for it. Earlier guide/task/image
+evidence remains retained, and v2 needs new publication and approvals.
 
 See the [project guide](guide.md), [drill plan](README.md), and
 [shared forge boundary](../../docs/engineering/local-agent-loop.md).

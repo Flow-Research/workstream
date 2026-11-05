@@ -1,20 +1,32 @@
 {
-  "version": "garden-engineering-drill-1",
-  "change_summary": "Define Garden dev-branch engineering contributions with independently verified pull-request evidence and task association.",
+  "version": "garden-engineering-drill-2",
+  "change_summary": "Replace the drill guide with an explicit Garden zero-independent-approval test policy while preserving real merge, trusted CI and exact task association.",
   "task_examples": [
     {
       "title": "Correct the local PostgreSQL port-conflict instructions",
-      "content": "At dev c61609fc4170ea76238b1fb53b1c00177448dad5, Garden README still suggests changing only DATABASE_URL if host port 55432 is occupied. Align it with onboarding: change the compose.dev.yaml host mapping and DATABASE_URL together, keep container port 5432 distinct, and link the detailed instructions. Do not change runtime configuration or delete data volumes. Start from and target dev.",
-      "labels": ["documentation", "developer-experience"]
+      "content": "At Garden dev 458833c297382e679a9de3c4539b3c51239aac0d, README still suggests changing only DATABASE_URL if host port 55432 is occupied. Align it with docs/guides/develop/fix-setup-problems.md: change the compose.dev.yaml host mapping and DATABASE_URL together, keep container port 5432 distinct, and link the detailed instructions. Do not change runtime configuration or delete data volumes. Start from and target dev; run the applicable documentation checks.",
+      "labels": [
+        "documentation",
+        "developer-experience"
+      ]
     },
     {
       "title": "Document the Garden Workstream contribution handoff",
-      "content": "Add a concise contributor page for the approved Workstream project: claim, task trailer before final review, required GitHub checks and merge, proof.json ZIP and PRE/POST feedback. Link it from CONTRIBUTING without replacing the ordinary GitHub contribution path. Use explicit placeholders and no credentials. Start from and target dev.",
-      "labels": ["documentation", "contribution-workflow"]
+      "content": "Add a concise contributor page for the approved Workstream project: claim, task trailer before final checks and any required review, actual GitHub checks and merge, proof.json ZIP and PRE/POST feedback. Explain the explicit Garden test approval count of zero and the omitted default of one. Link it from CONTRIBUTING without replacing ordinary contributions. Use placeholders, no credentials; start from and target dev.",
+      "labels": [
+        "documentation",
+        "contribution-workflow"
+      ]
     }
   ],
   "documents": [
-    {"label": "guide.md", "media_type": "text/markdown"},
-    {"label": "manager-rules.md", "media_type": "text/markdown"}
+    {
+      "label": "guide.md",
+      "media_type": "text/markdown"
+    },
+    {
+      "label": "manager-rules.md",
+      "media_type": "text/markdown"
+    }
   ]
 }

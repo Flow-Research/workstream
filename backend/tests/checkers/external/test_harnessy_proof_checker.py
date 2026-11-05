@@ -1107,3 +1107,17 @@ def test_published_registry_validates_actual_normal_execution_result_request() -
         checker.build_result(request.model_dump(mode="json"), [])
     ))
     result.validate_request(request)
+
+
+def test_shared_approval_default_and_direct_upper_bound_are_unchanged():
+    assert _codes(reviews=[]) == _forge("independent_approval_missing")
+    assert _codes(
+        configuration={**CONFIGURATION, "required_independent_approvals": 0}, reviews=[]
+    ) == _forge("configuration")
+    # The existing direct-call validator has no upper bound; Garden owns its ten cap.
+    assert (
+        checker.forge_configuration({**CONFIGURATION, "required_independent_approvals": 11})[
+            "required_approvals"
+        ]
+        == 11
+    )
