@@ -1,8 +1,9 @@
 # Read-only GitHub access for the Garden drill
 
 The external image receives bounded facts, never GitHub credentials. Configure
-the existing Workstream GitHub App adapter on the API and worker host that reads
-those facts. Do not place the private key in a checker image, ZIP, guide or PR.
+the existing Workstream GitHub App adapter on the outbox worker that reads
+those facts. The API and its migration process do not consume this credential.
+Do not place the private key in a checker image, ZIP, guide or PR.
 
 An organization owner or authorized App manager registers the App under
 Flow-Research's Settings → Developer settings → GitHub Apps. Use a descriptive
@@ -36,14 +37,19 @@ The existing settings are:
 
 ```dotenv
 WORKSTREAM_GITHUB_APP_ID=<actual numeric App ID>
-WORKSTREAM_GITHUB_APP_PRIVATE_KEY=<private PEM supplied through the secret environment>
-WORKSTREAM_GITHUB_API_BASE_URL=https://api.github.com
+WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE=<absolute operator-only PEM file path>
+WORKSTREAM_GITHUB_APP_INSTALLATION_ID=
 ```
 
-The placeholders above are not runnable configuration. The adapter accepts
-multiline PEM or literal escaped newline separators. The optional
+The placeholders above are not runnable configuration. Hosted release preflight
+requires the App ID and key file together; the checked optional GitHub overlay
+mounts the key only into the worker. Store the complete multiline PEM in a regular
+file owned by the runtime UID/GID with mode `0400`. The worker entrypoint loads
+the adapter's existing `WORKSTREAM_GITHUB_APP_PRIVATE_KEY` variable; do not put
+that raw value in the release environment file. The optional
 `WORKSTREAM_GITHUB_APP_INSTALLATION_ID` can remain unset: the adapter discovers
-the installation for the exact repository. It requests a repository-scoped
+the installation for the exact repository. The API origin defaults to
+`https://api.github.com`. It requests a repository-scoped
 installation token; no personal-token or anonymous fallback is used.
 
 After configuration, verify a bounded facts read for a real Garden PR through
@@ -55,3 +61,4 @@ reviewed and merged PR and the public Workstream submission/contribution journey
 
 See the [project guide](guide.md), [drill plan](README.md), and
 [shared forge boundary](../../docs/engineering/local-agent-loop.md).
+The [hosted release instructions](../../deploy/hosted/README.md) describe secret provisioning.

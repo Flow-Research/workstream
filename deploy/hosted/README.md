@@ -220,7 +220,19 @@ development authentication are absent.
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
 API only the database, broker, rate-limit and pagination secrets; the worker
-gets the database and broker. `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
+gets the database and broker. For read-only GitHub forge facts, optionally set
+`WORKSTREAM_GITHUB_APP_ID` and `WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE` together;
+`WORKSTREAM_GITHUB_APP_INSTALLATION_ID` may select an installation explicitly.
+Leave all three blank when unused. The private file contains the complete PEM,
+including its newlines, with the same runtime ownership and `0400` mode.
+The checked release command selects `compose.github.yml` only for this pair.
+Only the outbox worker receives the mounted key and App settings; API/migrations,
+Beat, parser, model proxy and proof jobs receive none. Preflight reads file
+metadata only; the worker loader sets the adapter's existing private-key variable
+without evaluating or logging its contents. Never put a raw private key in the
+release environment. Follow the
+[GitHub App instructions](../../pilots/garden/github-app.md) for read-only permissions.
+`WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process
 gets the database, each configured provider credential and the runtime ART identity.
 For non-manager setup, the selected setup provider path is required and the other

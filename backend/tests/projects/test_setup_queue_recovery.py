@@ -174,5 +174,3 @@ async def test_dispatch_pending_republishes_only_after_stale_cutoff(
         reclaimed = await session.get(ProjectSetupRun, run.id)
         assert reclaimed is not None
         assert reclaimed.updated_at > stale_updated_at
-
-

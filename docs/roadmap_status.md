@@ -681,8 +681,11 @@ cannot be reused as post-submission review-gate evidence. See the
   and POST configurations; only its external POST interprets the exact task
   trailer, without mapping GitHub authors to Workstream identities. The
   [Garden fixture](../pilots/garden/README.md) prepares guide/rules/task inputs.
-  Publishing/registration, hosted credentials, separate storage of fetched response
-  bytes and a real reviewed/merged Garden PR through durable public APIs to exact
+  Hosted release configuration supplies the GitHub App through an optional
+  Celery worker secret-file mount; API/migration, checker images and model proxy
+  receive no App key. Deployment must verify that wiring with the real adapter.
+  Publishing/registration, separate storage of fetched response bytes and a real
+  reviewed/merged Garden PR through durable public APIs to exact
   contribution evidence remain distinct from controlled image composition proof.
 - AWS S3 is the hosted artifact target, MinIO proves the storage protocol in
   development and CI, and all storage access stays behind `ArtifactStore`.

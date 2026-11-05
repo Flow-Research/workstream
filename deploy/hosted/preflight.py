@@ -30,6 +30,12 @@ TRIAL_KEYS = (
 )
 MODEL_OPENAI_COMPOSE_PATH = Path(__file__).with_name("compose.model-openai.yml")
 MODEL_OPENROUTER_COMPOSE_PATH = Path(__file__).with_name("compose.model-openrouter.yml")
+GITHUB_COMPOSE_PATH = Path(__file__).with_name("compose.github.yml")
+GITHUB_APP_KEYS = (
+    "WORKSTREAM_GITHUB_APP_ID",
+    "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE",
+    "WORKSTREAM_GITHUB_APP_INSTALLATION_ID",
+)
 DEFAULT_DEPLOYMENT_ROOT = Path("/var/lib/workstream")
 DEFAULT_CHECKER_SERVICE_BINARY = Path("/opt/workstream/bin/workstream-checker-service")
 INTAKE_DIGEST_KEYS = (
@@ -120,8 +126,16 @@ MODEL_PROVIDER_COMPOSE_PATHS = {
     "openai": MODEL_OPENAI_COMPOSE_PATH,
     "openrouter": MODEL_OPENROUTER_COMPOSE_PATH,
 }
-SECRET_FILE_KEYS = (*BASE_SECRET_FILE_KEYS, *MODEL_PROXY_SECRET_FILE_KEYS)
+SECRET_FILE_KEYS = (
+    *BASE_SECRET_FILE_KEYS,
+    *MODEL_PROXY_SECRET_FILE_KEYS,
+    GITHUB_APP_KEYS[1],
+)
 SECRET_FILE_TARGETS = {
+    "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": (
+        "github_app_private_key",
+        "/run/secrets/github_app_private_key",
+    ),
     "WORKSTREAM_DATABASE_URL_FILE": ("database_url", "/run/secrets/database_url"),
     "WORKSTREAM_CELERY_BROKER_URL_FILE": (
         "celery_broker_url",
@@ -162,6 +176,7 @@ ROLE_SECRET_FILE_KEYS = {
     "model-proxy": ("WORKSTREAM_DATABASE_URL_FILE",),
 }
 FORBIDDEN_RELEASE_KEYS = (
+    "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
     "AWS_ACCESS_KEY_ID",
     "AWS_CONFIG_FILE",
     "AWS_CONTAINER_CREDENTIALS_FULL_URI",
@@ -300,6 +315,7 @@ REQUIRED_RELEASE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
+    *GITHUB_APP_KEYS,
     "WORKSTREAM_DEPLOYMENT_ROOT",
     "WORKSTREAM_CHECKER_SERVICE_BINARY",
     *TRIAL_KEYS,
@@ -377,6 +393,22 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
+    github_app_id, github_key_file, github_installation_id = (
+        values.get(key, "") for key in GITHUB_APP_KEYS
+    )
+    if bool(github_app_id) != bool(github_key_file) or (
+        github_installation_id and not github_app_id
+    ):
+        raise PreflightError("GitHub App requires paired App ID and private key file")
+    if github_app_id:
+        _positive_id(values, GITHUB_APP_KEYS[0])
+        if github_installation_id:
+            _positive_id(values, GITHUB_APP_KEYS[2])
+        path = Path(github_key_file)
+        if not path.is_absolute() or path != path.resolve(strict=False) or any(
+            character in github_key_file for character in ("\n", "\r", "\0", ",")
+        ):
+            raise PreflightError("GitHub App key file must use a canonical absolute path")
     root = deployment_paths(values).root
     binary = checker_service_binary(values)
     if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root) or values.get(
@@ -778,16 +810,20 @@ def _private_metadata(path: Path, *, kind: str, uid: int, gid: int, mode: int) -
 
 
 def _secret_file_keys(values: dict[str, str]) -> tuple[str, ...]:
-    if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
-        return (
-            *BASE_SECRET_FILE_KEYS,
-            *(key for key in MODEL_PROXY_SECRET_FILE_KEYS if values.get(key)),
-        )
-    return BASE_SECRET_FILE_KEYS
+    return (
+        *BASE_SECRET_FILE_KEYS,
+        *(
+            key for key in MODEL_PROXY_SECRET_FILE_KEYS
+            if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true" and values.get(key)
+        ),
+        *((GITHUB_APP_KEYS[1],) if values.get(GITHUB_APP_KEYS[0]) else ()),
+    )
 
 
 def _role_secret_file_keys(role: str, values: dict[str, str]) -> tuple[str, ...]:
     keys = ROLE_SECRET_FILE_KEYS[role]
+    if role == "worker" and values.get(GITHUB_APP_KEYS[0]):
+        return (*keys, GITHUB_APP_KEYS[1])
     if role == "model-proxy" and values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         return (
             *keys,
@@ -939,6 +975,8 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
+    if values.get(GITHUB_APP_KEYS[0]):
+        arguments.extend(("--file", str(GITHUB_COMPOSE_PATH)))
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         arguments.extend(("--file", str(INFERENCE_COMPOSE_PATH)))
         for provider, key in MODEL_PROVIDER_SECRET_FILE_KEYS.items():
@@ -1583,6 +1621,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET",
                     "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET",
                     *TRIAL_KEYS,
+                    *GITHUB_APP_KEYS,
                 }
             }
         )
@@ -1685,7 +1724,23 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         service_environment = service.get("environment") or {}
         if not isinstance(service_environment, dict):
             raise PreflightError(f"{name} release environment is invalid")
+        expected_github = (
+            {
+                GITHUB_APP_KEYS[0]: values[GITHUB_APP_KEYS[0]],
+                GITHUB_APP_KEYS[1]: SECRET_FILE_TARGETS[GITHUB_APP_KEYS[1]][1],
+                GITHUB_APP_KEYS[2]: values.get(GITHUB_APP_KEYS[2], ""),
+            }
+            if name == "worker" and values.get(GITHUB_APP_KEYS[0])
+            else {}
+        )
+        actual_github = {
+            key: service_environment[key]
+            for key in GITHUB_APP_KEYS if key in service_environment
+        }
+        if actual_github != expected_github:
+            raise PreflightError(f"{name} GitHub App settings differ from its release role")
         for key in (
+            "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
             "WORKSTREAM_PROJECT_AGENT_API_KEY",
             "OPENAI_API_KEY",
             "OPENROUTER_API_KEY",

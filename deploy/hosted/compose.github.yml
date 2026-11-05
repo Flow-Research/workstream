@@ -1,0 +1,16 @@
+services:
+  worker:
+    environment:
+      WORKSTREAM_GITHUB_APP_ID: ${WORKSTREAM_GITHUB_APP_ID:?set the GitHub App ID}
+      WORKSTREAM_GITHUB_APP_INSTALLATION_ID: ${WORKSTREAM_GITHUB_APP_INSTALLATION_ID:-}
+      WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github_app_private_key
+    secrets:
+      - source: github_app_private_key
+        target: github_app_private_key
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+
+secrets:
+  github_app_private_key:
+    file: ${WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE:?set the private GitHub App key file}
