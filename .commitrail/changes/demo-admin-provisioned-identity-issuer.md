@@ -52,7 +52,7 @@ One local operator initializes a private issuer data directory and bootstraps an
 | Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
 | Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 1 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | no live EC2/DNS proof |
 | Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | hosted preflight and cutover deferred |
-| Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | added for pull requests | hosted result pending |
+| Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | workflow added | hosted executions are PR evidence |
 
 ## Review findings
 

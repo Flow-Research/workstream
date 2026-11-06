@@ -25,7 +25,7 @@
 !experiments/demo_identity/Cargo.lock
 !experiments/demo_identity/Dockerfile
 !experiments/demo_identity/src/
-!experiments/demo_identity/src/**
+!experiments/demo_identity/src/main.rs
 
 backend/.ci/
 backend/.coverage*
