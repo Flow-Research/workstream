@@ -18,6 +18,8 @@ Let issuer-approved demo participants sign in without an operator minting a toke
 
 - `experiments/demo_identity/`: independent Rust issuer, operator bootstrap command, HTTPS service, Dockerfile, README and focused tests.
 - `deploy/hosted/compose.demo-identity.yml`: opt-in hosted Compose overlay, without changing the active release composition.
+- `.github/workflows/demo-identity.yml`: changed-path issuer verification, without altering existing required checks.
+- `.dockerignore`: admit only the issuer's build inputs into the repository-root Docker context.
 - This change record; a narrowly affected roadmap statement if capability wording requires it.
 
 ### Not allowed
@@ -39,7 +41,7 @@ One local operator initializes a private issuer data directory and bootstraps an
 ## Risk and review routing
 
 - Risk class: L1 (credential issuance and authentication).
-- Required reviewers: security, architecture and QA; focused plan review before implementation.
+- Required reviewers: security, architecture, QA and CI integrity; focused plan review before implementation.
 - Human review focus: isolated demo boundary, issuer operational custody, admin-token separation and the deliberate absence of email ownership proof.
 
 ## Evidence
@@ -50,10 +52,11 @@ One local operator initializes a private issuer data directory and bootstraps an
 | Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
 | Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 1 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | no live EC2/DNS proof |
 | Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | hosted preflight and cutover deferred |
+| Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | added for pull requests | hosted result pending |
 
 ## Review findings
 
-Plan review required separate admin and Workstream audiences. Security review found JWT leeway/nbf acceptance, a shared Docker network and a global-login rate bucket; zero-leeway validation, a private identity network and bounded per-source/account buckets resolved those findings. Architecture review found invalid short Compose mounts and a hidden SQLite file-size restart cap; long bind mounts and metadata-only DB validation resolved them. QA review found bootstrap blocking until EOF and missing denial/bound probes; bounded line input and focused API tests resolved them. Exact committed-candidate replays remain PR evidence.
+Plan review required separate admin and Workstream audiences. Security review found JWT leeway/nbf acceptance, a shared Docker network and a global-login rate bucket; zero-leeway validation, a private identity network and bounded per-source/account buckets resolved those findings. Architecture review found invalid short Compose mounts and a hidden SQLite file-size restart cap; long bind mounts and metadata-only DB validation resolved them. QA review found bootstrap blocking until EOF and missing denial/bound probes; bounded line input and focused API tests resolved them. CI integrity review required Docker image and Compose topology proof in the changed-path workflow; those checks were added. Exact committed-candidate replays remain PR evidence.
 
 ## Reconciliation
 
