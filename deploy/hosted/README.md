@@ -238,8 +238,8 @@ python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env start de
 This bootstrap does not start or reconfigure the backend.
 
 The issuer port stays on loopback. Public participants require the chosen DNS
-name, a trusted TLS certificate and a rate-limited HTTPS ingress; see the
-[NGINX example](demo-identity.nginx.conf) and issuer instructions. Confirm real
+name, a trusted TLS certificate and a bounded HTTPS ingress; see the
+[Caddy example](demo-identity.Caddyfile) and issuer instructions. Confirm real
 login and token validation before switching the backend. An issuer administrator
 receives no Workstream administrative grant. Preserve retained actor links and
 records during cutover; never substitute identities by matching email.

@@ -7,7 +7,7 @@ on:
       - 'deploy/hosted/compose.demo-identity.yml'
       - 'deploy/hosted/preflight.py'
       - 'deploy/hosted/compose.py'
-      - 'deploy/hosted/demo-identity.nginx.conf'
+      - 'deploy/hosted/demo-identity.Caddyfile'
       - 'backend/app/adapters/auth/flow.py'
       - '.dockerignore'
       - '.github/workflows/demo-identity.yml'
@@ -53,6 +53,23 @@ jobs:
             exit 1
           fi
           grep -q 'usage: demo-identity' /tmp/demo-identity-smoke.out
+      - name: Validate Caddy HTTPS ingress configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof=$(mktemp -d)
+          trap 'rm -rf "$proof"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=identity.example.test' \
+            -addext 'subjectAltName=DNS:identity.example.test' \
+            -keyout "$proof/key.pem" -out "$proof/cert.pem" >/dev/null 2>&1
+          docker run --rm --network none \
+            -e DEMO_IDENTITY_HOSTNAME=identity.example.test \
+            -e DEMO_IDENTITY_UPSTREAM_CERT=/proof/cert.pem \
+            -v "$PWD/deploy/hosted/demo-identity.Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$proof/cert.pem:/proof/cert.pem:ro" \
+            caddy@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9 \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Verify hosted Compose issuer network boundary
         shell: bash
         run: |

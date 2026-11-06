@@ -17,7 +17,7 @@ Let issuer-approved demo participants sign in without an operator minting a toke
 ### Allowed
 
 - `experiments/demo_identity/`: independent Rust issuer, operator bootstrap command, HTTPS service, Dockerfile, README and focused tests.
-- `deploy/hosted/compose.demo-identity.yml`, `preflight.py`, `compose.py`, `release.env.example`, `demo-identity.nginx.conf`, and `README.md`: opt-in issuer integration through the existing hosted wrapper, bounded resources, private state/TLS mounts and readiness checks.
+- `deploy/hosted/compose.demo-identity.yml`, `preflight.py`, `compose.py`, `release.env.example`, `demo-identity.Caddyfile`, and `README.md`: opt-in issuer integration through the existing hosted wrapper, bounded resources, private state/TLS mounts and readiness checks.
 - `scripts/test_hosted_release_config.py`: focused configuration, topology and rejection proof.
 - `docs/reports/`: sanitized hosted account/login and Workstream authorization proof, with no credentials.
 - `.github/workflows/demo-identity.yml`: changed-path issuer verification, without altering existing required checks.
@@ -58,7 +58,7 @@ One local operator initializes a private issuer data directory and bootstraps an
 
 ## Review findings
 
-Plan review required separate admin and Workstream audiences. Security review found JWT leeway/nbf acceptance, a shared Docker network and a global-login rate bucket; zero-leeway validation, a private identity network and bounded per-source/account buckets resolved those findings. Architecture review found invalid short Compose mounts and a hidden SQLite file-size restart cap; long bind mounts and metadata-only DB validation resolved them. QA review found bootstrap blocking until EOF and missing denial/bound probes; bounded line input and focused API tests resolved them. CI integrity review required Docker image and Compose topology proof in the changed-path workflow; those checks were added. Exact committed-candidate replays remain PR evidence.
+Plan review required separate admin and Workstream audiences. Security review found JWT leeway/nbf acceptance, a shared Docker network and a global-login rate bucket; zero-leeway validation, a private identity network and bounded per-account limits with a global overload ceiling resolved those findings. Architecture review found invalid short Compose mounts and a hidden SQLite file-size restart cap; long bind mounts and metadata-only DB validation resolved them. QA review found bootstrap blocking until EOF and missing denial/bound probes; bounded line input and focused API tests resolved them. CI integrity review required Docker image and Compose topology proof in the changed-path workflow; those checks were added. Exact committed-candidate replays remain PR evidence.
 
 ## Reconciliation
 
@@ -69,3 +69,15 @@ Plan review required separate admin and Workstream audiences. Security review fo
 ## Hosted completion authorized after Garden merge
 
 The user requested completion of this same PR through real hosted deployment and account/login proof. Reconcile current main first. Integrate the existing overlay with the existing wrapper rather than bypassing its release checks. Test private persistent account/signing state, exact issuer/audience/JWKS configuration, resource bounds and readiness. Deploy the digest-qualified issuer with HTTPS, then prove administrator provisioning, participant login/password change, restart persistence and unchanged Workstream authentication plus denied access without admission/grants. Never remap the Garden fixture subjects to new accounts or invent authorization. Public DNS/TLS requires the operator-selected hostname; test private hosted transport meanwhile and distinguish that evidence from public reachability. Run focused security/architecture/QA/CI review on the final candidate and fresh CI before ready-for-merge status. No new login logic in Workstream core and no MCP/CLI scope in this PR.
+
+## Ingress refinement
+
+The operator selected Caddy for the test deployment so public certificate
+issuance and renewal are automatic. The NGINX candidate was removed. Caddy
+exposes only the four issuer paths, bounds bodies/connections/timeouts and
+verifies the private upstream TLS certificate. It has no per-client rate-limit
+plugin; the issuer retains per-account limits, a global overload ceiling and
+four concurrent password operations. It never trusts forwarded identity.
+Security review reproduced an all-clients lockout caused by a shared proxy-peer
+bucket. Removing that bucket preserves the stated account/global limits; a real
+HTTP regression fails on the previous binary with 429 and passes after repair.

@@ -1,6 +1,6 @@
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
-    extract::{ConnectInfo, DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, State},
     http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -390,10 +390,8 @@ async fn jwks(State(app): State<App>) -> Json<serde_json::Value> {
 }
 async fn login(
     State(app): State<App>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     Json(input): Json<Credentials>,
 ) -> Result<Json<LoginResponse>, ApiError> {
-    throttled(&app, format!("ip:{}", peer.ip()), 60)?;
     let email = normalize_email(&input.email).ok_or(INVALID)?;
     throttled(&app, format!("email:{email}"), 10)?;
     if !password_ok(&input.password) {
@@ -570,7 +568,7 @@ async fn run() -> Result<(), String> {
                 .parse()
                 .map_err(|_| "invalid bind address")?;
             axum_server::bind_rustls(bind, config)
-                .serve(router.into_make_service_with_connect_info::<SocketAddr>())
+                .serve(router.into_make_service())
                 .await
                 .map_err(|_| "issuer server failed".into())
         }
@@ -589,7 +587,7 @@ mod tests {
         state: State<App>,
         input: Json<Credentials>,
     ) -> Result<Json<LoginResponse>, ApiError> {
-        super::login(state, ConnectInfo("127.0.0.1:1234".parse().unwrap()), input).await
+        super::login(state, input).await
     }
     fn bearer(value: &str) -> HeaderMap {
         let mut headers = HeaderMap::new();

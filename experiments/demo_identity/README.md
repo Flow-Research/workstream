@@ -7,7 +7,7 @@ This Rust service is a small, independent identity issuer for the Flow demo. It 
 Build with the locked Rust toolchain and dependencies:
 
 ```sh
-cargo build --release --locked --manifest-path experiments/demo_identity/Cargo.toml
+cargo +1.99.1 build --release --locked --manifest-path experiments/demo_identity/Cargo.toml
 ```
 
 For the real HTTPS verifier test, first build the debug binary with `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml`, then run `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` in an environment with the backend's test dependencies and OpenSSL installed.
@@ -20,7 +20,7 @@ experiments/demo_identity/target/release/workstream-demo-identity init /private/
 
 The process reads one password line from stdin. It creates a 3072-bit RSA key and SQLite account database. Generate and mount a real TLS certificate and key for the exact issuer DNS hostname. Keep TLS and JWT signing keys separate in custody. `serve` refuses missing or unsafe state. Configure `DEMO_IDENTITY_ISSUER` as the canonical HTTPS origin, `DEMO_IDENTITY_AUDIENCE` as the Workstream audience, and the TLS certificate/key paths. For local runs, `DEMO_IDENTITY_BIND` defaults to `127.0.0.1:8443`.
 
-The optional [hosted Compose overlay](../../deploy/hosted/compose.demo-identity.yml) extends the base hosted Compose file. It uses a separately built, digest-qualified `DEMO_IDENTITY_IMAGE`, mounts private persistent state and TLS files, and uses a read-only root filesystem with non-root UID. Build the image from the included Dockerfile in a controlled release process. Configure the optional issuer fields in `deploy/hosted/release.env.example`; the canonical hosted wrapper selects and validates the overlay. The issuer joins a dedicated internal network shared only with the API, and its published port defaults to loopback. Setting a public bind for external users requires separately reviewed DNS, TLS, firewall and deployment configuration. Before switching Workstream, prove the deployed issuer independently and preserve all existing actor identity links and contribution records. Pin the backend issuer, JWKS URL and RS256 audience to the chosen issuer. New accounts receive new subjects; an existing actor requires an explicitly authorized identity link, never an email-based remapping. The existing verifier has `trust_env=False`, so merely setting `SSL_CERT_FILE` is not enough for a private CA; a publicly trusted certificate avoids that exception.
+The optional [hosted Compose overlay](../../deploy/hosted/compose.demo-identity.yml) extends the base hosted Compose file. It uses a separately built, digest-qualified `DEMO_IDENTITY_IMAGE`, mounts private persistent state and TLS files, and uses a read-only root filesystem with non-root UID. Build the image from the included Dockerfile in a controlled release process. Configure the optional issuer fields in `deploy/hosted/release.env.example`; the canonical hosted wrapper selects and validates the overlay. The issuer joins a dedicated internal network shared only with the API, and its published port is restricted to loopback. External users connect through the separately configured HTTPS ingress. Before switching Workstream, prove the deployed issuer independently and preserve all existing actor identity links and contribution records. Pin the backend issuer, JWKS URL and RS256 audience to the chosen issuer. New accounts receive new subjects; an existing actor requires an explicitly authorized identity link, never an email-based remapping. The existing verifier has `trust_env=False`, so merely setting `SSL_CERT_FILE` is not enough for a private CA; a publicly trusted certificate avoids that exception.
 
 ## API
 
@@ -36,7 +36,7 @@ Send credentials only in HTTPS JSON bodies and bearer tokens only in Authorizati
 
 The access token has fixed `iss`, `aud`, `sub`, `iat`, `nbf`, `exp`, `jti`, `subject_kind=human` and `scope=workstream:access` claims. The caller cannot choose claims or a subject. Issuer administrator status is held in the issuer database and never appears in the Workstream token. Workstream still grants project and system authority through its own actor and authorization records. Admin and access JWTs cannot substitute for each other because their audiences and purposes differ.
 
-The service uses Argon2 with a random salt for each password, generic login errors, bounded per-source/account rate buckets with a global overload ceiling, and a four-operation hashing limit. It is a single-instance demo service; its in-memory rate limits reset on restart. A future reverse proxy must preserve the intended source-IP throttle semantics. Place an ingress rate limit ahead of any public deployment. Password changes do not revoke previously issued JWTs; tokens remain valid until their short expiry. There is no refresh or introspection endpoint. Set `WORKSTREAM_TOKEN_INTROSPECTION_MODE=disabled` with a documented validity-until-expiry reason if this issuer is selected. Do not log request bodies, Authorization headers, passwords or tokens.
+The service uses Argon2 with a random salt for each password, generic login errors, bounded per-account rate buckets with a global overload ceiling, and a four-operation hashing limit. It is a single-instance demo service; its in-memory rate limits reset on restart. The issuer does not trust forwarded IP headers or apply a shared proxy-peer login bucket. The test deployment relies on these account/global bounds; Caddy adds request-size, connection and timeout bounds, not a per-client rate-limit plugin. Password changes do not revoke previously issued JWTs; tokens remain valid until their short expiry. There is no refresh or introspection endpoint. Set `WORKSTREAM_TOKEN_INTROSPECTION_MODE=disabled` with a documented validity-until-expiry reason if this issuer is selected. Do not log request bodies, Authorization headers, passwords or tokens.
 
 ## Hosted HTTPS and cutover
 
@@ -47,24 +47,23 @@ is that origin plus `/jwks.json`. Keep the audience identical to Workstream's
 configured token audience.
 
 The issuer itself publishes only loopback port 8443. The supplied
-[NGINX ingress example](../../deploy/hosted/demo-identity.nginx.conf) exposes the
-four supported API paths on HTTPS port 443, with request-size, connection,
-request-rate and timeout limits. It verifies TLS to the issuer and disables
-request logging. Render its hostname and certificate paths for your deployment
-and validate it with `nginx -t` before reload. The HTTP listener serves only
-ACME challenges; it never accepts passwords. Do not expose the issuer's port
-8443 or Workstream's database to the internet.
+[Caddy configuration](../../deploy/hosted/demo-identity.Caddyfile) exposes only
+the four supported paths. Caddy obtains and renews the public certificate
+automatically once DNS and ports 80/443 are configured. Keep Caddy's certificate
+data persistent and private. Its administrator API is disabled; request access
+logging is not enabled.
 
-Issue a publicly trusted certificate for the selected hostname. The ingress
-retains its own root-readable key; install the issuer's certificate/key copies
-with owner UID 12001 and key mode 0400 in its private TLS directory. Do not mount
-the entire ACME state directory into the container. Arrange certificate renewal
-to replace the mounted copies, recreate the issuer and reload NGINX after
-validation; neither action recreates `/data`. Back up private account/signing
-state with encryption and restrict backup access. Losing the signing key or
-account database cannot be repaired by silently initializing new identities.
+Caddy verifies the issuer's private HTTPS certificate using an explicit local
+trust file and server name. Generate a separate private TLS key/certificate for
+the issuer hostname, keep the key owned by UID 12001 with mode 0400, and give
+Caddy only the public certificate. Do not copy Caddy's public-site private keys
+or the issuer's JWT signing key between services. Monitor the private upstream
+certificate's expiry and replace it before expiry, then recreate only the issuer
+and restart Caddy after configuration validation. Neither action recreates
+`/data`. Back up private account/signing state with encryption and restrict
+backup access. Never silently initialize new identities after losing state.
 
-DNS and the trusted certificate are needed for public access and the live
+DNS and the public certificate are needed for participant access and the live
 Workstream issuer switch. Private-host compatibility tests may use an explicitly
 trusted private certificate with the existing verifier's client-factory seam;
 that is separate evidence, not public TLS or active Workstream API proof. Never
