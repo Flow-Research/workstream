@@ -18,9 +18,9 @@ from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.authorization.guide_compilation import (
     ProjectGuideCompilationAuthorizationAdapter,
 )
-from app.modules.projects.guide_compilation.repository import GuideCompilationRepository
 from tests.auth_concurrency_support import wait_for_named_database_lock
 
+from .helpers import acknowledge_requested_setup
 from .helpers import context, identity, result, seed_database, service_actor
 from .test_authorized_execution_service import _execution_service, _preflight
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
@@ -81,12 +81,12 @@ async def test_direct_and_natural_request_replays_share_auth_then_operation_lock
     factory = async_sessionmaker(engine, expire_on_commit=False)
     auth_held = asyncio.Event()
     release_natural = asyncio.Event()
-    direct_lookup_started = asyncio.Event()
+    direct_authorization_started = asyncio.Event()
     waiter_name = "guide-request-replay-" + uuid4().hex
     pids: dict[str, int] = {}
     tasks: list[asyncio.Task] = []
     original_prepare = ProjectGuideCompilationAuthorizationAdapter.prepare_request
-    original_matching = GuideCompilationRepository.matching_request_operation
+    original_validate = ProjectGuideCompilationAuthorizationAdapter.validate_request_replay
 
     async def pause_natural_after_auth(adapter, **kwargs):
         handle = await original_prepare(adapter, **kwargs)
@@ -99,16 +99,17 @@ async def test_direct_and_natural_request_replays_share_auth_then_operation_lock
             await release_natural.wait()
         return handle
 
-    async def name_direct_operation_lookup(repository, *args, **kwargs):
+    async def name_direct_authorization(adapter, *args, **kwargs):
+        session = adapter._prepared._session
         task = asyncio.current_task()
         if task is not None and task.get_name() == "direct-request-replay":
-            pids["direct"] = await repository._session.scalar(text("select pg_backend_pid()"))
-            await repository._session.execute(
+            pids["direct"] = await session.scalar(text("select pg_backend_pid()"))
+            await session.execute(
                 text("select set_config('application_name', :name, true)"),
                 {"name": waiter_name},
             )
-            direct_lookup_started.set()
-        return await original_matching(repository, *args, **kwargs)
+            direct_authorization_started.set()
+        return await original_validate(adapter, *args, **kwargs)
 
     async def replay(facts):
         async with factory() as session:
@@ -130,16 +131,16 @@ async def test_direct_and_natural_request_replays_share_auth_then_operation_lock
             pause_natural_after_auth,
         )
         monkeypatch.setattr(
-            GuideCompilationRepository,
-            "matching_request_operation",
-            name_direct_operation_lookup,
+            ProjectGuideCompilationAuthorizationAdapter,
+            "validate_request_replay",
+            name_direct_authorization,
         )
         natural = asyncio.create_task(replay(natural_facts), name="natural-request-replay")
         tasks.append(natural)
         await asyncio.wait_for(auth_held.wait(), 5)
         direct = asyncio.create_task(replay(stored_facts), name="direct-request-replay")
         tasks.append(direct)
-        await asyncio.wait_for(direct_lookup_started.wait(), 5)
+        await asyncio.wait_for(direct_authorization_started.wait(), 5)
         await asyncio.wait_for(
             wait_for_named_database_lock(
                 clean_postgres_database,
@@ -200,6 +201,7 @@ async def test_concurrent_finalization_commits_one_compilation_and_event(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             execution = _execution_service(session, service)

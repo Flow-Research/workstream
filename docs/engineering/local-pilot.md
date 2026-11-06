@@ -263,9 +263,27 @@ curl_with_token "$MANAGER_TOKEN" --fail --silent --show-error -X POST \
   "$API_URL/api/v1/projects/$PROJECT_ID/guides/$GUIDE_ID/documents/$DOCUMENT_ID/content" | jq
 ```
 
+Before requesting compilation, the latest setup diagnostic reports `status` and
+`current_step` as `not_requested` for valid inputs with no initial attempt.
+The guide-create response retains `awaiting_documents` for upload custody; even
+a complete upload set does not queue inference.
+
 The upload is complete only when the response and Celery logs show the stored
-object was verified through MinIO. Inspect the durable setup state rather than
-assuming checker/provider success:
+object was verified through MinIO. Upload only stores custody and does not invoke
+a model. Explicitly request assistance as the exact-project Project Manager with
+a new UUID key and no body (retain that key for exact replay):
+
+```bash
+SETUP_REQUEST_KEY="$(new_key)"
+curl_with_token "$MANAGER_TOKEN" --fail --silent --show-error -X POST \
+  -H "Idempotency-Key: $SETUP_REQUEST_KEY" \
+  "$API_URL/api/v1/projects/$PROJECT_ID/guides/$GUIDE_ID/setup" | jq
+```
+
+For provider-free compilation, upload a complete manager-rules JSON original with
+the guide and call the `requirements/compile` suffix instead. See the
+[manager-rules format](../operations_project_operating_manual.md#manager-authored-guide-rules).
+Inspect durable state rather than assuming checker/provider success:
 
 ```bash
 curl_with_token "$MANAGER_TOKEN" --fail --silent --show-error \

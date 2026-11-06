@@ -264,7 +264,7 @@ async def upload_guide_document(
     content_type: Annotated[str, Header(alias="Content-Type", min_length=1)],
     content_length: Annotated[int | None, Header(alias="Content-Length", ge=0)] = None,
 ) -> GuideArtifactIngestResponse:
-    """Store one declared original; complete membership gates automatic setup."""
+    """Store one declared original without requesting guide compilation."""
     key, context = authorization
     try:
         result = await ingest.ingest(

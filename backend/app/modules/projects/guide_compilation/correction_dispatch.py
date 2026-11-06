@@ -1,4 +1,4 @@
-"""Publish a committed human correction through the existing setup queue."""
+"""Publish explicit human guide requests through the existing setup queue."""
 
 from dataclasses import replace
 from uuid import UUID
@@ -14,9 +14,11 @@ from .request_inputs import CompilationRequestInputs, select_model_runtime_confi
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.modules.authorization.api import AuthorizationDenied, AuthorizationUnavailable, PreparedAuthorizationInvalid
-from app.modules.projects.api.guide_proposals import GuideProposalDispatchResponse, GuideProposalError
+from app.modules.projects.api.guide_proposals import GuideProposalDispatchResponse, GuideProposalError, GuideCompilationDispatchResponse
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.models import ProjectSetupRun
+from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.api.guide_documents import GuideDocumentUnavailable
 from app.modules.projects.setup_queue import dispatch_project_guide_compilation_after_commit
 
 from .models import ProjectGuideCompilationAttempt, ProjectGuideProposalCorrection
@@ -25,7 +27,7 @@ from .service import GuideCompilationService
 from .diagnostics import compilation_setup_response
 
 
-class GuideCorrectionDispatchService:
+class GuideCompilationDispatchService:
     """Use canonical request custody, then publish only after its transaction commits."""
 
     def __init__(
@@ -36,6 +38,43 @@ class GuideCorrectionDispatchService:
         self.authorization = authorization
         self.inputs = inputs
         self.profiles = profiles
+
+    async def request_initial(
+        self, project_id: UUID, guide_id: UUID, idempotency_key: UUID, *,
+        actor: ActorIdentityFacts, inference_required: bool,
+    ) -> GuideCompilationDispatchResponse:
+        """Resolve current immutable guide inputs, authorize once, then publish."""
+        try:
+            async with self.session.begin():
+                await self.authorization.lock_request_scope(actor=actor, project_id=project_id)
+                setup = await ProjectRepository(self.session).get_latest_project_setup_run(
+                    str(project_id), str(guide_id),
+                )
+                if setup is None:
+                    raise GuideProposalError("proposal_unavailable")
+                setup_id, generation, source_id = setup.id, setup.setup_generation, setup.source_snapshot_id
+                inputs = await self._selected_inputs(project_id, setup_id, generation)
+            receipt = await GuideCompilationService(
+                self.session, self.authorization, request_inputs=inputs,
+            ).request_initial(actor=actor, setup_run_id=UUID(setup_id),
+                              idempotency_key=idempotency_key, inference_required=inference_required)
+            await dispatch_project_guide_compilation_after_commit(
+                self.session, project_id=str(project_id), guide_id=str(guide_id),
+                source_snapshot_id=source_id, setup_run_id=setup_id, setup_generation=generation,
+                claimed_task_id=project_guide_compilation_task_id(setup_id, generation),
+            )
+            await self.session.rollback()
+            async with self.session.begin():
+                setup = await self.session.get(ProjectSetupRun, setup_id, populate_existing=True)
+                state = await compilation_setup_response(self.session, setup)
+                return GuideCompilationDispatchResponse(operation_id=receipt.operation_id,
+                    setup_run_id=UUID(setup_id), setup_generation=generation, status=state.status)
+        except (AuthorizationDenied, AuthorizationUnavailable, PreparedAuthorizationInvalid):
+            raise GuideProposalError("authority_unavailable") from None
+        except (SQLAlchemyError, GuideCompilationStorageError):
+            raise GuideProposalError("storage_unavailable") from None
+        except (GuideCompilationIntegrityError, GuideDocumentUnavailable, ModelCallUnavailable):
+            raise GuideProposalError("operation_conflict") from None
 
     async def dispatch(
         self, selection: GuideProposalSelection, correction_operation_id: UUID, *,
@@ -72,7 +111,7 @@ class GuideCorrectionDispatchService:
             # transaction before reading the bounded current status.
             await self.session.rollback()
             async with self.session.begin():
-                setup = await self.session.get(ProjectSetupRun, setup_id)
+                setup = await self.session.get(ProjectSetupRun, setup_id, populate_existing=True)
                 if setup is None:
                     raise GuideProposalError("proposal_unavailable")
                 state = await compilation_setup_response(self.session, setup)

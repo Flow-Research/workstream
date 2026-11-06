@@ -28,6 +28,7 @@ from app.modules.projects.guide_compilation.repository import (
 )
 from app.modules.projects.models import ProjectSetupRun
 
+from .helpers import acknowledge_requested_setup
 from .helpers import context, identity, result, seed_database, service_actor
 from .test_authorized_execution_service import _execution_service, _preflight
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
@@ -87,6 +88,7 @@ async def test_uncertain_restart_returns_unresolved_without_redispatch(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             first = await _execution_service(session, service).fence_dispatch(
@@ -145,6 +147,7 @@ async def test_uncertain_restart_requires_current_service_authority(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             first = await _execution_service(session, service).fence_dispatch(
@@ -205,7 +208,7 @@ async def test_changed_request_replay_fails_without_new_authority_event(
             )
         changed = replace(facts, instruction_version="v2")
         async with factory() as session:
-            with pytest.raises(GuideCompilationIntegrityError, match="replay mismatch"):
+            with pytest.raises(GuideCompilationIntegrityError, match="compilation request input mismatch"):
                 await _authorized_service(session, actor).authorize_request(
                     origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
                     actor=actor,
@@ -215,6 +218,13 @@ async def test_changed_request_replay_fails_without_new_authority_event(
                     ),
                     runtime_configuration=runtime_configuration(),
                 )
+            # Locked original input validation rejects drift before replay classification.
+            assert (await session.execute(text(
+                "select (select count(*) from project_guide_compilation_attempts),"
+                "(select count(*) from project_guide_compilation_request_operations),"
+                "(select count(*) from audit_events where action_id="
+                "'project.guide_compilation.request')"
+            ))).one() == (1, 1, 1)
     finally:
         await engine.dispose()
 

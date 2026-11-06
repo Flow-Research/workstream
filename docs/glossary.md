@@ -206,8 +206,9 @@ version.
 ## Guide Sufficiency Report
 
 The Workstream-owned sufficiency record for an exact project guide and source
-snapshot. After ART readiness automatically triggers unified compilation, a
-deterministic projection creates the verified report from that compilation's
+snapshot. Once originals are ready and a Project Manager explicitly requests
+assistance or provider-free manager-rules compilation, a deterministic projection
+creates the verified report from that compilation's
 sufficiency component. It records whether the guide passed, is blocked by gaps,
 or passed with warnings for Project Manager review. Verified material and exact
 projection custody bind the report to its compilation and setup generation.
@@ -216,7 +217,10 @@ provenance; they cannot replace or satisfy unified compilation evidence.
 
 ## Project Setup Run
 
-A setup execution ledger that does not replace canonical policy truth. The
+A setup execution ledger that does not replace canonical policy truth. An
+initial diagnostic without a request attempt reports `not_requested` for valid
+inputs; guide creation retains `awaiting_documents` as upload custody. Neither
+state implies queued inference. The
 unified path records queue/attempt diagnostics and exact compilation/projection
 references, then finalizes the run and its receipt immutably. Later approval,
 post-policy projection and correction have separate operation provenance; they

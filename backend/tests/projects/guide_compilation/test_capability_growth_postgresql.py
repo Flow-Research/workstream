@@ -11,11 +11,10 @@ from tests.committed_guide_fixtures import create_committed_document_fixture
 from tests.projects.client_fixtures import (
     project_client as project_client, project_database_env as project_database_env,
 )
-from .test_automatic_request import automatic_source as automatic_source
+from .pending_source import pending_source as pending_source, request_pending_source
 from .runtime_fixtures import (
     ScriptedGuideRuntime,
-    scripted_model_profile,  # noqa: F401 - registered pytest fixture
-    scripted_runtime_configuration,
+    scripted_model_profile as scripted_model_profile,
 )
 from .test_live_cutover_postgresql import (
     _delivery,
@@ -26,12 +25,12 @@ from .test_compilation_storage_limit import boundary_reports
 
 
 @pytest.mark.parametrize("oversized", [False, True])
-@pytest.mark.usefixtures("scripted_model_profile")
-async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeypatch, oversized):
+async def test_handoff_persistence_and_terminal_replay(pending_source, scripted_model_profile, monkeypatch, oversized):
     from app.workers import project_setup as worker
 
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     if oversized:
@@ -56,7 +55,6 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
     else:
         runtime.outcome = growth_report()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
     first = await (await worker._coordinator(factory)).run(delivery)
     assert first["status"] == (
         "compilation_invalid_terminal" if oversized else "policy_draft_ready"
@@ -95,13 +93,7 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
     def forbidden_runtime(_configuration):
         pytest.fail("terminal replay constructed a provider runtime")
 
-    def forbidden_configuration(_settings, *, adapter_profile_builder):
-        pytest.fail("terminal replay constructed a provider runtime")
-
     monkeypatch.setattr(worker, "create_project_guide_runtime", forbidden_runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", forbidden_configuration
-    )
     assert await (await worker._coordinator(factory)).run(delivery) == first
     assert runtime.calls == 1
     async with factory() as session:
@@ -109,8 +101,8 @@ async def test_handoff_persistence_and_terminal_replay(automatic_source, monkeyp
         await _assert_projection_state(session, setup_id, oversized)
 
 
-async def test_driver_json_byte_measure_matches_postgresql(automatic_source):
-    factory, *_ = automatic_source
+async def test_driver_json_byte_measure_matches_postgresql(pending_source):
+    factory, *_ = pending_source
     below, above = boundary_reports()
     payloads = [below.model_dump(mode="json"), above.model_dump(mode="json"),
                 {"parameters": [{"value": 1e-9}, {"value": 1000}, {"value": "文"}]}]
@@ -175,9 +167,8 @@ async def _assert_projection_state(session, setup_id, oversized):
         assert final.artifact_policy_output_digest.startswith("sha256:")
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 async def test_inflight_metered_setup_read_is_unresolved_without_claiming_failure(
-    automatic_source, monkeypatch, project_client
+    pending_source, scripted_model_profile, monkeypatch, project_client
 ):
     """The committed dispatch fence alone does not establish a failed compilation."""
     import asyncio
@@ -188,8 +179,9 @@ async def test_inflight_metered_setup_read_is_unresolved_without_claiming_failur
 
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
-    factory, _actor, setup_id, snapshot = automatic_source
+    factory, _actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     entered, release = asyncio.Event(), asyncio.Event()
@@ -202,9 +194,6 @@ async def test_inflight_metered_setup_read_is_unresolved_without_claiming_failur
 
     monkeypatch.setattr(runtime, "compile_project_guide", paused_compilation)
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(
-        worker, "project_guide_runtime_configuration", scripted_runtime_configuration
-    )
     coordinator = await worker._coordinator(factory)
     task = asyncio.create_task(coordinator.run(delivery))
     path = (

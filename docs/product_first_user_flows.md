@@ -25,7 +25,7 @@ The first user flows prove that Workstream can run real work from intake to acce
 
 ## Flow 1: Project Manager Creates A Project
 
-POL-04B delivers the automatic compilation and immutable draft/findings stop
+Explicit Project Manager requests start compilation and the immutable draft/findings stop
 below. POL-05A delivers hidden manager proposal review, correction and pre-submit
 approval. AUTH-12F4 and POL-05B deliver public manager authority and manual
 dispatch. POL-06A owns post-policy projection/read/approval/correction;
@@ -38,11 +38,14 @@ activation flow below describes the target lifecycle.
 3. An authorized covered Project Manager adds guide metadata with at least one
    ordinary-text task example in PostgreSQL and uploads the assigned
    PDF/DOCX/PPTX or UTF-8 Markdown (`.md`) guide originals to ArtifactStore/S3.
-4. Once ART commits every assigned original guide document,
-   Workstream automatically queues its authorized unified compilation in Celery.
+4. Once ART commits every assigned original guide document, the exact-project
+   Project Manager explicitly calls `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`
+   for assistance, or `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
+   for uploaded manager-authored rules. Upload alone invokes no inference.
 5. One unified compilation assesses sufficiency and proposes artifact,
    pre-submission and post-submission policy components from the exact guide
-   and catalogue snapshots together with every supplied task example.
+   and task examples, or validates the uploaded manager rules without inference.
+   Runtime/provider profiles belong to deployment composition, not public input.
 6. Blocking sufficiency gaps stop the setup pipeline and create clarification requests for the project owner.
 7. An authorized covered Project Manager acknowledges non-blocking sufficiency warnings.
 8. Workstream finalizes the exact compilation and its permitted projections.

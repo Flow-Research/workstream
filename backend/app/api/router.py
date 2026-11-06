@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.api.routes.guide_proposals import router as guide_proposal_router
+from app.api.routes.guide_proposals import router as guide_proposal_router, initial_router as guide_compilation_router
 from app.api.routes.guide_activation import router as guide_activation_router
 from app.api.routes.post_policy import router as post_policy_router
 from app.api.routes.contribution_policies import router as contribution_policy_router
@@ -49,6 +49,7 @@ api_router.include_router(task_import_source_router, prefix="/api/v1")
 api_router.include_router(artifact_submission_router, prefix="/api/v1")
 
 api_router.include_router(guide_proposal_router, prefix="/api/v1")
+api_router.include_router(guide_compilation_router, prefix="/api/v1")
 api_router.include_router(post_policy_router, prefix="/api/v1")
 api_router.include_router(contribution_policy_router, prefix="/api/v1")
 api_router.include_router(contributions_router, prefix="/api/v1")

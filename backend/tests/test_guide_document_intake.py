@@ -6,7 +6,7 @@ import os
 import hashlib
 import pytest
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
@@ -233,7 +233,7 @@ async def _assert_inactive_resolver_replay_denied(
     assert denied.status_code == 404, denied.text
     assert await _stored_put_state(project_id) == before_state
     assert provider_calls == before_provider_calls
-    assert len(deliveries) == 1
+    assert deliveries == []
     async with db_session.get_session_factory()() as session:
         denials = (await session.scalars(select(AuditEvent).where(
             AuditEvent.request_id == denied.headers["X-Request-ID"],
@@ -244,23 +244,9 @@ async def _assert_inactive_resolver_replay_denied(
         assert denials[0].denial_code == "actor_deactivated"
 
 
-@pytest.mark.parametrize("recover_callback", [False, True])
-async def test_all_documents_stored_dispatches_once_through_minio(
-    project_client, monkeypatch, recover_callback
-):
-    from app.core.config import get_settings
+async def _provision_put_resolver(project_client):
     from app.modules.actors.api import ServiceIdentity
-    from app.workers.project_setup import run_project_guide_compilation
-    from app.adapters.artifacts import internal_workers
 
-    deliveries = []
-    provider_calls = _trace_real_provider_operations(monkeypatch)
-
-    def publish(*, args, task_id):
-        deliveries.append((args, task_id))
-        return SimpleNamespace(id=task_id)
-
-    monkeypatch.setattr(run_project_guide_compilation, "apply_async", publish)
     provision = await project_client.post(
         "/api/v1/service-actors",
         headers=auth_headers(),
@@ -271,6 +257,31 @@ async def test_all_documents_stored_dispatches_once_through_minio(
         },
     )
     assert provision.status_code == 201, provision.text
+    return provision
+
+
+@pytest.mark.parametrize("recover_callback", [False, True])
+async def test_all_documents_stored_and_recovery_never_dispatch_without_pm_request(
+    project_client, monkeypatch, recover_callback
+):
+    from app.core.config import get_settings
+    from app.workers import project_setup as worker
+    from app.workers.project_setup import run_project_guide_compilation
+    from app.adapters.artifacts import internal_workers
+
+    def forbidden_runtime(_configuration):
+        pytest.fail("stored guide originals invoked inference without a PM request")
+
+    monkeypatch.setattr(worker, "create_project_guide_runtime", forbidden_runtime)
+    deliveries = []
+    provider_calls = _trace_real_provider_operations(monkeypatch)
+
+    def publish(*, args, task_id):
+        deliveries.append((args, task_id))
+        return SimpleNamespace(id=task_id)
+
+    monkeypatch.setattr(run_project_guide_compilation, "apply_async", publish)
+    provision = await _provision_put_resolver(project_client)
     project = await create_project(project_client)
     created = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides",
@@ -318,13 +329,13 @@ async def test_all_documents_stored_dispatches_once_through_minio(
 
                 await real_callback(UUID(attempt_id))
 
-            assert await internal_workers.scan_guide_setup_continuations(recover) == 1
+            assert await internal_workers.scan_guide_setup_continuations(recover) == 0
             assert await internal_workers.scan_guide_setup_continuations(recover) == 0
         assert response.status_code == 202, response.text
         assert response.json()["status"] == "document_stored"
         assert response.json()["sha256"] == "sha256:" + hashlib.sha256(original).hexdigest()
         assert set(response.json()) == {"document_id", "sha256", "byte_count", "status", "replayed"}
-        assert len(deliveries) == index
+        assert deliveries == []
         before_state = await _stored_put_state(project["id"])
         before_provider_calls = list(provider_calls)
         before_keys = await _stored_keys(get_settings())
@@ -334,7 +345,7 @@ async def test_all_documents_stored_dispatches_once_through_minio(
         assert await _stored_put_state(project["id"]) == before_state
         assert provider_calls == before_provider_calls
         assert await _stored_keys(get_settings()) == before_keys
-        assert len(deliveries) == index
+        assert deliveries == []
         before_keys = await _stored_keys(get_settings())
         changed = await project_client.post(path, headers=headers, content=original + b"changed")
         assert changed.status_code == 409, changed.text
@@ -343,14 +354,18 @@ async def test_all_documents_stored_dispatches_once_through_minio(
         )
         assert another_key.status_code == 409, another_key.text
         assert await _stored_keys(get_settings()) == before_keys
-        assert len(deliveries) == index
+        assert deliveries == []
         async with db_session.get_session_factory()() as session:
             run = await session.get(ProjectSetupRun, guide["setup"]["id"])
-            assert run.status == ("awaiting_documents" if index == 0 else "queued")
+            assert run.status == "awaiting_documents"
+            assert run.celery_task_id is None
     attempts, replicas, stored = await _stored_originals(project["id"])
     assert len(attempts) == len(replicas) == 2
     assert {row.media_type for row in attempts} == {"text/markdown", "application/pdf"}
     assert set(stored) == set(originals)
+    async with db_session.get_session_factory()() as session:
+        for table in ("project_guide_compilation_request_operations", "project_guide_compilation_attempts"):
+            assert await session.scalar(text("select count(*) from " + table)) == 0
 
     # Even a completed put requires the fixed resolver's current authority.
     await _assert_inactive_resolver_replay_denied(
@@ -643,7 +658,7 @@ async def test_invalid_bytes_are_correctable_and_leave_no_artifact(project_clien
 
 
 @pytest.mark.parametrize("mode", ["distinct", "same_document", "aggregate_limit"])
-async def test_concurrent_last_documents_dispatch_one_setup(project_client, monkeypatch, mode):
+async def test_concurrent_last_documents_never_dispatch_without_pm_request(project_client, monkeypatch, mode):
     import asyncio
     from sqlalchemy import func
     from app.core.config import get_settings
@@ -684,15 +699,13 @@ async def test_concurrent_last_documents_dispatch_one_setup(project_client, monk
         [202, 413] if mode == "aggregate_limit" else [202, 202]
     ), [response.text for response in responses]
     complete = mode == "distinct"
-    assert len(deliveries) == int(complete)
-    if complete:
-        assert deliveries[0][0][-2:] == (guide["setup"]["id"], 1)
+    assert deliveries == []
     async with db_session.get_session_factory()() as session:
         for model in (ArtifactPutAttempt, ArtifactReplica):
             assert await session.scalar(select(func.count()).select_from(model)) == (2 if complete else 1)
         run = await session.get(ProjectSetupRun, guide["setup"]["id"])
-        assert run.status == ("queued" if complete else "awaiting_documents")
-        assert run.celery_task_id == (deliveries[0][1] if complete else None)
+        assert run.status == "awaiting_documents"
+        assert run.celery_task_id is None
     assert len(await _stored_keys(get_settings())) == (2 if complete else 1)
 
 

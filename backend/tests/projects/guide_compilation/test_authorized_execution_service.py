@@ -40,6 +40,7 @@ from app.modules.projects.guide_compilation.repository import (
 )
 from app.modules.projects.guide_compilation.service import GuideCompilationService
 
+from .helpers import acknowledge_requested_setup
 from .helpers import context, identity, persistence_facts, result, seed_database, service_actor
 from .test_authorized_request_service import _authorized_service, _request, _seed_human
 
@@ -99,6 +100,7 @@ async def test_authorized_execution_fences_accepts_and_persists_atomically(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             fenced = await _execution_service(session, service).fence_dispatch(
@@ -165,6 +167,7 @@ async def test_invalid_provider_result_becomes_one_bounded_terminal_outcome(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             await _execution_service(session, service).fence_dispatch(actor=service, facts=facts)
@@ -225,6 +228,7 @@ async def test_execution_rejects_nonfresh_session_and_durable_fact_drift(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session, session.begin():
             with pytest.raises(GuideCompilationIntegrityError, match="fresh root"):
@@ -274,6 +278,7 @@ async def test_execution_rejects_stale_setup_lineage_before_authority_or_transit
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         async with factory() as session, session.begin():
             if stale_change == "new_generation":
                 await session.execute(
@@ -338,6 +343,7 @@ async def test_execution_rechecks_setup_lineage_for_outcome_and_persistence(
                 identity=identity(context(values)),
                 runtime_configuration=runtime_configuration(),
             )
+        await acknowledge_requested_setup(factory, requested)
         facts = _preflight(values, requested.attempt_id, requested.operation_id)
         async with factory() as session:
             await _execution_service(session, service).fence_dispatch(actor=service, facts=facts)

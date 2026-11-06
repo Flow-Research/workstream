@@ -193,7 +193,7 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_GUIDE_COMPILATION_REQUEST,
         ActionOwner.AUTH_12I,
     ),
-    _active(
+    _planned(
         ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC,
         PermissionId.PROJECT_GUIDE_COMPILATION_EXECUTE,
         ActionOwner.AUTH_12I,

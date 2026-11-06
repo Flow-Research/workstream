@@ -117,6 +117,7 @@ _FACTS_KEYS = frozenset(
         "landed_commit_sha",
         "base_ref",
         "head_sha",
+        "head_commit_message",
         "author",
         "reviews",
         "changed_files_count",
@@ -152,19 +153,37 @@ def evaluate_proof(
     *,
     configuration: object,
     input_value: object,
+    minimum_independent_approvals: int = 1,
 ) -> list[dict[str, object]]:
     """Return findings for one proof; it passes only when it matches the forge facts."""
+    proof, findings = parse_proof(raw)
+    if proof is None:
+        return findings
+    return (
+        findings
+        + claim_findings(proof)
+        + compare_forge_facts(
+            proof,
+            configuration,
+            input_value,
+            minimum_independent_approvals=minimum_independent_approvals,
+        )
+    )
+
+
+def parse_proof(raw: bytes | None) -> tuple[dict | None, list[dict[str, object]]]:
+    """Read bounded project claims without requesting forge facts or accepting work."""
     if raw is None:
-        return [_finding("missing", "The submission must contain proof.json at its root.")]
+        return None, [_finding("missing", "The submission must contain proof.json at its root.")]
     if len(raw) > MAX_PROOF_BYTES:
-        return [_finding("too_large", "proof.json must be at most 64 KiB.")]
+        return None, [_finding("too_large", "proof.json must be at most 64 KiB.")]
     try:
         proof = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, ValueError, RecursionError):
-        return [_finding("invalid_json", "proof.json must be valid UTF-8 JSON.")]
+        return None, [_finding("invalid_json", "proof.json must be valid UTF-8 JSON.")]
     if not isinstance(proof, dict):
-        return [_finding("invalid_json", "proof.json must contain a JSON object.")]
-    return claim_findings(proof) + compare_forge_facts(proof, configuration, input_value)
+        return None, [_finding("invalid_json", "proof.json must contain a JSON object.")]
+    return proof, []
 
 
 def claim_findings(proof: dict) -> list[dict[str, object]]:
@@ -210,11 +229,14 @@ def _repository(value: object) -> bool:
     )
 
 
-def forge_configuration(configuration: object) -> dict | None:
+def forge_configuration(
+    configuration: object, *, minimum_independent_approvals: int = 1
+) -> dict | None:
     """Return the normalized configuration, or None when it is absent or invalid.
 
     Integrity options take safe defaults: unbound required checks are errors,
     the default protected paths apply, and one independent approval is needed.
+    The minimum is a trusted project-code parameter, never a configuration key.
     """
     if not isinstance(configuration, dict):
         return None
@@ -239,7 +261,7 @@ def forge_configuration(configuration: object) -> dict | None:
         or not isinstance(allow_unbound, bool)
         or not _strings(protected)
         or type(approvals) is not int
-        or approvals < 1
+        or approvals < minimum_independent_approvals
         or not _strings(operators)
     ):
         return None
@@ -343,6 +365,16 @@ def _response(value: object) -> bool:
     )
 
 
+def _bounded_commit_message(value: object) -> bool:
+    """A forge message is bounded UTF-8 text, never a truncated claim."""
+    if not isinstance(value, str):
+        return False
+    try:
+        return len(value.encode("utf-8")) <= 65_536
+    except UnicodeEncodeError:
+        return False
+
+
 def valid_facts(facts: object) -> bool:
     """Accept only the exact ``workstream.forge_change_facts.v1`` shape."""
     if not _record(facts, _FACTS_KEYS) or facts["schema_version"] != FORGE_FACTS_SCHEMA:
@@ -365,6 +397,7 @@ def valid_facts(facts: object) -> bool:
         and (not merged or facts["state"] == "closed")
         and isinstance(facts["base_ref"], str)
         and _sha(facts["head_sha"])
+        and _bounded_commit_message(facts["head_commit_message"])
         and _actor(facts["author"])
         and isinstance(facts["reviews"], list)
         and all(_review(review) for review in facts["reviews"])
@@ -570,10 +603,23 @@ def _integrity_findings(facts: dict, settings: dict) -> list[dict[str, object]]:
 
 
 def compare_forge_facts(
-    proof: dict, configuration: object, input_value: object
+    proof: dict,
+    configuration: object,
+    input_value: object,
+    *,
+    minimum_independent_approvals: int = 1,
+    commit_reference: str = "landed",
 ) -> list[dict[str, object]]:
-    """Compare proof claims with WorkStream-read forge facts; one finding per mismatch."""
-    settings = forge_configuration(configuration)
+    """Compare proof claims with WorkStream-read forge facts; one finding per mismatch.
+
+    Project code selects current head or landed work. This is never a binding
+    configuration option: Harnessy retains its landed-work default.
+    """
+    if commit_reference not in {"head", "landed"}:
+        raise ValueError("commit_reference must be head or landed")
+    settings = forge_configuration(
+        configuration, minimum_independent_approvals=minimum_independent_approvals
+    )
     if settings is None:
         return [
             _finding(
@@ -623,17 +669,25 @@ def compare_forge_facts(
             )
         )
     findings.extend(_url_findings(proof, facts))
-    if facts["merged"] is not True:
+    if commit_reference == "landed" and facts["merged"] is not True:
         findings.append(
             _finding("forge.merged", "The forge reports that the change is not merged.")
         )
     commit_sha = proof.get("commit_sha")
-    if not isinstance(commit_sha, str) or facts["landed_commit_sha"] != commit_sha.lower():
+    reference_sha = (
+        facts["head_sha"]
+        if commit_reference == "head"
+        else facts["landed_commit_sha"]
+    )
+    if not isinstance(commit_sha, str) or reference_sha != commit_sha.lower():
         findings.append(
             _finding(
-                "forge.landed_commit_sha",
-                "commit_sha does not equal the commit the change landed as on the base "
-                "branch, as the forge reports it.",
+                "forge.head_sha" if commit_reference == "head" else "forge.landed_commit_sha",
+                (
+                    "commit_sha does not equal the current PR head commit the forge reports."
+                    if commit_reference == "head"
+                    else "commit_sha does not equal the commit the change landed as on the base branch, as the forge reports it."
+                ),
             )
         )
     for check in facts["required_checks"]:

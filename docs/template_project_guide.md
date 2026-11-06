@@ -41,11 +41,19 @@ immutable for that guide version; a correction uses a new guide version.
 }
 ```
 
-The response returns each document ID and the waiting setup ID. Upload each
+The response returns each document ID and the setup ID with `awaiting_documents`
+upload custody. Before an initial request reserves an attempt, the latest setup
+diagnostic reports `status` and `current_step` as `not_requested` for valid
+inputs; completed uploads do not imply queued inference. Upload each
 original as a binary body to its project/guide/document content endpoint with
-the declared `Content-Type` and a UUID `Idempotency-Key`. Setup starts when every
-declared original has committed bytes. There is no separate source-snapshot
-creation step.
+the declared `Content-Type` and a UUID `Idempotency-Key`. Upload commits custody
+only. When every original is ready, the exact-project Project Manager explicitly
+calls `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup` for assistance,
+or `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
+for provider-free uploaded rules. There is no separate source-snapshot creation
+step. The [Garden rules fixture](../pilots/garden/manager-rules.md) shows the
+complete JSON body required in one `text/markdown` original; ordinary prose is
+not that format. Changed rules require a new guide version.
 
 ## Business Terms Summary
 
@@ -334,5 +342,6 @@ not one-to-one matches to setup suggestions; one image may cover several checks
 and a phase may use several images. The Workstream PRE default remains separate.
 Registration after proposal does not change its hash or require another setup
 run. Approval locks exact image digest and configuration. Suggestions never
-register, execute or activate checks. Optional/configurable automatic setup is
-deferred; manager feedback for improving setup remains deferred.
+register, execute or activate checks. Assistance requires an explicit manager
+request. An explicit correction supplies bounded manager feedback; it does not
+supply image choices or replace the separate policy approvals.

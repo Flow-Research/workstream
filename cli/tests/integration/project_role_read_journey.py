@@ -1,6 +1,8 @@
 """Read the real stored role decisions through public AUTH and the built CLI."""
 
 import json
+from datetime import datetime
+from uuid import UUID
 
 
 def role_read(cli, origin, token, project, *command, status=None):
@@ -50,6 +52,30 @@ async def inspect_role_history(
             paths[route]["get"]["x-workstream-action-id"]
             == "project_role_grant." + action
         )
+    # History orders by the stored transaction timestamp and UUID, not request
+    # completion order. A host clock adjustment can reverse granted_at values.
+    granted = []
+    for issued in (first, reviewer, self_grant):
+        response = await direct.get(path + "/" + issued["id"], headers=headers)
+        assert response.status_code == 200, response.text
+        row = response.json()
+        assert (row["id"], row["project_id"], row["actor_profile_id"], row["role"]) == (
+            issued["id"],
+            project,
+            issued["actor_profile_id"],
+            issued["role"],
+        )
+        granted.append(row)
+    expected_order = [
+        row["id"]
+        for row in sorted(
+            granted,
+            key=lambda row: (
+                datetime.fromisoformat(row["granted_at"]),
+                UUID(row["id"]),
+            ),
+        )
+    ]
     cursor, first_cursor, seen = None, None, []
     for index in range(3):
         flags = () if cursor is None else ("--cursor", cursor)
@@ -63,7 +89,11 @@ async def inspect_role_history(
         if index == 0:
             assert cursor is not None
             first_cursor = cursor
-    assert seen == [first["id"], reviewer["id"], self_grant["id"]] and cursor is None
+    assert seen == expected_order and cursor is None, (
+        seen,
+        [(row["id"], row["granted_at"]) for row in granted],
+        cursor is not None,
+    )
     selected = role_read(
         cli, origin, token, project, "show", first["id"].replace("-", "")
     )

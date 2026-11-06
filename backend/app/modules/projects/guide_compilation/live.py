@@ -1,18 +1,10 @@
 """PROJECTS orchestration of the sole live guide-compilation operation."""
 
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.interfaces.project_guide_runtime import ProjectGuideRuntimeConfiguration
-from app.modules.authorization.api import (
-    ActorIdentityFacts,
-    ProjectGuideCompilationAuthorizationPort,
-)
-from app.modules.model_usage.api import ModelProfileReaderPort
 from app.modules.projects.api.guide_compilation import (
     ProjectGuideCompilationDelivery,
     ProjectGuideCompilationDeliveryError,
@@ -25,7 +17,6 @@ from app.modules.projects.api.guide_compilation_projections import (
     ProjectGuideProjectionCommand,
     ProjectGuideProjectionError,
 )
-from app.modules.projects.api.guide_documents import GuideDocumentManifestPort
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.api.task_examples import (
     GuideTaskExampleInputError,
@@ -42,19 +33,7 @@ from .models import (
     ProjectGuideSetupFinalization,
 )
 from .repository import GuideCompilationIntegrityError
-from .request_inputs import (
-    CompilationRequestInputs, automatic_request_selector, select_model_runtime_configuration,
-)
-from .service import GuideCompilationService
 from .source_state import is_compilation_source_setup
-
-RequestAuthority = Callable[
-    [AsyncSession, UUID],
-    AbstractAsyncContextManager[
-        tuple[ProjectGuideCompilationAuthorizationPort, ActorIdentityFacts]
-    ],
-]
-
 
 class LiveGuideCompilationCoordinator:
     """Reuse request, execution, projection and finalization owners in their transactions."""
@@ -63,19 +42,11 @@ class LiveGuideCompilationCoordinator:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         *,
-        material_factory: Callable[[AsyncSession], GuideDocumentManifestPort],
-        request_authority: RequestAuthority,
-        configuration_factory: Callable[[], ProjectGuideRuntimeConfiguration],
-        model_profiles: Callable[[AsyncSession], ModelProfileReaderPort],
         execution: ProjectGuideCompilationExecutionPort,
         projections,
         finalization_authorization_factory,
     ) -> None:
         self._sessions = session_factory
-        self._material = material_factory
-        self._request_authority = request_authority
-        self._configuration = configuration_factory
-        self._model_profiles = model_profiles
         self._execution = execution
         self._projections = projections
         self._finalization_authorization = finalization_authorization_factory
@@ -94,24 +65,8 @@ class LiveGuideCompilationCoordinator:
             return await self._finalize(finalization)
         if has_attempt and snapshot is None:
             raise GuideCompilationIntegrityError("compilation runtime configuration unavailable")
-        configuration = ProjectGuideRuntimeConfiguration.model_validate(snapshot)
-        if manual_attempt is None:
-            operation_id = automatic_request_selector(
-                delivery.setup_run_id, delivery.setup_generation
-            )
-            async with self._sessions() as session:
-                async with self._request_authority(session, operation_id) as (authority, actor):
-                    request = await GuideCompilationService(
-                        session,
-                        authority,
-                        request_inputs=CompilationRequestInputs(
-                            self._material(session),
-                            configuration,
-                        ),
-                    ).request_automatic(actor=actor, setup_run_id=delivery.setup_run_id)
-            attempt_id = request.attempt_id
-        else:
-            attempt_id = manual_attempt
+        ProjectGuideRuntimeConfiguration.model_validate(snapshot)
+        attempt_id = manual_attempt
         outcome = await self._execution.execute(
             ProjectGuideCompilationExecutionCommand(attempt_id=attempt_id)
         )
@@ -250,26 +205,13 @@ class LiveGuideCompilationCoordinator:
             from .delivery_request import manual_delivery_attempt
 
             manual_attempt = await manual_delivery_attempt(session, setup, attempt)
-            runtime_configuration = (
-                attempt.runtime_configuration
-                if attempt is not None
-                else (await self._select_runtime_configuration(session, delivery.project_id))
-                .model_dump(mode="json")
-            )
+            runtime_configuration = attempt.runtime_configuration
             return (
                 None,
                 attempt is not None,
                 runtime_configuration,
                 manual_attempt,
             )
-
-    async def _select_runtime_configuration(
-        self, session: AsyncSession, project_id: UUID
-    ) -> ProjectGuideRuntimeConfiguration:
-        """Snapshot the newest exact Operator profile while PROJECTS custody is held."""
-        return await select_model_runtime_configuration(
-            self._configuration(), self._model_profiles(session), project_id
-        )
 
     async def _finalize(self, command: ProjectGuideSetupFinalizationCommand) -> dict:
         """Create or replay the existing finalizer's receipt under fresh authority."""

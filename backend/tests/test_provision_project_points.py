@@ -1,12 +1,14 @@
-"""PostgreSQL proof for the local project-points provisioning operator script."""
+"""Real Flow identity and PostgreSQL authority proof for the points operator."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -15,360 +17,465 @@ from uuid import UUID
 import pytest
 from sqlalchemy import func, select
 
+from app.adapters.auth.flow import FlowAuthVerifier
 from app.core.config import get_settings
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
-from app.modules.actors.api import ServiceIdentity
+from app.interfaces.auth import AuthVerificationError
+from app.modules.actors.api import CompensationAdapterActorUnavailable, ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.compensation.api import (
+    AdapterBindingConflict,
+    AdapterBindingSuspendRequest,
+    AdapterBindingUnavailable,
+)
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
+from app.modules.contributions.api import ContributionPolicyAuthorizationDenied
 from app.modules.contributions.models import ProjectCompensationUnit
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
 from project_create_fixtures import insert_historical_project
-from tests.projects.guide_compilation.proposals.pg_support import seed_review_actor
+from tests.authentication.fixtures import rsa_signing_material as rsa_signing_material
+from tests.authentication.support import (
+    issue_asymmetric_token,
+    jwks_transport,
+    production_verifier_settings,
+)
+from tests.projects.guide_compilation.proposals.pg_support import (
+    revoke_review_grant,
+    seed_review_actor,
+)
 
 script = importlib.import_module("scripts.provision_project_points")
+ISSUER = "https://identity.flowresearch.tech"
+ROUTE = "flow_points.recording"
 
 
 @pytest.fixture(name="points_database_env")
-def _points_database_env(
-    monkeypatch: pytest.MonkeyPatch, clean_postgres_database: str
-) -> Iterator[str]:
+def _points_database_env(monkeypatch, clean_postgres_database: str) -> Iterator[str]:
     monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     monkeypatch.setenv("WORKSTREAM_ENVIRONMENT", "test")
     get_settings.cache_clear()
-    try:
-        yield clean_postgres_database
-    finally:
-        get_settings.cache_clear()
+    yield clean_postgres_database
+    get_settings.cache_clear()
 
 
 async def _project() -> UUID:
-    project_id = new_record_id()
+    project = new_record_id()
     async with db_session.get_session_factory()() as session, session.begin():
         await insert_historical_project(
-            session, project_id=str(project_id), name="Points script project",
-            slug=f"points-script-{project_id.hex}",
+            session, project_id=str(project), name="Points project", slug=f"points-{project.hex}"
         )
-    return project_id
+    return project
 
 
-async def _insert_adapter_actor() -> UUID:
-    """Test setup only: stand in for the Access Administrator route."""
-    actor_id = new_record_id()
+async def _adapter() -> UUID:
+    """Fixture only: the public service-actor owner is tested separately."""
+    actor = new_record_id()
     async with db_session.get_session_factory()() as session, session.begin():
-        session.add(ActorProfile(
-            id=str(actor_id), actor_kind="service", status="active",
-            provisioning_method="manual_service_provisioning",
-            service_identity=ServiceIdentity.COMPENSATION_ADAPTER.value,
-            created_by="points-script-test",
-        ))
+        session.add(
+            ActorProfile(
+                id=str(actor),
+                actor_kind="service",
+                status="active",
+                provisioning_method="manual_service_provisioning",
+                service_identity=ServiceIdentity.COMPENSATION_ADAPTER.value,
+                created_by="points-fixture",
+            )
+        )
         await session.flush()
-        session.add(ActorIdentityLink(
-            id=str(new_record_id()), actor_profile_id=str(actor_id), issuer="workstream-internal",
-            subject=f"points-adapter-{actor_id}", subject_kind="service", status="active",
-            linked_by="points-script-test",
-        ))
-    return actor_id
+        session.add(
+            ActorIdentityLink(
+                id=str(new_record_id()),
+                actor_profile_id=str(actor),
+                issuer=ISSUER,
+                subject=f"adapter-{actor}",
+                subject_kind="service",
+                status="active",
+                linked_by="points-fixture",
+            )
+        )
+    return actor
 
 
-async def _finance(project_id: UUID, role: str = "finance_authority") -> UUID:
-    actor, _ = await seed_review_actor(db_session.get_session_factory(), project_id, role=role)
-    return actor.actor_profile_id
-
-
-def _args(project_id: UUID, finance: UUID, **changes) -> argparse.Namespace:
-    values = dict(
-        project_id=project_id, finance_actor_profile_id=finance,
-        unit_code=script.DEFAULT_UNIT_CODE, route_key=script.DEFAULT_ROUTE_KEY,
-        admin_subject=None, api_url="http://127.0.0.1:8000", subject_prefix="local-agent-loop",
+def _authenticate(monkeypatch, tmp_path, signing_material, actor, **claims):
+    key, jwk = signing_material
+    settings = production_verifier_settings(token_issuer=ISSUER)
+    verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    monkeypatch.setattr(script, "get_settings", lambda: settings)
+    monkeypatch.setattr(script, "get_auth_verifier", lambda: verifier)
+    token = issue_asymmetric_token(
+        key, claims={"iss": ISSUER, "sub": str(actor.actor_profile_id), **claims}
     )
-    values.update(changes)
-    return argparse.Namespace(**values)
+    path = tmp_path / f"finance-{actor.actor_profile_id}.token"
+    path.write_text(token)
+    path.chmod(0o600)
+    return path, token
 
 
-async def _state(project_id: UUID) -> tuple[int, int, int]:
+def _args(project, path, adapter, **changes):
+    values = dict(
+        project_id=project,
+        finance_token_file=path,
+        adapter_actor_id=adapter,
+        unit_code="FLOW",
+        route_key=ROUTE,
+    )
+    return argparse.Namespace(**(values | changes))
+
+
+async def _state(project):
     async with db_session.get_session_factory()() as session:
-        units = await session.scalar(select(func.count()).select_from(ProjectCompensationUnit).where(
-            ProjectCompensationUnit.project_id == str(project_id)))
-        events = await session.scalar(
-            select(func.count()).select_from(ProjectCompensationUnitCreationEvent))
-        bindings = await session.scalar(
-            select(func.count()).select_from(ProjectCompensationAdapterBinding).where(
-                ProjectCompensationAdapterBinding.project_id == str(project_id)))
-    return units, events, bindings
+        return tuple(
+            [
+                await session.scalar(
+                    select(func.count()).select_from(model).where(model.project_id == str(project))
+                )
+                for model in (
+                    ProjectCompensationUnit,
+                    ProjectCompensationUnitCreationEvent,
+                    ProjectCompensationAdapterBinding,
+                )
+            ]
+        )
 
 
-def test_defaults_name_the_flow_points_unit_and_operation_ids_are_stable() -> None:
+async def _prepared(
+    points_database_env, monkeypatch, tmp_path, rsa_signing_material, *, role="finance_authority"
+):
+    project = await _project()
+    actor, grant = await seed_review_actor(db_session.get_session_factory(), project, role=role)
+    adapter = await _adapter()
+    path, token = _authenticate(monkeypatch, tmp_path, rsa_signing_material, actor)
+    return project, actor, grant, _args(project, path, adapter), token
+
+
+def test_operation_ids_are_stable_request_keys():
     project = new_record_id()
     assert script.DEFAULT_UNIT_CODE == "FLOW"
-    assert script.operation_id("unit", project, "FLOW") == script.operation_id("unit", project, "FLOW")
+    assert script.operation_id("unit", project, "FLOW") == script.operation_id(
+        "unit", project, "FLOW"
+    )
     assert script.operation_id("unit", project, "FLOW") != script.operation_id(
         "binding", project, "FLOW"
     )
+    assert script.operation_id("unit", project, "FLOW").version == 5
 
 
-@pytest.mark.asyncio
-async def test_fresh_run_provisions_actor_unit_and_binding_then_rerun_changes_nothing(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    calls = []
-
-    async def provision(api_url: str, admin_subject: str, subject_prefix: str) -> str:
-        calls.append((api_url, admin_subject, subject_prefix))
-        await _insert_adapter_actor()
-        return "provisioned"
-
-    monkeypatch.setattr(script, "_provision_adapter_actor", provision)
-    output: dict = {}
-    first = await script.run(_args(project_id, finance, admin_subject="admin"), output)
-
-    assert calls == [("http://127.0.0.1:8000", "admin", "local-agent-loop")]
-    assert (first["result_code"], first["adapter_actor"], first["unit"], first["binding"]) == (
-        "ready", "provisioned", "created", "created"
-    )
-    assert first["unit_code"] == "FLOW" and await _state(project_id) == (1, 1, 1)
-
-    second = await script.run(_args(project_id, finance, admin_subject="admin"), {})
-    assert (second["adapter_actor"], second["unit"], second["binding"]) == (
-        "existing", "existing", "existing"
-    )
-    assert second["adapter_binding_id"] == first["adapter_binding_id"]
-    assert second["adapter_actor_id"] == first["adapter_actor_id"]
-    assert len(calls) == 1 and await _state(project_id) == (1, 1, 1)
+@pytest.mark.parametrize(
+    "unsafe", ["symlink", "hardlink", "directory", "public", "oversized", "empty", "wrong-owner"]
+)
+def test_token_file_custody_fails_closed(tmp_path, monkeypatch, unsafe):
+    path = tmp_path / "bearer"
+    path.write_text("never-log-this-bearer")
+    path.chmod(0o600)
+    if unsafe == "symlink":
+        link = tmp_path / "link"
+        link.symlink_to(path)
+        path = link
+    elif unsafe == "hardlink":
+        os.link(path, tmp_path / "link")
+    elif unsafe == "directory":
+        path = tmp_path
+    elif unsafe == "public":
+        path.chmod(0o644)
+    elif unsafe == "oversized":
+        path.write_text("x" * 65)
+    elif unsafe == "empty":
+        path.write_text("")
+    else:
+        uid = os.geteuid()
+        monkeypatch.setattr(script.os, "geteuid", lambda: uid + 1)
+    with pytest.raises(script.ProvisioningUnavailable, match="finance_token_file_unavailable"):
+        script._read_token(path, 64)
 
 
-@pytest.mark.asyncio
-async def test_existing_actor_without_unit_creates_unit_and_binding(
-    points_database_env: str,
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    adapter = await _insert_adapter_actor()
-
-    result = await script.run(_args(project_id, finance), {})
-
-    assert (result["adapter_actor"], result["unit"], result["binding"]) == (
-        "existing", "created", "created"
-    )
-    assert result["adapter_actor_id"] == str(adapter)
-    async with db_session.get_session_factory()() as session:
-        binding = await session.get(
-            ProjectCompensationAdapterBinding, UUID(result["adapter_binding_id"])
-        )
-    assert binding is not None and binding.adapter_actor_id == str(adapter)
-    assert (binding.instrument_type, binding.route_key, binding.status) == (
-        "project_points", "flow_points.local", "active"
-    )
-
-
-@pytest.mark.asyncio
-async def test_existing_unit_without_binding_creates_only_the_binding(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await _insert_adapter_actor()
-
-    original_ensure_binding = script._ensure_binding
-
-    async def no_binding(*args) -> tuple[str, UUID]:
-        raise RuntimeError("stop after unit")
-
-    monkeypatch.setattr(script, "_ensure_binding", no_binding)
-    with pytest.raises(RuntimeError, match="stop after unit"):
-        await script.run(_args(project_id, finance), {})
-    assert await _state(project_id) == (1, 1, 0)
-    monkeypatch.setattr(script, "_ensure_binding", original_ensure_binding)
-
-    result = await script.run(_args(project_id, finance), {})
-
-    assert (result["unit"], result["binding"]) == ("existing", "created")
-    assert await _state(project_id) == (1, 1, 1)
-
-
-def _argv(project_id: UUID, finance: UUID, *extra: str) -> list[str]:
-    return ["--project-id", str(project_id), "--finance-actor-profile-id", str(finance), *extra]
-
-
-@pytest.mark.asyncio
-async def test_missing_actor_without_admin_subject_is_unavailable(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await db_session.dispose_engine()
-
-    code, output = await _run_main(monkeypatch, capsys, _argv(project_id, finance))
-
-    assert code == 3 and output["result_code"] == "unavailable"
-    assert output["detail"] == "adapter_actor_missing_and_no_admin_subject"
-    assert await _state(project_id) == (0, 0, 0)
-
-
-async def _run_main(monkeypatch, capsys, argv):
-    """Run the synchronous entrypoint off the test loop, as the CLI does."""
-    code = await asyncio.to_thread(script.main, argv)
-    return code, json.loads(capsys.readouterr().out)
-
-
-@pytest.mark.asyncio
-async def test_failed_actor_provisioning_is_unavailable(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await db_session.dispose_engine()
-
-    async def failed(*args) -> str:
-        return "failed:403:permission_denied"
-
-    monkeypatch.setattr(script, "_provision_adapter_actor", failed)
-    code, output = await _run_main(
-        monkeypatch, capsys, _argv(project_id, finance, "--admin-subject", "admin")
-    )
-
-    assert code == 3 and output["detail"] == "adapter_actor_failed:403:permission_denied"
-    assert await _state(project_id) == (0, 0, 0)
-
-
-@pytest.mark.asyncio
-async def test_finance_actor_without_one_active_identity_is_unavailable(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    await _insert_adapter_actor()
-    await db_session.dispose_engine()
-
-    code, output = await _run_main(monkeypatch, capsys, _argv(project_id, new_record_id()))
-
-    assert code == 3 and output["detail"] == "finance_identity_unavailable"
-    assert output["adapter_actor"] == "existing"
-
-
-@pytest.mark.asyncio
-async def test_non_finance_actor_fails_with_bounded_error_and_no_unit(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    manager = await _finance(project_id, role="project_manager")
-    await _insert_adapter_actor()
-    await db_session.dispose_engine()
-
-    code, output = await _run_main(monkeypatch, capsys, _argv(project_id, manager))
-
-    assert code == 1 and output == {
-        "result_code": "failed", "error_type": "ContributionPolicyAuthorizationDenied",
-        "project_id": str(project_id), "adapter_actor": "existing",
-        "adapter_actor_id": output["adapter_actor_id"],
-    }
-    assert await _state(project_id) == (0, 0, 0)
-
-
-@pytest.mark.asyncio
-async def test_main_prints_ready_summary(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await _insert_adapter_actor()
-    await db_session.dispose_engine()
-
-    code, output = await _run_main(
-        monkeypatch, capsys, _argv(project_id, finance, "--unit-code", "PARTNER")
-    )
-
-    assert code == 0 and output["result_code"] == "ready" and output["unit_code"] == "PARTNER"
-
-
-@pytest.mark.asyncio
-async def test_actor_provisioning_uses_the_existing_route_helper(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls = []
-
-    def provision(client, admin_subject, identities, prefix):
-        calls.append((str(client.base_url), admin_subject, identities, prefix))
-        return {identities[0]: "provisioned"}
-
-    monkeypatch.setattr(script, "provision_service_actors", provision)
-    assert await script._provision_adapter_actor("http://127.0.0.1:8000", "admin", "loop") == (
-        "provisioned"
-    )
-    assert calls == [(
-        "http://127.0.0.1:8000", "admin", ("workstream.compensation.adapter",), "loop"
-    )]
-    with pytest.raises(script.ProvisioningUnavailable, match="invalid_api_url"):
-        await script._provision_adapter_actor("http://example.com", "admin", "loop")
-
-
-def test_documented_direct_invocation_imports_its_sibling_helper() -> None:
-    """``python scripts/provision_project_points.py`` runs without package context."""
-    backend = Path(__file__).parents[1]
-    result = subprocess.run(
-        [sys.executable, "scripts/provision_project_points.py", "--help"],
-        cwd=backend, capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "--finance-actor-profile-id" in result.stdout
-
-
-@pytest.mark.asyncio
-async def test_existing_binding_with_another_route_is_reported_as_mismatch(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await _insert_adapter_actor()
-    first = await script.run(_args(project_id, finance), {})
-    await db_session.dispose_engine()
-
-    code, output = await _run_main(
-        monkeypatch, capsys, _argv(project_id, finance, "--route-key", "other.route")
-    )
-
-    assert code == 3 and output["detail"] == "active_binding_mismatch"
-    assert output["unit"] == "existing" and "adapter_binding_id" not in output
-    assert first["binding"] == "created" and await _state(project_id) == (1, 1, 1)
-
-
-@pytest.mark.asyncio
-async def test_binding_failure_after_unit_reports_the_committed_steps(
-    points_database_env: str, monkeypatch: pytest.MonkeyPatch, capsys
-) -> None:
-    project_id = await _project()
-    finance = await _finance(project_id)
-    await _insert_adapter_actor()
-    await db_session.dispose_engine()
-
-    async def no_binding(*args):
-        raise RuntimeError("binding store unavailable")
-
-    monkeypatch.setattr(script, "_ensure_binding", no_binding)
-    code, output = await _run_main(monkeypatch, capsys, _argv(project_id, finance))
-
-    assert code == 1 and output["error_type"] == "RuntimeError"
-    assert (output["adapter_actor"], output["unit"], output["unit_code"]) == (
-        "existing", "created", "FLOW"
-    )
-    assert await _state(project_id) == (1, 1, 0)
-
-
-@pytest.mark.parametrize("environment", ["staging", "preview", "prod", "production"])
-def test_production_like_environments_are_refused_before_any_database_access(
-    monkeypatch: pytest.MonkeyPatch, capsys, environment: str
-) -> None:
+@pytest.mark.parametrize("failure", ["invalid", "expired", "wrong-issuer", "service"])
+async def test_bad_flow_identity_rejected_before_database(
+    monkeypatch, tmp_path, rsa_signing_material, failure
+):
     from types import SimpleNamespace
 
-    async def unexpected():
-        raise AssertionError("database must not be read")
+    actor = SimpleNamespace(actor_profile_id=new_record_id())
+    claims = {}
+    if failure == "expired":
+        claims["exp"] = int((datetime.now(UTC) - timedelta(seconds=60)).timestamp())
+    elif failure == "wrong-issuer":
+        claims["iss"] = "https://foreign.example"
+    path, _ = _authenticate(monkeypatch, tmp_path, rsa_signing_material, actor, **claims)
+    if failure == "invalid":
+        path.write_text("invalid-bearer")
+    if failure == "service":
+        path.write_text(
+            issue_asymmetric_token(
+                rsa_signing_material[0],
+                subject_kind="service",
+                claims={"iss": ISSUER, "sub": str(actor.actor_profile_id)},
+            )
+        )
+    monkeypatch.setattr(script, "get_session_factory", lambda: pytest.fail("database accessed"))
+    with pytest.raises((AuthVerificationError, script.ProvisioningUnavailable)):
+        await script._finance_context(path)
 
-    monkeypatch.setattr(script, "get_settings", lambda: SimpleNamespace(environment=environment))
-    monkeypatch.setattr(script, "_adapter_actor_id", unexpected)
-    monkeypatch.setattr(script, "dispose_engine", lambda: asyncio.sleep(0))
 
-    code = script.main(_argv(new_record_id(), new_record_id()))
+async def test_dev_provider_is_rejected_before_file_or_database(monkeypatch, tmp_path):
+    from types import SimpleNamespace
 
-    assert code == 3
-    assert json.loads(capsys.readouterr().out)["detail"] == "production_like_environment"
+    monkeypatch.setattr(script, "get_settings", lambda: SimpleNamespace(auth_provider="dev"))
+    with pytest.raises(script.ProvisioningUnavailable, match="flow_authentication_required"):
+        await script._finance_context(tmp_path / "missing")
+
+
+async def test_create_and_exact_replay_use_live_flow_and_owner_receipts(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    first = await script.run(args, {})
+    second = await script.run(args, {})
+    assert first == second and first["result_code"] == "ready"
+    assert first["unit"] == first["binding"] == "ready"
+    assert (
+        UUID(first["unit_creation_event_id"]).version
+        == UUID(first["adapter_binding_id"]).version
+        == 7
+    )
+    assert await _state(project) == (1, 1, 1)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+async def test_non_finance_cannot_discover_missing_or_existing_readiness(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+    existing,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    if existing:
+        await script.run(args, {})
+    manager, _ = await seed_review_actor(
+        db_session.get_session_factory(), project, role="project_manager"
+    )
+    args.finance_token_file, _ = _authenticate(monkeypatch, tmp_path, rsa_signing_material, manager)
+    output = {}
+    with pytest.raises(ContributionPolicyAuthorizationDenied):
+        await script.run(args, output)
+    assert output == {} and await _state(project) == ((1, 1, 1) if existing else (0, 0, 0))
+
+
+async def test_foreign_finance_scope_cannot_enable_target_project(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    foreign = await _project()
+    actor, _ = await seed_review_actor(
+        db_session.get_session_factory(), foreign, role="finance_authority"
+    )
+    args.finance_token_file, _ = _authenticate(monkeypatch, tmp_path, rsa_signing_material, actor)
+    with pytest.raises(ContributionPolicyAuthorizationDenied):
+        await script.run(args, {})
+    assert await _state(project) == (0, 0, 0)
+
+
+async def test_token_is_reverified_between_commits_and_partial_step_is_retained(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, actor, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    original = script._ensure_unit
+
+    async def expire(context, values):
+        result = await original(context, values)
+        args.finance_token_file.write_text(
+            issue_asymmetric_token(
+                rsa_signing_material[0],
+                claims={
+                    "iss": ISSUER,
+                    "sub": str(actor.actor_profile_id),
+                    "exp": int((datetime.now(UTC) - timedelta(seconds=60)).timestamp()),
+                },
+            )
+        )
+        return result
+
+    monkeypatch.setattr(script, "_ensure_unit", expire)
+    output = {}
+    with pytest.raises(AuthVerificationError):
+        await script.run(args, output)
+    assert output["unit"] == "ready" and "binding" not in output
+    assert await _state(project) == (1, 1, 0)
+    monkeypatch.setattr(script, "_ensure_unit", original)
+    _authenticate(monkeypatch, tmp_path, rsa_signing_material, actor)
+    assert (await script.run(args, {}))["result_code"] == "ready"
+    assert await _state(project) == (1, 1, 1)
+
+
+async def test_valid_finance_identity_change_between_commits_is_rejected(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    other, _ = await seed_review_actor(
+        db_session.get_session_factory(), project, role="finance_authority"
+    )
+    other_path, _ = _authenticate(monkeypatch, tmp_path, rsa_signing_material, other)
+    original = script._ensure_unit
+
+    async def switch_identity(context, values):
+        result = await original(context, values)
+        args.finance_token_file = other_path
+        return result
+
+    monkeypatch.setattr(script, "_ensure_unit", switch_identity)
+    output = {}
+    with pytest.raises(script.ProvisioningUnavailable, match="finance_identity_changed"):
+        await script.run(args, output)
+    assert output["unit"] == "ready" and "binding" not in output
+    assert await _state(project) == (1, 1, 0)
+
+
+async def test_revoked_finance_grant_blocks_binding_after_unit_commit(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, actor, grant, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    original = script._ensure_unit
+
+    async def revoke(context, values):
+        result = await original(context, values)
+        await revoke_review_grant(db_session.get_session_factory(), actor, grant)
+        return result
+
+    monkeypatch.setattr(script, "_ensure_unit", revoke)
+    output = {}
+    with pytest.raises(AdapterBindingUnavailable):
+        await script.run(args, output)
+    assert output["unit"] == "ready" and "binding" not in output
+    assert await _state(project) == (1, 1, 0)
+
+
+@pytest.mark.parametrize("inactive", ["adapter", "binding"])
+async def test_binding_replay_requires_active_adapter_and_binding(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+    inactive,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    created = await script.run(args, {})
+    assert created["result_code"] == "ready"
+    context, _ = await script._finance_context(args.finance_token_file)
+    async with db_session.get_session_factory()() as session, session.begin():
+        if inactive == "adapter":
+            # Fixture state: ACTORS eligibility must be rechecked even on exact replay.
+            adapter = await session.get(ActorProfile, str(args.adapter_actor_id))
+            adapter.status = "suspended"
+            adapter.suspended_by = str(context.actor_profile_id)
+            adapter.suspended_at = func.now()
+            adapter.suspension_reason = "security response"
+        else:
+            authority = script.compensation_adapter_binding_authorization(session, context)
+            await script.AdapterBindingService(
+                session, read_authorization=authority, mutation_authorization=authority
+            ).suspend(
+                AdapterBindingSuspendRequest(
+                    operation_id=new_record_id(),
+                    actor_profile_id=context.actor_profile_id,
+                    project_id=args.project_id,
+                    adapter_binding_id=UUID(created["adapter_binding_id"]),
+                    expected_lifecycle_version=1,
+                )
+            )
+    expected = (
+        CompensationAdapterActorUnavailable
+        if inactive == "adapter"
+        else script.ProvisioningUnavailable
+    )
+    output = {}
+    with pytest.raises(expected):
+        await script.run(args, output)
+    assert output["unit"] == "ready" and "binding" not in output
+    assert await _state(project) == (1, 1, 1)
+
+
+async def test_changed_binding_request_conflicts_instead_of_reporting_ready(
+    points_database_env,
+    monkeypatch,
+    tmp_path,
+    rsa_signing_material,
+):
+    project, _, _, args, _ = await _prepared(
+        points_database_env, monkeypatch, tmp_path, rsa_signing_material
+    )
+    await script.run(args, {})
+    args.route_key = "other.points"
+    with pytest.raises(AdapterBindingConflict):
+        await script.run(args, {})
+    assert await _state(project) == (1, 1, 1)
+
+
+async def test_main_error_does_not_echo_bearer_or_verifier_details(monkeypatch, capsys, tmp_path):
+    path = tmp_path / "token"
+    path.write_text("private-bearer")
+    path.chmod(0o600)
+
+    async def fail(args, output):
+        raise RuntimeError("private-bearer provider detail")
+
+    monkeypatch.setattr(script, "run", fail)
+    result = await asyncio.to_thread(
+        script.main,
+        [
+            "--project-id",
+            str(new_record_id()),
+            "--finance-token-file",
+            str(path),
+            "--adapter-actor-id",
+            str(new_record_id()),
+            "--route-key",
+            ROUTE,
+        ],
+    )
+    output = capsys.readouterr().out
+    assert result == 1 and "private-bearer" not in output and "provider detail" not in output
+    assert json.loads(output)["error_type"] == "RuntimeError"
+
+
+def test_help_exposes_authenticated_standard_without_local_bypass():
+    result = subprocess.run(
+        [sys.executable, "scripts/provision_project_points.py", "--help"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "--finance-token-file" in result.stdout and "--adapter-actor-id" in result.stdout
+    assert (
+        "--admin-subject" not in result.stdout and "--finance-actor-profile-id" not in result.stdout
+    )

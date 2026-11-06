@@ -13,7 +13,7 @@ from uuid import UUID
 from app.core.identifiers import new_record_id
 
 import pytest
-from unittest.mock import AsyncMock, Mock, call
+from unittest.mock import AsyncMock, Mock
 
 import app.interfaces.artifact_operations  # noqa: F401 - cumulative contract coverage
 import app.adapters.artifacts.internal_workers as internal_worker_adapter
@@ -250,7 +250,7 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
         job_id,
         submission_task_contexts=task_contexts,
     )
-    continuation_delay.assert_called_once_with(str(attempt_id))
+    continuation_delay.assert_not_called()
     celery_module = importlib.import_module("app.workers.celery_app")
     worker_module = importlib.import_module("app.workers.artifacts")
     celery_app = celery_module.celery_app
@@ -292,13 +292,13 @@ def test_eager_internal_tasks_use_lazy_process_runtime(
     assert operation.await_count == 2
     assert operation.await_args_list[0].args == ("put", UUID(attempt_id))
     assert operation.await_args_list[1].args == ("verification", UUID(job_id))
-    continuation_delay.assert_called_once_with(attempt_id)
+    continuation_delay.assert_not_called()
     assert worker_module.scan_pending_work() == 2
     assert worker_module.scan_guide_setup_continuations() == 1
     assert scanned == ["called"]
     put_delay.assert_called_once_with("put-id")
     job_delay.assert_called_once_with("job-id")
-    assert continuation_delay.call_args_list == [call(attempt_id), call("guide-put-id")]
+    continuation_delay.assert_called_once_with("guide-put-id")
     get_settings.cache_clear()
 
 

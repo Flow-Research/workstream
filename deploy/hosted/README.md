@@ -7,11 +7,17 @@ Smol systemd node. Compose does not start a checker controller or grant access
 to its Docker socket. PostgreSQL, Redis, AWS S3, Flow identity and the optional
 OTLP collector remain environment-managed dependencies.
 
-This configuration depends on the guest-native model/trial transport from
-[PR #677](https://github.com/Flow-Research/workstream/pull/677) and preserves the
-provider selection from [PR #690](https://github.com/Flow-Research/workstream/pull/690).
-A render, image build or preflight does not establish hosted operation or a real
-model call. Parent issue #555 owns the connected public API/worker evidence.
+The checked-in [release environment template](release.env.example),
+[Compose wrapper](compose.py), [preflight](preflight.py), native node and
+[canonical Settings](../../backend/app/core/config.py) define the source
+topology. An operator must still build and publish exact images, provision the
+host and external services, configure private assets and credentials, run the
+fixed AWS proof, and verify the public journey for that deployment. A render,
+image build or preflight alone does not establish hosted operation or a real
+model call. The [capability ledger](../../docs/roadmap_status.md) and
+[hosted drill report](../../docs/reports/garden-hosted-drill-2026-11-06.md)
+record what has actually been exercised; neither makes this directory an
+automatic installer or qualifies another host.
 
 ## Trust boundary
 
@@ -220,7 +226,19 @@ development authentication are absent.
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
 API only the database, broker, rate-limit and pagination secrets; the worker
-gets the database and broker. `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
+gets the database and broker. For read-only GitHub forge facts, optionally set
+`WORKSTREAM_GITHUB_APP_ID` and `WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE` together;
+`WORKSTREAM_GITHUB_APP_INSTALLATION_ID` may select an installation explicitly.
+Leave all three blank when unused. The private file contains the complete PEM,
+including its newlines, with the same runtime ownership and `0400` mode.
+The checked release command selects `compose.github.yml` only for this pair.
+Only the outbox worker receives the mounted key and App settings; API/migrations,
+Beat, parser, model proxy and proof jobs receive none. Preflight reads file
+metadata only; the worker loader sets the adapter's existing private-key variable
+without evaluating or logging its contents. Never put a raw private key in the
+release environment. Follow the
+[GitHub App instructions](../../pilots/garden/github-app.md) for read-only permissions.
+`WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process
 gets the database, each configured provider credential and the runtime ART identity.
 For non-manager setup, the selected setup provider path is required and the other
@@ -301,11 +319,12 @@ trust-policy, Roles Anywhere resource and bucket-policy identity from the
 approved release evidence. The release wrapper allowlists these non-secret
 values and the shared Compose environment passes them unchanged to API, worker
 and Beat.
-The integrated canonical application `Settings` from #582/PR #592 defines
-these fields and validates their format and relationships. That owner rejects a malformed digest or ARN, a mixed AWS partition/account, reused
-workload roles or trust-policy digests, or reused managed policies when any of
-those processes starts. Preflight checks presence and rendered custody only so
-it does not create a second IAM-policy validator.
+The [canonical application Settings](../../backend/app/core/config.py) defines
+these fields and validates their format and relationships. It rejects a
+malformed digest or ARN, a mixed AWS partition/account, reused workload roles
+or trust-policy digests, or reused managed policies when any of those processes
+starts. Preflight checks presence and rendered custody only so it does not
+create a second IAM-policy validator.
 
 The proof command loads this exact Settings contract with distinct active IAM
 identities. Run the wrapper's fixed `proof --group-nonce <uuid>` operation. It
@@ -324,13 +343,22 @@ An image-cache failure does not extend AWS evidence freshness: activation become
 unavailable when its existing proof window expires, even if process health
 checks remain green.
 
-The example S3 and completion timeouts are unmeasured starting values supplied
-by the current #582 contract:
+If a recurring proof timer is enabled, check its oneshot state and the exact
+group receipts before release finalization or a database preservation check.
+An in-progress group is unsettled evidence even when earlier groups passed;
+let it finish and verify its result before using a settled interval for the
+final check. Keep the timer's normal cadence and the proof guard intact. The
+wrapper does not coordinate a release finalization window automatically; do
+not delete a running receipt or treat it as a pass.
+
+The [example S3 and completion timeouts](release.env.example) are starting
+values, not latency measurements. Canonical Settings requires:
 
 ```text
 max(S3 operation total, complete-read deadline)
-  + terminal-persistence margin + 30-second clock margin
-  + 300-second proof refresh <= 900 seconds
+  + terminal-persistence margin + 300-second proof refresh
+  + 120-second proof sequence allowance + 30-second clock margin
+  <= 900-second activation validity
 ```
 
 Preflight checks only that these required values are finite and positive. The
@@ -429,11 +457,12 @@ sudo python3 deploy/hosted/preflight.py --env-file /etc/workstream/release.env
 
 Preflight cannot attest the active AWS identity, absence of extra IAM
 permissions, Flow token acceptance, a successful VM boot, collector delivery,
-backup recoverability or a live checker result. Issue #582 and PR #592 own the
-AWS release identity, exact role/policy and bucket-policy proof contract. This
-configuration carries those values into every long-running process environment
-for canonical startup validation. Rendered values and valid formats do not prove
-the underlying cloud facts or completed proof-job execution.
+backup recoverability or a live checker result. The
+[AWS operations guide](../../docs/operations_aws_roles_anywhere.md) describes
+the exact role, policy, bucket and certificate preparation and the fixed proof
+group. This configuration carries those values into every long-running process
+environment for canonical startup validation. Rendered values and valid formats
+do not prove the underlying cloud facts or completed proof-job execution.
 
 ## Start and inspect
 
@@ -445,6 +474,49 @@ URL, secret path, Compose selector or Docker daemon selector. Normal `up`
 reloads the node configuration and requires static custody plus both typed native
 health checks before releasing API/worker services. `pull`, `ps` and fixed `stop`
 remain usable while a node is unavailable.
+
+### Provision project-points prerequisites
+
+Use the fixed `provision-project-points` operation for the authenticated Finance
+operator command. Before hosted use, the selected digest-qualified backend image
+must contain the reviewed `scripts/provision_project_points.py` and current
+adapter-binding replay authority fence. Older deployed images do not acquire
+these changes from the host checkout. Build and release the intended backend
+image first; do not mount replacement source or override the image/entrypoint.
+
+An Access Administrator separately provisions the actual compensation-adapter
+actor through the public service-actor route. Supply that actor UUID and the
+project UUID. Store a short-lived real Finance Flow token in a canonical absolute
+host file owned by `10001:10001`, mode `0400` or `0600`, with one hard link and no
+symbolic links. The nonempty file must be at most 16,384 bytes; its path cannot
+contain whitespace, colons or commas. Never put the bearer itself in argv or the
+release environment file.
+
+```bash
+sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
+  provision-project-points --project-id "$PROJECT_ID" \
+  --adapter-actor-id "$ADAPTER_ID" --unit-code FLOW \
+  --route-key flow_points.recording \
+  --finance-token-file /etc/workstream/operator/finance-token
+```
+
+All five inputs are required. The wrapper validates the release and static host
+inputs, then runs only the configured API image's embedded provisioner, retaining
+the API role's entrypoint, secrets, network and TLS trust. It adds one read-only
+mount at `/run/secrets/points_finance_token`; it does not publish API ports, start
+dependencies, run migrations or launch a checker. Generic `run`, arbitrary
+commands, environment/entrypoint overrides and source/image mounts are rejected.
+
+The operator verifies the token and current Finance authority separately for each
+committed step and exact replay. Its result contains actual owner receipts;
+unit and binding commits are separate. Execution has a 120-second inner deadline
+with five seconds to kill, a 150-second outer wait and a ten-second cleanup bound.
+Normal completion removes the one-off container. Exceptional cleanup targets
+only its generated name; uncertainty reports that name without claiming removal.
+A timeout or start failure remains a failure even if a step committed. Retain
+the receipts and inspect the outcome before an explicitly chosen retry; the
+wrapper never retries automatically or infers readiness. No award, policy
+publication or external fulfillment is performed by this operation.
 
 Cold startup has explicit prerequisite stages to avoid a schema/activation/proxy/
 node dependency cycle. `migrate` runs only the existing API image's Alembic command
@@ -577,11 +649,15 @@ the current schema. Otherwise repair forward with a new reviewed digest.
 
 ## Backup and restore proof
 
-Use the approved PostgreSQL provider's consistent backup/snapshot facility and
-the AWS retention/versioning controls established by #582. Redis carries queue
-transport, not Workstream lifecycle truth; recovery scanners rebuild eligible
-delivery from PostgreSQL owners. Never treat a Redis snapshot as the record
-backup and never delete retained S3 objects during database recovery.
+Use the selected PostgreSQL provider's consistent backup/snapshot facility and
+the [AWS bucket versioning and custody procedure](../../docs/operations_aws_roles_anywhere.md#provision-the-closed-aws-trust).
+Before release, identify the provider's exact backup and restore operations,
+retention policy, authorized operator and isolated restore target. Verify that
+the target can read the retained artifact namespace without write authority.
+Redis carries queue transport, not Workstream lifecycle truth; recovery scanners
+rebuild eligible delivery from PostgreSQL owners. Never treat a Redis snapshot
+as the record backup and never delete retained S3 objects during database
+recovery.
 
 Before a release, restore the database backup into an isolated environment with
 the same application/schema digest and read-only access to the retained artifact
@@ -601,17 +677,19 @@ data loading; the two-function correction is defined by
 [the migration](../../backend/alembic/versions/0060_audit_restore_path.py).
 Do not disable validation or edit retained rows to force a restore to finish.
 
-The exact provider commands and completed restore observations belong to the
-approved environment evidence. They are intentionally absent here because no
-database, account or backup system has been authorized for this configuration
-change.
+Run the selected provider's documented backup and restore operations for the
+actual deployment. Record the exact commands or API operations, provider backup
+ID, restore result and checks above in private release evidence. This repository
+cannot supply one universal provider command for environment-managed PostgreSQL.
 
 ## Remaining release evidence
 
-Before #583 or parent #555 can claim a hosted release, retain evidence for real
-Flow human/service identities, AWS custody and negative identity cases, selected
-registry/LIVE controls, actual project checker images, Smol isolation,
-representative CPU/memory/PID/disk/time measurements, missing-cache and limit
-classification, collector outage, drain/restart, supported recovery and isolated
-backup restore. Bind that evidence to exact source, service-image, checker-image,
-configuration and corpus identities.
+For each deployment, retain its exact source, service-image, checker-image,
+configuration, native binary/cache and corpus identities with the results of
+full preflight, a fresh fixed AWS proof group, public API/worker journey, drain
+and restart, supported recovery and isolated backup restore. Verify real Flow
+human/service authority, AWS custody and negative identity cases, registry
+access, Smol isolation, representative CPU/memory/PID/disk/time limits,
+missing-cache classification and collector behavior if OTLP is enabled. The
+[current capability ledger](../../docs/roadmap_status.md) distinguishes source
+delivery from live qualification and remaining release gates.

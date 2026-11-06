@@ -319,8 +319,8 @@ async def test_guide_correction_public_save_dispatch_replay_and_authority(
                     "correction_operation_id": saved["operation_id"],
                     "setup_run_id": saved["successor_setup_run_id"],
                     "setup_generation": saved["successor_setup_generation"],
-                    # Diagnostic attempt custody is distinct from queue state.
-                    "status": "compilation_reserved",
+                    # Dispatch reports queue state until the reserved attempt executes.
+                    "status": "queued",
                 }
                 assert success(call(dispatch=True)) == observed
                 await stored(1, saved, observed)

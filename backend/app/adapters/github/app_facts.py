@@ -36,6 +36,7 @@ from app.interfaces.external_services import (
 from app.interfaces.forge_facts import (
     FORGE_FACTS_CAPABILITY_KEY,
     GITHUB_FORGE,
+    MAXIMUM_HEAD_COMMIT_MESSAGE_BYTES,
     ForgeActorFact,
     ForgeChangeFacts,
     ForgeChangeNotEligibleError,
@@ -75,6 +76,7 @@ _GITHUB_REPOSITORY = re.compile(
 _GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\[bot\])?")
 # Reviewers whose write access is read: those approving the head commit.
 MAXIMUM_PERMISSION_READS = 20
+MAXIMUM_HEAD_COMMIT_RESPONSE_BYTES = 262_144
 _WRITE_PERMISSIONS = frozenset({"admin", "maintain", "write"})
 # Whole facts reads attempted when the pull request moves during a read.
 FACTS_CONSISTENCY_ATTEMPTS = 3
@@ -350,6 +352,22 @@ class GitHubAppFactsAdapter:
             )
         )
         head_sha = pull_facts["head_sha"]
+        commit = await session.read_json(
+            "head_commit", f"/repos/{repository}/git/commits/{head_sha}",
+            not_found=ForgeFactsProtocolError,
+            maximum_response_bytes=MAXIMUM_HEAD_COMMIT_RESPONSE_BYTES,
+        )
+        if not isinstance(commit, dict) or commit.get("sha") != head_sha:
+            raise ForgeFactsProtocolError(_IDENTITY)
+        message = commit.get("message")
+        try:
+            message_valid = isinstance(message, str) and (
+                len(message.encode("utf-8")) <= MAXIMUM_HEAD_COMMIT_MESSAGE_BYTES
+            )
+        except UnicodeEncodeError:
+            message_valid = False
+        if not message_valid:
+            raise ForgeFactsProtocolError(_IDENTITY)
         changed_files_count = pull_facts["changed_files_count"]
         if changed_files_count > GITHUB_MAXIMUM_LISTED_FILES:
             raise ForgeChangeNotEligibleError(_IDENTITY)
@@ -411,6 +429,7 @@ class GitHubAppFactsAdapter:
                 landed_commit_sha=pull_facts["landed_commit_sha"],
                 base_ref=pull_facts["base_ref"],
                 head_sha=head_sha,
+                head_commit_message=message,
                 author=_actor(pull_facts["author"]),
                 reviews=tuple(_review(item, write_access) for item in reviews),
                 changed_files_count=changed_files_count,
@@ -564,9 +583,12 @@ class _FactsSession:
         path: str,
         *,
         not_found: type[Exception],
+        maximum_response_bytes: int | None = None,
     ) -> object:
         """Read and hash one installation-token GET response."""
-        response = await self._installation_get(self._url(path), not_found=not_found)
+        response = await self._installation_get(
+            self._url(path), not_found=not_found, maximum_response_bytes=maximum_response_bytes
+        )
         self._record(label, response)
         return _json(response)
 
@@ -624,7 +646,7 @@ class _FactsSession:
         self._digests.append(ForgeResponseDigest(request=label, sha256=f"sha256:{digest}"))
 
     async def _installation_get(
-        self, url: str, *, not_found: type[Exception]
+        self, url: str, *, not_found: type[Exception], maximum_response_bytes: int | None = None
     ) -> httpx.Response:
         """GET with the installation token, refreshing a rejected token once."""
         token = await self._adapter._installation_token(self)
@@ -636,6 +658,7 @@ class _FactsSession:
                 json_body=None,
                 not_found=not_found,
                 installation=True,
+                maximum_response_bytes=maximum_response_bytes,
             )
         except _TokenRejected:
             # A revoked or expired cached token gets one fresh exchange.
@@ -649,6 +672,7 @@ class _FactsSession:
                 json_body=None,
                 not_found=not_found,
                 installation=True,
+                maximum_response_bytes=maximum_response_bytes,
             )
         except _TokenRejected:
             raise ForgeFactsAccessDeniedError(_IDENTITY) from None
@@ -663,6 +687,7 @@ class _FactsSession:
         not_found: type[Exception],
         installation: bool,
         unprocessable: type[Exception] = ForgeFactsProtocolError,
+        maximum_response_bytes: int | None = None,
     ) -> httpx.Response:
         """Send with bounded retries for transport errors, 5xx and rate limits."""
         configuration = self._adapter._configuration
@@ -675,13 +700,28 @@ class _FactsSession:
             timeout = min(configuration.request_timeout_seconds, remaining)
             response: httpx.Response | None = None
             try:
-                response = await self._client.request(
-                    method,
-                    url,
-                    json=json_body,
-                    headers={"Authorization": authorization()},
-                    timeout=timeout,
-                )
+                if maximum_response_bytes is None:
+                    response = await self._client.request(
+                        method, url, json=json_body,
+                        headers={"Authorization": authorization()}, timeout=timeout,
+                    )
+                else:
+                    async with self._client.stream(
+                        method, url, json=json_body,
+                        headers={"Authorization": authorization(), "Accept-Encoding": "identity"},
+                        timeout=timeout,
+                    ) as streamed:
+                        if streamed.headers.get("content-encoding", "identity").lower() != "identity":
+                            raise ForgeFactsProtocolError(_IDENTITY)
+                        body = bytearray()
+                        async for chunk in streamed.aiter_bytes(chunk_size=16_384):
+                            if len(body) + len(chunk) > maximum_response_bytes:
+                                raise ForgeFactsProtocolError(_IDENTITY)
+                            body.extend(chunk)
+                        response = httpx.Response(
+                            streamed.status_code, headers=streamed.headers,
+                            content=bytes(body), request=streamed.request,
+                        )
             except httpx.TransportError:
                 response = None
             except (httpx.HTTPError, httpx.InvalidURL):

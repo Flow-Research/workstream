@@ -131,7 +131,12 @@ async def exercise_guide_creation(
     setup = await direct.get(root + "/setup-runs/latest", headers=caller)
     assert setup.status_code == 200, setup.text
     assert setup.json()["id"] == created["setup"]["id"]
-    assert setup.json()["status"] == "awaiting_documents"
+    # Creation retains upload custody; diagnostics expose that no PM has yet
+    # requested compilation, independently of document completion.
+    assert setup.json()["status"] == "not_requested"
+    assert setup.json()["current_step"] == "not_requested"
+    assert setup.json()["celery_task_id"] is None
+    assert setup.json()["started_at"] is None
     assert (
         setup.json()["project_id"] == project_id
         and setup.json()["guide_id"] == created["id"]

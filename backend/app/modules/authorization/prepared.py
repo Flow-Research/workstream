@@ -523,6 +523,7 @@ class PreparedAuthorizationService:
         self._root_transaction()
         if (
             action_id not in CONTRIBUTION_POLICY_MUTATION_ACTIONS | ADAPTER_BINDING_MUTATION_ACTIONS
+            | {ActionId.PROJECT_GUIDE_COMPILATION_REQUEST}
             or scope.kind is not PreparedAuthorityScopeKind.PROJECT
             or not isinstance(scope.project_id, UUID)
         ):

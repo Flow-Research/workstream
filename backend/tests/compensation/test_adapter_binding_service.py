@@ -57,15 +57,19 @@ def _trace_binding_order(service, authorization, monkeypatch):
     return order
 
 
-async def _mutate_and_replay(session, method, request, order, expected):
+async def _mutate_and_replay(
+    session, method, request, order, expected, *, scope_before_recovery=False,
+):
+    first_steps = ["scope", "recovery"] if scope_before_recovery else ["recovery", "scope"]
     order.clear()
     async with session.begin():
         result = await method(request)
-    assert order == ["recovery", "scope", *expected, "prepare"]
+    assert order == [*first_steps, *expected, "prepare"]
     order.clear()
     async with session.begin():
         assert await method(request) == result
-    assert order == ["recovery", "read"]
+    replay_steps = ["scope", "recovery", "read"] if scope_before_recovery else ["recovery", "read"]
+    assert order == replay_steps
     return result
 
 
@@ -84,7 +88,7 @@ async def test_create_suspend_resume_persists_contiguous_immutable_history(
             AdapterBindingCreateRequest(
                 operation_id=new_record_id(), actor_profile_id=actor_id, project_id=project_id,
                 instrument_type="money", adapter_actor_id=adapter_id, route_key="adapter.primary",
-            ), order, ["project", "actor"],
+            ), order, ["project", "actor"], scope_before_recovery=True,
         )
         suspended = await _mutate_and_replay(session, service.suspend,
             AdapterBindingSuspendRequest(
@@ -300,8 +304,8 @@ async def test_concurrent_duplicate_waits_then_recovers_one_effect(
     winner_auth.release.set()
     first, second = await asyncio.gather(winner, loser)
     assert first == second
-    assert winner_auth.prepared + loser_auth.prepared == 1
-    assert len(winner_auth.scopes) == 1 and loser_auth.scopes == []
+    assert winner_auth.prepared == 1 and loser_auth.prepared == 0
+    assert len(winner_auth.scopes) == 1 and len(loser_auth.scopes) == 1
     assert loser_auth.read_authorized == 1
     async with db_session.get_session_factory()() as session:
         assert len((await session.scalars(select(ProjectCompensationAdapterBinding))).all()) == 1

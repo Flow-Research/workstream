@@ -477,9 +477,15 @@ Celery process; other queues can use their appropriate execution pool.
 
 ## Implementation Notes: Guide Setup, Policies And Task Context
 
-Verified guide-source readiness automatically delivers one compilation. A ready
-result records both policy proposals and stops at a draft; an insufficient guide
-stops with findings. Automatic compilation ends without approving the proposals.
+Uploading guide originals stores and verifies their custody; it does not request
+compilation or invoke inference. After every declared original is ready, an
+exact-project Project Manager explicitly requests assistance through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-free
+compilation of uploaded manager rules through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+Both paths use the same validation, proposal review, independent PRE/POST
+approvals and activation guards. A ready result stops at a draft; an insufficient
+guide stops with findings. Neither request approves proposals.
 POL-05B exposes exact Project Manager proposal review, pre-submission approval,
 setup-wide correction and explicit manual dispatch using POL-05A operations and
 AUTH-12F4 authorization. The setup response supplies `finalized_compilation_id`

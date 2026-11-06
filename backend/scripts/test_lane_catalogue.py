@@ -50,11 +50,16 @@ SHARED_FOUNDATION_MODULES = (
     "tests/reviews/lifecycle/test_transitions.py",
     "tests/reviews/lifecycle/test_authority_binding.py",
     "tests/artifacts/test_review_packet_contract.py",
+    "tests/reviews/packet/test_storage.py",
     "tests/artifacts/test_selected_predecessor_rules.py",
     "tests/authorization/post_submit/test_atomicity.py",
     "tests/authorization/post_submit/test_concurrency.py",
     "tests/authorization/post_submit/test_live_authority.py",
     "tests/authorization/post_submit/test_principals.py",
+    # Keep these storage proofs with their shared authorization/review peers
+    # so the schema lane retains capacity for the full migration suite.
+    "tests/authorization/post_submit/test_receipt_custody.py",
+    "tests/authorization/post_submit/test_migration.py",
     "tests/authorization/post_submit/test_timeout.py",
     "tests/authorization/project_roles/test_cancellation_postgresql.py",
     "tests/authorization/project_roles/test_constraint_postgresql.py",
@@ -98,6 +103,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_checker_smol_cache.py",
     "tests/test_trusted_intake.py",
     "tests/checkers/external/test_harnessy_proof_checker.py",
+    "tests/checkers/external/test_garden_proof_checker.py",
     "tests/test_github_facts_adapter.py",
     "tests/test_api_controls.py",
     "tests/test_identifiers.py",
@@ -445,7 +451,7 @@ PROJECT_MODULES = (
     "tests/projects/guide_compilation/test_authorized_execution_service.py",
     "tests/projects/guide_compilation/test_authorized_recovery_postgresql.py",
     "tests/projects/guide_compilation/test_authorized_request_service.py",
-    "tests/projects/guide_compilation/test_automatic_request.py",
+    "tests/projects/guide_compilation/test_explicit_request.py",
     "tests/projects/guide_compilation/test_contracts.py",
     "tests/projects/guide_compilation/test_context_builder.py",
     "tests/projects/guide_compilation/test_document_access_postgresql.py",
@@ -498,6 +504,7 @@ PROJECT_MODULES = (
 
 # Broad project intake uses the same deterministic project-family partition.
 PROJECT_INTAKE_MODULES = (
+    "tests/projects/test_setup_queue_recovery.py",
     "tests/test_guide_document_intake.py",
     "tests/test_projects.py",
 )
@@ -768,9 +775,6 @@ LANES = (
             "tests/migrations/test_guide_check_specification.py",
             "tests/migrations/test_contribution_read_audit.py",
             "tests/migrations/test_contribution_export_snapshots.py",
-            "tests/authorization/post_submit/test_receipt_custody.py",
-            "tests/authorization/post_submit/test_migration.py",
-            "tests/reviews/packet/test_storage.py",
             "tests/reviews/lifecycle/test_contracts.py",
             "tests/reviews/lifecycle/test_storage.py",
             "tests/reviews/lifecycle/test_transition_storage.py",

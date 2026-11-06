@@ -140,6 +140,8 @@ Adds protected v1 routes:
 - `POST /api/v1/projects/{project_id}/guides`
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/documents/{document_id}/content`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
@@ -150,7 +152,11 @@ These routes require an actor role allowed to manage project setup.
 
 Guide creation requires at least one task example and a complete nonempty
 `documents` list of labels and supported media types. Its response includes each
-`document_id` and the initial `awaiting_documents` setup. Upload each original as
+`document_id` and the initial `awaiting_documents` setup for upload custody.
+Before an initial request reserves an attempt, latest-setup diagnostics project
+`status` and `current_step` as `not_requested`; uploads alone never queue
+compilation. Invalid task-example evidence can instead report
+`setup_input_invalid`. Upload each original as
 a raw binary body with the declared `Content-Type` and a UUID `Idempotency-Key`.
 Workstream computes the digest and size, checks format and bounds, and stores
 the bytes through ArtifactStore. The document-set identity and source consent
@@ -158,16 +164,23 @@ are internal custody; clients do not create or select a source snapshot.
 Exact create/upload replay rechecks current authority and returns the original
 result. A changed document set requires a new guide.
 
-Committed original-document readiness dispatches the sole unified project-guide compilation
-through Celery. Source metadata without committed original uploads remains pending;
-ART readiness resumes the same generation. Guide creation alone does not invoke
-the provider. One authorized attempt proposes sufficiency findings and separate
+Committed original-document readiness only establishes source custody. The
+exact-project Project Manager explicitly requests assistance through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-free
+uploaded rules compilation through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+Both use the existing Celery compilation path. Neither guide creation, upload
+nor a readiness scan invokes the provider or creates request authority. One authorized attempt proposes sufficiency findings and separate
 pre-submission and post-submission checker policies. A blocked guide records
 findings without a policy projection; a ready guide records draft proposals.
 
+Both initial request routes require a UUID `Idempotency-Key`, no request body,
+and current human exact-project Project Manager authority. They return 202 with
+`operation_id`, `setup_run_id`, `setup_generation` and `status`. A same-key mode
+change conflicts. Provider/runtime configuration is selected by composition.
 The old sufficiency-run route and three inference methods are removed. The fixed
-`workstream.project.setup` service requests, executes, projects and finalizes the
-same attempt under fresh authority at each boundary. Runtime configuration is
+`workstream.project.setup` service executes, projects and finalizes the committed
+PM request under fresh authority at each boundary. Runtime configuration is
 immutable attempt evidence. Recovery never repeats an uncertain provider call.
 Manual reports remain human-authored diagnostics and cannot occupy the
 compilation report slot. Each compilation report binds exact original-document
@@ -204,7 +217,7 @@ Approval neither invokes a model nor changes the finalized setup receipt.
 
 Correction binds a manager's reason to one successor generation over the same
 original documents and task examples. The successor starts at
-`correction_requested`; initial-upload automatic recovery cannot dispatch it.
+`correction_requested`; source-readiness recovery cannot dispatch it.
 The existing authorized human request operation binds feedback into its canonical
 input and reserves one attempt. POL-05B dispatch atomically stores the pending
 queue claim with request custody, then publishes through the existing queue.
