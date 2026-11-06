@@ -1,0 +1,43 @@
+# Opt-in external demo issuer. Use with compose.yml only after a separate cutover decision.
+services:
+  api:
+    networks:
+      - default
+      - demo_identity
+  demo-identity:
+    image: ${DEMO_IDENTITY_IMAGE:?set a digest-qualified demo issuer image}
+    pull_policy: always
+    init: true
+    user: "12001:12001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      DEMO_IDENTITY_ISSUER: ${DEMO_IDENTITY_ISSUER:?set the canonical HTTPS issuer}
+      DEMO_IDENTITY_AUDIENCE: ${DEMO_IDENTITY_AUDIENCE:?set the Workstream audience}
+      DEMO_IDENTITY_TLS_CERT: /run/tls/cert.pem
+      DEMO_IDENTITY_TLS_KEY: /run/tls/key.pem
+      DEMO_IDENTITY_BIND: 0.0.0.0:8443
+    volumes:
+      - type: bind
+        source: ${DEMO_IDENTITY_DATA_DIR:?set the private persistent data directory}
+        target: /data
+      - type: bind
+        source: ${DEMO_IDENTITY_TLS_CERT_FILE:?set TLS certificate file}
+        target: /run/tls/cert.pem
+        read_only: true
+      - type: bind
+        source: ${DEMO_IDENTITY_TLS_KEY_FILE:?set TLS private key file}
+        target: /run/tls/key.pem
+        read_only: true
+    command: ["serve", "/data"]
+    ports:
+      - "${DEMO_IDENTITY_PUBLISHED_BIND:-127.0.0.1}:${DEMO_IDENTITY_PUBLISHED_PORT:-8443}:8443"
+    networks:
+      demo_identity:
+        aliases:
+          - ${DEMO_IDENTITY_HOSTNAME:?set the issuer DNS hostname}
+
+networks:
+  demo_identity:
+    internal: true

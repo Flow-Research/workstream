@@ -713,6 +713,11 @@ cannot be reused as post-submission review-gate evidence. See the
 
 - Workstream verifies external Flow identity tokens but owns no login,
   password, or primary authentication session.
+- An [external Rust demo issuer](../experiments/demo_identity/README.md) can
+  provision participant accounts through its own administrator and issue
+  compatible short-lived tokens. Its hosted Compose overlay is opt-in and not
+  deployed or selected by Workstream; actual Flow Identity integration remains
+  separate.
 - External subject identity resolves through ActorIdentityLink into a stable
   internal ActorProfile.
 - Human roles and fixed-service authority remain separate and fail closed.
