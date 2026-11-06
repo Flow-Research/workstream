@@ -107,6 +107,163 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.environment_path.write_text(environment_text, encoding="utf-8")
         self.environment = preflight.parse_environment(self.environment_path)
 
+    def demo_identity_values(self):
+        values = dict(self.environment)
+        values.update(
+            {
+                "DEMO_IDENTITY_IMAGE": "example.test/issuer@sha256:" + "a" * 64,
+                "DEMO_IDENTITY_ISSUER": "https://identity.example.test",
+                "DEMO_IDENTITY_AUDIENCE": values["WORKSTREAM_TOKEN_AUDIENCE"],
+                "DEMO_IDENTITY_HOSTNAME": "identity.example.test",
+                "DEMO_IDENTITY_DATA_DIR": str(self.root / "issuer-data"),
+                "DEMO_IDENTITY_TLS_CERT_FILE": str(self.root / "issuer-cert.pem"),
+                "DEMO_IDENTITY_TLS_KEY_FILE": str(self.root / "issuer-tls-key.pem"),
+                "WORKSTREAM_TOKEN_ISSUER": "https://identity.example.test",
+                "WORKSTREAM_TOKEN_JWKS_URL": "https://identity.example.test/jwks.json",
+            }
+        )
+        return values
+
+    def test_demo_identity_overlay_preserves_default_and_bounds_authority(self):
+        self.assertNotIn(
+            str(preflight.DEMO_IDENTITY_COMPOSE_PATH),
+            preflight._compose_file_arguments(self.environment),
+        )
+        values = self.demo_identity_values()
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        self.assertEqual(
+            rendered["services"]["demo-identity"]["networks"], {"demo_identity": None}
+        )
+        self.assertEqual(rendered["services"]["api"]["networks"]["demo_identity"], None)
+        mutations = []
+        for key, value in (
+            ("user", "10001:10001"),
+            ("mem_limit", 0),
+            ("command", ["init", "/data", "admin@example.test"]),
+            ("environment", {"WORKSTREAM_DATABASE_URL": "forbidden"}),
+        ):
+            changed = copy.deepcopy(rendered)
+            changed["services"]["demo-identity"][key] = value
+            mutations.append(changed)
+        for role in ("worker", "beat"):
+            changed = copy.deepcopy(rendered)
+            changed["services"][role]["networks"] = {"demo_identity": None}
+            mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["ports"][0]["host_ip"] = "0.0.0.0"
+        mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["volumes"][0]["source"] = str(self.root)
+        mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["healthcheck"]["test"].append("--insecure")
+        mutations.append(changed)
+        for changed in mutations:
+            with self.subTest(changed=changed["services"]["demo-identity"]):
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_compose(changed, values)
+
+    def test_demo_identity_configuration_rejects_partial_unpinned_and_public_settings(
+        self,
+    ):
+        values = self.demo_identity_values()
+        for key, value in (
+            ("DEMO_IDENTITY_IMAGE", "issuer:latest"),
+            ("DEMO_IDENTITY_HOSTNAME", "wrong.example.test"),
+            ("WORKSTREAM_TOKEN_AUDIENCE", "foreign"),
+            ("WORKSTREAM_TOKEN_JWKS_URL", "https://foreign.example.test/jwks.json"),
+            ("DEMO_IDENTITY_PUBLISHED_BIND", "0.0.0.0"),
+            ("DEMO_IDENTITY_ISSUER", "https://identity.example.test/path"),
+            ("DEMO_IDENTITY_TLS_KEY_FILE", "relative/key.pem"),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_environment({**values, key: value})
+        del values["DEMO_IDENTITY_DATA_DIR"]
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_environment(values)
+
+    def test_demo_identity_host_custody_is_separate_and_rejects_missing_state(self):
+        values = self.demo_identity_values()
+        with (
+            patch.object(preflight, "_private_metadata") as metadata,
+            patch.object(
+                Path,
+                "stat",
+                return_value=type("Metadata", (), {"st_ino": 1, "st_dev": 1})(),
+            ),
+        ):
+            with self.assertRaisesRegex(preflight.PreflightError, "distinct"):
+                preflight.validate_demo_identity_host_inputs(values)
+            self.assertEqual(
+                metadata.call_args_list[0].kwargs,
+                {"kind": "directory", "uid": 12001, "gid": 12001, "mode": 0o700},
+            )
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_demo_identity_host_inputs(values)
+        values["DEMO_IDENTITY_DATA_DIR"] = str(
+            preflight.deployment_paths(values).scratch / "issuer"
+        )
+        with self.assertRaisesRegex(preflight.PreflightError, "shared runtime roots"):
+            preflight.validate_environment(values)
+
+    def test_demo_identity_bootstrap_checks_only_issuer_inputs_and_waits(self):
+        values = self.demo_identity_values()
+        with (
+            patch.object(
+                compose,
+                "parse_args",
+                return_value=type(
+                    "Args",
+                    (),
+                    {
+                        "env_file": self.environment_path,
+                        "compose_arguments": ["start", "demo-identity"],
+                    },
+                )(),
+            ),
+            patch.object(compose, "parse_environment", return_value=values),
+            patch.object(compose, "render_compose", return_value={}),
+            patch.object(compose, "validate_compose"),
+            patch.object(
+                compose, "validate_demo_identity_host_inputs"
+            ) as issuer_inputs,
+            patch.object(compose, "validate_private_host_inputs") as backend_inputs,
+            patch.object(compose, "load_checker_config") as checker_inputs,
+            patch.object(compose, "run_compose", return_value=0),
+        ):
+            self.assertEqual(compose.main(), 0)
+            issuer_inputs.assert_called_once_with(values)
+            backend_inputs.assert_not_called()
+            checker_inputs.assert_not_called()
+        with patch.object(
+            preflight.subprocess,
+            "run",
+            return_value=type("Result", (), {"returncode": 0})(),
+        ) as run:
+            self.assertEqual(
+                preflight.run_compose(
+                    self.environment_path, values, ["start", "demo-identity"]
+                ),
+                0,
+            )
+            command = run.call_args.args[0]
+            self.assertEqual(
+                command[-7:],
+                [
+                    "up",
+                    "--detach",
+                    "--no-deps",
+                    "--wait",
+                    "--wait-timeout",
+                    "60",
+                    "demo-identity",
+                ],
+            )
+            self.assertEqual(run.call_args.kwargs["timeout"], 120)
+
     def test_optional_github_app_render_is_worker_only(self) -> None:
         values = dict(self.environment)
         values.update({

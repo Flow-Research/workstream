@@ -18,6 +18,7 @@ import sys
 import time
 from typing import Any
 from uuid import UUID, uuid4
+from urllib.parse import urlsplit
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
@@ -30,6 +31,20 @@ TRIAL_KEYS = (
 )
 MODEL_OPENAI_COMPOSE_PATH = Path(__file__).with_name("compose.model-openai.yml")
 MODEL_OPENROUTER_COMPOSE_PATH = Path(__file__).with_name("compose.model-openrouter.yml")
+DEMO_IDENTITY_COMPOSE_PATH = Path(__file__).with_name("compose.demo-identity.yml")
+DEMO_IDENTITY_KEYS = (
+    "DEMO_IDENTITY_IMAGE",
+    "DEMO_IDENTITY_ISSUER",
+    "DEMO_IDENTITY_AUDIENCE",
+    "DEMO_IDENTITY_HOSTNAME",
+    "DEMO_IDENTITY_DATA_DIR",
+    "DEMO_IDENTITY_TLS_CERT_FILE",
+    "DEMO_IDENTITY_TLS_KEY_FILE",
+)
+DEMO_IDENTITY_OPTIONAL_KEYS = (
+    "DEMO_IDENTITY_PUBLISHED_BIND",
+    "DEMO_IDENTITY_PUBLISHED_PORT",
+)
 GITHUB_COMPOSE_PATH = Path(__file__).with_name("compose.github.yml")
 GITHUB_APP_KEYS = (
     "WORKSTREAM_GITHUB_APP_ID",
@@ -315,6 +330,8 @@ REQUIRED_RELEASE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
+    *DEMO_IDENTITY_KEYS,
+    *DEMO_IDENTITY_OPTIONAL_KEYS,
     *GITHUB_APP_KEYS,
     "WORKSTREAM_DEPLOYMENT_ROOT",
     "WORKSTREAM_CHECKER_SERVICE_BINARY",
@@ -386,6 +403,121 @@ def _positive_decimal(values: dict[str, str], key: str) -> Decimal:
     return value
 
 
+def validate_demo_identity_environment(values: dict[str, str]) -> None:
+    selected = any(
+        key in values for key in (*DEMO_IDENTITY_KEYS, *DEMO_IDENTITY_OPTIONAL_KEYS)
+    )
+    if not selected:
+        return
+    for key in DEMO_IDENTITY_KEYS:
+        _required(values, key)
+    if not IMAGE_REFERENCE.fullmatch(values["DEMO_IDENTITY_IMAGE"]):
+        raise PreflightError("demo identity image must be digest-qualified")
+    hostname = values["DEMO_IDENTITY_HOSTNAME"]
+    if (
+        len(hostname) > 253
+        or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+",
+            hostname,
+        )
+        or any(len(label) > 63 for label in hostname.split("."))
+    ):
+        raise PreflightError("demo identity hostname must be a canonical DNS name")
+    try:
+        origin = urlsplit(values["DEMO_IDENTITY_ISSUER"])
+        port = origin.port
+    except ValueError as exc:
+        raise PreflightError("demo identity issuer origin is invalid") from exc
+    expected = f"https://{hostname}" + (f":{port}" if port is not None else "")
+    if values["DEMO_IDENTITY_ISSUER"] != expected or (
+        port is not None and not 1 <= port <= 65535
+    ):
+        raise PreflightError("demo identity issuer must use its canonical HTTPS origin")
+    if (
+        values.get("WORKSTREAM_TOKEN_ISSUER") != values["DEMO_IDENTITY_ISSUER"]
+        or values.get("WORKSTREAM_TOKEN_AUDIENCE") != values["DEMO_IDENTITY_AUDIENCE"]
+        or values.get("WORKSTREAM_TOKEN_JWKS_URL")
+        != values["DEMO_IDENTITY_ISSUER"] + "/jwks.json"
+        or values.get("WORKSTREAM_TOKEN_ALGORITHMS") != "RS256"
+    ):
+        raise PreflightError("demo identity and Workstream verifier pins must match")
+    if values.get("DEMO_IDENTITY_PUBLISHED_BIND", "127.0.0.1") != "127.0.0.1":
+        raise PreflightError("demo identity publication must remain loopback")
+    if values.get("DEMO_IDENTITY_PUBLISHED_PORT", "8443") != "8443":
+        raise PreflightError("demo identity publication must use port 8443")
+    paths = [values[key] for key in DEMO_IDENTITY_KEYS[-3:]]
+    for raw in paths:
+        path = Path(raw)
+        if (
+            not path.is_absolute()
+            or path != path.resolve(strict=False)
+            or any(c in raw for c in (",", "\n", "\r", "\0"))
+        ):
+            raise PreflightError("demo identity paths must be canonical absolute paths")
+    if len(set(paths)) != 3 or any(
+        Path(raw).is_relative_to(Path(paths[0])) for raw in paths[1:]
+    ):
+        raise PreflightError("demo identity state and TLS files must be separate")
+    hosted = deployment_paths(values)
+    shared_roots = (
+        hosted.scratch,
+        hosted.socket_root,
+        hosted.guide_root,
+        hosted.model_root,
+        hosted.model_relays,
+    )
+    if any(
+        Path(raw).is_relative_to(root) or root.is_relative_to(Path(raw))
+        for raw in paths
+        for root in shared_roots
+    ):
+        raise PreflightError(
+            "demo identity custody must remain outside shared runtime roots"
+        )
+
+
+def validate_demo_identity_host_inputs(values: dict[str, str]) -> None:
+    if not values.get("DEMO_IDENTITY_IMAGE"):
+        return
+    data = Path(values["DEMO_IDENTITY_DATA_DIR"])
+    _private_metadata(data, kind="directory", uid=12001, gid=12001, mode=0o700)
+    for name in ("accounts.db", "signer.pem"):
+        _private_metadata(data / name, kind="file", uid=12001, gid=12001, mode=0o600)
+    for key in ("DEMO_IDENTITY_TLS_CERT_FILE", "DEMO_IDENTITY_TLS_KEY_FILE"):
+        _private_metadata(
+            Path(values[key]), kind="file", uid=12001, gid=12001, mode=0o400
+        )
+    protected = [
+        data / "signer.pem",
+        data / "accounts.db",
+        *(Path(values[key]) for key in DEMO_IDENTITY_KEYS[-2:]),
+    ]
+    if any(
+        os.path.samestat(a.stat(), b.stat())
+        for i, a in enumerate(protected)
+        for b in protected[i + 1 :]
+    ):
+        raise PreflightError("demo identity private files must be distinct")
+    backend_files = [
+        Path(values[key])
+        for key in (*BASE_SECRET_FILE_KEYS, *ROLES_ANYWHERE_HOST_FILE_KEYS)
+        if values.get(key)
+    ]
+    try:
+        if any(
+            b.exists() and os.path.samestat(a.stat(), b.stat())
+            for a in protected
+            for b in backend_files
+        ):
+            raise PreflightError(
+                "demo identity must not reuse Workstream private files"
+            )
+    except OSError as exc:
+        raise PreflightError(
+            "demo identity private file identity is unavailable"
+        ) from exc
+
+
 def validate_environment(values: dict[str, str]) -> None:
     """Validate only invariants introduced by the hosted release profile."""
     unknown = sorted(set(values) - RELEASE_KEYS)
@@ -393,6 +525,7 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
+    validate_demo_identity_environment(values)
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
     )
@@ -405,8 +538,12 @@ def validate_environment(values: dict[str, str]) -> None:
         if github_installation_id:
             _positive_id(values, GITHUB_APP_KEYS[2])
         path = Path(github_key_file)
-        if not path.is_absolute() or path != path.resolve(strict=False) or any(
-            character in github_key_file for character in ("\n", "\r", "\0", ",")
+        if (
+            not path.is_absolute()
+            or path != path.resolve(strict=False)
+            or any(
+                character in github_key_file for character in ("\n", "\r", "\0", ",")
+            )
         ):
             raise PreflightError("GitHub App key file must use a canonical absolute path")
     root = deployment_paths(values).root
@@ -851,6 +988,7 @@ def validate_private_host_inputs(
     values: dict[str, str], *, require_node: bool = True
 ) -> None:
     """Inspect metadata only; do not read application secret contents."""
+    validate_demo_identity_host_inputs(values)
     paths = deployment_paths(values)
     uid = _positive_id(values, "WORKSTREAM_RUNTIME_UID")
     gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
@@ -975,6 +1113,8 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
+    if values.get("DEMO_IDENTITY_IMAGE"):
+        arguments.extend(("--file", str(DEMO_IDENTITY_COMPOSE_PATH)))
     if values.get(GITHUB_APP_KEYS[0]):
         arguments.extend(("--file", str(GITHUB_COMPOSE_PATH)))
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
@@ -1020,7 +1160,20 @@ def run_compose(
     if compose_arguments and compose_arguments[0] == "provision-project-points":
         return _run_points_operator(environment_path, values, compose_arguments)
     command_timeout = None
-    if compose_arguments == ["migrate"]:
+    if compose_arguments == ["start", "demo-identity"]:
+        if not values.get("DEMO_IDENTITY_IMAGE"):
+            raise PreflightError("demo identity bootstrap requires the issuer overlay")
+        compose_arguments = [
+            "up",
+            "--detach",
+            "--no-deps",
+            "--wait",
+            "--wait-timeout",
+            "60",
+            "demo-identity",
+        ]
+        command_timeout = 120
+    elif compose_arguments == ["migrate"]:
         compose_arguments = [
             "run",
             "--rm",
@@ -1148,8 +1301,13 @@ def _run_points_operator(
         except (OSError, subprocess.TimeoutExpired):
             removed = False
         if not removed:
-            print(f"points operator cleanup uncertain; owned container: {name}", file=sys.stderr)
-        raise PreflightError("points operator did not complete; no automatic retry") from exc
+            print(
+                f"points operator cleanup uncertain; owned container: {name}",
+                file=sys.stderr,
+            )
+        raise PreflightError(
+            "points operator did not complete; no automatic retry"
+        ) from exc
 
 
 def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
@@ -1161,6 +1319,8 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["stop", "--timeout", "7320", "model-proxy"])
     phases.append(["stop", "guide-document-parser"])
+    if values.get("DEMO_IDENTITY_IMAGE"):
+        phases.append(["stop", "demo-identity"])
     for arguments in phases:
         try:
             completed = subprocess.run(
@@ -1296,6 +1456,109 @@ def _validate_exact_bind_mounts(
             )
 
 
+def demo_identity_healthcheck(values: dict[str, str]) -> list[str]:
+    host = values["DEMO_IDENTITY_HOSTNAME"]
+    return [
+        "CMD",
+        "curl",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "5",
+        "--cacert",
+        "/run/tls/cert.pem",
+        "--resolve",
+        f"{host}:8443:127.0.0.1",
+        f"https://{host}:8443/jwks.json",
+    ]
+
+
+def validate_demo_identity_compose(
+    rendered: dict[str, Any], values: dict[str, str]
+) -> None:
+    services = rendered["services"]
+    enabled = bool(values.get("DEMO_IDENTITY_IMAGE"))
+    for name, service in services.items():
+        networks = service.get("networks") or {}
+        if "demo_identity" in networks and (
+            not enabled or name not in {"api", "demo-identity"}
+        ):
+            raise PreflightError("demo identity network escaped its API boundary")
+    if not enabled:
+        return
+    network = rendered.get("networks", {}).get("demo_identity", {})
+    if (
+        network.get("internal") is not True
+        or network.get("external")
+        or network.get("driver_opts")
+    ):
+        raise PreflightError("demo identity network must remain private")
+    issuer = services["demo-identity"]
+    expected_environment = {
+        "DEMO_IDENTITY_ISSUER": values["DEMO_IDENTITY_ISSUER"],
+        "DEMO_IDENTITY_AUDIENCE": values["DEMO_IDENTITY_AUDIENCE"],
+        "DEMO_IDENTITY_TLS_CERT": "/run/tls/cert.pem",
+        "DEMO_IDENTITY_TLS_KEY": "/run/tls/key.pem",
+        "DEMO_IDENTITY_BIND": "0.0.0.0:8443",
+    }
+    if (
+        issuer.get("image") != values["DEMO_IDENTITY_IMAGE"]
+        or issuer.get("user") != "12001:12001"
+        or issuer.get("environment") != expected_environment
+        or issuer.get("command") != ["serve", "/data"]
+        or issuer.get("entrypoint") is not None
+        or issuer.get("secrets")
+        or issuer.get("network_mode")
+        or issuer.get("privileged")
+        or issuer.get("devices")
+        or issuer.get("tmpfs")
+        or issuer.get("restart") != "on-failure:5"
+        or str(issuer.get("mem_limit")) != "268435456"
+        or issuer.get("cpus") != 1
+        or issuer.get("pids_limit") != 64
+        or issuer.get("init") is not True
+        or issuer.get("pull_policy") != "always"
+    ):
+        raise PreflightError("demo identity process differs from its bounded profile")
+    if issuer.get("healthcheck") != {
+        "test": demo_identity_healthcheck(values),
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 3,
+        "start_period": "10s",
+    }:
+        raise PreflightError(
+            "demo identity HTTPS readiness differs from its bounded profile"
+        )
+    ports = issuer.get("ports", [])
+    if (
+        len(ports) != 1
+        or ports[0].get("host_ip") != "127.0.0.1"
+        or str(ports[0].get("published")) != "8443"
+        or ports[0].get("target") != 8443
+        or ports[0].get("protocol") != "tcp"
+    ):
+        raise PreflightError("demo identity port must remain loopback")
+    if (
+        set(issuer.get("networks", {})) != {"demo_identity"}
+        or issuer["networks"]["demo_identity"] is not None
+        or set(services["api"].get("networks", {})) != {"default", "demo_identity"}
+    ):
+        raise PreflightError(
+            "demo identity network attachments differ from its profile"
+        )
+    _validate_exact_bind_mounts(
+        "demo-identity",
+        issuer,
+        {
+            "/data": (values["DEMO_IDENTITY_DATA_DIR"], False),
+            "/run/tls/cert.pem": (values["DEMO_IDENTITY_TLS_CERT_FILE"], True),
+            "/run/tls/key.pem": (values["DEMO_IDENTITY_TLS_KEY_FILE"], True),
+        },
+    )
+
+
 def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     """Check the rendered release process and privilege topology."""
     paths = deployment_paths(values)
@@ -1310,10 +1573,13 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
         expected_services.add("model-proxy")
+    if values.get("DEMO_IDENTITY_IMAGE"):
+        expected_services.add("demo-identity")
     if not isinstance(services, dict) or set(services) != expected_services:
         raise PreflightError(
             "release Compose services differ from the bounded topology"
         )
+    validate_demo_identity_compose(rendered, values)
     for name, service in services.items():
         if not isinstance(service, dict) or service.get("build") is not None:
             raise PreflightError(f"release service cannot build at runtime: {name}")

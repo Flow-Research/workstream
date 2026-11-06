@@ -755,9 +755,10 @@ cannot be reused as post-submission review-gate evidence. See the
   password, or primary authentication session.
 - An [external Rust demo issuer](../experiments/demo_identity/README.md) can
   provision participant accounts through its own administrator and issue
-  compatible short-lived tokens. Its hosted Compose overlay is opt-in and not
-  deployed or selected by Workstream; actual Flow Identity integration remains
-  separate.
+  compatible short-lived tokens. Its opt-in hosted overlay is validated by the canonical wrapper, with
+  bounded HTTPS readiness and persistent private state. Public DNS/TLS and
+  deployed Workstream issuer-cutover proof remain required; compatibility tests
+  do not establish full Flow Identity platform integration.
 - External subject identity resolves through ActorIdentityLink into a stable
   internal ActorProfile.
 - Human roles and fixed-service authority remain separate and fail closed.

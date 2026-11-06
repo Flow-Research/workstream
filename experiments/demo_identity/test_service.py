@@ -30,18 +30,25 @@ def service(tmp_path_factory):
         [str(BINARY), "init", str(data), "admin@example.test"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
-    bootstrap.stdin.write("bootstrap-password-123\n")
-    bootstrap.stdin.flush()  # Keep stdin open: a terminal operator need not send EOF.
-    for _ in range(300):
-        if data.exists():
-            break
-        if bootstrap.poll() is not None:
-            raise AssertionError("issuer initialization exited before creating state")
-        time.sleep(0.1)
-    else:
-        raise AssertionError("issuer initialization waited for stdin EOF")
-    assert bootstrap.wait(timeout=240) == 0
-    bootstrap.stdin.close()
+    try:
+        bootstrap.stdin.write("bootstrap-password-123\n")
+        bootstrap.stdin.flush()  # Keep stdin open: a terminal operator need not send EOF.
+        for _ in range(300):
+            if data.exists():
+                break
+            if bootstrap.poll() is not None:
+                raise AssertionError("issuer initialization exited before creating state")
+            time.sleep(0.1)
+        else:
+            raise AssertionError("issuer initialization waited for stdin EOF")
+        assert bootstrap.wait(timeout=240) == 0
+    finally:
+        if bootstrap.poll() is None:
+            bootstrap.kill()
+            bootstrap.wait(timeout=5)
+        bootstrap.stdin.close()
+        bootstrap.stdout.close()
+        bootstrap.stderr.close()
     cert = root / "cert.pem"
     key = root / "key.pem"
     subprocess.run(
@@ -58,8 +65,22 @@ def service(tmp_path_factory):
     env = {**os.environ, "DEMO_IDENTITY_ISSUER": issuer, "DEMO_IDENTITY_AUDIENCE": "workstream-demo",
            "DEMO_IDENTITY_TLS_CERT": str(cert), "DEMO_IDENTITY_TLS_KEY": str(key),
            "DEMO_IDENTITY_BIND": f"127.0.0.1:{port}"}
-    process = subprocess.Popen([str(BINARY), "serve", str(data)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    try:
+    process = None
+
+    def stop():
+        if process is not None:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+            process.stderr.close()
+
+    def start():
+        nonlocal process
+        process = subprocess.Popen([str(BINARY), "serve", str(data)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         with httpx.Client(verify=str(cert), trust_env=False) as client:
             for _ in range(100):
                 if process.poll() is not None:
@@ -72,14 +93,20 @@ def service(tmp_path_factory):
                     time.sleep(0.1)
             else:
                 raise AssertionError("issuer did not start")
-        yield issuer, cert, data
+
+    def restart():
+        stop()
+        start()
+
+    try:
+        start()
+        yield issuer, cert, data, restart
     finally:
-        process.terminate()
-        process.wait(timeout=5)
+        stop()
 
 
 def test_login_admin_provision_and_real_verifier(service, monkeypatch):
-    issuer, cert, data = service
+    issuer, cert, data, _restart = service
     bundle = cert.parent / "trust.pem"
     bundle.write_bytes(Path(certifi.where()).read_bytes() + cert.read_bytes())
     monkeypatch.setattr(certifi, "where", lambda: str(bundle))
@@ -94,8 +121,13 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
         assert client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {admin['access_token']}"}, json={"email": "user@example.test", "password": "user-password-123"}).status_code == 401
         created = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {admin['admin_token']}"}, json={"email": "user@example.test", "password": "user-password-123"})
         assert created.status_code == 201
+        duplicate = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {admin['admin_token']}"}, json={"email": "USER@example.test", "password": "different-password-123"})
+        assert duplicate.status_code == 409
         user = client.post(f"{issuer}/login", json={"email": "user@example.test", "password": "user-password-123"}).json()
         assert "admin_token" not in user
+        denied = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {user['access_token']}"}, json={"email": "blocked@example.test", "password": "blocked-password-123"})
+        assert denied.status_code == 401
+        assert client.post(f"{issuer}/login", json={"email": "blocked@example.test", "password": "blocked-password-123"}).status_code == 401
         jwks = client.get(f"{issuer}/jwks.json").json()
         assert set(jwks["keys"][0]) == {"kty", "kid", "use", "key_ops", "alg", "n", "e"}
     verifier = FlowAuthVerifier(Settings(environment="test", auth_provider="flow", token_issuer=issuer,
@@ -126,3 +158,54 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
             altered = jwt.encode({**admin_claims, **change}, signer, algorithm="RS256", headers={"kid": kid})
             denial = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {altered}"}, json={"email": "blocked@example.test", "password": "blocked-password-123"})
             assert denial.status_code == 401
+
+
+def test_password_change_and_identity_survive_process_restart(service, monkeypatch):
+    issuer, cert, _data, restart = service
+    bundle = cert.parent / "restart-trust.pem"
+    bundle.write_bytes(Path(certifi.where()).read_bytes() + cert.read_bytes())
+    monkeypatch.setattr(certifi, "where", lambda: str(bundle))
+    settings = Settings(environment="test", auth_provider="flow", token_issuer=issuer,
+        token_audience="workstream-demo", token_jwks_url=f"{issuer}/jwks.json", token_algorithms="RS256",
+        token_clock_skew_seconds=0, token_introspection_mode="disabled",
+        token_introspection_disabled_reason="demo issuer tokens expire without revocation")
+    account = {"email": "password-user@example.test", "password": "original-password-123"}
+    replacement = {**account, "password": "replacement-password-123"}
+    with httpx.Client(verify=str(cert), trust_env=False) as client:
+        admin = client.post(f"{issuer}/login", json={"email": "admin@example.test", "password": "bootstrap-password-123"})
+        assert admin.status_code == 200
+        created = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {admin.json()['admin_token']}"}, json=account)
+        assert created.status_code == 201
+        login = client.post(f"{issuer}/login", json=account)
+        assert login.status_code == 200
+        original_token = login.json()["access_token"]
+        authorization = {"Authorization": f"Bearer {original_token}"}
+        change = {"current_password": account["password"], "new_password": replacement["password"]}
+        assert client.post(f"{issuer}/me/password", json=change).status_code == 401
+        wrong = client.post(f"{issuer}/me/password", headers=authorization, json={**change, "current_password": "incorrect-password-123"})
+        assert wrong.status_code == 401
+        assert client.post(f"{issuer}/login", json=account).status_code == 200
+        assert client.post(f"{issuer}/login", json=replacement).status_code == 401
+        assert client.post(f"{issuer}/me/password", headers=authorization, json=change).status_code == 204
+        assert client.post(f"{issuer}/login", json=account).status_code == 401
+        updated = client.post(f"{issuer}/login", json=replacement)
+        assert updated.status_code == 200
+        updated_token = updated.json()["access_token"]
+        jwks = client.get(f"{issuer}/jwks.json").json()
+    before = FlowAuthVerifier(settings)
+    for token in (original_token, updated_token):
+        assert asyncio.run(before.verify(token)).token.subject == created.json()["subject"]
+
+    restart()
+
+    with httpx.Client(verify=str(cert), trust_env=False) as client:
+        assert client.get(f"{issuer}/jwks.json").json() == jwks
+        assert client.post(f"{issuer}/login", json=account).status_code == 401
+        reopened = client.post(f"{issuer}/login", json=replacement)
+        assert reopened.status_code == 200
+        assert "admin_token" not in reopened.json()
+    # A fresh verifier fetches the restarted issuer's JWKS over HTTPS. Both old
+    # and new tokens must verify, proving persistence of the actual signing key.
+    after = FlowAuthVerifier(settings)
+    for token in (original_token, updated_token, reopened.json()["access_token"]):
+        assert asyncio.run(after.verify(token)).token.subject == created.json()["subject"]

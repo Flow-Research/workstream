@@ -223,6 +223,27 @@ not secret values. Select real Flow issuer, audience, JWKS and algorithm values.
 The release profile uses `WORKSTREAM_AUTH_PROVIDER=flow`; local Flow-HMAC and
 development authentication are absent.
 
+For invite-only demo accounts, the optional [external Rust issuer](../../experiments/demo_identity/README.md)
+provides administrator provisioning, login and password change. It stays outside
+Workstream core. Set all `DEMO_IDENTITY_*` essentials in the release environment
+and pin Workstream's issuer, audience, algorithms and JWKS URL to the same
+service. The wrapper validates the issuer's exact image, private mounts,
+UID 12001, network and resource bounds. Initialize its persistent state once;
+then start only the issuer and wait for verified HTTPS readiness:
+
+```sh
+python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env start demo-identity
+```
+
+This bootstrap does not start or reconfigure the backend.
+
+The issuer port stays on loopback. Public participants require the chosen DNS
+name, a trusted TLS certificate and a rate-limited HTTPS ingress; see the
+[NGINX example](demo-identity.nginx.conf) and issuer instructions. Confirm real
+login and token validation before switching the backend. An issuer administrator
+receives no Workstream administrative grant. Preserve retained actor links and
+records during cutover; never substitute identities by matching email.
+
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
 API only the database, broker, rate-limit and pagination secrets; the worker

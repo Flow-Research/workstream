@@ -7,6 +7,16 @@ services:
   demo-identity:
     image: ${DEMO_IDENTITY_IMAGE:?set a digest-qualified demo issuer image}
     pull_policy: always
+    restart: on-failure:5
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 64
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, --max-time, "5", --cacert, /run/tls/cert.pem, --resolve, "${DEMO_IDENTITY_HOSTNAME}:8443:127.0.0.1", "https://${DEMO_IDENTITY_HOSTNAME}:8443/jwks.json"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
+      start_period: 10s
     init: true
     user: "12001:12001"
     read_only: true
@@ -34,9 +44,7 @@ services:
     ports:
       - "${DEMO_IDENTITY_PUBLISHED_BIND:-127.0.0.1}:${DEMO_IDENTITY_PUBLISHED_PORT:-8443}:8443"
     networks:
-      demo_identity:
-        aliases:
-          - ${DEMO_IDENTITY_HOSTNAME:?set the issuer DNS hostname}
+      - demo_identity
 
 networks:
   demo_identity:
