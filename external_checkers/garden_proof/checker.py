@@ -26,6 +26,11 @@ _TRAILER = re.compile(r"[A-Za-z0-9-]+: [^\r\n]+")
 REPOSITORY = "Flow-Research/garden"
 ORIGIN = "https://github.com"
 PRE_CONFIGURATION = {"repository": REPOSITORY, "forge_origin": ORIGIN}
+PROOF_SCHEMA = "garden.work.proof.v1"
+PROOF_KEYS = frozenset(
+    {"schema", "pr_url", "commit_sha", "ci_run_url", "ci_conclusion"}
+)
+_COMMIT_SHA = re.compile(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}")
 
 
 def finding(code: str, message: str) -> dict:
@@ -84,11 +89,30 @@ def task_findings(input_value: object) -> list[dict]:
     return []
 
 
+def claim_findings(proof: dict) -> list[dict]:
+    """Garden accepts a claim about the current PR head, never a merge claim."""
+    findings = []
+    if set(proof) != PROOF_KEYS:
+        findings.append(
+            finding("fields", "proof.json must contain exactly the Garden proof fields.")
+        )
+    if proof.get("schema") != PROOF_SCHEMA:
+        findings.append(finding("schema", f"schema must be {PROOF_SCHEMA!r}."))
+    commit_sha = proof.get("commit_sha")
+    if not isinstance(commit_sha, str) or _COMMIT_SHA.fullmatch(commit_sha) is None:
+        findings.append(
+            finding("commit_sha", "commit_sha must be 40 or 64 hexadecimal characters.")
+        )
+    if proof.get("ci_conclusion") != "success":
+        findings.append(finding("ci_conclusion", "ci_conclusion must be 'success'."))
+    return findings
+
+
 def evaluate_intake(raw: bytes | None, configuration: object) -> list[dict]:
     proof, findings = shared.parse_proof(raw)
     if proof is None:
         return findings
-    findings += shared.claim_findings(proof)
+    findings += claim_findings(proof)
     if configuration != PRE_CONFIGURATION:
         findings.append(
             finding(
@@ -111,11 +135,16 @@ def evaluate_intake(raw: bytes | None, configuration: object) -> list[dict]:
 def evaluate_post(
     raw: bytes | None, configuration: object, input_value: object
 ) -> list[dict]:
-    findings = shared.evaluate_proof(
-        raw,
-        configuration=configuration,
-        input_value=input_value,
+    proof, findings = shared.parse_proof(raw)
+    if proof is None:
+        return findings
+    findings += claim_findings(proof)
+    findings += shared.compare_forge_facts(
+        proof,
+        configuration,
+        input_value,
         minimum_independent_approvals=0,
+        commit_reference="head",
     )
     if (
         not isinstance(configuration, dict)

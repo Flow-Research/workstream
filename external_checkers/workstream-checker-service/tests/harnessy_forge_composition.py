@@ -130,8 +130,11 @@ def invocation(
         old, new = "acme/widgets", "Flow-Research/garden"
         proof = {key: value.replace(old, new) if isinstance(value, str) else value
                  for key, value in proof.items()}
+        proof.update(schema="garden.work.proof.v1", commit_sha=HEAD)
+        proof.pop("merged")
         facts.update(repository=new, change_url=proof["pr_url"],
-                     head_commit_message="Improve docs\n\nWorkstream-Task: " + TASK_ID + "\n")
+                     head_commit_message="Improve docs\n\nWorkstream-Task: " + TASK_ID + "\n",
+                     state="open", merged=False, landed_commit_sha=None)
         facts["required_checks"][0]["run_url"] = proof["ci_run_url"]
         facts["reviews"] = []
         configuration["repository"] = new
@@ -160,7 +163,7 @@ def invocation(
         assert spec is not None and spec.loader is not None
         publisher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(publisher)
-        spec = publisher.registry_spec(image_digest, "v2", "post_submit")
+        spec = publisher.registry_spec(image_digest, "v3", "post_submit")
     else:
         spec = PUBLISH.registry_spec(image_digest, "v4")
     request["registry"] = {**spec, **metadata, "entry_digest": digest(spec)}

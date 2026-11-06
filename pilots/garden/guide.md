@@ -10,7 +10,7 @@ they use an agent to help.
 
 Garden's code lives in `Flow-Research/garden`. Workstream owns the assignment,
 locked project rules, immutable submission and contribution outcome. GitHub hosts
-the code and its merge/CI evidence, plus review evidence when the locked checker
+the code and its current-head CI evidence, plus review evidence when the locked checker
 configuration requires it. A GitHub issue is not required: the Project Manager can create the task directly in Workstream.
 
 ## Engineering rules
@@ -60,21 +60,20 @@ and verified. It does not establish that a GitHub username is the
 same identity as the Workstream contributor. The submitting contributor remains
 accountable for the submission; do not submit another person's work as your own.
 
-## Check and merge the Garden change
+## Check the Garden change
 
 Open a focused PR targeting `dev` in `Flow-Research/garden`. Explain what changed,
 why it fulfills the task, and the checks performed. Required CI checks must pass
-on the final head with their trusted producer. A real authorized merge into
-`dev` is required before a successful POST result; an open PR cannot pass by
-claiming `merged=true`.
+on the final head with their trusted producer. The PR may remain open: Garden
+POST verifies the current PR head and does not require a GitHub merge.
 
 For this test drill, the PM explicitly selects
 `required_independent_approvals=0` in the Garden POST attachment. No independent
 GitHub human review is required by that checker configuration. Omitting the
 setting still requires one independent current-head human approval; positive
 values keep the corresponding review requirement. The shared Harnessy checker
-continues to require at least one. This setting grants no permission to merge
-or override repository protections, and creates no approval or reviewer facts.
+continues to require at least one and retains its landed-work requirement.
+This setting creates no approval or reviewer facts.
 
 Workstream's separate ReviewPolicy remains `human_review_required=false` for the
 approved drill. Passing required POST checks invokes the existing authorized
@@ -91,28 +90,26 @@ locked guide and its checker explicitly define it.
 
 ```json
 {
-  "schema": "harnessy.work.proof.v1",
+  "schema": "garden.work.proof.v1",
   "pr_url": "https://github.com/Flow-Research/garden/pull/123",
-  "commit_sha": "<full landed commit SHA>",
+  "commit_sha": "<full current PR head SHA>",
   "ci_run_url": "https://github.com/Flow-Research/garden/actions/runs/456",
-  "ci_conclusion": "success",
-  "merged": true
+  "ci_conclusion": "success"
 }
 ```
 
 Those example numbers and the SHA placeholder are not usable evidence. Replace
-them with the actual merged PR, landed commit and successful required CI run.
-`commit_sha` identifies the landed merge/squash/rebase result; the PR
-head used for checks and the task trailer can be a different SHA. The schema
-identifier is the existing external proof format, not an internal agent version.
+them with the actual PR, its current head commit and successful required CI run.
+`commit_sha` must identify the same PR head used for checks and the task
+trailer. The schema identifier is Garden's external proof format.
 
 The file must be a JSON object no larger than 64 KiB. For this first drill the
 archive contains exactly that one regular file, at most 64 KiB expanded in total
 and at most 128 KiB for the entire ZIP including its metadata. The fields above are claims,
 not authority. Workstream supplies verified artifact bytes and scoped GitHub
 facts to the external checker. The checker compares repository, base branch, PR,
-landed commit, CI run/checks, the configured review requirement and task
-association. A client writing `"merged": true` or `"ci_conclusion": "success"` cannot establish either.
+current head, CI run/checks, the configured review requirement and task
+association. A client writing `"ci_conclusion": "success"` cannot establish a passing check.
 
 ## What PRE and POST mean
 
@@ -131,7 +128,7 @@ policy to the result; the checker itself cannot accept a task or pay anyone.
 
 ## Source baseline and changes
 
-This is guide `garden-engineering-drill-2`, reconciled against Garden `dev`
+This is guide `garden-engineering-drill-3`, reconciled against Garden `dev`
 commit `458833c297382e679a9de3c4539b3c51239aac0d`: README, CONTRIBUTING,
 `docs/tutorials/get-started.md`, `docs/guides/develop/fix-setup-problems.md`,
 `docs/guides/maintain/maintain-garden.md`, `.agents/skills/contribute/SKILL.md`,
@@ -139,8 +136,8 @@ commit `458833c297382e679a9de3c4539b3c51239aac0d`: README, CONTRIBUTING,
 `main`; engineering contributions target `dev`. The POST binding therefore uses
 `base_branch=dev`. A later promotion to `main` is separate release work.
 
-This version introduces the explicit zero-approval test choice and requires a
-new guide, separate PRE/POST approvals with the new Garden capability version,
+This version uses current-head proof and the explicit zero-approval test choice;
+it requires a new guide, separate PRE/POST approvals with Garden capability `v3`,
 and a newly claimed task. Earlier guide/task/image records retain their exact
 rules and evidence; do not reinterpret an old assignment under this version.
 The PM must reconcile later source changes before activating another version.

@@ -58,7 +58,7 @@ def main() -> int:
     parser.add_argument("--sandbox-uid", type=int, required=True)
     parser.add_argument("--sandbox-gid", type=int, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--capability-version", default="v2")
+    parser.add_argument("--capability-version", default="v3")
     args = parser.parse_args()
     image = shared.publish(
         args.registry,

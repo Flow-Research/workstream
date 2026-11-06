@@ -3,7 +3,7 @@
 This directory defines a small real project drill, not evidence that it has
 already passed. The [project guide](guide.md) describes the contributor contract;
 the task definitions will be created as native Workstream tasks. Garden's code
-and merge/CI evidence stay in GitHub. This version-2 test explicitly requires
+and current-head CI evidence stay in GitHub. This version-3 test explicitly requires
 zero independent GitHub approvals; omitting the Garden POST setting still
 requires one. This is not a general no-review default. No issue-sync integration is required.
 
@@ -14,18 +14,17 @@ The intended sequence is:
    provider-free rules input, then reviews requirements and approves separate
    pinned PRE/POST bindings and the project's activation.
 2. PM creates a bounded task. Contributor claims it and implements the change.
-3. Required trusted CI passes and an authorized Garden maintainer actually merges
-   the task-associated PR. This test selects `required_independent_approvals=0`;
-   it does not require an independent GitHub review or invent one. An open PR
-   still fails the real-merge check.
+3. Required trusted CI passes on the task-associated PR head. This test selects
+   `required_independent_approvals=0`; it does not require an independent GitHub
+   review or invent one. An open PR may pass Garden POST.
 4. Contributor uploads the root `proof.json` ZIP. Exercise missing/malformed PRE
    input, valid intake, a controlled POST rejection and a real successful proof.
 5. Inspect immutable artifact/Submission, retained checker evidence, governed
    acceptance and exact submitter ContributionRecord through public APIs and
    durable workers. Retry the same operation and verify no duplicate effects.
 
-Use a new guide `garden-engineering-drill-2`, newly approved Garden capability
-`v2` PRE/POST bindings, and a new task locked to that guide. Previously activated
+Use a new guide `garden-engineering-drill-3`, newly approved Garden capability
+`v3` PRE/POST bindings, and a new task locked to that guide. Previously activated
 guides, claimed tasks, image registrations and evidence remain retained under
 their original rules. This is a replacement policy version, not another runtime
 implementation or a rewrite of the earlier assignment.
@@ -34,7 +33,8 @@ implementation or a rewrite of the earlier assignment.
 as the user requested. Preserve its original commit and existing task history.
 Do not assert that its head already identifies a newly claimed task: any later
 marker update must use the actual new UUID before final checks and any required
-review. No accepted work or contribution is established while it remains open.
+review. Its open state does not prevent Garden POST; no accepted work or contribution
+is established by this documentation alone.
 
 The external image implementation belongs under
 `external_checkers/garden_proof/`. The generic GitHub facts adapter only retrieves
@@ -107,7 +107,7 @@ exists. Run applicable checks including `pnpm verify:docs`.
 
 **Second drill: document the Garden Workstream contribution handoff.** After the
 guide and checker policy are approved, a small contributor page can explain
-claim, head trailer, configured GitHub approval count, required CI/merge, proof
+claim, head trailer, configured GitHub approval count, required current-head CI, proof
 ZIP and PRE versus POST feedback. Preserve ordinary GitHub contributions and use
 obvious placeholders, never credentials or fabricated accepted work. This is an
 optional later task, not a reason to create another PR for the current test.
@@ -142,7 +142,6 @@ composition. Only a real authorized GitHub PR plus the public Workstream journey
 proves the hosted success path. Report these separately, with exact source/image
 digests and no credentials or private evidence bodies in this repository.
 
-The new zero-approval guide/image/task sequence remains separate from earlier
-hosted setup and claim evidence. PR #287 is referenced as retained open work,
-not a passed proof. Record actual new identities and outcomes only after they
+The new current-head guide/image/task sequence remains separate from earlier
+hosted setup and claim evidence. PR #287 is referenced as retained open work, not a passed proof. Record actual new identities and outcomes only after they
 exist; source fixtures and controlled facts cannot establish acceptance.

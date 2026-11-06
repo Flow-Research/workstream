@@ -6,7 +6,7 @@ Build the offline image from the shared evaluator and Garden-owned entry point:
 docker build -f external_checkers/garden_proof/Dockerfile -t ws-garden-proof:qualification external_checkers
 ```
 
-One image registers `garden.work_proof` version `v2` separately for `pre_submit`
+One image registers `garden.work_proof` version `v3` separately for `pre_submit`
 and `post_submit`. Use its exact platform-manifest digest. A changed image needs
 a new capability version and explicit registration; retained evidence is not
 rewritten. The existing Harnessy image now uses capability version `v4` for the
@@ -15,7 +15,7 @@ expanded exact forge-facts shape. Old pinned images have no fallback parser.
 `publish_local.py` reuses the existing loopback-only image publisher and emits
 `checker-service.json`, `registry-pre.json`, and `registry-post.json`. It requires
 `--registry`, `--compose-project`, `--sandbox-uid`, `--sandbox-gid`, `--out-dir`;
-`--capability-version` defaults to `v2`. Running it builds and publishes locally.
+`--capability-version` defaults to `v3`. Running it builds and publishes locally.
 No image is published merely by adding these sources.
 
 PRE configuration is exactly:
@@ -25,7 +25,7 @@ PRE configuration is exactly:
 ```
 
 PRE checks root `proof.json` as bounded UTF-8 JSON and validates existing
-`harnessy.work.proof.v1` schema, landed-SHA shape, successful CI/merged claims,
+`garden.work.proof.v1` schema, current-head SHA shape and successful CI claim,
 and canonical Garden PR and Actions-run URLs. It has no forge facts or network.
 Passing intake creates no acceptance evidence about the external work.
 
@@ -41,12 +41,12 @@ is `main`. The pilot was reconciled against `dev` commit
 must match the actual engineering target, not the default branch. Changing the
 base requires a new approved policy context, not relabelling retained evidence.
 
-POST retains merge, landed commit, repository/base, trusted CI producer and
-protected-path checks. Garden alone accepts an explicit
+POST verifies the claimed current PR head, repository/base, trusted CI producer and
+protected-path checks. An open PR with no landed commit may pass. Garden alone accepts an explicit
 `required_independent_approvals=0` for this test. Omission defaults to one;
 positive counts require eligible independent human approvals on the current
 head. Shared Harnessy still requires at least one. Zero does not fabricate a
-review or permit an open/unmerged PR, failed CI or a foreign task marker.
+review or permit failed CI, a wrong head or a foreign task marker.
 This POST-only configuration is independent of Workstream's unchanged
 `human_review_required=false` policy and its default-true branch.
 
@@ -70,7 +70,7 @@ Workstream-Task: <trusted Workstream task UUID>
 The image compares it with Workstream's trusted `input.task_id`. Add the trailer
 before final checks and any required review: changing it changes the head SHA. Findings are
 `garden.proof.task_trailer`, `garden.proof.task_mismatch` or
-`garden.proof.task_identity`; existing `harnessy.proof.*` findings retain their
+`garden.proof.task_identity`; shared forge-fact findings such as `harnessy.proof.forge.head_sha` retain their
 meaning. Canonical URL/configuration findings use `garden.proof.pr_url`,
 `garden.proof.ci_run_url` and `garden.proof.configuration`.
 
@@ -79,10 +79,10 @@ they are checked against the GitHub author and current head. No GitHub-to-Workst
 contributor identity mapping is established. Zero-count mode supplies no
 independent human quality-review fact; the submitter remains accountable.
 
-Publish/register the new digest and approve a new version-2 guide/task context.
+Publish/register the new digest and approve a new version-3 guide/task context.
 Retain earlier images, guide/task records and proofs unchanged. This source
-update is not evidence of a v2 deployment or accepted Garden work. Leave PR #287
-open as requested; it cannot supply a successful merged-work proof while open.
+update is not evidence of a v3 deployment or accepted Garden work. Leave PR #287
+open as requested; its open state does not prevent current-head Garden proof.
 
 Qualify the actual offline image through the native service using controlled
 facts (this is not a live GitHub read or durable public-API drill):

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.modules.checkers.api.external import ExternalCheckerRegistrySpec
-from tests.checkers.external.test_harnessy_proof_checker import FACTS, VALID_PROOF
+from tests.checkers.external.test_harnessy_proof_checker import FACTS
 
 ROOT = Path(__file__).parents[4] / "external_checkers/garden_proof"
 
@@ -38,14 +38,23 @@ def control(message=MESSAGE, task=TASK):
         repository=checker.REPOSITORY,
         change_url=checker.ORIGIN + "/" + checker.REPOSITORY + "/pull/12",
         head_commit_message=message,
+        state="open",
+        merged=False,
+        landed_commit_sha=None,
     )
     run = checker.ORIGIN + "/" + checker.REPOSITORY + "/actions/runs/345"
     facts["required_checks"][0]["run_url"] = run
-    proof = {**VALID_PROOF, "pr_url": facts["change_url"], "ci_run_url": run}
+    proof = {
+        "schema": checker.PROOF_SCHEMA,
+        "pr_url": facts["change_url"],
+        "commit_sha": facts["head_sha"],
+        "ci_run_url": run,
+        "ci_conclusion": "success",
+    }
     return json.dumps(proof).encode(), {"forge_facts": facts, "task_id": task}
 
 
-def test_matching_reviewed_task_passes_pre_and_post():
+def test_matching_open_pr_head_passes_pre_and_post():
     raw, value = control()
     assert checker.evaluate_intake(raw, checker.PRE_CONFIGURATION) == []
     assert checker.evaluate_post(raw, CONFIG, value) == []
@@ -53,6 +62,45 @@ def test_matching_reviewed_task_passes_pre_and_post():
         checker.evaluate_post(raw, CONFIG, {**value, "task_id": OTHER_TASK})[0]["code"]
         == "garden.proof.task_mismatch"
     )
+
+
+def test_merged_or_closed_pr_head_still_passes_with_current_evidence():
+    raw, value = control()
+    facts = value["forge_facts"]
+    facts.update(state="closed", merged=True, landed_commit_sha="d" * 40)
+    assert checker.evaluate_post(raw, CONFIG, value) == []
+    facts.update(merged=False, landed_commit_sha=None)
+    assert checker.evaluate_post(raw, CONFIG, value) == []
+
+
+@pytest.mark.parametrize(
+    "change,expected",
+    [
+        ({"merged": True}, ["garden.proof.fields"]),
+        ({"ci_conclusion": None}, ["garden.proof.ci_conclusion"]),
+        ({"schema": "harnessy.work.proof.v1"}, ["garden.proof.schema"]),
+    ],
+)
+def test_garden_proof_claims_reject_merge_field_and_wrong_schema(change, expected):
+    raw, value = control()
+    proof = {**json.loads(raw), **change}
+    codes = [item["code"] for item in checker.evaluate_intake(json.dumps(proof).encode(), checker.PRE_CONFIGURATION)]
+    assert codes == expected
+    assert codes == [item["code"] for item in checker.evaluate_post(json.dumps(proof).encode(), CONFIG, value)]
+
+
+def test_garden_proof_requires_each_exact_field():
+    raw, _ = control()
+    proof = json.loads(raw)
+    for field in checker.PROOF_KEYS:
+        incomplete = {key: value for key, value in proof.items() if key != field}
+        codes = [
+            item["code"]
+            for item in checker.evaluate_intake(
+                json.dumps(incomplete).encode(), checker.PRE_CONFIGURATION
+            )
+        ]
+        assert "garden.proof.fields" in codes, field
 
 
 @pytest.mark.parametrize(
@@ -109,7 +157,8 @@ def test_intake_rejects_unusable_proof_without_facts(raw, code):
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("merged", False),
+        ("merged", True),
+        ("schema", "harnessy.work.proof.v1"),
         ("commit_sha", "invalid"),
         ("pr_url", "https://github.com/other/repo/pull/1"),
         ("pr_url", "https://github.com/Flow-Research/garden/pull/1?x=1"),
@@ -127,7 +176,7 @@ def test_intake_rejects_bad_claim_shape_and_foreign_urls(field, value):
 @pytest.mark.parametrize("phase", ["pre_submit", "post_submit"])
 def test_registry_specs_select_distinct_authority(phase):
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publisher.registry_spec("sha256:" + "f" * 64, "v2", phase)
+        publisher.registry_spec("sha256:" + "f" * 64, "v3", phase)
     )
     assert spec.phase == phase
     assert spec.capability_id == "garden.work_proof"
@@ -187,7 +236,7 @@ def test_approval_configuration_matches_published_garden_schema(count, valid):
 
     configuration = {**CONFIG, "required_independent_approvals": count}
     spec = ExternalCheckerRegistrySpec.model_validate(
-        publisher.registry_spec("sha256:" + "f" * 64, "v2", "post_submit")
+        publisher.registry_spec("sha256:" + "f" * 64, "v3", "post_submit")
     )
     raw, value = control()
     findings = checker.evaluate_post(raw, configuration, value)
@@ -202,14 +251,13 @@ def test_approval_configuration_matches_published_garden_schema(count, valid):
 @pytest.mark.parametrize(
     "guard,code",
     [
-        ("merge", "harnessy.proof.forge.merged"),
         ("ci", "harnessy.proof.forge.required_check"),
         ("producer", "harnessy.proof.forge.producer_mismatch"),
         ("unbound", "harnessy.proof.forge.unbound_required_check"),
         ("protected", "harnessy.proof.forge.protected_path_changed"),
         ("head", "harnessy.proof.forge.facts_binding"),
         ("repository", "harnessy.proof.forge.repository"),
-        ("commit", "harnessy.proof.forge.landed_commit_sha"),
+        ("commit", "harnessy.proof.forge.head_sha"),
         ("task", "garden.proof.task_mismatch"),
     ],
 )
@@ -219,10 +267,7 @@ def test_zero_approvals_retains_other_integrity_guards(guard, code):
     configuration = {**CONFIG, "required_independent_approvals": 0}
     assert checker.evaluate_post(raw, configuration, value) == []
     facts = value["forge_facts"]
-    if guard == "merge":
-        facts["merged"] = False
-        facts["landed_commit_sha"] = None
-    elif guard == "ci":
+    if guard == "ci":
         facts["required_checks"][0]["conclusion"] = "failure"
     elif guard == "producer":
         facts["required_checks"][0]["judged"][0]["producer"] = "github_app:999"

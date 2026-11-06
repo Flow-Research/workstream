@@ -608,8 +608,15 @@ def compare_forge_facts(
     input_value: object,
     *,
     minimum_independent_approvals: int = 1,
+    commit_reference: str = "landed",
 ) -> list[dict[str, object]]:
-    """Compare proof claims with WorkStream-read forge facts; one finding per mismatch."""
+    """Compare proof claims with WorkStream-read forge facts; one finding per mismatch.
+
+    Project code selects current head or landed work. This is never a binding
+    configuration option: Harnessy retains its landed-work default.
+    """
+    if commit_reference not in {"head", "landed"}:
+        raise ValueError("commit_reference must be head or landed")
     settings = forge_configuration(
         configuration, minimum_independent_approvals=minimum_independent_approvals
     )
@@ -662,17 +669,25 @@ def compare_forge_facts(
             )
         )
     findings.extend(_url_findings(proof, facts))
-    if facts["merged"] is not True:
+    if commit_reference == "landed" and facts["merged"] is not True:
         findings.append(
             _finding("forge.merged", "The forge reports that the change is not merged.")
         )
     commit_sha = proof.get("commit_sha")
-    if not isinstance(commit_sha, str) or facts["landed_commit_sha"] != commit_sha.lower():
+    reference_sha = (
+        facts["head_sha"]
+        if commit_reference == "head"
+        else facts["landed_commit_sha"]
+    )
+    if not isinstance(commit_sha, str) or reference_sha != commit_sha.lower():
         findings.append(
             _finding(
-                "forge.landed_commit_sha",
-                "commit_sha does not equal the commit the change landed as on the base "
-                "branch, as the forge reports it.",
+                "forge.head_sha" if commit_reference == "head" else "forge.landed_commit_sha",
+                (
+                    "commit_sha does not equal the current PR head commit the forge reports."
+                    if commit_reference == "head"
+                    else "commit_sha does not equal the commit the change landed as on the base branch, as the forge reports it."
+                ),
             )
         )
     for check in facts["required_checks"]:

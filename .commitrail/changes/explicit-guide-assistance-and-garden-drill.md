@@ -19,14 +19,31 @@ owns task/assignment/submission/acceptance truth. Garden owns its code, project
 guide and external evaluation. GitHub supplies independently retrieved facts.
 The ZIP contains claims in `proof.json`, not another copy of the repository.
 
-The user subsequently clarified that this test drill does not require an
-independent GitHub review. Garden's image must support an explicitly selected
-zero-approval requirement while retaining real merge, trusted CI, repository,
-commit and task-association checks. Omission continues to require one approval;
-Harnessy's existing minimum remains one. This is a project-checker policy
-choice, not permission to manufacture review facts or bypass Workstream's
-locked ReviewPolicy. Previously registered images and activated guides remain
-immutable; publish the changed image and approve a new guide for the drill.
+The Garden drill completes on verified current-head work, not a GitHub merge.
+The user explicitly removed auto-merge and merge prerequisites. Garden proof
+identifies the current PR head; POST retains exact task/repository/base, trusted
+successful CI and configured approval-count checks. An open PR with no landed
+commit may pass. Required POST passing with locked
+`human_review_required=false` invokes existing shared FinalAcceptance,
+submitter ContributionRecord and the applicable 100-point award. It fabricates
+no Review, reviewer contribution, merge or deployment fact. Harnessy's distinct
+landed-work requirement is unchanged. Published images and activated guide/task
+records remain immutable; use a new image and guide/task for changed rules.
+
+### Current bounded correction
+
+Replace Garden's merged-claim/landed-commit proof with a Garden-owned current-head
+proof format and update PRE, POST, locator fixtures, image publication defaults,
+manager rules, tests and current docs together. Reuse fact validation and CI
+integrity comparisons in external-checker code with an explicit owner-selected
+head-versus-landed distinction if needed; no new Workstream core policy flag,
+merge automation, filtering-away failures or fabricated forge facts. Remove
+superseded Garden merge-only assertions; retain Harnessy landed checks and all
+project/task/head/CI isolation proof. Tests must prove open/unmerged facts with
+null landed commit pass for Garden, wrong head/task and failed/untrusted CI
+reject, and Harnessy still rejects unmerged work. Qualify the actual changed
+image before running the public drill. Security/architecture and QA/test-delta
+review must cover this correction; the existing allowed files and L1 scope apply.
 
 ## Implementation plan
 
@@ -56,15 +73,15 @@ immutable; publish the changed image and approve a new guide for the drill.
    configuration and preserve releases that do not use forge checking.
 6. Exercise public guide/upload/request/approval/task/submission APIs and durable
    workers for the Garden drill. Distinguish controlled composition proof from
-   a real GitHub PR with authorized merge and its configured approval count. Record any human
-   step still pending; never fabricate it or claim the live drill passed early.
+   a real GitHub PR with current-head checks and its configured approval count.
+   Record any human step still pending; never fabricate it or claim the live drill passed early.
 
 For the clarified zero-approval drill, extend the shared evaluator with an
 explicit minimum-approval argument used only by the Garden entry point, keeping
 the Harnessy default and validation unchanged. Garden's registration schema
 allows zero; negative, boolean and excessive values reject. Test explicit zero
 against authentic-shaped facts with no reviews, omission against those same
-facts, and retained merge/CI/task failure boundaries. Update Garden's guide,
+facts, and retained CI/task failure boundaries. Keep Harnessy merge checks. Update Garden's guide,
 rules and publisher fixtures together; no Workstream core or AUTH relaxation.
 Requalify the image and retain all previous deployed evidence under its actual
 identities. A new claimed task must bind the new guide; do not reinterpret the
@@ -188,16 +205,16 @@ facts and foreign-task rejection, not live GitHub access. Full public-API
 fixture sequence is upload
 all originals -> assert no attempt/provider call -> explicit authorized request
 -> durable worker -> proposal -> separate policy approvals -> activation. Forge
-negative controls first satisfy merge, CI producer, the configured approval
+negative controls first satisfy current-head CI producer, the configured approval
 count and proof comparisons, then vary only the marker or trusted task UUID.
 
 The hosted Garden proof requires the read-only GitHub App, a candidate deployment
-and a real task-associated PR with authorized merge and configured checks. The
+and a real task-associated PR with trusted current-head checks. The
 explicit zero-approval test does not require or fabricate a GitHub review;
-omission/positive counts retain their review requirement. Guide v2 and capability
-v2 require new approvals and a new task; retain the earlier records and leave PR
+omission/positive counts retain their review requirement. Guide v3 and capability
+v3 require new approvals and a new task; retain the earlier records and leave PR
 #287 open as requested. A successful outcome must not be inferred from controlled
-facts or open work. Exact check/review freshness
+facts alone. Exact check/review freshness
 and operational completion evidence belong in the PR.
 
 ## Risk and review routing

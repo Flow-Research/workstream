@@ -36,8 +36,8 @@
         ],
         "check_steps": [
           "Require a root regular proof.json file at most 65536 bytes.",
-          "Validate the documented proof schema, full commit SHA and canonical Garden PR and Actions run URLs.",
-          "Require successful CI and merged assertions as claims only; do not verify GitHub facts during PRE."
+          "Validate garden.work.proof.v1, the full current PR head SHA and canonical Garden PR and Actions run URLs.",
+          "Require a successful CI assertion as a claim only; do not verify GitHub facts during PRE."
         ],
         "pass_conditions": [
           "All required claim fields have the documented format and no structural error is found."
@@ -62,28 +62,28 @@
             "message": "The proof exceeds the byte limit. Correct the claim before uploading."
           },
           {
-            "code": "harnessy.proof.schema",
+            "code": "garden.proof.schema",
             "level": "error",
             "condition": "The proof schema is unsupported.",
             "message": "The proof schema is unsupported. Correct the claim before uploading."
           },
           {
-            "code": "harnessy.proof.commit_sha",
+            "code": "garden.proof.fields",
             "level": "error",
-            "condition": "The landed commit SHA has an invalid format.",
-            "message": "The landed commit SHA has an invalid format. Correct the claim before uploading."
+            "condition": "The proof has a missing or unexpected field, including a superseded merged field.",
+            "message": "Provide exactly the documented Garden proof fields."
           },
           {
-            "code": "harnessy.proof.ci_conclusion",
+            "code": "garden.proof.commit_sha",
+            "level": "error",
+            "condition": "The current PR head SHA has an invalid format.",
+            "message": "The current PR head SHA has an invalid format. Correct the claim before uploading."
+          },
+          {
+            "code": "garden.proof.ci_conclusion",
             "level": "error",
             "condition": "The claimed CI conclusion is not success.",
             "message": "The claimed CI conclusion is not success. Correct the claim before uploading."
-          },
-          {
-            "code": "harnessy.proof.merged",
-            "level": "error",
-            "condition": "The merged claim is not true.",
-            "message": "The merged claim is not true. Correct the claim before uploading."
           },
           {
             "code": "garden.proof.pr_url",
@@ -123,14 +123,14 @@
       },
       "evidence_refs": [
         {
-          "document": "sha256:e637df3367b4b47510c9c43ef8ba60d40e44db31a45c34bc71017f6b3a35e578",
+          "document": "sha256:349a34de355e34aac997ebe033b49d117d676a4b4bd933a40f3c3aef464a8bf8",
           "section": "Submit one small ZIP"
         }
       ]
     },
     {
       "suggestion_id": "garden_task_proof",
-      "statement": "Independent GitHub facts substantiate the submitted merged and CI-passing Garden change for this exact Workstream task under the explicit test approval count.",
+      "statement": "Independent GitHub facts substantiate the submitted current-head, CI-passing Garden change for this exact Workstream task under the explicit test approval count.",
       "stage": "post_submit",
       "classification_rationale": "Verifying remote PR, immutable commit, CI, task association and any configured reviews belongs after immutable Submission creation.",
       "check_specification": {
@@ -154,10 +154,10 @@
           }
         ],
         "check_steps": [
-          "Require the claimed PR to be merged into Garden dev at the claimed landed commit.",
-          "Require successful trusted required checks. For this test, the PM explicitly selects required_independent_approvals=0 in the Garden POST attachment; no independent GitHub review is required. Omission requires one, and positive counts require the corresponding eligible current-head approvals.",
+          "Require the claimed commit to be the current PR head in Garden dev; a merge or landed commit is not required.",
+          "Require successful trusted required checks on that head. For this test, the PM explicitly selects required_independent_approvals=0 in the Garden POST attachment; no independent GitHub review is required. Omission requires one, and positive counts require the corresponding eligible current-head approvals.",
           "Require exactly one canonical Workstream-Task trailer on the immutable PR head commit and compare it with the trusted task UUID.",
-          "Reject mismatched URLs, repository, commit, CI or task association and preserve actionable findings."
+          "Reject mismatched URLs, repository, head, CI or task association and preserve actionable findings."
         ],
         "pass_conditions": [
           "All required independent comparisons pass for the exact task and submitted claims."
@@ -224,16 +224,10 @@
             "message": "The PR targets another base branch. Resolve the finding before resubmission."
           },
           {
-            "code": "harnessy.proof.forge.merged",
+            "code": "harnessy.proof.forge.head_sha",
             "level": "error",
-            "condition": "The forge reports that the PR is not merged.",
-            "message": "The forge reports that the PR is not merged. Resolve the finding before resubmission."
-          },
-          {
-            "code": "harnessy.proof.forge.landed_commit_sha",
-            "level": "error",
-            "condition": "The claimed landed commit differs from the verified merge result.",
-            "message": "The claimed landed commit differs from the verified merge result. Resolve the finding before resubmission."
+            "condition": "The claimed commit differs from the current verified PR head.",
+            "message": "Use the verified current PR head SHA in proof.json and rerun required checks after a head change."
           },
           {
             "code": "harnessy.proof.forge.required_check",
@@ -243,13 +237,13 @@
           }
         ],
         "positive_tests": [
-          "A merged Garden PR with trusted passing checks, the exact task trailer and no reviews passes when required_independent_approvals is explicitly zero.",
+          "An open Garden PR with null landed commit, trusted passing current-head checks, the exact task trailer and no reviews passes when required_independent_approvals is explicitly zero.",
           "The same no-review facts fail the independent-approval requirement when the setting is omitted or positive."
         ],
         "negative_tests": [
           {
             "name": "foreign_task",
-            "scenario": "Every required PR, merge and CI condition passes under the explicit zero-approval test configuration, but the immutable head trailer names a different Workstream task.",
+            "scenario": "Every required PR, head and CI condition passes under the explicit zero-approval test configuration, but the immutable head trailer names a different Workstream task.",
             "expected_verdict": "failed",
             "expected_finding_codes": [
               "garden.proof.task_mismatch"
@@ -268,7 +262,7 @@
       },
       "evidence_refs": [
         {
-          "document": "sha256:e637df3367b4b47510c9c43ef8ba60d40e44db31a45c34bc71017f6b3a35e578",
+          "document": "sha256:349a34de355e34aac997ebe033b49d117d676a4b4bd933a40f3c3aef464a8bf8",
           "section": "What PRE and POST mean"
         }
       ]
