@@ -120,7 +120,7 @@ with an empty client configuration, for example
 
 Rebuilding the proof checker changes its digest. The registry holds one
 immutable entry per phase, capability and version, so rerun `publish_local.py`
-with a new `--capability-version` (the default is `v3`; use, for example, `v4`), recreate the checker with
+with a new `--capability-version` (the default is `v4`; use, for example, `v5`), recreate the checker with
 `docker compose up --wait --force-recreate checker`, and register the new
 body. Registering a new digest under an existing version returns
 `external_checker_registry_conflict`.
@@ -216,7 +216,7 @@ run the checker for any project.
 
 ### What the proof checker checks
 
-`external_checkers/harnessy_proof/checker.py` (capability version `v3`,
+`external_checkers/harnessy_proof/checker.py` (capability version `v4`,
 [WS-GHPROOF-001](../../.commitrail/initiatives/WS-GHPROOF-001/OVERVIEW.md)) is a
 post-submission checker with one mode, and it fails closed. It reads
 `proof.json` at the root of the submitted ZIP, compares it with forge facts
@@ -255,7 +255,11 @@ WorkStream places the facts in the request `input` under `forge_facts`, so the
 request digest binds them. Each forge provider maps its host into the same
 `workstream.forge_change_facts.v1` facts; anything a provider cannot prove is
 null or absent, and the checker then fails closed. The facts are bound to one
-change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
+change state (`head_sha`, `landed_commit_sha`). The exact head commit's message
+is retrieved independently as `head_commit_message` with its response hash. The
+expanded strict shape requires rebuilding and explicitly registering affected
+images; retained evidence and old pinned images are not rewritten or used as a
+fallback. A commit id is 40 (SHA-1) or 64
 (SHA-256) lowercase hexadecimal characters:
 
 ```json
@@ -272,6 +276,7 @@ change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
     "landed_commit_sha": "<commit id; null unless merged>",
     "base_ref": "main",
     "head_sha": "<commit id>",
+    "head_commit_message": "Repair the assigned documentation\n\nWorkstream-Task: 01900000-0000-7000-8000-000000000001",
     "author": {"login": "agent-bot", "id": 501, "kind": "bot"},
     "reviews": [{"id": "61", "reviewer": {"login": "reviewer", "id": 7, "kind": "user"},
                  "reviewer_write_access": true,
@@ -284,7 +289,8 @@ change state (`head_sha`, `landed_commit_sha`). A commit id is 40 (SHA-1) or 64
                          "judged": [{"producer": "github_app:15368", "sha": "<head sha>"}],
                          "run_url": "https://github.com/Flow-Research/harnessy-v2/actions/runs/345"}],
     "fetched_at": "2026-10-24T12:00:00Z",
-    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"}]
+    "responses": [{"request": "pull_request", "sha256": "sha256:<64 hex>"},
+                  {"request": "head_commit", "sha256": "sha256:<64 hex>"}]
   }
 }
 ```
@@ -362,7 +368,11 @@ its web origin follows the API URL (`https://github.com` for the public API,
 the Enterprise host otherwise), and a binding whose `forge_origin` differs ends
 as an infrastructure failure. For reviewers who approved the head commit, the
 App also reads their current repository permission, so an approval counts only
-from someone with write access. A missing, oversized or malformed `proof.json`
+from someone with write access. The App additionally needs repository Contents
+read permission for the exact-head Git commit endpoint. That response is streamed
+with a 256 KiB cap; the message is bounded to 64 KiB of UTF-8. Malformed,
+inconsistent or oversized responses are infrastructure failures, never truncated
+facts. A missing, oversized or malformed `proof.json`
 fails with the checker's `missing`, `too_large` or `invalid_json` finding. A
 claim that names another repository, a change the forge does not have, a
 change into another base branch, or one with more changed files, reviews or
@@ -372,6 +382,30 @@ unreachable, refuses the credential, cannot read the configured repository or
 answers outside its protocol, or the App is not configured, the evaluation ends
 as an infrastructure failure that an Operator can retry; it never passes.
 There is deliberately no shape-only mode.
+
+### Garden task association
+
+The [Garden image](../../external_checkers/garden_proof/README.md) registers
+`garden.work_proof` version `v2` separately for PRE and POST. PRE validates the
+bounded `proof.json` claims; POST compares independently retrieved facts and
+requires exactly one standalone `Workstream-Task: <canonical lowercase UUID>`
+line in the immutable head commit's final trailer block. Duplicate reserved
+occurrences anywhere, missing, malformed or foreign task markers fail. Add it
+before final CI and any required review: changing the message changes the head.
+Garden's test POST binding explicitly sets `required_independent_approvals=0`;
+omission requires one, positive values require the configured approvals, and
+shared Harnessy still requires at least one. Real merge, trusted CI and task
+association remain required. Workstream's separate false ReviewPolicy setting
+is unchanged. Only the external image interprets the marker; it proves declared
+head-commit task association, not contributor identity or a human review in
+zero-count mode.
+
+See the [Garden guide](../../pilots/garden/guide.md) and
+[uploaded manager rules](../../pilots/garden/manager-rules.md). These source
+fixtures and controlled image tests do not establish publication, deployment or
+a real GitHub merge/contribution drill. Register the exact new image and approve
+its separate phase attachments under a new guide/task context. Earlier records
+stay immutable; leave Garden PR #287 open and claim no successful proof for it.
 
 ## Create the manager project and the agent submitter
 
@@ -449,47 +483,54 @@ project-scoped in Workstream, so each Flow project gets its own `FLOW` unit
 with the same code; equal codes in different projects are still different
 units, and Workstream does not add them together.
 
-A `project_points` award rule needs three things for the project: the
-`workstream.compensation.adapter` service actor, the project's `FLOW` unit and
-an active `project_points` adapter binding. The unit and the binding have no
-public route. The script below creates each one that is missing, in this order
-and through the owners' authorized commands:
+A `project_points` award rule needs a `workstream.compensation.adapter`
+service actor, the project's points unit and an active `project_points` adapter
+binding. An Access Administrator first provisions the adapter actor through
+`POST /api/v1/service-actors`, using its actual trusted service identity. Record
+the returned actor UUID as `ADAPTER_ID`. Actor registration establishes identity;
+it does not implement external award delivery.
 
-1. the adapter actor through `POST /api/v1/service-actors` with the Access
-   Administrator's authority (the same call as `provision_local_service_actors.py`);
-2. the unit through `contribution.compensation_unit.create` with the Finance
-   Authority's AUTH decision;
-3. the binding through `compensation.adapter_binding.create` with the same
-   Finance Authority.
+The unit and binding have no public route. The operator script composes their
+authorized owner commands using a real Finance Authority's Flow token. It
+supports configured Flow authentication in local and hosted environments, with
+no development identity or caller-UUID bypass. Put a short-lived token in an
+absolute, caller-owned regular file with mode `0400` or `0600`, visible inside
+the operator process. Symlinks and hard links are rejected. Do not pass the token
+itself as a command argument or print it. For example, with the token file
+mounted at `/run/secrets/finance-token`:
 
 ```bash
 docker compose exec -T backend python scripts/provision_project_points.py \
-  --project-id "$PROJECT_ID" --finance-actor-profile-id "$FINANCE_ID" \
-  --admin-subject local-access-admin
+  --project-id "$PROJECT_ID" \
+  --finance-token-file /run/secrets/finance-token \
+  --adapter-actor-id "$ADAPTER_ID" --route-key flow_points.recording
 ```
 
-The script prints one JSON line. Record `adapter_binding_id` as `BINDING_ID`:
+Hosted operators use the deployed release's configured database and Flow
+verifier settings through the fixed
+[`provision-project-points` hosted command](../../deploy/hosted/README.md#provision-project-points-prerequisites),
+using a released image containing the authenticated provisioner and replay fence.
+It accepts structured selectors and one private token-file mount; it does not
+change running services' configuration. In the direct script above,
+`--unit-code` defaults to `FLOW`.
+`--route-key` is required and identifies the binding's route; it does not enable
+an external delivery implementation.
 
-```json
-{"adapter_actor": "provisioned", "adapter_actor_id": "...", "adapter_binding_id": "...",
- "binding": "created", "project_id": "...", "result_code": "ready", "unit": "created",
- "unit_code": "FLOW"}
-```
+The JSON result contains actual unit creation and binding event IDs, operation
+IDs and request digests. On `result_code: ready`, record `adapter_binding_id`
+as `BINDING_ID`. Each step commits separately. Before each step the script
+verifies the token again, resolves its exact issuer and subject to actual human
+actor rows, and checks current Finance authority. Exact retries use the same
+owner operation keys and return the original receipts after fresh authorization
+and active-resource checks. A resource created under another operation or a
+changed request conflicts instead of being reported ready.
 
-Each step commits on its own, so a rerun reports `existing` for what is already
-there and changes nothing. If a step
-fails, the output lists the steps that already committed; fix the cause and run
-the script again. It exits 3 with `result_code: unavailable` when the adapter
-actor is missing and `--admin-subject` is absent, or when the Finance actor
-does not have exactly one active identity link. An AUTH denial (for example, an
-actor without a Finance Authority grant covering the project) exits 1 with
-`error_type`; the failed step creates nothing, and an adapter actor provisioned
-earlier in the run stays. An active binding with another adapter actor or route
-key exits 3 with `active_binding_mismatch`. The script refuses to run when
-`WORKSTREAM_ENVIRONMENT` is production-like (`staging`, `preview`, `prod`,
-`production`). `--unit-code` and `--route-key`
-(default `flow_points.local`) override the defaults. Like the lifecycle script,
-it does not authenticate its caller and is a local operator tool only.
+Expired credentials, identity changes, revoked grants, inactive adapters or
+bindings stop the affected step. Output retains receipts for earlier committed
+steps so an authorized retry can resume. Exit 3 reports a bounded `unavailable`
+reason; exit 1 reports an exception type without credentials or provider detail.
+The script provisions neither the adapter actor nor external fulfillment,
+and it does not publish a contribution policy.
 
 A compensated policy then names the unit and binding. For example, 10 Flow
 Points for an accepted submission and 3 for a completed review:

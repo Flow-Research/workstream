@@ -6,7 +6,7 @@ from datetime import datetime
 
 from dataclasses import asdict, replace
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid5
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.projects.models import ProjectSetupRun
 from app.modules.projects.repository import ProjectRepository
@@ -68,47 +68,44 @@ class GuideCompilationService:
         self._authorization = authorization
         self._request_inputs = request_inputs
 
-    async def request_automatic(
-        self, *, actor: ActorIdentityFacts, setup_run_id: UUID
+    async def request_initial(
+        self, *, actor: ActorIdentityFacts, setup_run_id: UUID,
+        idempotency_key: UUID, inference_required: bool,
     ) -> CompilationRequestReceipt:
-        """Resolve a source-ready selector without calling or constructing a provider."""
+        """Request one initial generation using exact saved inputs on replay."""
         self._require_fresh_session()
         if self._request_inputs is None:
-            raise GuideCompilationIntegrityError("automatic compilation inputs unavailable")
+            raise GuideCompilationIntegrityError("compilation inputs unavailable")
         async with self._session.begin():
             setup = await self._session.get(ProjectSetupRun, str(setup_run_id))
             if setup is None:
-                raise GuideCompilationIntegrityError("automatic compilation setup unavailable")
+                raise GuideCompilationIntegrityError("compilation setup unavailable")
+            await self._authorization.lock_request_scope(actor=actor, project_id=UUID(setup.project_id))
             repository = GuideCompilationRepository(self._session)
             operation = await repository.request_operation_for_setup(
-                setup_run_id,
-                setup.setup_generation,
-                "automatic_source_ready",
-                lock=False,
+                setup_run_id, setup.setup_generation, "project_manager", lock=False,
             )
             if operation is not None:
                 attempt = await repository.attempt(operation.attempt_id, lock=False)
-                facts = _request_facts(operation, attempt)
+                retained = _request_facts(operation, attempt)
+                facts = replace(retained, idempotency_key=idempotency_key,
+                                request_id=uuid5(idempotency_key, "guide-compilation-request"))
                 identity = identity_from_attempt(attempt)
-                origin = ProjectGuideCompilationRequestOrigin(
-                    trigger=operation.request_trigger,
-                    source_mutation_operation_id=operation.source_mutation_operation_id,
-                    source_authorization_decision_event_id=UUID(
-                        operation.source_authorization_decision_event_id
-                    )
-                    if operation.source_authorization_decision_event_id
-                    else None,
-                )
+                configuration = ProjectGuideRuntimeConfiguration.model_validate(attempt.runtime_configuration)
             else:
-                facts, identity, origin = await self._request_inputs.resolve(
-                    self._session, setup_run_id
+                context = await self._request_inputs.context_for_setup(self._session, setup)
+                identity = CompilationAttemptIdentity.from_context(context)
+                configuration = self._request_inputs.runtime_configuration
+                facts = ProjectGuideCompilationRequestFacts(
+                    **identity.model_dump(), operation_id=uuid5(idempotency_key, "guide-compilation-operation"),
+                    request_id=uuid5(idempotency_key, "guide-compilation-request"),
+                    idempotency_key=idempotency_key, expected_predecessor_compilation_id=None,
                 )
-        return await self.authorize_request(
-            actor=actor,
-            facts=facts,
-            identity=identity,
-            origin=origin,
-            runtime_configuration=self._request_inputs.runtime_configuration,
+        inputs = replace(self._request_inputs, runtime_configuration=configuration)
+        return await GuideCompilationService(self._session, self._authorization, request_inputs=inputs).authorize_request(
+            actor=actor, facts=facts, identity=identity,
+            origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
+            runtime_configuration=configuration, inference_required=inference_required,
         )
 
     async def request_correction(
@@ -165,6 +162,7 @@ class GuideCompilationService:
         identity: CompilationAttemptIdentity,
         origin: ProjectGuideCompilationRequestOrigin,
         runtime_configuration: ProjectGuideRuntimeConfiguration | None,
+        inference_required: bool | None = None,
     ) -> CompilationRequestReceipt:
         """Atomically persist an authorized request or recover its receipt."""
         self._require_fresh_session()
@@ -172,6 +170,12 @@ class GuideCompilationService:
         try:
             async with self._session.begin():
                 repository = GuideCompilationRepository(self._session)
+                await self._authorization.validate_request_replay(actor=actor, facts=facts, origin=origin)
+                if origin.trigger != "project_manager":
+                    raise GuideCompilationIntegrityError("explicit Project Manager request required")
+                if (inference_required is not None and
+                        (runtime_configuration is None or runtime_configuration.uses_inference != inference_required)):
+                    raise GuideCompilationIntegrityError("compilation request mode mismatch")
                 existing = await self._existing_request(repository, actor, facts, origin)
                 if existing is not None:
                     observed_operation_id = existing.operation_id
@@ -227,10 +231,6 @@ class GuideCompilationService:
 
     async def _admit_request(self, repository, actor, prepared_facts, identity, origin):
         """Resolve owner-locked inputs or return one exact natural replay receipt."""
-        if origin.trigger == "automatic_source_ready":
-            return await self._admit_automatic_request(
-                repository, actor, prepared_facts, identity, origin
-            )
         from .correction_request import admit_correction_request
 
         setup, facts, natural = await admit_correction_request(
@@ -249,36 +249,6 @@ class GuideCompilationService:
         if facts is None:
             raise GuideCompilationIntegrityError("correction compilation request input mismatch")
         return facts, setup, None
-
-    async def _admit_automatic_request(self, repository, actor, prepared_facts, identity, origin):
-        """Resolve automatic inputs under the setup lock without losing caller selectors."""
-        if self._request_inputs is None:
-            raise GuideCompilationIntegrityError("automatic compilation inputs unavailable")
-        resolved = await self._request_inputs.resolve(
-            self._session,
-            prepared_facts.setup_run_id,
-            operation_id=new_compilation_request_operation_id(),
-            lock=True,
-        )
-        natural = await repository.request_operation_for_setup(
-            prepared_facts.setup_run_id,
-            prepared_facts.setup_generation,
-            origin.trigger,
-            lock=True,
-        )
-        if natural is not None:
-            receipt = await self._natural_request_replay(
-                repository, actor, prepared_facts, origin, natural
-            )
-            return prepared_facts, None, receipt
-        facts = resolved[0]
-        if (
-            resolved[1:] != (identity, origin)
-            or facts.request_id != prepared_facts.request_id
-            or facts.idempotency_key != prepared_facts.idempotency_key
-        ):
-            raise GuideCompilationIntegrityError("automatic compilation request input mismatch")
-        return facts, None, None
 
     async def _natural_request_replay(
         self, repository, actor, prepared_facts, origin, natural
@@ -546,6 +516,8 @@ async def load_compilation_execution_state(
         except GuideCompilationIntegrityError as exc:
             raise CompilationExecutionStateUnavailable("attempt_unavailable") from exc
         try:
+            if operation.request_trigger != "project_manager":
+                raise GuideCompilationIntegrityError("explicit Project Manager request required")
             await repository.require_current_setup_lineage(attempt)
             classification = await repository.recovery_classification(attempt.id)
             compilation_id = None
@@ -582,6 +554,8 @@ async def _locked_exact(
 ) -> tuple[ProjectGuideCompilationRequestOperation, ProjectGuideCompilationAttempt]:
     attempt = await repository.attempt(facts.attempt_id, lock=True)
     operation = await repository.request_operation_for_attempt(attempt.id, lock=True)
+    if operation.request_trigger != "project_manager":
+        raise GuideCompilationIntegrityError("explicit Project Manager request required")
     if _preflight_facts(operation, attempt) != facts:
         raise GuideCompilationIntegrityError("compilation execute facts mismatch")
     await repository.require_current_setup_lineage(attempt)

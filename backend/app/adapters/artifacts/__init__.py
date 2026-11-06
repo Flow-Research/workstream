@@ -368,10 +368,8 @@ def get_guide_artifact_ingest_command(
             manager.close()
             bootstrap.close()
 
-    from app.adapters.artifacts.internal_workers import continue_guide_setup_after_stored_document
-
     service = GuideArtifactIngestService(
-        runtime, authority, continue_guide_setup_after_stored_document
+        runtime, authority
     )
     return PreparedGuideArtifactIngestCommand(
         service,

@@ -153,13 +153,6 @@ async def create_compiled_guide(
     """Create declarations with real AUTH, then execute/project/finalize scripted findings."""
     snapshot_id = await _create_guide_source(factory, values, actor, version)
     manifest = await create_committed_document_fixture(str(snapshot_id), sessions=factory)
-    # Arrange the completed durable dispatch prerequisite; no broker is exercised here.
-    async with factory() as session, session.begin():
-        setup = await session.get(ProjectSetupRun, str(manifest.setup_run_id))
-        setup.status = setup.current_step = "queued"
-        from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
-
-        setup.celery_task_id = project_guide_compilation_task_id(setup.id, setup.setup_generation)
     values = {
         **values,
         "guide": manifest.guide_id,

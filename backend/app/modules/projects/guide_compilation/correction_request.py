@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from uuid import UUID, uuid5
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -53,35 +54,27 @@ async def admit_correction_request(session, inputs, *, actor, facts, identity, o
         )
     )
     if correction is None:
-        setup = await session.scalar(
-            select(ProjectSetupRun)
-            .where(ProjectSetupRun.id == str(facts.setup_run_id))
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-        if (
-            setup is None
-            or setup.project_id != str(facts.project_id)
-            or setup.guide_id != str(facts.guide_id)
-            or setup.guide_version != facts.guide_version
-            or setup.source_snapshot_id != str(facts.source_snapshot_id)
-            or setup.setup_generation != facts.setup_generation
-            or facts.expected_predecessor_compilation_id is not None
-        ):
+        if inputs is None:
+            raise GuideCompilationIntegrityError("compilation inputs unavailable")
+        setup = await session.get(ProjectSetupRun, str(facts.setup_run_id))
+        if setup is None or facts.expected_predecessor_compilation_id is not None:
             raise GuideCompilationIntegrityError("compilation request authority mismatch")
+        # The manifest owner acquires guide/snapshot/setup and original metadata locks.
+        context = await inputs.context_for_setup(session, setup)
+        if CompilationAttemptIdentity.from_context(context) != identity:
+            raise GuideCompilationIntegrityError("compilation request input mismatch")
         natural = await GuideCompilationRepository(session).request_operation_for_setup(
-            facts.setup_run_id, facts.setup_generation, "project_manager", lock=True
+            facts.setup_run_id, facts.setup_generation, "project_manager", lock=True,
         )
         if natural is not None:
-            return None, None, natural
-        return (
-            None,
-            replace(
-                facts,
-                operation_id=operation_id or new_compilation_request_operation_id(),
-            ),
-            None,
-        )
+            return setup, None, natural
+        if setup.status != "awaiting_documents" or setup.current_step != "awaiting_documents":
+            raise GuideCompilationIntegrityError("compilation setup is not awaiting a request")
+        setup.status, setup.current_step = "dispatch_pending", "dispatch"
+        setup.celery_task_id = project_guide_compilation_task_id(setup.id, setup.setup_generation)
+        if setup.documents_ready_at is None:
+            setup.documents_ready_at = datetime.now(UTC)
+        return setup, replace(facts, operation_id=operation_id or new_compilation_request_operation_id()), None
     if inputs is None:
         raise GuideCompilationIntegrityError("correction request authority mismatch")
     await session.scalar(

@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "f2106e3ba7324a7e43f47995a3faa4714ea3f6fab2de425b02c2eea0a3a4f680",
+  "canonical_sha256": "511ae10529d23a1b6cf3f992ef7afa70fe2dcfc9e805d924dcf451e6d216427a",
   "components": {
     "schemas": {
       "ApiError": {
@@ -86,7 +86,7 @@
     }
   },
   "operation": {
-    "description": "Store one declared original; complete membership gates automatic setup.",
+    "description": "Store one declared original without requesting guide compilation.",
     "operationId": "upload_guide_document_api_v1_projects__project_id__guides__guide_id__documents__document_id__content_post",
     "parameters": [
       {

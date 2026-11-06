@@ -731,13 +731,23 @@ async def exercise_guide_setup_contract(
             content=payload,
         )
         ensure(upload.status_code == 202, f"guide document upload failed: {upload.text}")
-    # Successful original uploads already commit document readiness. The guide
-    # has no verifier/extractor work to drain. Deliver its queued compilation
-    # below through the explicit scripted runtime used by this API drill.
-    queued_setup = await request_json(
+    # Committed originals do not request compilation. The authorized PM must
+    # explicitly request assistance before the scripted broker can acknowledge it.
+    unrequested_setup = await request_json(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        diagnostic_reader_token,
+    )
+    ensure(unrequested_setup["status"] == "not_requested", "uploads requested guide compilation")
+    ensure(unrequested_setup["celery_task_id"] is None, "uploads dispatched guide compilation")
+    ensure(unrequested_setup["finalized_compilation_id"] is None, "uploads finalized guide compilation")
+    await request_json(
+        client, "POST", f"/api/v1/projects/{project_id}/guides/{guide_id}/setup",
+        diagnostic_reader_token, expected_status=202, idempotency_key=str(uuid4()),
+    )
+    queued_setup = await request_json(
+        client, "GET", f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
         diagnostic_reader_token,
     )
     # Internal lineage for the explicitly separate downstream fixture below;

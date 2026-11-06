@@ -107,6 +107,67 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.environment_path.write_text(environment_text, encoding="utf-8")
         self.environment = preflight.parse_environment(self.environment_path)
 
+    def test_optional_github_app_render_is_worker_only(self) -> None:
+        values = dict(self.environment)
+        values.update({
+            "WORKSTREAM_GITHUB_APP_ID": "123",
+            "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": str(self.root / "github.pem"),
+            "WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "456",
+        })
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        self.assertIn("github_app_private_key", rendered["secrets"])
+        self.assertIn(preflight.GITHUB_COMPOSE_PATH.as_posix(), preflight._compose_file_arguments(values))
+        for role, service in rendered["services"].items():
+            environment = service.get("environment", {})
+            mounted = {item["source"] for item in service.get("secrets", [])}
+            if role == "worker":
+                self.assertEqual(environment["WORKSTREAM_GITHUB_APP_ID"], "123")
+                self.assertEqual(environment["WORKSTREAM_GITHUB_APP_INSTALLATION_ID"], "456")
+                self.assertIn("github_app_private_key", mounted)
+            else:
+                self.assertTrue(set(preflight.GITHUB_APP_KEYS).isdisjoint(environment))
+                self.assertNotIn("github_app_private_key", mounted)
+            with self.subTest(injected_role=role):
+                altered = copy.deepcopy(rendered)
+                altered["services"][role]["environment"]["WORKSTREAM_GITHUB_APP_PRIVATE_KEY"] = "synthetic-private-value"
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_compose(altered, values)
+            if role != "worker":
+                altered = copy.deepcopy(rendered)
+                altered["services"][role]["environment"]["WORKSTREAM_GITHUB_APP_ID"] = "123"
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_compose(altered, values)
+        baseline = preflight.render_compose(self.environment_path, self.environment)
+        preflight.validate_compose(baseline, self.environment)
+        self.assertNotIn("github_app_private_key", baseline["secrets"])
+        self.assertNotIn(str(preflight.GITHUB_COMPOSE_PATH), preflight._compose_file_arguments(self.environment))
+        self.assertIn("WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE", preflight._secret_file_keys(values))
+        self.assertNotIn("WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE", preflight._secret_file_keys(self.environment))
+
+    def test_github_app_requires_safe_paired_configuration(self) -> None:
+        valid = dict(self.environment, WORKSTREAM_GITHUB_APP_ID="123",
+                     WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE=str(self.root / "github.pem"))
+        preflight.validate_environment(valid)
+        cases = [
+            {"WORKSTREAM_GITHUB_APP_ID": ""},
+            {"WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": ""},
+            {"WORKSTREAM_GITHUB_APP_ID": "0"},
+            {"WORKSTREAM_GITHUB_APP_ID": "-1"},
+            {"WORKSTREAM_GITHUB_APP_ID": "１２３"},
+            {"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "0"},
+            {"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "not-an-id"},
+            {"WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": "relative.pem"},
+            {"WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": str(self.root / ".." / "github.pem")},
+            {"WORKSTREAM_GITHUB_APP_PRIVATE_KEY": "synthetic-private-value"},
+        ]
+        for changes in cases:
+            with self.subTest(changes=changes), self.assertRaises(preflight.PreflightError):
+                preflight.validate_environment(valid | changes)
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_environment(self.environment | {"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "456"})
+
     def _render_modified_compose(self, compose_text: str) -> dict[str, object]:
         compose_path = self.root / "compose.yml"
         compose_path.write_text(compose_text, encoding="utf-8")
@@ -1747,6 +1808,133 @@ class HostedReleaseConfigTests(unittest.TestCase):
             ],
         )
 
+    def _points_inputs(self):
+        token = self.root / "finance-token"
+        token.write_text("private-finance-bearer", encoding="ascii")
+        token.chmod(0o400)
+        values = self.environment | {
+            "WORKSTREAM_RUNTIME_UID": str(os.getuid()),
+            "WORKSTREAM_RUNTIME_GID": str(os.getgid()),
+        }
+        arguments = [
+            "provision-project-points",
+            "--project-id", "00000000-0000-4000-8000-000000000001",
+            "--adapter-actor-id", "00000000-0000-4000-8000-000000000002",
+            "--unit-code", "FLOW", "--route-key", "flow_points.recording",
+            "--finance-token-file", str(token),
+        ]
+        return values, arguments, token
+
+    def test_points_operator_uses_only_fixed_image_owned_command_and_private_mount(self):
+        values, arguments, token = self._points_inputs()
+        with patch.object(preflight.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            self.assertEqual(preflight.run_compose(self.environment_path, values, arguments), 0)
+        command = run.call_args.args[0]
+        name = command[command.index("--name") + 1]
+        self.assertRegex(name, r"^workstream-points-[0-9a-f]{32}$")
+        self.assertEqual(command[command.index("run"):], [
+            "run", "--rm", "--no-deps", "-T", "--pull", "never", "--name", name,
+            "--volume", f"{token}:/run/secrets/points_finance_token:ro", "api",
+            "/usr/bin/timeout", "--signal=TERM", "--kill-after=5s", "120s",
+            "python", "scripts/provision_project_points.py",
+            *arguments[1:9], "--finance-token-file", "/run/secrets/points_finance_token",
+        ])
+        self.assertEqual(run.call_args.kwargs["env"], preflight.compose_environment(values))
+        self.assertEqual(run.call_args.kwargs["timeout"], 150)
+        self.assertNotIn("private-finance-bearer", repr(run.call_args))
+        self.assertNotIn("--entrypoint", command)
+        self.assertNotIn("--service-ports", command)
+
+    def test_points_operator_rejects_extra_or_malformed_selectors_before_launch(self):
+        values, original, _ = self._points_inputs()
+        cases = [original[:-2], original + ["--entrypoint", "sh"], ["run", "api", "sh"]]
+        for index, value in ((1, "--entrypoint"), (3, "--project-id"), (2, "invalid"),
+                             (4, "invalid"), (6, "--help"), (8, "../route"), (8, "--help")):
+            changed = list(original)
+            changed[index] = value
+            cases.append(changed)
+        for arguments in cases:
+            with self.subTest(arguments=arguments), patch.object(preflight.subprocess, "run") as run:
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.run_compose(self.environment_path, values, arguments)
+                run.assert_not_called()
+
+    def test_points_operator_rejects_unsafe_token_mounts(self):
+        for unsafe in ("symlink", "parent-link", "hardlink", "public", "directory",
+                       "empty", "oversized", "owner", "group", "delimiter"):
+            with self.subTest(unsafe=unsafe):
+                values, arguments, token = self._points_inputs()
+                if unsafe == "symlink":
+                    token = self.root / "token-link"
+                    token.symlink_to(arguments[-1])
+                elif unsafe == "parent-link":
+                    parent = self.root / "parent-link"
+                    parent.symlink_to(self.root, target_is_directory=True)
+                    token = parent / token.name
+                elif unsafe == "hardlink":
+                    os.link(token, self.root / "hardlink")
+                elif unsafe == "public":
+                    token.chmod(0o644)
+                elif unsafe == "directory":
+                    token = self.root
+                elif unsafe in {"empty", "oversized"}:
+                    token.chmod(0o600)
+                    token.write_text("" if unsafe == "empty" else "x" * 16_385)
+                elif unsafe in {"owner", "group"}:
+                    key = "WORKSTREAM_RUNTIME_UID" if unsafe == "owner" else "WORKSTREAM_RUNTIME_GID"
+                    values[key] = str(int(values[key]) + 1)
+                else:
+                    token = self.root / "token:mount"
+                    token.write_text("private-finance-bearer")
+                    token.chmod(0o400)
+                arguments[-1] = str(token)
+                with patch.object(preflight.subprocess, "run") as run:
+                    with self.assertRaises(preflight.PreflightError):
+                        preflight.run_compose(self.environment_path, values, arguments)
+                    run.assert_not_called()
+                # Restore the shared token before the next independent subcase.
+                (self.root / "finance-token").chmod(0o600)
+                if unsafe == "hardlink":
+                    (self.root / "hardlink").unlink()
+
+    def test_points_operator_timeout_and_start_failure_clean_only_owned_container(self):
+        values, arguments, _ = self._points_inputs()
+        for error in (subprocess.TimeoutExpired([], 150), OSError("private-provider-detail")):
+            for cleanup_ok in (True, False):
+                errors = io.StringIO()
+                cleanup = subprocess.CompletedProcess([], 0 if cleanup_ok else 1)
+                with (
+                    self.subTest(error=type(error), cleanup_ok=cleanup_ok),
+                    patch.object(preflight.subprocess, "run", side_effect=[error, cleanup]) as run,
+                    redirect_stderr(errors),
+                ):
+                    with self.assertRaisesRegex(preflight.PreflightError, "no automatic retry"):
+                        preflight.run_compose(self.environment_path, values, arguments)
+                launch, removal = run.call_args_list
+                name = launch.args[0][launch.args[0].index("--name") + 1]
+                self.assertEqual(removal.args[0], ["docker", "rm", "--force", name])
+                self.assertEqual(removal.kwargs["timeout"], 10)
+                self.assertEqual(removal.kwargs["env"], preflight.compose_environment(values))
+                self.assertNotIn("private-provider-detail", errors.getvalue())
+                self.assertEqual(bool(errors.getvalue()), not cleanup_ok)
+                if not cleanup_ok:
+                    self.assertIn(name, errors.getvalue())
+
+    def test_points_operator_preflight_requires_static_inputs_without_checker_execution(self):
+        _, arguments, _ = self._points_inputs()
+        with (
+            patch.object(compose, "validate_private_host_inputs") as private,
+            patch.object(compose, "validate_smol_runtime") as native,
+            patch.object(compose, "validate_trusted_intake") as intake,
+            patch.object(compose, "run_compose", return_value=0) as run,
+        ):
+            self.assertEqual(self._compose_main(*arguments), (0, ""))
+            private.assert_called_once_with(self.environment, require_node=False)
+            native.assert_not_called()
+            intake.assert_not_called()
+            run.assert_called_once_with(self.environment_path, self.environment, arguments)
+
     def test_checker_model_paths_require_enabled_exact_proxy_topology(self) -> None:
         for key in ("model_proxy_socket", "model_relay_root"):
             for replacement in (None, "/tmp/substituted"):
@@ -2024,6 +2212,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
         host_uid = os.getuid()
         host_gid = os.getgid()
         environment = dict(self.environment)
+        environment["WORKSTREAM_GITHUB_APP_ID"] = "123"
         environment["WORKSTREAM_DEPLOYMENT_ROOT"] = str(self.root)
         environment["WORKSTREAM_RUNTIME_UID"] = str(host_uid)
         environment["WORKSTREAM_RUNTIME_GID"] = str(host_gid)
@@ -2214,6 +2403,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
 
 class ReleaseSecretLoaderTests(unittest.TestCase):
     FILE_TO_SECRET = {
+        "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
         "WORKSTREAM_DATABASE_URL_FILE": "WORKSTREAM_DATABASE_URL",
         "WORKSTREAM_CELERY_BROKER_URL_FILE": "WORKSTREAM_CELERY_BROKER_URL",
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE": (
@@ -2258,8 +2448,13 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
         sdk_environment: str = "agents",
         include_runtime_configuration: bool = True,
         provider_files: tuple[str, ...] = ("openrouter",),
+        github: bool = False,
+        github_settings: dict[str, str] | None = None,
+        check_github_settings: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
+        for variable in preflight.GITHUB_APP_KEYS:
+            environment.pop(variable, None)
         file_names = {
             "WORKSTREAM_DATABASE_URL_FILE": "database",
             "WORKSTREAM_CELERY_BROKER_URL_FILE": "broker",
@@ -2274,6 +2469,10 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
             f"WORKSTREAM_MODEL_PROXY_{name.upper()}_API_KEY_FILE"
             for name in provider_files
         }
+        if github:
+            file_names["WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE"] = "github-private-key"
+            environment["WORKSTREAM_GITHUB_APP_ID"] = "123"
+            environment["WORKSTREAM_GITHUB_APP_INSTALLATION_ID"] = "456"
         for variable, name in file_names.items():
             if (
                 variable in preflight.MODEL_PROXY_SECRET_FILE_KEYS
@@ -2304,6 +2503,8 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
             environment[override[0]] = str(override[1])
         if unset_selector is not None:
             environment.pop(unset_selector, None)
+        if github_settings:
+            environment.update(github_settings)
         environment["WORKSTREAM_RELEASE_ROLE"] = role
         runtime_variables = {
             "WORKSTREAM_PROJECT_AGENT_RUNTIME": runtime,
@@ -2330,6 +2531,8 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
         role_files = self.ROLE_FILES.get(role, ())
         if role == "model-proxy":
             role_files = (*role_files, *sorted(configured_provider_variables))
+        if github and role == "worker":
+            role_files = (*role_files, "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE")
         expected = {self.FILE_TO_SECRET[key] for key in role_files}
         environment["EXPECTED_SECRET_NAMES"] = ",".join(sorted(expected))
         environment["EXPECTED_SECRET_SHA256"] = hashlib.sha256(
@@ -2342,6 +2545,7 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
             "'WORKSTREAM_API_RATE_LIMIT_KEY_SECRET',"
             "'WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET','OPENAI_API_KEY',"
             "'OPENROUTER_API_KEY','WORKSTREAM_PROJECT_AGENT_API_KEY',"
+            "'WORKSTREAM_GITHUB_APP_PRIVATE_KEY',"
             "'WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID',"
             "'WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY',"
             "'WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN',"
@@ -2358,6 +2562,19 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
             "assert 'WORKSTREAM_RELEASE_ROLE' not in os.environ;"
             "print('loader-ok')"
         )
+        if check_github_settings:
+            program += (
+                ";import sys;"
+                f"sys.path.insert(0,{str(ROOT / 'backend')!r});"
+                "selected={key:value for key,value in os.environ.items() "
+                "if key.startswith('WORKSTREAM_GITHUB_APP_')};"
+                "os.environ.clear();os.environ.update(selected);"
+                "from app.core.config import Settings;"
+                "settings=Settings(_env_file=None,environment='test');"
+                "assert settings.github_app_installation_id is None;"
+                "assert (settings.github_app_id is not None)=="
+                "('WORKSTREAM_GITHUB_APP_PRIVATE_KEY' in selected)"
+            )
         marker = root / "project-agent-sdk-environment"
         if marker.exists():
             marker.chmod(0o600)
@@ -2377,13 +2594,71 @@ class ReleaseSecretLoaderTests(unittest.TestCase):
         )
         loader.chmod(0o555)
         return subprocess.run(
-            ["/bin/sh", str(loader), sys.executable, "-c", program],
+            ["/bin/sh", str(loader),
+             str(ROOT / "backend/.venv/bin/python") if check_github_settings else sys.executable,
+             "-c", program],
             env=environment,
             capture_output=True,
             text=True,
             timeout=10,
             check=False,
         )
+
+    def test_github_key_loader_is_worker_only_and_preserves_multiline_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            content = "-----BEGIN PRIVATE KEY-----\nsynthetic $(touch ignored) `false`\n-----END PRIVATE KEY-----"
+            completed = self._run_loader(root, github=True, content=content)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "loader-ok\n")
+            self.assertEqual(completed.stderr, "")
+            self.assertFalse((ROOT / "ignored").exists())
+            for role in self.ROLE_FILES:
+                if role == "worker":
+                    continue
+                with self.subTest(role=role):
+                    refused = self._run_loader(root, role=role, github=True, content=content)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertIn("worker release role", refused.stderr)
+                    self.assertNotIn(content, refused.stdout + refused.stderr)
+
+            for settings in (
+                {"WORKSTREAM_GITHUB_APP_ID": ""},
+                {"WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": ""},
+                {"WORKSTREAM_GITHUB_APP_ID": "0"},
+                {"WORKSTREAM_GITHUB_APP_ID": "-1"},
+                {"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "bad"},
+                {"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": "000"},
+            ):
+                with self.subTest(settings=settings):
+                    refused = self._run_loader(root, github=True, github_settings=settings)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertNotIn(content, refused.stdout + refused.stderr)
+            missing = root / "missing-github-key"
+            symlink = root / "linked-github-key"
+            symlink.symlink_to(root / "github-private-key")
+            broad = root / "broad-github-key"
+            broad.write_text(content)
+            broad.chmod(0o440)
+            for invalid in (missing, symlink, broad):
+                with self.subTest(invalid=invalid):
+                    refused = self._run_loader(root, github=True, override=("WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE", invalid))
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertNotIn(content, refused.stdout + refused.stderr)
+
+    def test_github_optional_installation_and_absent_app_parse_real_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for github in (False, True):
+                with self.subTest(github=github):
+                    completed = self._run_loader(
+                        root, github=github,
+                        content="-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----",
+                        github_settings={"WORKSTREAM_GITHUB_APP_INSTALLATION_ID": ""},
+                        check_github_settings=True,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertEqual(completed.stdout, "loader-ok\n")
 
     def test_loader_does_not_evaluate_or_log_secret_content(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -445,6 +445,23 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         f"POST {proposal_prefix}/corrections/{{correction_operation_id}}/dispatch",
     }
     assert proposal_routes <= set(protected_inventory)
+    initial_routes = {
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/setup",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile",
+    }
+    assert initial_routes <= set(protected_inventory)
+    for route in initial_routes:
+        path = route.split(" ", 1)[1]
+        operation = schema["paths"][path]["post"]
+        assert operation["x-workstream-action-id"] == "project.guide_compilation.request"
+        assert "requestBody" not in operation
+        assert operation["responses"]["202"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/GuideCompilationDispatchResponse"
+        }
+        assert [item for item in operation["parameters"] if item["name"] == "Idempotency-Key"] == [{
+            "name": "Idempotency-Key", "in": "header", "required": True,
+            "schema": {"type": "string", "format": "uuid"},
+        }]
     post_policy_prefix = f"{proposal_prefix}/post-submission-policies/{{policy_id}}"
     post_policy_routes = {
         f"GET {post_policy_prefix}",
@@ -485,6 +502,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         f"POST {policy_prefix}/{{policy_id}}/versions/{{version_id}}/publication": "contribution.policy.publish",
         f"POST {policy_prefix}/{{policy_id}}/versions/{{version_id}}/retirement": "contribution.policy.retire",
     }
+    new_manager_reads |= initial_routes
     assert policy_actions.keys() <= set(protected_inventory)
     new_manager_reads |= policy_actions.keys()
     activation_path = "/api/v1/projects/{project_id}/guides/{guide_id}/activate"
@@ -646,13 +664,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 132
+    assert len(route_inventory) == 134
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 130
+    assert len(protected_inventory) == 132
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
@@ -766,6 +784,8 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}": "project.read",
         "POST /api/v1/projects": "project.create",
         "POST /api/v1/projects/{project_id}/guides": "project.guide.create",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/setup": "project.guide_compilation.request",
+        "POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile": "project.guide_compilation.request",
         "PATCH /api/v1/projects/{project_id}/guides/{guide_id}": "project.guide.update",
         "PUT /api/v1/projects/{project_id}/guides/{guide_id}/review-policy": (
             "project.review_policy.update"

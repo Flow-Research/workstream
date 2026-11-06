@@ -1,4 +1,4 @@
-"""Project-guide inference worker topology and timeout boundaries."""
+"""Project-guide compilation worker topology and timeout boundaries."""
 
 from __future__ import annotations
 
@@ -177,7 +177,10 @@ def _prove_unsafe_prefetch_redelivery(broker, redis_client, context, tmp_path) -
     app, task = _build_redis_delivery_probe_app(
         broker=broker, prefix=prefix, disable_prefetch=False, visibility=1
     )
-    worker_process = _start_redis_prefork_worker(context, app, marker, "manager_authored")
+    # This synthetic transport negative control is not a guide consumer. Real
+    # guide consumers must reject these settings even in manager-authored mode.
+    setattr(app.conf, topology.PROJECT_GUIDE_CONSUMER_MARKER, False)
+    worker_process = _start_redis_prefork_worker(context, app, marker, "openai_agents_sdk")
     task_ids = [uuid4().hex for _ in range(3)]
     try:
         for task_id in task_ids:
@@ -385,11 +388,13 @@ def test_global_signal_ignores_unowned_apps_without_resetting_guide_worker():
     assert topology._validated_parent == validated_parent
 
 
-def test_manager_authored_runtime_does_not_require_provider_worker_topology(monkeypatch):
+def test_global_manager_authored_setting_cannot_bypass_inference_worker_topology(monkeypatch):
     monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME", "manager_authored")
     get_settings.cache_clear()
-    topology.validate_project_setup_worker(worker(pool=SoloPool, broker="memory://"))
-    topology.require_project_setup_worker(SimpleNamespace())
+    with pytest.raises(WorkerShutdown, match="bounded Redis prefork"):
+        topology.validate_project_setup_worker(worker(pool=SoloPool, broker="memory://"))
+    with pytest.raises(RuntimeError, match="validated Redis prefork"):
+        topology.require_project_setup_worker(SimpleNamespace(request=SimpleNamespace(), app=worker().app))
 
 
 def test_validated_prefork_child_requires_exact_hard_limit(monkeypatch):

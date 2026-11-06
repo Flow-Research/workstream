@@ -182,4 +182,31 @@ def _planned_service_matrix_inputs(context, action_id, derive_inputs):
     scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
     if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
         caller_input, scope = derive_inputs()
+    elif action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC:
+        # Historical input must parse before the inactive action's AUTH denial.
+        # This does not enable automatic request admission.
+        from app.modules.authorization.domain.guide_compilation import (
+            ProjectGuideCompilationRequestResourceContext,
+        )
+
+        operation_id, project_id = new_record_id(), new_record_id()
+        resource = ProjectGuideCompilationRequestResourceContext(
+            resource_type="project_guide_compilation_request",
+            resource_id=operation_id, operation_id=operation_id,
+            scope_project_id=project_id, guide_id=new_record_id(),
+            source_snapshot_id=new_record_id(), setup_run_id=new_record_id(),
+            setup_generation=1, request_id=context.request_id,
+            idempotency_key=caller_input.idempotency_key,
+            request_facts_digest="sha256:" + "a" * 64,
+            trigger="automatic_source_ready",
+            source_mutation_operation_id=new_record_id(),
+            source_authorization_decision_event_id=new_record_id(),
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=caller_input.idempotency_key,
+            request_value=resource.model_dump(mode="json"),
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id,
+        )
     return context, caller_input, scope

@@ -21,6 +21,65 @@ sys.path.insert(0, str(SCRIPTS))
 MODULES = [importlib.import_module("api_contract_e2e")]
 
 
+@pytest.mark.asyncio
+async def test_api_drill_requests_assistance_after_upload_before_delivering(monkeypatch) -> None:
+    """Completed uploads alone cannot supply the drill's compilation delivery."""
+    from uuid import UUID, uuid4
+
+    import httpx
+
+    from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
+
+    project_id, guide_id, snapshot_id, setup_id, document_id = (str(uuid4()) for _ in range(5))
+    path = f"/api/v1/projects/{project_id}/guides/{guide_id}"
+    events = []
+
+    def respond(request):
+        assert request.headers["Authorization"] == "Bearer project-pm"
+        response_headers = {
+            key: request.headers[key]
+            for key in ("x-request-id", "x-correlation-id") if key in request.headers
+        }
+        if request.method == "POST":
+            UUID(request.headers["Idempotency-Key"])
+            if request.url.path == path + f"/documents/{document_id}/content":
+                assert request.content.startswith(b"%PDF")
+                events.append("upload")
+            else:
+                assert request.url.path == path + "/setup"
+                assert events == ["upload", "not_requested"]
+                events.append("request")
+            return httpx.Response(202, json={}, headers=response_headers)
+        assert request.url.path == path + "/setup-runs/latest"
+        requested = "request" in events
+        events.append("queued" if requested else "not_requested")
+        return httpx.Response(200, headers=response_headers, json={
+            "id": setup_id, "source_snapshot_id": snapshot_id, "setup_generation": 1,
+            "status": "queued" if requested else "not_requested",
+            "current_step": "queued" if requested else "not_requested",
+            "celery_task_id": project_guide_compilation_task_id(setup_id, 1) if requested else None,
+            "documents_ready_at": "2026-11-05T00:00:00Z" if requested else None,
+            "finalized_compilation_id": None,
+        })
+
+    class DeliveryReached(Exception):
+        pass
+
+    async def compile_guide(delivery):
+        assert events == ["upload", "not_requested", "request", "queued"]
+        assert delivery.source_snapshot_id == UUID(snapshot_id)
+        raise DeliveryReached
+
+    monkeypatch.setattr(importlib.import_module("guide_compilation_e2e"), "compile_live_guide", compile_guide)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond), base_url="http://test") as client:
+        with pytest.raises(DeliveryReached):
+            await MODULES[0].exercise_guide_setup_contract(
+                client, "administrator", "project-pm", "contributor", "service", "role-only",
+                "foreign-pm", "manager-subject", project_id, guide_id, "run",
+                documents=[{"document_id": document_id, "media_type": "application/pdf"}],
+            )
+
+
 def test_scripted_guide_broker_acknowledgement_binds_exact_delivery() -> None:
     """The API drill cannot acknowledge a different generation or task ID."""
     from uuid import uuid4

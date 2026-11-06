@@ -47,17 +47,21 @@ def main() -> int:
             ["up", "--detach", "model-proxy"],
         )
         migration = args.compose_arguments == ["migrate"]
+        points = bool(
+            args.compose_arguments
+            and args.compose_arguments[0] == "provision-project-points"
+        )
         proof_bootstrap = bool(
             args.compose_arguments and args.compose_arguments[0] == "proof"
         )
         if proxy_bootstrap and values["WORKSTREAM_MODEL_PROXY_ENABLED"] != "true":
             raise PreflightError("model proxy bootstrap requires an enabled proxy")
-        if launch or migration:
+        if launch or migration or points:
             checker_config = load_checker_config(
                 Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"])
             )
             validate_checker_config(checker_config, values)
-            if proxy_bootstrap or migration or proof_bootstrap:
+            if proxy_bootstrap or migration or proof_bootstrap or points:
                 # No API, worker or producer is released in these fixed stages.
                 validate_private_host_inputs(values, require_node=False)
             else:

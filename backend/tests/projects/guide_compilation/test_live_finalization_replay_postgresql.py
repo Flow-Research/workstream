@@ -8,21 +8,19 @@ from tests.projects.client_fixtures import (
     project_client as project_client,
     project_database_env as project_database_env,
 )
-from .test_automatic_request import automatic_source as automatic_source
+from .pending_source import pending_source as pending_source, request_pending_source
 from .live_fixtures import _delivery, scripted_document_port as scripted_document_port
 from .runtime_fixtures import (
     ScriptedGuideRuntime,
     scripted_model_profile as scripted_model_profile,
-    scripted_runtime_configuration,
 )
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 @pytest.mark.parametrize(
     "failure", [None, "storage_unavailable", "service_authority_denied", "revoked"]
 )
 async def test_finalization_between_projections_replays_only_with_current_authority(
-    automatic_source, monkeypatch, failure
+    pending_source, scripted_model_profile, monkeypatch, failure
 ):
     """A late policy projection reuses only the exact, freshly authorized finalizer."""
     import asyncio
@@ -33,12 +31,12 @@ async def test_finalization_between_projections_replays_only_with_current_author
 
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
-    factory, actor, setup_id, snapshot = automatic_source
+    factory, actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
     primary, duplicate = await worker._coordinator(factory), await worker._coordinator(factory)
     finalize_entered, finalize_release = asyncio.Event(), asyncio.Event()
     policy_entered, policy_release = asyncio.Event(), asyncio.Event()
@@ -108,9 +106,8 @@ async def test_finalization_between_projections_replays_only_with_current_author
         assert await session.scalar(text("select count(*) from project_guide_setup_finalizations")) == 1
 
 
-@pytest.mark.usefixtures("scripted_model_profile")
 async def test_projection_source_error_without_finalization_is_not_recovered(
-    automatic_source, monkeypatch
+    pending_source, scripted_model_profile, monkeypatch
 ):
     """A source error cannot create a finalization or conceal missing projections."""
     from app.core.config import get_settings
@@ -119,12 +116,12 @@ async def test_projection_source_error_without_finalization_is_not_recovered(
 
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
-    factory, _actor, setup_id, snapshot = automatic_source
+    factory, _actor, setup_id, snapshot = pending_source
     await create_committed_document_fixture(snapshot["id"])
+    await request_pending_source(factory, setup_id, scripted_model_profile)
     delivery = await _delivery(factory, setup_id)
     runtime = ScriptedGuideRuntime()
     monkeypatch.setattr(worker, "create_project_guide_runtime", lambda configuration: runtime)
-    monkeypatch.setattr(worker, "project_guide_runtime_configuration", scripted_runtime_configuration)
     coordinator = await worker._coordinator(factory)
 
     async def source_unavailable(command):

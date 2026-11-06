@@ -8,20 +8,17 @@ from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDe
 
 from .correction_request import correction_request_selector
 from .models import ProjectGuideCompilationRequestOperation, ProjectGuideProposalCorrection
-from .request_inputs import automatic_request_selector
 
 
 async def manual_delivery_attempt(session, setup, attempt):
-    """Return only an exact committed correction attempt; automatic requests keep their path."""
+    """Require an exact committed PM request before any worker execution."""
     correction = (await session.execute(
         select(ProjectGuideProposalCorrection).where(
             ProjectGuideProposalCorrection.successor_setup_run_id == setup.id,
         )
     )).scalar_one_or_none()
     if attempt is None:
-        if correction is not None:
-            raise ProjectGuideCompilationDeliveryError()
-        return None
+        raise ProjectGuideCompilationDeliveryError()
     operations = (await session.scalars(
         select(ProjectGuideCompilationRequestOperation).where(
             ProjectGuideCompilationRequestOperation.attempt_id == attempt.id,
@@ -36,16 +33,16 @@ async def manual_delivery_attempt(session, setup, attempt):
         "project_id", "guide_id", "source_snapshot_id", "setup_generation",
     )) or attempt.setup_run_id != setup.id:
         raise ProjectGuideCompilationDeliveryError()
-    if operation.request_trigger == "automatic_source_ready":
-        selector = automatic_request_selector(attempt.setup_run_id, attempt.setup_generation)
-        if (
-            correction is not None
-            or operation.operation_id.version != 7
-            or operation.request_id != uuid5(selector, "request")
-            or operation.idempotency_key != uuid5(selector, "idempotency")
-        ):
+    if (operation.request_trigger != "project_manager" or operation.operation_id.version != 7
+            or operation.source_mutation_operation_id is not None
+            or operation.source_authorization_decision_event_id is not None
+            or attempt.runtime_configuration is None):
+        raise ProjectGuideCompilationDeliveryError()
+    if correction is None:
+        if (operation.expected_predecessor_compilation_id is not None
+                or operation.request_id != uuid5(operation.idempotency_key, "guide-compilation-request")):
             raise ProjectGuideCompilationDeliveryError()
-        return None
+        return attempt.id
     if (
         operation.request_trigger != "project_manager"
         or correction is None

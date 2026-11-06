@@ -29,3 +29,12 @@ No speculative Claude adapter, generic plugin platform, runtime-generated shell
 or future product work. No full hosted journey is claimed by adapter tests.
 Merged PR #651's draft-review/checker-specification behavior remains required
 for every runtime. Retained unresolved provider attempts cannot be reset or rerun.
+
+The [explicit guide assistance and Garden drill change](../../changes/explicit-guide-assistance-and-garden-drill.md)
+uses these existing runtime boundaries: uploading originals invokes no inference;
+an exact-project PM explicitly requests `/setup` assistance or provider-free
+uploaded manager rules through `/requirements/compile`. Callers supply no runtime
+or model settings, and the rules route requires no global runtime toggle. Both
+paths retain the same validation, independent approvals and activation. Historical
+adapter qualification does not establish deployment of these explicit routes or
+a live Garden contribution journey.

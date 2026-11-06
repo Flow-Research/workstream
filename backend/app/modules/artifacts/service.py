@@ -251,9 +251,7 @@ class GuideArtifactIngestService:
             ],
         ],
         authority: GuideArtifactPreparedAuthorization,
-        on_document_stored: Callable[[UUID], Awaitable[None]],
     ) -> None:
-        self._on_document_stored = on_document_stored
         self._runtime_factory = runtime_factory
         self._authority = authority
 
@@ -328,13 +326,6 @@ class GuideArtifactIngestService:
         finally:
             await prepared.close()
 
-        if status in {"document_stored", "object_confirmed"}:
-            try:
-                await self._on_document_stored(admission.attempt_id)
-            except Exception:
-                # The committed upload remains successful. The bounded continuation
-                # scanner recovers publication without repeating storage or inference.
-                pass
         return result
 
 

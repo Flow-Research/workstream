@@ -49,7 +49,7 @@ Exact pre-cutover work record: [`STATUS.md`](pre-cutover/STATUS.md),
   delivered. Mandatory persisted custody accompanies the first authorized atomic
   consequence at 04E2-B. No packet resolver or human runtime is live.
 
-- Completed boundary: automatic unified execution, deterministic projections,
+- Completed boundary: unified execution, deterministic projections,
   immutable setup finalization, current-authority replay and one public guide
   creation/document-upload flow; hidden complete-proposal review, pre-submission
   approval custody and correction successors; public exact manager review,
@@ -130,15 +130,20 @@ acceptance later uses the same authorized shared acceptance/CON operation.
   sufficiency/artifact-policy projections are complete through 04A3.
 - POL-04A2 atomically binds those exact projections to an immutable finalization
   receipt and closes the current setup generation. AUTH-12B2 supplies the exact
-  concrete adapter; POL-04B explicitly composes it in the automatic worker.
+  concrete adapter; POL-04B explicitly composes it in the durable worker.
   Default composition and public finalization routes remain unavailable.
 
-- POL-04B1 binds automatic source-ready requests to committed source consent
-  and current setup-service authority. Human and service replay hold current
-  authority through receipt classification.
-- POL-04B runs one automatic compilation when ART commits all assigned originals, using an
-  immutable runtime/model/instructions snapshot and scoped on-demand document
-  access. Original bytes stay in ArtifactStore; extracted bodies are not stored
+- POL-04B1's historical automatic source-ready request records remain immutable
+  evidence. Their retained action identifier is inactive and cannot authorize
+  new inference. The [explicit guide assistance and Garden drill change](../../changes/explicit-guide-assistance-and-garden-drill.md)
+  replaces upload-triggered requests: uploads establish custody only; a current
+  human exact-project Project Manager explicitly calls the guide's `/setup`
+  operation for assistance or `/requirements/compile` for provider-free uploaded
+  manager rules. Both require a UUID `Idempotency-Key`, no body, and the same
+  validation, independent PRE/POST approvals and activation. Runtime settings
+  belong to composition; changed manager rules require a new guide version.
+- The durable compilation path uses an immutable runtime/model/instructions
+  snapshot and scoped on-demand document access. Original bytes stay in ArtifactStore; extracted bodies are not stored
   in PostgreSQL. It replaces all three earlier
   inference methods and stops at findings and draft pre/post proposals. Unknown
   provider outcomes are visible and cannot trigger a second invocation.

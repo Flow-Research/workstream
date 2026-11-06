@@ -9,7 +9,6 @@ from app.modules.projects.api.guide_compilation import ProjectGuideCompilationDe
 from app.core.identifiers import new_record_id
 from app.modules.projects.guide_compilation.correction_request import correction_request_selector
 from app.modules.projects.guide_compilation.delivery_request import manual_delivery_attempt
-from app.modules.projects.guide_compilation.request_inputs import automatic_request_selector
 
 
 def delivery_case():
@@ -60,19 +59,17 @@ async def test_exact_manual_request_required(fault):
         await manual_delivery_attempt(session,setup,attempt)
 
 
-async def test_automatic_delivery_retains_its_own_admission_path():
-    session,setup,attempt,operation,_ = delivery_case()
+async def test_initial_delivery_requires_explicit_request_and_cannot_use_historical_automatic_authority():
+    session, setup, attempt, operation, _ = delivery_case()
     session.correction = None
-    assert await manual_delivery_attempt(session,setup,None) is None
-    operation.request_trigger = "automatic_source_ready"
-    selector = automatic_request_selector(setup.id,setup.setup_generation)
-    operation.operation_id = new_record_id()
-    operation.request_id = uuid5(selector, "request")
-    operation.idempotency_key = uuid5(selector, "idempotency")
-    assert await manual_delivery_attempt(session,setup,attempt) is None
-    operation.request_id = uuid4()
     with pytest.raises(ProjectGuideCompilationDeliveryError):
-        await manual_delivery_attempt(session,setup,attempt)
+        await manual_delivery_attempt(session, setup, None)
+    operation.expected_predecessor_compilation_id = None
+    operation.request_id = uuid5(operation.idempotency_key, "guide-compilation-request")
+    assert await manual_delivery_attempt(session, setup, attempt) == attempt.id
+    operation.request_trigger = "automatic_source_ready"
+    with pytest.raises(ProjectGuideCompilationDeliveryError):
+        await manual_delivery_attempt(session, setup, attempt)
 
 
 @pytest.mark.parametrize("failure,expected", [
@@ -101,7 +98,7 @@ async def test_correction_dispatch_distinguishes_storage_from_conflict(monkeypat
     monkeypatch.setattr(correction_dispatch.GuideCompilationService, "request_correction", request)
     publish = AsyncMock()
     monkeypatch.setattr(correction_dispatch, "dispatch_project_guide_compilation_after_commit", publish)
-    service = correction_dispatch.GuideCorrectionDispatchService(
+    service = correction_dispatch.GuideCompilationDispatchService(
         session, object(), object(), profiles=object()
     )
     monkeypatch.setattr(service, "_selected_inputs", AsyncMock(return_value=object()))

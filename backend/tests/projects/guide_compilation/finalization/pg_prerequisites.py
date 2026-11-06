@@ -36,6 +36,7 @@ from app.modules.projects.api import (
 )
 from app.modules.projects.guide_compilation.projections import GuideCompilationProjectionService
 from app.modules.projects.guide_compilation.service import GuideCompilationService
+from app.modules.projects.guide_compilation.request_inputs import CompilationRequestInputs
 from app.modules.projects.api.setup_identity import project_guide_compilation_task_id
 from app.modules.projects.setup_queue import dispatch_project_guide_compilation_after_commit
 from ..helpers import (
@@ -94,7 +95,10 @@ async def request_compilation(factory, values, compilation_context, predecessor_
         kernel = AuthorizationService(session, ctx, admin_repository=repository)
         prepared = PreparedAuthorizationService(session, ctx, kernel, repository)
         return await GuideCompilationService(
-            session, ProjectGuideCompilationAuthorizationAdapter(kernel, prepared)
+            session, ProjectGuideCompilationAuthorizationAdapter(kernel, prepared),
+            request_inputs=CompilationRequestInputs(
+                guide_document_manifest_port(session), compilation_context.runtime_configuration
+            ),
         ).authorize_request(
             origin=ProjectGuideCompilationRequestOrigin(trigger="project_manager"),
             actor=actor,

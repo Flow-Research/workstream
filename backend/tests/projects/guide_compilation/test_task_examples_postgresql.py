@@ -221,7 +221,7 @@ async def test_unfinished_setup_diagnostic_validates_examples_without_finalizati
             setup = await session.get(ProjectSetupRun, str(values['setup_1']))
             before = setup.status
             response = await compilation_setup_response(session, setup)
-            assert response.status == ('setup_input_invalid' if missing else before)
+            assert response.status == ('setup_input_invalid' if missing else 'not_requested')
             if missing:
                 assert response.error_code == 'task_examples_missing'
                 assert response.current_step == 'input_validation'

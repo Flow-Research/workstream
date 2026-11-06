@@ -304,8 +304,9 @@ API-only development remains supported, but starting a native Celery process
 alone does not provide the isolated parser. The parser supports bounded read and
 search over the exact assigned Markdown, PDF, DOCX and PPTX originals; it exposes
 no shell or model-selected storage paths. Rebuild the local image after changing
-parser code. Committed original-document readiness runs one compilation and
-stops at findings and proposals; manager review and approval remain separate.
+parser code. Uploads only establish original-document custody. An explicit
+Project Manager request starts compilation and stops at findings and proposals;
+manager review and approval remain separate.
 
 Model-backed POST checkers select OpenAI Responses or OpenRouter Chat Completions
 from their locked project model profile through the shared budgeted proxy.
@@ -314,19 +315,13 @@ its OpenRouter credential; setup runtime selection does not force POST to use
 OpenAI. See [model runtime operations](docs/operations_checker_models.md) for
 provider bounds, evidence custody and recovery limits.
 
-To compile guides without any model provider, select the manager-authored
-runtime instead. It makes no inference request and allocates no provider
-resources. It uses the same isolated document tools. With the model proxy
-disabled, the hosted release omits provider credentials for this exact
-`none/none/none` configuration; model-backed POST can independently enable the
-proxy with its selected provider credential:
-
-```bash
-WORKSTREAM_PROJECT_AGENT_RUNTIME=manager_authored
-WORKSTREAM_PROJECT_AGENT_MODEL_PROVIDER=none
-WORKSTREAM_PROJECT_AGENT_MODEL_API=none
-WORKSTREAM_PROJECT_AGENT_MODEL=none
-```
+To compile guides without a model provider, upload the manager-authored rules
+with the guide originals and explicitly call
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+This route selects provider-free compilation without changing global runtime
+settings. It makes no inference request and uses the same isolated document
+tools. The assistance route uses the deployment's configured inference profile;
+public callers supply neither runtime settings nor a model catalogue.
 
 The selected adapter validates its configuration before dispatch; the database
 binds the complete immutable configuration to the attempt. The manager uploads a rules
@@ -452,8 +447,8 @@ PRE and POST images and non-secret configuration in explicit phase lists during
 policy approval. Those human choices need not map one-to-one to suggestions;
 empty lists are valid intent. The Workstream PRE default is independent. Image
 registration after proposal does not change its hash or require another setup
-run; approval locks exact image digests and configuration. Optional/configurable
-automatic setup remains deferred.
+run; approval locks exact image digests and configuration. Initial assistance
+requires an explicit Project Manager request.
 Use the locked installation and environment-loading commands in
 [Native Unified Guide Inference](#native-unified-guide-inference).
 
@@ -492,9 +487,15 @@ image; it accepts no runtime options. `manager_authored` works in either SDK ima
 and has no retry, circuit or provider credential because it makes no provider
 request. See the [hosted runtime selection runbook](deploy/hosted/README.md#prepare-source-images).
 
-Verified guide-source readiness automatically delivers one compilation. A ready
-result records both policy proposals and stops at a draft; an insufficient guide
-stops with findings. Automatic compilation ends without approving the proposals.
+Uploading guide originals stores and verifies their custody; it does not request
+compilation or invoke inference. After every declared original is ready, an
+exact-project Project Manager explicitly requests assistance through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-free
+compilation of uploaded manager rules through
+`POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+Both paths use the same validation, proposal review, independent PRE/POST
+approvals and activation guards. A ready result stops at a draft; an insufficient
+guide stops with findings. Neither request approves proposals.
 POL-05B exposes exact Project Manager proposal review, pre-submission approval,
 setup-wide correction and explicit manual dispatch using POL-05A operations and
 AUTH-12F4 authorization. The setup response supplies `finalized_compilation_id`

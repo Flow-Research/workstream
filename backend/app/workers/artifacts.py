@@ -39,7 +39,6 @@ def cleanup_stale_scratch() -> int:
 def resolve_put_attempt(attempt_id: str) -> None:
     """Resolve one exact put attempt as the fixed resolver service."""
     run_async_task(lambda: run_artifact_internal_operation("put", UUID(attempt_id)))
-    continue_guide_setup.delay(attempt_id)
 
 
 @celery_app.task(name=ARTIFACT_VERIFICATION_TASK)

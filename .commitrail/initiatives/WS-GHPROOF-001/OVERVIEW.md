@@ -6,9 +6,17 @@
   required-check facts from the forge (the git host) with a read-only
   credential, outside the checker sandbox, and the networkless
   `harnessy.work_proof` checker compares the proof with those facts.
-- Current change: [WS-GHPROOF-001-04A](WS-GHPROOF-001-04A.md) moves proof
+- Delivered boundary: [WS-GHPROOF-001-04A](WS-GHPROOF-001-04A.md) moves proof
   interpretation into the selected external image and binds its selector and
   retrieved facts to verified material. Chunk 04 delivered the scoped provider.
+- The [explicit guide assistance and Garden drill change](../../changes/explicit-guide-assistance-and-garden-drill.md)
+  extends facts with the exact head commit message and response hash. Affected
+  strict images require explicit republishing (Harnessy capability `v4`);
+  retained evidence is not rewritten. Garden's separate `garden.work_proof` `v1`
+  image interprets the final head's canonical task trailer against trusted
+  Workstream task identity. Shared POST remains project-neutral. This establishes
+  declared reviewed task association, not contributor identity. Controlled image
+  proof does not establish a live GitHub review/merge/contribution journey.
 - Product behavior changed: Yes, for POST bindings that select forge facts.
 - Integrity: see [Integrity requirements](#integrity-requirements); every layer
   fails closed.
@@ -40,13 +48,14 @@ enter a container that runs submitted material.
    not a project setting.
 2. A typed `ForgeFactsAdapter` port (ADR 0014, capability `forge_facts`, one
    provider per forge, provider key = forge name) reads, for one change: state,
-   merged flag, landed commit, base branch and head commit; author; reviews
+   merged flag, landed commit, base branch, head commit and its message; author; reviews
    (oldest first, with each head-commit approver's write access);
    changed files; and each required check of the base branch with the results
    judged for the head commit and who produced them. It returns one immutable
    `workstream.forge_change_facts.v1` value with the fetch time and the SHA-256
    of every forge response body read. GitHub, read as a GitHub App, is the only
-   provider.
+   provider. Exact-head commit retrieval additionally requires repository
+   Contents read permission; its response and message are bounded, never truncated.
 3. "CI passed" means every check required by the base branch's protection has
    conclusion `success` for the change's head commit, resting on at least one
    judged result.

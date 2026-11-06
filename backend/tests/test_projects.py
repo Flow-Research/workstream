@@ -8,7 +8,7 @@ import json
 import types
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -114,7 +114,6 @@ from project_create_fixtures import (
     seed_historical_project,
 )
 from committed_guide_fixtures import (
-    create_committed_document_fixture,
     create_compiled_report_fixture,
 )
 from tests.projects.guide_activation.read_fixtures import activate_approved_guide
@@ -322,8 +321,8 @@ def test_project_setup_queue_normalizes_broker_failure(
 @pytest.mark.parametrize(
     ("setup_run", "expected"),
     [
-        (SimpleNamespace(status="running", celery_task_id="existing"), "existing"),
-        (SimpleNamespace(status="running", celery_task_id=None), None),
+        (SimpleNamespace(id=str(uuid4()), status="running", celery_task_id="existing"), "existing"),
+        (SimpleNamespace(id=str(uuid4()), status="running", celery_task_id=None), None),
     ],
 )
 async def test_project_setup_dispatch_returns_terminal_state_without_publish(
@@ -339,6 +338,9 @@ async def test_project_setup_dispatch_returns_terminal_state_without_publish(
             return setup_run
 
     class Session:
+        async def scalar(self, _statement):
+            return uuid4()
+
         async def commit(self) -> None:
             raise AssertionError("terminal state must not be mutated")
 
@@ -390,11 +392,14 @@ async def test_project_setup_dispatch_reuses_exact_queued_task_without_republish
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     expected = project_setup_identity.project_guide_compilation_task_id("run-1", 1)
-    setup_run = SimpleNamespace(status="queued", celery_task_id=expected, updated_at=datetime.now(UTC))
+    setup_run = SimpleNamespace(id=str(uuid4()), status="queued", celery_task_id=expected, updated_at=datetime.now(UTC))
 
     repository = SimpleNamespace(lock_project_setup_run=AsyncMock(return_value=setup_run))
 
     class Session:
+        async def scalar(self, _statement):
+            return uuid4()
+
         async def commit(self) -> None:
             raise AssertionError("existing queue custody must not be mutated")
 
@@ -2642,8 +2647,8 @@ async def test_project_setup_waits_for_verified_guide_material_before_outputs(
 
     assert setup_run_response.status_code == 200, setup_run_response.text
     setup_run = setup_run_response.json()
-    assert setup_run["status"] == "awaiting_documents"
-    assert setup_run["current_step"] == "awaiting_documents"
+    assert setup_run["status"] == "not_requested"
+    assert setup_run["current_step"] == "not_requested"
     assert setup_run["celery_task_id"] is None
     assert setup_run["output_sufficiency_report_id"] is None
     assert setup_run["output_submission_artifact_policy_id"] is None
@@ -2673,148 +2678,6 @@ async def test_pre_submit_visibility_requires_compiled_policy(
     )
 
     assert response.status_code == 404
-
-
-async def test_document_ready_setup_enqueue_failure_is_sanitized_and_retryable(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    get_settings.cache_clear()
-
-    def fail_enqueue(**_: object) -> str:
-        raise ProjectSetupQueueError(
-            "broker rejected https://storage.flow.test/signed?token=secret"
-        )
-
-    monkeypatch.setattr(
-        project_setup_queue_module, "enqueue_project_guide_compilation", fail_enqueue
-    )
-    project = await create_project(project_client)
-    guide = await create_guide(
-        project_client,
-        project["id"],
-        {
-            **complete_guide_payload(),
-            "documents": complete_guide_payload()["documents"],
-        },
-    )
-
-    async with db_session.get_session_factory()() as session:
-        run = await session.scalar(
-            select(ProjectSetupRun).where(ProjectSetupRun.guide_id == guide["id"])
-        )
-        assert run is not None
-        source_snapshot_id = run.source_snapshot_id
-        await session.commit()
-        await create_committed_document_fixture(source_snapshot_id)
-        from app.modules.projects.guide_setup_continuation import continue_setup_after_stored_guide_item
-        from app.adapters.artifacts import guide_document_manifest_port
-        await continue_setup_after_stored_guide_item(
-            UUID(source_snapshot_id), session_factory=db_session.get_session_factory(),
-            manifest_factory=guide_document_manifest_port,
-        )
-
-    response = await project_client.get(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
-        headers=auth_headers(),
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["status"] == "enqueue_failed"
-    assert body["current_step"] == "enqueue"
-    assert body["celery_task_id"] is None
-    assert body["error_code"] == "ProjectSetupQueueError"
-    assert body["error_summary"] == "project setup failed"
-    assert "token" not in body["error_summary"]
-    assert "https://" not in body["error_summary"]
-
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        lambda **facts: cast(str, facts["task_id"]),
-    )
-    async with db_session.get_session_factory()() as session:
-        task_id = await project_setup_queue_module.dispatch_project_guide_compilation_after_commit(
-            session,
-            project_id=run.project_id,
-            guide_id=run.guide_id,
-            source_snapshot_id=run.source_snapshot_id,
-            setup_run_id=run.id,
-            setup_generation=run.setup_generation,
-        )
-    expected_task_id = project_setup_identity.project_guide_compilation_task_id(
-        run.id, run.setup_generation
-    )
-    assert task_id == expected_task_id
-    async with db_session.get_session_factory()() as session:
-        recovered = await session.get(ProjectSetupRun, run.id)
-        assert recovered is not None
-        assert recovered.status == "queued"
-        assert recovered.celery_task_id == expected_task_id
-        assert recovered.error_code is None
-
-
-async def test_dispatch_pending_republishes_only_after_stale_cutoff(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    get_settings.cache_clear()
-    project = await create_project(project_client)
-    guide = await create_guide(
-        project_client,
-        project["id"],
-        {**complete_guide_payload(), "documents": complete_guide_payload()["documents"]},
-    )
-    published: list[str | None] = []
-
-    def capture_enqueue(**facts: object) -> str:
-        published.append(cast(str | None, facts["task_id"]))
-        return cast(str, facts["task_id"])
-
-    monkeypatch.setattr(
-        project_setup_queue_module,
-        "enqueue_project_guide_compilation",
-        capture_enqueue,
-    )
-    async with db_session.get_session_factory()() as session:
-        run = await session.scalar(
-            select(ProjectSetupRun).where(ProjectSetupRun.guide_id == guide["id"])
-        )
-        assert run is not None
-        run.status = "dispatch_pending"
-        run.celery_task_id = project_setup_identity.project_guide_compilation_task_id(
-            run.id, run.setup_generation
-        )
-        run.updated_at = datetime.now(UTC)
-        await session.commit()
-        fresh = await project_setup_queue_module.dispatch_project_guide_compilation_after_commit(
-            session,
-            project_id=run.project_id,
-            guide_id=run.guide_id,
-            source_snapshot_id=run.source_snapshot_id,
-            setup_run_id=run.id,
-            setup_generation=run.setup_generation,
-        )
-        assert fresh == run.celery_task_id
-        assert published == []
-        stale_updated_at = datetime.now(UTC) - timedelta(seconds=61)
-        run.updated_at = stale_updated_at
-        await session.commit()
-        stale = await project_setup_queue_module.dispatch_project_guide_compilation_after_commit(
-            session,
-            project_id=run.project_id,
-            guide_id=run.guide_id,
-            source_snapshot_id=run.source_snapshot_id,
-            setup_run_id=run.id,
-            setup_generation=run.setup_generation,
-        )
-    assert stale == run.celery_task_id
-    assert published == [run.celery_task_id]
-    async with db_session.get_session_factory()() as session:
-        reclaimed = await session.get(ProjectSetupRun, run.id)
-        assert reclaimed is not None
-        assert reclaimed.updated_at > stale_updated_at
 
 
 @pytest.mark.asyncio

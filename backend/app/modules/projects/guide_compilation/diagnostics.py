@@ -65,6 +65,11 @@ async def compilation_setup_response(
                 response.error_summary = "Create a new guide version with at least one task example."
                 return response
     if attempt is None:
+        if correction is None and setup.status == "awaiting_documents":
+            response.status = "not_requested"
+            response.current_step = "not_requested"
+        return response
+    if attempt.status == "compilation_reserved" and setup.status in {"dispatch_pending", "queued", "enqueue_failed"}:
         return response
     response.status = {
         "compilation_provider_uncertain": "provider_outcome_unresolved",

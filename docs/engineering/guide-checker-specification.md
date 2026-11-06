@@ -101,4 +101,14 @@ The successful review phase must independently reopen the assigned originals.
 Schema validity cannot prove that every natural-language assertion is correct;
 source review and PM review remain necessary. Historical stored proposals are not
 rewritten. Manager-authored input follows the same specification-only result
-contract without inference. Optional or configurable automatic setup is deferred.
+contract without inference. Upload only commits original-document custody.
+After readiness, the exact-project Project Manager explicitly requests assistance
+at `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-free
+rules compilation at `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+The latter reads exactly one `text/markdown` original whose complete body is the
+`workstream.project_guide_rules.v1` JSON object; ordinary prose is insufficient.
+See the [Garden rules fixture](../../pilots/garden/manager-rules.md) and
+[operating format](../operations_project_operating_manual.md#manager-authored-guide-rules).
+Public requests accept no provider/runtime configuration. Both paths retain the
+same validation, independent manager approvals and activation guards. Revised
+rules require a new guide version, not correction feedback.

@@ -9,9 +9,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.deps.authorization import enforce_human_authorization_read
 from app.api.deps.guide_proposals import (
     ProposalRequest,
-    CorrectionDispatchRequest,
+    CompilationDispatchRequest,
     get_proposal_request,
     get_correction_dispatch,
+    get_assistance_dispatch,
+    get_requirements_dispatch,
 )
 from app.core.api_controls import ApiErrorResponse
 from app.modules.projects.api.guide_proposal_package import GuideProposalReviewPackage
@@ -25,6 +27,7 @@ from app.modules.projects.api.guide_proposals import (
     GuideProposalError,
     GuideProposalSelection,
     GuideProposalDispatchResponse,
+    GuideCompilationDispatchResponse,
 )
 from app.api.deps.guide_proposal_http import (
     IDEMPOTENCY_PARAMETER,
@@ -149,7 +152,7 @@ async def dispatch_correction(
     guide_id: UUID,
     compilation_id: UUID,
     correction_operation_id: UUID,
-    request: Annotated[CorrectionDispatchRequest, Depends(get_correction_dispatch)],
+    request: Annotated[CompilationDispatchRequest, Depends(get_correction_dispatch)],
 ) -> GuideProposalDispatchResponse:
     """Manually dispatch the selected correction; its identity makes retries idempotent."""
     try:
@@ -160,5 +163,43 @@ async def dispatch_correction(
             correction_operation_id,
             actor=request.actor,
         )
+    except GuideProposalError as exc:
+        raise proposal_http_error(exc) from exc
+
+
+initial_router = APIRouter(
+    prefix="/projects/{project_id}/guides/{guide_id}", tags=["projects"],
+    responses={code: {"model": ApiErrorResponse} for code in (404, 409, 422, 503)},
+)
+
+
+@initial_router.post("/setup", response_model=GuideCompilationDispatchResponse, status_code=202,
+    openapi_extra={"x-workstream-action-id": "project.guide_compilation.request",
+                   "parameters": [IDEMPOTENCY_PARAMETER]})
+async def request_guide_assistance(
+    project_id: UUID, guide_id: UUID,
+    key: Annotated[UUID, Depends(require_proposal_key)],
+    request: Annotated[CompilationDispatchRequest, Depends(get_assistance_dispatch)],
+) -> GuideCompilationDispatchResponse:
+    """Explicitly request configured guide assistance."""
+    try:
+        return await request.service.request_initial(project_id, guide_id, key, actor=request.actor,
+                                                     inference_required=True)
+    except GuideProposalError as exc:
+        raise proposal_http_error(exc) from exc
+
+
+@initial_router.post("/requirements/compile", response_model=GuideCompilationDispatchResponse, status_code=202,
+    openapi_extra={"x-workstream-action-id": "project.guide_compilation.request",
+                   "parameters": [IDEMPOTENCY_PARAMETER]})
+async def compile_manager_requirements(
+    project_id: UUID, guide_id: UUID,
+    key: Annotated[UUID, Depends(require_proposal_key)],
+    request: Annotated[CompilationDispatchRequest, Depends(get_requirements_dispatch)],
+) -> GuideCompilationDispatchResponse:
+    """Compile the manager's uploaded rules without an inference provider."""
+    try:
+        return await request.service.request_initial(project_id, guide_id, key, actor=request.actor,
+                                                     inference_required=False)
     except GuideProposalError as exc:
         raise proposal_http_error(exc) from exc

@@ -96,7 +96,18 @@ def test_task_operation_contracts_match_backend_openapi_when_configured() -> Non
         if operation[1] in {"/health", "/api/v1/health"}
     }
     assert health_operations == {("GET", "/health"), ("GET", "/api/v1/health")}
-    assert len(all_operations - health_operations) == 130
+    # These backend commands share existing PM authority; this adapter does not
+    # expose additional tools for requesting assistance or compiling rules.
+    explicit_setup_operations = {
+        ("POST", "/api/v1/projects/{project_id}/guides/{guide_id}/setup"),
+        ("POST", "/api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile"),
+    }
+    assert explicit_setup_operations <= all_operations - health_operations
+    for method, path in explicit_setup_operations:
+        operation = openapi["paths"][path][method.lower()]
+        assert operation["security"]
+        assert operation["x-workstream-action-id"] == "project.guide_compilation.request"
+    assert len(all_operations - health_operations) == 132
     for name, (method, path, _) in TASK_OPERATIONS.items():
         snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))
         assert snapshot["source"]["openapi_version"] == openapi["openapi"]

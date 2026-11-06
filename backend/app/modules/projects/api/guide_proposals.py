@@ -262,8 +262,13 @@ class GuideProposalOperationsPort(Protocol[_ActorT]):
     ) -> GuideProposalCorrectionReceipt: ...
 
 
-class GuideCorrectionDispatchPort(Protocol[_ActorT]):
+class GuideCompilationDispatchPort(Protocol[_ActorT]):
     """Own human correction admission and publication after commit."""
+
+    async def request_initial(
+        self, project_id: UUID, guide_id: UUID, idempotency_key: UUID, *, actor: _ActorT,
+        inference_required: bool,
+    ) -> "GuideCompilationDispatchResponse": ...
 
     async def dispatch(
         self,
@@ -272,3 +277,13 @@ class GuideCorrectionDispatchPort(Protocol[_ActorT]):
         *,
         actor: _ActorT,
     ) -> GuideProposalDispatchResponse: ...
+
+
+class GuideCompilationDispatchResponse(BaseModel):
+    """An explicit initial request's durable dispatch state, without runtime selectors."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: UUID
+    setup_run_id: UUID
+    setup_generation: int = Field(ge=1)
+    status: str

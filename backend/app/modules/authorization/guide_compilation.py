@@ -40,11 +40,9 @@ from app.modules.authorization.runtime import (
 
 def _request_action(origin: ProjectGuideCompilationRequestOrigin) -> ActionId:
     """Select authority by the explicit trigger, never by ambient actor roles."""
-    return (
-        ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC
-        if origin.trigger == "automatic_source_ready"
-        else ActionId.PROJECT_GUIDE_COMPILATION_REQUEST
-    )
+    if origin.trigger != "project_manager":
+        raise BoundaryAuthorizationDenied("explicit Project Manager request required")
+    return ActionId.PROJECT_GUIDE_COMPILATION_REQUEST
 
 
 def _request_context(
@@ -153,6 +151,14 @@ class ProjectGuideCompilationAuthorizationAdapter:
             raise PreparedAuthorizationInvalid("prepared compilation authority is invalid") from exc
         except (PreparedAuthorizationUnsupported, KernelAuthorizationDenied) as exc:
             raise BoundaryAuthorizationDenied("compilation authority denied") from exc
+
+    async def lock_request_scope(self, *, actor: ActorIdentityFacts, project_id: UUID) -> None:
+        """Reuse PREP's live scope fence without issuing product mutation authority."""
+        self._assert_actor(actor)
+        await self._invoke(self._prepared.lock_mutation_scope(
+            ActionId.PROJECT_GUIDE_COMPILATION_REQUEST,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+        ))
 
     async def prepare_request(
         self, *, actor: ActorIdentityFacts, facts: ProjectGuideCompilationRequestFacts,

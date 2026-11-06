@@ -1,4 +1,4 @@
-"""Require bounded Redis-prefork delivery for guide inference."""
+"""Require bounded Redis-prefork delivery for every guide compilation."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from celery.concurrency.prefork import TaskPool
 from celery.exceptions import WorkerShutdown
 from celery.signals import worker_init
 
-from app.core.config import get_settings
 
 PROJECT_GUIDE_HARD_LIMIT_SECONDS = 7_260
 PROJECT_GUIDE_DRAIN_SECONDS = 7_320
@@ -18,11 +17,6 @@ CELERY_VISIBILITY_TIMEOUT_SECONDS = 7_380
 PROJECT_GUIDE_QUEUE = "celery"
 PROJECT_GUIDE_CONSUMER_MARKER = "workstream_project_guide_consumer"
 _validated_parent: int | None = None
-
-
-def _uses_inference() -> bool:
-    """Report whether the selected runtime requires an inference worker."""
-    return get_settings().project_agent_runtime != "manager_authored"
 
 
 def _redis_url(value: object) -> bool:
@@ -49,7 +43,7 @@ def _valid_delivery_settings(app: object) -> bool:
 
 @worker_init.connect
 def validate_project_setup_worker(sender, **_kwargs: object) -> None:
-    """Validate inference workers before they can reserve guide work."""
+    """Validate guide workers independently of configured runtime selection."""
     global _validated_parent
     if (
         getattr(sender.app.conf, PROJECT_GUIDE_CONSUMER_MARKER, False) is not True
@@ -57,8 +51,6 @@ def validate_project_setup_worker(sender, **_kwargs: object) -> None:
     ):
         return
     _validated_parent = None
-    if not _uses_inference():
-        return
     pool = sender.pool_cls
     if isinstance(pool, str):
         pool = get_implementation(pool)
@@ -68,15 +60,13 @@ def validate_project_setup_worker(sender, **_kwargs: object) -> None:
         or not _valid_delivery_settings(sender.app)
     ):
         raise WorkerShutdown(
-            "project guide inference requires bounded Redis prefork delivery"
+            "project guide compilation requires bounded Redis prefork delivery"
         )
     _validated_parent = os.getpid()
 
 
 def require_project_setup_worker(task: object) -> None:
-    """Reject inference outside the startup-validated prefork child."""
-    if not _uses_inference():
-        return
+    """Reject guide compilation outside the startup-validated prefork child."""
     request = task.request
     if (
         _validated_parent is None
@@ -87,7 +77,7 @@ def require_project_setup_worker(task: object) -> None:
         or not _valid_delivery_settings(task.app)
     ):
         raise RuntimeError(
-            "project guide inference requires a validated Redis prefork worker"
+            "project guide compilation requires a validated Redis prefork worker"
         )
     message_limit = (request.timelimit or (None, None))[0]
     if (
@@ -99,4 +89,4 @@ def require_project_setup_worker(task: object) -> None:
             or message_limit != PROJECT_GUIDE_HARD_LIMIT_SECONDS
         )
     ):
-        raise RuntimeError("project guide inference requires a bounded hard time limit")
+        raise RuntimeError("project guide compilation requires a bounded hard time limit")
