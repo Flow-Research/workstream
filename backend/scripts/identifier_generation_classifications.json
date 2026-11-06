@@ -89,6 +89,7 @@
     "scripts/api_contract_e2e.py|configure_policy_boundaries|Expr:e6aa5c9bf6f425f5|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Assign:9e02527c52fe9b09|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Expr:8efd284e674559da|0": "uuid4:call:transport_token",
+    "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Expr:5561a67f28091c5b|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Assign:beb0e4919dfd9214|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Expr:89facd0ad06da847|0": "uuid4:call:transport_token",
     "scripts/api_contract_e2e.py|exercise_guide_setup_contract|Expr:c59e1185f85e0c47|0": "uuid4:call:transport_token",
