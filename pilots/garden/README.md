@@ -1,8 +1,9 @@
 # Garden engineering drill
 
-This directory defines a small real project drill, not evidence that it has
-already passed. The [project guide](guide.md) describes the contributor contract;
-the task definitions will be created as native Workstream tasks. Garden's code
+This directory defines a small real project drill. Its first v3 task passed the
+[hosted public-API journey](../../docs/reports/garden-hosted-drill-2026-11-06.md).
+The [project guide](guide.md) describes the contributor contract; the task
+definitions remain local examples for native Workstream tasks. Garden's code
 and current-head CI evidence stay in GitHub. This version-3 test explicitly requires
 zero independent GitHub approvals; omitting the Garden POST setting still
 requires one. This is not a general no-review default. No issue-sync integration is required.
@@ -17,8 +18,9 @@ The intended sequence is:
 3. Required trusted CI passes on the task-associated PR head. This test selects
    `required_independent_approvals=0`; it does not require an independent GitHub
    review or invent one. An open PR may pass Garden POST.
-4. Contributor uploads the root `proof.json` ZIP. Exercise missing/malformed PRE
-   input, valid intake, a controlled POST rejection and a real successful proof.
+4. Contributor uploads the root `proof.json` ZIP. Exercise malformed PRE input,
+   valid intake and real successful POST proof. Controlled image cases cover POST
+   rejection boundaries separately.
 5. Inspect immutable artifact/Submission, retained checker evidence, governed
    acceptance and exact submitter ContributionRecord through public APIs and
    durable workers. Retry the same operation and verify no duplicate effects.
@@ -31,10 +33,11 @@ implementation or a rewrite of the earlier assignment.
 
 [Garden PR #287](https://github.com/Flow-Research/garden/pull/287) must remain open
 as the user requested. Preserve its original commit and existing task history.
-Do not assert that its head already identifies a newly claimed task: any later
-marker update must use the actual new UUID before final checks and any required
-review. Its open state does not prevent Garden POST; no accepted work or contribution
-is established by this documentation alone.
+Its current head `97a0378c726126521819f0a281833d000901b42a` identifies the
+newly claimed task `01a1b1a7-23bf-7bf1-a17e-1858f79adfb7`; trusted CI run
+`42251194616` passed. The open PR passed Garden POST under the locked v3 policy,
+and Workstream accepted the resulting Submission. This establishes no GitHub
+merge or release of Garden code.
 
 The external image implementation belongs under
 `external_checkers/garden_proof/`. The generic GitHub facts adapter only retrieves
@@ -90,8 +93,8 @@ Harnessy retains its minimum of one.
 At that SHA, README's PostgreSQL troubleshooting paragraph still tells readers
 to override only `DATABASE_URL`. `docs/guides/develop/fix-setup-problems.md`
 correctly requires both the URL and `compose.dev.yaml` mapping. Compose maps host
-`55432` to container `5432`. The README repair therefore remains needed on `dev`;
-the pending work is not a completed contribution. The old onboarding page is now
+`55432` to container `5432`. The README repair remains unmerged on `dev`; Workstream accepted the verified
+current-head contribution while the Garden PR stayed open. The old onboarding page is now
 `docs/tutorials/get-started.md`, and maintainer workflow is
 `docs/guides/maintain/maintain-garden.md`.
 
@@ -123,25 +126,28 @@ locking the new task, configure the authorized project-points unit and binding;
 Finance must publish the ContributionPolicy with `accepted_submission` set to those
 100 points and `completed_review` unpaid. Select that exact published policy
 through the existing guide/task binding flow. This is separate Finance policy,
-not setup-agent output or a change to the uploaded guide/rules. This preparation
-does not establish that the unit, binding or policy is provisioned or deployed.
+not setup-agent output or a change to the uploaded guide/rules. The hosted drill selected the already published 100 FLOW policy version
+`01a1afd3-957f-7aa5-9af1-963000da945c`.
 
 Verify that passing required checks commits the exact 100-point award, submitter
 ContributionRecord and FinalAcceptance atomically. Rejected work must create no
 award; exact replay must create no duplicate award or contribution. An earned
 project-points award is not cash, a wallet balance or proof of fulfillment.
-Garden PR #287 remains open; this policy preparation establishes no acceptance.
+Garden PR #287 remains open. The hosted drill produced the exact accepted
+Submission, submitter ContributionRecord and one earned 100 FLOW award; see the
+[evidence report](../../docs/reports/garden-hosted-drill-2026-11-06.md).
 
 ## Evidence boundaries
 
-Prepare the [read-only GitHub App](github-app.md) before the hosted POST drill.
-Local fixture success does not establish its installation or permissions.
+The hosted drill used the [read-only GitHub App](github-app.md) through the
+durable POST worker. Local fixture success alone did not establish that path.
 
 Local fixtures and controlled forge responses can prove negative cases and image
-composition. Only a real authorized GitHub PR plus the public Workstream journey
-proves the hosted success path. Report these separately, with exact source/image
-digests and no credentials or private evidence bodies in this repository.
+composition. The real open GitHub PR and public Workstream journey proved this hosted success
+path. Keep controlled image negatives separate from the live positive, with no
+credentials or private evidence bodies in this repository.
 
-The new current-head guide/image/task sequence remains separate from earlier
-hosted setup and claim evidence. PR #287 is referenced as retained open work, not a passed proof. Record actual new identities and outcomes only after they
-exist; source fixtures and controlled facts cannot establish acceptance.
+The new current-head guide/image/task sequence retains earlier locked records.
+PR #287 supplied the real passing v3 proof while open. The accepted work fact
+does not assert a Garden merge, reviewer contribution, payment fulfillment or
+future task outcome.

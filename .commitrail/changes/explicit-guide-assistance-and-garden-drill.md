@@ -154,9 +154,11 @@ foreign task markers reject. It must exist before final checks and any reviews r
   argument limits without changing assertions or execution selection.
 - Existing CI lane catalogue and its allocation tests for the measured
   three-module redistribution described above; no workflow/gate relaxation.
-- This record, affected current README/spec/runbook/roadmap claims and local
-  roadmap exports if present. A migration only if an identified persisted
-  invariant needs enforcement; preserve retained records.
+- This record, affected current README/spec/runbook/roadmap claims, the bounded
+  hosted Garden evidence report under `docs/reports/`, and local roadmap exports
+  if present. The hosted README describes shipped deployment prerequisites and
+  procedures, not PR-number dependencies or private drill scripts. A migration
+  only if an identified persisted invariant needs enforcement; preserve retained records.
 
 ### Prohibited changes
 
@@ -216,6 +218,22 @@ v3 require new approvals and a new task; retain the earlier records and leave PR
 #287 open as requested. A successful outcome must not be inferred from controlled
 facts alone. Exact check/review freshness
 and operational completion evidence belong in the PR.
+
+The [hosted Garden v3 drill](../../docs/reports/garden-hosted-drill-2026-11-06.md)
+now supplies that live positive evidence. Garden PR #287 remained open at head
+`97a0378c726126521819f0a281833d000901b42a`; trusted CI run
+`42251194616` succeeded and the durable external POST returned
+`garden_task_proof=passed`. Actual public Submission
+`01a1b1ae-c0c7-7220-96ee-f7f66befabf8` reached `accepted` under the locked
+false ReviewPolicy. Shared FinalAcceptance created one submitter
+ContributionRecord and one 100 FLOW project-points award, with null Review
+references and no reviewer contribution in the complete project export. Exact same-key Submission replay retained those
+identities. The private public-response packet hash is
+`sha256:b6579914708bfc43e1105e9bcf0f6e74dc5f6685d212e060ff231105039064d7`.
+Controlled image negatives remain distinct from live POST failure/retry proof;
+external fulfillment, positive GitHub approval counts and the default-true
+human-review path remain separate. Source and deployment identities are in the
+linked report; no Garden merge or Workstream `main` delivery is claimed here.
 
 ## Risk and review routing
 
