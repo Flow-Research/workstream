@@ -32,7 +32,15 @@ def service(tmp_path_factory):
     )
     bootstrap.stdin.write("bootstrap-password-123\n")
     bootstrap.stdin.flush()  # Keep stdin open: a terminal operator need not send EOF.
-    assert bootstrap.wait(timeout=120) == 0
+    for _ in range(300):
+        if data.exists():
+            break
+        if bootstrap.poll() is not None:
+            raise AssertionError("issuer initialization exited before creating state")
+        time.sleep(0.1)
+    else:
+        raise AssertionError("issuer initialization waited for stdin EOF")
+    assert bootstrap.wait(timeout=240) == 0
     bootstrap.stdin.close()
     cert = root / "cert.pem"
     key = root / "key.pem"
