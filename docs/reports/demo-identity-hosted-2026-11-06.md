@@ -14,7 +14,7 @@ Verified through the real hosted image and HTTPS:
 - Caddy forwards login and public JWKS over verified upstream TLS. Unsupported
   routes/methods and oversized bodies reject; substituting an unrelated upstream
   trust certificate returns 502. The temporary private Caddy listener was stopped.
-- Existing Workstream API, worker, Beat, parser and model-proxy containers and
+- Existing Workstream API, Celery execution, Beat, parser and model-proxy containers and
   the active release marker were unchanged. Account/signing state was preserved
   during the network correction.
 
