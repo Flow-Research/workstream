@@ -70,3 +70,23 @@ Workstream issuer switch. Private-host compatibility tests may use an explicitly
 trusted private certificate with the existing verifier's client-factory seam;
 that is separate evidence, not public TLS or active Workstream API proof. Never
 use `verify=False`, insecure curl flags, or unverified JWT decoding for access.
+
+The supplied [Caddy host unit](../../deploy/hosted/demo-identity-caddy.service)
+runs as `workstream-identity-ingress`, with only the bind-service capability,
+256 MiB memory and a finite restart rate. Install the reviewed Caddy binary at
+`/usr/local/libexec/workstream-identity-ingress/caddy` and the configuration at
+`/etc/workstream-identity-ingress/Caddyfile`. The unit's root-owned `ingress.env`
+contains `DEMO_IDENTITY_HOSTNAME`, `DEMO_IDENTITY_UPSTREAM_CERT`,
+`XDG_DATA_HOME=/var/lib/workstream-identity-ingress/data` and
+`XDG_CONFIG_HOME=/var/lib/workstream-identity-ingress/config`; none is a secret.
+Create the state directory with that service user's ownership and mode 0700.
+Caddy receives the issuer's public certificate, never its private keys or
+account database. Validate the unit and configuration before enabling it.
+Keep TCP 80/443 reachable for certificate issuance and HTTPS; port 8443 stays
+loopback-only. Wait for DNS before starting automatic certificate issuance.
+
+After the new public login and Workstream authorization path passes, retire the
+previous fixture issuer and remove its signing keys and saved tokens. Test old
+token rejection and obtain future credentials through login. Retain existing
+actor history and contribution facts; changing authentication does not transfer
+old work or grants to a new account.

@@ -8,6 +8,7 @@ on:
       - 'deploy/hosted/preflight.py'
       - 'deploy/hosted/compose.py'
       - 'deploy/hosted/demo-identity.Caddyfile'
+      - 'deploy/hosted/demo-identity-caddy.service'
       - 'backend/app/adapters/auth/flow.py'
       - '.dockerignore'
       - '.github/workflows/demo-identity.yml'

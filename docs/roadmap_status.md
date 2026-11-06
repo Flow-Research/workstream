@@ -756,7 +756,9 @@ cannot be reused as post-submission review-gate evidence. See the
 - An [external Rust demo issuer](../experiments/demo_identity/README.md) can
   provision participant accounts through its own administrator and issue
   compatible short-lived tokens. Its opt-in hosted overlay is validated by the canonical wrapper, with
-  bounded HTTPS readiness and persistent private state. Public DNS/TLS and
+  bounded HTTPS readiness and persistent private state. [Private hosted account,
+  restart and Caddy transport proof](reports/demo-identity-hosted-2026-11-06.md)
+  passed. Public DNS/TLS and
   deployed Workstream issuer-cutover proof remain required; compatibility tests
   do not establish full Flow Identity platform integration.
 - External subject identity resolves through ActorIdentityLink into a stable

@@ -17,7 +17,7 @@ Let issuer-approved demo participants sign in without an operator minting a toke
 ### Allowed
 
 - `experiments/demo_identity/`: independent Rust issuer, operator bootstrap command, HTTPS service, Dockerfile, README and focused tests.
-- `deploy/hosted/compose.demo-identity.yml`, `preflight.py`, `compose.py`, `release.env.example`, `demo-identity.Caddyfile`, and `README.md`: opt-in issuer integration through the existing hosted wrapper, bounded resources, private state/TLS mounts and readiness checks.
+- `deploy/hosted/compose.demo-identity.yml`, `preflight.py`, `compose.py`, `release.env.example`, `demo-identity.Caddyfile`, `demo-identity-caddy.service`, and `README.md`: opt-in issuer integration through the existing hosted wrapper, bounded resources, private state/TLS mounts and readiness checks.
 - `scripts/test_hosted_release_config.py`: focused configuration, topology and rejection proof.
 - `docs/reports/`: sanitized hosted account/login and Workstream authorization proof, with no credentials.
 - `.github/workflows/demo-identity.yml`: changed-path issuer verification, without altering existing required checks.
@@ -52,7 +52,7 @@ One local operator initializes a private issuer data directory and bootstraps an
 |---|---|---|---|
 | Existing verifier contract | inspect `flow.py` and hosted fixture | RS256/JWKS and exact human claims identified | public issuer cutover still requires DNS/TLS |
 | Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
-| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | no live EC2/DNS proof |
+| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | private EC2 account/verifier proof passed; public DNS/API cutover pending |
 | Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | canonical hosted configuration proof now passes 65 tests; public cutover pending DNS/TLS |
 | Actual container networking and persistence | `python3 experiments/demo_identity/test_container.py -q` with the built candidate image | passed; replacing the bridge with the earlier internal network fails at the host HTTPS connection | public DNS/TLS remains separate |
 | Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | workflow added | hosted executions are PR evidence |
@@ -91,3 +91,11 @@ starts the shipped image/overlay, connects over host HTTPS, recreates only the
 issuer and proves account/signing persistence. CI runs this proof, not only
 Compose rendering. Retained account state and existing backend containers are
 preserved during the correction.
+
+After public login and Workstream authority proof succeeds, retire the fixture
+issuer container, signing keys and saved drill tokens, and update current
+operator/client references. Prove the old tokens are denied by the new verifier.
+Do not erase retained Garden identity links, audit facts or contributions.
+Credential retirement is conditional on the new authorized path working.
+
+[Private hosted proof](../../docs/reports/demo-identity-hosted-2026-11-06.md) records real account, restart, verifier and Caddy transport evidence and the remaining public cutover boundary.
