@@ -136,7 +136,9 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.assertEqual(
             rendered["services"]["demo-identity"]["networks"], {"demo_identity": None}
         )
-        self.assertEqual(rendered["services"]["api"]["networks"]["demo_identity"], None)
+        self.assertEqual(rendered["services"]["api"]["networks"], {"default": None})
+        self.assertEqual(rendered["networks"]["demo_identity"]["driver"], "bridge")
+        self.assertFalse(rendered["networks"]["demo_identity"].get("internal", False))
         mutations = []
         for key, value in (
             ("user", "10001:10001"),
@@ -147,10 +149,25 @@ class HostedReleaseConfigTests(unittest.TestCase):
             changed = copy.deepcopy(rendered)
             changed["services"]["demo-identity"][key] = value
             mutations.append(changed)
-        for role in ("worker", "beat"):
+        for role in ("api", "worker", "beat"):
             changed = copy.deepcopy(rendered)
             changed["services"][role]["networks"] = {"demo_identity": None}
             mutations.append(changed)
+        # The reproduced live failure: an internal bridge reports healthy but
+        # does not expose the requested loopback host port to the ingress proxy.
+        for key, value in (
+            ("internal", True),
+            ("driver", "host"),
+            ("external", True),
+            ("ipam", {"driver": "custom"}),
+            ("driver_opts", {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}),
+        ):
+            changed = copy.deepcopy(rendered)
+            changed["networks"]["demo_identity"][key] = value
+            mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["networks"]["default"] = None
+        mutations.append(changed)
         changed = copy.deepcopy(rendered)
         changed["services"]["demo-identity"]["ports"][0]["host_ip"] = "0.0.0.0"
         mutations.append(changed)

@@ -53,6 +53,8 @@ jobs:
             exit 1
           fi
           grep -q 'usage: demo-identity' /tmp/demo-identity-smoke.out
+      - name: Prove real issuer loopback HTTPS and account persistence
+        run: python3 experiments/demo_identity/test_container.py -q
       - name: Validate Caddy HTTPS ingress configuration
         shell: bash
         run: |
@@ -90,8 +92,9 @@ jobs:
               config = json.load(stream)
           services = config['services']
           assert set(services['demo-identity']['networks']) == {'demo_identity'}
-          assert {'default', 'demo_identity'} <= set(services['api']['networks'])
-          assert config['networks']['demo_identity']['internal'] is True
+          assert set(services['api']['networks']) == {'default'}
+          assert config['networks']['demo_identity']['driver'] == 'bridge'
+          assert config['networks']['demo_identity'].get('internal', False) is False
           assert services['demo-identity']['read_only'] is True
           assert services['demo-identity']['user'] == '12001:12001'
           PY

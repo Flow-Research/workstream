@@ -1482,18 +1482,19 @@ def validate_demo_identity_compose(
     for name, service in services.items():
         networks = service.get("networks") or {}
         if "demo_identity" in networks and (
-            not enabled or name not in {"api", "demo-identity"}
+            not enabled or name != "demo-identity"
         ):
-            raise PreflightError("demo identity network escaped its API boundary")
+            raise PreflightError("demo identity network escaped its issuer boundary")
     if not enabled:
         return
     network = rendered.get("networks", {}).get("demo_identity", {})
     if (
-        network.get("internal") is not True
-        or network.get("external")
-        or network.get("driver_opts")
+        network.get("driver") != "bridge"
+        or network.get("internal", False) is not False
+        or network.get("ipam")
+        or set(network) - {"name", "driver", "internal", "ipam"}
     ):
-        raise PreflightError("demo identity network must remain private")
+        raise PreflightError("demo identity network must use the dedicated publishing bridge")
     issuer = services["demo-identity"]
     expected_environment = {
         "DEMO_IDENTITY_ISSUER": values["DEMO_IDENTITY_ISSUER"],
@@ -1543,7 +1544,6 @@ def validate_demo_identity_compose(
     if (
         set(issuer.get("networks", {})) != {"demo_identity"}
         or issuer["networks"]["demo_identity"] is not None
-        or set(services["api"].get("networks", {})) != {"default", "demo_identity"}
     ):
         raise PreflightError(
             "demo identity network attachments differ from its profile"

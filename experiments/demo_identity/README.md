@@ -20,7 +20,7 @@ experiments/demo_identity/target/release/workstream-demo-identity init /private/
 
 The process reads one password line from stdin. It creates a 3072-bit RSA key and SQLite account database. Generate and mount a real TLS certificate and key for the exact issuer DNS hostname. Keep TLS and JWT signing keys separate in custody. `serve` refuses missing or unsafe state. Configure `DEMO_IDENTITY_ISSUER` as the canonical HTTPS origin, `DEMO_IDENTITY_AUDIENCE` as the Workstream audience, and the TLS certificate/key paths. For local runs, `DEMO_IDENTITY_BIND` defaults to `127.0.0.1:8443`.
 
-The optional [hosted Compose overlay](../../deploy/hosted/compose.demo-identity.yml) extends the base hosted Compose file. It uses a separately built, digest-qualified `DEMO_IDENTITY_IMAGE`, mounts private persistent state and TLS files, and uses a read-only root filesystem with non-root UID. Build the image from the included Dockerfile in a controlled release process. Configure the optional issuer fields in `deploy/hosted/release.env.example`; the canonical hosted wrapper selects and validates the overlay. The issuer joins a dedicated internal network shared only with the API, and its published port is restricted to loopback. External users connect through the separately configured HTTPS ingress. Before switching Workstream, prove the deployed issuer independently and preserve all existing actor identity links and contribution records. Pin the backend issuer, JWKS URL and RS256 audience to the chosen issuer. New accounts receive new subjects; an existing actor requires an explicitly authorized identity link, never an email-based remapping. The existing verifier has `trust_env=False`, so merely setting `SSL_CERT_FILE` is not enough for a private CA; a publicly trusted certificate avoids that exception.
+The optional [hosted Compose overlay](../../deploy/hosted/compose.demo-identity.yml) extends the base hosted Compose file. It uses a separately built, digest-qualified `DEMO_IDENTITY_IMAGE`, mounts private persistent state and TLS files, and uses a read-only root filesystem with non-root UID. Build the image from the included Dockerfile in a controlled release process. Configure the optional issuer fields in `deploy/hosted/release.env.example`; the canonical hosted wrapper selects and validates the overlay. The issuer joins a dedicated bridge with no backend services attached, and its published port is restricted to loopback. External users connect through the separately configured HTTPS ingress. Before switching Workstream, prove the deployed issuer independently and preserve all existing actor identity links and contribution records. Pin the backend issuer, JWKS URL and RS256 audience to the chosen issuer. New accounts receive new subjects; an existing actor requires an explicitly authorized identity link, never an email-based remapping. The existing verifier has `trust_env=False`, so merely setting `SSL_CERT_FILE` is not enough for a private CA; a publicly trusted certificate avoids that exception.
 
 ## API
 
@@ -46,7 +46,9 @@ The canonical issuer is the HTTPS origin without a trailing slash; its JWKS URL
 is that origin plus `/jwks.json`. Keep the audience identical to Workstream's
 configured token audience.
 
-The issuer itself publishes only loopback port 8443. The supplied
+The issuer itself publishes only loopback port 8443. Its dedicated bridge is
+not Docker `internal`: that mode suppresses the host port on the qualified
+host. No backend service joins the bridge and no public issuer port is allowed. The supplied
 [Caddy configuration](../../deploy/hosted/demo-identity.Caddyfile) exposes only
 the four supported paths. Caddy obtains and renews the public certificate
 automatically once DNS and ports 80/443 are configured. Keep Caddy's certificate

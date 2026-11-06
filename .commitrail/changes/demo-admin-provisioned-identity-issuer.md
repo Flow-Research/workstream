@@ -52,8 +52,9 @@ One local operator initializes a private issuer data directory and bootstraps an
 |---|---|---|---|
 | Existing verifier contract | inspect `flow.py` and hosted fixture | RS256/JWKS and exact human claims identified | public issuer cutover still requires DNS/TLS |
 | Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
-| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 2 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | no live EC2/DNS proof |
+| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | no live EC2/DNS proof |
 | Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | canonical hosted configuration proof now passes 65 tests; public cutover pending DNS/TLS |
+| Actual container networking and persistence | `python3 experiments/demo_identity/test_container.py -q` with the built candidate image | passed; replacing the bridge with the earlier internal network fails at the host HTTPS connection | public DNS/TLS remains separate |
 | Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | workflow added | hosted executions are PR evidence |
 
 ## Review findings
@@ -81,3 +82,12 @@ four concurrent password operations. It never trusts forwarded identity.
 Security review reproduced an all-clients lockout caused by a shared proxy-peer
 bucket. Removing that bucket preserves the stated account/global limits; a real
 HTTP regression fails on the previous binary with 429 and passes after repair.
+
+A real EC2 run caught a second deployment mismatch: Docker marked the issuer
+healthy but suppressed its loopback port on an `internal` network. The issuer
+now has an ordinary dedicated bridge with no backend service attached; the
+exact loopback publication remains enforced. The container integration test
+starts the shipped image/overlay, connects over host HTTPS, recreates only the
+issuer and proves account/signing persistence. CI runs this proof, not only
+Compose rendering. Retained account state and existing backend containers are
+preserved during the correction.

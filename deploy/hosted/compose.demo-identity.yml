@@ -1,9 +1,5 @@
 # Opt-in external demo issuer. Use with compose.yml only after a separate cutover decision.
 services:
-  api:
-    networks:
-      - default
-      - demo_identity
   demo-identity:
     image: ${DEMO_IDENTITY_IMAGE:?set a digest-qualified demo issuer image}
     pull_policy: always
@@ -48,4 +44,4 @@ services:
 
 networks:
   demo_identity:
-    internal: true
+    driver: bridge
