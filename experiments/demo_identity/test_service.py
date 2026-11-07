@@ -19,7 +19,7 @@ from app.core.config import Settings
 from app.interfaces.auth import AuthVerificationError
 
 ROOT = Path(__file__).resolve().parents[2]
-BINARY = ROOT / "experiments/demo_identity/target/debug/workstream-demo-identity"
+BINARY = ROOT / "experiments/demo_identity/target/release/workstream-demo-identity"
 
 
 @pytest.fixture(scope="module")
@@ -212,7 +212,10 @@ def test_password_change_and_identity_survive_process_restart(service, monkeypat
 
 
 def test_proxy_peer_does_not_collapse_participant_login_limits(service):
-    issuer, cert, _data, _restart = service
+    issuer, cert, _data, restart = service
+    # Start a fresh limiter window; never credit a slow run that crossed reset.
+    started = time.monotonic()
+    restart()
     with httpx.Client(verify=str(cert), trust_env=False) as client:
         # All proxy requests share a socket peer. Unknown valid-format identities must not
         # fill a peer-wide bucket that prevents another participant signing in.
@@ -228,3 +231,4 @@ def test_proxy_peer_does_not_collapse_participant_login_limits(service):
         })
         assert response.status_code == 200
         assert "admin_token" in response.json()
+    assert time.monotonic() - started < 60, "throttle proof crossed its fresh window"

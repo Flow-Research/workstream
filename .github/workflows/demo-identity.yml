@@ -45,7 +45,7 @@ jobs:
           cargo fmt --check
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked -- --test-threads=1
-          cargo build --locked
+          cargo build --release --locked
       - name: Build issuer container and check executable
         shell: bash
         run: |

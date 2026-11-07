@@ -10,7 +10,7 @@ Build with the locked Rust toolchain and dependencies:
 cargo +1.99.1 build --release --locked --manifest-path experiments/demo_identity/Cargo.toml
 ```
 
-For the real HTTPS verifier test, first build the debug binary with `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml`, then run `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` in an environment with the backend's test dependencies and OpenSSL installed.
+For the real HTTPS verifier test, first build the optimized binary used in deployment with `cargo build --release --locked --manifest-path experiments/demo_identity/Cargo.toml`, then run `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` in an environment with the backend's test dependencies and OpenSSL installed.
 
 Create a new private directory outside the checkout. The local operator's first issuer administrator account is created exclusively at initialization. Give the email as an argument and provide its password from private stdin; it must be 12–1024 bytes. Do not put a password in an argument, environment variable, script, shell history or command log. Initialization refuses an existing directory and never resets accounts or signing keys. A private Docker bind mount for `/data` must be owned by UID 12001 and mode 0700; its SQLite file and signing key must persist across container recreation.
 
