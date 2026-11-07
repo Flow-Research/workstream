@@ -6,7 +6,11 @@ during the client drill. This extends the earlier
 [temporary client proof](demo-identity-clients-2026-11-07.md); it does not replace
 that report's historical scope.
 
-## Qualified deployment
+The [resource-sizing qualification below](#sealed-size-resource-qualification-and-fresh-hosted-journey)
+records the latest deployed backend and a separate new contribution. Earlier
+identities and evidence remain attributed to their original deployment.
+
+## Earlier qualified deployment
 
 - MCP source: `8f46a920c9524f017d48a9d0b1aad06e8edd7f1f`.
 - MCP OCI manifest: `sha256:e034a1eba0906744a471602411ac95396a68372144a16209821fb688cd7335db`.
@@ -103,6 +107,119 @@ replay. Bounded API, MCP, Celery and issuer log captures contained none of
 the known caller bearers. Owned SSH tunnels and temporary bearer files were
 removed; accounts, accepted work, contribution/award records and audit history
 remain intact. This known-token scan is not a claim about every historical secret.
+
+## Sealed-size resource qualification and fresh hosted journey
+
+The resource correction was deployed as release
+`sha256:4a0001cac9c21714f06a0dbb9dcc963289ba8d3a6f235cdf6879cbb46cc496a1`,
+using backend source `b637b33f7136ac2d81ef8d56ab71d704a8fd474a` and image
+`sha256:c5df6dbb0641239d6cadb062fe89753785b5d9f3983ad049f1b4ecd53044e8e5`.
+The unchanged MCP image above remained in use, attached to the replacement API
+container's actual namespace. The tested Linux CLI hashed to
+`65e36e36d8a8b69a05c10a2cc6305d73c5a84b6b91a9abcb6350bf475fa04306`.
+
+Scratch reservations now grow before writes from counted upload bytes plus
+bounded buffer headroom. New submission ZIPs are capped at 500 MiB; smaller
+project/deployment limits still apply. Guide and retained-artifact limits remain
+distinct, as does MCP's 64 MiB transport ceiling. The sealed ZIP length then
+bounds inspection expansion and VM allocation. The original operation deadline
+covers upload and subsequent inspection; it is not restarted at sealing.
+
+| Qualified input | Data disk | Separate root overlay | Result |
+| --- | --- | --- | --- |
+| Tiny PRE and POST fixtures | 1 GiB | 1 GiB | Passed inspection/export and cleanup |
+| Exactly 500 MiB new ZIP | 2 GiB | 1 GiB | Passed canonical preparation/native inspection |
+| Retained 512 MiB artifact | 2 GiB | 1 GiB | Passed the separate internal read contract |
+| New ZIP above 500 MiB | None | None | Rejected before VM allocation |
+
+The pinned envelope also passed maximum expanded-content, 2,000-entry,
+1,024-byte path, depth-32 and directory-stress cases. Qualified overhead is
+769,622,016 bytes; minimum observed free inodes were 45,482. Cancellation,
+abandoned upload, capacity refusal, lease expiry and slot reuse left no owned
+VMs, cgroups or leases. Native automatic image seeding was disabled by the
+command owner so it cannot allocate an unaccounted extra VM.
+
+The intake/native components were qualified from `18a9e7c06ca73874be99c596eb3381bb0f0880fe`.
+Their exact image/runtime pins remain independently bound; all 72 observed
+intake import files and native/guest sources are unchanged by the backend's
+later orchestration repairs. Those repairs have separate real-scratch,
+PostgreSQL and mutation proof. The complete numeric receipt hashes to
+`sha256:df328a8cc9a1e03134f1985101879bbfe6f5cf64475e3d7e21ce57f55107058a`.
+These measured synthetic limits are not a 500 MiB public project submission or
+an arbitrary-image capacity guarantee. The Garden guide allows only a 128 KiB ZIP.
+
+The previous deployed configuration requested a fixed 3 GiB data disk and did
+not separately charge its root overlay. The corrected small-input charge is
+1 GiB data plus 1 GiB overlay; its supported maximum is 2 GiB plus 1 GiB.
+Logical reservation, disk capacity and actual physical usage are different
+measurements. No comparison with unmeasured previous upload latency is claimed.
+The tiny native fixture sealed at 0.023 seconds, was VM-ready at 8.704 seconds
+and acknowledged cleanup at 10.402 seconds, measured cumulatively inside the
+canonical-owner fixture rather than through the public API.
+
+Deployment drained the existing workers, verified retained database contents,
+installed the pinned assets and passed real AWS storage qualification. A native
+socket-readiness race in the private deployment harness was resolved by checking
+the already-running exact process and continuing with canonical preflight;
+completed starts were not repeated. A proof-script argument error was corrected
+against the MCP tool's empty input schema. Preservation evidence ends at the
+actual pre-read cutoff: later legitimate actor/AUTH audit writes are retained,
+not erased or misrepresented as an unchanged database. Fresh real issuer/API/MCP
+observations then bound the active containers, native process and release.
+
+A separate fresh task used [Garden PR #287](https://github.com/Flow-Research/garden/pull/287)
+head `4e61e1d70d04a81681b775cde7c36acd76161ed8`, its exact task trailer and
+[successful current-head CI](https://github.com/Flow-Research/garden/actions/runs/42371374488).
+The new documentation work explains PRE/POST failures and safe replay. This
+was not a relabeling of an earlier accepted task. The PR remained open and unmerged.
+
+Fresh Rust logins supplied the CLI and SDK client. Forty read/authentication
+checks and fourteen task-creation/replay checks passed before screening, release
+and immediate claim. Malformed proof returned actionable PRE findings through
+both clients, created no Submission and preserved `in_progress` and assignment
+ownership. The first malformed preparation took 17.3 seconds; its MCP replay
+took 11.1 seconds. The valid 292-byte ZIP first returned pending verification in
+19.7 seconds, with MCP replay taking 12.4 seconds. These are client-observed
+elapsed times, not isolated VM startup or complete acceptance latency.
+
+The storage job verified the original put attempt on its first execution.
+Unchanged replay progressed through `stored_pending_verification`,
+`object_confirmed` and `ready`; only verified admission permitted Submission v1.
+The evaluation event was delivered once, external Garden POST passed, and locked
+`human_review_required=false` routing invoked shared acceptance. Contributor and
+manager reads agreed on these durable facts:
+
+| Durable fact | Identity |
+| --- | --- |
+| Task | `01a1b5ea-30cf-7c14-9f75-0b04256817ed` |
+| Submission | `01a1b5f6-04b9-7298-8229-6bbc29ba5bf5` |
+| Completed checker run | `01a1b5f6-066e-75fc-8bc0-066621bfa3fe` |
+| FinalAcceptance | `01a1b5f7-d2e9-7796-9485-9e15e5e9d7f6` |
+| ContributionRecord | `01a1b5f7-d33a-7b5f-928d-b7c1930b6e33` |
+| Single 100 FLOW points award | `01a1b5f7-d345-75e0-96e1-5ffb804353d1` |
+
+Exact MCP Submission replay retained the same Submission/evaluation identities,
+completed checker run, contribution and award. Assertions bind assignment,
+contributor, locked policies and the exact ZIP hash
+`sha256:9fc1c8b0ae78ffe48ce705be9612c847f57bb5af2dc51a6d5248494a5bbaf99e`.
+Review and review-lease references remain null; no reviewer contribution is
+fabricated. The response evidence packet hashes to `sha256:a89a3015a4c9cfa5695e6470e9c23790b6e69039125744434afb05fc3b66f487`.
+Read-only snapshots after failed PRE and after acceptance found zero owned native
+leases, VMs, guardians, cgroups, scratch reservations and workspaces. Services
+remained running; these snapshots did not delete or recover resources.
+
+Both temporary project grants were revoked. Ten post-revocation checks confirmed
+that live authority is required for manager reads and creation replay. Final
+bounded service-log scans contained none of the known caller bearers; this run's
+three bearer files and private bearer inventory were removed. Owned SSH tunnels
+closed; issuer accounts, keys, accepted work and evidence remain retained.
+
+[Exact backend CI](https://github.com/Flow-Research/workstream/actions/runs/42367582804)
+passed all 27 jobs, including CLI contracts, MCP packaging and real-API contracts.
+The package-only MCP run's six integration skips are not integration evidence;
+the separate real-API job supplies that proof. This deployed journey still does
+not establish live human review, public DNS/TLS, a native Garden/Codex connector
+or publication of CLI binaries.
 
 ## Coverage and distribution limits
 

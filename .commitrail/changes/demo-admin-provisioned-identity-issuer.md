@@ -1,14 +1,14 @@
 # Demo administrator-provisioned identity issuer
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: An isolated Rust demo issuer lets its own administrator provision human accounts and issue compatible short-lived tokens without changing Workstream authentication or authorization.
 
 ## Intent
 
 Let issuer-approved demo participants sign in without an operator minting a token roster. This is an external demo issuer, not production Flow Identity or a Workstream login feature.
 
-## Current behavior
+## Starting behavior before this change
 
 `experiments/hosted_drill_identity/fixture.py` mints offline tokens for named identities. `backend/app/adapters/auth/flow.py` verifies pinned asymmetric JWTs using HTTPS JWKS. Workstream owns actor admission and grants independently of token claims. CLI and MCP clients consume a supplied bearer token.
 
@@ -280,8 +280,9 @@ binary/guest hashes, qualified entry/path/depth ceilings, overhead bytes and the
 maximum qualified data-disk size. Reject mismatched identities or requests outside
 those bounds before allocation. Enforce the separate intake root overlay at one
 GiB in the runtime arguments and charge it in admission. Numeric settings and
-deployment remain blocked on actual cold/runtime qualification, not on writing
-the fail-closed calculation and its tests. New ZIP admission is 500 MiB; retained
+deployment required actual cold/runtime qualification, not merely the
+fail-closed calculation and its tests. The completed proof below supplies the
+measured envelope for the exact pinned deployment. New ZIP admission is 500 MiB; retained
 artifact reads keep their existing internal byte contract and exact identity.
 
 The scratch/ZIP/inventory candidate received focused security and architecture
@@ -343,3 +344,22 @@ rejection. Keep the existing post-reservation regression and add empty-source an
 inspection rejection controls before reservation. These repairs preserve the
 existing lifecycle and recovery contract; they introduce no new state or retry
 path.
+
+
+### Completed resource qualification and fresh hosted proof
+
+The [managed hosted report](../../docs/reports/managed-mcp-hosted-2026-11-07.md#sealed-size-resource-qualification-and-fresh-hosted-journey)
+binds the exact backend, intake/native components and numeric receipt. Cold,
+maximum-size/path/inode, cancellation and capacity proofs passed. The small VM
+uses a 1 GiB data disk plus a separately charged 1 GiB overlay; qualified maximum
+inputs use 2 GiB plus the same overlay. Large fixtures are canonical-owner tests,
+not maximum-size public project submissions.
+
+The repaired backend was deployed through actual drain, retained-data and AWS
+proof. A new public CLI/MCP Garden task then proved malformed PRE/no Submission,
+verified original-put admission, external POST, automatic shared acceptance,
+one submitter contribution and one 100 FLOW award. Exact replay preserved those
+facts; final native/scratch observations showed no retained temporary resources.
+Earlier accepted work remains retained and separately attributed. No old
+credential or signer path was restored. Public DNS/TLS, native connector access,
+protected CLI publication and live human review remain separate limits.
