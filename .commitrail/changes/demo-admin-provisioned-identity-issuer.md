@@ -99,3 +99,9 @@ Do not erase retained Garden identity links, audit facts or contributions.
 Credential retirement is conditional on the new authorized path working.
 
 [Private hosted proof](../../docs/reports/demo-identity-hosted-2026-11-06.md) records real account, restart, verifier and Caddy transport evidence and the remaining public cutover boundary.
+
+The user additionally authorized private CLI/MCP testing while DNS is pending.
+The existing clients use real login tokens and the existing API without client
+core changes. The [bounded client proof](../../docs/reports/demo-identity-clients-2026-11-07.md)
+covers authority denials, one shared draft-task receipt, cross-client replay and
+revocation; it does not claim full client catalogue or native connector coverage.

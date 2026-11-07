@@ -758,8 +758,9 @@ cannot be reused as post-submission review-gate evidence. See the
   compatible short-lived tokens. Its opt-in hosted overlay is validated by the canonical wrapper, with
   bounded HTTPS readiness and persistent private state. [Private hosted account,
   restart, Caddy transport and Workstream authorization proof](reports/demo-identity-hosted-2026-11-06.md)
-  passed. Public DNS/TLS and
-  deployed Workstream issuer-cutover proof remain required; compatibility tests
+  passed. [Login-based CLI and MCP calls](reports/demo-identity-clients-2026-11-07.md)
+  additionally prove bounded private reads, shared draft-task replay and revocation.
+  Public DNS/TLS and deployed Workstream issuer-cutover proof remain required; compatibility tests
   do not establish full Flow Identity platform integration.
 - External subject identity resolves through ActorIdentityLink into a stable
   internal ActorProfile.
