@@ -73,7 +73,7 @@ workers ran `garden_task_proof` successfully and routed the result under locked
 `human_review_required=false` rules. Contributor and manager APIs both returned
 accepted work. Exact MCP submission replay retained the original Submission and
 evaluation request. Complete contribution exports before and after replay
-contained the same single contribution and single earned award:
+contained the same single contribution and single earned award for this Submission:
 
 | Durable fact | Identity |
 | --- | --- |
