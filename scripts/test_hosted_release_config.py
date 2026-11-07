@@ -1751,6 +1751,21 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(preflight.PreflightError, "exceeds storage qualification"):
                     preflight.validate_checker_config(self.checker, values)
 
+    def test_intake_storage_qualification_covers_largest_supported_zip(self):
+        changed = copy.deepcopy(self.checker)
+        envelope = changed["trusted_intake"]["storage_envelope"]
+        envelope["maximum_storage_gib"] = 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
+            preflight.validate_checker_config(changed, self.environment)
+        envelope.update(maximum_storage_gib=2, overhead_bytes=1024**3)
+        preflight.validate_checker_config(changed, self.environment)
+        envelope["overhead_bytes"] += 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
+            preflight.validate_checker_config(changed, self.environment)
+        envelope["overhead_bytes"] = 2**64 - 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
+            preflight.validate_checker_config(changed, self.environment)
+
     def test_custom_deployment_root_preserves_paths_and_refuses_unsafe_custody(
         self,
     ) -> None:

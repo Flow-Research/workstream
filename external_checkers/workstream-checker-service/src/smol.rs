@@ -398,6 +398,7 @@ fn command(s: &SmolConfig, args: &[&str], cgroup: Option<&Path>) -> Result<Comma
     command
         .args(args)
         .env_clear()
+        .env("SMOLVM_IMAGE_SEEDS", "0")
         .env("HOME", &s.home)
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .stdin(Stdio::null())

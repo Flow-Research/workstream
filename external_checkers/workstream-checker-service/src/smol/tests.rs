@@ -390,3 +390,65 @@ fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged(
     drop(machine);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn runtime_command_disables_image_seeds_despite_conflicting_ambient_environment() {
+    const CHILD: &str = "WORKSTREAM_TEST_SMOL_SEED_POLICY_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        // Isolate the conflicting environment from other tests in this process.
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "smol::tests::runtime_command_disables_image_seeds_despite_conflicting_ambient_environment", "--nocapture"])
+            .env(CHILD, "1")
+            .env("SMOLVM_IMAGE_SEEDS", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "seed-policy child failed: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    assert_eq!(std::env::var("SMOLVM_IMAGE_SEEDS").unwrap(), "1");
+    let (root, _) = super::super::tests::test_config();
+    let binary = root.join("runtime-probe");
+    fs::write(
+        &binary,
+        b"#!/bin/sh\nprintf '%s\\n' \"$SMOLVM_IMAGE_SEEDS\" \"$HOME\" \"$PATH\" \"$@\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o700)).unwrap();
+    let runtime = SmolConfig {
+        binary,
+        binary_sha256: format!("sha256:{}", "a".repeat(64)),
+        home: root.join("home"),
+        guest_binary: root.join("guest"),
+        guest_sha256: format!("sha256:{}", "b".repeat(64)),
+        cgroup_root: root.join("groups"),
+        maximum_parallel: 1,
+        maximum_storage_bytes: 4 * 1024 * 1024 * 1024,
+    };
+    let output = command(
+        &runtime,
+        &["machine", "start", "--name", "owned-probe", "--no-workload"],
+        None,
+    )
+    .unwrap()
+    .output()
+    .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let observed: Vec<_> = stdout.lines().collect();
+    assert_eq!(
+        observed[0], "0",
+        "owned runtime must disable seed creation and reuse"
+    );
+    assert_eq!(observed[1], runtime.home.to_str().unwrap());
+    assert_eq!(observed[2], "/usr/local/bin:/usr/bin:/bin");
+    assert_eq!(
+        &observed[3..],
+        ["machine", "start", "--name", "owned-probe", "--no-workload"]
+    );
+    fs::remove_dir_all(root).unwrap();
+}

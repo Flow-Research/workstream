@@ -234,6 +234,9 @@ limits. The example's zero overhead/size fields deliberately fail preflight
 until replaced with measured bounds. Do not copy a guessed buffer into them.
 Cold boot, archive spooling, maximum projected inventory, expanded content and
 cleanup must fit; an example upload alone does not qualify the envelope.
+The native owner disables automatic Smol image-seed creation and reuse; do not
+qualify with an extra upstream seed VM outside the node reservation. Existing
+cache data is preserved. Measure startup under the same enforced environment.
 Both typed clients
 connect through the one mode-`0600` socket in the mode-`0700` checker directory.
 

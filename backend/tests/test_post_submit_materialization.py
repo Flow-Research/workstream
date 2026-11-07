@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import pickle
 from dataclasses import asdict
 
@@ -311,11 +312,26 @@ async def test_post_submit_expansion_cannot_bypass_aggregate_quota(tmp_path, iso
     )) as h:
         execution = await material_execution(h)
         consumer = Consumer(h.files)
-        with pytest.raises(PostSubmissionMaterializationFailure, match="material_unavailable"):
-            await h.service.materialize(execution, consumer)
-        assert consumer.calls == 0
-        assert not h.preparation._active
+        baseline = (await h.manager.usage()).reserved_bytes
+        reservation, descriptor = await h.manager.allocate()
+        try:
+            await h.manager.reserve_bytes(reservation, len(h.data))
+            archive_charge = (await h.manager.usage()).reserved_bytes - baseline
+        finally:
+            try:
+                os.close(descriptor)
+            finally:
+                await h.manager.release(reservation)
+        expanded_bytes = sum(len(content) for content in h.files.values())
+        # The complete progressive download fits; its projection is one byte short.
+        occupied = h.manager.limits.aggregate_reserved_bytes - baseline - archive_charge - expanded_bytes + 1
+        with h.manager.extraction_workspace(reserved_bytes=occupied, maximum_entries=0):
+            with pytest.raises(PostSubmissionMaterializationFailure, match="material_unavailable"):
+                await h.service.materialize(execution, consumer)
+            assert consumer.calls == 0
+            assert not h.preparation._active
         assert list((h.scratch / "workspaces").iterdir()) == []
+        assert (await h.manager.usage()).reserved_bytes == baseline
 
 
 async def test_stored_manifest_mismatch_never_reaches_consumer(tmp_path, isolated_database_env):

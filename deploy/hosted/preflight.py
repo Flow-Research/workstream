@@ -919,6 +919,21 @@ def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> N
         if not 0 < configured <= envelope[key]:
             raise PreflightError("trusted intake inspection limit exceeds storage qualification")
 
+    # Qualification must cover supported inputs, independently of transient free space.
+    internal_zip_bytes = 512 * 1024**2
+    try:
+        expanded = int(values.get("WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_EXPANDED_BYTES",
+                                  str(internal_zip_bytes)))
+        ratio = int(values.get("WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO", "100"))
+    except (TypeError, ValueError):
+        raise PreflightError("trusted intake expansion limits are invalid") from None
+    if not 0 < expanded <= internal_zip_bytes or not 0 < ratio <= 2**64 - 1:
+        raise PreflightError("trusted intake expansion limits are invalid")
+    required_bytes = internal_zip_bytes + min(expanded, internal_zip_bytes * ratio) + envelope["overhead_bytes"]
+    rounded_bytes = required_bytes + 1024**3 - 1
+    if rounded_bytes > 2**64 - 1 or rounded_bytes // 1024**3 > envelope["maximum_storage_gib"]:
+        raise PreflightError("trusted intake storage qualification cannot cover supported ZIPs")
+
     trial_path, trial_digest = (values.get(key) or None for key in TRIAL_KEYS)
     if (
         config.get("trial_authority_manifest_path"),

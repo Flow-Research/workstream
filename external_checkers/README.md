@@ -418,6 +418,10 @@ Requests outside that qualification fail before allocation. Establish its bounds
 with cold startup, maximum accepted inventory/expansion and cleanup on the exact
 runtime; there is no production default overhead. Its private writable scratch
 is bounded processing space, never artifact storage.
+Workstream sets `SMOLVM_IMAGE_SEEDS=0` in the native command environment so one
+lease cannot spawn an unaccounted automatic image-seed VM. The pinned image
+archive cache remains available; existing seed data is not deleted. Qualification
+and latency measurements must use this same enforced cold-start behavior.
 
 Backend API and durable workers require all three settings:
 

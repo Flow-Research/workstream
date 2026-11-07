@@ -310,3 +310,17 @@ focus on safe admission before writes, concurrent accounting, cleanup after
 interruption and the qualified VM sizing floor. Re-run the real hosted
 PRE-to-contribution client journey after the correction; do not relabel the
 earlier successful run as proof of changed storage behavior.
+
+### Native runtime automatic image seeding
+
+Cold-probe investigation found that pinned Smol 1.31.4 attempts an additional
+`image-seed-*` VM before the requested VM, including with `--no-workload`.
+Its upstream defaults and retained seed cache are outside Workstream's exact
+lease and capacity calculation. The native command environment currently clears
+ambient variables, and the deployed wrapper does not disable this behavior.
+The bounded repair is to set `SMOLVM_IMAGE_SEEDS=0` explicitly in the existing
+native command owner, with executed-environment proof that callers cannot restore
+it through ambient settings. Do not add a pool, seed manager or configuration
+switch, and do not delete existing cache or retained data. Qualification must
+measure cold startup under that enforced environment. This is a prerequisite for
+the promised one-VM resource calculation, not a project checker policy change.
