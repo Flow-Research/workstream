@@ -124,6 +124,13 @@ class HostedReleaseConfigTests(unittest.TestCase):
         )
         return values
 
+    def test_issuer_host_mapping_is_absent_without_issuer_profile(self):
+        rendered = preflight.render_compose(self.environment_path, self.environment)
+        preflight.validate_compose(rendered, self.environment)
+        rendered["services"]["api"]["extra_hosts"] = ["identity.example.test=host-gateway"]
+        with self.assertRaisesRegex(preflight.PreflightError, "host mapping"):
+            preflight.validate_compose(rendered, self.environment)
+
     def test_demo_identity_overlay_preserves_default_and_bounds_authority(self):
         self.assertNotIn(
             str(preflight.DEMO_IDENTITY_COMPOSE_PATH),
@@ -137,9 +144,22 @@ class HostedReleaseConfigTests(unittest.TestCase):
             rendered["services"]["demo-identity"]["networks"], {"demo_identity": None}
         )
         self.assertEqual(rendered["services"]["api"]["networks"], {"default": None})
+        self.assertEqual(
+            rendered["services"]["api"]["extra_hosts"],
+            [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway"],
+        )
         self.assertEqual(rendered["networks"]["demo_identity"]["driver"], "bridge")
         self.assertFalse(rendered["networks"]["demo_identity"].get("internal", False))
         mutations = []
+        for hosts in ([], [values["DEMO_IDENTITY_HOSTNAME"] + "=127.0.0.1"],
+                      ["other.example.test=host-gateway"],
+                      [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway", "extra.test=host-gateway"]):
+            changed = copy.deepcopy(rendered)
+            changed["services"]["api"]["extra_hosts"] = hosts
+            mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["worker"]["extra_hosts"] = {values["DEMO_IDENTITY_HOSTNAME"]: "host-gateway"}
+        mutations.append(changed)
         for key, value in (
             ("user", "10001:10001"),
             ("mem_limit", 0),

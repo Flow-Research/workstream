@@ -1,5 +1,8 @@
 # Opt-in external demo issuer. Use with compose.yml only after a separate cutover decision.
 services:
+  api:
+    extra_hosts:
+      - "${DEMO_IDENTITY_HOSTNAME}:host-gateway"
   demo-identity:
     image: ${DEMO_IDENTITY_IMAGE:?set a digest-qualified demo issuer image}
     pull_policy: always

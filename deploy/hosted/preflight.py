@@ -1480,6 +1480,12 @@ def validate_demo_identity_compose(
     services = rendered["services"]
     enabled = bool(values.get("DEMO_IDENTITY_IMAGE"))
     for name, service in services.items():
+        expected_hosts = (
+            [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway"]
+            if enabled and name == "api" else []
+        )
+        if (service.get("extra_hosts") or []) != expected_hosts:
+            raise PreflightError("demo identity host mapping differs from its profile")
         networks = service.get("networks") or {}
         if "demo_identity" in networks and (
             not enabled or name != "demo-identity"

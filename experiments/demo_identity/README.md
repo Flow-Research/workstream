@@ -90,3 +90,21 @@ previous fixture issuer and remove its signing keys and saved tokens. Test old
 token rejection and obtain future credentials through login. Retain existing
 actor history and contribution facts; changing authentication does not transfer
 old work or grants to a new account.
+
+### Private access before public DNS
+
+The opt-in overlay maps only the API's configured issuer hostname to the Docker
+host gateway. Keep that exact hostname and HTTPS issuer/JWKS origin; Caddy serves
+443 on the same host and verifies the loopback issuer on 8443. The issuer network
+remains isolated from backend membership. The preflight rejects missing or
+substituted hostname mappings.
+
+For an operator-authorized private deployment, configure the installed Caddy
+site with an explicit certificate and key for that hostname, and disable automatic
+HTTPS provisioning until public DNS is available. Qualify the backend image from
+its clean base with the private certificate added to its trust bundle, retaining
+normal public roots and removing the retired fixture CA. Do not disable hostname
+or certificate verification. Record image and deployment-configuration provenance
+separately, and repeat the existing release/AWS proof after changing either.
+This supplies trusted private access; it does not establish public trust for
+participants. Public DNS permits replacement with Caddy-managed certificates.

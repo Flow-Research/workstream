@@ -26,7 +26,7 @@ Let issuer-approved demo participants sign in without an operator minting a toke
 
 ### Not allowed
 
-- Workstream verifier, actor, admission, authorization, CLI or MCP core changes; public signup; mail, OAuth, frontend or refresh tokens.
+- Workstream verifier, actor, admission or authorization core changes; public signup; mail, OAuth, frontend or refresh tokens. CLI/MCP additions are restricted to the two already-public guide request operations below.
 
 ## Design and decisions
 
@@ -105,3 +105,40 @@ The existing clients use real login tokens and the existing API without client
 core changes. The [bounded client proof](../../docs/reports/demo-identity-clients-2026-11-07.md)
 covers authority denials, one shared draft-task receipt, cross-client replay and
 revocation; it does not claim full client catalogue or native connector coverage.
+
+## Active private cutover and client completion
+
+The user requires retirement of the previous runtime credentials now, without
+waiting for public DNS, and all changes remain in this PR. Preserve the canonical
+HTTPS issuer identity. Resolve that hostname to the same host from the API through
+a fixed, validated issuer-overlay mapping. Caddy temporarily serves the trusted
+private certificate on 443 and verifies the issuer upstream. Qualified images
+start from the recorded clean base and trust only the new private certificate in
+addition to normal public roots; never disable TLS verification. Public DNS/TLS
+remains a distinct participant-access claim.
+
+Use the existing deployment drain, release descriptor, AWS proof and generation
+marker owners. Record deployment configuration and image source separately when
+they differ. Prove fresh account login and retained grants through the active API,
+then reject old tokens and remove fixture signing keys, token copies, runtime
+container/helpers and old CA trust. Preserve original actors, immutable records
+and non-secret historical evidence. Do not delete business data or fabricate an
+identity mapping. Remove obsolete runtime paths rather than leave a fallback.
+
+Client additions are exactly the existing POST guide `/setup` and
+`/requirements/compile` operations. The former explicitly requests optional
+assistance; the latter compiles uploaded manager rules without inference. Reuse
+CLI guide commands and MCP guide-lifecycle ports, with caller-owned UUID keys,
+strict 202 receipt validation, unchanged bearer forwarding and no automatic retry.
+The receipt contains operation/run/generation/status, not project/guide selectors;
+clients must not invent a selector comparison or another lookup.
+
+Additional allowed files: `cli/internal/api/`, `cli/internal/command/`, their
+focused tests and `cli/README.md`; `mcp_server/` tools, gateway, schemas, packaged
+contracts, tests and README; the MCP workflow's exact catalogue assertion only.
+Deployment changes remain within the existing issuer overlay/preflight/tests and
+operator documentation. Required proof includes missing/malformed keys, exact
+forwarding, invalid/uncertain responses, denials, and explicit no-inference
+compilation; actual deployed login, old-token rejection and credential retirement.
+Focused security/architecture, QA/test-delta, docs and CI review apply to affected
+boundaries. No native connector/OAuth claim or expansion to unrelated tools.
