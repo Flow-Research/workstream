@@ -21,7 +21,7 @@ issuer cutover.
 - MCP's management read matched the task's identity, title, creator and source
   provenance. The participant's project and task reads returned concealed 404s.
 - After revocation of the temporary Project Manager grant, both clients still
-  authenticated for self reads but were denied the project read and exact replay.
+  authenticated for self reads but were denied the task read and exact replay.
   A retained successful receipt did not bypass fresh authorization.
 
 The task remains an unreleased draft. No screening, claim, Submission, checker
