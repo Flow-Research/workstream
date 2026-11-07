@@ -15,7 +15,7 @@ native checker service changed.
 
 The existing deployment owners drained execution, preserved the retained database
 and eight pending delivery rows, sealed a new release, and completed its real AWS
-proof before API/worker startup. Exact retained-data checks passed before the
+proof before API and Celery worker startup. Exact retained-data checks passed before the
 public API authorization proof; subsequent self/grant reads legitimately record
 authorization evidence and are not compared away. Beat and the release-bound AWS
 proof timer resumed only after that proof passed.
@@ -71,7 +71,7 @@ securely erased. Existing actors, identity links and contribution history remain
 
 The active client proof's temporary tokens were deleted and its SDK adapter and
 SSH tunnel were stopped; both local ports were verified closed. The normal API,
-Rust issuer, workers and scheduler remain running. The deployment's private
+Rust issuer, Celery workers and scheduler remain running. The deployment's private
 Caddy ingress is active; it has not yet proved public DNS/certificate issuance.
 
 The private operator startup plan no longer launches the fixture JWKS service.
