@@ -22,19 +22,21 @@
 ## Current implementation
 
 [`mcp_server/`](../../../mcp_server/README.md) is an independently packaged
-Streamable HTTP adapter with 130 tools: three self-service tools for profile read,
+Streamable HTTP adapter with 132 tools: three self-service tools for profile read,
 profile update and exact-project authorization context, plus six administrative
 reads for permission/role definitions, grants and actor/identity projections, two
 administrative grant mutations, five actor/identity lifecycle mutations, two
 project-shell tools, five project-participation tools, two guide-metadata tools
 and two draft-policy tools, plus twenty contributor workspace, contribution
-evidence and contribution-policy tools, twenty-four complete guide-lifecycle
+evidence and contribution-policy tools, twenty-six complete guide-lifecycle
 tools, ten checker/delivery/registry tools, nine operator-artifact tools and
 seventeen task-execution/submission tools and twenty-three current project-list,
 task-management, audit, import, service-actor and model-operation tools. It includes a container,
 selected response-schema validation and additive CI. Its integration tests
 exercise the installed adapter against the real Workstream API. Workstream
-still owns token verification and authorization. This is delivered packaging,
+still owns token verification and authorization. Explicit guide assistance and
+manager-rules compilation reuse the two existing keyed request operations;
+neither automatically invokes the other. This is delivered packaging,
 not proof of a deployed public gateway, production Flow integration or the
 assembled release drill. The initiative remains Planned because that larger scope
 is unfinished. Historical hashes below describe their stated design/proof;

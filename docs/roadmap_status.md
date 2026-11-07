@@ -362,13 +362,13 @@ Selected production request/completion composition and
 supported false-guide activation are implemented. A known pre-effect non-live REV refusal returns bounded OUTBOX retry after rollback; exhaustion dead-letters without automatic reopen. A setup-fault hold is future safety work because no current selected production result emits `task_setup_blocked`. Human review/revision, conditional fulfillment, operations and
 release proof remain later v0.1 work.
 
-The [independent MCP package](../mcp_server/README.md) implements 130
+The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,
 project-participation, guide-metadata, draft-policy, contributor-workspace,
 contribution-evidence, contribution-policy, complete guide-lifecycle,
 checker/delivery/registry, operator-artifact, task-execution, submission,
 project-list, task-management, audit, import, service-actor and model-operation
-tools through WS-MCP-002-13. The
+tools through WS-MCP-002-13 plus explicit optional assistance and manager-rules compilation. The
 [Go CLI](../cli/README.md) provides caller-profile and exact-project authorization
 reads plus human self-profile editing, exact-project inspection and manager
 task queue/detail reads, contributor ready-work/instruction reads and public
