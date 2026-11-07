@@ -47,7 +47,7 @@ async def byte_stream(*chunks: bytes) -> AsyncIterator[bytes]:
 
 
 def preparation_limits(**changes: Any) -> ArtifactPreparationLimits:
-    """Build fast focused-test limits while retaining full-max reservations."""
+    """Build fast focused-test limits with a small streamed reservation buffer."""
     values: dict[str, Any] = {
         "aggregate_reserved_bytes": 2 * HARD_MAXIMUM_ARTIFACT_BYTES,
         "maximum_files": 2,
@@ -205,7 +205,12 @@ async def test_preparation_seals_exact_commitment_and_single_stream(tmp_path: Pa
     assert prepared.commitment.sha256 == expected
     assert prepared.commitment.byte_count == 5
     assert prepared.commitment.media_type == "text/plain"
-    assert (await manager.usage()).reserved_bytes == HARD_MAXIMUM_ARTIFACT_BYTES
+    reserved = (await manager.usage()).reserved_bytes
+    assert (
+        prepared.commitment.byte_count
+        <= reserved
+        <= (prepared.commitment.byte_count + manager.limits.stream_buffer_bytes)
+    )
 
     async with prepared as source:
         assert source.commitment is prepared.commitment
@@ -397,14 +402,18 @@ async def test_preparation_enforces_source_caps_and_byte_only_streams(
             yield chunk
 
     monkeypatch.setattr(service, "_write_chunk", track_write)
-    with pytest.raises(ArtifactLimitExceededError):
-        await service.prepare(
-            over_cap_stream(),
-            media_type="text/plain",
-            maximum_bytes=4,
-        )
-    assert written == b"abcd"
-    assert yielded == [b"abcd", b"e"]
+    for expected_size in (None, 1, 8):
+        written.clear()
+        yielded.clear()
+        with pytest.raises(ArtifactLimitExceededError):
+            await service.prepare(
+                over_cap_stream(),
+                media_type="text/plain",
+                maximum_bytes=4,
+                expected_size=expected_size,
+            )
+        assert written == b"abcd"
+        assert yielded == [b"abcd", b"e"]
 
     async def invalid_stream() -> AsyncIterator[bytes]:
         yield "not-bytes"  # type: ignore[misc]
@@ -416,12 +425,44 @@ async def test_preparation_enforces_source_caps_and_byte_only_streams(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("maximum_bytes", [True, 0, -1, 65])
+@pytest.mark.parametrize("maximum_bytes", [16, 500 * 1024 * 1024, HARD_MAXIMUM_ARTIFACT_BYTES])
+async def test_operation_cap_preserves_smaller_configured_source_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, maximum_bytes: int,
+) -> None:
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch", limits=preparation_limits(maximum_source_bytes=8),
+    )
+    service = ArtifactPreparationService(manager)
+    prepared = await service.prepare(
+        byte_stream(b"12345678"), media_type="application/zip", maximum_bytes=maximum_bytes,
+    )
+    assert prepared.commitment.byte_count == 8
+    await prepared.close()
+    written = bytearray()
+    original_write = service._write_chunk
+
+    async def track_write(descriptor, chunk):
+        written.extend(chunk)
+        await original_write(descriptor, chunk)
+
+    monkeypatch.setattr(service, "_write_chunk", track_write)
+    with pytest.raises(ArtifactLimitExceededError):
+        await service.prepare(
+            byte_stream(b"12345678", b"9"),
+            media_type="application/zip", maximum_bytes=maximum_bytes,
+        )
+    assert written == b"12345678"
+    assert (await manager.usage()).reservation_count == 0
+    manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("maximum_bytes", [True, 0, -1, HARD_MAXIMUM_ARTIFACT_BYTES + 1])
 async def test_preparation_rejects_invalid_per_call_caps_before_iteration(
     tmp_path: Path,
     maximum_bytes: object,
 ) -> None:
-    """Reject malformed or manager-exceeding per-call limits before reserving scratch."""
+    """Reject malformed or hard-ceiling-exceeding limits before reserving scratch."""
     manager = ArtifactScratchManager(
         root=tmp_path / str(maximum_bytes),
         limits=preparation_limits(maximum_source_bytes=64),
@@ -468,7 +509,7 @@ async def test_cross_process_ledger_prevents_concurrent_oversubscription(
         manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=limits)
         usage = await manager.usage()
         assert usage.reservation_count == 1
-        assert usage.reserved_bytes == HARD_MAXIMUM_ARTIFACT_BYTES
+        assert usage.reserved_bytes == limits.stream_buffer_bytes
         with pytest.raises(ArtifactScratchCapacityError):
             await manager.allocate()
         manager.close()
@@ -483,7 +524,7 @@ async def test_free_space_floor_fails_before_file_creation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reject a reservation when the full hard maximum would cross the floor."""
+    """Reject even a buffer reservation when it would cross the free-space floor."""
     manager = ArtifactScratchManager(
         root=tmp_path / "scratch",
         limits=preparation_limits(minimum_free_bytes=1024),
@@ -491,7 +532,7 @@ async def test_free_space_floor_fails_before_file_creation(
     monkeypatch.setattr(
         os,
         "fstatvfs",
-        lambda _: SimpleNamespace(f_bavail=HARD_MAXIMUM_ARTIFACT_BYTES, f_frsize=1),
+        lambda _: SimpleNamespace(f_bavail=1025, f_frsize=1),
     )
     with pytest.raises(ArtifactScratchCapacityError, match="free-space"):
         await manager.allocate()
@@ -506,10 +547,14 @@ async def test_free_space_floor_counts_existing_full_reservations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Preserve the free-space floor across shared outstanding reservations."""
-    limits = preparation_limits(minimum_free_bytes=HARD_MAXIMUM_ARTIFACT_BYTES)
+    limits = preparation_limits(
+        minimum_free_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+        maximum_source_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+    )
     root = tmp_path / "scratch"
     first_manager = ArtifactScratchManager(root=root, limits=limits)
     first_reservation, descriptor = await first_manager.allocate()
+    await first_manager.reserve_bytes(first_reservation, HARD_MAXIMUM_ARTIFACT_BYTES)
     os.close(descriptor)
     second_manager = ArtifactScratchManager(root=root, limits=limits)
     monkeypatch.setattr(
@@ -942,7 +987,12 @@ async def test_cleanup_rejects_symlink_and_non_regular_scratch_entries(
         scratch_file.mkdir()
     with pytest.raises(ArtifactScratchIntegrityError, match="file is invalid"):
         await cleaner.cleanup_stale(now_unix_ns=reservation.expires_at_unix_ns)
-    assert (await manager.usage()).reservation_count == 1
+    # Variable quota cannot report trusted usage for an unsafe retained file.
+    with pytest.raises(ArtifactScratchIntegrityError, match="file is invalid"):
+        await manager.usage()
+    ledger = json.loads((tmp_path / "scratch" / ".ledger.json").read_text())
+    assert len(ledger["reservations"]) == 1
+    assert ledger["reservations"][0]["reservation_id"] == reservation.reservation_id
     if replacement == "symlink":
         assert target.read_bytes() == b"keep"
         scratch_file.unlink()
@@ -1074,9 +1124,11 @@ async def test_capacity_gates_are_independently_enforced(tmp_path: Path) -> None
             aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
             maximum_files=2,
             maximum_concurrency=2,
+            maximum_source_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
         ),
     )
     first, descriptor = await byte_manager.allocate()
+    await byte_manager.reserve_bytes(first, HARD_MAXIMUM_ARTIFACT_BYTES)
     os.close(descriptor)
     with pytest.raises(ArtifactScratchCapacityError, match="byte limit"):
         await byte_manager.allocate()
@@ -2493,28 +2545,40 @@ async def test_client_commitment_shape_is_rejected_before_reservation(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancellation", ["caller", "deadline"])
-async def test_submission_processing_preserves_cancellation_over_aborted_callback_error(tmp_path, monkeypatch, cancellation):
+async def test_submission_processing_preserves_cancellation_over_aborted_callback_error(
+    tmp_path, monkeypatch, cancellation
+):
     """The shared pre/post owner distinguishes callback errors from its cleanup."""
     manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
     service = ArtifactPreparationService(manager)
     prepared = await service.prepare(byte_stream(b"data"), media_type="text/plain")
     entered, aborted = asyncio.Event(), asyncio.Event()
+
     class Processor:
         async def process(self, reader, workspace):
             entered.set()
             await aborted.wait()
             raise RuntimeError("processor error after abort")
+
         def abort(self):
             aborted.set()
+
     deadlines, original_timeout = [], asyncio.timeout
+
     def controlled_timeout_at(deadline):
         timer = original_timeout(None)
         deadlines.append(timer)
         return timer
+
     monkeypatch.setattr(asyncio, "timeout_at", controlled_timeout_at)
-    task = asyncio.create_task(service._process_prepared_submission(
-        prepared, Processor(), reserved_bytes=1, maximum_entries=1,
-    ))
+    task = asyncio.create_task(
+        service._process_prepared_submission(
+            prepared,
+            Processor(),
+            reserved_bytes=1,
+            maximum_entries=1,
+        )
+    )
     try:
         await asyncio.wait_for(entered.wait(), 1)
         if cancellation == "caller":
@@ -2538,3 +2602,246 @@ async def test_submission_processing_preserves_cancellation_over_aborted_callbac
         await prepared.close()
         assert (await manager.usage()).reservation_count == 0
         manager.close()
+
+
+def _compete_for_scratch_growth(root, limits, start, release, connection):
+    """Hold each process's result until its peer has attempted the same capacity."""
+
+    async def compete():
+        manager = ArtifactScratchManager(root=Path(root), limits=limits)
+        reservation, descriptor = await manager.allocate()
+        os.close(descriptor)
+        connection.send("allocated")
+        await asyncio.to_thread(start.wait, 10)
+        try:
+            await manager.reserve_bytes(reservation, 4)
+            connection.send("grown")
+        except ArtifactScratchCapacityError:
+            connection.send("denied")
+        finally:
+            await asyncio.to_thread(release.wait, 10)
+            await manager.release(reservation)
+            manager.close()
+            connection.close()
+
+    asyncio.run(compete())
+
+
+@pytest.mark.asyncio
+async def test_streamed_growth_covers_each_write_without_full_maximum_charge(tmp_path, monkeypatch):
+    """Count real bytes before writing, including sources without a size hint."""
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch", limits=preparation_limits(minimum_free_bytes=1024)
+    )
+    monkeypatch.setattr(os, "fstatvfs", lambda _: SimpleNamespace(f_bavail=1032, f_frsize=1))
+    service = ArtifactPreparationService(manager)
+    original_write = service._write_chunk
+    observed = []
+
+    async def accounted_write(descriptor, chunk):
+        incoming = os.fstat(descriptor).st_size + len(chunk)
+        usage = await manager.usage()
+        assert incoming <= usage.reserved_bytes <= incoming + manager.limits.stream_buffer_bytes
+        observed.append(incoming)
+        await original_write(descriptor, chunk)
+
+    monkeypatch.setattr(service, "_write_chunk", accounted_write)
+    prepared = await service.prepare(byte_stream(b"abc", b"def"), media_type="application/zip")
+    assert observed == [2, 3, 5, 6]
+    assert prepared.commitment.byte_count == 6
+    assert prepared.commitment.sha256 == "sha256:" + hashlib.sha256(b"abcdef").hexdigest()
+    await prepared.close()
+    assert await manager.usage() == ArtifactScratchUsage(0, 0)
+    manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gate", ["aggregate", "free_space"])
+async def test_growth_denial_precedes_chunk_write_and_releases_owned_bytes(
+    tmp_path, monkeypatch, gate
+):
+    """A later chunk cannot consume capacity already owned by another workspace."""
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
+    service = ArtifactPreparationService(manager)
+    written = []
+    original_write = service._write_chunk
+
+    async def write(descriptor, chunk):
+        written.append(bytes(chunk))
+        await original_write(descriptor, chunk)
+
+    monkeypatch.setattr(service, "_write_chunk", write)
+    occupied = manager.limits.aggregate_reserved_bytes - 5 if gate == "aggregate" else 0
+    with manager.extraction_workspace(reserved_bytes=occupied):
+        if gate == "free_space":
+            monkeypatch.setattr(os, "fstatvfs", lambda _: SimpleNamespace(f_bavail=5, f_frsize=1))
+        with pytest.raises(ArtifactScratchCapacityError):
+            await service.prepare(byte_stream(b"ab", b"cd"), media_type="application/zip")
+        assert written == [b"ab"]
+        usage = await manager.usage()
+        assert usage.reservation_count == 0 and usage.reserved_bytes == occupied
+        assert list((tmp_path / "scratch" / "files").iterdir()) == []
+    assert await manager.usage() == ArtifactScratchUsage(0, 0)
+    manager.close()
+
+
+def test_cross_process_growth_cannot_consume_same_remaining_quota(tmp_path):
+    """Exactly one process can grow while both original reservations remain live."""
+    limits = preparation_limits(aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES)
+    root = tmp_path / "scratch"
+    manager = ArtifactScratchManager(root=root, limits=limits)
+    context = multiprocessing.get_context("spawn")
+    start, release = context.Event(), context.Event()
+    processes, receivers = [], []
+    with manager.extraction_workspace(reserved_bytes=limits.aggregate_reserved_bytes - 10):
+        try:
+            for _ in range(2):
+                receiver, sender = context.Pipe(duplex=False)
+                process = context.Process(
+                    target=_compete_for_scratch_growth,
+                    args=(str(root), limits, start, release, sender),
+                )
+                process.start()
+                sender.close()
+                processes.append(process)
+                receivers.append(receiver)
+            for receiver in receivers:
+                assert receiver.poll(10) and receiver.recv() == "allocated"
+            start.set()
+            outcomes = []
+            for receiver in receivers:
+                assert receiver.poll(10)
+                outcomes.append(receiver.recv())
+            assert sorted(outcomes) == ["denied", "grown"]
+            usage = manager._usage_sync()
+            assert usage.reservation_count == 2
+            assert usage.reserved_bytes <= limits.aggregate_reserved_bytes
+        finally:
+            start.set()
+            release.set()
+            for receiver in receivers:
+                receiver.close()
+            for process in processes:
+                _join_or_kill_process(process)
+        assert [p.exitcode for p in processes] == [0, 0]
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_growth_finishes_before_cleanup_and_never_writes(tmp_path, monkeypatch):
+    """Cancellation drains an in-flight ledger publication before releasing quota."""
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
+    service = ArtifactPreparationService(manager)
+    started, finish = threading.Event(), threading.Event()
+    original_growth = manager._reserve_bytes_sync
+    writes = []
+
+    def blocked_growth(reservation, byte_count):
+        original_growth(reservation, byte_count)
+        started.set()
+        assert finish.wait(5)
+
+    async def unexpected_write(*args):
+        writes.append(args)
+
+    monkeypatch.setattr(manager, "_reserve_bytes_sync", blocked_growth)
+    monkeypatch.setattr(service, "_write_chunk", unexpected_write)
+    task = asyncio.create_task(service.prepare(byte_stream(b"ab"), media_type="text/plain"))
+    try:
+        assert await asyncio.to_thread(started.wait, 5)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert (await manager.usage()).reserved_bytes == 4
+        assert [f.stat().st_size for f in (tmp_path / "scratch" / "files").iterdir()] == [0]
+    finally:
+        finish.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert writes == [] and service.pending_cleanup_count == 0
+    assert await manager.usage() == ArtifactScratchUsage(0, 0)
+    manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("published", [False, True])
+async def test_failed_growth_publication_never_permits_write_and_retains_failed_cleanup(
+    tmp_path, monkeypatch, published
+):
+    """Both sides of an ambiguous replace keep custody until explicit cleanup succeeds."""
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
+    service = ArtifactPreparationService(manager)
+    original_ledger, original_release = manager._write_ledger, manager.release
+    writes = []
+
+    def fail_growth(ledger):
+        if any(
+            r["reserved_bytes"] > manager.limits.stream_buffer_bytes for r in ledger["reservations"]
+        ):
+            if published:
+                original_ledger(ledger)
+            raise OSError(errno.EIO, "injected growth publication failure")
+        original_ledger(ledger)
+
+    async def fail_release(_reservation):
+        raise OSError(errno.EIO, "injected cleanup failure")
+
+    async def unexpected_write(*args):
+        writes.append(args)
+
+    monkeypatch.setattr(manager, "_write_ledger", fail_growth)
+    monkeypatch.setattr(manager, "release", fail_release)
+    monkeypatch.setattr(service, "_write_chunk", unexpected_write)
+    with pytest.raises(ArtifactStoreUnavailableError):
+        await service.prepare(byte_stream(b"ab"), media_type="text/plain")
+    assert writes == [] and service.pending_cleanup_count == 1
+    usage = await manager.usage()
+    assert usage.reservation_count == 1 and usage.reserved_bytes == (4 if published else 2)
+    assert [f.stat().st_size for f in (tmp_path / "scratch" / "files").iterdir()] == [0]
+    with pytest.raises(ArtifactScratchIntegrityError, match="cleanup is still pending"):
+        manager.close()
+    monkeypatch.setattr(manager, "_write_ledger", original_ledger)
+    monkeypatch.setattr(manager, "release", original_release)
+    assert await service.retry_pending_cleanup() == 1
+    assert await manager.usage() == ArtifactScratchUsage(0, 0)
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_retained_full_reservation_and_anonymous_reader_stay_accounted(tmp_path):
+    """Existing full charges remain valid through sealing, reopen and final release."""
+    limits = preparation_limits(maximum_source_bytes=HARD_MAXIMUM_ARTIFACT_BYTES)
+    root = tmp_path / "scratch"
+    manager = ArtifactScratchManager(root=root, limits=limits)
+    reservation, descriptor = await manager.allocate()
+    await manager.reserve_bytes(reservation, HARD_MAXIMUM_ARTIFACT_BYTES)
+    os.write(descriptor, b"x")
+    reader = await manager.seal_for_read(reservation, descriptor)
+    reopened = ArtifactScratchManager(root=root, limits=limits)
+    assert await reopened.usage() == ArtifactScratchUsage(1, HARD_MAXIMUM_ARTIFACT_BYTES)
+    assert list((root / "files").iterdir()) == []
+    assert reader.read() == b"x"
+    reader.close()
+    await manager.release(reservation)
+    assert await reopened.usage() == ArtifactScratchUsage(0, 0)
+    reopened.close()
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_underaccounted_retained_file_is_rejected_without_deletion(tmp_path):
+    """Reopening cannot trust a valid-looking quota smaller than the actual file."""
+    limits = preparation_limits()
+    root = tmp_path / "scratch"
+    manager = ArtifactScratchManager(root=root, limits=limits)
+    reservation, descriptor = await manager.allocate()
+    os.write(descriptor, b"unaccounted")
+    with pytest.raises(ArtifactScratchIntegrityError, match="exceeds its custody reservation"):
+        ArtifactScratchManager(root=root, limits=limits)
+    assert (root / "files" / reservation.filename).read_bytes() == b"unaccounted"
+    os.ftruncate(descriptor, 0)
+    os.close(descriptor)
+    await manager.release(reservation)
+    manager.close()

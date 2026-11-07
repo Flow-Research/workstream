@@ -53,20 +53,20 @@ CONTENT = b'fn main() { println!("verified"); }\n'
 LIMITS = SubmissionArchiveLimits()
 
 
-def request(phase="pre_submit", deadline_ms=120000):
-    return TrustedIntakePreparation(phase, POLICY, LIMITS, deadline_ms)
+def request(archive_byte_count, phase="pre_submit", deadline_ms=120000):
+    return TrustedIntakePreparation(phase, POLICY, LIMITS, deadline_ms, archive_byte_count)
 
 
 async def bytes_source(data):
     yield data
 
 
-async def recovered_capacity(adapter):
+async def recovered_capacity(adapter, archive_byte_count):
     """A new ready VM proves that the sole execution slot was returned."""
     deadline = time.monotonic() + 30
     while True:
         try:
-            session = await adapter.prepare(request())
+            session = await adapter.prepare(request(archive_byte_count))
         except ExternalServiceAdapterError:
             if time.monotonic() >= deadline:
                 raise
@@ -90,11 +90,13 @@ async def retained_material(adapter, root, data, phase):
         ),
     )
     preparation = ArtifactPreparationService(manager)
-    session = await adapter.prepare(request(phase))
     prepared = await preparation.prepare(
         bytes_source(data), media_type="application/zip"
     )
+    session = None
     try:
+        remaining_ms = int((started + 120 - time.monotonic()) * 1000)
+        session = await adapter.prepare(request(prepared.commitment.byte_count, phase, remaining_ms))
         inspection = await prepared.inspect(
             TrustedArchiveInspector(session, prepared.commitment),
             on_cancel=session.abort,
@@ -174,7 +176,7 @@ async def retained_material(adapter, root, data, phase):
                             assert grant.grant_id.startswith("extract_")
                     # The same one-slot node can serve another job while ART retains
                     # the verified callback material: no intake/project slot deadlock.
-                    await recovered_capacity(adapter)
+                    await recovered_capacity(adapter, len(data))
                 finally:
                     await asyncio.to_thread(context.__exit__, None, None, None)
 
@@ -185,8 +187,11 @@ async def retained_material(adapter, root, data, phase):
             maximum_entries=inspection.entry_count + 1,
         )
     finally:
-        await prepared.close()
-        await session.close()
+        try:
+            if session is not None:
+                await session.close()
+        finally:
+            await prepared.close()
         assert not list((root / "workspaces").iterdir())
         assert preparation.pending_cleanup_count == 0
         manager.close()
@@ -229,18 +234,18 @@ async def run(args):
             for phase in ("pre_submit", "post_submit"):
                 await retained_material(adapter, Path(directory) / phase, data, phase)
 
-    session = await adapter.prepare(request())
-    session.abort()  # An upload disappears after preparation, before a ZIP arrives.
+    session = await adapter.prepare(request(len(data)))
+    session.abort()  # A sealed upload is abandoned before its bytes are sent to the prepared VM.
     try:
         await session.close()
     except ExternalServiceAdapterError:
         pass  # Missing ACK is not reported as confirmed cleanup.
     else:
         raise AssertionError("aborted transport falsely acknowledged cleanup")
-    await recovered_capacity(adapter)
+    await recovered_capacity(adapter, len(data))
     print(json.dumps({"case": "abandoned_upload", "capacity": "recovered"}), flush=True)
 
-    pending = asyncio.create_task(adapter.prepare(request()))
+    pending = asyncio.create_task(adapter.prepare(request(len(data))))
     await asyncio.sleep(0.2)
     assert not pending.done(), "cancellation did not reach preparation"
     pending.cancel()
@@ -250,23 +255,23 @@ async def run(args):
         pass
     else:
         raise AssertionError("preparation ignored cancellation")
-    await recovered_capacity(adapter)
+    await recovered_capacity(adapter, len(data))
     print(
         json.dumps({"case": "cancelled_prepare", "capacity": "recovered"}), flush=True
     )
 
     # The absolute lease expires while no ZIP arrives; no explicit close releases it.
     started = time.monotonic()
-    session = await adapter.prepare(request(deadline_ms=8000))
+    session = await adapter.prepare(request(len(data), deadline_ms=8000))
     await asyncio.sleep(max(0, started + 8.2 - time.monotonic()))
-    await recovered_capacity(adapter)
+    await recovered_capacity(adapter, len(data))
     session.abort()
     print(json.dumps({"case": "idle_deadline", "capacity": "recovered"}), flush=True)
 
-    session = await adapter.prepare(request())
     import hashlib
 
     malformed = b"not a ZIP"
+    session = await adapter.prepare(request(len(malformed)))
     try:
         await asyncio.to_thread(
             session.inspect,
@@ -280,7 +285,7 @@ async def run(args):
         raise AssertionError("malformed ZIP was admitted")
     finally:
         await session.close()
-    await recovered_capacity(adapter)
+    await recovered_capacity(adapter, len(data))
     print(json.dumps({"case": "malformed_zip", "capacity": "recovered"}), flush=True)
 
 

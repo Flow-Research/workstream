@@ -173,6 +173,18 @@ independent guardians with `KillMode=process`. Review its explicit deployment
 CPU/memory/PID/storage capacity against intake, checker and sequential trial
 peak demand; this configuration does not increase registered checker limits.
 
+Keep that storage capacity physically free on the native checker's filesystem,
+not merely configured as a quota. ZIP intake seals and counts the upload first,
+then reserves a data disk sized for those bytes, permitted expansion and its
+qualified image/filesystem allowance, rounded up to whole GiB. Its separate
+root overlay is explicitly limited to one GiB and charged as well. A healthy
+socket does not prove that reservation can succeed. Subsequent
+checkers require their own configured capacity. Monitor free space as well as
+service health, and remove only identified obsolete build/staging assets when
+needed. Preserve active images, credential state, database volumes and retained
+artifact/evidence data. An intake capacity refusal is an infrastructure failure,
+not a failed assessment of contributor work.
+
 Provision a dedicated host service account and group at UID/GID `10001:10001`
 before starting the unit. Numeric file ownership alone is insufficient: systemd
 must resolve this account, otherwise it can fail with `217/USER`. Inspect
@@ -214,7 +226,18 @@ Provision project images and the pinned trusted intake image using the existing
 [Smol cache command](../../external_checkers/README.md#smol-microvm-engine).
 The native `trusted_intake` configuration selects the intake image; project
 registrations cannot select that privileged purpose. Its image/config pins must
-match the two `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values. Both typed clients
+match the two `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values. Its required
+`storage_envelope` binds the archive/config and Smol/guest hashes to qualified
+entry/path limits, overhead bytes and maximum data-disk size. Use the evidence
+for the exact release image and native runtime; requalify changed images or
+limits. The example's zero overhead/size fields deliberately fail preflight
+until replaced with measured bounds. Do not copy a guessed buffer into them.
+Cold boot, archive spooling, maximum projected inventory, expanded content and
+cleanup must fit; an example upload alone does not qualify the envelope.
+The native owner disables automatic Smol image-seed creation and reuse; do not
+qualify with an extra upstream seed VM outside the node reservation. Existing
+cache data is preserved. Measure startup under the same enforced environment.
+Both typed clients
 connect through the one mode-`0600` socket in the mode-`0700` checker directory.
 
 Copy `release.env.example` to an operator-owned non-secret environment file and
@@ -222,6 +245,27 @@ replace every example identity. The file contains paths and public configuration
 not secret values. Select real Flow issuer, audience, JWKS and algorithm values.
 The release profile uses `WORKSTREAM_AUTH_PROVIDER=flow`; local Flow-HMAC and
 development authentication are absent.
+
+For invite-only demo accounts, the optional [external Rust issuer](../../experiments/demo_identity/README.md)
+provides administrator provisioning, login and password change. It stays outside
+Workstream core. Set all `DEMO_IDENTITY_*` essentials in the release environment
+and pin Workstream's issuer, audience, algorithms and JWKS URL to the same
+service. The wrapper validates the issuer's exact image, private mounts,
+UID 12001, network and resource bounds. Initialize its persistent state once;
+then start only the issuer and wait for verified HTTPS readiness:
+
+```sh
+python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env start demo-identity
+```
+
+This bootstrap does not start or reconfigure the backend.
+
+The issuer port stays on loopback. Public participants require the chosen DNS
+name, a trusted TLS certificate and a bounded HTTPS ingress; see the
+[Caddy example](demo-identity.Caddyfile) and issuer instructions. Confirm real
+login and token validation before switching the backend. An issuer administrator
+receives no Workstream administrative grant. Preserve retained actor links and
+records during cutover; never substitute identities by matching email.
 
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
@@ -693,3 +737,34 @@ access, Smol isolation, representative CPU/memory/PID/disk/time limits,
 missing-cache classification and collector behavior if OTLP is enabled. The
 [current capability ledger](../../docs/roadmap_status.md) distinguishes source
 delivery from live qualification and remaining release gates.
+
+## Managed private MCP service
+
+Set `WORKSTREAM_MCP_IMAGE` to the qualified MCP image digest to include
+[`compose.mcp.yml`](compose.mcp.yml). Build that image from `mcp_server/`, not the
+repository root. The adapter receives no account password, server-wide bearer,
+database credential or artifact-store key. Each client supplies its own fresh
+Rust-issued Workstream access token; the API retains all authorization decisions.
+
+The adapter shares API's network namespace and calls only its loopback port 8000.
+Its port 8080 is published on host `127.0.0.1` only. For private access, forward
+local port 8080 to host `127.0.0.1:8080` through authenticated SSH and connect to
+`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. This is custom
+bearer-header MCP, not OAuth discovery or a public browser endpoint. Tokens belong
+in the client's protected header configuration, never tool arguments or URLs.
+
+Use the hosted wrapper for updates. When an `up` operation can replace API, the
+wrapper stops MCP first and force-recreates it after the operation succeeds,
+then checks its actual namespace against the current API container ID. With
+`--no-start`, MCP remains stopped until the subsequent start. Shutdown stops MCP
+before API. Direct Docker recreation of API bypasses this coupling and is not a
+supported update procedure. The initial overlay requires a controlled API
+replacement to add the private port; it cannot be hot-attached.
+
+The health probe checks API health and the static MCP catalogue. It does not
+establish a caller's authority: qualification must additionally call tools with
+fresh login tokens and verify both permitted and denied access. API's Docker
+bridge can still reach the listener, so exact Host checks, browser-Origin
+rejection and per-call authentication remain necessary. Public MCP ingress and
+clients requiring OAuth discovery need separate qualification; this private
+profile does not claim that support.

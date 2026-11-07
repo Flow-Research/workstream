@@ -7,10 +7,10 @@ const PROTOCOL: &str = "trusted_submission_intake.v1";
 const COMMAND_BYTES: usize = 4 * 1024 * 1024;
 const FRAME_BYTES: usize = 64 * 1024 * 1024;
 const ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
-const RESOURCES: Resources = Resources {
+const BASE_RESOURCES: Resources = Resources {
     cpu_millis: 1000,
     memory_bytes: 2 * 1024 * 1024 * 1024,
-    storage_gib: 3,
+    storage_gib: 1,
     pids: 128,
 };
 
@@ -19,6 +19,51 @@ const RESOURCES: Resources = Resources {
 pub(crate) struct IntakeConfig {
     pub platform_manifest_digest: String,
     pub default_behavior_sha256: String,
+    pub storage_envelope: StorageEnvelope,
+}
+
+// Qualification belongs to these exact immutable inputs, never to an image tag.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct StorageEnvelope {
+    pub archive_sha256: String,
+    pub config_image_id: String,
+    pub smol_binary_sha256: String,
+    pub guest_sha256: String,
+    pub maximum_entries: u64,
+    pub maximum_path_bytes: u64,
+    pub maximum_path_depth: u64,
+    pub overhead_bytes: u64,
+    pub maximum_storage_gib: u64,
+}
+impl StorageEnvelope {
+    fn validate(&self, runtime: &SmolConfig, cache: &CacheEntry) -> Result<(), String> {
+        let source = cache.smol.as_ref().ok_or("intake image unavailable")?;
+        if [
+            (&self.archive_sha256, &source.archive_sha256),
+            (&self.config_image_id, &cache.config_image_id),
+            (&self.smol_binary_sha256, &runtime.binary_sha256),
+            (&self.guest_sha256, &runtime.guest_sha256),
+        ]
+        .iter()
+        .any(|(qualified, actual)| !valid_digest(qualified) || qualified != actual)
+            || self.maximum_entries == 0
+            || self.maximum_entries > 100_000
+            || self.maximum_path_bytes == 0
+            || self.maximum_path_depth == 0
+            || self.maximum_path_depth > 256
+            || self.overhead_bytes == 0
+            || self.maximum_storage_gib == 0
+            || self
+                .maximum_storage_gib
+                .checked_add(1)
+                .and_then(|gib| gib.checked_mul(1024 * 1024 * 1024))
+                .is_none()
+        {
+            return Err("intake storage qualification differs".into());
+        }
+        Ok(())
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,6 +80,7 @@ struct Preparation {
     policy_sha256: String,
     limits: Value,
     deadline_ms: u64,
+    archive_byte_count: u64,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +155,7 @@ fn image(config: &ServiceConfig) -> Result<(&IntakeConfig, &CacheEntry), String>
         .iter()
         .find(|entry| entry.platform_manifest_digest == intake.platform_manifest_digest)
         .ok_or("trusted intake image missing")?;
+    intake.storage_envelope.validate(settings(config)?, cache)?;
     inspect_image(cache)?;
     Ok((intake, cache))
 }
@@ -117,8 +164,8 @@ fn identity(config: &ServiceConfig) -> Result<Value, String> {
     Ok(
         json!({"image_digest": cache.platform_manifest_digest, "config_digest": cache.config_image_id,
         "default_behavior_sha256": intake.default_behavior_sha256, "runtime": config.runtime,
-        "isolation_mode": config.isolation_mode, "cpu_millis": RESOURCES.cpu_millis,
-        "memory_bytes": RESOURCES.memory_bytes}),
+        "isolation_mode": config.isolation_mode, "cpu_millis": BASE_RESOURCES.cpu_millis,
+        "memory_bytes": BASE_RESOURCES.memory_bytes}),
     )
 }
 fn preparation(value: &Value) -> Result<Preparation, String> {
@@ -127,6 +174,9 @@ fn preparation(value: &Value) -> Result<Preparation, String> {
     if !matches!(request.phase.as_str(), "pre_submit" | "post_submit")
         || !valid_digest(&request.policy_sha256)
         || !(1..=7_200_000).contains(&request.deadline_ms)
+        // New uploads are capped at 500 MiB by the public API; retained internal
+        // artifacts keep their existing 512 MiB transport allowance.
+        || !(1..=ARCHIVE_BYTES).contains(&request.archive_byte_count)
     {
         return Err("intake preparation invalid".into());
     }
@@ -163,6 +213,52 @@ fn preparation(value: &Value) -> Result<Preparation, String> {
     Ok(request)
 }
 
+fn resources(request: &Preparation, qualified: &StorageEnvelope) -> Result<Resources, String> {
+    for (name, maximum) in [
+        ("maximum_entries", qualified.maximum_entries),
+        ("maximum_path_bytes", qualified.maximum_path_bytes),
+        ("maximum_path_depth", qualified.maximum_path_depth),
+    ] {
+        if request.limits[name]
+            .as_u64()
+            .ok_or("intake limits invalid")?
+            > maximum
+        {
+            return Err("intake storage qualification exceeded".into());
+        }
+    }
+    let expanded = request.limits["maximum_expanded_bytes"]
+        .as_u64()
+        .ok_or("intake limits invalid")?;
+    let ratio = request.limits["maximum_compression_ratio"]
+        .as_u64()
+        .ok_or("intake limits invalid")?;
+    let expansion = expanded.min(request.archive_byte_count.saturating_mul(ratio));
+    let bytes = request
+        .archive_byte_count
+        .checked_add(expansion)
+        .and_then(|value| value.checked_add(qualified.overhead_bytes))
+        .ok_or("intake storage overflow")?;
+    let storage_gib = bytes.div_ceil(1024 * 1024 * 1024).max(1);
+    if storage_gib > qualified.maximum_storage_gib {
+        return Err("intake storage qualification exceeded".into());
+    }
+    Ok(Resources {
+        storage_gib,
+        ..BASE_RESOURCES
+    })
+}
+
+fn archive(value: Value, request: &Preparation) -> Result<Archive, String> {
+    let archive: Archive = serde_json::from_value(value).map_err(|_| "intake archive invalid")?;
+    if !valid_digest(&archive.archive_sha256)
+        || archive.archive_byte_count != request.archive_byte_count
+    {
+        return Err("intake archive differs".into());
+    }
+    Ok(archive)
+}
+
 /// One prepared VM holds its capacity until the guardian confirms exact absence.
 pub(crate) fn serve(
     config: &ServiceConfig,
@@ -184,8 +280,12 @@ pub(crate) fn serve(
         return Err("intake operation invalid".into());
     }
     let request = preparation(&first.payload)?;
+    let (intake, cache) = image(config)?;
+    let resources = resources(&request, &intake.storage_envelope)?;
     let deadline = Instant::now() + Duration::from_millis(request.deadline_ms);
-    let reservation = match reserve_resources(config, RESOURCES) {
+    // Intake explicitly allocates a separate 1 GiB writable root overlay.
+    let capacity = resource_capacity(resources, Some(1))?;
+    let reservation = match reserve_capacity(config, capacity, None) {
         Ok(value) => value,
         Err(_) => {
             return send(
@@ -200,11 +300,10 @@ pub(crate) fn serve(
             )
         }
     };
-    let (intake, cache) = image(config)?;
     let lease = format!("{}{}", reservation.admission.epoch, random_token()?);
     let mut machine = None;
     for attempt in 0..3 {
-        let mut candidate = match Machine::create(config, RESOURCES, deadline) {
+        let mut candidate = match Machine::create(config, resources, deadline) {
             Ok(value) => value,
             Err(error) if !error.cleanup_unsettled => {
                 return send(
@@ -225,7 +324,7 @@ pub(crate) fn serve(
                 return Err(UNSETTLED_RESOURCE_ERROR.into());
             }
         };
-        match candidate.prepare(cache, RESOURCES, &client, deadline) {
+        match candidate.prepare(cache, resources, Some(1), &client, deadline) {
             Ok(()) => {
                 machine = Some(candidate);
                 break;
@@ -478,13 +577,8 @@ fn session(
         }
         match (command.operation.as_str(), state) {
             ("inspect", "prepared") => {
-                let archive: Archive = serde_json::from_value(command.payload)
-                    .map_err(|_| "intake archive invalid")?;
-                if !valid_digest(&archive.archive_sha256)
-                    || !(1..=ARCHIVE_BYTES).contains(&archive.archive_byte_count)
-                {
-                    return Err("intake archive invalid".into());
-                }
+                // Reject substitution before starting guest I/O or accepting ZIP bytes.
+                let archive = archive(command.payload, request)?;
                 let source = cache.smol.as_ref().ok_or("intake image unavailable")?;
                 let image: Value = serde_json::from_slice(&read_bounded_file(
                     &source.image_config,
@@ -493,8 +587,8 @@ fn session(
                 .map_err(|_| "intake image invalid")?;
                 let job = GuestJob {
                     purpose: GuestPurpose::TrustedIntake {
-                        cpu_millis: RESOURCES.cpu_millis,
-                        memory_bytes: RESOURCES.memory_bytes,
+                        cpu_millis: BASE_RESOURCES.cpu_millis,
+                        memory_bytes: BASE_RESOURCES.memory_bytes,
                     },
                     request: json!({"lease":lease, "preparation":preparation, "archive_sha256":archive.archive_sha256,
                                    "archive_byte_count":archive.archive_byte_count}),
@@ -654,6 +748,203 @@ fn session(
 #[cfg(test)]
 mod tests {
     use super::*;
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    fn qualification() -> StorageEnvelope {
+        // Synthetic test qualification only; never a production default.
+        StorageEnvelope {
+            archive_sha256: format!("sha256:{}", "a".repeat(64)),
+            config_image_id: format!("sha256:{}", "b".repeat(64)),
+            smol_binary_sha256: format!("sha256:{}", "c".repeat(64)),
+            guest_sha256: format!("sha256:{}", "d".repeat(64)),
+            maximum_entries: 2000,
+            maximum_path_bytes: 1024,
+            maximum_path_depth: 32,
+            overhead_bytes: 1,
+            maximum_storage_gib: 4,
+        }
+    }
+
+    fn preparation_value(size: u64) -> Value {
+        json!({
+            "phase":"pre_submit", "policy_sha256":format!("sha256:{}", "a".repeat(64)),
+            "deadline_ms": 30000, "archive_byte_count": size,
+            "limits": {
+                "maximum_entries": 2000, "maximum_path_bytes": 1024,
+                "maximum_path_depth": 32, "maximum_central_directory_bytes": 8388608,
+                "maximum_entry_bytes": 134217728, "maximum_expanded_bytes": ARCHIVE_BYTES,
+                "maximum_compression_ratio": 100, "maximum_inspection_seconds": 300.0,
+            }
+        })
+    }
+
+    #[test]
+    fn storage_formula_rounds_at_gib_boundaries_and_bounds_expansion() {
+        let mut qualified = qualification();
+        let mut value = preparation_value(1);
+        value["limits"]["maximum_compression_ratio"] = json!(1);
+        let request = preparation(&value).unwrap();
+        assert_eq!(resources(&request, &qualified).unwrap().storage_gib, 1);
+        qualified.overhead_bytes = GIB - 2;
+        assert_eq!(resources(&request, &qualified).unwrap().storage_gib, 1);
+        qualified.overhead_bytes += 1;
+        assert_eq!(resources(&request, &qualified).unwrap().storage_gib, 2);
+        qualified.overhead_bytes = 1;
+        let request = preparation(&preparation_value(ARCHIVE_BYTES)).unwrap();
+        assert_eq!(resources(&request, &qualified).unwrap().storage_gib, 2);
+        // Saturating multiplication still uses the smaller expanded-content cap.
+        value = preparation_value(2);
+        value["limits"]["maximum_compression_ratio"] = json!(u64::MAX);
+        let request = preparation(&value).unwrap();
+        assert_eq!(resources(&request, &qualified).unwrap().storage_gib, 1);
+        qualified.overhead_bytes = u64::MAX;
+        assert_eq!(
+            resources(&request, &qualified).err().unwrap(),
+            "intake storage overflow"
+        );
+    }
+
+    #[test]
+    fn request_cannot_exceed_qualified_storage_or_inventory_envelope() {
+        let mut qualified = qualification();
+        let request = preparation(&preparation_value(ARCHIVE_BYTES)).unwrap();
+        qualified.maximum_storage_gib = 1;
+        assert!(resources(&request, &qualified).is_err());
+        qualified.maximum_storage_gib = 4;
+        for field in [
+            "maximum_entries",
+            "maximum_path_bytes",
+            "maximum_path_depth",
+        ] {
+            let mut value = preparation_value(1);
+            let maximum = value["limits"][field].as_u64().unwrap();
+            value["limits"][field] = json!(maximum + 1);
+            assert!(resources(&preparation(&value).unwrap(), &qualified).is_err());
+        }
+    }
+
+    #[test]
+    fn prepare_binds_positive_retained_archive_size_and_inspect_cannot_substitute_it() {
+        for size in [0, ARCHIVE_BYTES + 1] {
+            assert!(preparation(&preparation_value(size)).is_err());
+        }
+        let mut value = preparation_value(ARCHIVE_BYTES);
+        value.as_object_mut().unwrap().remove("archive_byte_count");
+        assert!(preparation(&value).is_err());
+        let request = preparation(&preparation_value(ARCHIVE_BYTES)).unwrap();
+        let digest = format!("sha256:{}", "a".repeat(64));
+        assert!(archive(
+            json!({"archive_sha256":digest, "archive_byte_count":ARCHIVE_BYTES}),
+            &request
+        )
+        .is_ok());
+        for size in [0, 1, ARCHIVE_BYTES - 1, ARCHIVE_BYTES + 1] {
+            assert!(archive(
+                json!({"archive_sha256":digest, "archive_byte_count":size}),
+                &request
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn qualification_is_required_closed_and_bound_to_all_four_immutable_inputs() {
+        assert!(serde_json::from_value::<IntakeConfig>(json!({
+            "platform_manifest_digest":format!("sha256:{}", "a".repeat(64)),
+            "default_behavior_sha256":format!("sha256:{}", "b".repeat(64)),
+        }))
+        .is_err());
+        let (root, mut config) = super::super::super::tests::test_config();
+        let qualified = qualification();
+        let runtime = SmolConfig {
+            binary: root.join("smol"),
+            binary_sha256: qualified.smol_binary_sha256.clone(),
+            home: root.join("home"),
+            guest_binary: root.join("guest"),
+            guest_sha256: qualified.guest_sha256.clone(),
+            cgroup_root: root.join("group"),
+            maximum_parallel: 1,
+            maximum_storage_bytes: 8 * GIB,
+        };
+        let cache = &mut config.cache[0];
+        cache.config_image_id = qualified.config_image_id.clone();
+        cache.smol = Some(SmolImage {
+            archive: root.join("intake.tar"),
+            archive_sha256: qualified.archive_sha256.clone(),
+            image_config: root.join("intake.json"),
+        });
+        assert!(qualified.validate(&runtime, cache).is_ok());
+        for index in 0..4 {
+            let mut stale = qualified.clone();
+            let field = match index {
+                0 => &mut stale.archive_sha256,
+                1 => &mut stale.config_image_id,
+                2 => &mut stale.smol_binary_sha256,
+                _ => &mut stale.guest_sha256,
+            };
+            *field = format!("sha256:{}", "e".repeat(64));
+            assert!(stale.validate(&runtime, cache).is_err());
+        }
+        let value = json!({
+            "archive_sha256":qualified.archive_sha256, "config_image_id":qualified.config_image_id,
+            "smol_binary_sha256":qualified.smol_binary_sha256, "guest_sha256":qualified.guest_sha256,
+            "maximum_entries":2000, "maximum_path_bytes":1024, "maximum_path_depth":32,
+            "overhead_bytes":1, "maximum_storage_gib":4, "unexpected":true,
+        });
+        assert!(serde_json::from_value::<StorageEnvelope>(value).is_err());
+        for (entries, path_bytes, depth, overhead, storage) in [
+            (0, 1024, 32, 1, 4),
+            (2000, 0, 32, 1, 4),
+            (2000, 1024, 0, 1, 4),
+            (2000, 1024, 257, 1, 4),
+            (2000, 1024, 32, 0, 4),
+            (2000, 1024, 32, 1, 0),
+            (2000, 1024, 32, 1, u64::MAX),
+        ] {
+            let bad = StorageEnvelope {
+                maximum_entries: entries,
+                maximum_path_bytes: path_bytes,
+                maximum_path_depth: depth,
+                overhead_bytes: overhead,
+                maximum_storage_gib: storage,
+                ..qualified.clone()
+            };
+            assert!(bad.validate(&runtime, cache).is_err());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn admission_charges_overlay_and_releases_the_whole_charge_after_cleanup_handoff() {
+        let resources = resources(
+            &preparation(&preparation_value(1)).unwrap(),
+            &qualification(),
+        )
+        .unwrap();
+        let data_only = resource_capacity(resources, None).unwrap();
+        let intake = resource_capacity(resources, Some(1)).unwrap();
+        assert_eq!(intake.storage_bytes, data_only.storage_bytes + GIB);
+        assert_eq!(intake.slots, data_only.slots);
+        assert_eq!(intake.memory_bytes, data_only.memory_bytes);
+        let insufficient = Arc::new(Admission::new(data_only, "a".repeat(64)).unwrap());
+        assert!(insufficient.reserve(intake, None).is_err());
+        let node = Arc::new(Admission::new(intake, "b".repeat(64)).unwrap());
+        let reservation = node.reserve(intake, None).unwrap();
+        assert_eq!(node.reserved_storage_bytes().unwrap(), intake.storage_bytes);
+        assert!(node.reserve(intake, None).is_err());
+        drop(reservation);
+        assert_eq!(node.reserved_storage_bytes().unwrap(), 0);
+        assert!(node.reserve(intake, None).is_ok());
+        assert!(resource_capacity(
+            Resources {
+                storage_gib: u64::MAX,
+                ..resources
+            },
+            Some(1)
+        )
+        .is_err());
+    }
+
     #[test]
     fn pending_upload_bytes_are_not_a_disconnected_intake_client() {
         let (mut sender, mut receiver) = UnixStream::pair().unwrap();

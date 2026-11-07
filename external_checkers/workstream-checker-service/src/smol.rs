@@ -107,7 +107,7 @@ pub(super) fn reserve(
 ) -> Result<Arc<Reservation>, String> {
     reserve_resources(config, request.into())
 }
-fn resource_capacity(resources: Resources) -> Result<Capacity, String> {
+fn resource_capacity(resources: Resources, overlay_gib: Option<u64>) -> Result<Capacity, String> {
     Ok(Capacity {
         slots: 1,
         memory_bytes: resources
@@ -116,7 +116,8 @@ fn resource_capacity(resources: Resources) -> Result<Capacity, String> {
             .ok_or("capacity overflow")?,
         storage_bytes: resources
             .storage_gib
-            .checked_mul(1024 * 1024 * 1024)
+            .checked_add(overlay_gib.unwrap_or(0))
+            .and_then(|gib| gib.checked_mul(1024 * 1024 * 1024))
             .ok_or("capacity overflow")?,
     })
 }
@@ -124,14 +125,18 @@ fn reserve_resources(
     config: &ServiceConfig,
     resources: Resources,
 ) -> Result<Arc<Reservation>, String> {
-    reserve_capacity(config, resource_capacity(resources)?, None)
+    reserve_capacity(config, resource_capacity(resources, None)?, None)
 }
 pub(super) fn reserve_invocation(
     config: &ServiceConfig,
     request: &ValidatedRequest,
     child: Capacity,
 ) -> Result<Arc<Reservation>, String> {
-    reserve_capacity(config, resource_capacity(request.into())?, Some(child))
+    reserve_capacity(
+        config,
+        resource_capacity(request.into(), None)?,
+        Some(child),
+    )
 }
 pub(crate) fn trial_capacity(memory_bytes: u64, disk_bytes: u64) -> Result<Capacity, String> {
     const GIB: u64 = 1024 * 1024 * 1024;
@@ -139,12 +144,15 @@ pub(crate) fn trial_capacity(memory_bytes: u64, disk_bytes: u64) -> Result<Capac
         return Err("invalid child capacity".into());
     }
     let storage_gib = disk_bytes.checked_add(GIB - 1).ok_or("capacity overflow")? / GIB;
-    let mut capacity = resource_capacity(Resources {
-        cpu_millis: 1,
-        memory_bytes,
-        storage_gib,
-        pids: 2,
-    })?;
+    let mut capacity = resource_capacity(
+        Resources {
+            cpu_millis: 1,
+            memory_bytes,
+            storage_gib,
+            pids: 2,
+        },
+        None,
+    )?;
     capacity.storage_bytes = capacity
         .storage_bytes
         .checked_add(disk_bytes)
@@ -390,6 +398,7 @@ fn command(s: &SmolConfig, args: &[&str], cgroup: Option<&Path>) -> Result<Comma
     command
         .args(args)
         .env_clear()
+        .env("SMOLVM_IMAGE_SEEDS", "0")
         .env("HOME", &s.home)
         .env("PATH", "/usr/local/bin:/usr/bin:/bin")
         .stdin(Stdio::null())
@@ -848,6 +857,7 @@ impl Machine {
         &self,
         cache: &CacheEntry,
         resources: Resources,
+        overlay_gib: Option<u64>,
         client: &UnixStream,
         deadline: Instant,
     ) -> Result<(), String> {
@@ -857,28 +867,31 @@ impl Machine {
         let image = cache.smol.as_ref().ok_or("Smol image missing")?;
         let archive = image.archive.to_str().ok_or("image path invalid")?;
         let label = format!("workstream.external-checker-owner={}", lease.owner);
-        checked(
-            s,
-            &[
-                "machine",
-                "create",
-                "--name",
-                &lease.name,
-                "--image",
-                archive,
-                "--label",
-                &label,
-                "--cpus",
-                &resources.cpu_millis.div_ceil(1000).to_string(),
-                "--mem",
-                &(resources.memory_bytes.div_ceil(1024 * 1024) + GUEST_OVERHEAD_MIB).to_string(),
-                "--storage",
-                &resources.storage_gib.to_string(),
-            ],
-            Some(&group),
-            deadline,
-            Some(client),
-        )?;
+        let cpus = resources.cpu_millis.div_ceil(1000).to_string();
+        let memory =
+            (resources.memory_bytes.div_ceil(1024 * 1024) + GUEST_OVERHEAD_MIB).to_string();
+        let storage = resources.storage_gib.to_string();
+        let overlay = overlay_gib.map(|value| value.to_string());
+        let mut args = vec![
+            "machine",
+            "create",
+            "--name",
+            &lease.name,
+            "--image",
+            archive,
+            "--label",
+            &label,
+            "--cpus",
+            &cpus,
+            "--mem",
+            &memory,
+            "--storage",
+            &storage,
+        ];
+        if let Some(value) = overlay.as_deref() {
+            args.extend(["--overlay", value]);
+        }
+        checked(s, &args, Some(&group), deadline, Some(client))?;
         // Closed argv omits network enablers; verify exact-owner state before start.
         lease.verify_network_disabled(deadline)?;
         checked(
@@ -1042,7 +1055,7 @@ pub(super) fn execute(
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
     for attempt in 0..3 {
         let mut machine = Machine::create(config, request.into(), budget.deadline)?;
-        let prepared = machine.prepare(cache, request.into(), client, budget.deadline);
+        let prepared = machine.prepare(cache, request.into(), None, client, budget.deadline);
         let launched = prepared.is_ok();
         let result = prepared.and_then(|_| {
             machine.run(

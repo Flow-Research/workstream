@@ -122,12 +122,21 @@ async def test_workspace_expansion_is_charged_before_projection(tmp_path: Path) 
     )
     reservation, descriptor = await manager.allocate()
     os.close(descriptor)
-    with pytest.raises(ArtifactScratchCapacityError, match="byte limit"):
-        with manager.extraction_workspace(
-            reserved_bytes=inspection.total_expanded_bytes,
-            maximum_entries=inspection.entry_count,
-        ):
-            raise AssertionError("workspace must not be exposed")
+    # Leave one byte less than this projection needs, counting the actual
+    # progressive file reservation instead of assuming a full-ceiling charge.
+    occupied = (
+        manager.limits.aggregate_reserved_bytes
+        - (await manager.usage()).reserved_bytes
+        - inspection.total_expanded_bytes
+        + 1
+    )
+    with manager.extraction_workspace(reserved_bytes=occupied, maximum_entries=0):
+        with pytest.raises(ArtifactScratchCapacityError, match="byte limit"):
+            with manager.extraction_workspace(
+                reserved_bytes=inspection.total_expanded_bytes,
+                maximum_entries=inspection.entry_count,
+            ):
+                raise AssertionError("workspace must not be exposed")
 
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     await manager.release(reservation)

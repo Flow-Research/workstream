@@ -21,6 +21,7 @@ from preflight import (
     validate_trusted_intake,
     validate_environment,
     validate_private_host_inputs,
+    validate_demo_identity_host_inputs,
     run_proof_group,
 )
 
@@ -38,6 +39,13 @@ def main() -> int:
         values = parse_environment(args.env_file)
         validate_environment(values)
         validate_compose(render_compose(args.env_file, values), values)
+        if args.compose_arguments == ["start", "demo-identity"]:
+            if not values.get("DEMO_IDENTITY_IMAGE"):
+                raise PreflightError(
+                    "demo identity bootstrap requires the issuer overlay"
+                )
+            validate_demo_identity_host_inputs(values)
+            return run_compose(args.env_file, values, args.compose_arguments)
         worker_start = args.compose_arguments == ["start", "worker"]
         launch = worker_start or (
             args.compose_arguments and args.compose_arguments[0] in {"up", "proof"}

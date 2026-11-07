@@ -19,14 +19,13 @@ from app.interfaces.artifacts import (
 )
 from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
 from app.interfaces.trusted_submission_intake import (
-    TrustedIntakePreparation,
+
     TrustedSubmissionIntakeAdapter,
 )
 from app.interfaces.external_services import ExternalServiceAdapterError
 from app.modules.artifacts.trusted_intake import (
     prepared_trusted_intake,
     TrustedArchiveInspector,
-    prepare_bytes_with_intake,
 )
 from app.modules.checkers.api.materialization import (
     PostSubmissionMaterialConsumer,
@@ -685,89 +684,69 @@ class PostSubmissionMaterializer:
         selected, evidence_id = await self._select(facts)
         sources = []
         failure = None
+        deadline = asyncio.get_running_loop().time() + self._artifact_deadline_ms / 1000
         try:
-            try:
-                materialization_facts = self._authority_facts(facts, selected)
-                selections = {"submission_archive": selected.current}
-                if materialization_facts.predecessor is not None:
-                    selections["predecessor_submission_archive"] = selected.predecessor
-                async with AsyncExitStack() as intake_cleanup:
-                    inspections, intakes, media_types = {}, {}, {}
-                    expanded_bytes, entries = 0, 0
-                    for role, selection in selections.items():
-                        pending_intake = await intake_cleanup.enter_async_context(
-                            prepared_trusted_intake(
-                                self._intake,
-                                TrustedIntakePreparation(
-                                    phase="post_submit",
-                                    policy_sha256=request.policy.policy_sha256,
-                                    limits=self._archive_limits,
-                                    deadline_ms=self._artifact_deadline_ms,
-                                ),
-                            )
-                        )
-                        prepared, intake = await prepare_bytes_with_intake(
-                            pending_intake,
+            materialization_facts = self._authority_facts(facts, selected)
+            selections = {"submission_archive": selected.current}
+            if materialization_facts.predecessor is not None:
+                selections["predecessor_submission_archive"] = selected.predecessor
+            async with AsyncExitStack() as intake_cleanup:
+                inspections, intakes, media_types = {}, {}, {}
+                expanded_bytes, entries = 0, 0
+                for role, selection in selections.items():
+                    prepared, intake = await intake_cleanup.enter_async_context(
+                        prepared_trusted_intake(
+                            self._intake,
                             self._preparation.prepare(
                                 self._store.open(selection.provider_object_ref),
                                 media_type=selection.media_type,
                                 expected_sha256=selection.sha256,
                                 expected_size=selection.byte_count,
                             ),
-                        )
-                        sources.append((role, prepared))
-                        inspection = await prepared.inspect(
-                            TrustedArchiveInspector(intake, prepared.commitment),
-                            on_cancel=intake.abort,
-                        )
-                        manifest = build_submission_manifest(inspection)
-                        if manifest.sha256 != selection.semantic_manifest_sha256:
-                            raise PostSubmissionMaterializationFailure(
-                                "post_submit_material_manifest_mismatch"
-                            )
-                        expanded_bytes += manifest.total_expanded_bytes
-                        entries += manifest.entry_count
-                        if (
-                            expanded_bytes > self._archive_limits.maximum_expanded_bytes
-                            or entries > self._archive_limits.maximum_entries
-                        ):
-                            raise ArtifactLimitExceededError("post_submit_aggregate_material_limit")
-                        inspections[role] = inspection
-                        intakes[role] = intake
-                        media_types[role] = selection.media_type
-                    evaluation = await self._preparation._process_prepared_post_submission(
-                        tuple(sources),
-                        _MaterialProcessor(
-                            intakes,
-                            inspections,
-                            request,
-                            consumer,
+                            phase="post_submit",
+                            policy_sha256=request.policy.policy_sha256,
                             limits=self._archive_limits,
-                            preparation=self._preparation,
-                            sources=tuple(sources),
-                            execution=facts,
-                            materialization=materialization_facts,
-                            media_types=media_types,
-                        ),
-                        reserved_bytes=expanded_bytes,
-                        # Aggregate materials root, each role root and one temporary grant.
-                        maximum_entries=entries + len(sources) + 2,
+                            deadline=deadline,
+                        )
                     )
-            finally:
-
-                async def close_sources():
-                    failures = []
-                    for _, prepared in reversed(sources):
-                        try:
-                            await prepared.close()
-                        except Exception as error:
-                            failures.append(error)
-                    if failures:
-                        raise ArtifactScratchIntegrityError(
-                            "post_submit_source_cleanup_unconfirmed"
-                        ) from failures[0]
-
-                await await_cancellation_resistant(close_sources())
+                    sources.append((role, prepared))
+                    inspection = await prepared.inspect(
+                        TrustedArchiveInspector(intake, prepared.commitment),
+                        on_cancel=intake.abort,
+                    )
+                    manifest = build_submission_manifest(inspection)
+                    if manifest.sha256 != selection.semantic_manifest_sha256:
+                        raise PostSubmissionMaterializationFailure(
+                            "post_submit_material_manifest_mismatch"
+                        )
+                    expanded_bytes += manifest.total_expanded_bytes
+                    entries += manifest.entry_count
+                    if (
+                        expanded_bytes > self._archive_limits.maximum_expanded_bytes
+                        or entries > self._archive_limits.maximum_entries
+                    ):
+                        raise ArtifactLimitExceededError("post_submit_aggregate_material_limit")
+                    inspections[role] = inspection
+                    intakes[role] = intake
+                    media_types[role] = selection.media_type
+                evaluation = await self._preparation._process_prepared_post_submission(
+                    tuple(sources),
+                    _MaterialProcessor(
+                        intakes,
+                        inspections,
+                        request,
+                        consumer,
+                        limits=self._archive_limits,
+                        preparation=self._preparation,
+                        sources=tuple(sources),
+                        execution=facts,
+                        materialization=materialization_facts,
+                        media_types=media_types,
+                    ),
+                    reserved_bytes=expanded_bytes,
+                    # Aggregate materials root, each role root and one temporary grant.
+                    maximum_entries=entries + len(sources) + 2,
+                )
         except asyncio.CancelledError:
             # The executor may convert its deadline cancellation into a terminal
             # timeout. Validate the completed read before allowing that conversion.

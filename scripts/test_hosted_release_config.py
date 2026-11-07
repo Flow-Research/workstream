@@ -52,6 +52,10 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.checker = json.loads(CHECKER_EXAMPLE.read_text(encoding="utf-8"))
         self.checker["sandbox_uid"] = self.runtime_uid
         self.checker["sandbox_gid"] = self.runtime_gid
+        # Synthetic test qualification, never an operational sizing recommendation.
+        self.checker["trusted_intake"]["storage_envelope"].update(
+            overhead_bytes=128 * 1024**2, maximum_storage_gib=2,
+        )
         self.checker_path.write_text(json.dumps(self.checker), encoding="utf-8")
         self.identity_files = {
             name: self.root / f"{name.replace('_', '-')}.pem"
@@ -106,6 +110,286 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.environment_path = self.root / "release.env"
         self.environment_path.write_text(environment_text, encoding="utf-8")
         self.environment = preflight.parse_environment(self.environment_path)
+
+    def test_mcp_overlay_is_private_and_has_no_server_credentials(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        self.assertEqual(rendered["services"]["mcp"]["network_mode"], "service:api")
+        for key, value in (
+            ("network_mode", "host"), ("networks", {"default": None}),
+            ("volumes", [{"type": "bind", "source": "/private", "target": "/private"}]),
+            ("secrets", [{"source": "database_url"}]), ("user", "0:0"),
+            ("privileged", True), ("entrypoint", ["sh"]),
+            ("environment", {"WORKSTREAM_API_URL": "https://foreign.example"}),
+        ):
+            with self.subTest(field=key):
+                changed = copy.deepcopy(rendered)
+                changed["services"]["mcp"][key] = value
+                with self.assertRaisesRegex(preflight.PreflightError, "MCP isolation"):
+                    preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        next(p for p in changed["services"]["api"]["ports"] if p["target"] == 8080)["host_ip"] = "0.0.0.0"
+        with self.assertRaisesRegex(preflight.PreflightError, "private API"):
+            preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["api"]["network_mode"] = "host"
+        changed["services"]["api"].pop("networks", None)
+        with self.assertRaisesRegex(preflight.PreflightError, "parent API"):
+            preflight.validate_compose(changed, values)
+        for network in ({"driver": "host"}, {"external": True}, {"driver_opts": {"anything": "yes"}}):
+            changed = copy.deepcopy(rendered)
+            changed["networks"]["default"] = network
+            with self.assertRaisesRegex(preflight.PreflightError, "parent API"):
+                preflight.validate_compose(changed, values)
+        for image in ("mcp:latest", "", "mcp@sha256:bad"):
+            with self.assertRaisesRegex(preflight.PreflightError, "digest-qualified"):
+                preflight.validate_environment(dict(values, WORKSTREAM_MCP_IMAGE=image))
+
+    def test_api_replacement_stops_then_recreates_mcp_and_binds_current_namespace(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        api_id, mcp_id = "a" * 64, "b" * 64
+        calls = []
+        def run(command, **kwargs):
+            calls.append(command)
+            output = ""
+            if command[-3:] == ["ps", "--quiet", "api"]:
+                output = api_id
+            elif command[-3:] == ["ps", "--quiet", "mcp"]:
+                output = mcp_id
+            elif command[:2] == ["docker", "inspect"]:
+                output = "container:" + api_id
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+        with patch.object(preflight.subprocess, "run", side_effect=run):
+            self.assertEqual(preflight.run_compose(self.environment_path, values,
+                             ["up", "--detach", "--no-deps", "api"]), 0)
+        self.assertEqual(calls[0][-2:], ["stop", "mcp"])
+        self.assertEqual(calls[1][-4:], ["up", "--detach", "--no-deps", "api"])
+        self.assertIn("--force-recreate", calls[2])
+        self.assertEqual(calls[2][-1], "mcp")
+        self.assertEqual(calls[-1][-1], mcp_id)
+        with patch.object(preflight.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0, stdout=api_id),
+            subprocess.CompletedProcess([], 0, stdout=mcp_id),
+            subprocess.CompletedProcess([], 0, stdout="container:" + "c" * 64),
+        ]):
+            with self.assertRaisesRegex(preflight.PreflightError, "different API namespace"):
+                preflight.validate_running_mcp_namespace(["docker", "compose"], values)
+
+    def test_isolated_bootstrap_does_not_start_or_stop_mcp(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        for service in ("model-proxy", "demo-identity", "guide-document-parser"):
+            with self.subTest(service=service), patch.object(
+                preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)
+            ) as run:
+                self.assertEqual(preflight.run_compose(self.environment_path, values,
+                                 ["up", "-d", service]), 0)
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_args.args[0][-3:], ["up", "-d", service])
+
+    def test_failed_api_replacement_does_not_restart_mcp(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        with patch.object(preflight.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 1),
+        ]) as run:
+            self.assertEqual(preflight.run_compose(self.environment_path, values,
+                             ["up", "--detach", "--no-deps", "api"]), 1)
+        self.assertEqual(run.call_count, 2)
+
+    def demo_identity_values(self):
+        values = dict(self.environment)
+        values.update(
+            {
+                "DEMO_IDENTITY_IMAGE": "example.test/issuer@sha256:" + "a" * 64,
+                "DEMO_IDENTITY_ISSUER": "https://identity.example.test",
+                "DEMO_IDENTITY_AUDIENCE": values["WORKSTREAM_TOKEN_AUDIENCE"],
+                "DEMO_IDENTITY_HOSTNAME": "identity.example.test",
+                "DEMO_IDENTITY_DATA_DIR": str(self.root / "issuer-data"),
+                "DEMO_IDENTITY_TLS_CERT_FILE": str(self.root / "issuer-cert.pem"),
+                "DEMO_IDENTITY_TLS_KEY_FILE": str(self.root / "issuer-tls-key.pem"),
+                "WORKSTREAM_TOKEN_ISSUER": "https://identity.example.test",
+                "WORKSTREAM_TOKEN_JWKS_URL": "https://identity.example.test/jwks.json",
+            }
+        )
+        return values
+
+    def test_issuer_host_mapping_is_absent_without_issuer_profile(self):
+        rendered = preflight.render_compose(self.environment_path, self.environment)
+        preflight.validate_compose(rendered, self.environment)
+        rendered["services"]["api"]["extra_hosts"] = ["identity.example.test=host-gateway"]
+        with self.assertRaisesRegex(preflight.PreflightError, "host mapping"):
+            preflight.validate_compose(rendered, self.environment)
+
+    def test_demo_identity_overlay_preserves_default_and_bounds_authority(self):
+        self.assertNotIn(
+            str(preflight.DEMO_IDENTITY_COMPOSE_PATH),
+            preflight._compose_file_arguments(self.environment),
+        )
+        values = self.demo_identity_values()
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        self.assertEqual(
+            rendered["services"]["demo-identity"]["networks"], {"demo_identity": None}
+        )
+        self.assertEqual(rendered["services"]["api"]["networks"], {"default": None})
+        self.assertEqual(
+            rendered["services"]["api"]["extra_hosts"],
+            [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway"],
+        )
+        self.assertEqual(rendered["networks"]["demo_identity"]["driver"], "bridge")
+        self.assertFalse(rendered["networks"]["demo_identity"].get("internal", False))
+        mutations = []
+        for hosts in ([], [values["DEMO_IDENTITY_HOSTNAME"] + "=127.0.0.1"],
+                      ["other.example.test=host-gateway"],
+                      [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway", "extra.test=host-gateway"]):
+            changed = copy.deepcopy(rendered)
+            changed["services"]["api"]["extra_hosts"] = hosts
+            mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["worker"]["extra_hosts"] = {values["DEMO_IDENTITY_HOSTNAME"]: "host-gateway"}
+        mutations.append(changed)
+        for key, value in (
+            ("user", "10001:10001"),
+            ("mem_limit", 0),
+            ("command", ["init", "/data", "admin@example.test"]),
+            ("environment", {"WORKSTREAM_DATABASE_URL": "forbidden"}),
+        ):
+            changed = copy.deepcopy(rendered)
+            changed["services"]["demo-identity"][key] = value
+            mutations.append(changed)
+        for role in ("api", "worker", "beat"):
+            changed = copy.deepcopy(rendered)
+            changed["services"][role]["networks"] = {"demo_identity": None}
+            mutations.append(changed)
+        # The reproduced live failure: an internal bridge reports healthy but
+        # does not expose the requested loopback host port to the ingress proxy.
+        for key, value in (
+            ("internal", True),
+            ("driver", "host"),
+            ("external", True),
+            ("ipam", {"driver": "custom"}),
+            ("driver_opts", {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}),
+        ):
+            changed = copy.deepcopy(rendered)
+            changed["networks"]["demo_identity"][key] = value
+            mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["networks"]["default"] = None
+        mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["ports"][0]["host_ip"] = "0.0.0.0"
+        mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["volumes"][0]["source"] = str(self.root)
+        mutations.append(changed)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["demo-identity"]["healthcheck"]["test"].append("--insecure")
+        mutations.append(changed)
+        for changed in mutations:
+            with self.subTest(changed=changed["services"]["demo-identity"]):
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_compose(changed, values)
+
+    def test_demo_identity_configuration_rejects_partial_unpinned_and_public_settings(
+        self,
+    ):
+        values = self.demo_identity_values()
+        for key, value in (
+            ("DEMO_IDENTITY_IMAGE", "issuer:latest"),
+            ("DEMO_IDENTITY_HOSTNAME", "wrong.example.test"),
+            ("WORKSTREAM_TOKEN_AUDIENCE", "foreign"),
+            ("WORKSTREAM_TOKEN_JWKS_URL", "https://foreign.example.test/jwks.json"),
+            ("DEMO_IDENTITY_PUBLISHED_BIND", "0.0.0.0"),
+            ("DEMO_IDENTITY_ISSUER", "https://identity.example.test/path"),
+            ("DEMO_IDENTITY_TLS_KEY_FILE", "relative/key.pem"),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaises(preflight.PreflightError):
+                    preflight.validate_environment({**values, key: value})
+        del values["DEMO_IDENTITY_DATA_DIR"]
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_environment(values)
+
+    def test_demo_identity_host_custody_is_separate_and_rejects_missing_state(self):
+        values = self.demo_identity_values()
+        with (
+            patch.object(preflight, "_private_metadata") as metadata,
+            patch.object(
+                Path,
+                "stat",
+                return_value=type("Metadata", (), {"st_ino": 1, "st_dev": 1})(),
+            ),
+        ):
+            with self.assertRaisesRegex(preflight.PreflightError, "distinct"):
+                preflight.validate_demo_identity_host_inputs(values)
+            self.assertEqual(
+                metadata.call_args_list[0].kwargs,
+                {"kind": "directory", "uid": 12001, "gid": 12001, "mode": 0o700},
+            )
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_demo_identity_host_inputs(values)
+        values["DEMO_IDENTITY_DATA_DIR"] = str(
+            preflight.deployment_paths(values).scratch / "issuer"
+        )
+        with self.assertRaisesRegex(preflight.PreflightError, "shared runtime roots"):
+            preflight.validate_environment(values)
+
+    def test_demo_identity_bootstrap_checks_only_issuer_inputs_and_waits(self):
+        values = self.demo_identity_values()
+        with (
+            patch.object(
+                compose,
+                "parse_args",
+                return_value=type(
+                    "Args",
+                    (),
+                    {
+                        "env_file": self.environment_path,
+                        "compose_arguments": ["start", "demo-identity"],
+                    },
+                )(),
+            ),
+            patch.object(compose, "parse_environment", return_value=values),
+            patch.object(compose, "render_compose", return_value={}),
+            patch.object(compose, "validate_compose"),
+            patch.object(
+                compose, "validate_demo_identity_host_inputs"
+            ) as issuer_inputs,
+            patch.object(compose, "validate_private_host_inputs") as backend_inputs,
+            patch.object(compose, "load_checker_config") as checker_inputs,
+            patch.object(compose, "run_compose", return_value=0),
+        ):
+            self.assertEqual(compose.main(), 0)
+            issuer_inputs.assert_called_once_with(values)
+            backend_inputs.assert_not_called()
+            checker_inputs.assert_not_called()
+        with patch.object(
+            preflight.subprocess,
+            "run",
+            return_value=type("Result", (), {"returncode": 0})(),
+        ) as run:
+            self.assertEqual(
+                preflight.run_compose(
+                    self.environment_path, values, ["start", "demo-identity"]
+                ),
+                0,
+            )
+            command = run.call_args.args[0]
+            self.assertEqual(
+                command[-7:],
+                [
+                    "up",
+                    "--detach",
+                    "--no-deps",
+                    "--wait",
+                    "--wait-timeout",
+                    "60",
+                    "demo-identity",
+                ],
+            )
+            self.assertEqual(run.call_args.kwargs["timeout"], 120)
 
     def test_optional_github_app_render_is_worker_only(self) -> None:
         values = dict(self.environment)
@@ -1421,6 +1705,65 @@ class HostedReleaseConfigTests(unittest.TestCase):
         changed = copy.deepcopy(self.checker)
         changed["cache"][0]["config_image_id"] = "sha256:" + "A" * 64
         with self.assertRaises(preflight.PreflightError):
+            preflight.validate_checker_config(changed, self.environment)
+
+    def test_intake_storage_qualification_must_match_pins_and_have_real_bounds(self):
+        preflight.validate_checker_config(self.checker, self.environment)
+        for key in (
+            "archive_sha256",
+            "config_image_id",
+            "smol_binary_sha256",
+            "guest_sha256",
+        ):
+            with self.subTest(identity=key):
+                changed = copy.deepcopy(self.checker)
+                changed["trusted_intake"]["storage_envelope"][key] = (
+                    "sha256:" + "f" * 64
+                )
+                with self.assertRaisesRegex(
+                    preflight.PreflightError, "storage qualification"
+                ):
+                    preflight.validate_checker_config(changed, self.environment)
+        for key in (
+            "overhead_bytes",
+            "maximum_storage_gib",
+            "maximum_entries",
+            "maximum_path_bytes",
+            "maximum_path_depth",
+        ):
+            for value in (0, True, -1, 2**64):
+                with self.subTest(bound=key, value=value):
+                    changed = copy.deepcopy(self.checker)
+                    changed["trusted_intake"]["storage_envelope"][key] = value
+                    with self.assertRaisesRegex(
+                        preflight.PreflightError, "storage qualification"
+                    ):
+                        preflight.validate_checker_config(changed, self.environment)
+        changed = copy.deepcopy(self.checker)
+        changed["smol"]["maximum_storage_bytes"] = 2 * 1024**3
+        with self.assertRaisesRegex(preflight.PreflightError, "storage qualification"):
+            preflight.validate_checker_config(changed, self.environment)
+
+    def test_intake_storage_qualification_covers_configured_inspection_limits(self):
+        for setting in ("MAXIMUM_ENTRIES", "MAXIMUM_PATH_BYTES", "MAXIMUM_PATH_DEPTH"):
+            values = self.environment | {"WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_" + setting: "100001"}
+            with self.subTest(setting=setting):
+                with self.assertRaisesRegex(preflight.PreflightError, "exceeds storage qualification"):
+                    preflight.validate_checker_config(self.checker, values)
+
+    def test_intake_storage_qualification_covers_largest_supported_zip(self):
+        changed = copy.deepcopy(self.checker)
+        envelope = changed["trusted_intake"]["storage_envelope"]
+        envelope["maximum_storage_gib"] = 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
+            preflight.validate_checker_config(changed, self.environment)
+        envelope.update(maximum_storage_gib=2, overhead_bytes=1024**3)
+        preflight.validate_checker_config(changed, self.environment)
+        envelope["overhead_bytes"] += 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
+            preflight.validate_checker_config(changed, self.environment)
+        envelope["overhead_bytes"] = 2**64 - 1
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot cover supported ZIPs"):
             preflight.validate_checker_config(changed, self.environment)
 
     def test_custom_deployment_root_preserves_paths_and_refuses_unsafe_custody(

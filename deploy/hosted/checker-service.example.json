@@ -51,6 +51,17 @@
   },
   "trusted_intake": {
     "platform_manifest_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-    "default_behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f"
+    "default_behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f",
+    "storage_envelope": {
+      "archive_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "config_image_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "smol_binary_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "guest_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "maximum_entries": 2000,
+      "maximum_path_bytes": 1024,
+      "maximum_path_depth": 32,
+      "overhead_bytes": 0,
+      "maximum_storage_gib": 0
+    }
   }
 }

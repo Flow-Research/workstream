@@ -139,6 +139,8 @@ def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
         "workstream_guide_effective_submission_artifact_policy_get",
         "workstream_guide_pre_submit_checker_policy_get",
         "workstream_guide_setup_latest_get",
+        "workstream_guide_assistance_request",
+        "workstream_guide_requirements_compile",
         "workstream_guide_submission_artifact_policies_list",
         "workstream_guide_submission_artifact_policy_create",
         "workstream_guide_submission_artifact_policy_get",

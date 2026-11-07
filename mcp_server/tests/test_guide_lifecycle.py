@@ -136,10 +136,10 @@ def _catalogue(client: TestClient) -> dict[str, Any]:
     return {tool["name"]: tool for tool in response.json()["result"]["tools"]}
 
 
-def test_guide_lifecycle_catalogue_has_24_closed_valid_contracts(adapter: Adapter) -> None:
+def test_guide_lifecycle_catalogue_has_26_closed_valid_contracts(adapter: Adapter) -> None:
     client, received, _ = adapter
     catalogue = _catalogue(client)
-    assert len(guide_lifecycle.TOOL_NAMES) == 24
+    assert len(guide_lifecycle.TOOL_NAMES) == 26
     for name in guide_lifecycle.TOOL_NAMES:
         tool = catalogue[name]
         Draft202012Validator.check_schema(tool["inputSchema"])
@@ -555,3 +555,138 @@ def test_invalid_guide_input_never_dispatches(
     assert result["structuredContent"]["error"] == "invalid_tool_input"
     assert received == []
     assert "Bearer" not in json.dumps(result)
+
+
+_INITIAL_DISPATCH_ROUTES = (
+    ("guide_assistance_request", "setup"),
+    ("guide_requirements_compile", "requirements/compile"),
+)
+
+
+def _initial_dispatch_arguments() -> dict[str, Any]:
+    return {"project_id": PROJECT_ID, "guide_id": GUIDE_ID, "idempotency_key": IDEMPOTENCY_KEY}
+
+
+def _initial_dispatch_receipt() -> dict[str, Any]:
+    return {
+        "operation_id": CORRECTION_ID,
+        "setup_run_id": REPORT_ID,
+        "setup_generation": 1,
+        "status": "dispatch_pending",
+    }
+
+
+@pytest.mark.parametrize(("name", "suffix"), _INITIAL_DISPATCH_ROUTES)
+def test_initial_dispatch_forwards_exact_key_and_caller_without_body(
+    adapter: Adapter, call: Call, name: str, suffix: str
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 202
+    upstream["json"] = _initial_dispatch_receipt()
+    result = call(
+        client, name=f"workstream_{name}", arguments=_initial_dispatch_arguments(),
+        token="explicit-guide-caller",
+    ).json()["result"]
+    assert result["isError"] is False
+    assert result["structuredContent"] == upstream["json"]
+    assert len(received) == 1
+    request = received[0]
+    assert request.method == "POST"
+    assert request.url.path == f"/api/v1/projects/{PROJECT_ID}/guides/{GUIDE_ID}/{suffix}"
+    assert not request.url.query
+    assert request.content == b""
+    assert request.headers["authorization"] == "Bearer explicit-guide-caller"
+    assert request.headers["idempotency-key"] == IDEMPOTENCY_KEY
+    annotations = _catalogue(client)[f"workstream_{name}"]["annotations"]
+    assert annotations["destructiveHint"] is True
+    assert annotations["idempotentHint"] is True
+
+
+@pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
+@pytest.mark.parametrize("change", (
+    {"idempotency_key": None}, {"idempotency_key": "not-a-uuid"},
+    {"project_id": "foreign/path"}, {"guide_id": "not-a-uuid"},
+    {"body": {"inference_required": True}}, {"token": "caller-override"},
+))
+def test_initial_dispatch_rejects_invalid_selectors_keys_and_behavior_overrides(
+    adapter: Adapter, call: Call, name: str, _suffix: str, change: dict[str, Any]
+) -> None:
+    client, received, _ = adapter
+    arguments = {**_initial_dispatch_arguments(), **change}
+    if change.get("idempotency_key", "present") is None:
+        arguments.pop("idempotency_key")
+    result = call(client, name=f"workstream_{name}", arguments=arguments).json()["result"]
+    assert result["structuredContent"]["error"] == "invalid_tool_input"
+    assert received == []
+
+
+@pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
+@pytest.mark.parametrize(("status", "response"), (
+    (200, _initial_dispatch_receipt()),
+    (202, {**_initial_dispatch_receipt(), "setup_run_id": "invalid"}),
+    (202, {**_initial_dispatch_receipt(), "setup_generation": 0}),
+    (202, {**_initial_dispatch_receipt(), "project_id": PROJECT_ID}),
+))
+def test_initial_dispatch_rejects_uncertain_success_without_retry(
+    adapter: Adapter, call: Call, name: str, _suffix: str, status: int, response: dict[str, Any]
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = status
+    upstream["json"] = response
+    result = call(
+        client, name=f"workstream_{name}", arguments=_initial_dispatch_arguments()
+    ).json()["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["error"] == "workstream_execution_uncertain"
+    assert result["structuredContent"]["retryable"] is False
+    assert len(received) == 1
+
+
+@pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
+@pytest.mark.parametrize(("status", "code"), (
+    (404, "proposal_unavailable"), (409, "operation_conflict"),
+    (503, "storage_unavailable"), (503, "authorization_service_unavailable"),
+))
+def test_initial_dispatch_preserves_safe_public_failures(
+    adapter: Adapter, call: Call, name: str, _suffix: str, status: int, code: str
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = status
+    upstream["json"] = {
+        "error": {"code": code, "message": "Private detail", "retryable": status == 503}
+    }
+    result = call(
+        client, name=f"workstream_{name}", arguments=_initial_dispatch_arguments()
+    ).json()["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["status"] == status
+    assert result["structuredContent"]["code"] == code
+    assert result["structuredContent"]["retryable"] is False
+    if status == 503:
+        assert result["structuredContent"]["error"] == "workstream_execution_uncertain"
+    assert "Private detail" not in json.dumps(result)
+    assert len(received) == 1
+
+
+@pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
+@pytest.mark.asyncio
+async def test_initial_dispatch_transport_failure_is_uncertain_and_not_retried(
+    name: str, _suffix: str
+) -> None:
+    attempts = 0
+
+    def fail(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ReadError("private transport detail", request=request)
+
+    async with httpx.AsyncClient(
+        base_url="http://api.test", transport=httpx.MockTransport(fail)
+    ) as client:
+        result = await WorkstreamGateway(
+            Settings(api_url="http://127.0.0.1:8000"), client
+        ).guide_lifecycle(name, "Bearer explicit-caller", _initial_dispatch_arguments())
+    assert result.failure is not None
+    assert result.failure.error == "workstream_execution_uncertain"
+    assert result.failure.retryable is False
+    assert attempts == 1
