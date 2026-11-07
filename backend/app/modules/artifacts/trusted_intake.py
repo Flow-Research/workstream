@@ -102,6 +102,8 @@ async def prepared_trusted_intake(
         finally:
             if prepared is not None:
                 try:
-                    await await_completion_preserving_cancellation(prepared.close())
+                    # PreparedArtifact owns cancellation-resistant release and lets cleanup
+                    # failure win over cancellation; another wrapper would hide it.
+                    await prepared.close()
                 except Exception as error:
                     raise ArtifactScratchIntegrityError("trusted_intake_source_cleanup_unconfirmed") from error

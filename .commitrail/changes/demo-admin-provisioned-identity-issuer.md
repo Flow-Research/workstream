@@ -328,3 +328,18 @@ it through ambient settings. Do not add a pool, seed manager or configuration
 switch, and do not delete existing cache or retained data. Qualification must
 measure cold startup under that enforced environment. This is a prerequisite for
 the promised one-VM resource calculation, not a project checker policy change.
+
+
+### Seal-first error boundaries
+
+Preserve cleanup failure over cancellation by relying directly on the existing
+`PreparedArtifact.close` owner; do not wrap it in a helper that discards its
+release exception. Real scratch regressions must cancel during release, retain
+unconfirmed ownership, prevent terminal POST finalization, and prove successful
+cleanup still preserves cancellation. Archive-error translation belongs only at
+initial intake entry and inspection. A later archive error after PRE reservation
+must retain its recovery owner and must not become a contributor-facing terminal
+rejection. Keep the existing post-reservation regression and add empty-source and
+inspection rejection controls before reservation. These repairs preserve the
+existing lifecycle and recovery contract; they introduce no new state or retry
+path.

@@ -691,15 +691,18 @@ class PreparedSubmissionBundlePreparationCommand:
                     project_context.external_checker_policies.value
                 ).pre_submit
                 deadline = asyncio.get_running_loop().time() + runtime.artifact_deadline_ms / 1000
-                prepared, intake = await scratch_cleanup.enter_async_context(prepared_trusted_intake(
-                    runtime.intake,
-                    runtime.preparation.prepare(
-                        request.byte_source, media_type="application/zip",
-                        maximum_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
-                    ),
-                    phase="pre_submit", policy_sha256=early_policy.policy_sha256,
-                    limits=runtime.archive_limits, deadline=deadline,
-                ))
+                try:
+                    prepared, intake = await scratch_cleanup.enter_async_context(prepared_trusted_intake(
+                        runtime.intake,
+                        runtime.preparation.prepare(
+                            request.byte_source, media_type="application/zip",
+                            maximum_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
+                        ),
+                        phase="pre_submit", policy_sha256=early_policy.policy_sha256,
+                        limits=runtime.archive_limits, deadline=deadline,
+                    ))
+                except SubmissionArchiveRejectedError as exc:
+                    raise SubmissionBundlePreparationRejected(exc.code.value) from exc
                 async with self._session.begin():
                     task_context, project_context = await self._lock_authorized_context(request)
                     if task_context.checker_remediation_manifest_id != remediation_manifest_id:
@@ -720,9 +723,12 @@ class PreparedSubmissionBundlePreparationCommand:
                             idempotency_key=request.idempotency_key,
                         )
                     )
-                    inspection = await prepared.inspect(
-                        TrustedArchiveInspector(intake, prepared.commitment), on_cancel=intake.abort,
-                    )
+                    try:
+                        inspection = await prepared.inspect(
+                            TrustedArchiveInspector(intake, prepared.commitment), on_cancel=intake.abort,
+                        )
+                    except SubmissionArchiveRejectedError as exc:
+                        raise SubmissionBundlePreparationRejected(exc.code.value) from exc
                     manifest = build_submission_manifest(inspection)
                     packet = SubmissionPacketView(
                         summary=request.summary,
@@ -861,8 +867,6 @@ class PreparedSubmissionBundlePreparationCommand:
                     durable,
                 )
                 return self._result(result, terminal.execution)
-        except SubmissionArchiveRejectedError as exc:
-            raise SubmissionBundlePreparationRejected(exc.code.value) from exc
         except ArtifactPreparationDeadlineError as exc:
             # No terminal claim is made when intake cleanup was not confirmed.
             # The existing lease recovery owner resolves an already reserved run.

@@ -264,3 +264,82 @@ async def test_sealed_handoff_failure_drains_real_scratch_without_leaked_reader(
     assert (await manager.usage()).reservation_count == 0
     assert list((tmp_path / "scratch" / "files").iterdir()) == []
     manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cleanup_failure", ["integrity", "deadline", None])
+async def test_cancellation_during_source_close_preserves_real_cleanup_failure(
+    tmp_path, monkeypatch, cleanup_failure,
+):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from app.modules.artifacts.preparation import (
+        ArtifactPreparationDeadlineError, ArtifactPreparationLimits,
+        ArtifactPreparationService, ArtifactScratchIntegrityError, ArtifactScratchManager,
+    )
+    from app.modules.artifacts.trusted_intake import prepared_trusted_intake
+
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(minimum_free_bytes=0),
+    )
+    preparation = ArtifactPreparationService(manager)
+    entered, finish = asyncio.Event(), asyncio.Event()
+    original_release = manager.release
+    errors = {"integrity": ArtifactScratchIntegrityError("release failed"),
+              "deadline": ArtifactPreparationDeadlineError("release timed out"), None: None}
+    error = errors[cleanup_failure]
+    session = SimpleNamespace(close=AsyncMock(), abort=lambda: None)
+    adapter = SimpleNamespace(prepare=AsyncMock(return_value=session))
+    sources = []
+
+    async def stream():
+        yield b"sealed source"
+
+    async def paused_release(reservation):
+        entered.set()
+        await finish.wait()
+        if error is not None:
+            raise error
+        await original_release(reservation)
+
+    async def operation():
+        async with prepared_trusted_intake(
+            adapter, preparation.prepare(stream(), media_type="application/zip"),
+            phase="post_submit", policy_sha256="sha256:" + "a" * 64,
+            limits=SubmissionArchiveLimits(), deadline=asyncio.get_running_loop().time() + 10,
+        ) as (prepared, _):
+            sources.append(prepared)
+
+    monkeypatch.setattr(manager, "release", paused_release)
+    task = asyncio.create_task(operation())
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        finish.set()
+        if error is None:
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 2)
+            assert not preparation._active
+            assert (await manager.usage()).reservation_count == 0
+        else:
+            with pytest.raises(ArtifactScratchIntegrityError, match="trusted_intake_source_cleanup_unconfirmed") as raised:
+                await asyncio.wait_for(task, 2)
+            assert raised.value.__cause__ is error
+            assert len(preparation._active) == 1
+            assert (await manager.usage()).reservation_count == 1
+        session.close.assert_awaited_once()
+    finally:
+        finish.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        monkeypatch.setattr(manager, "release", original_release)
+        for prepared in sources:
+            await prepared.close()
+        assert not preparation._active
+        assert (await manager.usage()).reservation_count == 0
+        manager.close()

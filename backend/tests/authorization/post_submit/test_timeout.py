@@ -148,7 +148,7 @@ async def test_outer_deadline_cannot_hide_failed_scratch_cleanup(tmp_path, isola
             assert task.cancelling(), "executor deadline did not cancel the protected operation"
             finish.set()
             expected = ("post_submit_projection_cleanup_unconfirmed" if failure == "projection" else
-                        "post_submit_source_cleanup_unconfirmed" if failure == "release" else
+                        "trusted_intake_source_cleanup_unconfirmed" if failure == "release" else
                         f"controlled {failure} failure" if cleanup_error == "integrity" else
                         "submission_workspace_cleanup_unconfirmed")
             with pytest.raises(ArtifactScratchIntegrityError, match=expected):
