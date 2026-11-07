@@ -157,7 +157,7 @@ The tiny native fixture sealed at 0.023 seconds, was VM-ready at 8.704 seconds
 and acknowledged cleanup at 10.402 seconds, measured cumulatively inside the
 canonical-owner fixture rather than through the public API.
 
-Deployment drained the existing workers, verified retained database contents,
+Deployment drained the existing Celery workers, verified retained database contents,
 installed the pinned assets and passed real AWS storage qualification. A native
 socket-readiness race in the private deployment harness was resolved by checking
 the already-running exact process and continuing with canonical preflight;
