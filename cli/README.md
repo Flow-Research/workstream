@@ -127,6 +127,8 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream project guide set-revision-policy PROJECT_ID GUIDE_ID --input FILE --if-match ETAG --idempotency-key UUID` | `PUT /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/revision-policy` |
 | `workstream project guide upload PROJECT_ID GUIDE_ID DOCUMENT_ID --file FILE --media-type MIME --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/documents/DOCUMENT_ID/content` |
 | `workstream project guide setup PROJECT_ID GUIDE_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup-runs/latest` |
+| `workstream project guide assist PROJECT_ID GUIDE_ID --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/setup` |
+| `workstream project guide compile-requirements PROJECT_ID GUIDE_ID --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/requirements/compile` |
 | `workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/proposal` |
 | `workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input FILE --idempotency-key UUID` | `POST /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/pre-submission-approval` |
 | `workstream project guide post-policy PROJECT_ID GUIDE_ID COMPILATION_ID POLICY_ID` | `GET /api/v1/projects/PROJECT_ID/guides/GUIDE_ID/compilations/COMPILATION_ID/post-submission-policies/POLICY_ID` |
@@ -838,6 +840,34 @@ is a known denial; dropped, malformed, mismatching or unexpected responses are
 unknown outcomes. An otherwise valid unconfirmed-storage status also exits 1,
 sets `outcome_unknown` and leaves stdout empty rather than reporting success.
 Diagnostics never include file paths, contents or raw provider/transport errors.
+
+## Request guide compilation explicitly
+
+```sh
+workstream project guide assist PROJECT_ID GUIDE_ID --idempotency-key UUID --output json
+workstream project guide compile-requirements PROJECT_ID GUIDE_ID --idempotency-key UUID --output json
+```
+
+After original documents are uploaded, a Project Manager chooses an explicit
+request: `assist` requests configured model assistance; `compile-requirements`
+compiles uploaded manager requirements without model inference. Uploading alone
+does not start either operation. Neither command approves policies or activates
+the guide. The backend owns current authority, input readiness and configured
+runtime selection; the CLI does not preflight or select a fallback mode.
+
+Each command sends one bodyless POST with the unchanged caller-owned UUID key.
+A strict HTTP 202 receipt contains `operation_id`, `setup_run_id`, a positive
+`setup_generation` integer and the backend's current `status`. Exit 0 reports
+that dispatch state, including `enqueue_failed`; it does not mean compilation
+succeeded. Inspect `project guide setup` deliberately for current diagnostics.
+There is no automatic polling or retry. Manual replay uses the unchanged
+command, project, guide and key; the durable identity remains the same while
+the reported status may advance. Fresh backend authority also applies to replay.
+
+Lost, malformed, oversized, redirected or other uncertain mutation responses
+leave stdout empty, exit 1 and set `error.outcome_unknown: true` in JSON.
+Inspect setup status and replay only the saved unchanged inputs; do not infer
+rollback or generate a new key. Canonical backend denials remain known denials.
 
 ## Inspect current guide setup
 
