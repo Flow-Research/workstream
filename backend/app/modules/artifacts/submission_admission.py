@@ -52,6 +52,7 @@ from app.modules.artifacts.service import (
 from app.modules.artifacts.sources import PreparedArtifact
 from app.modules.artifacts.trusted_intake import prepared_trusted_intake, TrustedArchiveInspector, prepare_bytes_with_intake
 from app.modules.artifacts.api.submission_archive import (
+    MAXIMUM_SUBMISSION_ZIP_BYTES,
     SubmissionArchiveRejectedError,
     SubmissionArchiveLimits,
 )
@@ -695,7 +696,10 @@ class PreparedSubmissionBundlePreparationCommand:
                     ),
                 ))
                 prepared, intake = await prepare_bytes_with_intake(pending_intake,
-                    runtime.preparation.prepare(request.byte_source, media_type="application/zip"),
+                    runtime.preparation.prepare(
+                        request.byte_source, media_type="application/zip",
+                        maximum_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
+                    ),
                 )
                 scratch_cleanup.push_async_callback(prepared.close)
                 async with self._session.begin():

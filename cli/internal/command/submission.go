@@ -68,9 +68,9 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				}
 				return writeTaskContextFields(stdout, []contextField{{"Submission receipt (not acceptance)", result.Value}})
 			}
-			bad := commandError{"invalid_arguments", "--file must be a readable, nonempty regular ZIP of at most 512MiB"}
+			bad := commandError{"invalid_arguments", "--file must be a readable, nonempty regular ZIP of at most 500MiB"}
 			info, err := os.Stat(path)
-			if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > api.MaxGuideDocumentBytes {
+			if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > api.MaxSubmissionZipBytes {
 				return bad
 			}
 			file, err := os.Open(path)

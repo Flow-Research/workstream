@@ -240,6 +240,19 @@ probe must detect missing growth-before-write or aggregate enforcement.
 
 ### B. Sealed ZIP and inspection sizing
 
+Allowed files: existing ART intake orchestration, typed intake contracts and
+adapter, native checker-service intake/capacity implementation and its guest,
+existing image-cache qualification tooling and affected tests; CLI submission
+API/command files and their tests for the ZIP-specific limit; affected hosted
+configuration, operator documentation and capability claims. Do not alter
+project checker semantics, identity authority or durable acceptance behavior.
+
+The existing upload/VM overlap deliberately reduced PRE latency. The sizing
+change must report upload, VM startup and inspection timings in qualification;
+do not silently claim unchanged latency. Prefer sealed-size allocation over a
+new speculative pool or prewarming subsystem. Preserve one original deadline
+across reception and subsequent inspection, rather than restarting its clock.
+
 Before implementation, complete focused security/architecture plan review of the
 trusted image overhead bound, native whole-GiB storage floor and separate root
 overlay accounting. Finish receiving/hashing/sealing the archive before allocating
@@ -250,6 +263,27 @@ runtime/filesystem overhead are separate terms; ZIP-declared expansion is not
 trusted sizing evidence. Qualify cold boot and worst-case supported archives on
 the pinned native runtime before deployment. Project checker execution limits
 and policy ownership remain unchanged.
+
+The candidate sizing formula uses the sealed ZIP length `Z` and the existing
+inspector's enforced ratio `R`: expanded allowance is
+`min(maximum_expanded_bytes, Z * R)`, with checked/saturating native arithmetic.
+This follows the inspector's nonoverlapping record coverage, per-file ratio and
+actual decompressed-size checks; malformed archives never reach projection.
+Add qualified trusted-image/cold-bootstrap/filesystem overhead for the configured
+entry/path bounds, then round storage up to native whole GiB. Account for the
+separate agent-root overlay explicitly. Qualification must bind the selected
+image and runtime identities and establish both bytes and inode capacity; do
+not treat a sample successful tiny ZIP or a guessed buffer as that proof.
+No native sizing implementation is authorized by an unmeasured envelope alone.
+
+Caller tracing found one prerequisite defect in canonical archive inspection:
+implicit ancestors check the projected-entry limit, but the final explicit
+member insertion does not. Repair `submission_archive.py` and its existing tests
+so the complete projected inventory stays within the configured bound before
+reading/projecting the member. Prove rejection of an implicit directory plus two
+files under a two-entry limit, a valid exact-limit control, and a guard-removal
+probe. This repairs the existing resource contract; it does not introduce a new
+checker rule or change project evaluation semantics.
 
 Use the existing per-call preparation limit for the 500 MiB ZIP ceiling; do not
 reduce guide-document or other generic artifact ceilings. Keep compressed and

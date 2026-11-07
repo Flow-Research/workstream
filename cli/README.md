@@ -1113,8 +1113,9 @@ workstream submission findings SUBMISSION_ID --limit 25
 workstream submission findings SUBMISSION_ID --run CHECKER_RUN_ID
 ```
 
-Preparation streams one nonempty regular ZIP (at most 512MiB) to the public
-authenticated API. Server project limits can be smaller. It never creates a
+Preparation streams one nonempty regular ZIP (at most 500MiB compressed,
+524,288,000 bytes) to the public authenticated API. Server project limits can be
+smaller. It never creates a
 Submission, automatically retries or polls. A `ready` receipt supplies the
 admission for the separate submit command. Other statuses must not be interpreted
 as readiness. Before confirming a successful upload, the CLI checks file size,

@@ -182,6 +182,9 @@ async def test_hidden_preparation_uses_selected_pre_before_durable_admission(
     assert result.submission_bundle_preparation_status is (
         SubmissionBundlePreparationStatus.PREPARED
     )
+    case.runtime.preparation.prepare.assert_awaited_once_with(
+        request.byte_source, media_type="application/zip", maximum_bytes=524_288_000,
+    )
     # The admitted attempt returns its intake feedback from the executed facts.
     assert result.pre_submission_results == tuple(
         public_pre_submission_results(case.completion.terminal.execution)

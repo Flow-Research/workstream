@@ -625,7 +625,7 @@ class ArtifactScratchManager:
         )
 
     async def allocate(self) -> tuple[_ScratchReservation, int]:
-        """Reserve the full hard maximum before creating one private file."""
+        """Reserve one stream buffer before creating one private file."""
         with self._tracked_operation():
             task = asyncio.create_task(asyncio.to_thread(self._allocate_sync))
             try:
@@ -666,6 +666,15 @@ class ArtifactScratchManager:
                 raise
             self._owned_reservations[reservation.reservation_id] = reservation
             return reservation, descriptor
+
+    async def reserve_bytes(self, reservation: _ScratchReservation, byte_count: int) -> None:
+        """Cover counted source bytes and buffer headroom before any write."""
+        if type(byte_count) is not int or not 0 <= byte_count <= self._limits.maximum_source_bytes:
+            raise ValueError("artifact scratch byte count is invalid")
+        with self._tracked_operation():
+            if self._owned_reservations.get(reservation.reservation_id) != reservation:
+                raise ArtifactScratchIntegrityError("artifact scratch reservation is not owned")
+            await self._run_io(self._reserve_bytes_sync, reservation, byte_count)
 
     async def seal_for_read(self, reservation: _ScratchReservation, descriptor: int) -> BinaryIO:
         """Close the first pass and pin one private read-only second-pass file."""
@@ -1582,20 +1591,19 @@ class ArtifactScratchManager:
                 raise ArtifactScratchCapacityError("artifact scratch file limit reached")
             if len(entries) >= self._limits.maximum_concurrency:
                 raise ArtifactScratchCapacityError("artifact scratch concurrency limit reached")
-            if reserved_bytes + HARD_MAXIMUM_ARTIFACT_BYTES > self._limits.aggregate_reserved_bytes:
+            initial_bytes = self._limits.stream_buffer_bytes
+            if reserved_bytes + initial_bytes > self._limits.aggregate_reserved_bytes:
                 raise ArtifactScratchCapacityError("artifact scratch byte limit reached")
             filesystem = os.fstatvfs(self._files_fd)
             available = filesystem.f_bavail * filesystem.f_frsize
-            required = (
-                reserved_bytes + HARD_MAXIMUM_ARTIFACT_BYTES + self._limits.minimum_free_bytes
-            )
+            required = reserved_bytes + initial_bytes + self._limits.minimum_free_bytes
             if available < required:
                 raise ArtifactScratchCapacityError("artifact scratch free-space floor reached")
             entries.append(
                 {
                     "reservation_id": reservation.reservation_id,
                     "filename": reservation.filename,
-                    "reserved_bytes": HARD_MAXIMUM_ARTIFACT_BYTES,
+                    "reserved_bytes": initial_bytes,
                     "created_at_unix_ns": now,
                     "expires_at_unix_ns": reservation.expires_at_unix_ns,
                     "owner_pid": os.getpid(),
@@ -1646,6 +1654,46 @@ class ArtifactScratchManager:
                     raise _AllocationCleanupRequired(reservation) from cleanup_error
                 raise
             return reservation, descriptor
+
+    def _reserve_bytes_sync(self, reservation: _ScratchReservation, byte_count: int) -> None:
+        """Publish monotonic growth under the same cross-process quota lock."""
+        self._validate_reservation(reservation)
+        with self._locked_ledger():
+            ledger = self._read_ledger()
+            matching = [
+                entry
+                for entry in ledger["reservations"]
+                if entry["reservation_id"] == reservation.reservation_id
+            ]
+            if len(matching) != 1:
+                raise ArtifactScratchIntegrityError("artifact scratch reservation is invalid")
+            entry = matching[0]
+            if (
+                entry["filename"] != reservation.filename
+                or entry["expires_at_unix_ns"] != reservation.expires_at_unix_ns
+                or entry["owner_pid"] != os.getpid()
+                or entry["owner_process_identity"] != self._owner_process_identity
+            ):
+                raise ArtifactScratchIntegrityError("artifact scratch reservation is not owned")
+            required = min(
+                byte_count + self._limits.stream_buffer_bytes, HARD_MAXIMUM_ARTIFACT_BYTES
+            )
+            if required <= entry["reserved_bytes"]:
+                return
+            current_reserved = sum(
+                item["reserved_bytes"] for item in ledger["reservations"] + ledger["workspaces"]
+            )
+            total = current_reserved + required - entry["reserved_bytes"]
+            if total > self._limits.aggregate_reserved_bytes:
+                raise ArtifactScratchCapacityError("artifact scratch byte limit reached")
+            filesystem = os.fstatvfs(self._files_fd)
+            if filesystem.f_bavail * filesystem.f_frsize < total + self._limits.minimum_free_bytes:
+                raise ArtifactScratchCapacityError("artifact scratch free-space floor reached")
+            # A failed/ambiguous ledger publication never permits the chunk write.
+            # Either valid ledger version still covers the previously written bytes;
+            # the existing preparation cleanup retains custody until release succeeds.
+            entry["reserved_bytes"] = required
+            self._write_ledger(ledger)
 
     def _restore_failed_reservation_ledger(
         self,
@@ -2015,13 +2063,29 @@ class ArtifactScratchManager:
             if any(type(value) is not int or value < 0 for value in integer_values):
                 raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
             if (
-                entry["reserved_bytes"] != HARD_MAXIMUM_ARTIFACT_BYTES
+                not 0 < entry["reserved_bytes"] <= HARD_MAXIMUM_ARTIFACT_BYTES
                 or entry["expires_at_unix_ns"] <= entry["created_at_unix_ns"]
                 or entry["owner_pid"] <= 0
                 or not isinstance(entry["owner_process_identity"], str)
                 or _PROCESS_IDENTITY.fullmatch(entry["owner_process_identity"]) is None
             ):
                 raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
+            try:
+                metadata = os.stat(entry["filename"], dir_fd=self._files_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                # Sealing unlinks the private file while its anonymous reader and
+                # complete reservation remain owned until the reader is closed.
+                continue
+            if (
+                not stat_module.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o777 not in {0o600, 0o400}
+            ):
+                raise ArtifactScratchIntegrityError("artifact scratch file is invalid")
+            if metadata.st_size > entry["reserved_bytes"]:
+                raise ArtifactScratchIntegrityError(
+                    "artifact scratch file exceeds its custody reservation"
+                )
         workspaces = ledger["workspaces"]
         if not isinstance(workspaces, list) or len(workspaces) > 1024:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
@@ -2199,6 +2263,7 @@ class ArtifactPreparationService:
                             raise ArtifactLimitExceededError(
                                 "artifact source exceeds maximum bytes"
                             )
+                        await self._manager.reserve_bytes(reservation, byte_count)
                         digest.update(chunk)
                         await self._write_chunk(descriptor, chunk)
                 sha256 = f"sha256:{digest.hexdigest()}"
