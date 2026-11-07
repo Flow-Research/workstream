@@ -171,7 +171,8 @@ def main() -> None:
             # namespace. The new API's published port has no MCP listener yet.
             try:
                 rpc("tools/list", {})
-            except URLError:
+            except (URLError, ConnectionResetError):
+                # Docker may refuse the empty port or reset its TCP forwarder.
                 pass
             else:
                 raise AssertionError("MCP unexpectedly followed the replaced API namespace")
