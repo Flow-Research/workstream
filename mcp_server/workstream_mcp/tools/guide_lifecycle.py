@@ -41,6 +41,8 @@ _DESCRIPTIONS = {
     ),
     "guide_pre_submit_checker_policy_get": "Read the selected pre-submit checker policy.",
     "guide_setup_latest_get": "Read the latest guide setup run and compilation lineage.",
+    "guide_assistance_request": "Explicitly request optional configured guide assistance.",
+    "guide_requirements_compile": "Compile manager-authored guide requirements without inference.",
     "guide_submission_artifact_policies_list": "List submission artifact policies.",
     "guide_submission_artifact_policy_create": "Create one submission artifact policy.",
     "guide_submission_artifact_policy_get": "Read one submission artifact policy.",
@@ -57,6 +59,8 @@ TOOL_NAMES = tuple(f"workstream_{name}" for name in _DESCRIPTIONS)
 _MUTATIONS = frozenset(
     {
         "guide_activate",
+        "guide_assistance_request",
+        "guide_requirements_compile",
         "guide_proposal_correct",
         "guide_correction_dispatch",
         "guide_post_policy_approve",
