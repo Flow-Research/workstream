@@ -468,9 +468,14 @@ class NestedTrialRecovery:
             # Two simultaneous real preparations fill this node's two slots.
             # A health response alone would not prove admission capacity reuse.
             assert config["smol"]["maximum_parallel"] == 2
+            probe = io.BytesIO()
+            with zipfile.ZipFile(probe, "w") as archive:
+                archive.writestr("capacity-probe.txt", b"bounded capacity probe")
+            sealed_probe = probe.getvalue()
             preparation = TrustedIntakePreparation(
                 phase="post_submit", policy_sha256="sha256:" + "a" * 64,
                 limits=SubmissionArchiveLimits(maximum_inspection_seconds=30), deadline_ms=30000,
+                archive_byte_count=len(sealed_probe),
             )
             sessions = []
             try:

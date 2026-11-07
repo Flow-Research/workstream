@@ -391,9 +391,11 @@ it only with an isolated runtime home; exact test machines and disks are removed
 ## Trusted submission intake
 
 ART uses the separate typed `trusted_submission_intake/unix_socket` capability.
-After task/project authorization, the upload request starts one trusted VM while
-receiving the ZIP. The sealed artifact reader streams the exact bytes into that
-VM for canonical inspection and extraction. ART verifies every exported path,
+After task/project authorization, the upload request receives, hashes and seals
+the ZIP before allocating its size-bound trusted VM. Preparation binds the exact
+server-counted length; inspection rejects a substituted length before accepting
+archive bytes. The sealed artifact reader streams the exact bytes into that VM
+for canonical inspection and extraction. ART verifies every exported path,
 size, mode and hash in quota-owned scratch. The default PRE checker runs inside
 the trusted VM only after the selected PRE reservation commits. Cleanup must be
 acknowledged before project checker execution, including on a one-slot node.
@@ -402,13 +404,20 @@ retains its existing lease and material revalidation.
 
 Build `intake/Dockerfile` from the repository root, pin its platform manifest and
 config, and provision it with the same cache command. Configure the node's
-`trusted_intake` object with `platform_manifest_digest` and
+`trusted_intake` object with `platform_manifest_digest`, `storage_envelope` and
 `default_behavior_sha256` (the canonical `WORKSTREAM_DEFAULT_BEHAVIOR_SHA256` from
 `app.modules.checkers.api.default_checker`). The node selects this image; project
 registrations cannot select the trusted intake mode. The trusted guest uses
-1 CPU, 2 GiB memory and 3 GiB private disk; aggregate node capacity must include
-virtualization overhead. Its private writable scratch is bounded processing
-space, never artifact storage.
+1 CPU and 2 GiB memory. Its data disk is the whole-GiB ceiling of sealed ZIP
+bytes, permitted expansion (`min(expanded limit, ZIP bytes * ratio limit)`) and
+qualified image/filesystem overhead. A separate one-GiB root overlay is enforced
+and charged. Aggregate node capacity also includes virtualization overhead.
+The required closed `storage_envelope` binds archive/config and Smol/guest hashes,
+qualified entry/path/depth ceilings, overhead bytes and maximum data-disk GiB.
+Requests outside that qualification fail before allocation. Establish its bounds
+with cold startup, maximum accepted inventory/expansion and cleanup on the exact
+runtime; there is no production default overhead. Its private writable scratch
+is bounded processing space, never artifact storage.
 
 Backend API and durable workers require all three settings:
 

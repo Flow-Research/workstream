@@ -198,9 +198,69 @@ async def test_intake_cleanup_preserves_unresolved_outcome_but_overrides_work_re
 
     expected = original if body_failure in {"deadline", "cancellation"} else cleanup
     with pytest.raises(type(expected)) as raised:
-        async with prepared_trusted_intake(Adapter(), None) as pending:
-            await pending
+        async def source():
+            from types import SimpleNamespace
+            from unittest.mock import AsyncMock
+            return SimpleNamespace(commitment=SimpleNamespace(byte_count=1), close=AsyncMock())
+
+        async with prepared_trusted_intake(
+            Adapter(), source(), phase="pre_submit", policy_sha256="sha256:" + "a" * 64,
+            limits=SubmissionArchiveLimits(), deadline=asyncio.get_running_loop().time() + 10,
+        ):
             if original is not None:
                 raise original
     assert raised.value is expected
     assert events == (["abort", "close"] if body_failure == "cancellation" else ["close"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["upload_error", "deadline", "cancellation", "boot_error"])
+async def test_sealed_handoff_failure_drains_real_scratch_without_leaked_reader(tmp_path, failure):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager, ArtifactPreparationLimits, ArtifactPreparationDeadlineError
+    from app.modules.artifacts.trusted_intake import prepared_trusted_intake
+
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=ArtifactPreparationLimits(minimum_free_bytes=0))
+    preparation = ArtifactPreparationService(manager)
+    entered = asyncio.Event()
+
+    async def stream():
+        yield b"archive bytes"
+        entered.set()
+        if failure == "upload_error":
+            raise OSError("upload interrupted")
+        if failure in {"deadline", "cancellation"}:
+            await asyncio.Event().wait()
+
+    intake = SimpleNamespace(prepare=AsyncMock(side_effect=ExternalServiceUnavailableError()))
+
+    async def operation():
+        async with prepared_trusted_intake(
+            intake, preparation.prepare(stream(), media_type="application/zip"),
+            phase="post_submit", policy_sha256="sha256:" + "a" * 64,
+            limits=SubmissionArchiveLimits(), deadline=asyncio.get_running_loop().time() + (0.02 if failure == "deadline" else 2),
+        ):
+            pytest.fail("failed handoff exposed a session")
+
+    task = asyncio.create_task(operation())
+    if failure != "deadline":
+        await asyncio.wait_for(entered.wait(), 2)
+    if failure == "cancellation":
+        task.cancel()
+    from app.interfaces.artifacts import ArtifactStoreUnavailableError
+    expected = {"upload_error": ArtifactStoreUnavailableError, "deadline": ArtifactPreparationDeadlineError,
+                "cancellation": asyncio.CancelledError, "boot_error": ExternalServiceUnavailableError}[failure]
+    with pytest.raises(expected):
+        await asyncio.wait_for(task, 2)
+    if failure == "boot_error":
+        intake.prepare.assert_awaited_once()
+        assert intake.prepare.call_args.args[0].archive_byte_count == len(b"archive bytes")
+    else:
+        intake.prepare.assert_not_awaited()
+    assert preparation._active == {} and preparation.pending_cleanup_count == 0
+    assert (await manager.usage()).reservation_count == 0
+    assert list((tmp_path / "scratch" / "files").iterdir()) == []
+    manager.close()

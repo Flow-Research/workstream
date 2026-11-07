@@ -174,8 +174,11 @@ CPU/memory/PID/storage capacity against intake, checker and sequential trial
 peak demand; this configuration does not increase registered checker limits.
 
 Keep that storage capacity physically free on the native checker's filesystem,
-not merely configured as a quota. ZIP intake reserves 3 GiB before starting its
-VM; a healthy socket does not prove that reservation can succeed. Subsequent
+not merely configured as a quota. ZIP intake seals and counts the upload first,
+then reserves a data disk sized for those bytes, permitted expansion and its
+qualified image/filesystem allowance, rounded up to whole GiB. Its separate
+root overlay is explicitly limited to one GiB and charged as well. A healthy
+socket does not prove that reservation can succeed. Subsequent
 checkers require their own configured capacity. Monitor free space as well as
 service health, and remove only identified obsolete build/staging assets when
 needed. Preserve active images, credential state, database volumes and retained
@@ -223,7 +226,15 @@ Provision project images and the pinned trusted intake image using the existing
 [Smol cache command](../../external_checkers/README.md#smol-microvm-engine).
 The native `trusted_intake` configuration selects the intake image; project
 registrations cannot select that privileged purpose. Its image/config pins must
-match the two `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values. Both typed clients
+match the two `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values. Its required
+`storage_envelope` binds the archive/config and Smol/guest hashes to qualified
+entry/path limits, overhead bytes and maximum data-disk size. Use the evidence
+for the exact release image and native runtime; requalify changed images or
+limits. The example's zero overhead/size fields deliberately fail preflight
+until replaced with measured bounds. Do not copy a guessed buffer into them.
+Cold boot, archive spooling, maximum projected inventory, expanded content and
+cleanup must fit; an example upload alone does not qualify the envelope.
+Both typed clients
 connect through the one mode-`0600` socket in the mode-`0700` checker directory.
 
 Copy `release.env.example` to an operator-owned non-secret environment file and

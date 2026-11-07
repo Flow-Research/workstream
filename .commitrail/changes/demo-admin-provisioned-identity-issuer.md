@@ -274,7 +274,20 @@ entry/path bounds, then round storage up to native whole GiB. Account for the
 separate agent-root overlay explicitly. Qualification must bind the selected
 image and runtime identities and establish both bytes and inode capacity; do
 not treat a sample successful tiny ZIP or a guessed buffer as that proof.
-No native sizing implementation is authorized by an unmeasured envelope alone.
+Implement the checked calculation with a required closed qualification envelope;
+there is no guessed/default production overhead. Bind archive/config and native
+binary/guest hashes, qualified entry/path/depth ceilings, overhead bytes and the
+maximum qualified data-disk size. Reject mismatched identities or requests outside
+those bounds before allocation. Enforce the separate intake root overlay at one
+GiB in the runtime arguments and charge it in admission. Numeric settings and
+deployment remain blocked on actual cold/runtime qualification, not on writing
+the fail-closed calculation and its tests. New ZIP admission is 500 MiB; retained
+artifact reads keep their existing internal byte contract and exact identity.
+
+The scratch/ZIP/inventory candidate received focused security and architecture
+review with actual concurrent-growth, cancellation and guard-removal proof. The
+VM calculation/order design passed prerequisite review; numerical capacity and
+hosted performance remain separate verification obligations.
 
 Caller tracing found one prerequisite defect in canonical archive inspection:
 implicit ancestors check the projected-entry limit, but the final explicit

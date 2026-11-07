@@ -308,8 +308,10 @@ class _Session:
         with self._lock:
             if (
                 self._state != "prepared"
+                or self._request is None
                 or type(archive_byte_count) is not int
                 or not 0 < archive_byte_count <= _MAX_ARCHIVE
+                or archive_byte_count != self._request.archive_byte_count
                 or type(archive_sha256) is not str
                 or re.fullmatch(r"sha256:[0-9a-f]{64}", archive_sha256) is None
             ):

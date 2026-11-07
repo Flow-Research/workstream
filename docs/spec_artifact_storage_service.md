@@ -918,9 +918,12 @@ scope and retrieval controls; it is not a fallback for current guide input.
 Retained binding/extraction evidence is read-only and cannot drive new setup.
 
 The scratch manager uses one private dedicated root and a cross-process locked
-reservation ledger. Because the first pass does not know actual size, every
-preparation atomically reserves the full 512 MiB per-object maximum before file
-creation. Configuration fixes aggregate reserved bytes, file count, preparation
+reservation ledger. Preparation reserves one streaming buffer before creating a
+file, then atomically grows its reservation before each write to cover counted
+bytes plus bounded buffer headroom, capped by the generic 512 MiB object limit.
+Caller size hints never authorize unaccounted writes. Named files exceeding their
+reservation fail custody validation; sealed anonymous readers retain their charge
+until closed. Configuration fixes aggregate reserved bytes, file count, preparation
 concurrency, reservation TTL, and a minimum-free-space floor below the volume
 quota. Exhaustion or `ENOSPC` fails with a stable infrastructure error and no
 provider call. One total preparation-plus-upload deadline is strictly shorter
@@ -934,7 +937,7 @@ only after its database-independent wall-clock expiry; a conforming live
 operation must already have cancelled before that point. Startup performs the
 same idempotent cleanup. Chunk 02A2 implements the cleanup mechanics without
 activating them. Chunk 02A3 wires API-startup cleanup and one named Celery Beat
-task as the periodic owner. Tests cover concurrent processes, full-max quota
+task as the periodic owner. Tests cover concurrent growth, retained full reservations, aggregate quota
 boundaries, low disk, slow active work versus cleanup, deadline cancellation,
 crash, stale cleanup, and symlink/non-regular entries.
 
@@ -943,11 +946,11 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | Environment variable | Default | Contract |
 |---|---:|---|
 | `WORKSTREAM_ARTIFACT_SCRATCH_ROOT` | unset | Dedicated private scratch root; required before runtime activation and must not equal, contain, or sit inside `WORKSTREAM_ARTIFACT_LOCAL_ROOT`. |
-| `WORKSTREAM_ARTIFACT_SCRATCH_AGGREGATE_RESERVED_BYTES` | `2147483648` | Maximum bytes reserved across the shared root. Each active preparation reserves the full 512 MiB hard maximum. |
+| `WORKSTREAM_ARTIFACT_SCRATCH_AGGREGATE_RESERVED_BYTES` | `2147483648` | Maximum bytes reserved across the shared root. Active source reservations grow before writes; processing workspaces remain separately charged. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_FILES` | `8` | Maximum live scratch reservations/files. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_CONCURRENCY` | `4` | Maximum concurrent preparations; cannot exceed the file limit. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_MAXIMUM_WORKSPACE_ENTRIES` | `2000` | Maximum entries removable from one private processing workspace; it must be at least the accepted submission-ZIP entry limit. |
-| `WORKSTREAM_ARTIFACT_SCRATCH_MINIMUM_FREE_BYTES` | `536870912` | Free-space floor retained in addition to the next full reservation. |
+| `WORKSTREAM_ARTIFACT_SCRATCH_MINIMUM_FREE_BYTES` | `536870912` | Free-space floor checked under the ledger lock against outstanding reservations and each allocation or growth. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_RESERVATION_TTL_SECONDS` | `3900` | Database-independent wall-clock expiry for abandoned reservations. |
 | `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` | `3400` | Total first-pass and provider-consumption deadline, aligned with the maximum selected POST execution budget. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_MARGIN_SECONDS` | `300` | Required margin between the total deadline and reservation TTL. |
@@ -962,10 +965,12 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
 
-Contributor outer-ZIP inspection uses additional startup-fixed bounds. These
-limits govern scratch inspection only; they do not activate submission routes
-or durable admission. Raising the 512 MiB ceiling requires a separately
-approved operational change.
+New contributor ZIP uploads have a 500 MiB compressed-byte ceiling. Generic
+artifacts and guide originals retain their 512 MiB ceiling; expanded ZIP content
+has its separate 512 MiB bound. MCP currently accepts at most 64 MiB per ZIP,
+while the backend and CLI support the 500 MiB upload ceiling. These limits do
+not grant submission authority or create durable admission. Contributor
+outer-ZIP inspection also uses the startup-fixed bounds below.
 
 | Environment variable | Default | Maximum | Contract |
 |---|---:|---:|---|

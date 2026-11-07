@@ -69,8 +69,9 @@ def _archive(path: str = "work.txt", content: bytes = b"finished work") -> bytes
     return output.getvalue()
 
 
-def _request(phase="pre_submit") -> TrustedIntakePreparation:
-    return TrustedIntakePreparation(phase, _POLICY, SubmissionArchiveLimits(), 30_000)
+def _request(phase="pre_submit", archive_byte_count=None) -> TrustedIntakePreparation:
+    return TrustedIntakePreparation(phase, _POLICY, SubmissionArchiveLimits(), 30_000,
+                                    len(_archive()) if archive_byte_count is None else archive_byte_count)
 
 
 def _default(data: bytes) -> WorkstreamDefaultCheckerInput:
@@ -120,7 +121,7 @@ def _run(tmp_path, data, commands=b"", phase="pre_submit"):
     worker = _WORKER.IntakeWorker(
         startup={
             "lease": _LEASE,
-            "preparation": asdict(_request(phase)),
+            "preparation": asdict(_request(phase, len(data))),
             "archive_sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
             "archive_byte_count": len(data),
         },
@@ -419,3 +420,49 @@ async def test_interrupted_export_disconnects_before_cleanup_can_read_raw_bytes(
     finally:
         session.abort()
         peer.close()
+
+
+@pytest.mark.parametrize("byte_count", [None, True, 0, -1, 512 * 1024 * 1024 + 1])
+def test_preparation_requires_positive_bounded_sealed_archive_count(byte_count):
+    with pytest.raises(ValueError, match="trusted intake preparation is invalid"):
+        replace(_request(), archive_byte_count=byte_count)
+    assert replace(_request(), archive_byte_count=512 * 1024 * 1024).archive_byte_count == 512 * 1024 * 1024
+
+
+def test_inspect_size_substitution_is_rejected_before_command_or_archive_bytes(tmp_path, monkeypatch):
+    import time
+    from app.adapters.artifacts.trusted_intake import _Session
+
+    data = _archive()
+    adapter = UnixSocketTrustedIntakeAdapter(socket_path=tmp_path / "unused.sock", image_digest=_IMAGE, config_digest=_CONFIG)
+    session = _Session(adapter, time.monotonic() + 10, _request(archive_byte_count=len(data)))
+    session._state = "prepared"
+    commands = []
+
+    def unexpected_command(*args, **kwargs):
+        commands.append(args)
+        raise AssertionError("size-substituted inspection reached transport")
+
+    monkeypatch.setattr(session, "_command", unexpected_command)
+    source = BytesIO(data)
+    try:
+        with pytest.raises(ExternalServiceProtocolError):
+            session.inspect(source, archive_sha256="sha256:" + hashlib.sha256(data).hexdigest(), archive_byte_count=len(data) + 1)
+        assert commands == [] and source.tell() == 0
+    finally:
+        session.abort()
+
+
+def test_worker_rejects_preparation_size_substitution_before_inspection(tmp_path, monkeypatch):
+    worker, output = _run(tmp_path, _archive())
+    worker._preparation = replace(worker._preparation, archive_byte_count=worker._preparation.archive_byte_count + 1)
+
+    def unexpected_inspector(*args, **kwargs):
+        raise AssertionError("size-substituted archive reached inspector")
+
+    monkeypatch.setattr(_WORKER, "SubmissionArchiveInspector", unexpected_inspector)
+    with pytest.raises(ValueError, match="intake archive identity differs"):
+        worker.run()
+    output.seek(0)
+    assert _read(output)["operation"] == "ready"
+    assert output.read() == b""

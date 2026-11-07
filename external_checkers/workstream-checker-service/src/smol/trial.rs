@@ -814,7 +814,7 @@ impl SmolTrialRuntime for Runtime {
             }
         };
         let prepared = machine
-            .prepare(&self.builder, resources, &self.client, deadline)
+            .prepare(&self.builder, resources, None, &self.client, deadline)
             .and_then(|_| stage_tools(&machine, &self.runtime, &self.client, &guard));
         let result = match prepared {
             Ok(()) => {
@@ -1039,7 +1039,7 @@ impl SmolTrialRuntime for Runtime {
             }
         };
         let prepared = machine
-            .prepare(&cache, resources, &self.client, deadline)
+            .prepare(&cache, resources, None, &self.client, deadline)
             .and_then(|_| stage_tools(&machine, &self.runtime, &self.client, &guard));
         let result = match prepared {
             Ok(()) => {

@@ -1,17 +1,18 @@
-"""ART ownership of one upload/download-overlapped trusted intake session."""
+"""ART ownership of sealed bytes and one size-bound trusted intake session."""
 
 from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from collections.abc import Awaitable
-from typing import BinaryIO
+from collections.abc import AsyncIterator, Awaitable
+from typing import BinaryIO, Literal
 
 from app.core.cancellation import (
     await_cancellation_resistant,
     await_completion_preserving_cancellation,
 )
 from app.interfaces.external_services import ExternalServiceAdapterError
+from app.interfaces.artifacts import ArtifactScratchIntegrityError
 from app.interfaces.trusted_submission_intake import (
     TrustedIntakePreparation,
     TrustedIntakeSession,
@@ -19,7 +20,10 @@ from app.interfaces.trusted_submission_intake import (
 )
 from app.modules.artifacts.preparation import ArtifactPreparationDeadlineError
 from app.modules.artifacts.sources import ArtifactCommitment, PreparedArtifact
-from app.modules.artifacts.api.submission_archive import SubmissionArchiveInspectionResult
+from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+from app.modules.artifacts.api.submission_archive import (
+    SubmissionArchiveInspectionResult, SubmissionArchiveRejectedError, SubmissionArchiveFailureCode,
+)
 
 
 class TrustedArchiveInspector:
@@ -40,60 +44,64 @@ class TrustedArchiveInspector:
 
 @asynccontextmanager
 async def prepared_trusted_intake(
-    adapter: TrustedSubmissionIntakeAdapter, request: TrustedIntakePreparation
-):
-    """Prepare while bytes arrive; every exit drains preparation and cleanup."""
-    pending = asyncio.create_task(adapter.prepare(request))
+    adapter: TrustedSubmissionIntakeAdapter,
+    prepare_bytes: Awaitable[PreparedArtifact],
+    *,
+    phase: Literal["pre_submit", "post_submit"],
+    policy_sha256: str,
+    limits: SubmissionArchiveLimits,
+    deadline: float,
+) -> AsyncIterator[tuple[PreparedArtifact, TrustedIntakeSession]]:
+    """Seal before allocating inspection; preserve the original absolute deadline."""
+    prepared: PreparedArtifact | None = None
+    pending: asyncio.Task[TrustedIntakeSession] | None = None
     failure: BaseException | None = None
     try:
-        yield pending
+        try:
+            async with asyncio.timeout_at(deadline):
+                prepared = await prepare_bytes
+                if prepared.commitment.byte_count == 0:
+                    raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.MALFORMED)
+                remaining_ms = int((deadline - asyncio.get_running_loop().time()) * 1000)
+                if remaining_ms <= 0:
+                    raise ArtifactPreparationDeadlineError("artifact preparation deadline exceeded")
+                request = TrustedIntakePreparation(
+                    phase=phase, policy_sha256=policy_sha256, limits=limits,
+                    deadline_ms=remaining_ms,
+                    archive_byte_count=prepared.commitment.byte_count,
+                )
+                pending = asyncio.create_task(adapter.prepare(request))
+                intake = await asyncio.shield(pending)
+        except TimeoutError:
+            raise ArtifactPreparationDeadlineError("artifact preparation deadline exceeded") from None
+        yield prepared, intake
     except BaseException as error:
         failure = error
         raise
     finally:
-        if not pending.done():
-            pending.cancel()
         try:
-            session = await await_cancellation_resistant(pending)
-        except (asyncio.CancelledError, ExternalServiceAdapterError):
-            if failure is None:
-                raise
-        else:
-            cancelled = isinstance(failure, asyncio.CancelledError)
-            if cancelled:
-                session.abort()
-            try:
-                await await_completion_preserving_cancellation(session.close())
-            except ExternalServiceAdapterError:
-                # Keep the selected-attempt unresolved outcome. Ordinary work
-                # rejection must still yield to unconfirmed runtime cleanup.
-                if not cancelled and not isinstance(failure, ArtifactPreparationDeadlineError):
-                    raise
-
-
-async def prepare_bytes_with_intake(
-    pending_intake: asyncio.Task[TrustedIntakeSession],
-    prepare_bytes: Awaitable[PreparedArtifact],
-) -> tuple[PreparedArtifact, TrustedIntakeSession]:
-    """Fail either preparation promptly and retain every successfully issued handle."""
-    upload = asyncio.create_task(prepare_bytes)
-    combined = asyncio.gather(pending_intake, upload)
-    try:
-        intake, prepared = await asyncio.shield(combined)
-        return prepared, intake
-    except BaseException:
-        if not upload.done():
-            upload.cancel()
-        if not pending_intake.done():
-            pending_intake.cancel()
-        try:
-            prepared = await await_cancellation_resistant(upload)
-        except BaseException:
-            pass  # The preparation owner drains unhanded scratch on cancellation.
-        else:
-            await await_cancellation_resistant(prepared.close())
-        try:
-            await await_cancellation_resistant(combined)
-        except BaseException:
-            pass
-        raise
+            if pending is not None:
+                if not pending.done():
+                    pending.cancel()
+                try:
+                    session = await await_cancellation_resistant(pending)
+                except (asyncio.CancelledError, ExternalServiceAdapterError):
+                    if failure is None:
+                        raise
+                else:
+                    cancelled = isinstance(failure, asyncio.CancelledError)
+                    if cancelled:
+                        session.abort()
+                    try:
+                        await await_completion_preserving_cancellation(session.close())
+                    except ExternalServiceAdapterError:
+                        # Keep unresolved timeout/cancellation distinct from a
+                        # work rejection whose runtime cleanup remains unconfirmed.
+                        if not cancelled and not isinstance(failure, ArtifactPreparationDeadlineError):
+                            raise
+        finally:
+            if prepared is not None:
+                try:
+                    await await_completion_preserving_cancellation(prepared.close())
+                except Exception as error:
+                    raise ArtifactScratchIntegrityError("trusted_intake_source_cleanup_unconfirmed") from error

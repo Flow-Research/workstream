@@ -33,12 +33,15 @@ fn trial_peak_reservation_admits_maximum_memory_and_overrun_atomically() {
     let maximum_memory = 32 * 1024 * 1024;
     let overrun = 1024 * 1024;
     let disk = 64 * 1024 * 1024;
-    let outer = resource_capacity(Resources {
-        cpu_millis: 1000,
-        memory_bytes: maximum_memory,
-        storage_gib: 1,
-        pids: 16,
-    })
+    let outer = resource_capacity(
+        Resources {
+            cpu_millis: 1000,
+            memory_bytes: maximum_memory,
+            storage_gib: 1,
+            pids: 16,
+        },
+        None,
+    )
     .unwrap();
     let peak = trial_peak_capacity(maximum_memory, overrun, disk).unwrap();
     let maximum = Capacity {
@@ -302,5 +305,88 @@ fn quarantined_admission_makes_runtime_health_unavailable() {
     .quarantine();
     config.smol_admission = Some(admission);
     assert_eq!(ready(&config).unwrap_err(), "node admission quarantined");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged() {
+    let (root, mut config) = super::super::tests::test_config();
+    let log = root.join("argv");
+    let binary = root.join("smol");
+    fs::write(
+        &binary,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 1\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&binary, fs::Permissions::from_mode(0o700)).unwrap();
+    let runtime = SmolConfig {
+        binary,
+        binary_sha256: format!("sha256:{}", "a".repeat(64)),
+        home: root.join("home"),
+        guest_binary: root.join("guest"),
+        guest_sha256: format!("sha256:{}", "b".repeat(64)),
+        cgroup_root: root.join("groups"),
+        maximum_parallel: 1,
+        maximum_storage_bytes: 4 * 1024 * 1024 * 1024,
+    };
+    config.cache[0].smol = Some(SmolImage {
+        archive: root.join("intake.tar"),
+        archive_sha256: format!("sha256:{}", "c".repeat(64)),
+        image_config: root.join("intake.json"),
+    });
+    let lease = Lease {
+        name: format!("ws-{}", "0".repeat(32)),
+        owner: "d".repeat(64),
+        epoch: "e".repeat(64),
+        expires_ms: 1,
+        lifetime_ms: 1,
+        root: root.join("leases"),
+        runtime,
+        private_home_root: None,
+    };
+    fs::create_dir_all(lease.cgroup()).unwrap();
+    // A private ordinary file substitutes the cgroup control, with no host effect.
+    fs::write(lease.cgroup().join("cgroup.procs"), b"").unwrap();
+    let mut machine = Machine {
+        lease,
+        guardian: Command::new("/bin/true").spawn().unwrap(),
+        keeper: None,
+        consumed: false,
+    };
+    let (client, _peer) = UnixStream::pair().unwrap();
+    let request = parse_request(include_bytes!("../../../fixtures/request.json")).unwrap();
+    let mut resources = Resources::from(&request);
+    resources.storage_gib = 2;
+    let mut base = None;
+    for overlay in [None, Some(1)] {
+        assert_eq!(
+            machine
+                .prepare(
+                    &config.cache[0],
+                    resources,
+                    overlay,
+                    &client,
+                    Instant::now() + SOCKET_IO_TIMEOUT
+                )
+                .unwrap_err(),
+            "runtime command failed"
+        );
+        let captured = fs::read_to_string(&log).unwrap();
+        let mut args: Vec<_> = captured.lines().map(str::to_owned).collect();
+        let storage = args.iter().position(|arg| arg == "--storage").unwrap();
+        assert_eq!(args[storage + 1], "2");
+        if overlay.is_some() {
+            assert_eq!(args.split_off(args.len() - 2), ["--overlay", "1"]);
+            assert_eq!(base.as_ref(), Some(&args));
+        } else {
+            assert!(!args.iter().any(|arg| arg == "--overlay"));
+            base = Some(args);
+        }
+    }
+    machine.guardian.wait().unwrap();
+    drop(machine);
     fs::remove_dir_all(root).unwrap();
 }

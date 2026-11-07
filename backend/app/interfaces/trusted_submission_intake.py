@@ -28,12 +28,13 @@ def _digest(value: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class TrustedIntakePreparation:
-    """Authorized pre-upload context; it carries no execution or ART grant."""
+    """Authorized sealed-archive context; it carries no execution or ART grant."""
 
     phase: Literal["pre_submit", "post_submit"]
     policy_sha256: str
     limits: SubmissionArchiveLimits
     deadline_ms: int
+    archive_byte_count: int
 
     def __post_init__(self) -> None:
         """Reject invalid phases, limits and deadlines before a lease can be requested."""
@@ -43,6 +44,8 @@ class TrustedIntakePreparation:
             or type(self.limits) is not SubmissionArchiveLimits
             or type(self.deadline_ms) is not int
             or not 1 <= self.deadline_ms <= 7_200_000
+            or type(self.archive_byte_count) is not int
+            or not 0 < self.archive_byte_count <= 512 * 1024 * 1024
         ):
             raise ValueError("trusted intake preparation is invalid")
 

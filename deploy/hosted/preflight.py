@@ -859,6 +859,7 @@ def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> N
     if not isinstance(intake, dict) or set(intake) != {
         "platform_manifest_digest",
         "default_behavior_sha256",
+        "storage_envelope",
     }:
         raise PreflightError("native node lacks the trusted intake purpose")
     selected = [
@@ -876,6 +877,47 @@ def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> N
         raise PreflightError(
             "trusted intake cache identity differs from release configuration"
         )
+
+    envelope = intake.get("storage_envelope")
+    identities = {
+        "archive_sha256": selected[0]["smol"]["archive_sha256"],
+        "config_image_id": selected[0]["config_image_id"],
+        "smol_binary_sha256": smol["binary_sha256"],
+        "guest_sha256": smol["guest_sha256"],
+    }
+    bounds = {
+        "maximum_entries",
+        "maximum_path_bytes",
+        "maximum_path_depth",
+        "overhead_bytes",
+        "maximum_storage_gib",
+    }
+    if (
+        not isinstance(envelope, dict)
+        or set(envelope) != set(identities) | bounds
+        or any(envelope[key] != value for key, value in identities.items())
+        or any(
+            type(envelope[key]) is not int or not 0 < envelope[key] <= 2**64 - 1
+            for key in bounds
+        )
+        or envelope["maximum_entries"] > 100_000
+        or envelope["maximum_path_depth"] > 256
+        or (envelope["maximum_storage_gib"] + 1) * 1024**3
+        > smol["maximum_storage_bytes"]
+    ):
+        raise PreflightError(
+            "trusted intake storage qualification is missing or differs"
+        )
+
+    for key, default in (("maximum_entries", 2000), ("maximum_path_bytes", 1024),
+                         ("maximum_path_depth", 32)):
+        setting = "WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_" + key.upper()
+        try:
+            configured = int(values.get(setting, str(default)))
+        except (TypeError, ValueError):
+            raise PreflightError("trusted intake inspection limit is invalid") from None
+        if not 0 < configured <= envelope[key]:
+            raise PreflightError("trusted intake inspection limit exceeds storage qualification")
 
     trial_path, trial_digest = (values.get(key) or None for key in TRIAL_KEYS)
     if (

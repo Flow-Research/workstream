@@ -235,7 +235,6 @@ async def test_cancellation_during_second_projection_drains_and_closes_every_rol
     from threading import Event
     from zipfile import ZipFile
 
-    from app.interfaces.trusted_submission_intake import TrustedIntakePreparation
     from app.modules.artifacts import post_submit_materialization
     from app.modules.artifacts.post_submit_materialization import _MaterialProcessor
     from app.modules.artifacts.preparation import (
@@ -326,21 +325,21 @@ async def test_cancellation_during_second_projection_drains_and_closes_every_rol
     predecessor = await preparation.prepare(stream(), media_type="application/zip")
     sources = tuple(zip(roles, (current, predecessor), strict=True))
     sessions = {role: Intake(role) for role in roles}
-    request = TrustedIntakePreparation(
-        phase="post_submit",
-        policy_sha256="sha256:" + "1" * 64,
-        limits=limits,
-        deadline_ms=10_000,
-    )
-
     try:
         async with AsyncExitStack() as intake_cleanup:
             intakes = {}
+            deadline = asyncio.get_running_loop().time() + 10
             for role in roles:
-                pending = await intake_cleanup.enter_async_context(
-                    prepared_trusted_intake(Adapter(sessions[role]), request)
+                async def prepared_source(source=dict(sources)[role]):
+                    return source
+
+                _, intakes[role] = await intake_cleanup.enter_async_context(
+                    prepared_trusted_intake(
+                        Adapter(sessions[role]), prepared_source(), phase="post_submit",
+                        policy_sha256="sha256:" + "1" * 64, limits=limits,
+                        deadline=deadline,
+                    )
                 )
-                intakes[role] = await pending
             processor = _MaterialProcessor(
                 intakes,
                 dict.fromkeys(roles, inspection),

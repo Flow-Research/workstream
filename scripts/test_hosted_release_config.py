@@ -52,6 +52,10 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.checker = json.loads(CHECKER_EXAMPLE.read_text(encoding="utf-8"))
         self.checker["sandbox_uid"] = self.runtime_uid
         self.checker["sandbox_gid"] = self.runtime_gid
+        # Synthetic test qualification, never an operational sizing recommendation.
+        self.checker["trusted_intake"]["storage_envelope"].update(
+            overhead_bytes=128 * 1024**2, maximum_storage_gib=2,
+        )
         self.checker_path.write_text(json.dumps(self.checker), encoding="utf-8")
         self.identity_files = {
             name: self.root / f"{name.replace('_', '-')}.pem"
@@ -1702,6 +1706,50 @@ class HostedReleaseConfigTests(unittest.TestCase):
         changed["cache"][0]["config_image_id"] = "sha256:" + "A" * 64
         with self.assertRaises(preflight.PreflightError):
             preflight.validate_checker_config(changed, self.environment)
+
+    def test_intake_storage_qualification_must_match_pins_and_have_real_bounds(self):
+        preflight.validate_checker_config(self.checker, self.environment)
+        for key in (
+            "archive_sha256",
+            "config_image_id",
+            "smol_binary_sha256",
+            "guest_sha256",
+        ):
+            with self.subTest(identity=key):
+                changed = copy.deepcopy(self.checker)
+                changed["trusted_intake"]["storage_envelope"][key] = (
+                    "sha256:" + "f" * 64
+                )
+                with self.assertRaisesRegex(
+                    preflight.PreflightError, "storage qualification"
+                ):
+                    preflight.validate_checker_config(changed, self.environment)
+        for key in (
+            "overhead_bytes",
+            "maximum_storage_gib",
+            "maximum_entries",
+            "maximum_path_bytes",
+            "maximum_path_depth",
+        ):
+            for value in (0, True, -1, 2**64):
+                with self.subTest(bound=key, value=value):
+                    changed = copy.deepcopy(self.checker)
+                    changed["trusted_intake"]["storage_envelope"][key] = value
+                    with self.assertRaisesRegex(
+                        preflight.PreflightError, "storage qualification"
+                    ):
+                        preflight.validate_checker_config(changed, self.environment)
+        changed = copy.deepcopy(self.checker)
+        changed["smol"]["maximum_storage_bytes"] = 2 * 1024**3
+        with self.assertRaisesRegex(preflight.PreflightError, "storage qualification"):
+            preflight.validate_checker_config(changed, self.environment)
+
+    def test_intake_storage_qualification_covers_configured_inspection_limits(self):
+        for setting in ("MAXIMUM_ENTRIES", "MAXIMUM_PATH_BYTES", "MAXIMUM_PATH_DEPTH"):
+            values = self.environment | {"WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_" + setting: "100001"}
+            with self.subTest(setting=setting):
+                with self.assertRaisesRegex(preflight.PreflightError, "exceeds storage qualification"):
+                    preflight.validate_checker_config(self.checker, values)
 
     def test_custom_deployment_root_preserves_paths_and_refuses_unsafe_custody(
         self,

@@ -143,6 +143,7 @@ class IntakeWorker:
                 size += len(chunk)
             if (
                 size != self._startup["archive_byte_count"]
+                or size != self._preparation.archive_byte_count
                 or "sha256:" + digest.hexdigest() != self._startup["archive_sha256"]
             ):
                 raise ValueError("intake archive identity differs")
