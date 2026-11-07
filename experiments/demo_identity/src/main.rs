@@ -404,16 +404,17 @@ async fn login(
         .map_err(|_| (StatusCode::TOO_MANY_REQUESTS, "try later"))?;
     let copy = app.clone();
     let result = tokio::task::spawn_blocking(move || {
-        let db = copy.db.lock().unwrap();
-        let account: Option<(String, String, i64)> = db
-            .query_row(
+        let account: Option<(String, String, i64)> = {
+            let db = copy.db.lock().unwrap();
+            db.query_row(
                 "SELECT subject,password_hash,is_admin FROM accounts WHERE email=?1",
                 [email],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()
             .ok()
-            .flatten();
+            .flatten()
+        };
         let candidate = account
             .as_ref()
             .map(|a| a.1.as_str())
@@ -489,6 +490,23 @@ async fn create_account(
         Json(AccountResponse { subject: result }),
     ))
 }
+fn replace_password_hash(
+    db: &Connection,
+    subject: &str,
+    current: &str,
+    replacement: &str,
+) -> Result<(), ApiError> {
+    let changed = db
+        .execute(
+            "UPDATE accounts SET password_hash=?1 WHERE subject=?2 AND password_hash=?3",
+            params![replacement, subject, current],
+        )
+        .map_err(|_| INVALID)?;
+    if changed != 1 {
+        return Err(INVALID);
+    }
+    Ok(())
+}
 async fn change_password(
     State(app): State<App>,
     headers: HeaderMap,
@@ -506,26 +524,21 @@ async fn change_password(
         .map_err(|_| (StatusCode::TOO_MANY_REQUESTS, "try later"))?;
     let copy = app.clone();
     tokio::task::spawn_blocking(move || {
-        let mut db = copy.db.lock().unwrap();
-        let tx = db.transaction().map_err(|_| INVALID)?;
-        let current: String = tx
-            .query_row(
+        let current: String = {
+            let db = copy.db.lock().unwrap();
+            db.query_row(
                 "SELECT password_hash FROM accounts WHERE subject=?1",
                 [&sub],
                 |r| r.get(0),
             )
-            .map_err(|_| INVALID)?;
+            .map_err(|_| INVALID)?
+        };
         if !verify_password(&input.current_password, &current) {
             return Err(INVALID);
         }
         let replacement = hash_password(&input.new_password).map_err(|_| INVALID)?;
-        tx.execute(
-            "UPDATE accounts SET password_hash=?1 WHERE subject=?2",
-            params![replacement, sub],
-        )
-        .map_err(|_| INVALID)?;
-        tx.commit().map_err(|_| INVALID)?;
-        Ok::<_, ApiError>(())
+        let db = copy.db.lock().unwrap();
+        replace_password_hash(&db, &sub, &current, &replacement)
     })
     .await
     .map_err(|_| INVALID)??;
@@ -831,6 +844,30 @@ mod tests {
             authenticate(&app, &bearer(&next.access_token), false).unwrap(),
             authenticate(&app, &bearer(&admin.access_token), false).unwrap()
         );
+    }
+    #[test]
+    fn password_hash_update_rejects_stale_snapshot_without_overwriting_winner() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE accounts (subject TEXT PRIMARY KEY, password_hash TEXT NOT NULL);
+             INSERT INTO accounts VALUES ('user', 'initial-hash');",
+        )
+        .unwrap();
+        // Both callers verified the same snapshot before preparing their new
+        // hashes outside the database lock. Only the first write may succeed.
+        replace_password_hash(&db, "user", "initial-hash", "winning-hash").unwrap();
+        assert_eq!(
+            replace_password_hash(&db, "user", "initial-hash", "stale-hash"),
+            Err(INVALID)
+        );
+        let persisted: String = db
+            .query_row(
+                "SELECT password_hash FROM accounts WHERE subject='user'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(persisted, "winning-hash");
     }
     #[test]
     fn fail_closed_on_missing_state_and_nonprivate_key() {

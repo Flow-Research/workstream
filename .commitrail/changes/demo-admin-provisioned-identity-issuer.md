@@ -51,7 +51,7 @@ One local operator initializes a private issuer data directory and bootstraps an
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
 | Existing verifier contract | inspect `flow.py` and hosted fixture | RS256/JWKS and exact human claims identified | public issuer cutover still requires DNS/TLS |
-| Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
+| Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 4 passed: admin provision, duplicate rejection, password change, stale-password-update rejection, restart, token separation, bounds and current admin flag | single-instance demo only |
 | Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | private EC2 account/verifier proof passed; public DNS access pending |
 | Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | canonical hosted configuration proof now passes 66 tests; public cutover pending DNS/TLS |
 | Actual container networking and persistence | `python3 experiments/demo_identity/test_container.py -q` with the built candidate image | passed; replacing the bridge with the earlier internal network fails at the host HTTPS connection | public DNS/TLS remains separate |
@@ -144,3 +144,5 @@ Focused security/architecture, QA/test-delta, docs and CI review apply to affect
 boundaries. No native connector/OAuth claim or expansion to unrelated tools.
 
 The [active private cutover report](../../docs/reports/demo-identity-active-cutover-2026-11-07.md) records canonical release/AWS proof, retained-data checks, fresh login, unexpired old-token rejection, bounded credential retirement and actual CLI/MCP SDK calls against the normal API. Public DNS/TLS and native connector integration remain separate.
+
+External review identified a shared database lock held during password hashing. Login and password replacement now read an owned snapshot, release the database lock during Argon2 work, and apply password changes through a subject/current-hash conditional update. A stale update cannot overwrite the winning change. The HTTP proxy-limit regression uses valid-format unknown addresses so normalization cannot bypass the throttle, and the issuer workflow includes its base Compose and environment inputs.

@@ -5,6 +5,8 @@ on:
     paths:
       - 'experiments/demo_identity/**'
       - 'deploy/hosted/compose.demo-identity.yml'
+      - 'deploy/hosted/compose.yml'
+      - 'deploy/hosted/release.env.example'
       - 'deploy/hosted/preflight.py'
       - 'deploy/hosted/compose.py'
       - 'deploy/hosted/demo-identity.Caddyfile'

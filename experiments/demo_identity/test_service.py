@@ -214,12 +214,12 @@ def test_password_change_and_identity_survive_process_restart(service, monkeypat
 def test_proxy_peer_does_not_collapse_participant_login_limits(service):
     issuer, cert, _data, _restart = service
     with httpx.Client(verify=str(cert), trust_env=False) as client:
-        # All proxy requests share a socket peer. Invalid identities must not
+        # All proxy requests share a socket peer. Unknown valid-format identities must not
         # fill a peer-wide bucket that prevents another participant signing in.
         for number in range(61):
             response = client.post(
                 f"{issuer}/login",
-                json={"email": "invalid", "password": "untrusted-password-123"},
+                json={"email": f"unknown-{number}@example.test", "password": "untrusted-password-123"},
                 headers={"X-Real-IP": f"192.0.2.{number + 1}"},
             )
             assert response.status_code == 401
