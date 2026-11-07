@@ -146,3 +146,40 @@ boundaries. No native connector/OAuth claim or expansion to unrelated tools.
 The [active private cutover report](../../docs/reports/demo-identity-active-cutover-2026-11-07.md) records canonical release/AWS proof, retained-data checks, fresh login, unexpired old-token rejection, bounded credential retirement and actual CLI/MCP SDK calls against the normal API. Public DNS/TLS and native connector integration remain separate.
 
 External review identified a shared database lock held during password hashing. Login and password replacement now read an owned snapshot, release the database lock during Argon2 work, and apply password changes through a subject/current-hash conditional update. A stale update cannot overwrite the winning change. The HTTP proxy-limit regression uses valid-format unknown addresses so normalization cannot bypass the throttle, and the issuer workflow includes its base Compose and environment inputs.
+
+## Hosted client completion in the same PR
+
+The user explicitly extends this PR to make MCP a managed hosted Compose service,
+verify deployed client workflows with Rust-issued login tokens, and establish CLI
+binary publication readiness. Reuse the existing MCP gateway, strict caller-token
+forwarding and hosted preflight. Do not introduce login into Workstream, OAuth
+claims, a shared MCP token, or change product authorization. Public DNS is still a
+separate prerequisite; private authenticated SSH transport is valid drill access.
+
+Additional allowed files: `deploy/hosted/compose.mcp.yml`, existing hosted wrapper,
+preflight, environment example and operator documentation; focused hosted config
+and MCP container tests; MCP deployment documentation; affected roadmap/report
+claims. Preserve all existing deployment checks and service isolation. Qualify
+images before deployment and retain active backend data and workers. Review
+network topology and recreation behavior before implementation. Security and
+architecture review cover caller-token custody and service isolation; QA/CI/docs
+review covers transport, negative cases, unchanged gates and accurate exposure.
+
+Acceptance: Compose starts a digest-qualified, bounded, non-root MCP service with
+no mounted credentials; it connects to the existing API without weakening TLS
+rules. Real authenticated MCP initialization/list/calls and CLI calls use fresh
+Rust-issued credentials, with unauthorized/expired/foreign credentials denied and
+no cross-caller state. Prove restart and a bounded representative authorized
+workflow; map remaining catalogue coverage to tests rather than claim every tool
+ran live. Verify four-platform CLI release proofs and repository publication
+controls. Publishing a binary or merging this PR remains a separate explicit
+human action. Do not describe native connector compatibility as proven through
+an SDK test.
+
+Hosted transport proof additionally owns `scripts/test_hosted_mcp_container.py`
+and its invocation in the existing MCP image job. It tests the shipped overlay
+and real container replacement against a controlled API fixture; that evidence
+is separate from deployed Rust-token authorization proof. No test gates or caps
+are weakened. The reviewed private topology shares API loopback; the wrapper
+stops MCP before API replacement, recreates it after success, and verifies the
+actual current container namespace.

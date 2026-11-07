@@ -31,6 +31,7 @@ TRIAL_KEYS = (
 )
 MODEL_OPENAI_COMPOSE_PATH = Path(__file__).with_name("compose.model-openai.yml")
 MODEL_OPENROUTER_COMPOSE_PATH = Path(__file__).with_name("compose.model-openrouter.yml")
+MCP_COMPOSE_PATH = Path(__file__).with_name("compose.mcp.yml")
 DEMO_IDENTITY_COMPOSE_PATH = Path(__file__).with_name("compose.demo-identity.yml")
 DEMO_IDENTITY_KEYS = (
     "DEMO_IDENTITY_IMAGE",
@@ -330,6 +331,7 @@ REQUIRED_RELEASE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
+    "WORKSTREAM_MCP_IMAGE",
     *DEMO_IDENTITY_KEYS,
     *DEMO_IDENTITY_OPTIONAL_KEYS,
     *GITHUB_APP_KEYS,
@@ -525,6 +527,8 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
+    if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
+        raise PreflightError("MCP image must be digest-qualified")
     validate_demo_identity_environment(values)
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
@@ -1113,6 +1117,8 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
+    if values.get("WORKSTREAM_MCP_IMAGE"):
+        arguments.extend(("--file", str(MCP_COMPOSE_PATH)))
     if values.get("DEMO_IDENTITY_IMAGE"):
         arguments.extend(("--file", str(DEMO_IDENTITY_COMPOSE_PATH)))
     if values.get(GITHUB_APP_KEYS[0]):
@@ -1206,27 +1212,82 @@ def run_compose(
         "ps",
     }:
         raise PreflightError("unsupported hosted Compose operation")
+    # Sharing API's loopback namespace requires coupled replacement. Never leave
+    # MCP attached to a retired API namespace after a Compose-managed update.
+    selected_services = set(compose_arguments) & {
+        "api", "mcp", "worker", "beat", "model-proxy", "demo-identity",
+        "guide-document-parser", *PROOF_SERVICES,
+    }
+    targets_api = not selected_services or "api" in selected_services or (
+        "--no-deps" not in compose_arguments
+        and bool(selected_services & {"mcp", "worker", "beat"})
+    )
+    couple_mcp = bool(values.get("WORKSTREAM_MCP_IMAGE")) and (
+        compose_arguments[0] == "up" and targets_api
+    )
+    prefix = ["docker", "compose", "--env-file", str(environment_path),
+              *_compose_file_arguments(values)]
     try:
+        if couple_mcp:
+            stopped = subprocess.run(
+                [*prefix, "stop", "mcp"], check=False,
+                env=compose_environment(values), timeout=60,
+            )
+            if stopped.returncode:
+                return stopped.returncode
         completed = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "--env-file",
-                str(environment_path),
-                *_compose_file_arguments(values),
-                *compose_arguments,
-            ],
+            [*prefix, *compose_arguments],
             check=False,
             env=compose_environment(values),
             timeout=command_timeout,
         )
     except subprocess.TimeoutExpired as exc:
         raise PreflightError(
-            "hosted worker operation exceeded its management deadline"
+            "hosted Compose operation exceeded its management deadline"
         ) from exc
     except OSError as exc:
         raise PreflightError("hosted Compose operation could not start") from exc
+    if completed.returncode == 0 and couple_mcp and "--no-start" not in compose_arguments:
+        try:
+            restarted = subprocess.run(
+                [*prefix, "up", "--detach", "--no-deps", "--force-recreate",
+                 "--wait", "--wait-timeout", "60", "mcp"],
+                check=False, env=compose_environment(values), timeout=90,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PreflightError("MCP namespace replacement did not complete") from exc
+        if restarted.returncode:
+            return restarted.returncode
+        validate_running_mcp_namespace(prefix, values)
+    if (completed.returncode == 0 and values.get("WORKSTREAM_MCP_IMAGE")
+            and not couple_mcp and compose_arguments[0] == "up"
+            and "mcp" in compose_arguments and "--no-start" not in compose_arguments):
+        validate_running_mcp_namespace(prefix, values)
     return completed.returncode
+
+
+def validate_running_mcp_namespace(prefix: list[str], values: dict[str, str]) -> None:
+    """Bind the running adapter to the current API, not a discarded namespace."""
+    try:
+        ids = []
+        for name in ("api", "mcp"):
+            result = subprocess.run(
+                [*prefix, "ps", "--quiet", name], check=True, capture_output=True,
+                text=True, env=compose_environment(values), timeout=15,
+            )
+            container_id = result.stdout.strip()
+            if not re.fullmatch(r"[0-9a-f]{64}", container_id):
+                raise PreflightError("MCP requires one running API and adapter")
+            ids.append(container_id)
+        result = subprocess.run(
+            ["docker", "inspect", "--format", "{{.HostConfig.NetworkMode}}", ids[1]],
+            check=True, capture_output=True, text=True,
+            env=compose_environment(values), timeout=15,
+        )
+        if result.stdout.strip() != "container:" + ids[0]:
+            raise PreflightError("MCP is attached to a different API namespace")
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise PreflightError("MCP namespace verification failed") from exc
 
 
 def _points_operator_arguments(arguments: list[str], values: dict[str, str]) -> list[str]:
@@ -1316,6 +1377,8 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
         ["stop", "beat", "api"],
         ["stop", "--timeout", "7320", "worker"],
     ]
+    if values.get("WORKSTREAM_MCP_IMAGE"):
+        phases.insert(0, ["stop", "mcp"])
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["stop", "--timeout", "7320", "model-proxy"])
     phases.append(["stop", "guide-document-parser"])
@@ -1565,6 +1628,61 @@ def validate_demo_identity_compose(
     )
 
 
+def validate_mcp_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
+    """Keep the private client beside API without handing it runtime secrets."""
+    services = rendered["services"]
+    mcp = services.get("mcp")
+    api_ports = services["api"].get("ports", [])
+    mcp_ports = [port for port in api_ports if port.get("target") == 8080]
+    if not values.get("WORKSTREAM_MCP_IMAGE"):
+        if mcp is not None or mcp_ports:
+            raise PreflightError("MCP requires its explicit release image")
+        return
+    if (not isinstance(mcp, dict) or len(mcp_ports) != 1
+            or mcp_ports[0].get("host_ip") != "127.0.0.1"
+            or str(mcp_ports[0].get("published")) != "8080"
+            or mcp_ports[0].get("protocol") != "tcp"):
+        raise PreflightError("MCP requires one private API namespace publication")
+    api = services["api"]
+    bridge = rendered.get("networks", {}).get("default", {})
+    if (api.get("network_mode") or api.get("networks") != {"default": None}
+            or not isinstance(bridge, dict)
+            or set(bridge) - {"name", "driver", "ipam"}
+            or bridge.get("ipam")
+            or bridge.get("driver", "bridge") != "bridge"):
+        raise PreflightError("MCP parent API must use the private default bridge")
+    if (mcp.get("image") != values["WORKSTREAM_MCP_IMAGE"]
+            or mcp.get("network_mode") != "service:api"
+            or mcp.get("user") != "1000:1000"
+            or mcp.get("environment") != {
+                "WORKSTREAM_API_URL": "http://127.0.0.1:8000",
+                "WORKSTREAM_MCP_HOST": "0.0.0.0",
+                "WORKSTREAM_MCP_PORT": "8080",
+                "WORKSTREAM_MCP_MAX_IN_FLIGHT": "1",
+                "WORKSTREAM_MCP_ALLOWED_HOSTS": "127.0.0.1:8080,localhost:8080",
+            }
+            or mcp.get("pull_policy") != "always"
+            or mcp.get("init") is not True
+            or mcp.get("restart") != "on-failure:5"
+            or str(mcp.get("mem_limit")) != "536870912"
+            or str(mcp.get("memswap_limit")) != "536870912"
+            or str(mcp.get("cpus")) not in {"1", "1.0"}
+            or mcp.get("pids_limit") != 64
+            or mcp.get("stop_grace_period") not in {"30s", "30.0s"}
+            or mcp.get("read_only") is not True
+            or mcp.get("cap_drop") != ["ALL"]
+            or mcp.get("security_opt") != ["no-new-privileges:true"]
+            or mcp.get("healthcheck", {}).get("disable") is True
+            or not mcp.get("healthcheck", {}).get("test")
+            or any(mcp.get(key) for key in (
+                "volumes", "secrets", "configs", "networks", "ports", "extra_hosts",
+                "privileged", "devices", "device_cgroup_rules", "cap_add", "group_add",
+                "pid", "ipc", "uts", "userns_mode", "cgroup", "use_api_socket",
+                "credential_spec", "command", "entrypoint", "tmpfs",
+            ))):
+        raise PreflightError("MCP isolation or caller-token boundary is invalid")
+
+
 def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     """Check the rendered release process and privilege topology."""
     paths = deployment_paths(values)
@@ -1581,10 +1699,13 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         expected_services.add("model-proxy")
     if values.get("DEMO_IDENTITY_IMAGE"):
         expected_services.add("demo-identity")
+    if values.get("WORKSTREAM_MCP_IMAGE"):
+        expected_services.add("mcp")
     if not isinstance(services, dict) or set(services) != expected_services:
         raise PreflightError(
             "release Compose services differ from the bounded topology"
         )
+    validate_mcp_compose(rendered, values)
     validate_demo_identity_compose(rendered, values)
     for name, service in services.items():
         if not isinstance(service, dict) or service.get("build") is not None:

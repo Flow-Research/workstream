@@ -107,6 +107,92 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.environment_path.write_text(environment_text, encoding="utf-8")
         self.environment = preflight.parse_environment(self.environment_path)
 
+    def test_mcp_overlay_is_private_and_has_no_server_credentials(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        self.assertEqual(rendered["services"]["mcp"]["network_mode"], "service:api")
+        for key, value in (
+            ("network_mode", "host"), ("networks", {"default": None}),
+            ("volumes", [{"type": "bind", "source": "/private", "target": "/private"}]),
+            ("secrets", [{"source": "database_url"}]), ("user", "0:0"),
+            ("privileged", True), ("entrypoint", ["sh"]),
+            ("environment", {"WORKSTREAM_API_URL": "https://foreign.example"}),
+        ):
+            with self.subTest(field=key):
+                changed = copy.deepcopy(rendered)
+                changed["services"]["mcp"][key] = value
+                with self.assertRaisesRegex(preflight.PreflightError, "MCP isolation"):
+                    preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        next(p for p in changed["services"]["api"]["ports"] if p["target"] == 8080)["host_ip"] = "0.0.0.0"
+        with self.assertRaisesRegex(preflight.PreflightError, "private API"):
+            preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["api"]["network_mode"] = "host"
+        changed["services"]["api"].pop("networks", None)
+        with self.assertRaisesRegex(preflight.PreflightError, "parent API"):
+            preflight.validate_compose(changed, values)
+        for network in ({"driver": "host"}, {"external": True}, {"driver_opts": {"anything": "yes"}}):
+            changed = copy.deepcopy(rendered)
+            changed["networks"]["default"] = network
+            with self.assertRaisesRegex(preflight.PreflightError, "parent API"):
+                preflight.validate_compose(changed, values)
+        for image in ("mcp:latest", "", "mcp@sha256:bad"):
+            with self.assertRaisesRegex(preflight.PreflightError, "digest-qualified"):
+                preflight.validate_environment(dict(values, WORKSTREAM_MCP_IMAGE=image))
+
+    def test_api_replacement_stops_then_recreates_mcp_and_binds_current_namespace(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        api_id, mcp_id = "a" * 64, "b" * 64
+        calls = []
+        def run(command, **kwargs):
+            calls.append(command)
+            output = ""
+            if command[-3:] == ["ps", "--quiet", "api"]:
+                output = api_id
+            elif command[-3:] == ["ps", "--quiet", "mcp"]:
+                output = mcp_id
+            elif command[:2] == ["docker", "inspect"]:
+                output = "container:" + api_id
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+        with patch.object(preflight.subprocess, "run", side_effect=run):
+            self.assertEqual(preflight.run_compose(self.environment_path, values,
+                             ["up", "--detach", "--no-deps", "api"]), 0)
+        self.assertEqual(calls[0][-2:], ["stop", "mcp"])
+        self.assertEqual(calls[1][-4:], ["up", "--detach", "--no-deps", "api"])
+        self.assertIn("--force-recreate", calls[2])
+        self.assertEqual(calls[2][-1], "mcp")
+        self.assertEqual(calls[-1][-1], mcp_id)
+        with patch.object(preflight.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0, stdout=api_id),
+            subprocess.CompletedProcess([], 0, stdout=mcp_id),
+            subprocess.CompletedProcess([], 0, stdout="container:" + "c" * 64),
+        ]):
+            with self.assertRaisesRegex(preflight.PreflightError, "different API namespace"):
+                preflight.validate_running_mcp_namespace(["docker", "compose"], values)
+
+    def test_isolated_bootstrap_does_not_start_or_stop_mcp(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        for service in ("model-proxy", "demo-identity", "guide-document-parser"):
+            with self.subTest(service=service), patch.object(
+                preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)
+            ) as run:
+                self.assertEqual(preflight.run_compose(self.environment_path, values,
+                                 ["up", "-d", service]), 0)
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_args.args[0][-3:], ["up", "-d", service])
+
+    def test_failed_api_replacement_does_not_restart_mcp(self):
+        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        with patch.object(preflight.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 1),
+        ]) as run:
+            self.assertEqual(preflight.run_compose(self.environment_path, values,
+                             ["up", "--detach", "--no-deps", "api"]), 1)
+        self.assertEqual(run.call_count, 2)
+
     def demo_identity_values(self):
         values = dict(self.environment)
         values.update(

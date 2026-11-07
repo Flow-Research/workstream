@@ -64,6 +64,7 @@ jobs:
           set -euo pipefail
           image="workstream-mcp-foundation:${GITHUB_SHA}"
           docker build --tag "${image}" mcp_server
+          python scripts/test_hosted_mcp_container.py --image "${image}"
           docker run --detach --rm --name workstream-mcp-foundation \
             --publish 127.0.0.1:18080:8080 \
             --env WORKSTREAM_API_URL=http://127.0.0.1:9 \

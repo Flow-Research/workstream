@@ -368,7 +368,7 @@ project-participation, guide-metadata, draft-policy, contributor-workspace,
 contribution-evidence, contribution-policy, complete guide-lifecycle,
 checker/delivery/registry, operator-artifact, task-execution, submission,
 project-list, task-management, audit, import, service-actor and model-operation
-tools through WS-MCP-002-13 plus explicit optional assistance and manager-rules compilation. The
+tools through WS-MCP-002-13 plus explicit optional assistance and manager-rules compilation. The opt-in hosted Compose profile manages a credential-free MCP service beside API, with private SSH access and coupled container replacement. Live SDK workflow proof is distinct from all-tool coverage, public ingress and native OAuth connector support. The
 [Go CLI](../cli/README.md) provides caller-profile and exact-project authorization
 reads plus human self-profile editing, exact-project inspection and manager
 task queue/detail reads, contributor ready-work/instruction reads and public

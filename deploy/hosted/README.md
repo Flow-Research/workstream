@@ -714,3 +714,34 @@ access, Smol isolation, representative CPU/memory/PID/disk/time limits,
 missing-cache classification and collector behavior if OTLP is enabled. The
 [current capability ledger](../../docs/roadmap_status.md) distinguishes source
 delivery from live qualification and remaining release gates.
+
+## Managed private MCP service
+
+Set `WORKSTREAM_MCP_IMAGE` to the qualified MCP image digest to include
+[`compose.mcp.yml`](compose.mcp.yml). Build that image from `mcp_server/`, not the
+repository root. The adapter receives no account password, server-wide bearer,
+database credential or artifact-store key. Each client supplies its own fresh
+Rust-issued Workstream access token; the API retains all authorization decisions.
+
+The adapter shares API's network namespace and calls only its loopback port 8000.
+Its port 8080 is published on host `127.0.0.1` only. For private access, forward
+local port 8080 to host `127.0.0.1:8080` through authenticated SSH and connect to
+`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. This is custom
+bearer-header MCP, not OAuth discovery or a public browser endpoint. Tokens belong
+in the client's protected header configuration, never tool arguments or URLs.
+
+Use the hosted wrapper for updates. When an `up` operation can replace API, the
+wrapper stops MCP first and force-recreates it after the operation succeeds,
+then checks its actual namespace against the current API container ID. With
+`--no-start`, MCP remains stopped until the subsequent start. Shutdown stops MCP
+before API. Direct Docker recreation of API bypasses this coupling and is not a
+supported update procedure. The initial overlay requires a controlled API
+replacement to add the private port; it cannot be hot-attached.
+
+The health probe checks API health and the static MCP catalogue. It does not
+establish a caller's authority: qualification must additionally call tools with
+fresh login tokens and verify both permitted and denied access. API's Docker
+bridge can still reach the listener, so exact Host checks, browser-Origin
+rejection and per-call authentication remain necessary. Public MCP ingress and
+clients requiring OAuth discovery need separate qualification; this private
+profile does not claim that support.

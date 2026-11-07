@@ -274,3 +274,13 @@ Local fixture evidence does not certify the deployed Flow provider, a public
 gateway or all MCP clients. The assembled release proof remains a bounded
 change in the
 [initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md).
+
+### Hosted Compose
+
+The [hosted deployment](../deploy/hosted/README.md#managed-private-mcp-service)
+can enable this image through `WORKSTREAM_MCP_IMAGE`. It runs as a bounded,
+non-root service with no credential mounts, alongside the API. Access is private
+host loopback through authenticated SSH until public ingress is qualified.
+The hosted wrapper couples API/MCP recreation so the adapter cannot retain an
+obsolete API namespace. A catalogue health check is separate from authenticated
+live workflow proof.

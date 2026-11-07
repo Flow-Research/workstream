@@ -1,0 +1,35 @@
+# Private native-client MCP access. Forward host loopback through authenticated SSH.
+services:
+  api:
+    ports:
+      - "127.0.0.1:8080:8080"
+  mcp:
+    image: ${WORKSTREAM_MCP_IMAGE:?set a digest-qualified MCP image}
+    pull_policy: always
+    network_mode: service:api
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure:5
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    stop_grace_period: 30s
+    environment:
+      WORKSTREAM_API_URL: http://127.0.0.1:8000
+      WORKSTREAM_MCP_HOST: 0.0.0.0
+      WORKSTREAM_MCP_PORT: "8080"
+      WORKSTREAM_MCP_MAX_IN_FLIGHT: "1"
+      WORKSTREAM_MCP_ALLOWED_HOSTS: 127.0.0.1:8080,localhost:8080
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2); r=urllib.request.Request('http://127.0.0.1:8080/mcp', data=b'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}', headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}); import json; assert len(json.load(urllib.request.urlopen(r,timeout=3))['result']['tools']) == 132"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
+      start_period: 10s
