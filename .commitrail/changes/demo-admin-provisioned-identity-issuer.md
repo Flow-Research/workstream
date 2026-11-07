@@ -64,7 +64,7 @@ Plan review required separate admin and Workstream audiences. Security review fo
 ## Reconciliation
 
 - Current-source reconciliation: Reconciled with `origin/main` at `03f7f379c` after Garden merge.
-- Next usable boundary: Build a digest-qualified issuer image and coordinate DNS, TLS, persistent volume ownership, hosted preflight/readiness, firewall, and issuer cutover after the Garden drill.
+- Next usable boundary: Complete public DNS/TLS and normal-deployment issuer cutover, then retire fixture credentials and verify fresh login access. The qualified issuer image, private account flow and temporary Workstream API authorization proof are complete.
 - Remaining risks: Tokens remain valid until expiry; issuer administrator provisioning does not establish mailbox ownership.
 
 ## Hosted completion authorized after Garden merge

@@ -34,7 +34,29 @@ the required host port. Each repaired test fails at the intended boundary when
 its prior behavior is restored. CI now exercises the actual image and overlay,
 not only their rendered configuration.
 
-Remaining proof: publicly trusted `identity.flowresearch.tech`, actual Workstream
-HTTP authentication and explicit grants for the new actors, retirement of the
-fixture issuer/keys/tokens, rejection of old credentials and fresh login-based
-access. Existing Garden actor history and contribution facts must remain intact.
+On November 7, a temporary API using the deployed backend's clean base image
+proved the new issuer through real Workstream HTTP routes against the existing
+database. It used the exact issuer hostname, a trusted private certificate and
+private HTTPS JWKS port 8443; no verifier code or signature checks were changed.
+The normal API and background execution remained unchanged.
+
+- Both login accounts were admitted through `/actors/me`, without administrative
+  authority. Issuer administration alone did not grant Workstream authority.
+- The existing Access Administrator explicitly granted the new administrator
+  account authority through the existing public mutation.
+- That account issued a temporary participant grant; exact replay returned the
+  same grant. Revocation succeeded, the retained grant read reported `revoked`,
+  and the participant's self projection excluded the revoked role.
+- The candidate rejected old fixture tokens and issuer-administration tokens;
+  the existing API rejected new-issuer tokens, as its unchanged pin requires.
+- No existing actor identity was remapped. This proof did not re-run or compare
+  the complete Garden contribution history.
+
+The temporary API, private environment file and temporary trust bundle were
+removed; its port closed and the issuer bridge again contains only the issuer.
+The new accounts and explicitly granted administrator remain for cutover.
+
+Remaining proof: publicly trusted `identity.flowresearch.tech`, the normal
+Workstream deployment's issuer cutover, retirement of fixture keys/tokens and
+old CA trust, then fresh login access and old-token rejection on that deployment.
+Existing Garden actor history and contribution facts must remain intact.
