@@ -299,7 +299,11 @@ probe. This repairs the existing resource contract; it does not introduce a new
 checker rule or change project evaluation semantics.
 
 Use the existing per-call preparation limit for the 500 MiB ZIP ceiling; do not
-reduce guide-document or other generic artifact ceilings. Keep compressed and
+reduce guide-document or other generic artifact ceilings. An operation ceiling
+is an additional restriction: enforce the smaller of it and the deployment
+source limit. Prove that smaller configured limits accept in-bound uploads and
+reject excess bytes before writing, including the real Operator recovery API
+fixture that exercises submission preparation. Keep compressed and
 expanded-byte guards separate throughout Python and Rust. The MCP transport's
 existing 64 MiB ZIP limit remains a smaller documented client bound; this work
 does not admit a 667 MiB base64 request into its 512 MiB service.

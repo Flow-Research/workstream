@@ -425,12 +425,44 @@ async def test_preparation_enforces_source_caps_and_byte_only_streams(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("maximum_bytes", [True, 0, -1, 65])
+@pytest.mark.parametrize("maximum_bytes", [16, 500 * 1024 * 1024, HARD_MAXIMUM_ARTIFACT_BYTES])
+async def test_operation_cap_preserves_smaller_configured_source_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, maximum_bytes: int,
+) -> None:
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch", limits=preparation_limits(maximum_source_bytes=8),
+    )
+    service = ArtifactPreparationService(manager)
+    prepared = await service.prepare(
+        byte_stream(b"12345678"), media_type="application/zip", maximum_bytes=maximum_bytes,
+    )
+    assert prepared.commitment.byte_count == 8
+    await prepared.close()
+    written = bytearray()
+    original_write = service._write_chunk
+
+    async def track_write(descriptor, chunk):
+        written.extend(chunk)
+        await original_write(descriptor, chunk)
+
+    monkeypatch.setattr(service, "_write_chunk", track_write)
+    with pytest.raises(ArtifactLimitExceededError):
+        await service.prepare(
+            byte_stream(b"12345678", b"9"),
+            media_type="application/zip", maximum_bytes=maximum_bytes,
+        )
+    assert written == b"12345678"
+    assert (await manager.usage()).reservation_count == 0
+    manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("maximum_bytes", [True, 0, -1, HARD_MAXIMUM_ARTIFACT_BYTES + 1])
 async def test_preparation_rejects_invalid_per_call_caps_before_iteration(
     tmp_path: Path,
     maximum_bytes: object,
 ) -> None:
-    """Reject malformed or manager-exceeding per-call limits before reserving scratch."""
+    """Reject malformed or hard-ceiling-exceeding limits before reserving scratch."""
     manager = ArtifactScratchManager(
         root=tmp_path / str(maximum_bytes),
         limits=preparation_limits(maximum_source_bytes=64),

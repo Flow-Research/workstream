@@ -2237,10 +2237,11 @@ class ArtifactPreparationService:
             if (
                 type(maximum_bytes) is not int
                 or maximum_bytes <= 0
-                or maximum_bytes > self._manager.limits.maximum_source_bytes
+                or maximum_bytes > HARD_MAXIMUM_ARTIFACT_BYTES
             ):
                 raise ValueError("artifact preparation per-call byte limit is invalid")
-            source_maximum_bytes = maximum_bytes
+            # An operation's ceiling can restrict deployment settings, never raise them.
+            source_maximum_bytes = min(maximum_bytes, self._manager.limits.maximum_source_bytes)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._manager.limits.total_deadline_seconds
         reservation: _ScratchReservation | None = None
