@@ -59,16 +59,17 @@ Caddy verifies the issuer's private HTTPS certificate using an explicit local
 trust file and server name. Generate a separate private TLS key/certificate for
 the issuer hostname, keep the key owned by UID 12001 with mode 0400, and give
 Caddy only the public certificate. Do not copy Caddy's public-site private keys
-or the issuer's JWT signing key between services. Monitor the private upstream
+or the issuer's JWT signing key between services. The explicitly trusted private
+ingress phase below may share the same-host TLS identity only. Monitor the private upstream
 certificate's expiry and replace it before expiry, then recreate only the issuer
 and restart Caddy after configuration validation. Neither action recreates
 `/data`. Back up private account/signing state with encryption and restrict
 backup access. Never silently initialize new identities after losing state.
 
-DNS and the public certificate are needed for participant access and the live
-Workstream issuer switch. Private-host compatibility tests may use an explicitly
-trusted private certificate with the existing verifier's client-factory seam;
-that is separate evidence, not public TLS or active Workstream API proof. Never
+DNS and a public certificate are needed for public participant access. An
+authorized private deployment may switch the active API using the verified
+private ingress below. Earlier isolated verifier tests remain distinct evidence
+and do not by themselves prove that active deployment switched. Never
 use `verify=False`, insecure curl flags, or unverified JWT decoding for access.
 
 The supplied [Caddy host unit](../../deploy/hosted/demo-identity-caddy.service)
@@ -80,12 +81,13 @@ contains `DEMO_IDENTITY_HOSTNAME`, `DEMO_IDENTITY_UPSTREAM_CERT`,
 `XDG_DATA_HOME=/var/lib/workstream-identity-ingress/data` and
 `XDG_CONFIG_HOME=/var/lib/workstream-identity-ingress/config`; none is a secret.
 Create the state directory with that service user's ownership and mode 0700.
-Caddy receives the issuer's public certificate, never its private keys or
-account database. Validate the unit and configuration before enabling it.
+For automatic public TLS, Caddy receives the issuer's public upstream
+certificate and manages its own frontend key. It never receives the JWT signing
+key or account database. Validate the unit and configuration before enabling it.
 Keep TCP 80/443 reachable for certificate issuance and HTTPS; port 8443 stays
 loopback-only. Wait for DNS before starting automatic certificate issuance.
 
-After the new public login and Workstream authorization path passes, retire the
+After the authorized replacement login and Workstream authorization path passes, retire the
 previous fixture issuer and remove its signing keys and saved tokens. Test old
 token rejection and obtain future credentials through login. Retain existing
 actor history and contribution facts; changing authentication does not transfer
@@ -101,7 +103,11 @@ substituted hostname mappings.
 
 For an operator-authorized private deployment, configure the installed Caddy
 site with an explicit certificate and key for that hostname, and disable automatic
-HTTPS provisioning until public DNS is available. Qualify the backend image from
+HTTPS provisioning until public DNS is available. This same-host private phase
+may copy the issuer TLS certificate and TLS key into an ingress-owned directory
+with mode 0700 and files with mode 0400; the JWT signing key and account database
+remain exclusive to the issuer. Public Caddy automation uses a separate frontend
+key when enabled. Qualify the backend image from
 its clean base with the private certificate added to its trust bundle, retaining
 normal public roots and removing the retired fixture CA. Do not disable hostname
 or certificate verification. Record image and deployment-configuration provenance

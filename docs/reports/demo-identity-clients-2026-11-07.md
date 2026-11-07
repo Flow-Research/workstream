@@ -47,4 +47,6 @@ These complement the real hosted calls; they do not replace them.
 The temporary project grant was revoked. Temporary client tokens, MCP process,
 API candidate and SSH tunnel are removed after the proof; retained accounts,
 the new administrator's cutover grant, task and authorization evidence remain.
-Old issuer retirement still follows successful normal-deployment cutover.
+The subsequent [active private cutover](demo-identity-active-cutover-2026-11-07.md)
+records the normal deployment separately; the bounded evidence above remains
+from the earlier temporary API.

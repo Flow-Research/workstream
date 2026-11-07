@@ -52,8 +52,8 @@ One local operator initializes a private issuer data directory and bootstraps an
 |---|---|---|---|
 | Existing verifier contract | inspect `flow.py` and hosted fixture | RS256/JWKS and exact human claims identified | public issuer cutover still requires DNS/TLS |
 | Issuer account and authority boundaries | `cargo test --locked -- --test-threads=1` | 3 passed: admin provision, duplicate rejection, password change, restart, token separation, bounds and current admin flag | single-instance demo only |
-| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | private EC2 account/verifier proof passed; public DNS/API cutover pending |
-| Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | canonical hosted configuration proof now passes 65 tests; public cutover pending DNS/TLS |
+| Real verifier compatibility | `cargo build --locked --manifest-path experiments/demo_identity/Cargo.toml` then `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=backend python3 -m pytest -q experiments/demo_identity/test_service.py` | 3 passed over real HTTPS, including wrong issuer/audience/expiry/signature and issuer-admin expiry/nbf/iat negatives | private EC2 account/verifier proof passed; public DNS access pending |
+| Compose and repository checks | combined hosted Compose `config --quiet`; Rust clippy; stale wording and Markdown links | passed | canonical hosted configuration proof now passes 66 tests; public cutover pending DNS/TLS |
 | Actual container networking and persistence | `python3 experiments/demo_identity/test_container.py -q` with the built candidate image | passed; replacing the bridge with the earlier internal network fails at the host HTTPS connection | public DNS/TLS remains separate |
 | Issuer CI | changed-path workflow runs frozen Cargo fmt/clippy/tests/build, Docker image build/smoke, Compose network assertions and real HTTPS verifier proof with frozen backend dependencies | workflow added | hosted executions are PR evidence |
 
@@ -64,12 +64,12 @@ Plan review required separate admin and Workstream audiences. Security review fo
 ## Reconciliation
 
 - Current-source reconciliation: Reconciled with `origin/main` at `03f7f379c` after Garden merge.
-- Next usable boundary: Complete public DNS/TLS and normal-deployment issuer cutover, then retire fixture credentials and verify fresh login access. The qualified issuer image, private account flow and temporary Workstream API authorization proof are complete.
+- Next usable boundary: Qualify public DNS/TLS participant access. Known old credentials, fixture containers and obsolete operator mint/startup paths were removed after the successful active private issuer cutover. The normal API now accepts Rust-issued logins and rejects a previously accepted, unexpired fixture token; the canonical release/AWS proof and retained-data checks passed.
 - Remaining risks: Tokens remain valid until expiry; issuer administrator provisioning does not establish mailbox ownership.
 
 ## Hosted completion authorized after Garden merge
 
-The user requested completion of this same PR through real hosted deployment and account/login proof. Reconcile current main first. Integrate the existing overlay with the existing wrapper rather than bypassing its release checks. Test private persistent account/signing state, exact issuer/audience/JWKS configuration, resource bounds and readiness. Deploy the digest-qualified issuer with HTTPS, then prove administrator provisioning, participant login/password change, restart persistence and unchanged Workstream authentication plus denied access without admission/grants. Never remap the Garden fixture subjects to new accounts or invent authorization. Public DNS/TLS requires the operator-selected hostname; test private hosted transport meanwhile and distinguish that evidence from public reachability. Run focused security/architecture/QA/CI review on the final candidate and fresh CI before ready-for-merge status. No new login logic in Workstream core and no MCP/CLI scope in this PR.
+The user requested completion of this same PR through real hosted deployment and account/login proof. Reconcile current main first. Integrate the existing overlay with the existing wrapper rather than bypassing its release checks. Test private persistent account/signing state, exact issuer/audience/JWKS configuration, resource bounds and readiness. Deploy the digest-qualified issuer with HTTPS, then prove administrator provisioning, participant login/password change, restart persistence and unchanged Workstream authentication plus denied access without admission/grants. Never remap the Garden fixture subjects to new accounts or invent authorization. Public DNS/TLS requires the operator-selected hostname; test private hosted transport meanwhile and distinguish that evidence from public reachability. Run focused security/architecture/QA/CI review on the final candidate and fresh CI before ready-for-merge status. No new login logic in Workstream core; the later explicit client completion below extends this same PR.
 
 ## Ingress refinement
 
@@ -92,7 +92,7 @@ issuer and proves account/signing persistence. CI runs this proof, not only
 Compose rendering. Retained account state and existing backend containers are
 preserved during the correction.
 
-After public login and Workstream authority proof succeeds, retire the fixture
+After authorized replacement login and Workstream authority proof succeeds, retire the fixture
 issuer container, signing keys and saved drill tokens, and update current
 operator/client references. Prove the old tokens are denied by the new verifier.
 Do not erase retained Garden identity links, audit facts or contributions.
@@ -142,3 +142,5 @@ forwarding, invalid/uncertain responses, denials, and explicit no-inference
 compilation; actual deployed login, old-token rejection and credential retirement.
 Focused security/architecture, QA/test-delta, docs and CI review apply to affected
 boundaries. No native connector/OAuth claim or expansion to unrelated tools.
+
+The [active private cutover report](../../docs/reports/demo-identity-active-cutover-2026-11-07.md) records canonical release/AWS proof, retained-data checks, fresh login, unexpired old-token rejection, bounded credential retirement and actual CLI/MCP SDK calls against the normal API. Public DNS/TLS and native connector integration remain separate.

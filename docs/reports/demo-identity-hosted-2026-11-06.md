@@ -56,7 +56,7 @@ The temporary API, private environment file and temporary trust bundle were
 removed; its port closed and the issuer bridge again contains only the issuer.
 The new accounts and explicitly granted administrator remain for cutover.
 
-Remaining proof: publicly trusted `identity.flowresearch.tech`, the normal
-Workstream deployment's issuer cutover, retirement of fixture keys/tokens and
-old CA trust, then fresh login access and old-token rejection on that deployment.
-Existing Garden actor history and contribution facts must remain intact.
+At completion of this earlier proof, active cutover and credential retirement
+remained outstanding. The subsequent [active private cutover](demo-identity-active-cutover-2026-11-07.md)
+records the normal deployment separately. Publicly trusted participant access
+still requires DNS/TLS qualification.

@@ -39,10 +39,15 @@ class IssuerContainerProof(unittest.TestCase):
                      "-keyout", str(key), "-out", str(cert)])
             cert.chmod(0o444)
             key.chmod(0o400)
-            # The image is built in this job. Only acquisition differs from
-            # deployment: no registry pull; service/security/network stay exact.
+            # The image is built in this job. Only issuer acquisition differs
+            # from deployment: no registry pull; service/security/network stay exact.
+            # The overlay also extends the backend API. Give that unused service
+            # a valid fixture definition without starting a backend in this proof.
             acquisition = root / "acquisition.json"
-            acquisition.write_text(json.dumps({"services": {"demo-identity": {"pull_policy": "never"}}}))
+            acquisition.write_text(json.dumps({"services": {
+                "api": {"image": IMAGE, "profiles": ["fixture-api-excluded"]},
+                "demo-identity": {"pull_policy": "never"},
+            }}))
             env = {**os.environ, "DEMO_IDENTITY_IMAGE": IMAGE,
                    "DEMO_IDENTITY_ISSUER": "https://identity.example.test",
                    "DEMO_IDENTITY_AUDIENCE": "workstream-demo",
@@ -53,6 +58,7 @@ class IssuerContainerProof(unittest.TestCase):
                    "DEMO_IDENTITY_PUBLISHED_BIND": "127.0.0.1",
                    "DEMO_IDENTITY_PUBLISHED_PORT": "8443"}
             compose = ["docker", "compose", "--project-name", project, "--file", str(OVERLAY), "--file", str(acquisition)]
+            command([*compose, "config", "--quiet"], env=env)
             owner = ["docker", "run", "--rm", "--network", "none", "--user", "0:0", "--entrypoint", "chown",
                      "--mount", f"type=bind,src={root},dst=/proof", IMAGE]
             try:
@@ -61,7 +67,7 @@ class IssuerContainerProof(unittest.TestCase):
                          "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                          "--mount", f"type=bind,src={state},dst=/state", IMAGE,
                          "init", "/state/accounts", "admin@example.test"], data=password + "\n")
-                command([*compose, "up", "--detach", "--wait", "--wait-timeout", "45"], env=env)
+                command([*compose, "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "45", "demo-identity"], env=env)
                 context = ssl.create_default_context(cafile=str(cert))
 
                 def request(path, body=None):
@@ -81,7 +87,7 @@ class IssuerContainerProof(unittest.TestCase):
                 status, body = request("/login", {"email": "admin@example.test", "password": password})
                 self.assertEqual(status, 200)
                 self.assertIn("admin_token", json.loads(body))
-                command([*compose, "up", "--detach", "--force-recreate", "--wait", "--wait-timeout", "45"], env=env)
+                command([*compose, "up", "--detach", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "45", "demo-identity"], env=env)
                 self.assertEqual(request("/jwks.json"), (200, jwks))
                 self.assertEqual(request("/login", {"email": "admin@example.test", "password": password})[0], 200)
             finally:
