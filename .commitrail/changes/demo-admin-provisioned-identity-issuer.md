@@ -194,3 +194,72 @@ unused build images were removed and the same request then reached the checker.
 The operator guide now distinguishes resource capacity from health readiness.
 Four-platform CLI preview evidence is separate from protected binary publication;
 public DNS/TLS and native connector integration remain unqualified.
+
+## Dynamic temporary storage correction requested during hosted qualification
+
+The user requires capacity accounting proportional to actual uploaded bytes,
+with a 500 MiB ceiling for newly uploaded ZIPs, and size-aware isolated inspection.
+The successful hosted contribution above remains evidence for the preceding
+implementation; it does not prove this subsequent correction. Keep this work in
+the same PR. Risk is L1: shared temporary-storage custody, resource admission and
+cancellation/concurrency boundaries. Do not add S3 upload staging, a remote
+execution fleet, an alternate scratch owner or weaker archive inspection.
+
+### A. Streamed scratch accounting
+
+Allowed implementation: `backend/app/modules/artifacts/preparation.py`, its
+existing tests in `backend/tests/test_artifact_preparation.py`, and directly
+affected preparation tests discovered by caller tracing. Shared consumers are
+guide originals, task-import sources, checker outputs and PRE/POST artifact
+materialization; their generic artifact limits stay unchanged.
+
+Extend the existing process-independent scratch ledger and its locked updates.
+An upload begins with a small reservation based on the existing stream buffer,
+not the hard artifact maximum. Before writing each chunk, atomically grow the
+reservation to cover actual accumulated bytes plus bounded buffer headroom,
+capped by the existing artifact ceiling. Reuse the existing buffer size rather
+than adding a tuning framework. Check aggregate reservations, physical free-space
+floor and record ownership under the same ledger lock. Never use a caller's
+declared size as permission to write unaccounted bytes. Known size/digest
+commitments remain enforced; counted bytes remain authoritative.
+
+Preserve file/concurrency limits, private-file custody, one original deadline,
+TTL/crash recovery, cancellation-safe cleanup and fail-closed uncertain cleanup.
+Validate variable reservation bounds and reject under-accounted retained files;
+do not introduce a second ledger format or compatibility parser. Retained
+valid reservations remain accounted for; no live scratch files or business data
+may be deleted to install the change.
+
+Proof: tiny-file accounting; streamed growth before writes; competing processes
+cannot over-reserve; capacity denial leaves no unaccounted bytes; absent or false
+size hints do not evade actual-byte limits; cancellation and ledger-write failure
+retain or release custody correctly; existing cleanup, stale-owner and shared
+consumer tests remain effective. Replace tests asserting the obsolete fixed
+charge with tests for the required quota guarantees. A focused guard-removal
+probe must detect missing growth-before-write or aggregate enforcement.
+
+### B. Sealed ZIP and inspection sizing
+
+Before implementation, complete focused security/architecture plan review of the
+trusted image overhead bound, native whole-GiB storage floor and separate root
+overlay accounting. Finish receiving/hashing/sealing the archive before allocating
+its inspection VM. Bind the trusted byte count into preparation and reject later
+size substitution. Preserve the original total deadline and cleanup on both PRE
+and POST paths. Compressed ZIP bytes, permitted expanded content and trusted
+runtime/filesystem overhead are separate terms; ZIP-declared expansion is not
+trusted sizing evidence. Qualify cold boot and worst-case supported archives on
+the pinned native runtime before deployment. Project checker execution limits
+and policy ownership remain unchanged.
+
+Use the existing per-call preparation limit for the 500 MiB ZIP ceiling; do not
+reduce guide-document or other generic artifact ceilings. Keep compressed and
+expanded-byte guards separate throughout Python and Rust. The MCP transport's
+existing 64 MiB ZIP limit remains a smaller documented client bound; this work
+does not admit a 667 MiB base64 request into its 512 MiB service.
+
+Required reviews: focused security/architecture, QA/test delta and affected docs;
+CI integrity only if selection or workflow files change. Human review should
+focus on safe admission before writes, concurrent accounting, cleanup after
+interruption and the qualified VM sizing floor. Re-run the real hosted
+PRE-to-contribution client journey after the correction; do not relabel the
+earlier successful run as proof of changed storage behavior.
