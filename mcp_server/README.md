@@ -284,3 +284,8 @@ host loopback through authenticated SSH until public ingress is qualified.
 The hosted wrapper couples API/MCP recreation so the adapter cannot retain an
 obsolete API namespace. A catalogue health check is separate from authenticated
 live workflow proof.
+
+The [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
+records actual SDK calls with Rust-issued login tokens, CLI cross-client checks
+and restart behavior. It does not establish all-tool live coverage or native
+connector/OAuth support.

@@ -183,3 +183,14 @@ is separate from deployed Rust-token authorization proof. No test gates or caps
 are weakened. The reviewed private topology shares API loopback; the wrapper
 stops MCP before API replacement, recreates it after success, and verifies the
 actual current container namespace.
+
+The [managed hosted qualification](../../docs/reports/managed-mcp-hosted-2026-11-07.md)
+records deployment, real Rust-account CLI/MCP calls, restart, malformed-PRE
+rejection/no Submission, verified admission, durable Garden POST, shared
+acceptance and a stable single 100 FLOW award across exact replay. Temporary
+grants and bearer files were retired after fresh revocation checks. A physical
+disk-capacity refusal was diagnosed without relaxing intake limits; obsolete
+unused build images were removed and the same request then reached the checker.
+The operator guide now distinguishes resource capacity from health readiness.
+Four-platform CLI preview evidence is separate from protected binary publication;
+public DNS/TLS and native connector integration remain unqualified.

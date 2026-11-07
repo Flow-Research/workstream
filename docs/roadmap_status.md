@@ -368,7 +368,7 @@ project-participation, guide-metadata, draft-policy, contributor-workspace,
 contribution-evidence, contribution-policy, complete guide-lifecycle,
 checker/delivery/registry, operator-artifact, task-execution, submission,
 project-list, task-management, audit, import, service-actor and model-operation
-tools through WS-MCP-002-13 plus explicit optional assistance and manager-rules compilation. The opt-in hosted Compose profile manages a credential-free MCP service beside API, with private SSH access and coupled container replacement. Live SDK workflow proof is distinct from all-tool coverage, public ingress and native OAuth connector support. The
+tools through WS-MCP-002-13 plus explicit optional assistance and manager-rules compilation. The opt-in hosted Compose profile manages a credential-free MCP service beside API, with private SSH access and coupled container replacement. [Managed hosted client qualification](reports/managed-mcp-hosted-2026-11-07.md) records real Rust-login authorization, task and intake calls plus MCP restart. Live SDK workflow proof is distinct from all-tool coverage, public ingress and native OAuth connector support. The
 [Go CLI](../cli/README.md) provides caller-profile and exact-project authorization
 reads plus human self-profile editing, exact-project inspection and manager
 task queue/detail reads, contributor ready-work/instruction reads and public
@@ -760,6 +760,11 @@ cannot be reused as post-submission review-gate evidence. See the
   restart, Caddy transport and Workstream authorization proof](reports/demo-identity-hosted-2026-11-06.md)
   passed. [Login-based CLI and MCP calls](reports/demo-identity-clients-2026-11-07.md)
   additionally prove bounded private reads, shared draft-task replay and revocation.
+  [Managed MCP and CLI qualification](reports/managed-mcp-hosted-2026-11-07.md)
+  extends that evidence on the normal deployment with a newly admitted contributor,
+  explicit project grants, immediate claim, external PRE feedback, verified intake,
+  durable Garden POST, automatic acceptance and one stable 100 FLOW award across
+  submission replay. This remains the false-human-review branch, not live human review.
   The [active private deployment](reports/demo-identity-active-cutover-2026-11-07.md)
   now accepts Rust-issued account logins and rejects
   the previous unexpired fixture token after canonical release/AWS verification.

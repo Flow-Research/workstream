@@ -173,6 +173,15 @@ independent guardians with `KillMode=process`. Review its explicit deployment
 CPU/memory/PID/storage capacity against intake, checker and sequential trial
 peak demand; this configuration does not increase registered checker limits.
 
+Keep that storage capacity physically free on the native checker's filesystem,
+not merely configured as a quota. ZIP intake reserves 3 GiB before starting its
+VM; a healthy socket does not prove that reservation can succeed. Subsequent
+checkers require their own configured capacity. Monitor free space as well as
+service health, and remove only identified obsolete build/staging assets when
+needed. Preserve active images, credential state, database volumes and retained
+artifact/evidence data. An intake capacity refusal is an infrastructure failure,
+not a failed assessment of contributor work.
+
 Provision a dedicated host service account and group at UID/GID `10001:10001`
 before starting the unit. Numeric file ownership alone is insufficient: systemd
 must resolve this account, otherwise it can fail with `217/USER`. Inspect
