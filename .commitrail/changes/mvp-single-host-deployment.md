@@ -40,6 +40,8 @@ operators still need backup/restore guidance; do not remove it from shared docs.
   clean-install helpers and operator instructions.
 - `scripts/test_hosted_release_config.py` and focused adjacent hosted-deployment
   tests when required for the changed behavior.
+- `.github/workflows/release-images.yml`: include the focused initialization tests
+  in the existing release check and its path selection; no new job or weakened gate.
 - `README.md`, `docs/roadmap_status.md`, directly affected operations documents
   and this record.
 - Private AWS provisioning files and deployment receipts outside Git; never
