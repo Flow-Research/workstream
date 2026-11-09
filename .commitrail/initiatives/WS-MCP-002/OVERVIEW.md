@@ -22,19 +22,21 @@
 ## Current implementation
 
 [`mcp_server/`](../../../mcp_server/README.md) is an independently packaged
-Streamable HTTP adapter with 130 tools: three self-service tools for profile read,
+Streamable HTTP adapter with 132 tools: three self-service tools for profile read,
 profile update and exact-project authorization context, plus six administrative
 reads for permission/role definitions, grants and actor/identity projections, two
 administrative grant mutations, five actor/identity lifecycle mutations, two
 project-shell tools, five project-participation tools, two guide-metadata tools
 and two draft-policy tools, plus twenty contributor workspace, contribution
-evidence and contribution-policy tools, twenty-four complete guide-lifecycle
+evidence and contribution-policy tools, twenty-six complete guide-lifecycle
 tools, ten checker/delivery/registry tools, nine operator-artifact tools and
 seventeen task-execution/submission tools and twenty-three current project-list,
 task-management, audit, import, service-actor and model-operation tools. It includes a container,
 selected response-schema validation and additive CI. Its integration tests
 exercise the installed adapter against the real Workstream API. Workstream
-still owns token verification and authorization. This is delivered packaging,
+still owns token verification and authorization. Explicit guide assistance and
+manager-rules compilation reuse the two existing keyed request operations;
+neither automatically invokes the other. This is delivered packaging,
 not proof of a deployed public gateway, production Flow integration or the
 assembled release drill. The initiative remains Planned because that larger scope
 is unfinished. Historical hashes below describe their stated design/proof;
@@ -444,7 +446,7 @@ assembled release proof follows those bindings rather than occupying row 10.
 | WS-MCP-002-10: contributor workspace and contribution policies | 09; current public contracts | `tools/workspace_reads.py`, `tools/contribution_policies.py`; 20 tools | Caller/project workspace, JSON contribution evidence and exact policy lifecycle; catalogue reaches 47. |
 | WS-MCP-002-11: guide, checker and artifact operations | Current guide/checker/ART contracts | `tools/guide_lifecycle.py`, `tools/checker_artifacts.py`; 43 tools | Complete public guide setup/activation, checker recovery and operator artifact inspection/recovery; catalogue reaches 90. |
 | WS-MCP-002-12: task execution and submissions | Current task/submission contracts | Seventeen contributor and manager execution/submission tools | Preparation, atomic claim, context and submission workflows. Separate start is removed from the current catalogue. |
-| WS-MCP-002-13: task operations and imports | Current project/task/import/AUTH/model contracts | Twenty-four project-list, management, audit, import, service-actor and model-operation tools | Public product catalogue reaches 132; both health routes remain operational liveness, not user tools. Four model operations landed after the earlier 128-operation census and are included from current OpenAPI. |
+| WS-MCP-002-13: task operations and imports | Current project/task/import/AUTH/model contracts | Twenty-three project-list, management, audit, import, service-actor and model-operation tools | Public product catalogue reaches 132; both health routes remain operational liveness, not user tools. Four model operations landed after the earlier 128-operation census and are included from current OpenAPI. |
 
 The dependency column describes technical prerequisites, not permission to start another chunk automatically. Default delivery follows row order. Independent branches may be proposed only after checking shared registry/schema ownership. One chunk finishes with its checks, focused review and human review/merge direction before beginning the next. If a chunk grows beyond its coherent behavior, revise its contract/map before adding unrelated implementation; do not silently combine rows into one PR.
 

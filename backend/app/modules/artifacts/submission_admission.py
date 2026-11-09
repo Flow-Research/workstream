@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
+import asyncio
 from dataclasses import dataclass, field, replace
 import re
 from uuid import UUID
 from app.core.hashing import canonical_json_hash
-from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter, TrustedIntakePreparation
+from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
 from app.interfaces.external_services import ExternalServiceAdapterError
 from app.core.identifiers import new_record_id
 
@@ -50,8 +51,9 @@ from app.modules.artifacts.service import (
     ArtifactStorageOrchestrator,
 )
 from app.modules.artifacts.sources import PreparedArtifact
-from app.modules.artifacts.trusted_intake import prepared_trusted_intake, TrustedArchiveInspector, prepare_bytes_with_intake
+from app.modules.artifacts.trusted_intake import prepared_trusted_intake, TrustedArchiveInspector
 from app.modules.artifacts.api.submission_archive import (
+    MAXIMUM_SUBMISSION_ZIP_BYTES,
     SubmissionArchiveRejectedError,
     SubmissionArchiveLimits,
 )
@@ -688,16 +690,19 @@ class PreparedSubmissionBundlePreparationCommand:
                 early_policy = LockedExternalCheckerPolicies.model_validate_json(
                     project_context.external_checker_policies.value
                 ).pre_submit
-                pending_intake = await scratch_cleanup.enter_async_context(prepared_trusted_intake(
-                    runtime.intake, TrustedIntakePreparation(
+                deadline = asyncio.get_running_loop().time() + runtime.artifact_deadline_ms / 1000
+                try:
+                    prepared, intake = await scratch_cleanup.enter_async_context(prepared_trusted_intake(
+                        runtime.intake,
+                        runtime.preparation.prepare(
+                            request.byte_source, media_type="application/zip",
+                            maximum_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
+                        ),
                         phase="pre_submit", policy_sha256=early_policy.policy_sha256,
-                        limits=runtime.archive_limits, deadline_ms=runtime.artifact_deadline_ms,
-                    ),
-                ))
-                prepared, intake = await prepare_bytes_with_intake(pending_intake,
-                    runtime.preparation.prepare(request.byte_source, media_type="application/zip"),
-                )
-                scratch_cleanup.push_async_callback(prepared.close)
+                        limits=runtime.archive_limits, deadline=deadline,
+                    ))
+                except SubmissionArchiveRejectedError as exc:
+                    raise SubmissionBundlePreparationRejected(exc.code.value) from exc
                 async with self._session.begin():
                     task_context, project_context = await self._lock_authorized_context(request)
                     if task_context.checker_remediation_manifest_id != remediation_manifest_id:

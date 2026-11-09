@@ -284,6 +284,29 @@ def test_entry_inventory_and_total_expansion_limits_are_enforced() -> None:
     assert total.value.code is SubmissionArchiveFailureCode.LIMIT_EXCEEDED
 
 
+def test_projected_entry_limit_counts_implicit_directories_before_member_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limits = SubmissionArchiveLimits(maximum_entries=2)
+    exact = inspect(archive_bytes({"dir/file": b"child"}), limits)
+    assert exact.entry_count == 2
+    assert [entry.normalized_path for entry in exact.entries] == ["dir", "dir/file"]
+
+    opened: list[str] = []
+    original_open = zipfile.ZipFile.open
+
+    def track_open(self, name, *args, **kwargs):
+        opened.append(name.filename if isinstance(name, zipfile.ZipInfo) else name)
+        return original_open(self, name, *args, **kwargs)
+
+    data = archive_bytes({"dir/file": b"child", "root": b"overflow"})
+    monkeypatch.setattr(zipfile.ZipFile, "open", track_open)
+    with pytest.raises(SubmissionArchiveRejectedError) as caught:
+        inspect(data, limits)
+    assert caught.value.code is SubmissionArchiveFailureCode.LIMIT_EXCEEDED
+    assert opened == ["dir/file"]
+
+
 def test_explicit_directory_is_structural_and_deadline_is_bounded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

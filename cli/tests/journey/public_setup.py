@@ -231,12 +231,34 @@ def publish_unpaid_terms(client, token, project_id):
 
 
 def approve_and_activate(client, token, project_id, guide_id, registry_entries):
+    command = (
+        "project",
+        "guide",
+        "compile-requirements",
+        project_id,
+        guide_id,
+        "--idempotency-key",
+        str(uuid4()),
+    )
+    requested = client.call(token, *command)
+    replay = client.call(token, *command)
+    # Dispatch status may advance while the same durable request is replayed.
+    for field in ("operation_id", "setup_run_id", "setup_generation"):
+        if requested[field] != replay[field]:
+            raise AssertionError("compilation replay changed durable request identity")
     setup = poll(
         client,
         token,
         ("project", "guide", "setup", project_id, guide_id),
         lambda value: value["finalized_compilation_id"] is not None,
     )
+    if (
+        setup["id"] != requested["setup_run_id"]
+        or setup["setup_generation"] != requested["setup_generation"]
+    ):
+        raise AssertionError(
+            "setup diagnostics no longer select the requested compilation"
+        )
     selectors = (project_id, guide_id, setup["finalized_compilation_id"])
     proposal = client.call(token, "project", "guide", "proposal", *selectors)
     if proposal["warning_hashes"]:

@@ -57,7 +57,7 @@ def main():
     envelope = {'protocol_version': 'trusted_submission_intake.v1',
                 'operation': 'prepare', 'lease': None,
                 'payload': {'phase': 'pre_submit', 'policy_sha256': 'sha256:' + 'a' * 64,
-                            'limits': limits, 'deadline_ms': 30000}}
+                            'limits': limits, 'deadline_ms': 30000, 'archive_byte_count': 1}}
     try:
         for case in ('lease_create_denied', 'cgroup_create_denied'):
             try:

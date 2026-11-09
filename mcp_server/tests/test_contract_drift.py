@@ -181,6 +181,12 @@ OPERATIONS = {
         "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
         "get",
     ),
+    "guide_assistance_request": (
+        "/api/v1/projects/{project_id}/guides/{guide_id}/setup", "post",
+    ),
+    "guide_requirements_compile": (
+        "/api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile", "post",
+    ),
     "guide_setup_latest_get": (
         "/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
         "get",

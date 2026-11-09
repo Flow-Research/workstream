@@ -313,6 +313,40 @@ def _post_reservation_command(case, monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["empty_sealed_archive", "inspection"])
+async def test_pre_reservation_archive_failure_is_rejected_without_reserving(
+    monkeypatch, failure_stage,
+) -> None:
+    case = _post_reservation_runtime_case()
+    if failure_stage == "empty_sealed_archive":
+        from hashlib import sha256
+
+        case.prepared.commitment.byte_count = 0
+        case.prepared.commitment.sha256 = "sha256:" + sha256(b"").hexdigest()
+    else:
+        case.prepared.inspect.side_effect = SubmissionArchiveRejectedError(
+            SubmissionArchiveFailureCode.MALFORMED
+        )
+    command, authority = _post_reservation_command(case, monkeypatch)
+
+    with pytest.raises(SubmissionBundlePreparationRejected) as failure:
+        await command.prepare(case.request)
+
+    assert str(failure.value) == SubmissionArchiveFailureCode.MALFORMED.value
+    if failure_stage == "empty_sealed_archive":
+        case.prepared.inspect.assert_not_awaited()
+    else:
+        case.prepared.inspect.assert_awaited_once()
+    case.materialization.authorize_inspected.assert_not_awaited()
+    case.coordinator.reserve.assert_not_awaited()
+    case.selected_execution.execute.assert_not_awaited()
+    case.durable_put.admit_in_transaction.assert_not_awaited()
+    case.durable_put.publish_after_commit.assert_not_awaited()
+    case.prepared.close.assert_awaited_once()
+    authority.close.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_post_reservation_archive_failure_remains_recoverable(
     monkeypatch,
 ) -> None:

@@ -64,6 +64,10 @@ _PUBLIC_ERROR_CODES = frozenset(
         "pre_submission_checker_failed",
         "project_authorization_resource_not_found",
         "project_slug_conflict",
+        "proposal_unavailable",
+        "operation_conflict",
+        "storage_unavailable",
+        "authorization_service_unavailable",
         "idempotency_pending",
         "invalid_cursor",
         "project_role_grant_already_revoked",
@@ -207,6 +211,12 @@ GUIDE_LIFECYCLE_OPERATIONS = {
         "GET",
         "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
         200,
+    ),
+    "guide_assistance_request": (
+        "POST", "/api/v1/projects/{project_id}/guides/{guide_id}/setup", 202,
+    ),
+    "guide_requirements_compile": (
+        "POST", "/api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile", 202,
     ),
     "guide_setup_latest_get": (
         "GET",
@@ -1396,6 +1406,11 @@ class WorkstreamGateway:
             "guide_setup_latest_get",
         }:
             return matches(data, "project_id") and matches(data, "guide_id")
+        # Initial dispatch receipts intentionally expose no project/guide selectors.
+        # The fixed route carries those selectors; the closed output schema validates
+        # the operation/run identities without inventing a supplemental lookup.
+        if name in {"guide_assistance_request", "guide_requirements_compile"}:
+            return True
         if name in {"guide_proposal_correct", "guide_pre_submission_approve"}:
             return True
         if name == "guide_correction_dispatch":

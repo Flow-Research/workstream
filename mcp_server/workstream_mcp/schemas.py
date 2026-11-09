@@ -1272,6 +1272,8 @@ GUIDE_LIFECYCLE_CONTRACT_NAMES = (
     "guide_effective_submission_artifact_policy_get",
     "guide_pre_submit_checker_policy_get",
     "guide_setup_latest_get",
+    "guide_assistance_request",
+    "guide_requirements_compile",
     "guide_submission_artifact_policies_list",
     "guide_submission_artifact_policy_create",
     "guide_submission_artifact_policy_get",

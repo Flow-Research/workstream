@@ -309,7 +309,7 @@ def test_preparation_rejects_empty_nonregular_and_oversized_sources_without_requ
     )
     empty.touch()
     with oversized.open("wb") as stream:
-        stream.truncate(512 * 1024 * 1024 + 1)  # Sparse; never allocates a huge upload.
+        stream.truncate(500 * 1024 * 1024 + 1)  # Sparse; never allocates a huge upload.
     os.mkfifo(pipe)
     with http_fixture() as (origin, _, requests):
         for path in (empty, tmp_path, pipe, oversized):

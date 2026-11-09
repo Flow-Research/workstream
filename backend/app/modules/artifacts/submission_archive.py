@@ -433,6 +433,8 @@ class SubmissionArchiveInspector:
                 if any(existing.startswith(prefix) for existing in paths):
                     self._reject(SubmissionArchiveFailureCode.COLLISION)
             paths[folded] = entry_type
+            if len(paths) > self._limits.maximum_entries:
+                self._reject(SubmissionArchiveFailureCode.LIMIT_EXCEEDED)
             source_paths.add(folded)
             if entry_type is SubmissionArchiveEntryType.DIRECTORY and any(
                 entry.normalized_path == path for entry in results

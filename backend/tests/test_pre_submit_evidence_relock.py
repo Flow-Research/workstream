@@ -10,7 +10,10 @@ from app.core.identifiers import new_record_id
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected, SubmissionBundlePreparationRequest,
 )
-from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+from app.modules.artifacts.api.submission_archive import (
+    MAXIMUM_SUBMISSION_ZIP_BYTES, SubmissionArchiveLimits,
+)
+from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.artifacts.submission_admission import PreparedSubmissionBundlePreparationCommand
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.tasks.api import TaskSubmissionContextUnavailable
@@ -38,7 +41,10 @@ async def test_stale_task_relock_denies_before_selected_execution_or_admission()
     projects = SimpleNamespace(lock_locked_policy_context=AsyncMock(return_value=project))
     authority = SimpleNamespace(preflight=AsyncMock(), lock_actor=AsyncMock(),
                                 revalidate=AsyncMock(), close=Mock())
-    prepared = SimpleNamespace(close=AsyncMock())
+    prepared = SimpleNamespace(
+        commitment=ArtifactCommitment("sha256:" + "a" * 64, 1, "application/zip"),
+        close=AsyncMock(),
+    )
     coordinator = SimpleNamespace(read_current=AsyncMock(), reserve=AsyncMock())
     executor = SimpleNamespace(execute=AsyncMock())
     durable = SimpleNamespace(admit_in_transaction=AsyncMock(), publish_after_commit=AsyncMock())
@@ -71,7 +77,9 @@ async def test_stale_task_relock_denies_before_selected_execution_or_admission()
                        match="^submission_bundle_preparation_context_changed$"):
         await command.prepare(request)
     assert tasks.lock_submission_context.await_count == 2
-    runtime.preparation.prepare.assert_awaited_once_with(request.byte_source, media_type="application/zip")
+    runtime.preparation.prepare.assert_awaited_once_with(
+        request.byte_source, media_type="application/zip", maximum_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
+    )
     projects.lock_locked_policy_context.assert_awaited_once()
     authority.lock_actor.assert_awaited_once()
     authority.revalidate.assert_awaited_once()

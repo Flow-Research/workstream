@@ -14,6 +14,10 @@ import (
 	"strings"
 )
 
+// MaxSubmissionZipBytes bounds the compressed submission ZIP, independently of guide uploads.
+// Project limits may enforce a smaller allowance.
+const MaxSubmissionZipBytes = 500 * 1024 * 1024
+
 // SubmissionPacket is shared unchanged between explicit preparation and creation.
 // ART's current public header boundary requires ASCII; no client normalization.
 type SubmissionPacket struct {
@@ -98,8 +102,8 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 		return result, errors.New("revision preparation requires its exact preparation ID and sha256 digest")
 	}
 	initial, err := source.Stat()
-	if err != nil || !initial.Mode().IsRegular() || initial.Size() <= 0 || initial.Size() > MaxGuideDocumentBytes {
-		return result, errors.New("ZIP must be a nonempty regular file of at most 512MiB")
+	if err != nil || !initial.Mode().IsRegular() || initial.Size() <= 0 || initial.Size() > MaxSubmissionZipBytes {
+		return result, errors.New("ZIP must be a nonempty regular file of at most 500MiB")
 	}
 	expected, err := uploadSourceHash(source, initial.Size())
 	if err != nil {

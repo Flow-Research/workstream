@@ -7,6 +7,10 @@ from enum import StrEnum
 import math
 
 
+# Compressed intake ceiling; expanded content has its own inspection limit.
+MAXIMUM_SUBMISSION_ZIP_BYTES = 500 * 1024 * 1024
+
+
 class SubmissionArchiveFailureCode(StrEnum):
     """Stable, non-sensitive outer-ZIP rejection categories."""
 

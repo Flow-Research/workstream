@@ -43,6 +43,7 @@ func addGuideCreate(project *cobra.Command, client func() (*api.Client, error), 
 	addGuidePostApproval(guide, client, output, stdout)
 	addGuidePostCorrection(guide, client, output, stdout)
 	addGuideCorrection(guide, client, output, stdout)
+	addGuideDispatch(guide, client, output, stdout)
 	addGuideActivation(guide, client, output, stdout)
 	addGuideReads(guide, client, output, stdout)
 	addGuideInspection(project, guide, client, output, stdout)

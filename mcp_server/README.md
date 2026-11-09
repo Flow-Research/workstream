@@ -1,6 +1,6 @@
 # Workstream MCP Adapter
 
-An independently installed adapter exposing 130 tools under the caller's authority:
+An independently installed adapter exposing 132 tools under the caller's authority:
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
@@ -54,9 +54,16 @@ An independently installed adapter exposing 130 tools under the caller's authori
   selection and one exact version.
 - Four keyed contribution-policy mutations create, replace, publish and retire
   an exact policy version.
-- Twenty-four guide-lifecycle tools cover retained guide reads, bounded verified
+- Twenty-six guide-lifecycle tools cover retained guide reads, bounded verified
   document bytes, setup and sufficiency records, submission-artifact policies,
   compiled proposals, corrections, approvals and activation.
+  `workstream_guide_assistance_request` explicitly requests optional configured
+  assistance through keyed `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`.
+  `workstream_guide_requirements_compile` compiles the manager's uploaded rules
+  without inference through keyed
+  `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
+  Both return the backend's `202` dispatch receipt; guide creation and document
+  upload do not invoke either tool automatically.
 - Ten checker/delivery/registry tools cover contributor and manager checker
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
@@ -242,7 +249,7 @@ retries. A mutation transport failure, upstream 5xx response, or unexpected
 success/redirect response is reported as non-retryable uncertain execution.
 Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the 130 selected public contracts in `contracts/`; upstream drift
+pinned to the 132 selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 
@@ -267,3 +274,18 @@ Local fixture evidence does not certify the deployed Flow provider, a public
 gateway or all MCP clients. The assembled release proof remains a bounded
 change in the
 [initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md).
+
+### Hosted Compose
+
+The [hosted deployment](../deploy/hosted/README.md#managed-private-mcp-service)
+can enable this image through `WORKSTREAM_MCP_IMAGE`. It runs as a bounded,
+non-root service with no credential mounts, alongside the API. Access is private
+host loopback through authenticated SSH until public ingress is qualified.
+The hosted wrapper couples API/MCP recreation so the adapter cannot retain an
+obsolete API namespace. A catalogue health check is separate from authenticated
+live workflow proof.
+
+The [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
+records actual SDK calls with Rust-issued login tokens, CLI cross-client checks
+and restart behavior. It does not establish all-tool live coverage or native
+connector/OAuth support.

@@ -96,8 +96,8 @@ def test_task_operation_contracts_match_backend_openapi_when_configured() -> Non
         if operation[1] in {"/health", "/api/v1/health"}
     }
     assert health_operations == {("GET", "/health"), ("GET", "/api/v1/health")}
-    # These backend commands share existing PM authority; this adapter does not
-    # expose additional tools for requesting assistance or compiling rules.
+    # These explicit guide commands share existing PM authority and are exposed
+    # through the guide lifecycle tools, separately from task operations.
     explicit_setup_operations = {
         ("POST", "/api/v1/projects/{project_id}/guides/{guide_id}/setup"),
         ("POST", "/api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile"),
