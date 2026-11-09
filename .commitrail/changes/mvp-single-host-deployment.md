@@ -6,7 +6,7 @@
   on a clean single host using repository-owned instructions and bounded setup
   commands, without private drill scripts or retained demo state.
 
-## Intent and boundary
+## Intent
 
 Replace the one-off deployment procedure with a supported clean-install path in
 `deploy/hosted`. The approved target is Linux amd64, 2 vCPU, 8 GiB RAM, encrypted
@@ -19,7 +19,7 @@ not require a migration or backup of that disposable state. This authorization
 does not apply to unrelated resources or deletion of the S3 bucket. Production
 operators still need backup/restore guidance; do not remove it from shared docs.
 
-## Plan
+## Bounded change
 
 1. Map current Compose, native runtime, identity, storage proof and bootstrap
    owners. Identify the private-only steps that prevent a clean public install.
@@ -53,7 +53,7 @@ database/Redis ports, embedded private account configuration, broad resource
 deletion, new payment/review features or unrelated CI changes. No claim that
 2 vCPU/8 GiB is qualified before measured runtime proof.
 
-## Acceptance and verification
+## Acceptance criteria
 
 - A clean operator can follow one documented order using checked-in commands;
   the procedure neither imports old demo records nor relies on private scripts.
@@ -69,7 +69,7 @@ deletion, new payment/review features or unrelated CI changes. No claim that
 - Run affected tests, link/stale-wording/Commitrail checks and reconcile current
   roadmap exposure against the actual deployed result.
 
-## Risk and review
+## Risk and review routing
 
 Risk: L1 deployment, authentication secrets and destructive environment reset.
 Required focused review: security/architecture plan and implementation;
@@ -78,3 +78,12 @@ CI-integrity review only if CI configuration changes become necessary.
 Human focus: clean-install usability, exact resource deletion scope, credential
 handling, stable ingress and measured small-host limits. Human merge remains
 required; live cloud operations follow the user's explicit deployment authority.
+
+## Evidence
+
+The focused deployment configuration and initialization suite exercises closed
+Compose inputs, secret isolation, fresh-state refusal, and consumer-first drain.
+Real container qualification additionally checks PostgreSQL/Redis startup,
+restricted application access and persisted state after restart. Those results
+are separate from the required fresh-host public journey and resource proof;
+no configuration test qualifies the proposed smaller host.
