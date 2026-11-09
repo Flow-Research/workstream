@@ -4,8 +4,10 @@ This directory prepares the Workstream API, durable Celery worker, Beat,
 fixed guide-document parser and optional trusted model proxy on one dedicated
 Linux amd64 host. Project PRE/POST and trusted ZIP intake use the existing native
 Smol systemd node. Compose does not start a checker controller or grant access
-to its Docker socket. PostgreSQL, Redis, AWS S3, Flow identity and the optional
-OTLP collector remain environment-managed dependencies.
+to its Docker socket. PostgreSQL and Redis are required and may run through the private
+[single-host backing-service overlay](SINGLE_HOST.md) or managed services.
+AWS S3, Flow identity and the optional OTLP collector retain their separate
+configuration and trust boundaries.
 
 The checked-in [release environment template](release.env.example),
 [Compose wrapper](compose.py), [preflight](preflight.py), native node and
@@ -623,7 +625,8 @@ outage does not change product results. Configuration alone is not that proof.
 
 The wrapper's `stop` operation stops Beat and API first so they cannot produce
 new work, gives the prefork worker its configured 7,320-second graceful window,
-then drains the model proxy before stopping the parser. It never stops the
+then drains the model proxy before stopping the parser. If the local backing-service
+overlay is enabled, Redis and PostgreSQL stop last, preserving their data directories. It never stops the
 native systemd node.
 Keeping all socket services alive while the worker drains lets cancellation and
 terminal persistence finish against their original dependencies. Guide inference

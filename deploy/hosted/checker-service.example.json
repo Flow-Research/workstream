@@ -46,7 +46,7 @@
     "guest_binary": "/opt/workstream/bin/workstream-checker-guest",
     "guest_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "cgroup_root": "/sys/fs/cgroup/system.slice/workstream-checker.service",
-    "maximum_parallel": 2,
+    "maximum_parallel": 1,
     "maximum_storage_bytes": 8589934592
   },
   "trusted_intake": {

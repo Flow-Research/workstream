@@ -22,6 +22,7 @@ from preflight import (
     validate_environment,
     validate_private_host_inputs,
     validate_demo_identity_host_inputs,
+    validate_local_data_host_inputs,
     run_proof_group,
 )
 
@@ -39,6 +40,11 @@ def main() -> int:
         values = parse_environment(args.env_file)
         validate_environment(values)
         validate_compose(render_compose(args.env_file, values), values)
+        if args.compose_arguments == ["start", "local-data"]:
+            if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
+                raise PreflightError("local data bootstrap requires its overlay")
+            validate_local_data_host_inputs(values)
+            return run_compose(args.env_file, values, args.compose_arguments)
         if args.compose_arguments == ["start", "demo-identity"]:
             if not values.get("DEMO_IDENTITY_IMAGE"):
                 raise PreflightError(

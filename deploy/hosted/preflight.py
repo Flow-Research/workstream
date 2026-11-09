@@ -33,6 +33,13 @@ MODEL_OPENAI_COMPOSE_PATH = Path(__file__).with_name("compose.model-openai.yml")
 MODEL_OPENROUTER_COMPOSE_PATH = Path(__file__).with_name("compose.model-openrouter.yml")
 MCP_COMPOSE_PATH = Path(__file__).with_name("compose.mcp.yml")
 DEMO_IDENTITY_COMPOSE_PATH = Path(__file__).with_name("compose.demo-identity.yml")
+LOCAL_DATA_COMPOSE_PATH = Path(__file__).with_name("compose.local-data.yml")
+LOCAL_DATA_KEYS = (
+    "WORKSTREAM_POSTGRES_IMAGE", "WORKSTREAM_REDIS_IMAGE",
+    "WORKSTREAM_POSTGRES_DATA_DIR", "WORKSTREAM_REDIS_DATA_DIR",
+    "WORKSTREAM_POSTGRES_PASSWORD_FILE", "WORKSTREAM_REDIS_CONFIG_FILE",
+    "WORKSTREAM_POSTGRES_INIT_SQL_FILE",
+)
 DEMO_IDENTITY_KEYS = (
     "DEMO_IDENTITY_IMAGE",
     "DEMO_IDENTITY_ISSUER",
@@ -331,6 +338,7 @@ REQUIRED_RELEASE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
+    *LOCAL_DATA_KEYS,
     "WORKSTREAM_MCP_IMAGE",
     *DEMO_IDENTITY_KEYS,
     *DEMO_IDENTITY_OPTIONAL_KEYS,
@@ -530,6 +538,7 @@ def validate_environment(values: dict[str, str]) -> None:
     if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
         raise PreflightError("MCP image must be digest-qualified")
     validate_demo_identity_environment(values)
+    validate_local_data_environment(values)
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
     )
@@ -989,6 +998,78 @@ def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> N
         raise PreflightError("native trial runtime lacks a pinned authority manifest")
 
 
+def validate_local_data_environment(values: dict[str, str]) -> None:
+    if not any(values.get(key) for key in LOCAL_DATA_KEYS):
+        return
+    for key in LOCAL_DATA_KEYS[:2]:
+        if not IMAGE_REFERENCE.fullmatch(_required(values, key)):
+            raise PreflightError("local data images must be digest-qualified")
+    paths = [Path(_required(values, key)) for key in LOCAL_DATA_KEYS[2:]]
+    runtime = deployment_paths(values).root
+    for path in paths:
+        if (not path.is_absolute() or path != path.resolve(strict=False)
+                or path == Path("/")
+                or any(c in str(path) for c in ("\n", "\r", "\0", ",", ":"))
+                or path.is_relative_to(runtime) or runtime.is_relative_to(path)):
+            raise PreflightError("local data paths must be private and outside runtime scratch")
+    if any(a.is_relative_to(b) or b.is_relative_to(a)
+           for index, a in enumerate(paths) for b in paths[index + 1:]):
+        raise PreflightError("local database, broker and credentials must not overlap")
+
+
+def validate_local_data_host_inputs(values: dict[str, str]) -> None:
+    if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        return
+    validate_local_data_environment(values)
+    for key in LOCAL_DATA_KEYS[2:4]:
+        _private_metadata(Path(values[key]), kind="directory", uid=999, gid=999, mode=0o700)
+    for key in LOCAL_DATA_KEYS[4:]:
+        path = Path(values[key])
+        _private_metadata(path, kind="file", uid=999, gid=999, mode=0o400)
+        if path.stat().st_nlink != 1:
+            raise PreflightError("local data credentials must have one link")
+
+
+def validate_local_data_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
+    if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        return
+    expected = {
+        "postgres": ("WORKSTREAM_POSTGRES_IMAGE", "WORKSTREAM_POSTGRES_DATA_DIR",
+                     "/var/lib/postgresql/data", "postgres_password", 1024**3),
+        "redis": ("WORKSTREAM_REDIS_IMAGE", "WORKSTREAM_REDIS_DATA_DIR",
+                  "/data", "redis_config", 256 * 1024**2),
+    }
+    for name, (image_key, data_key, target, secret, memory) in expected.items():
+        service = rendered["services"][name]
+        if (service.get("image") != values[image_key] or service.get("user") != "999:999"
+                or service.get("ports") or service.get("network_mode")
+                or service.get("networks") != {"default": None}
+                or service.get("privileged") or service.get("devices")
+                or service.get("entrypoint") is not None
+                or service.get("pull_policy") != "always"
+                or service.get("restart") != "on-failure:5"
+                or str(service.get("mem_limit")) != str(memory)
+                or service.get("secrets") != [{"source": secret, "target": "/run/secrets/" + secret}]
+                or not service.get("healthcheck", {}).get("test")):
+            raise PreflightError(f"local data service isolation differs: {name}")
+        mounts = {target: (values[data_key], False)}
+        if name == "postgres":
+            mounts["/docker-entrypoint-initdb.d/10-workstream.sql"] = (
+                values["WORKSTREAM_POSTGRES_INIT_SQL_FILE"], True,
+            )
+        _validate_exact_bind_mounts(name, service, mounts)
+    if rendered["services"]["postgres"].get("environment") != {
+        "POSTGRES_DB": "workstream", "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_password",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256",
+    }:
+        raise PreflightError("local PostgreSQL bootstrap credentials differ")
+    if (rendered["services"]["redis"].get("environment")
+            or rendered["services"]["redis"].get("command")
+            != ["redis-server", "/run/secrets/redis_config"]):
+        raise PreflightError("local Redis must use its private configuration")
+
+
 def _private_metadata(path: Path, *, kind: str, uid: int, gid: int, mode: int) -> None:
     try:
         metadata = path.lstat()
@@ -1050,6 +1131,7 @@ def validate_private_host_inputs(
 ) -> None:
     """Inspect metadata only; do not read application secret contents."""
     validate_demo_identity_host_inputs(values)
+    validate_local_data_host_inputs(values)
     paths = deployment_paths(values)
     uid = _positive_id(values, "WORKSTREAM_RUNTIME_UID")
     gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
@@ -1174,6 +1256,8 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
+    if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        arguments.extend(("--file", str(LOCAL_DATA_COMPOSE_PATH)))
     if values.get("WORKSTREAM_MCP_IMAGE"):
         arguments.extend(("--file", str(MCP_COMPOSE_PATH)))
     if values.get("DEMO_IDENTITY_IMAGE"):
@@ -1223,7 +1307,13 @@ def run_compose(
     if compose_arguments and compose_arguments[0] == "provision-project-points":
         return _run_points_operator(environment_path, values, compose_arguments)
     command_timeout = None
-    if compose_arguments == ["start", "demo-identity"]:
+    if compose_arguments == ["start", "local-data"]:
+        if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
+            raise PreflightError("local data bootstrap requires its complete configuration")
+        compose_arguments = ["up", "--detach", "--no-deps", "--wait",
+                             "--wait-timeout", "120", "postgres", "redis"]
+        command_timeout = 150
+    elif compose_arguments == ["start", "demo-identity"]:
         if not values.get("DEMO_IDENTITY_IMAGE"):
             raise PreflightError("demo identity bootstrap requires the issuer overlay")
         compose_arguments = [
@@ -1272,6 +1362,7 @@ def run_compose(
     # Sharing API's loopback namespace requires coupled replacement. Never leave
     # MCP attached to a retired API namespace after a Compose-managed update.
     selected_services = set(compose_arguments) & {
+        "postgres", "redis",
         "api", "mcp", "worker", "beat", "model-proxy", "demo-identity",
         "guide-document-parser", *PROOF_SERVICES,
     }
@@ -1441,6 +1532,8 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     phases.append(["stop", "guide-document-parser"])
     if values.get("DEMO_IDENTITY_IMAGE"):
         phases.append(["stop", "demo-identity"])
+    if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        phases.append(["stop", "--timeout", "60", "redis", "postgres"])
     for arguments in phases:
         try:
             completed = subprocess.run(
@@ -1758,12 +1851,15 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         expected_services.add("demo-identity")
     if values.get("WORKSTREAM_MCP_IMAGE"):
         expected_services.add("mcp")
+    if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        expected_services.update(("postgres", "redis"))
     if not isinstance(services, dict) or set(services) != expected_services:
         raise PreflightError(
             "release Compose services differ from the bounded topology"
         )
     validate_mcp_compose(rendered, values)
     validate_demo_identity_compose(rendered, values)
+    validate_local_data_compose(rendered, values)
     for name, service in services.items():
         if not isinstance(service, dict) or service.get("build") is not None:
             raise PreflightError(f"release service cannot build at runtime: {name}")
@@ -1923,6 +2019,11 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         for key, (secret_name, _target) in SECRET_FILE_TARGETS.items()
         if key in _secret_file_keys(values)
     }
+    if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        expected_secret_files.update(
+            postgres_password=values["WORKSTREAM_POSTGRES_PASSWORD_FILE"],
+            redis_config=values["WORKSTREAM_REDIS_CONFIG_FILE"],
+        )
     rendered_secrets = rendered.get("secrets")
     if not isinstance(rendered_secrets, dict) or set(rendered_secrets) != set(
         expected_secret_files

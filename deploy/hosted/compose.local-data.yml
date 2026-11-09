@@ -1,0 +1,68 @@
+# Optional single-host backing services. No database/broker ports are published.
+services:
+  postgres:
+    image: ${WORKSTREAM_POSTGRES_IMAGE:?set a digest-qualified PostgreSQL 16 bookworm image}
+    pull_policy: always
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: on-failure:5
+    mem_limit: 1g
+    pids_limit: 128
+    environment:
+      POSTGRES_DB: workstream
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets:
+      - postgres_password
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_POSTGRES_DATA_DIR:?set the private persistent PostgreSQL directory}
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ${WORKSTREAM_POSTGRES_INIT_SQL_FILE:?set the private fresh-database initialization SQL}
+        target: /docker-entrypoint-initdb.d/10-workstream.sql
+        read_only: true
+    tmpfs:
+      - /var/run/postgresql:uid=999,gid=999,mode=0700,size=16777216
+      - /tmp:uid=999,gid=999,mode=0700,size=67108864,noexec,nosuid,nodev
+    healthcheck:
+      test: [CMD, pg_isready, -U, postgres, -d, workstream]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    stop_grace_period: 60s
+
+  redis:
+    image: ${WORKSTREAM_REDIS_IMAGE:?set a digest-qualified Redis 7 bookworm image}
+    pull_policy: always
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: on-failure:5
+    mem_limit: 256m
+    pids_limit: 64
+    command: [redis-server, /run/secrets/redis_config]
+    secrets:
+      - redis_config
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_REDIS_DATA_DIR:?set the private persistent Redis directory}
+        target: /data
+    healthcheck:
+      # Liveness only: PING without credentials must be rejected by authentication.
+      test: [CMD-SHELL, "redis-cli ping | grep -qx 'NOAUTH Authentication required.'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    stop_grace_period: 60s
+
+secrets:
+  postgres_password:
+    file: ${WORKSTREAM_POSTGRES_PASSWORD_FILE:?set the private PostgreSQL password file}
+  redis_config:
+    file: ${WORKSTREAM_REDIS_CONFIG_FILE:?set the private Redis configuration file}

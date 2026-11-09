@@ -111,6 +111,72 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.environment_path.write_text(environment_text, encoding="utf-8")
         self.environment = preflight.parse_environment(self.environment_path)
 
+    def local_data_environment(self):
+        return self.environment | {
+            "WORKSTREAM_POSTGRES_IMAGE": "postgres@sha256:" + "1" * 64,
+            "WORKSTREAM_REDIS_IMAGE": "redis@sha256:" + "2" * 64,
+            "WORKSTREAM_POSTGRES_DATA_DIR": str(self.root / "postgres"),
+            "WORKSTREAM_REDIS_DATA_DIR": str(self.root / "redis"),
+            "WORKSTREAM_POSTGRES_PASSWORD_FILE": str(self.root / "pg-password"),
+            "WORKSTREAM_POSTGRES_INIT_SQL_FILE": str(self.root / "pg-init.sql"),
+            "WORKSTREAM_REDIS_CONFIG_FILE": str(self.root / "redis.conf"),
+        }
+
+    def test_local_data_shutdown_preserves_dependencies_until_consumers_stop(self):
+        values = self.local_data_environment()
+        with patch.object(preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(preflight.run_shutdown(self.environment_path, values), 0)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands[-1][-5:], ["stop", "--timeout", "60", "redis", "postgres"])
+        self.assertTrue(any(command[-4:] == ["stop", "--timeout", "7320", "worker"] for command in commands[:-1]))
+        with patch.object(preflight.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 17),
+        ]) as run:
+            self.assertEqual(preflight.run_shutdown(self.environment_path, values), 17)
+        self.assertFalse(any("postgres" in call.args[0] for call in run.call_args_list))
+
+    def test_local_data_requires_complete_pinned_separate_inputs(self):
+        values = self.local_data_environment()
+        preflight.validate_environment(values)
+        for key in preflight.LOCAL_DATA_KEYS:
+            with self.subTest(missing=key), self.assertRaises(preflight.PreflightError):
+                preflight.validate_environment(values | {key: ""})
+        for key, value in (
+            ("WORKSTREAM_POSTGRES_IMAGE", "postgres:16"),
+            ("WORKSTREAM_REDIS_DATA_DIR", values["WORKSTREAM_POSTGRES_DATA_DIR"]),
+            ("WORKSTREAM_POSTGRES_PASSWORD_FILE", values["WORKSTREAM_POSTGRES_DATA_DIR"] + "/secret"),
+            ("WORKSTREAM_REDIS_DATA_DIR", "/var/lib/workstream/scratch/redis"),
+        ):
+            with self.subTest(key=key, value=value), self.assertRaises(preflight.PreflightError):
+                preflight.validate_environment(values | {key: value})
+
+    def test_local_data_render_has_no_public_ports_or_cross_mounted_credentials(self):
+        values = self.local_data_environment()
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        for role in ("api", "worker", "beat", "model-proxy", "guide-document-parser"):
+            sources = {entry["source"] for entry in rendered["services"][role].get("secrets", [])}
+            self.assertFalse(sources & {"postgres_password", "redis_config"})
+        for role in ("postgres", "redis"):
+            for field, value in (
+                ("ports", [{"target": 5432, "published": "5432", "host_ip": "0.0.0.0"}]),
+                ("network_mode", "host"), ("user", "0:0"),
+                ("image", "postgres:latest"), ("privileged", True),
+                ("volumes", []), ("secrets", []),
+            ):
+                changed = copy.deepcopy(rendered)
+                changed["services"][role][field] = value
+                with self.subTest(role=role, field=field), self.assertRaises(preflight.PreflightError):
+                    preflight.validate_compose(changed, values)
+
+    def test_local_data_bootstrap_does_not_start_application_or_replace_mcp(self):
+        values = self.local_data_environment() | {"WORKSTREAM_MCP_IMAGE": "mcp@sha256:" + "3" * 64}
+        with patch.object(preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+            self.assertEqual(preflight.run_compose(self.environment_path, values, ["start", "local-data"]), 0)
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0][-8:], ["up", "--detach", "--no-deps", "--wait", "--wait-timeout", "120", "postgres", "redis"])
+        self.assertEqual(run.call_args.kwargs["timeout"], 150)
+
     def test_mcp_overlay_is_private_and_has_no_server_credentials(self):
         values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
         preflight.validate_environment(values)
