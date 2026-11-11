@@ -61,6 +61,28 @@ generation and fence. Metadata identity preserves exact packet and revision
 selectors; actor/key scope and locked context remain separate operation facts.
 Constructing these internal values grants no authority or provider qualification.
 
+## Foreground custody stage
+
+ART now has a private operation model/repository and TASK has a narrow custody
+port plus a composite-bound active-operation pointer. Migration 0069 adds these
+without rewriting retained rows. Actor/key uniqueness and one active operation
+per task protect concurrent intake. Command, actual locked TASK snapshot,
+namespace and source key are immutable. Recorded EOF precedes source sealing;
+completed generation, raw digest/count and sealed upload fence cannot change.
+A database-time lease fences stale publishers. Recovery can abandon expired
+foreground work, never resume PRE or accept it.
+
+Only receiving, pre_checking and pre-handoff terminal outcomes are currently
+permitted. Accepted states remain denied until exact AUTH/CHECKERS/outbox handoff
+is implemented. These flush-only persistence primitives provide neither storage
+capacity nor provider capability nor authorization. Root transaction composition,
+physical reservation, streaming, accepted handoff and public cutover remain work.
+
+The schema comparison from 0068 to 0069 added one table, 33 columns (including
+the TASK pointer), 24 constraints, six indexes, three functions and four triggers;
+no previous schema objects or reference rows changed. Model registration uses
+ART's `intake/models.py` through the canonical database model registry.
+
 ## Acceptance criteria
 
 - [x] Exact metadata round-trip and identity changes for each command selector.
@@ -69,6 +91,13 @@ Constructing these internal values grants no authority or provider qualification
 - [x] Namespace, generation, bytes and fence remain distinct identity inputs.
 - [x] Unknown fields, mutation and coercive values fail closed.
 - [ ] Focused tests, lint, boundary/docs checks and scoped frozen-candidate reviews.
+
+- [x] Task/operation commit and rollback, real parent substitution, retained-key
+  uniqueness, TASK-lock concurrency, EOF/seal immutability and stale-owner proof.
+- [x] Retained-submission migration and model/schema parity proof.
+- [ ] Complete D01–D18, I01–I12 and T1–T5 behavior with executed A01–A35 evidence.
+- [ ] Single API/CLI/MCP cutover, durable recovery and cleanup, existing downstream
+  policy branches and full-suite/end-to-end verification.
 
 ## Risk and review routing
 
@@ -85,8 +114,15 @@ Constructing these internal values grants no authority or provider qualification
 | Contracts and CI selection | `pytest -q tests/artifacts/test_submission_intake_contracts.py tests/test_ci_lane_catalogue.py`; ruff | 118 tests passed; lint passed | No database/storage/runtime proof |
 | Documentation guard regression | `python -m unittest scripts.test_lightweight_agent_gates scripts.test_stale_review_contracts -q` | 35 tests passed | Narrow storage examples only |
 | Module boundaries | `python -m scripts.module_boundaries validate --protected-base origin/main` | Passed | Existing private-import debt unchanged |
+| Foreground custody and retained-data upgrade | `pytest tests/artifacts/test_submission_intake_custody.py 'tests/test_alembic.py::test_preceding_head_upgrades_to_current_without_recreation[0068_issuer_profile_email]' tests/test_alembic.py::test_repeated_upgrade_head_preserves_current_database tests/tasks/submission_dispatch/test_migration.py -q` through the isolated PostgreSQL 16 runner | 21 passed; isolated database and role cleanup confirmed | Pre-handoff persistence only; no provider, PRE, acceptance or public-route proof |
+| Protected target partition | `pytest tests/test_behavior_ownership.py -q` | 170 passed | Exact added paths only; no relaxed selection |
+| Model registration | UUID inventory and protected module-boundary tests | Both passed | No new cross-owner private imports |
 
 ## Review findings
+
+- Hosted CI exposed an unregistered contract file in the protected behavior
+  partition. The exact target is now registered; unrelated additions and removal
+  of retained targets remain rejected. The 170-test ownership suite passed.
 
 - Architecture/security found a synthetic UUID namespace fixture incompatible
   with ART's natural singleton ID, and missing fingerprint binding. The value

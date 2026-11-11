@@ -598,6 +598,14 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/models.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/repository.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/metrics.py"
     },
     {
@@ -2126,6 +2134,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/intake_custody.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/management_queue.py"
     },
     {
@@ -2227,6 +2239,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/evaluation_revision.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/intake_custody.py"
     },
     {
       "group": "lifecycle",
@@ -2597,7 +2613,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "d303fa6bac1b76637fe1f4a31cf700c38bda0c84fc173b168850d3bbc1082537",
+  "authority_digest": "e5a34050788944ca725e2c7585d25a06f4fd3987e65bcae28d6b54e908a026cc",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

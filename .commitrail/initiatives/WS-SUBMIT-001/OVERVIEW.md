@@ -10,8 +10,7 @@ authorize merge or production deployment.
 ## Current boundary
 
 [WS-SUBMIT-001-01](WS-SUBMIT-001-01.md) establishes exact command/source value
-contracts. [WS-SUBMIT-001-02](WS-SUBMIT-001-02.md) adds hidden pre-handoff
-database custody and TASK/source/lease guards. Physical capacity, provider I/O,
+contracts and hidden pre-handoff database custody with TASK/source/lease guards. Physical capacity, provider I/O,
 accepted authority and orchestration remain to implement.
 The existing public flow stays active until coordinated cutover.
 
@@ -26,8 +25,12 @@ The existing public flow stays active until coordinated cutover.
 6. Single API/CLI/MCP mutation and truthful progress reads.
 7. Image cardinality, readiness, migration/cutover and integrated proof.
 
-Create each bounded record when work starts. Authorization covers this sequence;
-do not repeat discovery or verification without a relevant changed assumption.
+The user requires one PR for the complete work, with focused commits for each
+stage and end-to-end testing before requesting merge. Maintain the single
+WS-SUBMIT-001-01 change record as implementation proceeds. This explicit
+instruction supersedes the repository default of separate PRs per stage.
+Authorization covers the sequence; do not stop for intermediate merges or
+repeat discovery or verification without a relevant changed assumption.
 
 ## Acceptance tracking
 

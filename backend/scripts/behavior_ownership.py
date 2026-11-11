@@ -934,6 +934,10 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
 })
 SUBMISSION_INTAKE_TARGETS = frozenset({
     "backend/app/modules/artifacts/api/submission_intake.py",
+    "backend/app/modules/artifacts/intake/models.py",
+    "backend/app/modules/artifacts/intake/repository.py",
+    "backend/app/modules/tasks/api/intake_custody.py",
+    "backend/app/modules/tasks/intake_custody.py",
 })
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",
