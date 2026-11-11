@@ -86,7 +86,8 @@ def test_duplicate_authorization_does_not_dispatch(
         (PROFILE_UPDATE_TOOL_NAME, {"display_name": "   "}),
         (PROFILE_UPDATE_TOOL_NAME, {"display_name": 7}),
         (PROFILE_UPDATE_TOOL_NAME, {"display_name": "d" * 201}),
-        (PROFILE_UPDATE_TOOL_NAME, {"contact_email": "e" * 321}),
+        (PROFILE_UPDATE_TOOL_NAME, {"contact_email": "issuer@example.test"}),
+        (PROFILE_UPDATE_TOOL_NAME, {"contact_email": None}),
         (
             PROFILE_UPDATE_TOOL_NAME,
             {"display_name": "valid", "contact_email": "   "},
@@ -128,13 +129,13 @@ def test_profile_update_normalizes_text_and_preserves_omission_and_null(
     second = mcp_call(
         client,
         name=PROFILE_UPDATE_TOOL_NAME,
-        arguments={"contact_email": None},
+        arguments={"display_name": None},
     )
 
     assert first.json()["result"].get("isError", False) is False
     assert second.json()["result"].get("isError", False) is False
     assert json.loads(received[0].content) == {"display_name": "Victor"}
-    assert json.loads(received[1].content) == {"contact_email": None}
+    assert json.loads(received[1].content) == {"display_name": None}
     assert all(request.method == "PATCH" for request in received)
 
 
@@ -143,18 +144,16 @@ def test_new_tools_accept_exact_maximum_input_lengths(
 ) -> None:
     client, received, upstream = adapter
     display_name = "d" * 200
-    contact_email = "e" * 320
     project_id = "p" * 100
 
     profile_response = mcp_call(
         client,
         name=PROFILE_UPDATE_TOOL_NAME,
-        arguments={"display_name": display_name, "contact_email": contact_email},
+        arguments={"display_name": display_name},
     )
     assert profile_response.json()["result"].get("isError", False) is False
     assert json.loads(received[0].content) == {
         "display_name": display_name,
-        "contact_email": contact_email,
     }
 
     from conftest import authorization_context_fixture

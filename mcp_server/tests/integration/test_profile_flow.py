@@ -323,7 +323,8 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
 
                 for name, (profile, failed) in zip(names, results, strict=True):
                     assert not failed
-                    assert profile["display_name"] is None and profile["contact_email"] is None
+                    assert profile["display_name"] == name.replace("-", " ").title()
+                    assert profile["contact_email"] == f"{name}@flow.local"
                     assert profile["admin_roles"] == [] and profile["project_role_grants"] == []
                     first[name] = profile
                     response = await direct.get(
@@ -339,22 +340,10 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 _bootstrap_access_administrator(first["mcp-admin"]["actor_profile_id"], env)
                 admin_token = tokens["mcp-admin"]
 
-                for arguments, expected_name, expected_email in (
-                    (
-                        {"display_name": "Initial Owner", "contact_email": " owner@example.com "},
-                        "Initial Owner",
-                        "owner@example.com",
-                    ),
-                    (
-                        {"display_name": "  MCP Profile Owner  "},
-                        "MCP Profile Owner",
-                        "owner@example.com",
-                    ),
-                    (
-                        {"contact_email": None},
-                        "MCP Profile Owner",
-                        None,
-                    ),
+                for arguments, expected_name in (
+                    ({"display_name": "Initial Owner"}, "Initial Owner"),
+                    ({"display_name": "  MCP Profile Owner  "}, "MCP Profile Owner"),
+                    ({"display_name": None}, None),
                 ):
                     updated, failed = await _call(
                         mcp_url,
@@ -364,15 +353,31 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                     )
                     assert not failed
                     assert updated["display_name"] == expected_name
-                    assert updated["contact_email"] == expected_email
+                    assert updated["contact_email"] == "mcp-first-b@flow.local"
                     direct_updated = await direct.get(
                         "/api/v1/actors/me",
                         headers={"Authorization": f"Bearer {tokens['mcp-first-b']}"},
                     )
                     assert direct_updated.status_code == 200
                     assert direct_updated.json()["display_name"] == expected_name
-                    assert direct_updated.json()["contact_email"] == expected_email
+                    assert direct_updated.json()["contact_email"] == "mcp-first-b@flow.local"
 
+                for arguments in (
+                    {"contact_email": "changed@example.test"},
+                    {"contact_email": None},
+                ):
+                    rejected, failed = await _call(
+                        mcp_url,
+                        tokens["mcp-first-b"],
+                        name="workstream_profile_update",
+                        arguments=arguments,
+                    )
+                    assert failed and rejected["error"] == "invalid_tool_input"
+                saved = await direct.get(
+                    "/api/v1/actors/me",
+                    headers={"Authorization": f"Bearer {tokens['mcp-first-b']}"},
+                )
+                assert saved.json()["contact_email"] == "mcp-first-b@flow.local"
                 manager_grant = await direct.post(
                     "/api/v1/admin-role-grants",
                     headers={
@@ -519,7 +524,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
             mcp_log.close()
 
 
-@pytest.mark.parametrize("field", ["display_name", "contact_email"])
+@pytest.mark.parametrize("field", ["display_name"])
 @pytest.mark.parametrize(
     ("value", "expected", "valid"),
     [

@@ -54,6 +54,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(claims["sub"], "paced-client")
         self.assertEqual(claims["exp"] - claims["iat"], 3600)
         self.assertEqual(claims["roles"], [])
+        self.assertNotIn("name", claims)
+        self.assertNotIn("email", claims)
         expired = issuer.issue("expired-client", exp=now - 60)
         with self.assertRaises(jwt.ExpiredSignatureError):
             jwt.decode(expired, issuer.secret, algorithms=["HS256"],
@@ -196,8 +198,8 @@ class ContractTests(unittest.TestCase):
 
     def test_catalogue_oracle_rejects_nested_changes_and_duplicates(self):
         expected = drill.catalogue_expectations()
-        self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 75)
-        self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 75)
+        self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 90)
+        self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 90)
         self.assertIn("outbox.dispatch", drill.EXPECTED_PERMISSIONS)
         self.assertIn("task.assignment.authority_reconcile", drill.EXPECTED_PERMISSIONS)
         for name, body in expected.items():
@@ -222,7 +224,7 @@ class ContractTests(unittest.TestCase):
                 with self.subTest(name=name, mutant=mutant), self.assertRaises(drill.ProbeFailure):
                     drill.verify_response(httpx.Response(200, json=mutant), 200, body, exact_fields=body.keys())
         expected["permissions"]["items"].clear()
-        self.assertEqual(len(drill.catalogue_expectations()["permissions"]["items"]), 75)
+        self.assertEqual(len(drill.catalogue_expectations()["permissions"]["items"]), 90)
 
     def test_validation_retryability_is_strict(self):
         expected = {"error.code": "invalid_request", "error.retryable": False}
@@ -454,6 +456,56 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaises(drill.ProbeFailure):
                         await drill.health_cases(probe)
                     self.assertEqual(report["cases"][0]["result"], "failed")
+
+    async def test_profile_email_rejection_proves_unchanged_display_and_contact(self):
+        from uuid import uuid4
+        for corrupt_rejection in (False, True):
+            with self.subTest(corrupt_rejection=corrupt_rejection):
+                issuer = drill.TokenIssuer()
+                token = issuer.issue("self")
+                profile = {"actor_profile_id": str(uuid4()), "actor_kind": "human", "status": "active",
+                           "domains": ["contributor"], "admin_roles": [], "project_role_grants": [],
+                           "display_name": None, "contact_email": None,
+                           "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+                           "last_seen_at": "2026-01-01T00:00:00Z"}
+                readonly_requests = []
+                def handler(request):
+                    headers = {key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")}
+                    # This fixture tests the profile oracle. Exact bearer
+                    # matching keeps auth denials independent of JWT clock state;
+                    # the separate signer/expiry test exercises real verification.
+                    if request.headers.get("authorization") != "Bearer " + token:
+                        return httpx.Response(401, json={}, headers=headers)
+                    if request.method == "PATCH":
+                        payload = json.loads(request.content)
+                        if "contact_email" in payload:
+                            readonly_requests.append(payload)
+                            if corrupt_rejection and "display_name" in payload:
+                                profile["display_name"] = payload["display_name"]
+                        value = payload.get("display_name")
+                        invalid = (not payload or set(payload) != {"display_name"}
+                                   or value is not None and (not isinstance(value, str)
+                                   or not value.strip() or len(value.strip()) > 200 or "\x00" in value))
+                        if invalid:
+                            return httpx.Response(422, json={"error": {"code": "invalid_request", "retryable": False}}, headers=headers)
+                        profile["display_name"] = value.strip() if value is not None else None
+                    return httpx.Response(200, json=profile.copy(), headers=headers)
+                async with httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                             base_url="http://127.0.0.1") as client:
+                    report = {}
+                    probe = drill.Drill(client, {"paths": {"/api/v1/actors/me": {"get": {}, "patch": {}}}}, report)
+                    if corrupt_rejection:
+                        with self.assertRaises(drill.ProbeFailure) as failure:
+                            await drill.profile_cases(probe, issuer, token)
+                        self.assertEqual(str(failure.exception), "response_value_mismatch",
+                                         report["cases"][-3:])
+                        self.assertEqual(report["cases"][-1]["name"], "profile_readonly_mixed_unchanged",
+                                         report["cases"][-3:])
+                        self.assertEqual(report["cases"][-1]["result"], "failed")
+                    else:
+                        self.assertEqual(await drill.profile_cases(probe, issuer, token), profile["actor_profile_id"])
+                        self.assertEqual(len(readonly_requests), 4)
+                        self.assertTrue(any(row["name"] == "display_name_nul" for row in report["cases"]))
 
     async def test_profile_readback_rejects_cross_field_and_time_regressions(self):
         from uuid import uuid4

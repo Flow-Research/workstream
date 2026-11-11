@@ -48,10 +48,13 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
         "token_id",
         "subject_kind",
         "scopes",
+        "email",
+        "name",
     }
     assert result.token.subject == "opaque-subject-1"
     assert not hasattr(result.token, "roles")
-    assert not hasattr(result.token, "email")
+    assert result.token.email == "issuer-profile@example.test"
+    assert result.token.name == "Issuer Profile"
 
 
 @pytest.mark.parametrize(
@@ -235,3 +238,12 @@ async def test_temporal_claims_honor_configured_skew(
     assert (await verifier.verify(within_skew)).token.token_id == "token-id-1"
     with pytest.raises(AuthVerificationError):
         await verifier.verify(beyond_skew)
+
+
+@pytest.mark.parametrize("field,invalid", [("email", {}), ("email", "x" * 321),
+    ("email", "bad\x00value"), ("email", " "), ("name", 12), ("name", "x" * 201)])
+async def test_invalid_signed_profile_claim_is_rejected(rsa_signing_material, field, invalid):
+    private_key, jwk = rsa_signing_material
+    verifier = FlowAuthVerifier(production_verifier_settings(), jwks_transport=jwks_transport(jwk))
+    with pytest.raises(AuthVerificationError, match="profile claim"):
+        await verifier.verify(issue_asymmetric_token(private_key, claims={field: invalid}))

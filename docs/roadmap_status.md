@@ -101,6 +101,12 @@ Evidence remains an explicit CLI handoff; ZIP preparation/Submission, other
 TUI mutations and management remain separate. Neither this interface nor release automation
 establishes hosted operation or a published binary.
 
+Issuer-owned profile metadata: verified access-token email seeds first admission and
+refreshes on authorized self-profile GET/PATCH when the token is newer. Workstream,
+CLI and MCP cannot edit email. Optional issuer name seeds first admission; subsequent
+display-name edits, including clearing it, remain local. Identity and authority remain
+bound to issuer/subject, not email; signed email is not proof of mailbox verification.
+
 ## Product Goal
 
 Workstream turns governed work into trusted `ContributionRecord` facts:

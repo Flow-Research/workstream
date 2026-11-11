@@ -165,11 +165,11 @@ async def _exercise_access_reads(
     await _grant(direct, admin, ids["target"], "operator")
     await _grant(direct, admin, ids["target"], "finance_authority")
 
-    contact = f"private-{run_id}@example.com"
+    contact = f"{subjects["target"]}@flow.local"
     patched = await direct.patch(
         "/api/v1/actors/me",
         headers={"Authorization": f"Bearer {tokens['target']}"},
-        json={"display_name": "Access read target", "contact_email": contact},
+        json={"display_name": "Access read target"},
     )
     assert patched.status_code == 200, patched.text
     assert patched.json()["contact_email"] == contact

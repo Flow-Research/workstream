@@ -203,60 +203,6 @@ async def test_valid_dev_token_resolves_canonical_profile(
     assert not {"roles", "external_subject", "external_issuer", "audit_context"} & body.keys()
 
 
-async def test_signed_flow_token_authorizes_actor_self_read_and_update(
-    auth_database_env: str,
-    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
-) -> None:
-    private_key, jwk = rsa_signing_material
-    settings = production_verifier_settings(database_url=auth_database_env)
-    verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
-    app = create_app(settings)
-    app.state.auth_verifier = verifier
-    token = issue_asymmetric_token(
-        private_key,
-        claims={
-            "sub": "signed-self-actor",
-            "jti": "signed-self-token",
-            "roles": ["admin", "project_manager", "reviewer"],
-        },
-    )
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as client:
-        read = await client.get(
-            "/api/v1/actors/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        updated = await client.patch(
-            "/api/v1/actors/me",
-            headers={"Authorization": f"Bearer {token}"},
-            json={"display_name": "Signed Contributor", "contact_email": "signed@example.test"},
-        )
-
-    assert read.status_code == 200, read.text
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["display_name"] == "Signed Contributor"
-    assert updated.json()["contact_email"] == "signed@example.test"
-    assert updated.json()["admin_roles"] == []
-    assert updated.json()["project_role_grants"] == []
-    async with db_session.get_session_factory()() as session:
-        events = (
-            await session.scalars(
-                select(AuditEvent)
-                .where(AuditEvent.entity_type == "authorization_decision")
-                .order_by(AuditEvent.created_at, AuditEvent.id)
-            )
-        ).all()
-    assert [(event.action_id, event.permission_id, event.after_facts) for event in events] == [
-        ("actor.profile.read_self", "actor.profile.read_self", {"allowed": True}),
-        ("actor.profile.update_self", "actor.profile.update_self", {"allowed": True}),
-    ]
-    serialized = repr([event.event_payload for event in events])
-    assert "signed@example.test" not in serialized
-    assert token not in serialized
-
-
 async def test_controlled_endpoint_provisions_review_and_adapter_target_identities(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],

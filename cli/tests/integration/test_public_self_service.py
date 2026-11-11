@@ -169,6 +169,8 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
                     assert datetime.fromisoformat(
                         actual[field]
                     ) <= datetime.fromisoformat(expected[field])
+                assert expected["display_name"] == name.replace("-", " ").title()
+                assert expected["contact_email"] == f"{name}@flow.local"
                 profiles[name] = direct_response.json()
             assert (
                 len({profile["actor_profile_id"] for profile in profiles.values()}) == 4
@@ -176,21 +178,11 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
 
             manager_headers = {"Authorization": f"Bearer {tokens['cli-manager']}"}
             # No project/admin grant is required for these caller-owned fields.
-            for flags, name, email in (
-                (
-                    (
-                        "--display-name",
-                        "  Ada é  ",
-                        "--contact-email",
-                        "  contact@example.test  ",
-                    ),
-                    "Ada é",
-                    "contact@example.test",
-                ),
-                (("--display-name", "N" * 200), "N" * 200, "contact@example.test"),
-                (("--contact-email", "E" * 320), "N" * 200, "E" * 320),
-                (("--clear-display-name",), None, "E" * 320),
-                (("--clear-contact-email",), None, None),
+            issuer_email = "cli-manager@flow.local"
+            for flags, name in (
+                (("--display-name", "  Ada é  "), "Ada é"),
+                (("--display-name", "N" * 200), "N" * 200),
+                (("--clear-display-name",), None),
             ):
                 edited = cli(
                     origin,
@@ -210,7 +202,11 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
                     == profiles["cli-manager"]["actor_profile_id"]
                 )
                 assert actual["display_name"] == saved.json()["display_name"] == name
-                assert actual["contact_email"] == saved.json()["contact_email"] == email
+                assert (
+                    actual["contact_email"]
+                    == saved.json()["contact_email"]
+                    == issuer_email
+                )
                 assert {k: v for k, v in actual.items() if k not in touched} == {
                     k: v for k, v in saved.json().items() if k not in touched
                 }
@@ -221,7 +217,6 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
                 ("--display-name", ""),
                 ("--display-name", "   "),
                 ("--display-name", "N" * 201),
-                ("--contact-email", "E" * 321),
             ):
                 rejected = cli(
                     origin,
@@ -238,8 +233,27 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
                 saved = await direct.get("/api/v1/actors/me", headers=manager_headers)
                 assert (
                     saved.json()["display_name"] is None
-                    and saved.json()["contact_email"] is None
+                    and saved.json()["contact_email"] == issuer_email
                 )
+            for flags in (
+                ("--contact-email", "changed@example.test"),
+                ("--clear-contact-email",),
+            ):
+                rejected = cli(
+                    origin,
+                    tokens["cli-manager"],
+                    "profile",
+                    "update",
+                    *flags,
+                    "-o",
+                    "json",
+                )
+                assert rejected.returncode == 2 and rejected.stdout == ""
+                assert (
+                    json.loads(rejected.stderr)["error"]["code"] == "invalid_arguments"
+                )
+            saved = await direct.get("/api/v1/actors/me", headers=manager_headers)
+            assert saved.json()["contact_email"] == issuer_email
             outsider_profile = await direct.get(
                 "/api/v1/actors/me",
                 headers={"Authorization": f"Bearer {tokens['cli-outsider']}"},

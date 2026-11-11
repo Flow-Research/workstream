@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "8288e4a31900baf3764c4f116ab8195f78bcd8ed7a9a73ae1ce117745d6152b2",
+  "canonical_sha256": "b044f30cb235adefa9b2cc223a6c5ddc2ee8e0bef2096cd53a66a28d4413e1ea",
   "components": {
     "schemas": {
       "ActorProfileSelfResponse": {
@@ -113,18 +113,6 @@
         "additionalProperties": false,
         "description": "Human-owned display fields accepted by the canonical self API.",
         "properties": {
-          "contact_email": {
-            "anyOf": [
-              {
-                "maxLength": 320,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contact Email"
-          },
           "display_name": {
             "anyOf": [
               {

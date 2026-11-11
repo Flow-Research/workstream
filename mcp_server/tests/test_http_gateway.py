@@ -167,7 +167,7 @@ async def test_profile_update_uses_one_unkeyed_patch_and_preserves_payload() -> 
     client = httpx.AsyncClient(base_url="http://api.test", transport=httpx.MockTransport(handler))
     try:
         result = await WorkstreamGateway(settings(), client).profile_update(
-            "Bearer opaque", {"display_name": "Victor", "contact_email": None}
+            "Bearer opaque", {"display_name": "Victor"}
         )
     finally:
         await client.aclose()
@@ -178,7 +178,7 @@ async def test_profile_update_uses_one_unkeyed_patch_and_preserves_payload() -> 
     assert seen[0].url.path == "/api/v1/actors/me"
     assert seen[0].headers.get("idempotency-key") is None
     assert seen[0].headers.get("if-match") is None
-    assert seen[0].read() == b'{"display_name":"Victor","contact_email":null}'
+    assert seen[0].read() == b'{"display_name":"Victor"}'
 
 
 @pytest.mark.asyncio
@@ -224,10 +224,10 @@ async def test_profile_update_ambiguous_http_response_preserves_uncertainty(stat
         base_url="http://api.test", transport=httpx.MockTransport(handler)
     ) as client:
         result = await WorkstreamGateway(settings(), client).profile_update(
-            "Bearer opaque", {"contact_email": None}
+            "Bearer opaque", {"display_name": None}
         )
 
-    assert applied_updates == [b'{"contact_email":null}']
+    assert applied_updates == [b'{"display_name":null}']
     assert result.data is None
     assert result.failure is not None
     assert result.failure.error == "workstream_execution_uncertain"

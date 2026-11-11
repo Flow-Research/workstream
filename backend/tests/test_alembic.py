@@ -386,6 +386,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0067_canonical_json_restore_path",
         "0066_guide_check_specification",
         "0065_claim_starts_work",
         "0064_checker_trial_evidence",
@@ -813,6 +814,7 @@ def test_project_role_restore_path_repair_keeps_reference_guards(
         "0062_model_usage",
         "0063_checker_revision_input",
         "0066_guide_check_specification",
+        "0067_canonical_json_restore_path",
     ],
 )
 def test_preceding_head_upgrades_to_current_without_recreation(
@@ -2043,6 +2045,7 @@ def test_downgrade_refuses_without_mutation(
         ("0059_neutral_guide_runtime", "0058_compensation_unit_create"),
         ("0060_audit_restore_path", "0059_neutral_guide_runtime"),
         ("0067_canonical_json_restore_path", "0066_guide_check_specification"),
+        ("0068_issuer_profile_email", "0067_canonical_json_restore_path"),
     ),
 )
 def test_runtime_and_audit_one_revision_downgrades_refuse_without_mutation(

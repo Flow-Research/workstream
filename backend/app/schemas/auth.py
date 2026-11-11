@@ -26,6 +26,8 @@ class VerifiedIssuerToken(BaseModel):
     token_id: str
     subject_kind: SubjectKind
     scopes: frozenset[str]
+    email: str | None = Field(default=None, strict=True, min_length=1, max_length=320, pattern=r"^[^\x00\r\n]+$")
+    name: str | None = Field(default=None, strict=True, min_length=1, max_length=200, pattern=r"^[^\x00\r\n]+$")
 
 
 class AuthVerificationResult(BaseModel):

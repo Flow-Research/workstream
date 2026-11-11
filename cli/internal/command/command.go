@@ -72,22 +72,19 @@ func Run(args []string, stdout, stderr io.Writer, getenv environment, version st
 	})
 
 	profile := &cobra.Command{Use: "profile", Short: "Caller-owned profile operations"}
-	var displayName, contactEmail string
-	var clearDisplayName, clearContactEmail bool
+	var displayName string
+	var clearDisplayName bool
 	update := &cobra.Command{
 		Use:   "update",
-		Short: "Set or clear your human profile display fields",
+		Short: "Set or clear your human display name",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fields := api.ProfileUpdate{ClearDisplayName: clearDisplayName, ClearContactEmail: clearContactEmail}
+			fields := api.ProfileUpdate{ClearDisplayName: clearDisplayName}
 			if cmd.Flags().Changed("display-name") {
 				fields.DisplayName = &displayName
 			}
-			if cmd.Flags().Changed("contact-email") {
-				fields.ContactEmail = &contactEmail
-			}
-			if (fields.DisplayName != nil && clearDisplayName) || (fields.ContactEmail != nil && clearContactEmail) ||
-				(fields.DisplayName == nil && fields.ContactEmail == nil && !clearDisplayName && !clearContactEmail) {
+			if (fields.DisplayName != nil && clearDisplayName) ||
+				(fields.DisplayName == nil && !clearDisplayName) {
 				return commandError{"invalid_arguments", "select profile fields; do not set and clear the same field"}
 			}
 			apiClient, err := client()
@@ -102,9 +99,7 @@ func Run(args []string, stdout, stderr io.Writer, getenv environment, version st
 		},
 	}
 	update.Flags().StringVar(&displayName, "display-name", "", "Set your display name")
-	update.Flags().StringVar(&contactEmail, "contact-email", "", "Set your profile contact text (not your login identity)")
 	update.Flags().BoolVar(&clearDisplayName, "clear-display-name", false, "Clear your display name")
-	update.Flags().BoolVar(&clearContactEmail, "clear-contact-email", false, "Clear your profile contact text")
 	profile.AddCommand(update)
 	root.AddCommand(profile)
 	addAdminInspection(root, client, &output, stdout)

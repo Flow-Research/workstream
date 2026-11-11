@@ -1,7 +1,7 @@
 # Public Swagger access
 
 - Initiative: None
-- Durable disposition: Complete
+- Durable disposition: Planned
 - Intended merge outcome: Expose the existing FastAPI Swagger UI and schema on the public Workstream hostname.
 
 ## Intent
@@ -12,7 +12,7 @@ The public proxy currently hides FastAPI's `/docs` and `/openapi.json`, making A
 
 Allowed files: `deploy/hosted/public.Caddyfile`, `scripts/test_public_ingress.py`, `deploy/hosted/PUBLIC_ACCESS.md`, `experiments/demo_identity/README.md`, `deploy/hosted/SINGLE_HOST.md`,
 `docs/operations_authorization_service.md`, affected README/roadmap wording and this record.
-Prohibited: new application endpoints, auth bypass, wildcard documentation exposure, issuer/MCP runtime changes, unrelated deployment changes or additional worktrees.
+Prohibited: new application endpoints, auth bypass, wildcard documentation exposure, unrelated deployment changes or additional worktrees.
 
 ## Acceptance criteria
 
@@ -30,3 +30,45 @@ Risk: L2, bounded public metadata exposure. Focused security/architecture and QA
 Plan review found the exact shared proxy matcher sufficient. Real Caddy socket proof passes; removing the documentation paths or broadening `/docs` to a wildcard makes the corresponding regression fail at its intended assertion. Live deployment proof is recorded separately from these fixtures.
 
 User-requested documentation extension: make the existing Rust issuer README a complete four-endpoint operator reference, including separate administrator bootstrap, request/response/token contracts, participant onboarding and unsupported recovery. Cross-link the existing Workstream bootstrap owner; introduce no new identity API or behavior. Validate the descriptions against the Rust routes and schemas and review the final docs delta.
+
+## Issuer-owned profile correction
+
+User extends this same PR: email is issuer-owned metadata, never a Workstream edit;
+display name is seeded from an optional signed name on first admission and thereafter
+owned by the participant. Email updates occur during authorized self-profile reads
+and updates using verified issuer/subject, never by matching email. Rust access tokens
+include the stored account email; this does not assert mailbox verification.
+
+Allowed additional files: ACTORS model/repository/service/schema, verified-token and
+Flow verifier contracts, self-profile routes, AUTH requested-field contract, one linear
+Alembic migration and schema fingerprint, affected backend tests/drill callers, test-lane registration and structural-debt
+fingerprints (unchanged limits),
+`cli/`, `mcp_server/`, `experiments/demo_identity/`, and current profile documentation.
+No new identity APIs, authorization grants, alternate authentication, email matching,
+worktrees or unrelated cleanup. Risk L1 (identity metadata); security/architecture and
+QA/test-delta review required.
+
+Plan: retain first-admission display-name seeding only (no override flag needed);
+record an email observation `iat` on the exact identity link. Absent/null optional
+claims are not observations. Only strictly later tokens replace email; equal-second
+observations retain the first value until a later token. Existing contact values are
+retained until a signed email replaces them; they are not mailbox-verification proof.
+Use existing profile-before-link locks and caller-owned authorized transactions.
+Remove email mutation from API, AUTH facts, CLI and MCP together.
+
+Proof: signed first admission and changed email, stale-token non-regression, two
+subjects sharing email remaining distinct, explicit display-name edits/null surviving
+reads, denied mutations with no effect, rollback and concurrent profile operations.
+Test issuer access claims, client rejection and migration from current predecessor.
+Update current docs and roadmap; run focused reviews and final-head CI.
+
+Plan review: PASS with low risks; use the bounded self-profile routes rather than
+adding metadata side effects to every authorization touch. No global synchronization
+middleware is introduced.
+
+The signed self-profile proof moves from the oversized `test_auth.py` into the
+focused actor profile module alongside new regressions. Existing authorization
+and audit privacy assertions are retained; the email source changes from PATCH
+to the signed token. The structural ledger shrinks, and the new module is added
+to the existing identity test lane. The drill's stale fixed permission count is
+corrected from 75 to its already-existing 90-entry frozen oracle; no gate is relaxed.

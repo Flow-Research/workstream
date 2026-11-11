@@ -1121,7 +1121,10 @@ Self-update through ordinary request authorization retains its existing
 revalidation behavior; prepared self-update locks the exact profile followed by
 its exact link,
 rebuilds current context inside the caller transaction, and requires an active
-actor plus a non-empty subset of `display_name` and `contact_email`. Revoked
+actor plus an explicitly supplied `display_name`. `contact_email` is read-only
+issuer data: admission seeds it from signed `email`, and a newer signed token
+refreshes it on self GET/PATCH. Admission also seeds `display_name` from signed
+`name`, while subsequent local name edits remain authoritative. Revoked
 links, deactivated actors, and suspended updates deny in that order. Planned
 and unknown actions deny as `permission_not_granted` at public boundaries, and
 a system resource grants no implicit authority.

@@ -185,8 +185,14 @@ receive HTTP 429 before identity serialization.
 
 `GET /api/v1/actors/me` returns the caller's privacy-bounded Contributor-domain
 profile plus sorted active administrative role names as a non-authoritative
-self projection; project grants remain empty until AUTH-10. `PATCH /api/v1/actors/me` accepts
-only `display_name` and `contact_email`; token roles, issuer metadata, actor
+self projection; project grants are not included in this projection. `PATCH /api/v1/actors/me` accepts
+only `display_name`; `contact_email` is read-only and comes from signed issuer
+email claims. First admission seeds the display name from the signed `name`
+claim, then preserves local name edits. A newer signed token refreshes contact
+email on self GET/PATCH. Missing/null claims do not erase a stored email; older
+or equal-issued tokens do not replace a newer observation. Equal-second changes
+become visible with a later-issued token. A signed email is issuer metadata, not
+proof of mailbox ownership. Token roles, issuer metadata, actor
 kind, status, grants, and lifecycle fields are not writable there. Suspended
 and deactivated profiles cannot read or update their self profile or perform
 protected product operations. An authorized administrator may still inspect
@@ -802,8 +808,9 @@ on both self routes. Both self routes
 lock the exact actor profile first and its exact identity link second and
 recheck current state before deciding. GET then advances verification timestamps
 and commits bounded read-decision evidence. `PATCH /api/v1/actors/me` declares
-`actor.profile.update_self`; it additionally mutates only `display_name` or
-`contact_email` and commits mutation plus allow evidence once. The authorization
+`actor.profile.update_self`; its request body mutates only `display_name`
+and commits mutation plus allow evidence once. Both self routes may refresh
+issuer-owned `contact_email` from a newer signed token. The authorization
 kernel never commits or rolls back.
 
 Self routes return explicit 403 errors because the caller owns the target:

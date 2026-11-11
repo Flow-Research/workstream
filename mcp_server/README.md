@@ -121,10 +121,12 @@ call. Configure document reads independently with `WORKSTREAM_MCP_MAX_DOCUMENT_B
 `WORKSTREAM_MCP_DOCUMENT_TIMEOUT_SECONDS`; the adapter still buffers one bounded
 document before returning its Base64 representation.
 
-The profile read takes `{}`. Profile update accepts at least one of
-`display_name` and `contact_email`, preserving omission and explicit `null` while
-matching Workstream's normalization and bounds. Authorization context requires
-one `project_id`; Workstream decides whether the caller may see that exact
+The profile read takes `{}` and retains read-only `contact_email` supplied by
+the verified issuer. Profile update accepts only `display_name`, preserving
+explicit `null` for clearing and matching Workstream's normalization and bounds.
+Email update arguments are rejected before dispatch. First admission may seed the
+display name from the verified issuer name; later profile updates remain local.
+Authorization context requires one `project_id`; Workstream decides whether the caller may see that exact
 project. First admission can create the actor/link and update admission
 timestamps, but does not grant roles. Lifecycle and access denials follow
 Workstream. Errors are MCP tool failures with safe status/code information, not

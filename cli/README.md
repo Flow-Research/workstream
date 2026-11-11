@@ -1952,17 +1952,18 @@ never preflights authority or retries automatically.
 ## Edit your profile
 
 ```sh
-workstream profile update --display-name 'Ada' --contact-email 'ada@example.test'
-workstream profile update --clear-contact-email --output json
+workstream profile update --display-name 'Ada'
+workstream profile update --clear-display-name --output json
 ```
 
-Only human caller-owned `display_name` and `contact_email` are writable.
-An omitted flag leaves its field unchanged; a clear flag sends explicit JSON
-null. You can also use `--clear-display-name`. Select at least one field; setting
-and clearing the same field is invalid. Text must be valid UTF-8 and the JSON
-request is capped at 8 KiB. Workstream validates and normalizes the text:
-display name has a 200-character limit, contact text 320, and blank or NUL text
-is rejected. Contact text does not change your Flow login or identity.
+Only the human caller's `display_name` is writable. The self profile retains
+`contact_email` as read-only email supplied by the verified issuer. First
+admission may seed your display name from the issuer name; later edits remain
+local, including an explicit clear.
+`--clear-display-name` sends explicit JSON null; setting and clearing the name
+in one command is invalid. Select a name operation. Text must be valid UTF-8 and
+the JSON request is capped at 8 KiB. Workstream validates and normalizes names:
+the limit is 200 characters, and blank or NUL text is rejected.
 Caller-owned profile editing cannot provision service actors or change
 authority/lifecycle state; use the separate explicit `admin` commands above.
 

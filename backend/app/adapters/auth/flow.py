@@ -424,6 +424,14 @@ class FlowAuthVerifier:
         if nbf is not None and (isinstance(nbf, bool) or not isinstance(nbf, int | float)):
             raise AuthVerificationError("token not-before claim is invalid")
 
+        for field, limit in (("email", 320), ("name", 200)):
+            value = claims.get(field)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip() or len(value) > limit
+                or any(character in value for character in ("\x00", "\r", "\n"))
+            ):
+                raise AuthVerificationError("token profile claim is invalid")
+
         verified = VerifiedIssuerToken(
             issuer=self._issuer,
             subject=subject,
@@ -434,6 +442,8 @@ class FlowAuthVerifier:
             token_id=token_id,
             subject_kind=subject_kind,
             scopes=scopes,
+            email=claims.get("email"),
+            name=claims.get("name"),
         )
         return AuthVerificationResult(token=verified)
 
