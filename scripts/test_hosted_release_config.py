@@ -169,6 +169,19 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 with self.subTest(role=role, field=field), self.assertRaises(preflight.PreflightError):
                     preflight.validate_compose(changed, values)
 
+    def test_local_postgres_readiness_rejects_temporary_unix_server(self):
+        values = self.local_data_environment()
+        rendered = preflight.render_compose(self.environment_path, values)
+        for probe in (
+            ["CMD", "pg_isready", "-U", "postgres", "-d", "workstream"],
+            ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "workstream"],
+        ):
+            with self.subTest(probe=probe):
+                changed = copy.deepcopy(rendered)
+                changed["services"]["postgres"]["healthcheck"]["test"] = probe
+                with self.assertRaisesRegex(preflight.PreflightError, "final TCP server"):
+                    preflight.validate_compose(changed, values)
+
     def test_local_data_bootstrap_does_not_start_application_or_replace_mcp(self):
         values = self.local_data_environment() | {"WORKSTREAM_MCP_IMAGE": "mcp@sha256:" + "3" * 64}
         with patch.object(preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
@@ -633,7 +646,9 @@ class HostedReleaseConfigTests(unittest.TestCase):
             )
         api_command = " ".join(services["api"]["command"])
         worker_command = " ".join(services["worker"]["command"])
-        self.assertIn("alembic upgrade head", api_command)
+        self.assertEqual(services["api"]["command"], [
+            "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+        ])
         self.assertNotIn("--reload", api_command)
         self.assertIn("--pool=prefork", worker_command)
         health_commands = {

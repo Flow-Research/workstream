@@ -108,3 +108,9 @@ The [private host qualification report](../../docs/reports/mvp-single-host-2026-
 records the fresh public journey, exact contribution/award/replay and real
 post-reboot CLI/MCP evidence. The 2 vCPU/8 GiB host supports this bounded
 operator demo; public ingress and concurrent load remain outside the claim.
+
+External review identified an implicit migration in the API container command
+that contradicted recovery custody. API startup now launches only the server;
+schema changes use the existing explicit `migrate` operation before activation.
+The PostgreSQL TCP health probe excludes its temporary Unix-only initialization
+server. The installation sequence places public actor admission after API health.

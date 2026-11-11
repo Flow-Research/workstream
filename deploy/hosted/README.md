@@ -566,7 +566,10 @@ publication or external fulfillment is performed by this operation.
 
 Cold startup has explicit prerequisite stages to avoid a schema/activation/proxy/
 node dependency cycle. `migrate` runs only the existing API image's Alembic command
-with no dependencies. The fixed AWS `proof` sequence and exactly
+with no dependencies. Ordinary API startup launches only the server; it never
+applies migrations. Run `migrate` successfully before first activation or an
+upgrade, and requalify a restored database before enabling host recovery.
+The fixed AWS `proof` sequence and exactly
 `up -d model-proxy` validate static topology and private inputs but require no live
 node and release no API, worker or scheduler. The proof command retains its exact
 credential-separated AWS observations and coordinator; it does not use intake or
@@ -727,9 +730,9 @@ recovery operations. The migration refuses an inferred attempt without
 `adapter_profile` in `compilation_reserved` or `provider_result_accepted`, with
 `old inferred guide attempt requires removed runtime recovery before upgrade`.
 Finish supported recovery under the existing image and its compatible schema
-before retrying the upgrade. API startup applies migrations, so this refusal also
-prevents the new API from starting. If recovery cannot complete, keep the upgrade
-blocked; do not edit the attempt, delete evidence, or redispatch uncertain work
+before retrying the explicit migration. If that command refuses, do not start
+the new API or enable its host recovery unit. If recovery cannot complete, keep
+the upgrade blocked; do not edit the attempt, delete evidence, or redispatch uncertain work
 under the new runtime. The new image preserves retained evidence and exact-ID
 cleanup, not the removed inference implementation.
 

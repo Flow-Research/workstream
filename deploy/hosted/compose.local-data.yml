@@ -29,7 +29,7 @@ services:
       - /var/run/postgresql:uid=999,gid=999,mode=0700,size=16777216
       - /tmp:uid=999,gid=999,mode=0700,size=67108864,noexec,nosuid,nodev
     healthcheck:
-      test: [CMD, pg_isready, -U, postgres, -d, workstream]
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, postgres, -d, workstream]
       interval: 10s
       timeout: 5s
       retries: 6

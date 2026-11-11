@@ -1058,6 +1058,10 @@ def validate_local_data_compose(rendered: dict[str, Any], values: dict[str, str]
                 values["WORKSTREAM_POSTGRES_INIT_SQL_FILE"], True,
             )
         _validate_exact_bind_mounts(name, service, mounts)
+    if rendered["services"]["postgres"].get("healthcheck", {}).get("test") != [
+        "CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "workstream",
+    ]:
+        raise PreflightError("local PostgreSQL readiness must probe the final TCP server")
     if rendered["services"]["postgres"].get("environment") != {
         "POSTGRES_DB": "workstream", "POSTGRES_USER": "postgres",
         "POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_password",

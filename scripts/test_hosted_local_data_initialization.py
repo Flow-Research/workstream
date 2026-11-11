@@ -5,12 +5,17 @@ from __future__ import annotations
 from contextlib import ExitStack, redirect_stdout
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import stat
+import shlex
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
+import time
+from uuid import uuid4
 from unittest.mock import patch
 from urllib.parse import urlparse
 
@@ -178,6 +183,79 @@ class HostedLocalDataInitializationTests(unittest.TestCase):
             self.assertEqual(initializer.main(), 1)
         self.assertIn("No existing state was reset", output.getvalue())
         self.assertNotIn("private-password", output.getvalue())
+
+
+class HostedPostgresReadinessTests(unittest.TestCase):
+    def test_health_waits_for_tcp_after_initialization_scripts(self) -> None:
+        # Official PostgreSQL 16 bookworm, matching the hosted service identity.
+        image = "postgres@sha256:0ea6700a3b4f0ae6ce746519073558aed4d88a79d8d07622a9a644946c7319c4"
+        name = "workstream-pg-readiness-" + uuid4().hex
+        def docker(*arguments: str, check: bool = True) -> subprocess.CompletedProcess:
+            return subprocess.run(["docker", *arguments], check=check,
+                                  capture_output=True, text=True, timeout=120)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.chmod(0o755)
+            delay = root / "00-delay.sh"
+            delay.write_text(
+                "echo workstream-test-init-waiting\n"
+                "while [ ! -f /tmp/workstream-test-init-release ]; do sleep 0.1; done\n",
+            )
+            sql = root / "10-workstream.sql"
+            sql.write_text("CREATE ROLE workstream LOGIN PASSWORD 'test-only';\n")
+            for path in (delay, sql):
+                path.chmod(0o644)
+            # Render the actual overlay so this regression fails if its health
+            # command regresses, even when the configuration assertion changes.
+            environment = {
+                "PATH": os.environ["PATH"],
+                "WORKSTREAM_POSTGRES_IMAGE": image,
+                "WORKSTREAM_REDIS_IMAGE": "redis@sha256:" + "1" * 64,
+                "WORKSTREAM_POSTGRES_DATA_DIR": str(root / "data"),
+                "WORKSTREAM_POSTGRES_INIT_SQL_FILE": str(sql),
+                "WORKSTREAM_POSTGRES_PASSWORD_FILE": str(root / "password"),
+                "WORKSTREAM_REDIS_DATA_DIR": str(root / "redis"),
+                "WORKSTREAM_REDIS_CONFIG_FILE": str(root / "redis-config"),
+            }
+            rendered = subprocess.run(
+                ["docker", "compose", "--env-file", "/dev/null", "--file",
+                 str(ROOT / "deploy/hosted/compose.local-data.yml"),
+                 "config", "--format", "json"],
+                env=environment, check=True, capture_output=True, text=True, timeout=30,
+            )
+            probe = json.loads(rendered.stdout)["services"]["postgres"]["healthcheck"]["test"]
+            try:
+                docker("run", "--detach", "--pull=missing", "--name", name,
+                       "--network", "none", "--memory", "512m", "--pids-limit", "128",
+                       "--tmpfs", "/var/lib/postgresql/data:uid=999,gid=999,mode=0700",
+                       "--mount", f"type=bind,source={root},target=/docker-entrypoint-initdb.d,readonly",
+                       "--env", "POSTGRES_PASSWORD=test-only", "--env", "POSTGRES_DB=workstream",
+                       "--health-cmd", shlex.join(probe[1:]), "--health-interval", "1s",
+                       "--health-timeout", "2s", "--health-retries", "1", image)
+                deadline = time.monotonic() + 60
+                while "workstream-test-init-waiting" not in docker("logs", name).stdout:
+                    self.assertLess(time.monotonic(), deadline, "initialization gate was not reached")
+                    time.sleep(0.1)
+                # Reproduce the false positive: the temporary Unix server accepts
+                # connections before the application role/init script exists.
+                self.assertEqual(docker("exec", name, "pg_isready", "-U", "postgres",
+                                        "-d", "workstream", check=False).returncode, 0)
+                self.assertNotEqual(docker("exec", name, *probe[1:], check=False).returncode, 0)
+                time.sleep(2)
+                self.assertNotEqual(docker("inspect", "--format", "{{.State.Health.Status}}", name).stdout.strip(), "healthy")
+                docker("exec", name, "touch", "/tmp/workstream-test-init-release")
+                deadline = time.monotonic() + 60
+                while docker("inspect", "--format", "{{.State.Health.Status}}", name).stdout.strip() != "healthy":
+                    self.assertLess(time.monotonic(), deadline, "final TCP server did not become healthy")
+                    time.sleep(0.1)
+                result = docker("exec", "--env", "PGPASSWORD=test-only", name,
+                                "psql", "-h", "127.0.0.1", "-U", "workstream", "-d", "workstream",
+                                "-Atc", "SELECT current_user")
+                self.assertEqual(result.stdout.strip(), "workstream")
+            finally:
+                docker("rm", "--force", "--volumes", name, check=False)
+                self.assertNotEqual(docker("inspect", name, check=False).returncode, 0,
+                                    "owned PostgreSQL test container was not removed")
 
 
 if __name__ == "__main__":

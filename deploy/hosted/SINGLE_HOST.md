@@ -98,17 +98,6 @@ ownership. An issuer administrator is not a Workstream administrator. Bootstrap
 Workstream authority using its existing supported operator command, not database
 edits or saved fixture tokens.
 
-Log in to the issuer, then call `GET /api/v1/actors/me` with that access token to
-admit the initial human actor. Use the returned actor ID with
-[`bootstrap_access_administrator.py`](../../backend/scripts/bootstrap_access_administrator.py),
-first with `--dry-run`, then `--execute`, in the configured API image with its
-normal private database secret. Provision the journey's fixed service identities
-through `POST /api/v1/service-actors` under that administrator's fresh access
-token. The identity list in
-[`provision_local_service_actors.py`](../../backend/scripts/provision_local_service_actors.py)
-is a reference; that local-development script's token issuer is not the hosted
-Rust login path. Do not import its fixture tokens into this installation.
-
 Configure the issuer's trusted HTTPS origin and JWKS URL. Use the existing
 [Caddy deployment instructions](../../experiments/demo_identity/README.md#hosted-https-and-cutover).
 Public participant access requires DNS and a trusted public certificate. The
@@ -127,6 +116,20 @@ unit, run full preflight, then start the application. Start identity through its
 existing fixed bootstrap command before any step requiring token verification.
 The AWS proof and native readiness are required for this exact release; results
 from a retired deployment are not interchangeable.
+
+After the API is healthy, complete admission and authorization bootstrap:
+
+Log in to the issuer, then call `GET /api/v1/actors/me` with that access token to
+admit the initial human actor. Use the returned actor ID with
+[`bootstrap_access_administrator.py`](../../backend/scripts/bootstrap_access_administrator.py),
+first with `--dry-run`, then `--execute`, in the configured API image with its
+normal private database secret. Provision the journey's fixed service identities
+through `POST /api/v1/service-actors` under that administrator's fresh access
+token. The identity list in
+[`provision_local_service_actors.py`](../../backend/scripts/provision_local_service_actors.py)
+is a reference; that local-development script's token issuer is not the hosted
+Rust login path. Do not import its fixture tokens into this installation.
+
 
 For this continuously running AWS deployment, install and enable the
 [five-minute proof renewal timer](../../docs/operations_aws_roles_anywhere.md)
