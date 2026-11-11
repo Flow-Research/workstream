@@ -50,9 +50,9 @@ defaults. Current Caddy allows 16 KiB total headers; target packet text permits
 not delivered by preserving its guards.
 
 Initial main is `a4e485edea03db90c71189c51eac85cf4c3b1139`. The 14 commits after
-the spec baseline change deployment/identity, not submission owners. Open PR
-#698 changes CLI preparation; #707 changes public access/profile behavior.
-Reconcile those surfaces when reached without modifying their branches.
+the spec baseline change deployment/identity, not submission owners. At initial
+intake, open PR #698 changed CLI preparation and #707 changed public access/profile
+behavior. Reconcile affected surfaces without modifying their branches.
 
 PR #707 merged during the first change. Reconciled current main `94334ccf4`,
 including issuer-owned profile metadata, public Swagger and schema head 0068.
