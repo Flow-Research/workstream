@@ -33,6 +33,8 @@ use uuid::Uuid;
 
 const ACCESS_LIFETIME: i64 = 900;
 const ADMIN_LIFETIME: i64 = 600;
+const ROTATION_LIFETIME: i64 = 300;
+const SCHEMA_VERSION: i64 = 1;
 const SCOPE: &str = "workstream:access";
 const MAX_PASSWORD: usize = 1024;
 type ApiError = (StatusCode, &'static str);
@@ -111,7 +113,11 @@ struct PasswordChange {
 }
 #[derive(Serialize)]
 struct LoginResponse {
-    access_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    access_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    password_change_token: Option<String>,
+    must_change_password: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     admin_token: Option<String>,
     token_type: &'static str,
@@ -224,12 +230,12 @@ fn initialize(dir: &Path, email: &str, password: &str) -> Result<(), String> {
         Connection::open(dir.join("accounts.db")).map_err(|_| "database creation failed")?;
     fs::set_permissions(dir.join("accounts.db"), fs::Permissions::from_mode(0o600))
         .map_err(|_| "database permission failed")?;
-    db.execute_batch("PRAGMA journal_mode=DELETE; CREATE TABLE accounts (subject TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL CHECK(is_admin IN (0,1))); CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);").map_err(|_| "schema creation failed")?;
+    db.execute_batch("PRAGMA journal_mode=DELETE; CREATE TABLE accounts (subject TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL CHECK(is_admin IN (0,1)), must_change_password INTEGER NOT NULL CHECK(must_change_password IN (0,1))); CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);").map_err(|_| "schema creation failed")?;
     let tx = db
         .transaction()
         .map_err(|_| "database transaction failed")?;
     tx.execute(
-        "INSERT INTO accounts VALUES (?1, ?2, ?3, 1)",
+        "INSERT INTO accounts VALUES (?1, ?2, ?3, 1, 0)",
         params![Uuid::new_v4().to_string(), email, hash],
     )
     .map_err(|_| "admin creation failed")?;
@@ -238,8 +244,38 @@ fn initialize(dir: &Path, email: &str, password: &str) -> Result<(), String> {
         [hash_password("not-a-real-account-password")?],
     )
     .map_err(|_| "metadata creation failed")?;
+    tx.pragma_update(None, "user_version", SCHEMA_VERSION)
+        .map_err(|_| "schema version failed")?;
     tx.commit().map_err(|_| "database commit failed")?;
     println!("issuer initialized");
+    Ok(())
+}
+// Version zero is the original retained schema. Never migrate while serving.
+fn upgrade(dir: &Path) -> Result<(), String> {
+    let meta = fs::symlink_metadata(dir).map_err(|_| "missing issuer directory")?;
+    if !meta.is_dir() || meta.permissions().mode() & 0o077 != 0 {
+        return Err("unsafe issuer directory".into());
+    }
+    private_file(&dir.join("signer.pem"))?;
+    let mut db = database(&dir.join("accounts.db"))?;
+    let tx = db
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|_| "upgrade transaction failed")?;
+    let version: i64 = tx
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .map_err(|_| "schema version unavailable")?;
+    match version {
+        0 => {
+            tx.execute_batch("ALTER TABLE accounts ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0 CHECK(must_change_password IN (0,1)); UPDATE accounts SET must_change_password=1 WHERE is_admin=0;")
+                .map_err(|_| "schema upgrade failed")?;
+            tx.pragma_update(None, "user_version", SCHEMA_VERSION)
+                .map_err(|_| "schema version failed")?;
+        }
+        SCHEMA_VERSION => {}
+        _ => return Err("unsupported schema version".into()),
+    }
+    tx.commit().map_err(|_| "upgrade commit failed")?;
+    println!("issuer schema current");
     Ok(())
 }
 fn read_app(dir: &Path, issuer: String, audience: String) -> Result<App, String> {
@@ -272,6 +308,12 @@ fn read_app(dir: &Path, issuer: String, audience: String) -> Result<App, String>
         .to_public_key_pem(rsa::pkcs8::LineEnding::LF)
         .map_err(|_| "invalid public key")?;
     let db = database(&dir.join("accounts.db"))?;
+    let version: i64 = db
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .map_err(|_| "schema version unavailable")?;
+    if version != SCHEMA_VERSION {
+        return Err("issuer schema requires explicit upgrade DATA_DIR".into());
+    }
     let dummy_hash: String = db
         .query_row(
             "SELECT value FROM metadata WHERE key='dummy_hash'",
@@ -306,32 +348,56 @@ fn read_app(dir: &Path, issuer: String, audience: String) -> Result<App, String>
         dummy_hash,
     })
 }
-fn token(app: &App, sub: &str, admin: bool) -> Result<String, ApiError> {
+#[derive(Clone, Copy, PartialEq)]
+enum TokenKind {
+    Access,
+    Admin,
+    PasswordChange,
+}
+impl TokenKind {
+    fn audience(self, app: &App) -> String {
+        match self {
+            Self::Access => app.audience.clone(),
+            Self::Admin => format!("{}:issuer-admin", app.audience),
+            Self::PasswordChange => format!("{}:password-change", app.audience),
+        }
+    }
+    fn purpose(self) -> Option<&'static str> {
+        match self {
+            Self::Access => None,
+            Self::Admin => Some("issuer_admin"),
+            Self::PasswordChange => Some("password_change"),
+        }
+    }
+    fn lifetime(self) -> i64 {
+        match self {
+            Self::Access => ACCESS_LIFETIME,
+            Self::Admin => ADMIN_LIFETIME,
+            Self::PasswordChange => ROTATION_LIFETIME,
+        }
+    }
+}
+fn token(app: &App, sub: &str, kind: TokenKind) -> Result<String, ApiError> {
     let issued = now();
     let claims = Claims {
         iss: app.issuer.clone(),
         sub: sub.to_owned(),
-        aud: if admin {
-            format!("{}:issuer-admin", app.audience)
-        } else {
-            app.audience.clone()
-        },
+        aud: kind.audience(app),
         iat: issued,
         nbf: issued,
-        exp: issued
-            + if admin {
-                ADMIN_LIFETIME
-            } else {
-                ACCESS_LIFETIME
-            },
+        exp: issued + kind.lifetime(),
         jti: Uuid::new_v4().to_string(),
-        subject_kind: if admin { None } else { Some("human".into()) },
-        scope: if admin { None } else { Some(SCOPE.into()) },
-        purpose: if admin {
-            Some("issuer_admin".into())
+        subject_kind: if kind == TokenKind::Access {
+            Some("human".into())
         } else {
             None
         },
+        scope: if kind == TokenKind::Access {
+            Some(SCOPE.into())
+        } else {
+            None
+        },
+        purpose: kind.purpose().map(str::to_owned),
     };
     let mut header = Header::new(Algorithm::RS256);
     header.kid = Some(app.kid.clone());
@@ -339,6 +405,17 @@ fn token(app: &App, sub: &str, admin: bool) -> Result<String, ApiError> {
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "token issuance failed"))
 }
 fn authenticate(app: &App, headers: &HeaderMap, admin: bool) -> Result<String, ApiError> {
+    authenticate_kind(
+        app,
+        headers,
+        if admin {
+            TokenKind::Admin
+        } else {
+            TokenKind::Access
+        },
+    )
+}
+fn authenticate_kind(app: &App, headers: &HeaderMap, kind: TokenKind) -> Result<String, ApiError> {
     let value = headers
         .get("authorization")
         .and_then(|v| v.to_str().ok())
@@ -355,11 +432,7 @@ fn authenticate(app: &App, headers: &HeaderMap, admin: bool) -> Result<String, A
     validation.leeway = 0;
     validation.validate_nbf = true;
     validation.set_issuer(&[&app.issuer]);
-    validation.set_audience(&[if admin {
-        format!("{}:issuer-admin", app.audience)
-    } else {
-        app.audience.clone()
-    }]);
+    validation.set_audience(&[kind.audience(app)]);
     validation
         .required_spec_claims
         .extend(["iat".into(), "nbf".into(), "jti".into()]);
@@ -367,10 +440,10 @@ fn authenticate(app: &App, headers: &HeaderMap, admin: bool) -> Result<String, A
     if decoded.claims.iat > now() || decoded.claims.nbf > now() || decoded.claims.exp <= now() {
         return Err(INVALID);
     }
-    if decoded.claims.purpose.as_deref() != if admin { Some("issuer_admin") } else { None } {
+    if decoded.claims.purpose.as_deref() != kind.purpose() {
         return Err(INVALID);
     }
-    if !admin
+    if kind == TokenKind::Access
         && (decoded.claims.subject_kind.as_deref() != Some("human")
             || decoded.claims.scope.as_deref() != Some(SCOPE))
     {
@@ -404,12 +477,12 @@ async fn login(
         .map_err(|_| (StatusCode::TOO_MANY_REQUESTS, "try later"))?;
     let copy = app.clone();
     let result = tokio::task::spawn_blocking(move || {
-        let account: Option<(String, String, i64)> = {
+        let account: Option<(String, String, i64, i64)> = {
             let db = copy.db.lock().unwrap();
             db.query_row(
-                "SELECT subject,password_hash,is_admin FROM accounts WHERE email=?1",
+                "SELECT subject,password_hash,is_admin,must_change_password FROM accounts WHERE email=?1",
                 [email],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional()
             .ok()
@@ -422,20 +495,34 @@ async fn login(
         if !verify_password(&input.password, candidate) {
             return None;
         }
-        account.map(|(sub, _, admin)| (sub, admin == 1))
+        account.map(|(sub, _, admin, pending)| (sub, admin == 1, pending == 1))
     })
     .await
     .map_err(|_| INVALID)?
     .ok_or(INVALID)?;
     Ok(Json(LoginResponse {
-        access_token: token(&app, &result.0, false)?,
-        admin_token: if result.1 {
-            Some(token(&app, &result.0, true)?)
+        access_token: if result.2 {
+            None
+        } else {
+            Some(token(&app, &result.0, TokenKind::Access)?)
+        },
+        password_change_token: if result.2 {
+            Some(token(&app, &result.0, TokenKind::PasswordChange)?)
+        } else {
+            None
+        },
+        must_change_password: result.2,
+        admin_token: if result.1 && !result.2 {
+            Some(token(&app, &result.0, TokenKind::Admin)?)
         } else {
             None
         },
         token_type: "Bearer",
-        expires_in: ACCESS_LIFETIME,
+        expires_in: if result.2 {
+            ROTATION_LIFETIME
+        } else {
+            ACCESS_LIFETIME
+        },
     }))
 }
 async fn create_account(
@@ -475,7 +562,7 @@ async fn create_account(
             return Err(INVALID);
         }
         tx.execute(
-            "INSERT INTO accounts VALUES (?1,?2,?3,0)",
+            "INSERT INTO accounts (subject,email,password_hash,is_admin,must_change_password) VALUES (?1,?2,?3,0,1)",
             params![subject, email, hash],
         )
         .map_err(|_| (StatusCode::CONFLICT, "account unavailable"))?;
@@ -495,11 +582,12 @@ fn replace_password_hash(
     subject: &str,
     current: &str,
     replacement: &str,
+    pending: bool,
 ) -> Result<(), ApiError> {
     let changed = db
         .execute(
-            "UPDATE accounts SET password_hash=?1 WHERE subject=?2 AND password_hash=?3",
-            params![replacement, subject, current],
+            "UPDATE accounts SET password_hash=?1,must_change_password=0 WHERE subject=?2 AND password_hash=?3 AND must_change_password=?4",
+            params![replacement, subject, current, pending],
         )
         .map_err(|_| INVALID)?;
     if changed != 1 {
@@ -512,9 +600,15 @@ async fn change_password(
     headers: HeaderMap,
     Json(input): Json<PasswordChange>,
 ) -> Result<StatusCode, ApiError> {
-    let sub = authenticate(&app, &headers, false)?;
+    let (sub, pending) = match authenticate_kind(&app, &headers, TokenKind::PasswordChange) {
+        Ok(sub) => (sub, true),
+        Err(_) => (authenticate(&app, &headers, false)?, false),
+    };
     throttled(&app, format!("password:{sub}"), 10)?;
-    if !password_ok(&input.current_password) || !password_ok(&input.new_password) {
+    if !password_ok(&input.current_password)
+        || !password_ok(&input.new_password)
+        || input.current_password == input.new_password
+    {
         return Err(INVALID);
     }
     let _permit = app
@@ -527,8 +621,8 @@ async fn change_password(
         let current: String = {
             let db = copy.db.lock().unwrap();
             db.query_row(
-                "SELECT password_hash FROM accounts WHERE subject=?1",
-                [&sub],
+                "SELECT password_hash FROM accounts WHERE subject=?1 AND must_change_password=?2",
+                params![sub, pending],
                 |r| r.get(0),
             )
             .map_err(|_| INVALID)?
@@ -538,7 +632,7 @@ async fn change_password(
         }
         let replacement = hash_password(&input.new_password).map_err(|_| INVALID)?;
         let db = copy.db.lock().unwrap();
-        replace_password_hash(&db, &sub, &current, &replacement)
+        replace_password_hash(&db, &sub, &current, &replacement, pending)
     })
     .await
     .map_err(|_| INVALID)??;
@@ -555,6 +649,7 @@ async fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     match args.as_slice() {
         [_, command, dir, email] if command == "init" => init(Path::new(dir), email),
+        [_, command, dir] if command == "upgrade" => upgrade(Path::new(dir)),
         [_, command, dir] if command == "serve" => {
             let issuer = env::var("DEMO_IDENTITY_ISSUER").map_err(|_| "missing issuer")?;
             let audience = env::var("DEMO_IDENTITY_AUDIENCE").map_err(|_| "missing audience")?;
@@ -586,7 +681,7 @@ async fn run() -> Result<(), String> {
                 .map_err(|_| "issuer server failed".into())
         }
         _ => Err(
-            "usage: demo-identity init DATA_DIR ADMIN_EMAIL < password-on-stdin | serve DATA_DIR"
+            "usage: demo-identity init DATA_DIR ADMIN_EMAIL < password-on-stdin | upgrade DATA_DIR | serve DATA_DIR"
                 .into(),
         ),
     }
@@ -635,7 +730,7 @@ mod tests {
         assert_eq!(
             create_account(
                 State(app.clone()),
-                bearer(&admin.access_token),
+                bearer(admin.access_token.as_deref().unwrap()),
                 Json(Credentials {
                     email: "user@example.test".into(),
                     password: "user-password-123".into()
@@ -682,11 +777,58 @@ mod tests {
         .await
         .unwrap();
         assert!(user.admin_token.is_none());
+        assert!(user.access_token.is_none());
+        let rotation = user.password_change_token.unwrap();
+        assert!(authenticate(&app, &bearer(&rotation), false).is_err());
+        assert!(authenticate(&app, &bearer(&rotation), true).is_err());
+        let same = change_password(
+            State(app.clone()),
+            bearer(&rotation),
+            Json(PasswordChange {
+                current_password: "user-password-123".into(),
+                new_password: "user-password-123".into(),
+            }),
+        )
+        .await;
+        assert_eq!(same.unwrap_err(), INVALID);
+        change_password(
+            State(app.clone()),
+            bearer(&rotation),
+            Json(PasswordChange {
+                current_password: "user-password-123".into(),
+                new_password: "chosen-password-123".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        // Even knowledge of the new password cannot reuse a consumed rotation token.
         assert_eq!(
-            authenticate(&app, &bearer(&user.access_token), false).unwrap(),
+            change_password(
+                State(app.clone()),
+                bearer(&rotation),
+                Json(PasswordChange {
+                    current_password: "chosen-password-123".into(),
+                    new_password: "another-password-123".into(),
+                })
+            )
+            .await
+            .unwrap_err(),
+            INVALID
+        );
+        let Json(user) = login(
+            State(app.clone()),
+            Json(Credentials {
+                email: "user@example.test".into(),
+                password: "chosen-password-123".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            authenticate(&app, &bearer(user.access_token.as_deref().unwrap()), false).unwrap(),
             created.subject
         );
-        assert!(authenticate(&app, &bearer(&user.access_token), true).is_err());
+        assert!(authenticate(&app, &bearer(user.access_token.as_deref().unwrap()), true).is_err());
         assert!(authenticate(&app, &bearer(admin.admin_token.as_ref().unwrap()), false).is_err());
         let permits: Vec<_> = (0..4)
             .map(|_| app.work.clone().try_acquire_owned().unwrap())
@@ -780,13 +922,18 @@ mod tests {
             State(reopened),
             Json(Credentials {
                 email: "user@example.test".into(),
-                password: "user-password-123".into(),
+                password: "chosen-password-123".into(),
             }),
         )
         .await
         .unwrap();
         assert_eq!(
-            authenticate(&app, &bearer(&after_restart.access_token), false).unwrap(),
+            authenticate(
+                &app,
+                &bearer(after_restart.access_token.as_deref().unwrap()),
+                false
+            )
+            .unwrap(),
             created.subject
         );
     }
@@ -804,7 +951,7 @@ mod tests {
         .unwrap();
         let wrong = change_password(
             State(app.clone()),
-            bearer(&admin.access_token),
+            bearer(admin.access_token.as_deref().unwrap()),
             Json(PasswordChange {
                 current_password: "wrong-password-123".into(),
                 new_password: "changed-password-123".into(),
@@ -814,7 +961,7 @@ mod tests {
         assert_eq!(wrong.unwrap_err().0, StatusCode::UNAUTHORIZED);
         change_password(
             State(app.clone()),
-            bearer(&admin.access_token),
+            bearer(admin.access_token.as_deref().unwrap()),
             Json(PasswordChange {
                 current_password: "initial-password-123".into(),
                 new_password: "changed-password-123".into(),
@@ -841,23 +988,23 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            authenticate(&app, &bearer(&next.access_token), false).unwrap(),
-            authenticate(&app, &bearer(&admin.access_token), false).unwrap()
+            authenticate(&app, &bearer(next.access_token.as_deref().unwrap()), false).unwrap(),
+            authenticate(&app, &bearer(admin.access_token.as_deref().unwrap()), false).unwrap()
         );
     }
     #[test]
     fn password_hash_update_rejects_stale_snapshot_without_overwriting_winner() {
         let db = Connection::open_in_memory().unwrap();
         db.execute_batch(
-            "CREATE TABLE accounts (subject TEXT PRIMARY KEY, password_hash TEXT NOT NULL);
-             INSERT INTO accounts VALUES ('user', 'initial-hash');",
+            "CREATE TABLE accounts (subject TEXT PRIMARY KEY, password_hash TEXT NOT NULL, must_change_password INTEGER NOT NULL);
+             INSERT INTO accounts VALUES ('user', 'initial-hash', 1);",
         )
         .unwrap();
         // Both callers verified the same snapshot before preparing their new
         // hashes outside the database lock. Only the first write may succeed.
-        replace_password_hash(&db, "user", "initial-hash", "winning-hash").unwrap();
+        replace_password_hash(&db, "user", "initial-hash", "winning-hash", true).unwrap();
         assert_eq!(
-            replace_password_hash(&db, "user", "initial-hash", "stale-hash"),
+            replace_password_hash(&db, "user", "initial-hash", "stale-hash", true),
             Err(INVALID)
         );
         let persisted: String = db
@@ -868,6 +1015,252 @@ mod tests {
             )
             .unwrap();
         assert_eq!(persisted, "winning-hash");
+        // After first rotation, the pending flag stays false across ordinary
+        // password changes. Only the exact hash snapshot excludes a stale writer.
+        replace_password_hash(&db, "user", "winning-hash", "next-hash", false).unwrap();
+        assert_eq!(
+            replace_password_hash(&db, "user", "winning-hash", "stale-completed-hash", false),
+            Err(INVALID)
+        );
+        let completed: (String, bool) = db
+            .query_row(
+                "SELECT password_hash,must_change_password FROM accounts WHERE subject='user'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(completed, ("next-hash".into(), false));
+    }
+    #[tokio::test]
+    async fn concurrent_first_password_changes_have_one_winner_after_restart() {
+        let (dir, app) = fixture();
+        let Json(admin) = login(
+            State(app.clone()),
+            Json(Credentials {
+                email: "admin@example.test".into(),
+                password: "initial-password-123".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        let (_, Json(account)) = create_account(
+            State(app.clone()),
+            bearer(admin.admin_token.as_ref().unwrap()),
+            Json(Credentials {
+                email: "race@example.test".into(),
+                password: "temporary-password-123".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        let reopened = read_app(
+            &dir.path().join("issuer"),
+            app.issuer.clone(),
+            app.audience.clone(),
+        )
+        .unwrap();
+        let Json(pending) = login(
+            State(reopened.clone()),
+            Json(Credentials {
+                email: "race@example.test".into(),
+                password: "temporary-password-123".into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(pending.must_change_password);
+        assert!(pending.access_token.is_none());
+        let credential = pending.password_change_token.unwrap();
+        let (first, second) = tokio::join!(
+            change_password(
+                State(app.clone()),
+                bearer(&credential),
+                Json(PasswordChange {
+                    current_password: "temporary-password-123".into(),
+                    new_password: "first-chosen-password-123".into(),
+                })
+            ),
+            change_password(
+                State(reopened.clone()),
+                bearer(&credential),
+                Json(PasswordChange {
+                    current_password: "temporary-password-123".into(),
+                    new_password: "second-chosen-password-123".into(),
+                })
+            ),
+        );
+        assert_ne!(first.is_ok(), second.is_ok());
+        let winner = if first.is_ok() {
+            "first-chosen-password-123"
+        } else {
+            "second-chosen-password-123"
+        };
+        let losing_result = if first.is_ok() { second } else { first };
+        assert_eq!(losing_result.unwrap_err(), INVALID);
+        let restarted = read_app(
+            &dir.path().join("issuer"),
+            app.issuer.clone(),
+            app.audience.clone(),
+        )
+        .unwrap();
+        assert_eq!(
+            change_password(
+                State(restarted.clone()),
+                bearer(&credential),
+                Json(PasswordChange {
+                    current_password: winner.into(),
+                    new_password: "replayed-chosen-password-123".into(),
+                })
+            )
+            .await
+            .unwrap_err(),
+            INVALID
+        );
+        let Json(completed) = login(
+            State(restarted),
+            Json(Credentials {
+                email: "race@example.test".into(),
+                password: winner.into(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert!(!completed.must_change_password);
+        assert_eq!(
+            authenticate(
+                &app,
+                &bearer(completed.access_token.as_deref().unwrap()),
+                false
+            )
+            .unwrap(),
+            account.subject
+        );
+    }
+    #[test]
+    fn rotation_credentials_require_exact_audience_purpose_and_expiry() {
+        let (_dir, app) = fixture();
+        let rotation = token(&app, "subject", TokenKind::PasswordChange).unwrap();
+        assert!(authenticate_kind(&app, &bearer(&rotation), TokenKind::PasswordChange).is_ok());
+        assert!(authenticate(&app, &bearer(&rotation), false).is_err());
+        assert!(authenticate(&app, &bearer(&rotation), true).is_err());
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_audience(&[TokenKind::PasswordChange.audience(&app)]);
+        let claims = decode::<Claims>(&rotation, &app.decoding, &validation)
+            .unwrap()
+            .claims;
+        for variant in 0..4 {
+            let mut altered = Claims {
+                ..decode::<Claims>(&rotation, &app.decoding, &validation)
+                    .unwrap()
+                    .claims
+            };
+            match variant {
+                0 => altered.aud = app.audience.clone(),
+                1 => altered.purpose = None,
+                2 => altered.purpose = Some("issuer_admin".into()),
+                _ => altered.exp = now() - 1,
+            }
+            let mut header = Header::new(Algorithm::RS256);
+            header.kid = Some(app.kid.clone());
+            let signed = encode(&header, &altered, &app.encoding).unwrap();
+            assert!(authenticate_kind(&app, &bearer(&signed), TokenKind::PasswordChange).is_err());
+        }
+        assert_eq!(claims.exp - claims.iat, ROTATION_LIFETIME);
+        assert!(claims.scope.is_none());
+        assert!(claims.subject_kind.is_none());
+        let access = token(&app, "subject", TokenKind::Access).unwrap();
+        let admin = token(&app, "subject", TokenKind::Admin).unwrap();
+        assert!(authenticate_kind(&app, &bearer(&access), TokenKind::PasswordChange).is_err());
+        assert!(authenticate_kind(&app, &bearer(&admin), TokenKind::PasswordChange).is_err());
+    }
+    #[test]
+    fn explicit_upgrade_preserves_retained_identity_and_never_rearms_rotation() {
+        let (dir, app) = fixture();
+        let path = dir.path().join("issuer");
+        let signer = fs::read(path.join("signer.pem")).unwrap();
+        {
+            let db = app.db.lock().unwrap();
+            // Reconstruct exactly the original unversioned account schema.
+            db.execute_batch(
+                "ALTER TABLE accounts DROP COLUMN must_change_password; PRAGMA user_version=0;",
+            )
+            .unwrap();
+            db.execute(
+                "INSERT INTO accounts VALUES ('retained-subject','retained@example.test',?1,0)",
+                [&app.dummy_hash],
+            )
+            .unwrap();
+        }
+        assert!(read_app(&path, app.issuer.clone(), app.audience.clone()).is_err());
+        app.db.lock().unwrap().execute_batch("CREATE TRIGGER fail_upgrade BEFORE UPDATE ON accounts WHEN OLD.is_admin=0 BEGIN SELECT RAISE(ABORT, 'fixture failure'); END;").unwrap();
+        assert!(upgrade(&path).is_err());
+        {
+            let db = app.db.lock().unwrap();
+            assert_eq!(
+                db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+            assert!(db
+                .prepare("SELECT must_change_password FROM accounts")
+                .is_err());
+            db.execute_batch("DROP TRIGGER fail_upgrade;").unwrap();
+        }
+        upgrade(&path).unwrap();
+        let reopened = read_app(&path, app.issuer.clone(), app.audience.clone()).unwrap();
+        assert_eq!(fs::read(path.join("signer.pem")).unwrap(), signer);
+        let db = reopened.db.lock().unwrap();
+        let retained: (String, String, i64) = db.query_row("SELECT subject,password_hash,must_change_password FROM accounts WHERE email='retained@example.test'", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+        assert_eq!(
+            retained,
+            ("retained-subject".into(), app.dummy_hash.clone(), 1)
+        );
+        assert_eq!(
+            db.query_row(
+                "SELECT must_change_password FROM accounts WHERE is_admin=1",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+        db.execute(
+            "UPDATE accounts SET must_change_password=0 WHERE subject='retained-subject'",
+            [],
+        )
+        .unwrap();
+        drop(db);
+        upgrade(&path).unwrap();
+        assert_eq!(
+            reopened
+                .db
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT must_change_password FROM accounts WHERE subject='retained-subject'",
+                    [],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+            0
+        );
+        // A failed ALTER is rolled back with the version and rows unchanged.
+        reopened
+            .db
+            .lock()
+            .unwrap()
+            .pragma_update(None, "user_version", 0)
+            .unwrap();
+        assert!(upgrade(&path).is_err());
+        assert_eq!(
+            reopened
+                .db
+                .lock()
+                .unwrap()
+                .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
     }
     #[test]
     fn fail_closed_on_missing_state_and_nonprivate_key() {

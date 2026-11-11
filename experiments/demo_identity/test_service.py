@@ -19,7 +19,7 @@ from app.core.config import Settings
 from app.interfaces.auth import AuthVerificationError
 
 ROOT = Path(__file__).resolve().parents[2]
-BINARY = ROOT / "experiments/demo_identity/target/release/workstream-demo-identity"
+BINARY = Path(os.environ.get("DEMO_IDENTITY_TEST_BINARY", str(ROOT / "experiments/demo_identity/target/release/workstream-demo-identity")))
 
 
 @pytest.fixture(scope="module")
@@ -125,15 +125,40 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
         assert duplicate.status_code == 409
         user = client.post(f"{issuer}/login", json={"email": "user@example.test", "password": "user-password-123"}).json()
         assert "admin_token" not in user
-        denied = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {user['access_token']}"}, json={"email": "blocked@example.test", "password": "blocked-password-123"})
+        assert "access_token" not in user
+        assert user["must_change_password"] is True
+        rotation = user["password_change_token"]
+        denied = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {rotation}"}, json={"email": "blocked@example.test", "password": "blocked-password-123"})
         assert denied.status_code == 401
         assert client.post(f"{issuer}/login", json={"email": "blocked@example.test", "password": "blocked-password-123"}).status_code == 401
+        change = {"current_password": "user-password-123", "new_password": "chosen-password-123"}
+        rotation_claims = jwt.decode(rotation, options={"verify_signature": False})
+        signer = (data / "signer.pem").read_bytes()
+        jwks = client.get(f"{issuer}/jwks.json").json()
+        kid = jwks["keys"][0]["kid"]
+        # These mutations must fail while the account is still pending and its
+        # current password is correct; the unchanged credential then succeeds.
+        for variant in ({"aud": "workstream-demo"}, {"purpose": "issuer_admin"}, {"purpose": None}, {"exp": int(time.time()) - 30}):
+            altered = jwt.encode({**rotation_claims, **variant}, signer, algorithm="RS256", headers={"kid": kid})
+            denial = client.post(f"{issuer}/me/password", headers={"Authorization": f"Bearer {altered}"}, json=change)
+            assert denial.status_code == 401
+        assert client.post(f"{issuer}/me/password", headers={"Authorization": f"Bearer {rotation}"}, json=change).status_code == 204
+        user = client.post(f"{issuer}/login", json={"email": "user@example.test", "password": "chosen-password-123"}).json()
+        assert user["must_change_password"] is False
+        assert "password_change_token" not in user
         jwks = client.get(f"{issuer}/jwks.json").json()
         assert set(jwks["keys"][0]) == {"kty", "kid", "use", "key_ops", "alg", "n", "e"}
     verifier = FlowAuthVerifier(Settings(environment="test", auth_provider="flow", token_issuer=issuer,
         token_audience="workstream-demo", token_jwks_url=f"{issuer}/jwks.json", token_algorithms="RS256",
         token_clock_skew_seconds=0, token_introspection_mode="disabled",
         token_introspection_disabled_reason="demo issuer tokens expire without revocation"))
+    with pytest.raises(AuthVerificationError):
+        asyncio.run(verifier.verify(rotation))
+    rotation_claims = jwt.decode(rotation, options={"verify_signature": False})
+    assert rotation_claims["aud"] == "workstream-demo:password-change"
+    assert rotation_claims["purpose"] == "password_change"
+    assert rotation_claims["exp"] - rotation_claims["iat"] == 300
+    assert "scope" not in rotation_claims and "subject_kind" not in rotation_claims
     verified = asyncio.run(verifier.verify(user["access_token"])).token
     assert verified.subject == created.json()["subject"]
     assert verified.subject_kind == "human"
@@ -178,7 +203,8 @@ def test_password_change_and_identity_survive_process_restart(service, monkeypat
         assert created.status_code == 201
         login = client.post(f"{issuer}/login", json=account)
         assert login.status_code == 200
-        original_token = login.json()["access_token"]
+        assert "access_token" not in login.json()
+        original_token = login.json()["password_change_token"]
         authorization = {"Authorization": f"Bearer {original_token}"}
         change = {"current_password": account["password"], "new_password": replacement["password"]}
         assert client.post(f"{issuer}/me/password", json=change).status_code == 401
@@ -186,15 +212,19 @@ def test_password_change_and_identity_survive_process_restart(service, monkeypat
         assert wrong.status_code == 401
         assert client.post(f"{issuer}/login", json=account).status_code == 200
         assert client.post(f"{issuer}/login", json=replacement).status_code == 401
+        assert client.post(f"{issuer}/me/password", headers=authorization, json={**change, "new_password": account["password"]}).status_code == 401
         assert client.post(f"{issuer}/me/password", headers=authorization, json=change).status_code == 204
+        replay = {"current_password": replacement["password"], "new_password": "replayed-password-123"}
+        assert client.post(f"{issuer}/me/password", headers=authorization, json=replay).status_code == 401
         assert client.post(f"{issuer}/login", json=account).status_code == 401
         updated = client.post(f"{issuer}/login", json=replacement)
         assert updated.status_code == 200
         updated_token = updated.json()["access_token"]
         jwks = client.get(f"{issuer}/jwks.json").json()
     before = FlowAuthVerifier(settings)
-    for token in (original_token, updated_token):
-        assert asyncio.run(before.verify(token)).token.subject == created.json()["subject"]
+    with pytest.raises(AuthVerificationError):
+        asyncio.run(before.verify(original_token))
+    assert asyncio.run(before.verify(updated_token)).token.subject == created.json()["subject"]
 
     restart()
 
@@ -204,10 +234,10 @@ def test_password_change_and_identity_survive_process_restart(service, monkeypat
         reopened = client.post(f"{issuer}/login", json=replacement)
         assert reopened.status_code == 200
         assert "admin_token" not in reopened.json()
-    # A fresh verifier fetches the restarted issuer's JWKS over HTTPS. Both old
-    # and new tokens must verify, proving persistence of the actual signing key.
+    # A fresh verifier fetches the restarted issuer's JWKS over HTTPS.
+    # Completed rotation persists and the signing key remains unchanged.
     after = FlowAuthVerifier(settings)
-    for token in (original_token, updated_token, reopened.json()["access_token"]):
+    for token in (updated_token, reopened.json()["access_token"]):
         assert asyncio.run(after.verify(token)).token.subject == created.json()["subject"]
 
 

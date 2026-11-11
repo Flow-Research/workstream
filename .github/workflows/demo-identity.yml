@@ -10,6 +10,8 @@ on:
       - 'deploy/hosted/preflight.py'
       - 'deploy/hosted/compose.py'
       - 'deploy/hosted/demo-identity.Caddyfile'
+      - 'deploy/hosted/public.Caddyfile'
+      - 'scripts/test_public_ingress.py'
       - 'deploy/hosted/demo-identity-caddy.service'
       - 'backend/app/adapters/auth/flow.py'
       - '.dockerignore'
@@ -75,6 +77,15 @@ jobs:
             -v "$proof/cert.pem:/proof/cert.pem:ro" \
             caddy@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9 \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Prove public ingress routing with the pinned Caddy binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          proof=$(mktemp -d)
+          container=$(docker create caddy@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9)
+          trap 'docker rm -f "$container" >/dev/null; rm -rf "$proof"' EXIT
+          docker cp "$container:/usr/bin/caddy" "$proof/caddy"
+          WORKSTREAM_TEST_CADDY="$proof/caddy" python3 scripts/test_public_ingress.py -q
       - name: Verify hosted Compose issuer network boundary
         shell: bash
         run: |
