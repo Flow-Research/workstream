@@ -107,6 +107,12 @@ CLI and MCP cannot edit email. Optional issuer name seeds first admission; subse
 display-name edits, including clearing it, remain local. Identity and authority remain
 bound to issuer/subject, not email; signed email is not proof of mailbox verification.
 
+The [single-request submission specification](spec_submission_execution.md) is
+the approved target for [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md).
+Its first boundary defines immutable command/source values only. Durable intake,
+streaming custody, one-session PRE, finalization and client cutover remain planned;
+the active API still uses preparation followed by admission-consuming submission.
+
 ## Product Goal
 
 Workstream turns governed work into trusted `ContributionRecord` facts:

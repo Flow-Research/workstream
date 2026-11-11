@@ -273,6 +273,12 @@ TECHNICAL_WORKER_PREFIX = re.compile(
 )
 
 MATCH_EXEMPTIONS = {
+    # Exact storage-key example, not a public API route. All other /v1 uses
+    # in this active specification remain subject to the API-prefix rule.
+    (
+        "docs/spec_submission_execution.md",
+        "NON_CANONICAL_API_PREFIX",
+    ): re.compile(r"^submission-source/v1/<operation_uuid>/bundle\.zip$"),
     (
         "docs/reference_specs/README.md",
         "NON_CANONICAL_API_PREFIX",
