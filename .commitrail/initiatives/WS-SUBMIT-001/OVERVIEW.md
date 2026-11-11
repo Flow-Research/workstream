@@ -13,8 +13,9 @@ authorize merge or production deployment.
 contracts and hidden pre-handoff database custody with TASK/source/lease guards. Per-operation physical source reservations are implemented with explicit limits.
 Hidden S3-compatible source methods and a backpressured receiver now provide
 bounded parts, conditional completion, exact-version reads and scoped uncertain
-upload discovery. Durable upload receipt orchestration, local source support,
-confirmed physical reclamation, AWS qualification and accepted authority remain
+upload discovery. Local source methods keep one ZIP inode through sealing, verify
+exact generations and preserve completed bytes on late abort. Durable upload
+orchestration, confirmed physical reclamation, AWS qualification and accepted authority remain
 to implement and integrate.
 The existing public flow stays active until coordinated cutover.
 

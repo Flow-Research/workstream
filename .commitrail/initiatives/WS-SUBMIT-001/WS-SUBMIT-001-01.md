@@ -138,7 +138,7 @@ be enumerated only at the already-owned key. Abort acknowledgement never release
 a charge. Existing AWS activation remains insufficient for this new surface.
 
 The methods are hidden prerequisites. Durable handle/completion persistence is
-implemented. Root orchestration, local source support, exact cleanup authority/
+implemented, together with local source methods. Root orchestration and exact cleanup authority/
 reclamation and AWS qualification remain required before public use.
 
 ## Acceptance criteria
@@ -206,7 +206,7 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
 - The retained store conformance vector still allowed only the former four
   generic methods. Invoking that vector against the new S3 store reproduced its
   surface mismatch without provider I/O. Its closed assertion now includes the
-  seven explicit source operations for S3; local source parity is still pending.
+  seven explicit source operations for both local and S3 stores.
   No unrelated public methods or removed capability aliases are allowed.
 
 - Hosted CI exposed stale migration test assumptions after adding 0069: the
@@ -261,3 +261,37 @@ runs exercised the real provider but their cleanup metadata covered a different
 empty bucket; they do not prove cleanup of the test objects. This repair changes
 only test-infrastructure disposal, never product cleanup authority or charge
 release. Re-run the real suite and cleanup regression before crediting this proof.
+
+## Local source stage
+
+Extend the existing local ArtifactStore with the seven source methods through a
+private helper in the same adapter package. Preserve the existing namespace
+fingerprint, factory and SHA-object layout. Create each operation ZIP directly
+at its final key and retain that inode through sealing; never copy or rename raw
+ZIP bytes. Use exact operation locks, no-follow private descriptors, bounded
+metadata publication and cancellation-resistant off-loop I/O. A completed source
+survives late abort; receiving abort retains a tombstone and bytes for separate
+cleanup authority. No charge reclamation or public cutover is included.
+
+Allowed changes: local adapter and cohesive helper, existing local/conformance
+suites, exact behavior partition registration and affected current documentation.
+Required proof covers bounded parts and exact read/hash, inode substitution,
+namespace/handle substitution, late writes and abort, interrupted metadata/seal,
+startup during a live writer, and cancellation without a surviving writable fd.
+Architecture/security plan review passed with low risks after requiring abort
+under the operation lock to preserve any completed source. Runtime evidence is
+still required. Risk/reviewer routing remains the initiative's existing L0 scope.
+
+
+Local source implementation evidence: 67 local/conformance cases passed on the
+restored working tree, covering exact inode preservation, restarted reads,
+completed-source protection on late abort, rejected inode substitution,
+cancellation draining before abort, interrupted sealing, namespace/handle and
+receipt substitutions, lost-initiation discovery and symlink rejection. The
+170-test protected ownership suite passed after registering the new helper;
+existing targets and the protected base remain unchanged. These results cover
+provider primitives, not the absent public orchestration or physical reclamation.
+Metadata publication uses a private temporary file, fsync and rename under the
+operation lock; raw ZIP bytes are never renamed or copied. Every caller uses the
+same operation lock, and existing metadata is rejected before publication.
+New directories are fsynced through their parents before begin acknowledgement.

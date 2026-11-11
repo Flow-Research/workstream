@@ -113,8 +113,9 @@ Its hidden owner boundaries define immutable command/source values and durable
 foreground intake custody with a matching TASK pointer, source/lease fences and
 per-operation physical source reservations under explicit limits. Hidden bounded
 receipt and S3-compatible source capabilities cover conditional completion and
-exact-version reads. Durable upload/cleanup orchestration, local source support,
-AWS source qualification, one-session PRE, accepted handoff,
+exact-version reads. Local source methods preserve one ZIP inode through sealing
+and completed bytes on late abort. Durable upload/cleanup orchestration, AWS
+source qualification, one-session PRE, accepted handoff,
 finalization and client cutover remain planned;
 the active API still uses preparation followed by admission-consuming submission.
 

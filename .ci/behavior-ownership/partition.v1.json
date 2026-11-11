@@ -22,6 +22,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/local_submission_source.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/s3_compatible.py"
     },
     {
@@ -2621,7 +2625,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "a2f87870061a79753411f0d4d1ff941e830e00a4168af1f001f4910ba8f131b5",
+  "authority_digest": "84602ecd36037090ed183474d7020b1a046c316f77ea4963ef6be9e64d80d481",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

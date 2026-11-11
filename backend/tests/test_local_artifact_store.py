@@ -870,3 +870,245 @@ def test_cleanup_attempts_lock_release_after_temporary_unlink_failure(
         adapter.close()
 
     assert released == [lock]
+
+
+def local_source_intent(store):
+    from datetime import UTC, datetime, timedelta
+    from app.core.identifiers import new_record_id
+    from app.modules.artifacts.api.submission_intake import SubmissionSourceLocation, SubmissionSourceUploadIntent
+    return SubmissionSourceUploadIntent(
+        location=SubmissionSourceLocation(operation_id=new_record_id(), namespace_id="primary",
+            namespace_fingerprint=store._expected_namespace_fingerprint(), provider_profile="local-v2"),
+        upload_fence=1, maximum_raw_bytes=6 * 1024 * 1024, declared_raw_bytes=None,
+        part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0,
+        upload_deadline_at=datetime.now(UTC) + timedelta(seconds=90),
+    )
+
+
+async def local_source_completion(store, upload, data):
+    from app.modules.artifacts.api.submission_intake import SubmissionSourceCompletion
+    parts = []
+    for offset in range(0, len(data), upload.intent.part_bytes):
+        parts.append(await store.upload_source_part(upload, len(parts) + 1, data[offset:offset + upload.intent.part_bytes]))
+    return SubmissionSourceCompletion(upload=upload, parts=tuple(parts),
+        raw_sha256="sha256:" + hashlib.sha256(data).hexdigest(), raw_byte_count=len(data))
+
+
+@pytest.mark.asyncio
+async def test_local_submission_source_keeps_one_inode_and_survives_late_abort_and_restart(tmp_path):
+    from app.interfaces.artifacts import ArtifactPreconditionFailedError
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root, buffer_bytes=65536)
+    intent = local_source_intent(store)
+    upload = await store.begin_source_upload(intent)
+    path = root / "objects" / intent.location.object_ref
+    inode = path.stat().st_ino
+    data = b"x" * (5 * 1024 * 1024) + b"original tail"
+    completion = await local_source_completion(store, upload, data)
+    sealed = await store.complete_source_upload(completion)
+    assert await store.discover_source_uploads(intent) == ()
+    assert path.stat().st_ino == inode and path.stat().st_nlink == 1
+    assert path.stat().st_mode & 0o777 == 0o400
+    await store.request_source_abort(upload)
+    assert await store.observe_source_upload(completion) == sealed
+    with pytest.raises(ArtifactPreconditionFailedError):
+        await store.upload_source_part(upload, 1, b"replacement")
+    store.close()
+    store = initialize_local_store(root=root, buffer_bytes=65536)
+    try:
+        chunks = [chunk async for chunk in store.open_source(sealed)]
+        assert max(map(len, chunks)) <= 65536 and b"".join(chunks) == data
+        assert path.stat().st_ino == inode
+        assert list(root.rglob("bundle.zip")) == [path]
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_source_abort_tombstone_retains_bytes_and_fences_complete(tmp_path):
+    from app.interfaces.artifacts import ArtifactPreconditionFailedError
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        intent = local_source_intent(store)
+        upload = await store.begin_source_upload(intent)
+        assert await store.discover_source_uploads(intent) == (upload,)
+        completion = await local_source_completion(store, upload, b"partial owned bytes")
+        await store.request_source_abort(upload)
+        assert (root / "objects" / intent.location.object_ref).read_bytes() == b"partial owned bytes"
+        assert await store.discover_source_uploads(intent) == ()
+        assert await store.observe_source_upload(completion) is None
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.complete_source_upload(completion)
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.begin_source_upload(intent)
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_source_rejects_replaced_inode_even_with_identical_bytes(tmp_path):
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        upload = await store.begin_source_upload(local_source_intent(store))
+        completion = await local_source_completion(store, upload, b"identical bytes")
+        sealed = await store.complete_source_upload(completion)
+        path = root / "objects" / upload.intent.location.object_ref
+        replacement = path.with_name("replacement")
+        replacement.write_bytes(b"identical bytes")
+        replacement.chmod(0o400)
+        replacement.replace(path)
+        with pytest.raises(ArtifactIntegrityError, match="generation"):
+            await store.observe_source_upload(completion)
+        with pytest.raises(ArtifactIntegrityError, match="generation"):
+            _ = [chunk async for chunk in store.open_source(sealed)]
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_cancel_drains_writer_before_abort_and_allows_safe_startup(tmp_path, monkeypatch):
+    from app.interfaces.artifacts import ArtifactPreconditionFailedError
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    upload = await store.begin_source_upload(local_source_intent(store))
+    entered, release = threading.Event(), threading.Event()
+    original = store._write_all
+
+    def paused(descriptor, chunk):
+        if bytes(chunk) == b"in flight":
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("writer was not released")
+        return original(descriptor, chunk)
+
+    monkeypatch.setattr(store, "_write_all", paused)
+    writer = asyncio.create_task(store.upload_source_part(upload, 1, b"in flight"))
+    abort = None
+    try:
+        assert await asyncio.to_thread(entered.wait, 3)
+        reopened = await asyncio.to_thread(initialize_local_store, root=root)
+        reopened.close()  # Layout validation tolerates an active private write.
+        writer.cancel()
+        abort = asyncio.create_task(store.request_source_abort(upload))
+        await asyncio.sleep(0.05)
+        assert not writer.done() and not abort.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await writer
+        await abort
+        assert (root / "objects" / upload.intent.location.object_ref).read_bytes() == b"in flight"
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.upload_source_part(upload, 1, b"late writer")
+    finally:
+        release.set()
+        await asyncio.gather(writer, *([abort] if abort else []), return_exceptions=True)
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_interrupted_seal_cannot_admit_more_parts(tmp_path, monkeypatch):
+    from app.interfaces.artifacts import ArtifactPreconditionFailedError
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    upload = await store.begin_source_upload(local_source_intent(store))
+    completion = await local_source_completion(store, upload, b"exact raw bytes")
+    original = os.fchmod
+
+    def fail_seal(descriptor, mode):
+        if mode == 0o400:
+            raise OSError("simulated interrupted seal")
+        return original(descriptor, mode)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fchmod", fail_seal)
+        with pytest.raises(ArtifactStoreUnavailableError):
+            await store.complete_source_upload(completion)
+    store.close()
+    store = initialize_local_store(root=root)
+    try:
+        assert await store.observe_source_upload(completion) is None
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.upload_source_part(upload, 1, b"overwrite")
+        await store.request_source_abort(upload)
+        assert (root / "objects" / upload.intent.location.object_ref).read_bytes() == b"exact raw bytes"
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_rejects_foreign_namespace_handle_and_false_receipts(tmp_path):
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        intent = local_source_intent(store)
+        foreign = intent.model_copy(update={"location": intent.location.model_copy(
+            update={"namespace_fingerprint": "sha256:" + "f" * 64})})
+        with pytest.raises(ArtifactOperationConflictError, match="namespace"):
+            await store.begin_source_upload(foreign)
+        assert not (root / "objects" / "submission-source").exists()
+        upload = await store.begin_source_upload(intent)
+        with pytest.raises(ArtifactOperationConflictError, match="identity"):
+            await store.upload_source_part(upload.model_copy(update={"provider_upload_id": "foreign"}), 1, b"forged")
+        completion = await local_source_completion(store, upload, b"original")
+        with pytest.raises(ArtifactIntegrityError, match="part"):
+            await store.complete_source_upload(completion.model_copy(update={"parts": (
+                completion.parts[0].model_copy(update={"provider_etag": "false"}),)}))
+        with pytest.raises(ArtifactIntegrityError, match="digest"):
+            await store.complete_source_upload(completion.model_copy(update={"raw_sha256": "sha256:" + "0" * 64}))
+        sealed = await store.complete_source_upload(completion)
+        assert b"".join([part async for part in store.open_source(sealed)]) == b"original"
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_lost_begin_ack_keeps_discoverable_abort_ownership(tmp_path, monkeypatch):
+    from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
+    from app.interfaces.artifacts import ArtifactPreconditionFailedError
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    intent = local_source_intent(store)
+    original = LocalSubmissionSource.publish
+
+    def lost_ack(self, directory, name, value):
+        original(self, directory, name, value)
+        if name == "upload.json":
+            raise OSError("lost begin acknowledgement")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(LocalSubmissionSource, "publish", lost_ack)
+        with pytest.raises(ArtifactStoreUnavailableError):
+            await store.begin_source_upload(intent)
+    store.close()
+    store = initialize_local_store(root=root)
+    try:
+        uploads = await store.discover_source_uploads(intent)
+        assert len(uploads) == 1 and uploads[0].intent == intent
+        await store.request_source_abort(uploads[0])
+        assert await store.discover_source_uploads(intent) == ()
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.begin_source_upload(intent)
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_submission_symlink_cannot_write_outside_owned_source(tmp_path):
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    upload = await store.begin_source_upload(local_source_intent(store))
+    path = root / "objects" / upload.intent.location.object_ref
+    outside = tmp_path / "retained"
+    outside.write_bytes(b"retained bytes")
+    path.unlink()
+    path.symlink_to(outside)
+    try:
+        with pytest.raises(ArtifactStoreUnavailableError):
+            await store.upload_source_part(upload, 1, b"overwrite")
+        assert outside.read_bytes() == b"retained bytes"
+    finally:
+        store.close()
+    with pytest.raises((ArtifactConfigurationError, ArtifactIntegrityError)):
+        initialize_local_store(root=root)

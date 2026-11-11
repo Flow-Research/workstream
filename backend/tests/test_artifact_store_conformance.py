@@ -216,6 +216,11 @@ class ArtifactStoreConformanceTests:
 class TestLocalArtifactStoreConformance(ArtifactStoreConformanceTests):
     """Run the shared v2 contract against LocalStorage."""
 
+    expected_source_operations = frozenset({
+        "begin_source_upload", "upload_source_part", "complete_source_upload",
+        "open_source", "observe_source_upload", "discover_source_uploads", "request_source_abort",
+    })
+
     expected_identity = ExternalServiceAdapterIdentity("artifact_store", "local")
 
     def make_store(self, root: Path) -> ArtifactStore:
