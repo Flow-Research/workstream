@@ -18,8 +18,10 @@ from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceLocation,
+    SubmissionSourceCapacityLimits,
 )
 from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
 from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
@@ -35,6 +37,7 @@ class SubmissionIntakeRepository:
     def __init__(self, session: AsyncSession, tasks: IntakeTaskCustodyPort) -> None:
         self._session = session
         self._tasks = tasks
+        self._capacity = SubmissionSourceCapacity(session)
 
     def _require_transaction(self) -> None:
         if not self._session.in_transaction() or self._session.in_nested_transaction():
@@ -44,8 +47,9 @@ class SubmissionIntakeRepository:
         self, *, metadata: SubmissionIntakeMetadata, actor_id: UUID, identity_link_id: UUID,
         idempotency_key: UUID, maximum_raw_bytes: int,
         upload_deadline_at: datetime, lease_expires_at: datetime,
+        capacity_limits: SubmissionSourceCapacityLimits, declared_raw_bytes: int | None,
     ) -> SubmissionIntakeOperation:
-        """Reserve metadata custody only; callers must still perform full T1 admission."""
+        """Reserve command and physical bytes; callers still own AUTH and full T1 admission."""
         self._require_transaction()
         metadata = SubmissionIntakeMetadata.model_validate(metadata)
         operation_id = new_record_id()
@@ -77,6 +81,7 @@ class SubmissionIntakeRepository:
         self._session.add(row)
         await self._session.flush()
         await self._session.refresh(row)
+        await self._capacity.reserve(row, limits=capacity_limits, declared_raw_bytes=declared_raw_bytes)
         return row
 
     async def _lock(self, operation_id: UUID) -> SubmissionIntakeOperation:
@@ -124,6 +129,7 @@ class SubmissionIntakeRepository:
         row.state, row.lease_expires_at = "pre_checking", lease_expires_at
         await self._session.flush()
         await self._session.refresh(row)
+        await self._capacity.seal(row)
         return SealedSubmissionSource(
             location=SubmissionSourceLocation(
                 operation_id=operation_id, namespace_id=row.namespace_id,

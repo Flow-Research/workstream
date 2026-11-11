@@ -76,12 +76,37 @@ Only receiving, pre_checking and pre-handoff terminal outcomes are currently
 permitted. Accepted states remain denied until exact AUTH/CHECKERS/outbox handoff
 is implemented. These flush-only persistence primitives provide neither storage
 capacity nor provider capability nor authorization. Root transaction composition,
-physical reservation, streaming, accepted handoff and public cutover remain work.
+streaming, accepted handoff and public cutover remain work.
 
 The schema comparison from 0068 to 0069 added one table, 33 columns (including
 the TASK pointer), 24 constraints, six indexes, three functions and four triggers;
 no previous schema objects or reference rows changed. Model registration uses
 ART's `intake/models.py` through the canonical database model registry.
+
+## Physical reservation stage
+
+Source accounting extends ART's intake model/repository and migration 0069
+with per-operation source-byte charges. The existing SHA-deduplicated admission
+ledger remains intact for its consumers: it cannot count separate equal-content
+source objects. Source quotas are a distinct configured allocation for this
+managed prefix, not a claim to measure every existing object in the bucket.
+
+Use one immutable namespace capacity profile and serialize reservation/sealing
+under its row lock, after TASK and operation locks. Sum actual charge rows rather
+than adding a second mutable counter that could drift. Explicit required limits
+cover the source allocation, with optional task/project/producer caps. No
+production defaults are selected. Declared size reserves exactly that bounded
+amount; otherwise reserve the operation raw limit. EOF must match a declaration.
+Sealing converts to actual raw bytes and releases only unused allowance. Failure,
+lease expiry and registration do not release physical charges. Reclamation will
+require the subsequent exact cleanup implementation; it is not exposed here.
+
+Allowed files are the existing intake models/repository, a cohesive ART capacity
+owner and typed limits in the intake API, migration0069, their targeted tests,
+canonical reset/ownership catalogues and this current record. This stage adds no
+provider writes, route or AUTH authority. Proof must cover simultaneous spending,
+rollback, same-content distinct operations, declared-size equality, sealed-byte
+conversion and failed/expired charge retention on real PostgreSQL.
 
 ## Acceptance criteria
 
@@ -99,6 +124,10 @@ ART's `intake/models.py` through the canonical database model registry.
 - [ ] Single API/CLI/MCP cutover, durable recovery and cleanup, existing downstream
   policy branches and full-suite/end-to-end verification.
 
+- [x] Physical source reservations enforce every enabled scope, retain failed and
+  expired obligations, reject declared-length mismatch and count equal-content
+  sources separately; concurrent tasks cannot spend the same remaining bytes.
+
 ## Risk and review routing
 
 - Risk class: L0
@@ -115,6 +144,8 @@ ART's `intake/models.py` through the canonical database model registry.
 | Documentation guard regression | `python -m unittest scripts.test_lightweight_agent_gates scripts.test_stale_review_contracts -q` | 35 tests passed | Narrow storage examples only |
 | Module boundaries | `python -m scripts.module_boundaries validate --protected-base origin/main` | Passed | Existing private-import debt unchanged |
 | Foreground custody and retained-data upgrade | `pytest tests/artifacts/test_submission_intake_custody.py 'tests/test_alembic.py::test_preceding_head_upgrades_to_current_without_recreation[0068_issuer_profile_email]' tests/test_alembic.py::test_repeated_upgrade_head_preserves_current_database tests/tasks/submission_dispatch/test_migration.py -q` through the isolated PostgreSQL 16 runner | 21 passed; isolated database and role cleanup confirmed | Pre-handoff persistence only; no provider, PRE, acceptance or public-route proof |
+| Physical source accounting | `pytest tests/artifacts/test_submission_intake_custody.py -q` through isolated PostgreSQL 16 | 34 passed on the capacity-stage working tree; cleanup confirmed | No provider bytes written or cleanup/reclamation claim |
+| Capacity-stage static ownership | UUID inventory, behavior partition, semantic lane catalogue and module boundary tests | 254 passed; ruff passed | Final integrated suite still required |
 | Protected target partition | `pytest tests/test_behavior_ownership.py -q` | 170 passed | Exact added paths only; no relaxed selection |
 | Model registration | UUID inventory and protected module-boundary tests | Both passed | No new cross-owner private imports |
 
@@ -144,6 +175,6 @@ ART's `intake/models.py` through the canonical database model registry.
 
 - Current-source reconciliation: rebased onto 94334ccf4 (PR #707); preserved issuer
   profile roadmap changes and schema head 0068. Submission owner contracts unchanged.
-- Next implementation stage: physical reservation and streaming custody in
+- Next implementation stage: bounded streaming and exact cleanup custody in
   the same PR, followed by PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.

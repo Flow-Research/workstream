@@ -20,6 +20,8 @@ FORMAT = "workstream-identifier-inventory-1"
 GENERATION_CLASSIFICATION_FORMAT = "workstream-uuid-generation-classifications-1"
 GENERATION_CLASSIFICATIONS = "identifier_generation_classifications.json"
 SEMANTIC_KEYS = {
+    "submission_source_capacity_profiles": ("ART namespace-owned source allocation", ("namespace_id",)),
+    "submission_source_charges": ("intake-operation-owned physical obligation", ("operation_id",)),
     "submission_dispatches": ("submission-owned original dispatch receipt", ("submission_id",)),
     "submission_binding_receipts": ("admission-owned binding authority receipt", ("admission_id",)),
     "review_packet_guide_items": (

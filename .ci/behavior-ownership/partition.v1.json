@@ -598,6 +598,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/capacity.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/intake/models.py"
     },
     {
@@ -2613,7 +2617,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "e5a34050788944ca725e2c7585d25a06f4fd3987e65bcae28d6b54e908a026cc",
+  "authority_digest": "f8f9f1525d11ac23ce78f7dd22ea7258bee8417adece74ca9c205a3b0d901864",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

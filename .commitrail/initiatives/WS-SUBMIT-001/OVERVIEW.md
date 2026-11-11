@@ -10,7 +10,8 @@ authorize merge or production deployment.
 ## Current boundary
 
 [WS-SUBMIT-001-01](WS-SUBMIT-001-01.md) establishes exact command/source value
-contracts and hidden pre-handoff database custody with TASK/source/lease guards. Physical capacity, provider I/O,
+contracts and hidden pre-handoff database custody with TASK/source/lease guards. Per-operation physical source reservations are implemented with explicit limits.
+Provider I/O, confirmed physical reclamation,
 accepted authority and orchestration remain to implement.
 The existing public flow stays active until coordinated cutover.
 

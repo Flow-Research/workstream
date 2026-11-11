@@ -77,3 +77,49 @@ class SubmissionIntakeOperation(Base):
     terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_code: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+
+
+class SubmissionSourceCapacityProfile(Base):
+    """One explicit source-byte allocation shared by namespace writers."""
+
+    __tablename__ = "submission_source_capacity_profiles"
+    __table_args__ = (
+        ForeignKeyConstraint(["namespace_id", "namespace_fingerprint"],
+                             ["artifact_storage_namespaces.id", "artifact_storage_namespaces.namespace_fingerprint"],
+                             name="fk_submission_source_capacity_namespace"),
+        CheckConstraint("maximum_total_bytes>0 and (maximum_project_bytes is null or maximum_project_bytes>0) "
+                        "and (maximum_producer_bytes is null or maximum_producer_bytes>0) "
+                        "and (maximum_task_bytes is null or maximum_task_bytes>0)", name="positive_limits"),
+        CheckConstraint("configuration_sha256 ~ '^sha256:[0-9a-f]{64}$'", name="configuration_digest"),
+    )
+
+    namespace_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    namespace_fingerprint: Mapped[str] = mapped_column(String(71))
+    maximum_total_bytes: Mapped[int] = mapped_column(BigInteger)
+    maximum_project_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    maximum_producer_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    maximum_task_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    configuration_sha256: Mapped[str] = mapped_column(String(71))
+
+
+class SubmissionSourceCharge(Base):
+    """Physical source obligation, retained independently of command outcome."""
+
+    __tablename__ = "submission_source_charges"
+    __table_args__ = (
+        ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
+                             name="fk_submission_source_charge_operation"),
+        CheckConstraint("reserved_bytes>0 and accounted_bytes>0 and accounted_bytes<=reserved_bytes",
+                        name="positive_charge"),
+        CheckConstraint("declared_raw_bytes is null or declared_raw_bytes=reserved_bytes", name="declared_reservation"),
+        CheckConstraint("state in ('reserved','sealed')", name="charge_state"),
+        CheckConstraint("(state='reserved' and accounted_bytes=reserved_bytes and sealed_at is null) "
+                        "or (state='sealed' and sealed_at is not null)", name="charge_shape"),
+    )
+
+    operation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    declared_raw_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    reserved_bytes: Mapped[int] = mapped_column(BigInteger)
+    accounted_bytes: Mapped[int] = mapped_column(BigInteger)
+    state: Mapped[str] = mapped_column(String(20))
+    sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

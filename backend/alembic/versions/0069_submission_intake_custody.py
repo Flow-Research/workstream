@@ -71,6 +71,39 @@ CREATE INDEX ix_submission_intake_expiry ON public.submission_intake_operations 
 CREATE UNIQUE INDEX uq_submission_intake_active_task ON public.submission_intake_operations (task_id) WHERE state in ('receiving','pre_checking')
 """
 
+CAPACITY_TABLE_SQL = r"""
+CREATE TABLE public.submission_source_capacity_profiles (
+	namespace_id VARCHAR(20) NOT NULL,
+	namespace_fingerprint VARCHAR(71) NOT NULL,
+	maximum_total_bytes BIGINT NOT NULL,
+	maximum_project_bytes BIGINT,
+	maximum_producer_bytes BIGINT,
+	maximum_task_bytes BIGINT,
+	configuration_sha256 VARCHAR(71) NOT NULL,
+	CONSTRAINT pk_submission_source_capacity_profiles PRIMARY KEY (namespace_id),
+	CONSTRAINT fk_submission_source_capacity_namespace FOREIGN KEY(namespace_id, namespace_fingerprint) REFERENCES public.artifact_storage_namespaces (id, namespace_fingerprint),
+	CONSTRAINT ck_submission_source_capacity_profiles_positive_limits CHECK (maximum_total_bytes>0 and (maximum_project_bytes is null or maximum_project_bytes>0) and (maximum_producer_bytes is null or maximum_producer_bytes>0) and (maximum_task_bytes is null or maximum_task_bytes>0)),
+	CONSTRAINT ck_submission_source_capacity_profiles_configuration_digest CHECK (configuration_sha256 ~ '^sha256:[0-9a-f]{64}$')
+)
+
+;
+
+CREATE TABLE public.submission_source_charges (
+	operation_id UUID NOT NULL,
+	declared_raw_bytes BIGINT,
+	reserved_bytes BIGINT NOT NULL,
+	accounted_bytes BIGINT NOT NULL,
+	state VARCHAR(20) NOT NULL,
+	sealed_at TIMESTAMP WITH TIME ZONE,
+	CONSTRAINT pk_submission_source_charges PRIMARY KEY (operation_id),
+	CONSTRAINT fk_submission_source_charge_operation FOREIGN KEY(operation_id) REFERENCES public.submission_intake_operations (id),
+	CONSTRAINT ck_submission_source_charges_positive_charge CHECK (reserved_bytes>0 and accounted_bytes>0 and accounted_bytes<=reserved_bytes),
+	CONSTRAINT ck_submission_source_charges_declared_reservation CHECK (declared_raw_bytes is null or declared_raw_bytes=reserved_bytes),
+	CONSTRAINT ck_submission_source_charges_charge_state CHECK (state in ('reserved','sealed')),
+	CONSTRAINT ck_submission_source_charges_charge_shape CHECK ((state='reserved' and accounted_bytes=reserved_bytes and sealed_at is null) or (state='sealed' and sealed_at is not null))
+);
+"""
+
 GUARDS = r"""
 CREATE FUNCTION public.submission_intake_task_snapshot(t public.workstream_tasks)
 RETURNS jsonb LANGUAGE sql IMMUTABLE STRICT
@@ -87,7 +120,7 @@ DECLARE
   canonical text;
   selector text;
 BEGIN
-  IF TG_OP='DELETE' THEN
+  IF TG_OP IN ('DELETE','TRUNCATE') THEN
     RAISE EXCEPTION 'submission intake custody cannot be deleted' USING ERRCODE='23514';
   END IF;
   IF TG_OP='INSERT' THEN
@@ -184,6 +217,10 @@ BEGIN
     RAISE EXCEPTION 'stale intake foreground owner' USING ERRCODE='23514';
   END IF;
   IF OLD.raw_sha256 IS NULL AND NEW.raw_sha256 IS NOT NULL THEN
+    IF EXISTS (SELECT 1 FROM public.submission_source_charges c WHERE c.operation_id=OLD.id
+        AND c.declared_raw_bytes IS NOT NULL AND c.declared_raw_bytes IS DISTINCT FROM NEW.raw_byte_count) THEN
+      RAISE EXCEPTION 'submission source declared size mismatch' USING ERRCODE='23514';
+    END IF;
     NEW.eof_at:=clock_timestamp();
   END IF;
   IF OLD.provider_generation IS NULL AND NEW.provider_generation IS NOT NULL THEN
@@ -240,6 +277,123 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submiss
 CREATE CONSTRAINT TRIGGER assignment_submission_intake_closure
 AFTER INSERT OR UPDATE OR DELETE ON public.task_assignments
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submission_intake_custody();
+CREATE FUNCTION public.guard_submission_source_capacity_profile()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE canonical text;
+BEGIN
+  IF TG_OP<>'INSERT' THEN
+    IF TG_OP='UPDATE' AND to_jsonb(NEW)=to_jsonb(OLD) THEN RETURN NEW; END IF;
+    RAISE EXCEPTION 'submission source capacity configuration is immutable' USING ERRCODE='23514';
+  END IF;
+  canonical:=public.project_guide_projection_canonical_json(jsonb_build_object(
+    'schema_version','workstream.submission_source_capacity.v1',
+    'maximum_total_bytes',NEW.maximum_total_bytes,'maximum_project_bytes',NEW.maximum_project_bytes,
+    'maximum_producer_bytes',NEW.maximum_producer_bytes,'maximum_task_bytes',NEW.maximum_task_bytes));
+  IF NEW.configuration_sha256 IS DISTINCT FROM 'sha256:'||encode(sha256(convert_to(canonical,'UTF8')),'hex') THEN
+    RAISE EXCEPTION 'submission source capacity digest mismatch' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER submission_source_capacity_profile_guard
+BEFORE INSERT OR UPDATE OR DELETE ON public.submission_source_capacity_profiles
+FOR EACH ROW EXECUTE FUNCTION public.guard_submission_source_capacity_profile();
+
+CREATE FUNCTION public.guard_submission_source_charge()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE
+  o public.submission_intake_operations%ROWTYPE;
+  p public.submission_source_capacity_profiles%ROWTYPE;
+  total_bytes numeric; project_bytes numeric; producer_bytes numeric; task_bytes numeric;
+BEGIN
+  IF TG_OP IN ('DELETE','TRUNCATE') THEN
+    RAISE EXCEPTION 'submission source charges require confirmed cleanup' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO o FROM public.submission_intake_operations WHERE id=NEW.operation_id;
+  SELECT * INTO p FROM public.submission_source_capacity_profiles
+    WHERE namespace_id=o.namespace_id AND namespace_fingerprint=o.namespace_fingerprint FOR UPDATE;
+  IF o.id IS NULL OR p.namespace_id IS NULL THEN
+    RAISE EXCEPTION 'submission source capacity owner missing' USING ERRCODE='23514';
+  END IF;
+  IF TG_OP='INSERT' THEN
+    IF o.state<>'receiving' OR o.raw_sha256 IS NOT NULL
+       OR NEW.state<>'reserved' OR NEW.sealed_at IS NOT NULL
+       OR NEW.reserved_bytes IS DISTINCT FROM coalesce(NEW.declared_raw_bytes,o.maximum_raw_bytes)
+       OR NEW.reserved_bytes>o.maximum_raw_bytes
+       OR NEW.accounted_bytes IS DISTINCT FROM NEW.reserved_bytes THEN
+      RAISE EXCEPTION 'invalid submission source reservation' USING ERRCODE='23514';
+    END IF;
+  ELSE
+    IF (to_jsonb(NEW)-ARRAY['state','accounted_bytes','sealed_at']) IS DISTINCT FROM
+       (to_jsonb(OLD)-ARRAY['state','accounted_bytes','sealed_at']) THEN
+      RAISE EXCEPTION 'submission source reservation identity is immutable' USING ERRCODE='23514';
+    END IF;
+    IF OLD.state='sealed' THEN
+      IF to_jsonb(NEW) IS DISTINCT FROM to_jsonb(OLD) THEN
+        RAISE EXCEPTION 'sealed submission source charge is immutable' USING ERRCODE='23514';
+      END IF;
+      RETURN NEW;
+    END IF;
+    IF NEW.state<>'sealed' OR o.provider_generation IS NULL
+       OR NEW.accounted_bytes IS DISTINCT FROM o.raw_byte_count
+       OR (NEW.declared_raw_bytes IS NOT NULL AND NEW.declared_raw_bytes IS DISTINCT FROM o.raw_byte_count) THEN
+      RAISE EXCEPTION 'invalid sealed submission source charge' USING ERRCODE='23514';
+    END IF;
+    NEW.sealed_at:=clock_timestamp();
+  END IF;
+  SELECT coalesce(sum(c.accounted_bytes),0),
+         coalesce(sum(c.accounted_bytes) FILTER (WHERE i.project_id=o.project_id),0),
+         coalesce(sum(c.accounted_bytes) FILTER (WHERE i.actor_profile_id=o.actor_profile_id),0),
+         coalesce(sum(c.accounted_bytes) FILTER (WHERE i.task_id=o.task_id),0)
+    INTO total_bytes,project_bytes,producer_bytes,task_bytes
+    FROM public.submission_source_charges c JOIN public.submission_intake_operations i ON i.id=c.operation_id
+    WHERE i.namespace_id=o.namespace_id AND i.namespace_fingerprint=o.namespace_fingerprint
+      AND c.operation_id<>NEW.operation_id;
+  IF total_bytes+NEW.accounted_bytes>p.maximum_total_bytes
+     OR (p.maximum_project_bytes IS NOT NULL AND project_bytes+NEW.accounted_bytes>p.maximum_project_bytes)
+     OR (p.maximum_producer_bytes IS NOT NULL AND producer_bytes+NEW.accounted_bytes>p.maximum_producer_bytes)
+     OR (p.maximum_task_bytes IS NOT NULL AND task_bytes+NEW.accounted_bytes>p.maximum_task_bytes) THEN
+    RAISE EXCEPTION 'submission source capacity exhausted' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER submission_source_charge_guard
+BEFORE INSERT OR UPDATE OR DELETE ON public.submission_source_charges
+FOR EACH ROW EXECUTE FUNCTION public.guard_submission_source_charge();
+
+CREATE FUNCTION public.check_submission_source_accounting()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE
+  operation_key uuid;
+  o public.submission_intake_operations%ROWTYPE;
+  c public.submission_source_charges%ROWTYPE;
+BEGIN
+  IF TG_TABLE_NAME='submission_intake_operations' THEN
+    operation_key:=coalesce(NEW.id,OLD.id);
+  ELSE
+    operation_key:=coalesce(NEW.operation_id,OLD.operation_id);
+  END IF;
+  SELECT * INTO o FROM public.submission_intake_operations WHERE id=operation_key;
+  SELECT * INTO c FROM public.submission_source_charges WHERE operation_id=operation_key;
+  IF o.id IS NULL OR c.operation_id IS NULL
+     OR (o.provider_generation IS NULL AND c.state<>'reserved')
+     OR (o.provider_generation IS NOT NULL AND
+         (c.state<>'sealed' OR c.accounted_bytes IS DISTINCT FROM o.raw_byte_count)) THEN
+    RAISE EXCEPTION 'submission source accounting custody mismatch' USING ERRCODE='23514';
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER submission_intake_source_accounting
+AFTER INSERT OR UPDATE ON public.submission_intake_operations
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submission_source_accounting();
+CREATE CONSTRAINT TRIGGER submission_source_charge_accounting
+AFTER INSERT OR UPDATE OR DELETE ON public.submission_source_charges
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submission_source_accounting();
+CREATE TRIGGER submission_intake_operations_no_truncate BEFORE TRUNCATE ON public.submission_intake_operations
+FOR EACH STATEMENT EXECUTE FUNCTION public.guard_submission_intake_mutation();
+CREATE TRIGGER submission_source_capacity_profiles_no_truncate BEFORE TRUNCATE ON public.submission_source_capacity_profiles
+FOR EACH STATEMENT EXECUTE FUNCTION public.guard_submission_source_capacity_profile();
+CREATE TRIGGER submission_source_charges_no_truncate BEFORE TRUNCATE ON public.submission_source_charges
+FOR EACH STATEMENT EXECUTE FUNCTION public.guard_submission_source_charge();
 """
 
 
@@ -251,6 +405,8 @@ def upgrade() -> None:
     op.create_foreign_key("fk_task_active_submission_intake", "workstream_tasks",
                          "submission_intake_operations", ["active_submission_operation_id", "id"],
                          ["id", "task_id"], source_schema="public", referent_schema="public", deferrable=True, initially="DEFERRED")
+    for statement in split_sql_statements(CAPACITY_TABLE_SQL):
+        op.execute(statement)
     for statement in split_sql_statements(GUARDS):
         op.execute(statement)
 

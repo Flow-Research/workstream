@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.tasks import task_submission_context_port
 from app.core.identifiers import new_record_id
-from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 from app.modules.tasks.intake_custody import IntakeTaskCustody
@@ -31,7 +31,12 @@ def repository(session):
 
 
 @pytest.fixture
-async def intake(tmp_path, isolated_database_env):
+def capacity_limits(request):
+    return getattr(request, "param", SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000))
+
+
+@pytest.fixture
+async def intake(tmp_path, isolated_database_env, capacity_limits):
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -47,17 +52,19 @@ async def intake(tmp_path, isolated_database_env):
                 task=str(task), assignment=str(assignment),
                 project=str(plan.lineage.project_id), actor=str(actor.actor_profile_id),
             ))
-        yield SimpleNamespace(engine=engine, factory=factory, actor=actor, task=task, assignment=assignment)
+        yield SimpleNamespace(engine=engine, factory=factory, actor=actor, task=task, assignment=assignment,
+                              capacity_limits=capacity_limits)
     finally:
         await engine.dispose()
 
 
-async def reserve(intake, session, *, key=None):
+async def reserve(intake, session, *, key=None, declared_raw_bytes=None):
     now = datetime.now(UTC)
     return await repository(session).reserve(
         metadata=SubmissionIntakeMetadata(task_id=intake.task, assignment_id=intake.assignment),
         actor_id=intake.actor.actor_profile_id, identity_link_id=intake.actor.identity_link_id,
         idempotency_key=key or new_record_id(), maximum_raw_bytes=1024,
+        capacity_limits=intake.capacity_limits, declared_raw_bytes=declared_raw_bytes,
         upload_deadline_at=now + timedelta(minutes=5),
         lease_expires_at=now + timedelta(minutes=1),
     )
@@ -97,6 +104,7 @@ async def test_reservation_rollback_leaves_no_pointer_or_operation(intake):
         await session.rollback()
     async with intake.factory() as session:
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 0
         assert await session.scalar(text(
             "SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"
         ), {"id": intake.task}) is None
@@ -147,6 +155,7 @@ async def test_expiry_can_only_abandon_and_cannot_resume(intake):
         assert await repository(session).abandon_expired(operation)
     async with intake.factory.begin() as session:
         assert not await repository(session).abandon_expired(operation)
+        assert await session.scalar(text("SELECT sum(accounted_bytes) FROM submission_source_charges")) == 1024
         replacement = await reserve(intake, session)
         assert replacement.id != str(operation)
     with pytest.raises(DBAPIError, match="terminal intake is immutable"):
@@ -235,34 +244,37 @@ async def test_recorded_source_identity_is_immutable(intake):
 
 async def test_intake_model_matches_installed_schema(isolated_database_env):
     from sqlalchemy import inspect
-    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.modules.artifacts.intake.models import (
+        SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge,
+    )
 
     engine = create_async_engine(isolated_database_env)
     try:
         async with engine.connect() as connection:
             def compare(sync):
                 inspector = inspect(sync)
-                table = SubmissionIntakeOperation.__table__
-                assert {
-                    (c["name"], str(c["type"].compile(dialect=sync.dialect)), c["nullable"])
-                    for c in inspector.get_columns(table.name)
-                } == {
-                    (c.name, str(c.type.compile(dialect=sync.dialect)), c.nullable)
-                    for c in table.columns
-                }
-                assert {
-                    (tuple(f["constrained_columns"]), f["referred_table"], tuple(f["referred_columns"]))
-                    for f in inspector.get_foreign_keys(table.name)
-                } == {
-                    (tuple(f.column_keys), f.referred_table.name, tuple(e.column.name for e in f.elements))
-                    for f in table.foreign_key_constraints
-                }
-                assert {c["name"] for c in inspector.get_check_constraints(table.name)} == {
-                    c.name for c in table.constraints if c.__class__.__name__ == "CheckConstraint"
-                }
-                assert {i["name"] for i in inspector.get_indexes(table.name) if not i.get("duplicates_constraint")} == {
-                    i.name for i in table.indexes
-                }
+                for owner in (SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge):
+                    table = owner.__table__
+                    assert {
+                        (c["name"], str(c["type"].compile(dialect=sync.dialect)), c["nullable"])
+                        for c in inspector.get_columns(table.name)
+                    } == {
+                        (c.name, str(c.type.compile(dialect=sync.dialect)), c.nullable)
+                        for c in table.columns
+                    }
+                    assert {
+                        (tuple(f["constrained_columns"]), f["referred_table"], tuple(f["referred_columns"]))
+                        for f in inspector.get_foreign_keys(table.name)
+                    } == {
+                        (tuple(f.column_keys), f.referred_table.name, tuple(e.column.name for e in f.elements))
+                        for f in table.foreign_key_constraints
+                    }
+                    assert {c["name"] for c in inspector.get_check_constraints(table.name)} == {
+                        c.name for c in table.constraints if c.__class__.__name__ == "CheckConstraint"
+                    }
+                    assert {i["name"] for i in inspector.get_indexes(table.name) if not i.get("duplicates_constraint")} == {
+                        i.name for i in table.indexes
+                    }
             await connection.run_sync(compare)
     finally:
         await engine.dispose()
@@ -334,3 +346,194 @@ async def test_sql_rejects_malformed_command_selectors_even_with_matching_digest
                     "UPDATE workstream_tasks SET active_submission_operation_id=:operation WHERE id=:task"
                 ), {"operation": UUID(row.id), "task": intake.task})
                 await session.execute(SubmissionIntakeOperation.__table__.insert().values(**candidate))
+                from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
+                stored = await session.get(SubmissionIntakeOperation, values["id"])
+                await SubmissionSourceCapacity(session).reserve(
+                    stored, limits=intake.capacity_limits, declared_raw_bytes=None,
+                )
+
+
+@pytest.mark.parametrize("declared", [None, 100])
+async def test_source_reservation_becomes_exact_bytes_only_after_sealing(intake, declared):
+    from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, declared_raw_bytes=declared)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+        charge = await session.get(SubmissionSourceCharge, row.id)
+        assert charge.accounted_bytes == (1024 if declared is None else 100)
+    async with intake.factory.begin() as session:
+        await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+    async with intake.factory.begin() as session:
+        deadline = datetime.now(UTC) + timedelta(minutes=2)
+        await repository(session).seal(operation, lease, 1, provider_generation="exact-source",
+                                       pre_deadline_at=deadline, lease_expires_at=deadline)
+    async with intake.factory.begin() as session:
+        stored = await session.get(SubmissionIntakeOperation, str(operation))
+        charge = await SubmissionSourceCapacity(session).reserve(
+            stored, limits=intake.capacity_limits, declared_raw_bytes=declared,
+        )
+        assert (charge.state, charge.accounted_bytes) == ("sealed", 100)
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 1
+
+
+async def test_declared_length_mismatch_cannot_record_eof_or_free_its_charge(intake):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, declared_raw_bytes=101)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    with pytest.raises(DBAPIError, match="declared size mismatch"):
+        async with intake.factory.begin() as session:
+            await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+    async with intake.factory.begin() as session:
+        await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="length_mismatch")
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT sum(accounted_bytes) FROM submission_source_charges")) == 101
+        assert await session.scalar(text("SELECT raw_sha256 FROM submission_intake_operations")) is None
+    for statement in ("DELETE FROM submission_source_charges", "TRUNCATE submission_source_charges"):
+        with pytest.raises(DBAPIError, match="require confirmed cleanup"):
+            async with intake.factory.begin() as session:
+                await session.execute(text(statement))
+
+
+@pytest.mark.parametrize("capacity_limits", [
+    SubmissionSourceCapacityLimits(maximum_total_bytes=150),
+    SubmissionSourceCapacityLimits(maximum_total_bytes=2000, maximum_project_bytes=150),
+    SubmissionSourceCapacityLimits(maximum_total_bytes=2000, maximum_producer_bytes=150),
+    SubmissionSourceCapacityLimits(maximum_total_bytes=2000, maximum_task_bytes=150),
+], indirect=True)
+async def test_each_enabled_source_quota_counts_failed_objects(intake):
+    from app.modules.artifacts.intake.capacity import SubmissionSourceCapacityConflict
+
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, declared_raw_bytes=100)
+    async with intake.factory.begin() as session:
+        await repository(session).terminalize(UUID(row.id), UUID(row.lease_id), 1,
+                                             state="failed", failure_code="upload_uncertain")
+    with pytest.raises(SubmissionSourceCapacityConflict, match="source_capacity_exhausted"):
+        async with intake.factory.begin() as session:
+            await reserve(intake, session, declared_raw_bytes=100)
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT sum(accounted_bytes) FROM submission_source_charges")) == 100
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 1
+
+
+async def test_equal_content_sources_keep_distinct_physical_charges(intake):
+    operations = []
+    for _ in range(2):
+        async with intake.factory.begin() as session:
+            row = await reserve(intake, session, declared_raw_bytes=100)
+            operation, lease = UUID(row.id), UUID(row.lease_id)
+            operations.append(operation)
+        async with intake.factory.begin() as session:
+            await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        async with intake.factory.begin() as session:
+            deadline = datetime.now(UTC) + timedelta(minutes=2)
+            await repository(session).seal(operation, lease, 1, provider_generation=f"generation-{operation}",
+                                           pre_deadline_at=deadline, lease_expires_at=deadline)
+            await repository(session).terminalize(operation, lease, 1, state="rejected", failure_code="pre_failed")
+    assert operations[0] != operations[1]
+    async with intake.factory() as session:
+        counts = (await session.execute(text(
+            "SELECT count(*),sum(accounted_bytes) FROM submission_source_charges"
+        ))).one()
+        assert tuple(counts) == (2, 200)
+
+
+@pytest.mark.parametrize("capacity_limits", [SubmissionSourceCapacityLimits(maximum_total_bytes=150)], indirect=True)
+async def test_source_quota_serializes_distinct_tasks(intake):
+    from app.modules.artifacts.intake.capacity import SubmissionSourceCapacityConflict
+
+    async with intake.factory() as session:
+        project = await session.scalar(text("SELECT project_id FROM workstream_tasks WHERE id=:id"), {"id": intake.task})
+    other = SimpleNamespace(**{**vars(intake), "task": new_record_id(), "assignment": new_record_id()})
+    async with intake.engine.begin() as connection:
+        await seed_started_task_for_artifact_test(connection, dict(
+            task=str(other.task), assignment=str(other.assignment), project=str(project), actor=str(intake.actor.actor_profile_id),
+        ))
+    async with intake.factory() as first, intake.factory() as second:
+        await first.begin()
+        await second.begin()
+        await reserve(intake, first, declared_raw_bytes=100)
+        pid = await second.scalar(text("SELECT pg_backend_pid()"))
+        contender = asyncio.create_task(reserve(other, second, declared_raw_bytes=100))
+        try:
+            async with intake.factory() as observer:
+                async with asyncio.timeout(10):
+                    while not await observer.scalar(text("SELECT cardinality(pg_blocking_pids(:pid))>0"), {"pid": pid}):
+                        if contender.done():
+                            await contender
+                            pytest.fail("second task bypassed the shared capacity lock")
+                        await asyncio.sleep(0.02)
+                query = await observer.scalar(text("SELECT query FROM pg_stat_activity WHERE pid=:pid"), {"pid": pid})
+                assert "submission_source_capacity_profiles" in query
+            await first.commit()
+            with pytest.raises(SubmissionSourceCapacityConflict, match="source_capacity_exhausted"):
+                await contender
+        finally:
+            if not contender.done():
+                contender.cancel()
+                await asyncio.gather(contender, return_exceptions=True)
+            await first.rollback()
+            await second.rollback()
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT sum(accounted_bytes) FROM submission_source_charges")) == 100
+        assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": other.task}) is None
+
+
+@pytest.mark.parametrize("capacity_limits", [SubmissionSourceCapacityLimits(maximum_total_bytes=150)], indirect=True)
+async def test_sql_cannot_bypass_source_quota(intake):
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, declared_raw_bytes=100)
+        values = {c.name: getattr(row, c.name) for c in row.__table__.columns}
+    async with intake.factory.begin() as session:
+        await repository(session).terminalize(UUID(row.id), UUID(row.lease_id), 1,
+                                             state="failed", failure_code="upload_uncertain")
+    new_id = new_record_id()
+    values.update(id=str(new_id), lease_id=str(new_record_id()), idempotency_key=str(new_record_id()),
+                  object_ref=f"submission-source/v1/{new_id}/bundle.zip")
+    with pytest.raises(DBAPIError, match="submission source capacity exhausted"):
+        async with intake.factory.begin() as session:
+            await session.execute(text("UPDATE workstream_tasks SET active_submission_operation_id=:op WHERE id=:task"),
+                                  {"op": new_id, "task": intake.task})
+            await session.execute(SubmissionIntakeOperation.__table__.insert().values(**values))
+            await session.execute(SubmissionSourceCharge.__table__.insert().values(
+                operation_id=str(new_id), declared_raw_bytes=100, reserved_bytes=100, accounted_bytes=100, state="reserved",
+            ))
+
+
+async def test_capacity_configuration_cannot_be_replaced_or_truncated(intake):
+    from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity, SubmissionSourceCapacityConflict
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+    for statement in (
+        "UPDATE submission_source_capacity_profiles SET maximum_total_bytes=maximum_total_bytes+1",
+        "DELETE FROM submission_source_capacity_profiles",
+        "TRUNCATE submission_source_capacity_profiles",
+    ):
+        with pytest.raises(DBAPIError, match="capacity configuration is immutable"):
+            async with intake.factory.begin() as session:
+                await session.execute(text(statement))
+    with pytest.raises(SubmissionSourceCapacityConflict, match="configuration_mismatch"):
+        async with intake.factory.begin() as session:
+            operation = await session.get(SubmissionIntakeOperation, row.id)
+            await SubmissionSourceCapacity(session).reserve(
+                operation, limits=SubmissionSourceCapacityLimits(maximum_total_bytes=2_000_000), declared_raw_bytes=None,
+            )
+
+
+@pytest.mark.parametrize("declared", [True, 0, -1, 1025])
+async def test_invalid_declared_size_rolls_back_all_custody(intake, declared):
+    from app.modules.artifacts.intake.capacity import SubmissionSourceCapacityConflict
+
+    with pytest.raises(SubmissionSourceCapacityConflict, match="source_declared_size_invalid"):
+        async with intake.factory.begin() as session:
+            await reserve(intake, session, declared_raw_bytes=declared)
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 0
+        assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": intake.task}) is None

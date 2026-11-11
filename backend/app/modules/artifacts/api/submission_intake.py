@@ -134,3 +134,19 @@ class SealedSubmissionSource(_IntakeValue):
             "schema_version": "workstream.sealed_submission_source.v1",
             **self.model_dump(mode="json"),
         })
+
+
+class SubmissionSourceCapacityLimits(_IntakeValue):
+    """Explicit physical source allocation; no deployment defaults or logical dedup."""
+
+    maximum_total_bytes: int = Field(ge=1, le=2**63 - 1)
+    maximum_project_bytes: int | None = Field(default=None, ge=1, le=2**63 - 1)
+    maximum_producer_bytes: int | None = Field(default=None, ge=1, le=2**63 - 1)
+    maximum_task_bytes: int | None = Field(default=None, ge=1, le=2**63 - 1)
+
+    def configuration_sha256(self) -> str:
+        """Bind the explicit allocation used by every writer in this namespace."""
+        return canonical_json_hash({
+            "schema_version": "workstream.submission_source_capacity.v1",
+            **self.model_dump(mode="json"),
+        })
