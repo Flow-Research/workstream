@@ -52,6 +52,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/artifacts/test_review_packet_contract.py",
     "tests/reviews/packet/test_storage.py",
     "tests/artifacts/test_selected_predecessor_rules.py",
+    "tests/artifacts/test_submission_intake_contracts.py",
     "tests/authorization/post_submit/test_atomicity.py",
     "tests/authorization/post_submit/test_concurrency.py",
     "tests/authorization/post_submit/test_live_authority.py",

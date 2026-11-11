@@ -73,15 +73,17 @@ class SubmissionSourceLocation(_IntakeValue):
     """Server-selected source address inside the existing claimed ART namespace.
 
     The namespace ID references ART's existing immutable namespace record. The
-    profile must match that record at every owner boundary. It is not a freely
-    selectable endpoint. The adapter alone applies the configured key prefix.
+    fingerprint and profile must match that record at every owner boundary.
+    The singleton ID alone cannot identify storage across deployments. It is
+    not a freely selectable endpoint. The adapter applies its configured prefix.
     """
 
     operation_id: UUID
-    namespace_id: UUID
+    namespace_id: Literal["primary"]
+    namespace_fingerprint: Sha256
     provider_profile: str = Field(min_length=1, max_length=100)
 
-    @field_validator("operation_id", "namespace_id")
+    @field_validator("operation_id")
     @classmethod
     def record_identity(cls, value: UUID) -> UUID:
         """Check record shape; only the durable owner proves ID provenance."""

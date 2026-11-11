@@ -16,7 +16,7 @@ from app.modules.artifacts.api.submission_intake import (
 
 
 OPERATION = UUID("019a0000-0000-7000-8000-000000000001")
-NAMESPACE = UUID("019a0000-0000-7000-8000-000000000002")
+NAMESPACE_FINGERPRINT = "sha256:" + "c" * 64
 TASK = UUID("019a0000-0000-7000-8000-000000000003")
 ASSIGNMENT = UUID("019a0000-0000-7000-8000-000000000004")
 PREDECESSOR = UUID("019a0000-0000-7000-8000-000000000005")
@@ -32,7 +32,8 @@ def metadata(**updates):
 
 def location(**updates):
     return SubmissionSourceLocation.model_validate({
-        "operation_id": OPERATION, "namespace_id": NAMESPACE,
+        "operation_id": OPERATION, "namespace_id": "primary",
+        "namespace_fingerprint": NAMESPACE_FINGERPRINT,
         "provider_profile": "aws-s3-v1", **updates,
     })
 
@@ -114,7 +115,7 @@ def test_source_address_is_operation_bound_and_opaque_generation_round_trips():
 
 
 @pytest.mark.parametrize("updates", [
-    {"location": location(namespace_id=REVISION)},
+    {"location": location(namespace_fingerprint="sha256:" + "d" * 64)},
     {"location": location(provider_profile="qualified-managed-v1")},
     {"provider_generation": "other-version"},
     {"raw_sha256": "sha256:" + "b" * 64},
@@ -143,6 +144,7 @@ def test_sealed_source_rejects_unsealed_coercive_or_authority_bearing_inputs(upd
 
 @pytest.mark.parametrize("updates", [
     {"operation_id": uuid4()}, {"namespace_id": uuid4()},
+    {"namespace_id": "other"}, {"namespace_fingerprint": "invalid"},
     {"operation_id": str(OPERATION)}, {"provider_profile": "https://storage.invalid"},
     {"object_ref": "submission-source/v1/foreign/bundle.zip"},
     {"idempotency_key": OPERATION},
@@ -166,3 +168,44 @@ def test_frozen_values_revalidate_nested_instances_and_reject_unknown_command_fi
         SubmissionIntakeMetadata.model_validate_json(json.dumps({
             "task_id": str(TASK), "assignment_id": str(ASSIGNMENT), "summary": 1,
         }))
+
+
+def test_source_accepts_existing_art_namespace_and_binds_its_fingerprint(tmp_path):
+    """Use ART's actual singleton and adapter-derived fingerprint, not a fake UUID."""
+    from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
+    from app.core.config import Settings
+    from app.modules.artifacts.models import ArtifactStorageNamespace
+    from app.modules.artifacts.service import (
+        ARTIFACT_STORAGE_NAMESPACE_ID,
+        artifact_storage_namespace_spec,
+    )
+    from tests.artifact_store_helpers import artifact_admission_limit_settings
+
+    root = tmp_path / "store"
+    root.mkdir(mode=0o700)
+    settings = Settings(
+        **artifact_admission_limit_settings(), environment="test",
+        artifact_store_backend="local", artifact_local_root=root,
+        artifact_scratch_root=tmp_path / "scratch", artifact_scratch_minimum_free_bytes=0,
+    )
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(
+        root=root, buffer_bytes=settings.artifact_stream_buffer_bytes,
+        lock_timeout_seconds=settings.artifact_operation_lock_timeout_seconds,
+    ))
+    try:
+        spec = artifact_storage_namespace_spec(settings, bootstrap)
+    finally:
+        bootstrap.close()
+    namespace = ArtifactStorageNamespace(
+        id=ARTIFACT_STORAGE_NAMESPACE_ID, backend=spec.backend, adapter=spec.adapter,
+        provider_profile=spec.provider_profile, namespace_descriptor=spec.namespace_descriptor,
+        namespace_fingerprint=spec.namespace_fingerprint,
+    )
+    bound = location(namespace_id=namespace.id, namespace_fingerprint=namespace.namespace_fingerprint,
+                     provider_profile=namespace.provider_profile)
+    assert bound.namespace_id == "primary"
+    assert bound.namespace_fingerprint == spec.namespace_fingerprint
+    assert source(location=bound).source_sha256() != source(location=location(
+        namespace_id=namespace.id, namespace_fingerprint="sha256:" + "d" * 64,
+        provider_profile=namespace.provider_profile,
+    )).source_sha256()

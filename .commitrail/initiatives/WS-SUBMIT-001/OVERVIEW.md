@@ -54,6 +54,10 @@ the spec baseline change deployment/identity, not submission owners. Open PR
 #698 changes CLI preparation; #707 changes public access/profile behavior.
 Reconcile those surfaces when reached without modifying their branches.
 
+PR #707 merged during the first change. Reconciled current main `94334ccf4`,
+including issuer-owned profile metadata, public Swagger and schema head 0068.
+Its roadmap paragraph is preserved; no new submission behavior was introduced.
+
 Real PostgreSQL, S3/MinIO and Smol proof is required where claimed. Request
 missing live access when a concrete drill is prepared. Historical old-flow
 drills cannot establish this implementation's completion.

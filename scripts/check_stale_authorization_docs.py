@@ -344,6 +344,13 @@ def containing_line(text: str, offset: int) -> str:
 
 def exempt_match(relative_path: str, rule: Rule, text: str, offset: int) -> bool:
     """Return whether one exact reviewed archival marker match is allowed."""
+    # Preserve the literal implementation path in the imported specification.
+    # Exempt only its workers token; adjacent prose still undergoes every rule.
+    if (relative_path == "docs/spec_submission_execution.md"
+            and rule.code == "HUMAN_WORKER_VOCABULARY"):
+        start = offset - len("`backend/app/")
+        if start >= 0 and text[start:].startswith("`backend/app/workers/artifacts.py`"):
+            return True
     exemption = MATCH_EXEMPTIONS.get((relative_path, rule.code))
     return bool(exemption and exemption.fullmatch(containing_line(text, offset)))
 

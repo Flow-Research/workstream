@@ -352,6 +352,20 @@ class LightweightAgentGateTests(unittest.TestCase):
         failures = scan_authorization_text("docs/new-guide.md", "Call /v1/tasks.")
         self.assertIn("docs/new-guide.md:1: NON_CANONICAL_API_PREFIX", failures)
 
+    def test_submission_storage_examples_do_not_exempt_public_routes_or_human_roles(self):
+        path = "docs/spec_submission_execution.md"
+        key = "submission-source/v1/<operation_uuid>/bundle.zip"
+        for candidate_path, line, rejected in (
+            (path, key, False), ("docs/other.md", key, True),
+            (path, "POST /v1/tasks", True), (path, key + " POST /v1/tasks", True),
+            (path, "/v1/submission-source", True),
+            (path, "`backend/app/workers/artifacts.py`; task delivery", False),
+            (path, "`backend/app/workers/artifacts.py`; the worker submits a task", True),
+            (path, "A worker submits work", True),
+        ):
+            with self.subTest(path=candidate_path, line=line):
+                self.assertEqual(bool(scan_authorization_text(candidate_path, line)), rejected)
+
     def test_stale_authorization_allows_exact_compose_worker_service(self) -> None:
         commands = (
             "docker compose --profile backend exec -T worker "
