@@ -89,5 +89,6 @@ ORM readers, then remove it before upgrading; retained-effect assertions remain.
 
 The authorization regressions now request editable display-name updates rather
 than the removed email mutation; transaction revalidation, handle mismatch and
-unconsumed-handle assertions are unchanged. Structural-debt refresh changes only
-the source digest, not any size, limit or disposition.
+unconsumed-handle assertions are unchanged. The read/update contexts share one base identity with an empty requested-field
+copy for reads, removing duplicated setup. Structural debt shrinks without
+changing limits or dispositions.

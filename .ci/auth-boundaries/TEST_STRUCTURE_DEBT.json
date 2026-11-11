@@ -98,11 +98,11 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "e1d69794ee8a2200d3c16c9fb6dad173fcb4b9689d81b8ca2385cb37d48a21fc",
-      "end_line": 10756,
+      "content_sha256": "766830f1b18550766f39285996e584e2fb80f04bca3daca333f1e7301cebf755",
+      "end_line": 10752,
       "hard_limit": 1200,
       "kind": "test_file",
-      "observed_lines": 10756,
+      "observed_lines": 10752,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -303,26 +303,26 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "3d2a9843510cdb61b34500aa79a8ed3572df72723ab401f0245300e10c70044e",
-      "end_line": 9033,
+      "end_line": 9029,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 174,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_read_permissions_have_postgresql_role_scope_matrix",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 8860
+      "start_line": 8856
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "0da4e29b29ebd44bd9049145ee4148531320bce53859ad5341e5f57261e5a884",
-      "end_line": 10469,
+      "end_line": 10465,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 227,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_project_role_and_all_operation_mappings_commit_one_linked_pair",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 10243
+      "start_line": 10239
     },
     {
       "capability": "oversized_authorization_structure",
@@ -351,14 +351,14 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "217ea21f4a2cbd31a4428ba1f01a9fcd90e73ee95fedb2587100a847e8921926",
-      "end_line": 9998,
+      "end_line": 9994,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 154,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "test_service_actor_replay_fails_closed_on_committed_state_drift",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 9845
+      "start_line": 9841
     },
     {
       "capability": "oversized_authorization_structure",
@@ -399,14 +399,14 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "32083a125798736fa17533aaa767c0236ae3042de4f7d8debdce5f15e0a801fe",
-      "end_line": 9315,
+      "end_line": 9311,
       "hard_limit": 100,
       "kind": "test_helper",
       "observed_lines": 130,
       "path": "backend/tests/test_authorization.py",
       "qualified_symbol": "_operation_success",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 9186
+      "start_line": 9182
     }
   ],
   "exceptions": [],

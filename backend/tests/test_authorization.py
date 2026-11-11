@@ -8778,16 +8778,12 @@ async def test_authorization_kernel_preserves_lifecycle_denial_precedence(
 
 async def test_actor_self_update_requires_transaction_revalidation() -> None:
     context = _runtime_context()
-    read_resource = ActorSelfResourceContext(
-        resource_type="actor_profile",
-        resource_id=context.actor_profile_id,
-        requested_fields=(),
-    )
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
         requested_fields=("display_name",),
     )
+    read_resource = resource.model_copy(update={"requested_fields": ()})
     without_read_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as read_exc_info:
         await without_read_recheck.require(ActionId.ACTOR_PROFILE_READ_SELF, read_resource)
