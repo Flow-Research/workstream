@@ -190,6 +190,7 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
 | Physical source accounting | `pytest tests/artifacts/test_submission_intake_custody.py -q` through isolated PostgreSQL 16 | 34 passed on the capacity-stage working tree; cleanup confirmed | No provider bytes written or cleanup/reclamation claim |
 | Capacity-stage static ownership | UUID inventory, behavior partition, semantic lane catalogue and module boundary tests | 254 passed; ruff passed | Final integrated suite still required |
 | Bounded receive | Contract/stream tests including provider backpressure, byte bounds, idle expiry and in-flight cancellation | 70 passed; ruff passed | Transport/server buffers and real provider proof remain separate |
+| Durable provider receipts | Real PostgreSQL custody suite at `7c23981f7`; immutable handles/parts, direct-SQL malformed receipts, rollback and stale-owner checks | 37 passed; isolated database/role cleanup confirmed; 61 identifier/boundary checks passed | Root foreground orchestration and live provider integration remain required |
 | Protected target partition | `pytest tests/test_behavior_ownership.py -q` | 170 passed | Exact added paths only; no relaxed selection |
 | Model registration | UUID inventory and protected module-boundary tests | Both passed | No new cross-owner private imports |
 
@@ -201,6 +202,21 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
   I/O tripwire. An in-memory removal of the source gate fails that test at the
   tripwire. The documentation next-stage line now names durable receipt
   orchestration explicitly. Neither change asserts AWS source qualification.
+
+- The retained store conformance vector still allowed only the former four
+  generic methods. Invoking that vector against the new S3 store reproduced its
+  surface mismatch without provider I/O. Its closed assertion now includes the
+  seven explicit source operations for S3; local source parity is still pending.
+  No unrelated public methods or removed capability aliases are allowed.
+
+- Hosted CI exposed stale migration test assumptions after adding 0069: the
+  explicit revision graph omitted 0068, the exact 0062 table list included new
+  intake tables, and current TASK reads lacked a null-only active-operation
+  projection while seeding historical schemas. Update only those test fixtures;
+  keep captured archives and historical schema fingerprints unchanged, and
+  require the temporary projection to remain null before removing it. Align the
+  intake model's UUIDv7 constraint text with the existing canonical guard without
+  changing its SQL semantics or weakening the identifier assertion.
 
 - Custody review found nullable predecessor/revision selector types and UUID
   shape unchecked in the SQL insert guard. A direct-SQL regression recomputed

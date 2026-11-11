@@ -89,6 +89,10 @@ class TestMinioArtifactStoreConformance(ArtifactStoreConformanceTests):
         "artifact_store",
         "s3_compatible",
     )
+    expected_source_operations = frozenset({
+        "begin_source_upload", "upload_source_part", "complete_source_upload",
+        "open_source", "observe_source_upload", "discover_source_uploads", "request_source_abort",
+    })
 
     def make_store(self, root: Path) -> ArtifactStore:
         """Construct one namespace-isolated real MinIO adapter."""

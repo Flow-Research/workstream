@@ -22,7 +22,7 @@ class SubmissionIntakeOperation(Base):
 
     __tablename__ = "submission_intake_operations"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128", name="id_uuid7"),
+        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         UniqueConstraint("id", "task_id", name="uq_submission_intake_task_identity"),
         UniqueConstraint("actor_profile_id", "idempotency_key", name="uq_submission_intake_actor_key"),
         UniqueConstraint("namespace_id", "namespace_fingerprint", "object_ref", name="uq_submission_intake_source_key"),

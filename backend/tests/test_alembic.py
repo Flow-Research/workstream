@@ -388,6 +388,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0068_issuer_profile_email",
         "0067_canonical_json_restore_path",
         "0066_guide_check_specification",
         "0065_claim_starts_work",

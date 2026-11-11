@@ -45,7 +45,7 @@ CREATE TABLE public.submission_intake_operations (
 	failure_code VARCHAR(100),
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT clock_timestamp() NOT NULL,
 	CONSTRAINT pk_submission_intake_operations PRIMARY KEY (id),
-	CONSTRAINT ck_submission_intake_operations_id_uuid7 CHECK ((get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128),
+	CONSTRAINT ck_submission_intake_operations_id_uuid7 CHECK ((get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128),
 	CONSTRAINT uq_submission_intake_task_identity UNIQUE (id, task_id),
 	CONSTRAINT uq_submission_intake_actor_key UNIQUE (actor_profile_id, idempotency_key),
 	CONSTRAINT uq_submission_intake_source_key UNIQUE (namespace_id, namespace_fingerprint, object_ref),
