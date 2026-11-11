@@ -279,6 +279,15 @@ async def test_controlled_endpoint_provisions_review_and_adapter_target_identiti
     assert admin_grants == project_grants == 0
 
 
+async def _capture_service_response_privacy(observed: list[str], response: Response) -> None:
+    """Exclude only the intentional caller-email field from private-response checks."""
+    await response.aread()
+    body = response.json()
+    if response.request.url.path == "/api/v1/actors/me" and response.status_code == 200:
+        body.pop("contact_email")
+    observed.append(json.dumps(body))
+
+
 async def test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
@@ -406,19 +415,16 @@ async def test_controlled_service_actor_provisioning_includes_project_setup_and_
 
     observed_response_bodies: list[str] = []
 
-    async def capture_response(response: Response) -> None:
-        await response.aread()
-        observed_response_bodies.append(response.text)
-
     caplog.set_level(logging.DEBUG, logger="app")
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
-        event_hooks={"response": [capture_response]},
+        event_hooks={"response": [partial(_capture_service_response_privacy, observed_response_bodies)]},
     ) as client:
         admin_profile = await client.get("/api/v1/actors/me", headers=admin_headers)
         ordinary_profile = await client.get("/api/v1/actors/me", headers=ordinary_headers)
         assert admin_profile.status_code == ordinary_profile.status_code == 200
+        assert admin_profile.json()["contact_email"] == "private-admin@example.test"
         admin_id = UUID(admin_profile.json()["actor_profile_id"])
         assert (await run_admin_bootstrap(admin_id, execute=True))[0] == 0
         caller_before = await actor_timestamps(admin_id)

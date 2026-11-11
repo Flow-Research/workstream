@@ -29,6 +29,7 @@ from app.interfaces.auth import (
 from app.schemas.auth import (
     AuthVerificationResult,
     MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS,
+    MAX_VERIFIED_ISSUED_AT,
     VerifiedIssuerToken,
 )
 
@@ -421,6 +422,8 @@ class FlowAuthVerifier:
             isinstance(value, bool) or not isinstance(value, int | float) for value in (exp, iat)
         ):
             raise AuthVerificationError("token temporal claims are invalid")
+        if not 0 <= iat <= MAX_VERIFIED_ISSUED_AT:
+            raise AuthVerificationError("token issued-at claim is invalid")
         if nbf is not None and (isinstance(nbf, bool) or not isinstance(nbf, int | float)):
             raise AuthVerificationError("token not-before claim is invalid")
 
@@ -431,6 +434,11 @@ class FlowAuthVerifier:
                 or any(character in value for character in ("\x00", "\r", "\n"))
             ):
                 raise AuthVerificationError("token profile claim is invalid")
+            if value is not None:
+                try:
+                    value.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise AuthVerificationError("token profile claim is invalid") from None
 
         verified = VerifiedIssuerToken(
             issuer=self._issuer,

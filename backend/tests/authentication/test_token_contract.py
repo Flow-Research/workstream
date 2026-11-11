@@ -113,6 +113,8 @@ async def test_missing_kid_fails_before_jwks(
         ({"iss": "https://other.example.test"}, "signature or claims"),
         ({"exp": 1}, "signature or claims"),
         ({"iat": int((datetime.now(UTC) + timedelta(hours=1)).timestamp())}, "signature or claims"),
+        ({"iat": -(10**30)}, "issued-at"),
+        ({"iat": -1}, "issued-at"),
         ({"jti": ""}, "identifier"),
         ({"subject_kind": "Human"}, "subject kind"),
         ({"scope": "unrelated"}, "human scope"),
@@ -241,7 +243,7 @@ async def test_temporal_claims_honor_configured_skew(
 
 
 @pytest.mark.parametrize("field,invalid", [("email", {}), ("email", "x" * 321),
-    ("email", "bad\x00value"), ("email", " "), ("name", 12), ("name", "x" * 201)])
+    ("email", "bad\x00value"), ("email", "\ud800"), ("email", " "), ("name", 12), ("name", "x" * 201)])
 async def test_invalid_signed_profile_claim_is_rejected(rsa_signing_material, field, invalid):
     private_key, jwk = rsa_signing_material
     verifier = FlowAuthVerifier(production_verifier_settings(), jwks_transport=jwks_transport(jwk))
