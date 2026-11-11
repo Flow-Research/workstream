@@ -106,6 +106,12 @@ complete attribution and bounded lifecycle reasons. AUTH-09D-B activates exact
 link revoke/reactivate mutations. Append-only audit evidence preserves immutable
 transition history; the current row carries only the latest state-compatible attribution.
 Raw tokens, provider credentials, and full claim payloads are not stored.
+`email_observed_issued_at` records the newest signed email observation for this
+exact link. Authorized self-profile reads/updates replace `contact_email` only
+from a strictly later-issued token with an email claim; absence/null and older
+or equal-issued tokens leave the retained value unchanged. This metadata grants
+no authority and does not verify mailbox ownership. The optional issuer name
+seeds first admission only; later display-name edits remain local.
 The database enforces a unique `(issuer, subject)` pair across all links and, in
 v0.1, at most one active identity link per ActorProfile. Revocation preserves
 the immutable link and provenance; it does not free the pair for rebinding.

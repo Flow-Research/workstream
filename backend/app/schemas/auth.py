@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SubjectKind = Literal["human", "service", "agent", "space"]
 MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS = 200
+MAX_VERIFIED_ISSUED_AT = 2**63 - 1
 
 
 class VerifiedIssuerToken(BaseModel):
@@ -21,11 +22,13 @@ class VerifiedIssuerToken(BaseModel):
     subject: str = Field(min_length=1, max_length=MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS)
     audience: tuple[str, ...]
     expires_at: int
-    issued_at: int
+    issued_at: int = Field(strict=True, ge=0, le=MAX_VERIFIED_ISSUED_AT)
     not_before: int | None = None
     token_id: str
     subject_kind: SubjectKind
     scopes: frozenset[str]
+    email: str | None = Field(default=None, strict=True, min_length=1, max_length=320, pattern=r"^[^\x00\r\n]+$")
+    name: str | None = Field(default=None, strict=True, min_length=1, max_length=200, pattern=r"^[^\x00\r\n]+$")
 
 
 class AuthVerificationResult(BaseModel):

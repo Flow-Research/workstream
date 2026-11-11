@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.auth import (
+    get_auth_verification_result,
     actor_registry_http_error,
     actor_registry_unavailable_error,
 )
@@ -19,6 +20,7 @@ from app.api.deps.authorization import (
     get_authorization_service,
 )
 from app.db.session import get_db_session
+from app.schemas.auth import AuthVerificationResult
 from app.modules.actors.schemas import (
     ActorAuthorizationContextResponse,
     ActorProfileSelfResponse,
@@ -41,6 +43,7 @@ actors_router = APIRouter(prefix="/actors", tags=["actors"])
     openapi_extra={"x-workstream-action-id": ActionId.ACTOR_PROFILE_READ_SELF.value},
 )
 async def read_current_actor_profile(
+    verification: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
     resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
     authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -51,7 +54,9 @@ async def read_current_actor_profile(
             ActionId.ACTOR_PROFILE_READ_SELF,
             ActorService.actor_self_resource(resolved.profile.id, frozenset()),
         )
-        resolved = await ActorService(session).touch_after_authorization(resolved)
+        service = ActorService(session)
+        resolved = await service.touch_after_authorization(resolved)
+        resolved = await service.synchronize_identity_email(resolved, verification.token)
         admin_roles = await AdminRoleGrantService(session).active_roles_for_actor(
             UUID(resolved.profile.id)
         )
@@ -111,6 +116,7 @@ async def read_current_actor_authorization_context(
     openapi_extra={"x-workstream-action-id": ActionId.ACTOR_PROFILE_UPDATE_SELF.value},
 )
 async def update_current_actor_profile(
+    verification: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
     payload: ActorProfileUpdateRequest,
     resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
     authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
@@ -124,6 +130,7 @@ async def update_current_actor_profile(
         )
         service = ActorService(session)
         resolved = await service.touch_after_authorization(resolved)
+        resolved = await service.synchronize_identity_email(resolved, verification.token)
         response = await service.update_self(resolved, payload)
         admin_roles = await AdminRoleGrantService(session).active_roles_for_actor(
             UUID(resolved.profile.id)

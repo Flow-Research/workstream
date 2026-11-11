@@ -60,3 +60,41 @@ async def test_no_local_auth_routes() -> None:
         for path in paths
         for segment in path.lower().strip("/").split("/")
     )
+
+
+async def test_swagger_uses_pinned_integrity_checked_assets() -> None:
+    """Require exact Swagger asset versions, integrity digests and nonpersistent authorization."""
+    from html.parser import HTMLParser
+
+    class Assets(HTMLParser):
+        def __init__(self):
+            """Collect external asset attributes from the rendered documentation page."""
+            super().__init__()
+            self.assets = []
+
+        def handle_starttag(self, tag, attrs):
+            """Record script and stylesheet sources for integrity assertions."""
+            attributes = dict(attrs)
+            if tag in {"script", "link"} and ("src" in attributes or "href" in attributes):
+                self.assets.append(attributes)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=create_app()), base_url="http://testserver",
+    ) as client:
+        response = await client.get("/docs")
+    assert response.status_code == 200
+    parsed = Assets()
+    parsed.feed(response.text)
+    expected = {
+        "swagger-ui-bundle.js": "sha384-7xcoc6ZKDFF7Ek627QTC3Bg/K+5Y36NJ8MWAE43D2m6+3Sh9XO3tdsfHhrS8gNIQ",
+        "swagger-ui.css": "sha384-3nuX7df3EaAoiqLBeyS1Ola0Gpg9ryJKVtarubwfnA1cOH8AWHUdbPSIvEqPZ9VH",
+    }
+    assert len(parsed.assets) == len(expected)
+    for asset in parsed.assets:
+        url = asset.get("src", asset.get("href"))
+        filename = url.rsplit("/", 1)[1]
+        assert url == f"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.0/{filename}"
+        assert asset["integrity"] == expected[filename]
+        assert asset["crossorigin"] == "anonymous"
+    assert "url: '/openapi.json'" in response.text
+    assert "persistAuthorization: false" in response.text

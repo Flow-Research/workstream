@@ -102,6 +102,8 @@ task.queue.read task.claim submission.create submission.read_own submission.read
 task.post_submit.route task.revision.expire task.revision.recover
 checker.pre_submit.execute checker.pre_submit.finalize
 checker.post_submit.execute checker.post_submit.finalize
+project.guide_compilation.model.prepare project.guide_compilation.model.dispatch
+project.guide_compilation.model.observe project.guide_compilation.model.complete
 checker.model_call.prepare checker.model_call.dispatch checker.model_call.recover
 checker.model_call.observe checker.model_call.complete checker.model_call.grant
 review.queue.read review.queue.inspect review.claim review.release review.decline_preference
@@ -145,7 +147,7 @@ contribution.read_project compensation.award.read audit.read audit.export"""),
 def catalogue_expectations():
     """Fresh expected JSON objects; callers cannot mutate the frozen oracle."""
     return {
-        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 91},
+        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 94},
         "admin-role-definitions": {"items": [
             {"role": role, "allowed_scopes": list(scopes), "permission_ids": permissions.split()}
             for role, scopes, permissions in EXPECTED_ROLE_CONTRACT], "total": 5},
@@ -525,6 +527,7 @@ async def profile_readback(drill, token, name, expected, previous=None):
 
 
 async def profile_cases(drill, issuer, token):
+    """Exercise display-name edits and issuer-owned email rejection with exact readbacks."""
     route = "/api/v1/actors/me"
     for name, bad in (("missing", None), ("signature", TokenIssuer().issue("outsider")),
                       ("expired", issuer.issue("outsider", exp=int(time.time()) - 60)),
@@ -544,49 +547,52 @@ async def profile_cases(drill, issuer, token):
     stable = {key: actor[key] for key in ("actor_profile_id", "created_at", "actor_kind",
                                          "domains", "admin_roles", "project_role_grants", "status")}
     await drill.call("profile_stable_identity", "GET", route, token=token, values=stable)
-    await drill.call("profile_both_fields", "PATCH", route, token=token,
-        payload={"display_name": "  Display 名  ", "contact_email": "  opaque contact  "},
-        values=stable | {"display_name": "Display 名", "contact_email": "opaque contact"})
-    await drill.call("profile_patch_omission_preserves_other", "PATCH", route, token=token,
-        payload={"display_name": "single"},
-        values=stable | {"display_name": "single", "contact_email": "opaque contact"})
-    editable = {"display_name": "single", "contact_email": "opaque contact"}
-    previous = await profile_readback(drill, token, "profile_omission_readback",
-                                      stable | editable, actor)
-    for field, limit in (("display_name", 200), ("contact_email", 320)):
-        for label, value in (("text", "example"), ("limit", "x" * limit), ("null", None)):
+    # This issuer's default fixture has no name/email claims. Contact email
+    # stays issuer-owned while display name remains locally editable.
+    await drill.call("profile_display_name_normalized", "PATCH", route, token=token,
+        payload={"display_name": "  Display 名  "},
+        values=stable | {"display_name": "Display 名", "contact_email": None})
+    expected_profile = {"display_name": "Display 名", "contact_email": None}
+    previous = await profile_readback(drill, token, "profile_display_name_readback",
+                                      stable | expected_profile, actor)
+    field, limit = "display_name", 200
+    for label, value in (("text", "example"), ("limit", "x" * limit), ("null", None)):
+        await drill.call(f"{field}_{label}", "PATCH", route, token=token,
+                         payload={field: value}, values={field: value},
+                         fields=(f"body.{field}",))
+        expected_profile[field] = value
+        previous = await profile_readback(drill, token, f"{field}_{label}_readback",
+                                          stable | expected_profile, previous)
+    for label, value in (("too_long", "x" * (limit + 1)), ("blank", "  "), ("empty", ""),
+                         ("type", {"unexpected": True}), ("number", 1), ("bool", True),
+                         ("array", []), ("nul", "before\x00after")):
+        try:
             await drill.call(f"{field}_{label}", "PATCH", route, token=token,
-                             payload={field: value}, values={field: value},
-                             fields=(f"body.{field}",))
-            editable[field] = value
-            previous = await profile_readback(drill, token, f"{field}_{label}_readback",
-                                              stable | editable, previous)
-        for label, value in (("too_long", "x" * (limit + 1)), ("blank", "  "), ("empty", ""),
-                             ("type", {"unexpected": True}), ("number", 1), ("bool", True),
-                             ("array", []), ("nul", "before\x00after")):
-            try:
-                await drill.call(f"{field}_{label}", "PATCH", route, token=token,
-                                 payload={field: value}, expected=422, fields=(f"body.{field}",),
-                                 values={"error.code": "invalid_request", "error.retryable": False})
-            except ProbeFailure:
-                # Keep the failed case red, but run independent inputs if the
-                # following full-state control proves the profile is unchanged.
-                pass
-            previous = await profile_readback(drill, token, f"{field}_{label}_unchanged",
-                                              stable | editable, previous)
-        other = "contact_email" if field == "display_name" else "display_name"
-        await drill.call(f"{field}_mixed_invalid_atomic", "PATCH", route, token=token,
-            payload={field: "x" * (limit + 1), other: "must not persist"}, expected=422,
+                             payload={field: value}, expected=422, fields=(f"body.{field}",),
+                             values={"error.code": "invalid_request", "error.retryable": False})
+        except ProbeFailure:
+            # Retain the failed probe, then continue only if full state agrees.
+            pass
+        previous = await profile_readback(drill, token, f"{field}_{label}_unchanged",
+                                          stable | expected_profile, previous)
+    for label, payload in (
+        ("email", {"contact_email": "must-not-persist@example.invalid"}),
+        ("email_null", {"contact_email": None}),
+        ("mixed", {"display_name": "must not persist", "contact_email": "private@example.invalid"}),
+        ("mixed_invalid", {"display_name": "x" * (limit + 1), "contact_email": "private@example.invalid"}),
+    ):
+        await drill.call(f"profile_readonly_{label}", "PATCH", route, token=token,
+            payload=payload, expected=422,
             values={"error.code": "invalid_request", "error.retryable": False})
-        previous = await profile_readback(drill, token, f"{field}_mixed_invalid_unchanged",
-                                          stable | editable, previous)
+        previous = await profile_readback(drill, token, f"profile_readonly_{label}_unchanged",
+                                          stable | expected_profile, previous)
     await drill.call("empty_profile_patch", "PATCH", route, token=token, payload={}, expected=422)
     await drill.call("unknown_profile_field", "PATCH", route, token=token,
                      payload={"admin_roles": ["access_administrator"]}, expected=422)
     await drill.call("profile_unauthenticated_patch", "PATCH", route,
         payload={"display_name": "unauthorized"}, expected=401)
     await profile_readback(drill, token, "profile_failed_changes_readback",
-                           stable | editable, previous)
+                           stable | expected_profile, previous)
     return actor["actor_profile_id"]
 
 

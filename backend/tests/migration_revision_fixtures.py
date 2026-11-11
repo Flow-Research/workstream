@@ -44,37 +44,38 @@ _REVISION_ARCHIVE = Path(__file__).with_name("fixtures") / "historical_revision_
 _REVISION_ARCHIVE_SHA256 = "40b4c2bde917e6c8907da7d5462f6876a268952c449997af1ea93bffe6058420"
 _REVISION_ARCHIVE_SCHEMA = "workstream.historical_revision_rows.v1"
 _REVISION_ARCHIVE_SOURCE = "6fa9a9b557fa3ae22c16af67bca25dc868f67b38"
-_GUIDE_READ_PROJECTION_COLUMNS = (
+_OWNER_READ_PROJECTION_COLUMNS = (
+    ("actor_identity_links", "email_observed_issued_at", "bigint"),
     ("project_guide_compilation_attempts", "result_schema_version", "varchar(100)"),
     ("project_guide_compilations", "result_schema_version", "varchar(100)"),
     ("project_guide_proposal_approvals", "request_json", "jsonb"),
 )
 
 
-async def add_retained_guide_read_projection(connection):
+async def add_retained_owner_read_projection(connection):
     """Expose null-only current ORM fields after exact predecessor restoration."""
-    for table, column, column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+    for table, column, column_type in _OWNER_READ_PROJECTION_COLUMNS:
         await connection.execute(text(
             f"ALTER TABLE public.{table} ADD COLUMN {column} {column_type}"
         ))
 
 
-async def drop_retained_guide_read_projection(connection):
+async def drop_retained_owner_read_projection(connection):
     """Reject new-format writes before removing placeholders for the real upgrade."""
-    for table, column, _column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+    for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
         assert await connection.scalar(text(
             f"SELECT count(*) FROM public.{table} WHERE {column} IS NOT NULL"
-        )) == 0, f"historical guide projection contains new evidence: {table}.{column}"
-    for table, column, _column_type in _GUIDE_READ_PROJECTION_COLUMNS:
+        )) == 0, f"historical owner projection contains new evidence: {table}.{column}"
+    for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
         await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
 
 
 async def add_historical_revision_read_projection(connection):
-    """Expose current checker and guide reads only after validating the exact archive."""
+    """Expose current owner reads only after validating the exact archive."""
     await connection.execute(text(
         "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
     ))
-    await add_retained_guide_read_projection(connection)
+    await add_retained_owner_read_projection(connection)
 
 
 @lru_cache(maxsize=1)
@@ -373,7 +374,7 @@ async def leave_predecessor_owner_shape(execute, database_url):
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
-            await drop_retained_guide_read_projection(connection)
+            await drop_retained_owner_read_projection(connection)
     finally:
         await engine.dispose()
     await execute(database_url, (

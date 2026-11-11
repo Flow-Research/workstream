@@ -46,13 +46,14 @@ async def test_actors_me_returns_contributor_without_token_role_authority(
 async def test_patch_actors_me_updates_only_display_fields(
     actor_client: AsyncClient,
 ) -> None:
+    """Prove self updates edit display name while preserving issuer-owned email."""
     created = await actor_client.get("/api/v1/actors/me", headers=auth_headers())
     assert created.status_code == 200
     actor_id = created.json()["actor_profile_id"]
     preserved_columns = [
         column.name
         for column in ActorProfile.__table__.columns
-        if column.name not in {"display_name", "contact_email", "updated_at", "last_seen_at"}
+        if column.name not in {"display_name", "updated_at", "last_seen_at"}
     ]
     async with db_session.get_session_factory()() as session:
         before = await session.get(ActorProfile, actor_id)
@@ -60,19 +61,19 @@ async def test_patch_actors_me_updates_only_display_fields(
     response = await actor_client.patch(
         "/api/v1/actors/me",
         headers=auth_headers(),
-        json={"display_name": "Contributor One", "contact_email": "one@example.test"},
+        json={"display_name": "Contributor One"},
     )
     assert response.status_code == 200, response.text
     assert response.json()["display_name"] == "Contributor One"
-    assert response.json()["contact_email"] == "one@example.test"
+    assert response.json()["contact_email"] == created.json()["contact_email"]
     async with db_session.get_session_factory()() as session:
         after = await session.get(ActorProfile, actor_id)
         assert after.display_name == "Contributor One"
-        assert after.contact_email == "one@example.test"
+        assert after.contact_email == created.json()["contact_email"]
         assert {name: getattr(after, name) for name in preserved_columns} == before_fields
 
 
-@pytest.mark.parametrize("body", [{"status": "active"}, {}], ids=["authority-field", "empty"])
+@pytest.mark.parametrize("body", [{"status": "active"}, {}, {"contact_email": "other@example.test"}, {"contact_email": None}, {"display_name": "Blocked", "contact_email": "other@example.test"}])
 async def test_patch_actors_me_rejects_invalid_field_sets(actor_client, body):
     response = await actor_client.patch(
         "/api/v1/actors/me",

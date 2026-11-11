@@ -89,6 +89,8 @@ impl Throttle {
 struct Claims {
     iss: String,
     sub: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
     aud: String,
     iat: i64,
     nbf: i64,
@@ -377,11 +379,16 @@ impl TokenKind {
         }
     }
 }
-fn token(app: &App, sub: &str, kind: TokenKind) -> Result<String, ApiError> {
+fn token(app: &App, sub: &str, kind: TokenKind, email: &str) -> Result<String, ApiError> {
     let issued = now();
     let claims = Claims {
         iss: app.issuer.clone(),
         sub: sub.to_owned(),
+        email: if kind == TokenKind::Access {
+            Some(email.to_owned())
+        } else {
+            None
+        },
         aud: kind.audience(app),
         iat: issued,
         nbf: issued,
@@ -477,12 +484,12 @@ async fn login(
         .map_err(|_| (StatusCode::TOO_MANY_REQUESTS, "try later"))?;
     let copy = app.clone();
     let result = tokio::task::spawn_blocking(move || {
-        let account: Option<(String, String, i64, i64)> = {
+        let account: Option<(String, String, i64, i64, String)> = {
             let db = copy.db.lock().unwrap();
             db.query_row(
-                "SELECT subject,password_hash,is_admin,must_change_password FROM accounts WHERE email=?1",
+                "SELECT subject,password_hash,is_admin,must_change_password,email FROM accounts WHERE email=?1",
                 [email],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .optional()
             .ok()
@@ -495,7 +502,7 @@ async fn login(
         if !verify_password(&input.password, candidate) {
             return None;
         }
-        account.map(|(sub, _, admin, pending)| (sub, admin == 1, pending == 1))
+        account.map(|(sub, _, admin, pending, email)| (sub, admin == 1, pending == 1, email))
     })
     .await
     .map_err(|_| INVALID)?
@@ -504,16 +511,21 @@ async fn login(
         access_token: if result.2 {
             None
         } else {
-            Some(token(&app, &result.0, TokenKind::Access)?)
+            Some(token(&app, &result.0, TokenKind::Access, &result.3)?)
         },
         password_change_token: if result.2 {
-            Some(token(&app, &result.0, TokenKind::PasswordChange)?)
+            Some(token(
+                &app,
+                &result.0,
+                TokenKind::PasswordChange,
+                &result.3,
+            )?)
         } else {
             None
         },
         must_change_password: result.2,
         admin_token: if result.1 && !result.2 {
-            Some(token(&app, &result.0, TokenKind::Admin)?)
+            Some(token(&app, &result.0, TokenKind::Admin, &result.3)?)
         } else {
             None
         },
@@ -714,6 +726,14 @@ mod tests {
         .unwrap();
         (parent, app)
     }
+    fn signed_claims(app: &App, value: &str, kind: TokenKind) -> serde_json::Value {
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_issuer(&[&app.issuer]);
+        validation.set_audience(&[kind.audience(app)]);
+        decode::<serde_json::Value>(value, &app.decoding, &validation)
+            .unwrap()
+            .claims
+    }
     #[tokio::test]
     async fn admin_provisions_user_but_access_token_cannot_administer() {
         let (_dir, app) = fixture();
@@ -727,6 +747,21 @@ mod tests {
         .await
         .unwrap();
         assert!(admin.admin_token.is_some());
+        let admin_access = signed_claims(
+            &app,
+            admin.access_token.as_deref().unwrap(),
+            TokenKind::Access,
+        );
+        let admin_only = signed_claims(
+            &app,
+            admin.admin_token.as_deref().unwrap(),
+            TokenKind::Admin,
+        );
+        assert_eq!(admin_access["email"], "admin@example.test");
+        assert_eq!(admin_access["sub"], admin_only["sub"]);
+        assert!(admin_access.get("email_verified").is_none());
+        assert!(admin_only.get("email").is_none());
+        assert!(admin_only.get("email_verified").is_none());
         assert_eq!(
             create_account(
                 State(app.clone()),
@@ -779,6 +814,9 @@ mod tests {
         assert!(user.admin_token.is_none());
         assert!(user.access_token.is_none());
         let rotation = user.password_change_token.unwrap();
+        let restricted = signed_claims(&app, &rotation, TokenKind::PasswordChange);
+        assert!(restricted.get("email").is_none());
+        assert!(restricted.get("email_verified").is_none());
         assert!(authenticate(&app, &bearer(&rotation), false).is_err());
         assert!(authenticate(&app, &bearer(&rotation), true).is_err());
         let same = change_password(
@@ -818,7 +856,7 @@ mod tests {
         let Json(user) = login(
             State(app.clone()),
             Json(Credentials {
-                email: "user@example.test".into(),
+                email: " USER@EXAMPLE.TEST ".into(),
                 password: "chosen-password-123".into(),
             }),
         )
@@ -828,6 +866,26 @@ mod tests {
             authenticate(&app, &bearer(user.access_token.as_deref().unwrap()), false).unwrap(),
             created.subject
         );
+        let access = signed_claims(
+            &app,
+            user.access_token.as_deref().unwrap(),
+            TokenKind::Access,
+        );
+        let stored_email: String = app
+            .db
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT email FROM accounts WHERE subject=?1",
+                [&created.subject],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(access["email"], stored_email);
+        assert_eq!(stored_email, "user@example.test");
+        assert_eq!(access["sub"], restricted["sub"]);
+        assert_eq!(access["sub"], created.subject);
+        assert!(access.get("email_verified").is_none());
         assert!(authenticate(&app, &bearer(user.access_token.as_deref().unwrap()), true).is_err());
         assert!(authenticate(&app, &bearer(admin.admin_token.as_ref().unwrap()), false).is_err());
         let permits: Vec<_> = (0..4)
@@ -1139,7 +1197,13 @@ mod tests {
     #[test]
     fn rotation_credentials_require_exact_audience_purpose_and_expiry() {
         let (_dir, app) = fixture();
-        let rotation = token(&app, "subject", TokenKind::PasswordChange).unwrap();
+        let rotation = token(
+            &app,
+            "subject",
+            TokenKind::PasswordChange,
+            "subject@example.test",
+        )
+        .unwrap();
         assert!(authenticate_kind(&app, &bearer(&rotation), TokenKind::PasswordChange).is_ok());
         assert!(authenticate(&app, &bearer(&rotation), false).is_err());
         assert!(authenticate(&app, &bearer(&rotation), true).is_err());
@@ -1168,8 +1232,8 @@ mod tests {
         assert_eq!(claims.exp - claims.iat, ROTATION_LIFETIME);
         assert!(claims.scope.is_none());
         assert!(claims.subject_kind.is_none());
-        let access = token(&app, "subject", TokenKind::Access).unwrap();
-        let admin = token(&app, "subject", TokenKind::Admin).unwrap();
+        let access = token(&app, "subject", TokenKind::Access, "subject@example.test").unwrap();
+        let admin = token(&app, "subject", TokenKind::Admin, "subject@example.test").unwrap();
         assert!(authenticate_kind(&app, &bearer(&access), TokenKind::PasswordChange).is_err());
         assert!(authenticate_kind(&app, &bearer(&admin), TokenKind::PasswordChange).is_err());
     }

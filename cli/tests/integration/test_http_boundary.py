@@ -262,41 +262,32 @@ def test_profile_patch_is_not_replayed_after_http2_goaway(cli, tmp_path):
 
 
 def test_profile_update_sends_only_selected_fields(cli):
+    """Preserve omitted fields and explicit nulls in the outgoing profile patch."""
     with http_fixture() as (origin, response, requests):
         for flags, expected in (
             (("--display-name", "Ada é"), {"display_name": "Ada é"}),
-            (
-                ("--contact-email", "contact@example.test"),
-                {"contact_email": "contact@example.test"},
-            ),
             (("--clear-display-name",), {"display_name": None}),
-            (("--clear-contact-email",), {"contact_email": None}),
-            (
-                ("--display-name", "Ada", "--clear-contact-email"),
-                {"display_name": "Ada", "contact_email": None},
-            ),
-            (
-                ("--clear-display-name", "--clear-contact-email"),
-                {"display_name": None, "contact_email": None},
-            ),
         ):
             result = cli(origin, TOKEN, "profile", "update", *flags, "-o", "json")
             assert result.returncode == 0 and result.stderr == ""
             assert json.loads(result.stdout) == PROFILE
             assert response["updates"][-1] == ("application/json", expected)
-        assert requests == [("PATCH", "/api/v1/actors/me", "Bearer " + TOKEN)] * 6
+        assert requests == [("PATCH", "/api/v1/actors/me", "Bearer " + TOKEN)] * 2
         response["body"] = json.dumps({**PROFILE, "display_name": "Ada\x1b"}).encode()
         text = cli(origin, TOKEN, "profile", "update", "--display-name", "Ada")
         assert text.returncode == 0 and "Name: Ada\\u001B\n" in text.stdout
 
 
 def test_profile_update_bad_arguments_never_write(cli):
+    """Reject invalid or retired profile arguments before any HTTP mutation."""
     with http_fixture() as (origin, response, requests):
         for flags in (
             (),
             ("--clear-display-name=false",),
             ("--display-name", "Ada", "--clear-display-name"),
-            ("--contact-email", "x", "--clear-contact-email"),
+            ("--contact-email", "private@example.test"),
+            ("--clear-contact-email",),
+            ("--display-name", "Ada", "--contact-email", "private@example.test"),
             ("--actor-profile-id", ACTOR),
             ("--admin-roles", "access_administrator"),
             ("unexpected",),
@@ -309,6 +300,7 @@ def test_profile_update_bad_arguments_never_write(cli):
 
 
 def test_profile_update_uncertainty_and_known_denials(cli):
+    """Distinguish uncertain writes from known API denials without inventing success."""
     with http_fixture() as (origin, response, requests):
         # Record body receipt, then lose the connection before status headers.
         response["drop"] = True
@@ -413,7 +405,7 @@ def test_profile_update_uncertainty_and_known_denials(cli):
                 TOKEN,
                 "profile",
                 "update",
-                "--clear-contact-email",
+                "--clear-display-name",
                 "-o",
                 "json",
             )

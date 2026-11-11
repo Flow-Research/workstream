@@ -249,7 +249,7 @@ class ActorSelfResourceContext(BaseModel):
 
     resource_type: Literal["actor_profile"]
     resource_id: UUID
-    requested_fields: tuple[Literal["display_name", "contact_email"], ...]
+    requested_fields: tuple[Literal["display_name"], ...]
 
     @model_validator(mode="after")
     def require_unique_fields(self):

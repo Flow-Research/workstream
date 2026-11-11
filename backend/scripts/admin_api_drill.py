@@ -202,8 +202,10 @@ class AuthorityDrill:
         return result
 
     async def bootstrap(self):
+        """Admit the drill roster and verify administrator bootstrap denial and success paths."""
         for label in ROSTER:
-            self.tokens[label] = self.issuer.issue("admin-drill-" + label)
+            claims = {"email": "private-candidate@example.invalid"} if label == "outsider" else {}
+            self.tokens[label] = self.issuer.issue("admin-drill-" + label, **claims)
             body = await self.call("profile_" + label, "GET", "/api/v1/actors/me", label,
                 values={"actor_kind": "human", "status": "active", "admin_roles": [],
                         "project_role_grants": []}, checks={"actor_profile_id": uuid_value})
@@ -643,8 +645,8 @@ class AuthorityDrill:
         candidate_route = PROJECT + "/contributor-candidates"
         candidate_path = f'/api/v1/projects/{self.projects["a"]}/contributor-candidates'
         await self.call("candidate_populated_profile", "PATCH", "/api/v1/actors/me", "outsider",
-            payload={"display_name": "Candidate 名", "contact_email": "Private candidate contact"},
-            values={"display_name": "Candidate 名", "contact_email": "Private candidate contact"})
+            payload={"display_name": "Candidate 名"},
+            values={"display_name": "Candidate 名", "contact_email": "private-candidate@example.invalid"})
         self.candidate_names["outsider"] = "Candidate 名"
         candidate_cursor = await self.candidate_visibility("candidate_pages", limit=3)
         self.proof("candidate_cursor_present", isinstance(candidate_cursor, str) and bool(candidate_cursor))

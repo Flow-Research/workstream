@@ -122,6 +122,7 @@ After the API is healthy, complete admission and authorization bootstrap:
 Log in to the issuer, then call `GET /api/v1/actors/me` with that access token to
 admit the initial human actor. Use the returned actor ID with
 [`bootstrap_access_administrator.py`](../../backend/scripts/bootstrap_access_administrator.py),
+following [bootstrap custody and result codes](../../docs/operations_authorization_service.md#bootstrap-custody),
 first with `--dry-run`, then `--execute`, in the configured API image with its
 normal private database secret. Provision the journey's fixed service identities
 through `POST /api/v1/service-actors` under that administrator's fresh access

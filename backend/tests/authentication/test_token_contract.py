@@ -28,6 +28,7 @@ from tests.authentication.support import (
 async def test_asymmetric_token_returns_minimal_canonical_contract(
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
 ) -> None:
+    """Verify signed identity and optional profile metadata map to the canonical token."""
     private_key, jwk = rsa_signing_material
     verifier = FlowAuthVerifier(
         production_verifier_settings(),
@@ -48,10 +49,13 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
         "token_id",
         "subject_kind",
         "scopes",
+        "email",
+        "name",
     }
     assert result.token.subject == "opaque-subject-1"
     assert not hasattr(result.token, "roles")
-    assert not hasattr(result.token, "email")
+    assert result.token.email == "issuer-profile@example.test"
+    assert result.token.name == "Issuer Profile"
 
 
 @pytest.mark.parametrize(
@@ -110,6 +114,8 @@ async def test_missing_kid_fails_before_jwks(
         ({"iss": "https://other.example.test"}, "signature or claims"),
         ({"exp": 1}, "signature or claims"),
         ({"iat": int((datetime.now(UTC) + timedelta(hours=1)).timestamp())}, "signature or claims"),
+        ({"iat": -(10**30)}, "issued-at"),
+        ({"iat": -1}, "issued-at"),
         ({"jti": ""}, "identifier"),
         ({"subject_kind": "Human"}, "subject kind"),
         ({"scope": "unrelated"}, "human scope"),
@@ -235,3 +241,13 @@ async def test_temporal_claims_honor_configured_skew(
     assert (await verifier.verify(within_skew)).token.token_id == "token-id-1"
     with pytest.raises(AuthVerificationError):
         await verifier.verify(beyond_skew)
+
+
+@pytest.mark.parametrize("field,invalid", [("email", {}), ("email", "x" * 321),
+    ("email", "bad\x00value"), ("email", "\ud800"), ("email", " "), ("name", 12), ("name", "x" * 201)])
+async def test_invalid_signed_profile_claim_is_rejected(rsa_signing_material, field, invalid):
+    """Reject invalid signed profile metadata before it reaches persistence."""
+    private_key, jwk = rsa_signing_material
+    verifier = FlowAuthVerifier(production_verifier_settings(), jwks_transport=jwks_transport(jwk))
+    with pytest.raises(AuthVerificationError, match="profile claim"):
+        await verifier.verify(issue_asymmetric_token(private_key, claims={field: invalid}))

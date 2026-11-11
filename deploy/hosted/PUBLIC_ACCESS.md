@@ -60,8 +60,13 @@ only after the public path passes; retain the separate upstream TLS certificate.
    with the participant bearer token. Product operations still require current
    Workstream admission and appropriate grants.
 
-The API route is `/api/*`; documentation/debug paths are not exposed by this
-profile. MCP retains its exact upstream Host validation, request bounds and
+Swagger is available at `https://HOST/docs` and loads its schema from
+`https://HOST/openapi.json`. These are public API documentation, not login or
+authorization endpoints. Obtain a normal Workstream access token through the
+issuer flow above and use Swagger's **Authorize** button for protected calls;
+initial password-change and administrator tokens do not grant Workstream access.
+The API routes remain under `/api/*`. Other documentation/debug paths are not
+exposed by this profile. MCP retains its exact upstream Host validation, request bounds and
 browser-Origin rejection. Caddy accepts the configured public virtual host and
 sets the fixed loopback MCP Host; it preserves Origin so browsers cannot bypass
 that rejection. Public tool discovery is metadata, not product authorization.
@@ -90,3 +95,7 @@ representative authorized tools. Check missing bearer denial, hostile Host and
 Origin rejection, and retained service health. A successful DNS lookup or
 `tools/list` alone does not establish authenticated end-to-end access. Record
 exact live proof separately from fixtures and state remaining limitations.
+
+Swagger's JavaScript and CSS use an exact release with SHA-384 subresource integrity.
+The browser requires access to jsDelivr, but rejects changed asset bytes. Upgrade
+asset URLs and integrity digests together; bearer authorization is not persisted.

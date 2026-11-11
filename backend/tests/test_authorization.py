@@ -4167,6 +4167,7 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
 
 @pytest.mark.asyncio
 async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
+    """Reject substituted prepared inputs without consuming the original valid handle."""
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
@@ -4192,7 +4193,7 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
-        requested_fields=("contact_email",),
+        requested_fields=("display_name",),
     )
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(
@@ -8777,17 +8778,14 @@ async def test_authorization_kernel_preserves_lifecycle_denial_precedence(
 
 
 async def test_actor_self_update_requires_transaction_revalidation() -> None:
+    """Require transaction-bound revalidation for self reads and display-name updates."""
     context = _runtime_context()
-    read_resource = ActorSelfResourceContext(
-        resource_type="actor_profile",
-        resource_id=context.actor_profile_id,
-        requested_fields=(),
-    )
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
-        requested_fields=("contact_email",),
+        requested_fields=("display_name",),
     )
+    read_resource = resource.model_copy(update={"requested_fields": ()})
     without_read_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as read_exc_info:
         await without_read_recheck.require(ActionId.ACTOR_PROFILE_READ_SELF, read_resource)

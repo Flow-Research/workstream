@@ -98,10 +98,8 @@ type Result[T any] struct {
 // ProfileUpdate distinguishes absent fields from explicit clearing. Validation
 // of text and authority remains with the public Workstream API.
 type ProfileUpdate struct {
-	DisplayName       *string
-	ContactEmail      *string
-	ClearDisplayName  bool
-	ClearContactEmail bool
+	DisplayName      *string
+	ClearDisplayName bool
 }
 
 func New(origin, token string) (*Client, error) {
@@ -195,20 +193,15 @@ func decodeProfile(raw json.RawMessage) (Result[Profile], error) {
 
 func (c *Client) UpdateProfile(ctx context.Context, update ProfileUpdate) (Result[Profile], error) {
 	var result Result[Profile]
-	if (update.DisplayName != nil && !utf8.ValidString(*update.DisplayName)) ||
-		(update.ContactEmail != nil && !utf8.ValidString(*update.ContactEmail)) {
+	if update.DisplayName != nil && !utf8.ValidString(*update.DisplayName) {
 		return result, errors.New("profile fields must be valid UTF-8")
 	}
-	if (update.DisplayName != nil && update.ClearDisplayName) ||
-		(update.ContactEmail != nil && update.ClearContactEmail) {
+	if update.DisplayName != nil && update.ClearDisplayName {
 		return result, errors.New("cannot set and clear the same profile field")
 	}
 	fields := make(map[string]*string)
 	if update.DisplayName != nil || update.ClearDisplayName {
 		fields["display_name"] = update.DisplayName
-	}
-	if update.ContactEmail != nil || update.ClearContactEmail {
-		fields["contact_email"] = update.ContactEmail
 	}
 	if len(fields) == 0 {
 		return result, errors.New("select at least one profile field")

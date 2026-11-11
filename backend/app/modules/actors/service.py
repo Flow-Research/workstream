@@ -166,8 +166,8 @@ class ActorService:
             actor_kind="human",
             status="active",
             provisioning_method="automatic_first_access",
-            display_name=None,
-            contact_email=None,
+            display_name=token.name,
+            contact_email=token.email,
             created_by=profile_id,
             last_seen_at=func.now(),
         )
@@ -179,6 +179,7 @@ class ActorService:
             subject_kind="human",
             status="active",
             linked_by=profile_id,
+            email_observed_issued_at=token.issued_at if token.email is not None else None,
             last_verified_at=func.clock_timestamp(),
         )
         await self._repo.add_actor_profile(profile)
@@ -278,12 +279,29 @@ class ActorService:
         self._require_active_human(profile)
         if "display_name" in payload.model_fields_set:
             profile.display_name = payload.display_name
-        if "contact_email" in payload.model_fields_set:
-            profile.contact_email = payload.contact_email
         profile.updated_at = func.now()
         await self._session.flush()
         await self._session.refresh(profile)
         return self.self_response(profile)
+
+    async def synchronize_identity_email(
+        self, resolved: ResolvedActor, token: VerifiedIssuerToken,
+    ) -> ResolvedActor:
+        """Stage issuer-owned email after self authorization, in the caller transaction."""
+        resolved = await self.lock_actor_for_authorization(resolved)
+        profile, link = resolved.profile, resolved.identity_link
+        self._validate_link(token, link, profile)
+        self._require_active_human(profile)
+        if token.issuer != link.issuer or token.subject != link.subject:
+            raise RuntimeError("verified identity does not match resolved actor")
+        if token.email is not None and (
+            link.email_observed_issued_at is None
+            or token.issued_at > link.email_observed_issued_at
+        ):
+            profile.contact_email = token.email
+            link.email_observed_issued_at = token.issued_at
+            await self._session.flush()
+        return resolved
 
     async def touch_after_authorization(self, resolved: ResolvedActor) -> ResolvedActor:
         """Stage monotonic verification timestamps after an allowed decision."""

@@ -1,4 +1,4 @@
-"""Strict schemas for canonical actor self-service and legacy eligibility."""
+"""Strict schemas for canonical actor self-service and administration."""
 
 from __future__ import annotations
 
@@ -18,9 +18,8 @@ class ActorProfileUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, max_length=200)
-    contact_email: str | None = Field(default=None, max_length=320)
 
-    @field_validator("display_name", "contact_email")
+    @field_validator("display_name")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         """Reject whitespace-only values while preserving opaque text."""

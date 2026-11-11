@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PublicIngressTest(unittest.TestCase):
     def test_exact_hosts_paths_headers_upload_and_identity_tls(self):
+        """Exercise real proxy host/path boundaries, forwarded headers, uploads and identity TLS."""
         binary = os.environ['WORKSTREAM_TEST_CADDY']
         with tempfile.TemporaryDirectory(prefix='ws-ingress-') as directory:
             root = Path(directory)
@@ -147,6 +148,18 @@ class PublicIngressTest(unittest.TestCase):
                 self.assertEqual(request('identity.example.test', '/not-a-route')[0], 404)
                 self.assertEqual(request('foreign.example.test', '/api/v1/health')[0], 404)
                 self.assertEqual(request('workstream.example.test', '/admin/accounts', b'{}')[0], 404)
+                self.assertEqual(len(calls), before)
+                for target in ('/docs', '/openapi.json'):
+                    status, result = request('workstream.example.test', target)
+                    self.assertEqual(status, 200)
+                    self.assertEqual(json.loads(result)['path'], target)
+                    self.assertEqual(calls[-1][0], target)
+                before = len(calls)
+                for target in ('/docs/', '/docs-extra', '/redoc', '/openapi.json-extra'):
+                    self.assertEqual(request('workstream.example.test', target)[0], 404)
+                for target in ('/docs', '/openapi.json'):
+                    self.assertEqual(request('foreign.example.test', target)[0], 404)
+                    self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(len(calls), before)
                 # Larger than identity's limit, still a valid API body; prove streaming
                 # preserves exact bytes rather than merely accepting a status code.

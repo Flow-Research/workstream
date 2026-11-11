@@ -72,24 +72,26 @@ def denial(result, status):
 
 
 async def exercise(api, mcp, env):
+    """Exercise caller-token isolation and profile behavior across direct API and MCP calls."""
     issuer, audience, secret = flow_settings(env)
 
     def token(subject, **changes):
         return issue_flow_token(subject, [], **{
             "issuer": issuer, "audience": audience, "secret": secret, **changes})
 
-    tokens = [token("mcp-alice"), token("mcp-bob")]
+    subjects = ("mcp-alice", "mcp-bob")
+    tokens = [token(subject) for subject in subjects]
     checks = []
     async with httpx.AsyncClient(base_url=api, trust_env=False, timeout=10) as direct:
         expected = []
-        for bearer in tokens:
+        for subject, bearer in zip(subjects, tokens):
             response = await direct.get("/api/v1/actors/me", headers={"Authorization": "Bearer " + bearer})
             require(response.status_code == 200, "direct positive rejected")
             payload = response.json()
-            # Admission intentionally does not copy issuer display claims into
-            # caller-owned profile fields (ActorService's canonical behavior).
-            require(payload["contact_email"] is None and payload["display_name"] is None,
-                    "issuer claims unexpectedly became profile data")
+            # The shared local signer includes both claims on human tokens.
+            require(payload["contact_email"] == f"{subject}@flow.local"
+                    and payload["display_name"] == subject.replace("-", " ").title(),
+                    "first admission did not seed the signed issuer profile claims")
             require(payload["admin_roles"] == [] and payload["project_role_grants"] == [],
                     "fixture unexpectedly privileged")
             expected.append(payload)

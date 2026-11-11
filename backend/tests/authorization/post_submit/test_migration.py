@@ -49,6 +49,7 @@ async def test_actual_upgrade_preserves_or_refuses_without_repair(
 async def test_upgrade_excludes_writer_across_receipt_preflight(
     tmp_path, isolated_database_env, migration_lock, monkeypatch
 ):
+    """Prove migration custody blocks an interleaved predecessor receipt writer."""
     import threading
     from alembic.operations import Operations
     from sqlalchemy import text
@@ -113,7 +114,19 @@ async def test_upgrade_excludes_writer_across_receipt_preflight(
                     assert row == ("queued", None, None)
                 from tests.checkers.execution.support import provision_post_submit_service
 
-                await provision_post_submit_service(h.factory)
+                # Only the current ACTORS fixture needs this post-0068 field;
+                # the predecessor receipt migration has already run above.
+                async with h.factory() as session, session.begin():
+                    await session.execute(text(
+                        "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
+                    ))
+                try:
+                    await provision_post_submit_service(h.factory)
+                finally:
+                    async with h.factory() as session, session.begin():
+                        await session.execute(text(
+                            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
+                        ))
                 valid = await seed_archived_running_checker(h)
                 assert valid["reservation"]["attempt_id"] == reserved["attempt_id"]
             finally:

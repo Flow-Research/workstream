@@ -29,6 +29,7 @@ from app.interfaces.auth import (
 from app.schemas.auth import (
     AuthVerificationResult,
     MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS,
+    MAX_VERIFIED_ISSUED_AT,
     VerifiedIssuerToken,
 )
 
@@ -394,6 +395,7 @@ class FlowAuthVerifier:
         self,
         claims: dict[str, Any],
     ) -> AuthVerificationResult:
+        """Validate verified identity/profile claims and build the bounded authentication result."""
         subject = claims.get("sub")
         token_id = claims.get("jti")
         subject_kind = claims.get("subject_kind")
@@ -421,8 +423,23 @@ class FlowAuthVerifier:
             isinstance(value, bool) or not isinstance(value, int | float) for value in (exp, iat)
         ):
             raise AuthVerificationError("token temporal claims are invalid")
+        if not 0 <= iat <= MAX_VERIFIED_ISSUED_AT:
+            raise AuthVerificationError("token issued-at claim is invalid")
         if nbf is not None and (isinstance(nbf, bool) or not isinstance(nbf, int | float)):
             raise AuthVerificationError("token not-before claim is invalid")
+
+        for field, limit in (("email", 320), ("name", 200)):
+            value = claims.get(field)
+            if value is not None and (
+                not isinstance(value, str) or not value.strip() or len(value) > limit
+                or any(character in value for character in ("\x00", "\r", "\n"))
+            ):
+                raise AuthVerificationError("token profile claim is invalid")
+            if value is not None:
+                try:
+                    value.encode("utf-8")
+                except UnicodeEncodeError:
+                    raise AuthVerificationError("token profile claim is invalid") from None
 
         verified = VerifiedIssuerToken(
             issuer=self._issuer,
@@ -434,6 +451,8 @@ class FlowAuthVerifier:
             token_id=token_id,
             subject_kind=subject_kind,
             scopes=scopes,
+            email=claims.get("email"),
+            name=claims.get("name"),
         )
         return AuthVerificationResult(token=verified)
 

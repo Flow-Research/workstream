@@ -46,13 +46,17 @@ gRPC, or asynchronous transport without changing product authority semantics.
 - issued-at, expiry, optional not-before;
 - mandatory token identifier (`jti`);
 - subject kind;
-- verified coarse scope.
+- verified coarse scope;
+- optional signed email and display-name (`name`) profile metadata.
 
 It contains no Workstream product role or permission. Email, display name,
 skills, reputation, and relationship metadata are never authorization keys.
-Canonical self-read is `GET /api/v1/actors/me`. Actor admission does not copy
-issuer email or display name. Human-owned profile metadata is updated through
-`PATCH /api/v1/actors/me`; verified issuer claims do not grant product roles.
+Canonical self-read is `GET /api/v1/actors/me`. First human admission seeds
+email and display name from optional verified issuer claims. Email is read-only
+in Workstream and follows newer signed observations during authorized self reads
+and updates; missing claims do not erase it. `PATCH /api/v1/actors/me` edits or
+clears the local display name, which later issuer claims do not overwrite.
+Issuer metadata does not grant product roles or establish mailbox verification.
 
 Human first access may create a canonical human profile and identity link.
 Unknown service subjects, agents, and Spaces are denied without implicit
@@ -1121,7 +1125,10 @@ Self-update through ordinary request authorization retains its existing
 revalidation behavior; prepared self-update locks the exact profile followed by
 its exact link,
 rebuilds current context inside the caller transaction, and requires an active
-actor plus a non-empty subset of `display_name` and `contact_email`. Revoked
+actor plus an explicitly supplied `display_name`. `contact_email` is read-only
+issuer data: admission seeds it from signed `email`, and a newer signed token
+refreshes it on self GET/PATCH. Admission also seeds `display_name` from signed
+`name`, while subsequent local name edits remain authoritative. Revoked
 links, deactivated actors, and suspended updates deny in that order. Planned
 and unknown actions deny as `permission_not_granted` at public boundaries, and
 a system resource grants no implicit authority.

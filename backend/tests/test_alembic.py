@@ -332,7 +332,7 @@ async def _seed_export_resume_rows(database_url: str):
 
 
 async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str, object]:
-    """Compare retained row bytes and table identities, including the sentinel."""
+    """Compare retained facts/row identities, treating the new absent watermark as null."""
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         sentinel = await connection.fetchrow(
@@ -343,7 +343,8 @@ async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str,
         if snapshot_id is not None:
             export = await connection.fetchrow(
                 """
-                SELECT to_jsonb(s)::text,to_jsonb(a)::text,to_jsonb(l)::text,
+                SELECT to_jsonb(s)::text,to_jsonb(a)::text,
+                       ('{"email_observed_issued_at":null}'::jsonb || to_jsonb(l))::text,
                        s.tableoid::bigint,a.tableoid::bigint,l.tableoid::bigint,
                        s.xmin::text,a.xmin::text,l.xmin::text
                 FROM public.contribution_export_snapshots s
@@ -380,12 +381,14 @@ async def _audit_validator_custody(database_url: str) -> list[tuple]:
 
 
 def test_v01_graph_has_one_root_and_head() -> None:
+    """Assert one complete linear migration chain from the v0.1 root to the current head."""
     config = _alembic_config()
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0067_canonical_json_restore_path",
         "0066_guide_check_specification",
         "0065_claim_starts_work",
         "0064_checker_trial_evidence",
@@ -813,6 +816,7 @@ def test_project_role_restore_path_repair_keeps_reference_guards(
         "0062_model_usage",
         "0063_checker_revision_input",
         "0066_guide_check_specification",
+        "0067_canonical_json_restore_path",
     ],
 )
 def test_preceding_head_upgrades_to_current_without_recreation(
@@ -2043,6 +2047,7 @@ def test_downgrade_refuses_without_mutation(
         ("0059_neutral_guide_runtime", "0058_compensation_unit_create"),
         ("0060_audit_restore_path", "0059_neutral_guide_runtime"),
         ("0067_canonical_json_restore_path", "0066_guide_check_specification"),
+        ("0068_issuer_profile_email", "0067_canonical_json_restore_path"),
     ),
 )
 def test_runtime_and_audit_one_revision_downgrades_refuse_without_mutation(

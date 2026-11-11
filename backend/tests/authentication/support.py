@@ -78,6 +78,7 @@ def issue_asymmetric_token(
     remove_claims: set[str] | None = None,
     algorithm: str = "RS256",
 ) -> str:
+    """Sign controlled issuer claims, including explicit omissions and malformed-value probes."""
     now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "iss": "https://issuer.example.test",
@@ -90,8 +91,8 @@ def issue_asymmetric_token(
         "subject_kind": subject_kind,
         "scope": scope,
         "roles": ["admin", "reviewer"],
-        "email": "must-not-enter-canonical@example.test",
-        "name": "Must Not Enter Canonical",
+        "email": "issuer-profile@example.test",
+        "name": "Issuer Profile",
     }
     if claims:
         payload.update(claims)

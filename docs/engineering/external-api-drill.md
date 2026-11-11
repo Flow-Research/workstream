@@ -38,7 +38,7 @@ are outside this matrix.
 |---|---|---|
 | 1 | `GET /health` | Exact public health value/shape and request/correlation headers: E `health`. |
 | 2 | `GET /actors/me` | Canonical identity, every profile field, stable identity, token rejection and actor/link lifecycle admission: E `profile_*`, `*_self_read_*`. |
-| 3 | `PATCH /actors/me` | Both editable fields, omission/null/normalization/length/type/NUL, rejected mixed-update atomicity and readback: E `display_name_*`, `contact_email_*`, `*_self_write_*`. |
+| 3 | `PATCH /actors/me` | Editable display-name null/normalization/length/type/NUL, rejected read-only email and mixed-update atomicity with unchanged-state readback: E `display_name_*`, `profile_readonly_*`, `*_self_write_*`. |
 | 4 | `GET /actors/me/authorization-context` | Exact project, actor, roles and effective actions; selector validation, both contributor roles, revoked and foreign-project concealment: E `context_*`, `contributor_context_*`, `revoked_contributor_context_*`. |
 | 5 | `GET /actors/{actor_profile_id}` | Exact human/service fields and timestamps, access-admin/system-audit reads, project-audit/ordinary/no-auth denial, absent/malformed selectors: E `admin_human_profile_fields`, `service_persisted_profile`; A `human_admin_read_fields`, `admin_read_profile_*`. |
 | 6 | `GET /actors/{actor_profile_id}/identity-links` | Exact human/service link fields without subject disclosure, authority/selector checks, revoked/restored state: A `human_admin_link_fields`, `admin_read_link_*`; E `service_persisted_identity`, `service_link_*_readback`. |

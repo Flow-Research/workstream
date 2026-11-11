@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from html import escape
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import api_router
@@ -286,9 +287,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,
+        docs_url=None,
         lifespan=_application_lifespan,
         responses=DEFAULT_ERROR_RESPONSES,
     )
+    @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
+    async def swagger_docs() -> HTMLResponse:
+        """Serve bearer-token documentation with integrity-checked assets."""
+        # Fixed release and SRI: a changed CDN response must not execute with tokens.
+        return HTMLResponse("""<!DOCTYPE html>
+<html><head><title>""" + escape(app.title) + """ - Swagger UI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.0/swagger-ui.css"
+ integrity="sha384-3nuX7df3EaAoiqLBeyS1Ola0Gpg9ryJKVtarubwfnA1cOH8AWHUdbPSIvEqPZ9VH" crossorigin="anonymous">
+</head><body><div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.0/swagger-ui-bundle.js"
+ integrity="sha384-7xcoc6ZKDFF7Ek627QTC3Bg/K+5Y36NJ8MWAE43D2m6+3Sh9XO3tdsfHhrS8gNIQ" crossorigin="anonymous"></script>
+<script>SwaggerUIBundle({url: '/openapi.json', dom_id: '#swagger-ui',
+ deepLinking: true, showExtensions: true, showCommonExtensions: true,
+ presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+ layout: 'BaseLayout', persistAuthorization: false});</script></body></html>""")
+
     app.state.settings = settings
     app.state.auth_verifier, app.state.auth_configuration_valid = prepare_auth_verifier(settings)
     cache_auth_verifier(settings, app.state.auth_verifier)

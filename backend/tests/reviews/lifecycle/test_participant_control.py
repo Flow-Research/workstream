@@ -253,6 +253,12 @@ async def test_0038_old_manifest_live_upgrade_denies_new_effects_until_renewed(
     """Upgrade retains old facts/replay but requires current Operator review for new effects."""
     migration = _activation_migration()
     await _reset_to_0038(isolated_database_env, migration_lock)
+    # Current ACTORS reads need this nullable projection while seeding 0038.
+    # Remove it before the real migration introduces the column.
+    async with db_session.get_engine().begin() as connection:
+        await connection.execute(text(
+            "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
+        ))
     access = await _provision_0038_operator(admin_access)
     _set_runtime_manifest(monkeypatch, migration._OLD_MANIFEST)
     with monkeypatch.context() as predecessor:
@@ -278,6 +284,10 @@ async def test_0038_old_manifest_live_upgrade_denies_new_effects_until_renewed(
     assert await transition(old_live_command) == old_live_receipt
     assert await snapshot() == retained_lifecycle
 
+    async with db_session.get_engine().begin() as connection:
+        await connection.execute(text(
+            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
+        ))
     # The retained 0039 control is unchanged; current runtime owners require
     # their complete schema before exercising new submissions and acceptance.
     await db_session.dispose_engine()

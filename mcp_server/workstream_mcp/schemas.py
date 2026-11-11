@@ -24,7 +24,6 @@ PROFILE_UPDATE_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "display_name": {"type": ["string", "null"], "maxLength": 200},
-        "contact_email": {"type": ["string", "null"], "maxLength": 320},
     },
     "minProperties": 1,
     "additionalProperties": False,

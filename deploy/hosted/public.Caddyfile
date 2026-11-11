@@ -57,6 +57,7 @@
 
 {$WORKSTREAM_PUBLIC_HOSTNAME} {
 	header Cache-Control no-store
+	@api path /api/* /docs /openapi.json
 	route {
 		handle /mcp {
 			# JSON/base64 tools retain the MCP owner's stricter body/deadline limits.
@@ -77,7 +78,7 @@
 				}
 			}
 		}
-		handle /api/* {
+		handle @api {
 			# Binary ZIP upload is streamed, never buffered by this proxy.
 			request_body {
 				max_size 500MiB

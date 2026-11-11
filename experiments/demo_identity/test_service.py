@@ -106,6 +106,7 @@ def service(tmp_path_factory):
 
 
 def test_login_admin_provision_and_real_verifier(service, monkeypatch):
+    """Verify account provisioning, password rotation and issued tokens through the real verifier."""
     issuer, cert, data, _restart = service
     bundle = cert.parent / "trust.pem"
     bundle.write_bytes(Path(certifi.where()).read_bytes() + cert.read_bytes())
@@ -159,6 +160,7 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
     assert rotation_claims["purpose"] == "password_change"
     assert rotation_claims["exp"] - rotation_claims["iat"] == 300
     assert "scope" not in rotation_claims and "subject_kind" not in rotation_claims
+    assert "email" not in rotation_claims and "email_verified" not in rotation_claims
     verified = asyncio.run(verifier.verify(user["access_token"])).token
     assert verified.subject == created.json()["subject"]
     assert verified.subject_kind == "human"
@@ -166,7 +168,10 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
     with pytest.raises(AuthVerificationError):
         asyncio.run(verifier.verify(admin["admin_token"]))
     claims = jwt.decode(user["access_token"], options={"verify_signature": False})
-    assert set(claims) == {"iss", "sub", "aud", "iat", "nbf", "exp", "jti", "subject_kind", "scope"}
+    assert set(claims) == {"iss", "sub", "email", "aud", "iat", "nbf", "exp", "jti", "subject_kind", "scope"}
+    assert claims["email"] == "user@example.test"
+    assert claims["sub"] == rotation_claims["sub"] == created.json()["subject"]
+    assert "email_verified" not in claims
     signer = (data / "signer.pem").read_bytes()
     kid = jwks["keys"][0]["kid"]
     for change in ({"aud": "wrong"}, {"iss": "https://wrong.example"}, {"exp": int(time.time()) - 1}):
@@ -178,6 +183,7 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
     with pytest.raises(AuthVerificationError):
         asyncio.run(verifier.verify(forged))
     admin_claims = jwt.decode(admin["admin_token"], options={"verify_signature": False})
+    assert "email" not in admin_claims and "email_verified" not in admin_claims
     with httpx.Client(verify=str(cert), trust_env=False) as client:
         for change in ({"exp": int(time.time()) - 30}, {"nbf": int(time.time()) + 600}, {"iat": int(time.time()) + 600}):
             altered = jwt.encode({**admin_claims, **change}, signer, algorithm="RS256", headers={"kid": kid})
