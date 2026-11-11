@@ -1,7 +1,7 @@
 # Repeatable single-host MVP deployment
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Operators can install the existing Workstream runtime
   on a clean single host using repository-owned instructions and bounded setup
   commands, without private drill scripts or retained demo state.
@@ -103,3 +103,8 @@ failure, readiness retry/deadline, proxy-disabled recovery and cache-only image
 selection. Recovery does not initialize identities, migrate schema, repeat AWS
 proof or restart an already active native checker. The existing hosted Compose
 owner and a single systemd reconciliation unit own this behavior.
+
+The [private host qualification report](../../docs/reports/mvp-single-host-2026-11-11.md)
+records the fresh public journey, exact contribution/award/replay and real
+post-reboot CLI/MCP evidence. The 2 vCPU/8 GiB host supports this bounded
+operator demo; public ingress and concurrent load remain outside the claim.

@@ -367,9 +367,13 @@ release proof remain later v0.1 work.
 The [single-host installation path](../deploy/hosted/SINGLE_HOST.md) includes
 private persistent PostgreSQL/Redis, fresh credential initialization and ordered
 backing-service startup/shutdown alongside the existing hosted owners. Managed
-databases remain supported. The proposed 2 vCPU/8 GiB host is not yet qualified:
-complete fresh identity, artifact/checker journey, restart and measured resource
-proof remain required before claiming that deployment ready.
+databases remain supported. A [private single-host MVP drill](reports/mvp-single-host-2026-11-11.md)
+qualified the 2 vCPU/8 GiB deployment for one contributor journey: fresh identity,
+PRE failure, verified S3 Submission, external POST failure/correction, automatic
+acceptance, exact contribution/10-point award and replay. Selected CLI/MCP reads
+retained the same facts after host reboot and automatic service reconciliation.
+This is bounded operator-demo evidence, not a concurrency benchmark, all-tool
+coverage or public DNS/TLS qualification.
 
 The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,

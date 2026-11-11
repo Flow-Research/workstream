@@ -167,3 +167,6 @@ preserving its database only with its owner's authorization. Identify the exact
 instance, volume and deployment directories before deletion; retain unrelated
 resources, S3 objects and the stable address needed by the replacement. Confirm
 old billable compute is terminated after the replacement is qualified.
+
+The [single-host qualification report](../../docs/reports/mvp-single-host-2026-11-11.md)
+records the bounded private demo and restart proof, including its limits.
