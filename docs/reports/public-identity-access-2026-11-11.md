@@ -39,7 +39,9 @@ Seven optimized Rust tests, three real HTTPS/verifier tests and the isolated
 container restart/account proof passed. The earlier debug timing failure was
 resolved by running the optimized release; its timing assertion was unchanged.
 The real Caddy socket test proves route/header custody, verified issuer upstream
-TLS, body bounds and byte preservation. The final BuildKit image independently
+TLS, oversized identity-request rejection and API byte preservation. API and MCP
+body ceilings are asserted in the adapted configuration; this test does not send
+oversized bodies to those two routes. The final BuildKit image independently
 passed the container proof before immutable registry publication.
 
 Email remains an unverified login identifier. Initial credentials are delivered
