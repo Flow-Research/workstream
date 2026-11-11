@@ -29,7 +29,7 @@ from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
     _restore_historical_revision_rows, assert_historical_revision_guards,
-    add_retained_guide_read_projection, drop_retained_guide_read_projection,
+    add_retained_owner_read_projection, drop_retained_owner_read_projection,
     add_historical_revision_read_projection, enter_predecessor_owner_shape,
     leave_predecessor_owner_shape,
 )
@@ -74,10 +74,7 @@ async def predecessor_client(task_database_env, migration_lock):
         # Current TASK owners read retained guide custody through current ORM
         # columns. These null-only projections are removed before the upgrade.
         async with db_session.get_engine().begin() as connection:
-            await add_retained_guide_read_projection(connection)
-            await connection.execute(text(
-                "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
-            ))
+            await add_retained_owner_read_projection(connection)
     async for client in current_task_client.__wrapped__(task_database_env):
         project_id = seed["request"]["project_id"]
         await assert_historical_revision_guards(
@@ -195,10 +192,7 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
         assignment_id = assignment.id
         await session.commit()
     async with db_session.get_engine().begin() as connection:
-        await drop_retained_guide_read_projection(connection)
-        await connection.execute(text(
-            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
-        ))
+        await drop_retained_owner_read_projection(connection)
     await db_session.dispose_engine()
     await asyncio.to_thread(command.upgrade, _config(), "head")
     async with db_session.get_session_factory()() as session:

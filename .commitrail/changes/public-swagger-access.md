@@ -92,3 +92,7 @@ than the removed email mutation; transaction revalidation, handle mismatch and
 unconsumed-handle assertions are unchanged. The read/update contexts share one base identity with an empty requested-field
 copy for reads, removing duplicated setup. Structural debt shrinks without
 changing limits or dispositions.
+
+Historical archive restoration remains exact: the shared nullable owner projection
+is added only after archived column validation, checked for null-only values, and
+removed before migration. The archive inventory check is not relaxed.
