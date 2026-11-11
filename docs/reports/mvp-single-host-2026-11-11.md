@@ -13,7 +13,7 @@ PRE/POST images. No paid model inference was used.
   approved separately. The locked review policy selected automatic acceptance.
 - Finance published a project policy awarding 10 FLOW points per accepted submission.
 - Task claim returned `in_progress` with an active assignment; no separate start call.
-- An invalid package returned PRE findings without creating a Submission.
+- An invalid archive returned actionable intake feedback without creating a Submission.
 - A structurally valid package passed PRE, acquired verified S3 custody and became
   immutable Submission version 1. Real external POST found incorrect counts and
   routed it to `needs_revision`, with no ContributionRecord or award.

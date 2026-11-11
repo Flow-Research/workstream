@@ -369,7 +369,7 @@ private persistent PostgreSQL/Redis, fresh credential initialization and ordered
 backing-service startup/shutdown alongside the existing hosted owners. Managed
 databases remain supported. A [private single-host MVP drill](reports/mvp-single-host-2026-11-11.md)
 qualified the 2 vCPU/8 GiB deployment for one contributor journey: fresh identity,
-PRE failure, verified S3 Submission, external POST failure/correction, automatic
+intake failure, verified S3 Submission, external POST failure/correction, automatic
 acceptance, exact contribution/10-point award and replay. Selected CLI/MCP reads
 retained the same facts after host reboot and automatic service reconciliation.
 This is bounded operator-demo evidence, not a concurrency benchmark, all-tool
