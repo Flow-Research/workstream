@@ -1015,6 +1015,21 @@ mod tests {
             )
             .unwrap();
         assert_eq!(persisted, "winning-hash");
+        // After first rotation, the pending flag stays false across ordinary
+        // password changes. Only the exact hash snapshot excludes a stale writer.
+        replace_password_hash(&db, "user", "winning-hash", "next-hash", false).unwrap();
+        assert_eq!(
+            replace_password_hash(&db, "user", "winning-hash", "stale-completed-hash", false),
+            Err(INVALID)
+        );
+        let completed: (String, bool) = db
+            .query_row(
+                "SELECT password_hash,must_change_password FROM accounts WHERE subject='user'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(completed, ("next-hash".into(), false));
     }
     #[tokio::test]
     async fn concurrent_first_password_changes_have_one_winner_after_restart() {

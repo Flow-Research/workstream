@@ -132,6 +132,16 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
         assert denied.status_code == 401
         assert client.post(f"{issuer}/login", json={"email": "blocked@example.test", "password": "blocked-password-123"}).status_code == 401
         change = {"current_password": "user-password-123", "new_password": "chosen-password-123"}
+        rotation_claims = jwt.decode(rotation, options={"verify_signature": False})
+        signer = (data / "signer.pem").read_bytes()
+        jwks = client.get(f"{issuer}/jwks.json").json()
+        kid = jwks["keys"][0]["kid"]
+        # These mutations must fail while the account is still pending and its
+        # current password is correct; the unchanged credential then succeeds.
+        for variant in ({"aud": "workstream-demo"}, {"purpose": "issuer_admin"}, {"purpose": None}, {"exp": int(time.time()) - 30}):
+            altered = jwt.encode({**rotation_claims, **variant}, signer, algorithm="RS256", headers={"kid": kid})
+            denial = client.post(f"{issuer}/me/password", headers={"Authorization": f"Bearer {altered}"}, json=change)
+            assert denial.status_code == 401
         assert client.post(f"{issuer}/me/password", headers={"Authorization": f"Bearer {rotation}"}, json=change).status_code == 204
         user = client.post(f"{issuer}/login", json={"email": "user@example.test", "password": "chosen-password-123"}).json()
         assert user["must_change_password"] is False
@@ -169,10 +179,6 @@ def test_login_admin_provision_and_real_verifier(service, monkeypatch):
         asyncio.run(verifier.verify(forged))
     admin_claims = jwt.decode(admin["admin_token"], options={"verify_signature": False})
     with httpx.Client(verify=str(cert), trust_env=False) as client:
-        for change in ({"aud": "workstream-demo"}, {"purpose": "issuer_admin"}, {"purpose": None}, {"exp": int(time.time()) - 30}):
-            altered = jwt.encode({**rotation_claims, **change}, signer, algorithm="RS256", headers={"kid": kid})
-            denial = client.post(f"{issuer}/me/password", headers={"Authorization": f"Bearer {altered}"}, json={"current_password": "chosen-password-123", "new_password": "blocked-password-123"})
-            assert denial.status_code == 401
         for change in ({"exp": int(time.time()) - 30}, {"nbf": int(time.time()) + 600}, {"iat": int(time.time()) + 600}):
             altered = jwt.encode({**admin_claims, **change}, signer, algorithm="RS256", headers={"kid": kid})
             denial = client.post(f"{issuer}/admin/accounts", headers={"Authorization": f"Bearer {altered}"}, json={"email": "blocked@example.test", "password": "blocked-password-123"})

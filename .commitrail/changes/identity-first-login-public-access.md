@@ -1,8 +1,9 @@
 # First-login password change and public demo access
 
-Initiative: None
-Status: Planned
-Risk: L1 — identity credentials and public ingress
+- Initiative: None
+- Durable disposition: Planned
+- Intended merge outcome: Require a private first-login password change before
+  participant access, and support verified public HTTPS identity/API/native MCP.
 
 ## Intent
 
@@ -14,7 +15,9 @@ mail delivery, inbox verification and public signup are explicitly deferred.
 Finish the existing public HTTPS boundary for identity, API and MCP, then prove
 participant login and client access. Workstream owns no password/login service.
 
-## Allowed files
+## Bounded change
+
+### Allowed files
 
 - experiments/demo_identity/** and its affected integration fixtures.
 - deploy/hosted/{demo-identity.Caddyfile,compose.mcp.yml,compose.py,preflight.py,
@@ -25,14 +28,14 @@ participant login and client access. Workstream owns no password/login service.
 - scripts/test_public_ingress.py and .github/workflows/demo-identity.yml for
   actual Caddy transport proof in the existing issuer lane (no new lane).
 
-## Prohibited changes
+### Prohibited changes
 
 No product permission changes, automatic project grants, public signup, email
 verification claims, SMTP, OAuth implementation, replacement identities, deleted
 retained data, disabled TLS checks, exposed database/native-checker ports or
 unrelated changes to PR #704. Existing issuer subjects and signing keys persist.
 
-## Plan and acceptance
+## Acceptance criteria
 
 1. Persist must_change_password for newly provisioned participants. Bootstrap
    administrator is created locally with its chosen password. Provide an explicit `upgrade DATA_DIR` command for a versioned,
@@ -68,7 +71,13 @@ required; API transport budgets must accommodate the existing 3400-second
 preparation deadline plus upload time (3600-second response, 4200-second write).
 No new MCP configuration or consumed-token subsystem is needed.
 
-## Verification and review
+## Risk and review routing
+
+Risk: L1 — identity credentials and public ingress. Security/architecture and
+QA/test-delta review cover the account and ingress boundaries; CI/docs review
+covers the existing lane extension and operator-facing claims.
+
+## Evidence
 
 Run issuer Rust tests, real HTTPS verifier tests, affected container/deployment
 and MCP configuration tests. Use discriminating regressions for token audience,
