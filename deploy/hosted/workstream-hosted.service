@@ -1,0 +1,21 @@
+[Unit]
+Description=Reconcile the installed Workstream hosted release
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+# Copy the reviewed source here, or adjust this absolute path before installation.
+WorkingDirectory=/opt/workstream/source
+ExecStart=/usr/bin/python3 /opt/workstream/source/deploy/hosted/compose.py --env-file /etc/workstream/release.env resume
+RemainAfterExit=yes
+TimeoutStartSec=900
+Restart=on-failure
+RestartSec=30
+# Shutdown and upgrades use the documented consumer-first Compose stop operation.
+# An implicit systemd stop must not terminate active isolated executions.
+
+[Install]
+WantedBy=multi-user.target

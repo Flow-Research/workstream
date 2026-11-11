@@ -61,6 +61,12 @@ deletion, new payment/review features or unrelated CI changes. No claim that
   the procedure neither imports old demo records nor relies on private scripts.
 - Persistent backing services and account state survive restart; credentials
   remain private and images have exact immutable identities.
+- Installed-host reboot reconciliation uses cached pinned images, restores the
+  model proxy before starting an exhausted native checker unit, and waits for
+  canonical native/intake readiness before completing application recovery.
+  MCP is recreated only after API health and verified against the current API
+  namespace. Reboot qualification requires an actual reboot followed by the
+  authenticated public journey; configuration tests alone do not qualify it.
 - Missing prerequisites, placeholders and incompatible resource envelopes fail
   before application activation; setup does not repeat uncertain cloud creates.
 - Existing canonical release/AWS proof and Smol preflight remain authoritative.
@@ -89,3 +95,11 @@ Real container qualification additionally checks PostgreSQL/Redis startup,
 restricted application access and persisted state after restart. Those results
 are separate from the required fresh-host public journey and resource proof;
 no configuration test qualifies the proposed smaller host.
+
+The installed-host recovery regression reproduces the stale MCP health-wait
+boundary: the first application phase must omit MCP, then recreate it against
+the healthy API. Focused tests also cover prerequisite refusal, native startup
+failure, readiness retry/deadline, proxy-disabled recovery and cache-only image
+selection. Recovery does not initialize identities, migrate schema, repeat AWS
+proof or restart an already active native checker. The existing hosted Compose
+owner and a single systemd reconciliation unit own this behavior.

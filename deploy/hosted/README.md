@@ -606,6 +606,50 @@ these checks replaces a public authenticated journey, provider proof, resource
 qualification or restart/cleanup evidence. Each Compose service has its existing
 finite restart policy; the native unit retains its own bounded systemd policy.
 
+### Reconcile an installed host after reboot
+
+Docker restart policies do not enforce Compose dependency health ordering at
+host boot. The native node can exhaust its start attempts before the model proxy
+socket is ready, and MCP can retain a stopped API's network namespace. Install
+[workstream-hosted.service](workstream-hosted.service) after the initial schema,
+AWS activation, pinned image installation and public journey have passed. Copy
+the reviewed checkout to `/opt/workstream/source`, or edit both absolute source
+paths in the copied unit to its permanent root-owned location. Keep that checkout
+and `/etc/workstream/release.env` private and writable only by the deployment
+administrator.
+
+```sh
+sudo install -m 0644 deploy/hosted/workstream-hosted.service /etc/systemd/system/workstream-hosted.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now workstream-hosted.service
+sudo systemctl status workstream-hosted.service
+```
+
+The unit runs exactly `compose.py --env-file /etc/workstream/release.env resume`
+after Docker and network startup. This reconciles optional local data and identity
+services, waits for the enabled model proxy, resets the native node's exhausted
+start counter and starts that existing unit. It waits for canonical typed native
+and intake readiness before reconciling API, workers and scheduler. MCP is held
+out of the API health wait, then recreated against the current API namespace and
+verified. An already active native node is preserved. Each attempt has management
+deadlines; systemd retries failed reconciliation after 30 seconds and records
+failures in its journal. Inspect `journalctl -u workstream-hosted.service` and
+`journalctl -u workstream-checker.service` for diagnosis.
+
+Resume uses installed digest-pinned images with `--pull never`; registry login
+and network availability to the registry are unnecessary for reboot. A missing
+image fails recovery. It never initializes accounts, rotates credentials,
+migrates the schema or repeats cloud proof. Upgrades still follow the reviewed
+migration and activation procedure. Container restart can begin independently
+before reconciliation; the unit repairs dependency races and checks readiness,
+not a new runtime health monitor. Record an actual reboot and post-reboot public
+journey before claiming restart qualification.
+
+The hosted unit has no implicit stop action. Use the existing consumer-first
+`compose.py ... stop` before planned maintenance, and disable the hosted unit
+before shutting down a deployment permanently. To rerun reconciliation after an
+operator repair, use `systemctl restart workstream-hosted.service`.
+
 The API binds to host loopback for an environment-owned TLS reverse proxy. Do
 not expose the checker socket, Docker socket, PostgreSQL, Redis or OTLP collector
 as public ports.

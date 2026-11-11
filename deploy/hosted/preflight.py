@@ -1301,7 +1301,8 @@ def render_compose(environment_path: Path, values: dict[str, str]) -> dict[str, 
 
 
 def run_compose(
-    environment_path: Path, values: dict[str, str], compose_arguments: list[str]
+    environment_path: Path, values: dict[str, str], compose_arguments: list[str],
+    *, cached_images: bool = False,
 ) -> int:
     """Run one documented Compose operation with no ambient interpolation."""
     if compose_arguments and compose_arguments[0] == "provision-project-points":
@@ -1373,6 +1374,28 @@ def run_compose(
     couple_mcp = bool(values.get("WORKSTREAM_MCP_IMAGE")) and (
         compose_arguments[0] == "up" and targets_api
     )
+    if couple_mcp and "--no-start" not in compose_arguments:
+        # Do not restart an existing MCP container into a discarded namespace
+        # while waiting for API health. Release it only in the phase below.
+        if not selected_services:
+            compose_arguments = [*compose_arguments, "api", "worker", "beat",
+                                 "guide-document-parser"]
+            if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+                compose_arguments.extend(("postgres", "redis"))
+            if values.get("DEMO_IDENTITY_IMAGE"):
+                compose_arguments.append("demo-identity")
+            if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
+                compose_arguments.append("model-proxy")
+        else:
+            compose_arguments = [item for item in compose_arguments if item != "mcp"]
+            if selected_services == {"mcp"}:
+                compose_arguments.append("api")
+        if "--wait" not in compose_arguments:
+            compose_arguments[1:1] = ["--wait", "--wait-timeout", "120"]
+    if cached_images and compose_arguments[0] == "up":
+        compose_arguments[1:1] = ["--pull", "never"]
+    if "--wait" in compose_arguments and command_timeout is None:
+        command_timeout = 240
     prefix = ["docker", "compose", "--env-file", str(environment_path),
               *_compose_file_arguments(values)]
     try:
@@ -1398,7 +1421,8 @@ def run_compose(
     if completed.returncode == 0 and couple_mcp and "--no-start" not in compose_arguments:
         try:
             restarted = subprocess.run(
-                [*prefix, "up", "--detach", "--no-deps", "--force-recreate",
+                [*prefix, "up", *(("--pull", "never") if cached_images else ()),
+                 "--detach", "--no-deps", "--force-recreate",
                  "--wait", "--wait-timeout", "60", "mcp"],
                 check=False, env=compose_environment(values), timeout=90,
             )

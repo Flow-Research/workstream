@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import subprocess
 import sys
+import time
 from uuid import UUID
 
 from preflight import (
     PreflightError,
+    compose_environment,
     load_checker_config,
     parse_environment,
     render_compose,
@@ -34,12 +37,59 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resume_release(environment_path: Path, values: dict[str, str]) -> int:
+    """Reconcile an installed release after reboot, without pulling or migrating."""
+    checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
+    validate_checker_config(checker_config, values)
+    validate_private_host_inputs(values, require_node=False)
+    phases: list[list[str]] = []
+    if values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        phases.append(["start", "local-data"])
+    if values.get("DEMO_IDENTITY_IMAGE"):
+        phases.append(["start", "demo-identity"])
+    if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
+        phases.append(["up", "--detach", "--no-deps", "--wait",
+                       "--wait-timeout", "60", "model-proxy"])
+    for phase in phases:
+        result = run_compose(environment_path, values, phase, cached_images=True)
+        if result:
+            return result
+    try:
+        for operation in ("reset-failed", "start"):
+            result = subprocess.run(
+                ["systemctl", operation, "workstream-checker.service"],
+                check=False, timeout=60, env=compose_environment(values),
+            )
+            if result.returncode:
+                return result.returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise PreflightError("native checker startup did not complete") from exc
+    deadline = time.monotonic() + 120
+    while True:
+        try:
+            validate_private_host_inputs(values)
+            validate_smol_runtime(checker_config, values)
+            validate_trusted_intake(values)
+            break
+        except PreflightError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(2)
+    return run_compose(
+        environment_path, values,
+        ["up", "--detach", "--wait", "--wait-timeout", "120"],
+        cached_images=True,
+    )
+
+
 def main() -> int:
     args = parse_args()
     try:
         values = parse_environment(args.env_file)
         validate_environment(values)
         validate_compose(render_compose(args.env_file, values), values)
+        if args.compose_arguments == ["resume"]:
+            return resume_release(args.env_file, values)
         if args.compose_arguments == ["start", "local-data"]:
             if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
                 raise PreflightError("local data bootstrap requires its overlay")

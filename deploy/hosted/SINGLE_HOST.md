@@ -28,6 +28,15 @@ source, registry digests and native asset hashes. Install Docker Engine and its
 Compose plugin, Python 3, and the reviewed native assets. Copy this directory
 from that same reviewed checkout. Use one Compose project name for the deployment.
 
+Authenticate the deployment operator to the approved image registry before
+Compose pulls. For private ECR, obtain a short-lived login token through that
+operator's AWS identity and pass it to Docker through private stdin. Use a
+root-owned private Docker configuration directory, remove its registry token
+when deployment operations finish, and refresh it before later pulls. Do not put
+provisioning access keys in application containers or copy them onto the host.
+Normal Docker container restart uses the already installed image; an explicit
+Compose reconciliation can pull and needs valid registry authentication again.
+
 Configure Docker's `local` logging driver with `max-size=10m` and `max-file=3`
 before creating containers. Preserve any other required daemon settings; validate
 the configuration before restarting Docker. Bound systemd journal retention too.
@@ -64,6 +73,12 @@ broker URL files are consumed by the existing application secret loader.
 No database or broker port is published. Keep persistent backing data outside
 `WORKSTREAM_DEPLOYMENT_ROOT`, which is reserved for runtime scratch and sockets.
 
+Generate the API rate-limit and pagination HMAC secrets independently as 32
+random bytes encoded in canonical padded Base64, not hexadecimal. Write each
+directly to its configured private secret file without printing it. Preserve
+these keys on restart; do not regenerate them during deployment reconciliation.
+The application validates their encoding before migration or startup.
+
 After completing the release environment, initialize only the backing services:
 
 ```sh
@@ -82,6 +97,17 @@ Follow its private-stdin password procedure and persistent account/signing-key
 ownership. An issuer administrator is not a Workstream administrator. Bootstrap
 Workstream authority using its existing supported operator command, not database
 edits or saved fixture tokens.
+
+Log in to the issuer, then call `GET /api/v1/actors/me` with that access token to
+admit the initial human actor. Use the returned actor ID with
+[`bootstrap_access_administrator.py`](../../backend/scripts/bootstrap_access_administrator.py),
+first with `--dry-run`, then `--execute`, in the configured API image with its
+normal private database secret. Provision the journey's fixed service identities
+through `POST /api/v1/service-actors` under that administrator's fresh access
+token. The identity list in
+[`provision_local_service_actors.py`](../../backend/scripts/provision_local_service_actors.py)
+is a reference; that local-development script's token issuer is not the hosted
+Rust login path. Do not import its fixture tokens into this installation.
 
 Configure the issuer's trusted HTTPS origin and JWKS URL. Use the existing
 [Caddy deployment instructions](../../experiments/demo_identity/README.md#hosted-https-and-cutover).
@@ -102,6 +128,21 @@ existing fixed bootstrap command before any step requiring token verification.
 The AWS proof and native readiness are required for this exact release; results
 from a retired deployment are not interchangeable.
 
+For this continuously running AWS deployment, install and enable the
+[five-minute proof renewal timer](../../docs/operations_aws_roles_anywhere.md)
+before exercising uploads. Verify its first group completed successfully. A
+one-time activation expires after 15 minutes; healthy application containers do
+not keep it valid. The recurring proof uses the exact cached release image and
+does not need a retained registry login. Preserve the fail-closed expiry guard
+and inspect failed renewal receipts instead of extending evidence validity.
+
+Install the [host boot recovery unit](README.md#reconcile-an-installed-host-after-reboot)
+after initial activation. Set its checkout path to this installed release and
+enable it for subsequent boots. It restores prerequisite readiness and reconnects
+MCP to the current API namespace using cached images; it does not migrate or
+initialize account/database state. Docker restart policies alone do not establish
+this host-level startup order.
+
 ## Qualification, restart and retirement
 
 With fresh participant logins, exercise API, CLI and the configured private MCP
@@ -109,7 +150,9 @@ service. Prove claim, malformed ZIP feedback with no Submission, valid upload,
 verified S3 custody, external POST, governed acceptance, ContributionRecord,
 applicable award and exact replay. Check denied identities and infrastructure
 recovery separately. Record source/image/configuration identities and bounded
-results without participant tokens or document contents.
+results without participant tokens or document contents. Keep participant passwords
+in a private persistent operator credential store; temporary `/run` files are
+suitable for short-lived tokens, not the only copy of account credentials.
 
 Measure peak memory, filesystem use and scratch cleanup during this actual
 journey. Confirm the database role is not superuser and cannot create roles or

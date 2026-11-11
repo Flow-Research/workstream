@@ -231,7 +231,8 @@ class HostedReleaseConfigTests(unittest.TestCase):
             self.assertEqual(preflight.run_compose(self.environment_path, values,
                              ["up", "--detach", "--no-deps", "api"]), 0)
         self.assertEqual(calls[0][-2:], ["stop", "mcp"])
-        self.assertEqual(calls[1][-4:], ["up", "--detach", "--no-deps", "api"])
+        self.assertEqual(calls[1][-3:], ["--detach", "--no-deps", "api"])
+        self.assertIn("--wait", calls[1])
         self.assertIn("--force-recreate", calls[2])
         self.assertEqual(calls[2][-1], "mcp")
         self.assertEqual(calls[-1][-1], mcp_id)
@@ -242,6 +243,33 @@ class HostedReleaseConfigTests(unittest.TestCase):
         ]):
             with self.assertRaisesRegex(preflight.PreflightError, "different API namespace"):
                 preflight.validate_running_mcp_namespace(["docker", "compose"], values)
+
+    def test_full_launch_waits_for_api_before_starting_stale_mcp(self):
+        values = self.environment | {"WORKSTREAM_MCP_IMAGE": "mcp@sha256:" + "b" * 64}
+        calls = []
+        def run(command, **kwargs):
+            calls.append(command)
+            # A rebooted MCP would be unhealthy until recreated. The API phase
+            # must not include it, or --wait fails before repair can run.
+            if "up" in command and "--force-recreate" not in command:
+                self.assertNotIn("mcp", command)
+                self.assertIn("api", command)
+                self.assertIn("--wait", command)
+            return subprocess.CompletedProcess(command, 0)
+        with (
+            patch.object(preflight.subprocess, "run", side_effect=run),
+            patch.object(preflight, "validate_running_mcp_namespace") as namespace,
+        ):
+            self.assertEqual(preflight.run_compose(
+                self.environment_path, values, ["up", "--detach", "--wait"],
+                cached_images=True,
+            ), 0)
+        self.assertEqual(len(calls), 3)
+        self.assertIn("--force-recreate", calls[2])
+        self.assertEqual(calls[2][-1], "mcp")
+        for command in calls[1:]:
+            self.assertEqual(command[command.index("--pull") + 1], "never")
+        namespace.assert_called_once()
 
     def test_isolated_bootstrap_does_not_start_or_stop_mcp(self):
         values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
@@ -2175,6 +2203,87 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 with self.assertRaises(preflight.PreflightError):
                     preflight.validate_smol_runtime(changed, values)
                 run.assert_not_called()
+
+    def test_resume_orders_dependencies_before_native_and_application(self):
+        values = self.demo_identity_values() | self.local_data_environment()
+        events = []
+        def run(path, release, arguments, **kwargs):
+            self.assertTrue(kwargs["cached_images"])
+            events.append(arguments)
+            return 0
+        with (
+            patch.object(compose, "validate_private_host_inputs"),
+            patch.object(compose, "validate_local_data_host_inputs"),
+            patch.object(compose, "validate_demo_identity_host_inputs"),
+            patch.object(compose, "validate_checker_config"),
+            patch.object(compose, "run_compose", side_effect=run),
+            patch.object(compose.subprocess, "run", side_effect=lambda command, **kw:
+                events.append(command) or subprocess.CompletedProcess(command, 0)),
+            patch.object(compose, "validate_smol_runtime", side_effect=[
+                preflight.PreflightError("not ready"), None,
+            ]) as native,
+            patch.object(compose, "validate_trusted_intake") as intake,
+            patch.object(compose.time, "sleep") as sleep,
+        ):
+            self.assertEqual(compose.resume_release(self.environment_path, values), 0)
+        self.assertEqual(events[0], ["start", "local-data"])
+        self.assertEqual(events[1], ["start", "demo-identity"])
+        self.assertEqual(events[2][-1], "model-proxy")
+        self.assertEqual(events[3], ["systemctl", "reset-failed", "workstream-checker.service"])
+        self.assertEqual(events[4], ["systemctl", "start", "workstream-checker.service"])
+        self.assertEqual(events[5], ["up", "--detach", "--wait", "--wait-timeout", "120"])
+        self.assertEqual(native.call_count, 2)
+        sleep.assert_called_once_with(2)
+        intake.assert_called_once_with(values)
+
+    def test_resume_without_optional_services_keeps_native_readiness_guards(self):
+        values = self.environment | {"WORKSTREAM_MODEL_PROXY_ENABLED": "false"}
+        with (
+            patch.object(compose, "validate_checker_config"),
+            patch.object(compose, "validate_private_host_inputs") as private,
+            patch.object(compose, "run_compose", return_value=0) as run,
+            patch.object(compose.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)),
+            patch.object(compose, "validate_smol_runtime") as native,
+            patch.object(compose, "validate_trusted_intake") as intake,
+        ):
+            self.assertEqual(compose.resume_release(self.environment_path, values), 0)
+        self.assertEqual(private.call_count, 2)
+        native.assert_called_once_with(self.checker, values)
+        intake.assert_called_once_with(values)
+        run.assert_called_once_with(self.environment_path, values,
+            ["up", "--detach", "--wait", "--wait-timeout", "120"], cached_images=True)
+
+    def test_resume_dependency_failure_never_starts_native_or_application(self):
+        with (
+            patch.object(compose, "validate_private_host_inputs"),
+            patch.object(compose, "run_compose", return_value=17) as run,
+            patch.object(compose.subprocess, "run") as native,
+            patch.object(compose, "validate_smol_runtime") as health,
+        ):
+            self.assertEqual(compose.resume_release(self.environment_path, self.environment), 17)
+        self.assertEqual(run.call_count, 1)
+        native.assert_not_called()
+        health.assert_not_called()
+
+    def test_resume_native_failure_never_releases_application(self):
+        for failure in ("start", "readiness"):
+            with (
+                self.subTest(failure=failure),
+                patch.object(compose, "validate_private_host_inputs"),
+                patch.object(compose, "run_compose", return_value=0) as run,
+                patch.object(compose.subprocess, "run", return_value=
+                    subprocess.CompletedProcess([], 17 if failure == "start" else 0)),
+                patch.object(compose, "validate_smol_runtime",
+                    side_effect=preflight.PreflightError("unready")),
+                patch.object(compose.time, "monotonic", side_effect=[0, 121]),
+            ):
+                if failure == "start":
+                    self.assertEqual(compose.resume_release(self.environment_path, self.environment), 17)
+                else:
+                    with self.assertRaisesRegex(preflight.PreflightError, "unready"):
+                        compose.resume_release(self.environment_path, self.environment)
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(run.call_args.args[2][-1], "model-proxy")
 
     def test_cold_start_prerequisites_never_release_application_or_require_node(
         self,
