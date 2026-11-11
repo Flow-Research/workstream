@@ -332,7 +332,7 @@ async def _seed_export_resume_rows(database_url: str):
 
 
 async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str, object]:
-    """Compare retained row bytes and table identities, including the sentinel."""
+    """Compare retained facts/row identities, treating the new absent watermark as null."""
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         sentinel = await connection.fetchrow(
@@ -343,7 +343,8 @@ async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str,
         if snapshot_id is not None:
             export = await connection.fetchrow(
                 """
-                SELECT to_jsonb(s)::text,to_jsonb(a)::text,to_jsonb(l)::text,
+                SELECT to_jsonb(s)::text,to_jsonb(a)::text,
+                       ('{"email_observed_issued_at":null}'::jsonb || to_jsonb(l))::text,
                        s.tableoid::bigint,a.tableoid::bigint,l.tableoid::bigint,
                        s.xmin::text,a.xmin::text,l.xmin::text
                 FROM public.contribution_export_snapshots s

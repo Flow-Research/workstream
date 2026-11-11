@@ -1,8 +1,8 @@
-# Public Swagger access
+# Public Swagger access and issuer-owned profile metadata
 
 - Initiative: None
-- Durable disposition: Planned
-- Intended merge outcome: Expose the existing FastAPI Swagger UI and schema on the public Workstream hostname.
+- Durable disposition: Complete
+- Intended merge outcome: Expose the existing Swagger UI/schema and make profile email issuer-owned across REST, CLI and MCP.
 
 ## Intent
 
@@ -23,7 +23,7 @@ Prohibited: new application endpoints, auth bypass, wildcard documentation expos
 
 ## Risk and review routing
 
-Risk: L2, bounded public metadata exposure. Focused security/architecture and QA/docs review cover exact routing and unchanged authority. Human review focus: publicly readable schema is intentional, credentials are still required for protected API operations. Existing ingress proof and relevant documentation checks remain required. No claim that public Swagger implements login or grants project access.
+Risk: L1 for identity metadata synchronization; Swagger itself is bounded L2 public metadata exposure. Focused security/architecture and QA/docs review cover exact routing and unchanged authority. Human review focus: publicly readable schema is intentional, credentials are still required for protected API operations. Existing ingress proof and relevant documentation checks remain required. No claim that public Swagger implements login or grants project access.
 
 ## Evidence
 
@@ -72,3 +72,9 @@ and audit privacy assertions are retained; the email source changes from PATCH
 to the signed token. The structural ledger shrinks, and the new module is added
 to the existing identity test lane. The drill's stale fixed permission count is
 corrected from 75 to its already-existing 90-entry frozen oracle; no gate is relaxed.
+
+Review repair: reject signed issued-at values outside the supported nonnegative
+64-bit range and malformed UTF-8 profile claims before persistence. The migration
+preservation comparison includes the new nullable observation field as null before
+its introduction, retaining every existing field, table identity and row version;
+non-null post-upgrade observations cannot be hidden by the comparison.
