@@ -293,6 +293,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
     async def swagger_docs() -> HTMLResponse:
+        """Serve bearer-token documentation with integrity-checked assets."""
         # Fixed release and SRI: a changed CDN response must not execute with tokens.
         return HTMLResponse("""<!DOCTYPE html>
 <html><head><title>""" + escape(app.title) + """ - Swagger UI</title>

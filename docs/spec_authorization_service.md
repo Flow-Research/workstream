@@ -46,13 +46,17 @@ gRPC, or asynchronous transport without changing product authority semantics.
 - issued-at, expiry, optional not-before;
 - mandatory token identifier (`jti`);
 - subject kind;
-- verified coarse scope.
+- verified coarse scope;
+- optional signed email and display-name (`name`) profile metadata.
 
 It contains no Workstream product role or permission. Email, display name,
 skills, reputation, and relationship metadata are never authorization keys.
-Canonical self-read is `GET /api/v1/actors/me`. Actor admission does not copy
-issuer email or display name. Human-owned profile metadata is updated through
-`PATCH /api/v1/actors/me`; verified issuer claims do not grant product roles.
+Canonical self-read is `GET /api/v1/actors/me`. First human admission seeds
+email and display name from optional verified issuer claims. Email is read-only
+in Workstream and follows newer signed observations during authorized self reads
+and updates; missing claims do not erase it. `PATCH /api/v1/actors/me` edits or
+clears the local display name, which later issuer claims do not overwrite.
+Issuer metadata does not grant product roles or establish mailbox verification.
 
 Human first access may create a canonical human profile and identity link.
 Unknown service subjects, agents, and Spaces are denied without implicit
