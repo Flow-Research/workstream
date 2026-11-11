@@ -102,6 +102,8 @@ task.queue.read task.claim submission.create submission.read_own submission.read
 task.post_submit.route task.revision.expire task.revision.recover
 checker.pre_submit.execute checker.pre_submit.finalize
 checker.post_submit.execute checker.post_submit.finalize
+project.guide_compilation.model.prepare project.guide_compilation.model.dispatch
+project.guide_compilation.model.observe project.guide_compilation.model.complete
 checker.model_call.prepare checker.model_call.dispatch checker.model_call.recover
 checker.model_call.observe checker.model_call.complete checker.model_call.grant
 review.queue.read review.queue.inspect review.claim review.release review.decline_preference
@@ -145,7 +147,7 @@ contribution.read_project compensation.award.read audit.read audit.export"""),
 def catalogue_expectations():
     """Fresh expected JSON objects; callers cannot mutate the frozen oracle."""
     return {
-        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 91},
+        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 94},
         "admin-role-definitions": {"items": [
             {"role": role, "allowed_scopes": list(scopes), "permission_ids": permissions.split()}
             for role, scopes, permissions in EXPECTED_ROLE_CONTRACT], "total": 5},

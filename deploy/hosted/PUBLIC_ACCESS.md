@@ -95,3 +95,7 @@ representative authorized tools. Check missing bearer denial, hostile Host and
 Origin rejection, and retained service health. A successful DNS lookup or
 `tools/list` alone does not establish authenticated end-to-end access. Record
 exact live proof separately from fixtures and state remaining limitations.
+
+Swagger's JavaScript and CSS use an exact release with SHA-384 subresource integrity.
+The browser requires access to jsDelivr, but rejects changed asset bytes. Upgrade
+asset URLs and integrity digests together; bearer authorization is not persisted.

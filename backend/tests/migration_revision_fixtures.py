@@ -331,6 +331,7 @@ _ATTEMPT_OUTCOME_COLUMNS = {
     "task_assignments": ("started_at", "updated_at"),
 }
 _PREDECESSOR_SHAPE = """
+ALTER TABLE public.actor_identity_links ADD COLUMN email_observed_issued_at bigint;
 ALTER TABLE public.submissions ADD COLUMN attempt_status varchar(30) DEFAULT 'evaluation_pending' NOT NULL,
   ADD COLUMN status_reason varchar(40), ADD COLUMN decided_at timestamptz,
   ADD COLUMN updated_at timestamptz DEFAULT now() NOT NULL;
@@ -377,6 +378,7 @@ async def leave_predecessor_owner_shape(execute, database_url):
     finally:
         await engine.dispose()
     await execute(database_url, (
+        "ALTER TABLE public.actor_identity_links DROP COLUMN email_observed_issued_at; "
         "DROP TABLE public.checker_result_findings; "
         "ALTER TABLE public.checker_runs DROP COLUMN input_context_custody; "
         "ALTER TABLE public.submissions DROP COLUMN attempt_status, DROP COLUMN status_reason, "

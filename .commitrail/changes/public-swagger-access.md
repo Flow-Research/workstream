@@ -10,7 +10,7 @@ The public proxy currently hides FastAPI's `/docs` and `/openapi.json`, making A
 
 ## Bounded change
 
-Allowed files: `deploy/hosted/public.Caddyfile`, `scripts/test_public_ingress.py`, `deploy/hosted/PUBLIC_ACCESS.md`, `experiments/demo_identity/README.md`, `deploy/hosted/SINGLE_HOST.md`,
+Allowed files: `backend/app/main.py`, `backend/tests/test_app.py`, `deploy/hosted/public.Caddyfile`, `scripts/test_public_ingress.py`, `deploy/hosted/PUBLIC_ACCESS.md`, `experiments/demo_identity/README.md`, `deploy/hosted/SINGLE_HOST.md`,
 `docs/operations_authorization_service.md`, affected README/roadmap wording and this record.
 Prohibited: new application endpoints, auth bypass, wildcard documentation exposure, unrelated deployment changes or additional worktrees.
 
@@ -71,10 +71,23 @@ focused actor profile module alongside new regressions. Existing authorization
 and audit privacy assertions are retained; the email source changes from PATCH
 to the signed token. The structural ledger shrinks, and the new module is added
 to the existing identity test lane. The drill's stale fixed permission count is
-corrected from 75 to its already-existing 90-entry frozen oracle; no gate is relaxed.
+reconciled to all 94 current permissions (including four setup-model operations),
+with response total and uniqueness assertions; no gate is relaxed.
 
 Review repair: reject signed issued-at values outside the supported nonnegative
 64-bit range and malformed UTF-8 profile claims before persistence. The migration
 preservation comparison includes the new nullable observation field as null before
 its introduction, retaining every existing field, table identity and row version;
 non-null post-upgrade observations cannot be hidden by the comparison.
+
+External-review repair: the public Swagger page pins Swagger UI 5.32.0 JavaScript
+and CSS with SHA-384 subresource integrity and anonymous CORS. Changed CDN bytes
+are rejected by the browser; bearer authorization is not persisted. The app test
+locks the rendered asset URLs, digests and crossorigin attributes. Historical
+migration fixtures temporarily project the new nullable identity field for current
+ORM readers, then remove it before upgrading; retained-effect assertions remain.
+
+The authorization regressions now request editable display-name updates rather
+than the removed email mutation; transaction revalidation, handle mismatch and
+unconsumed-handle assertions are unchanged. Structural-debt refresh changes only
+the source digest, not any size, limit or disposition.

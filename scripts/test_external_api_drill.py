@@ -198,8 +198,9 @@ class ContractTests(unittest.TestCase):
 
     def test_catalogue_oracle_rejects_nested_changes_and_duplicates(self):
         expected = drill.catalogue_expectations()
-        self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 90)
-        self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 90)
+        self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 94)
+        self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 94)
+        self.assertEqual(expected["permissions"]["total"], len(expected["permissions"]["items"]))
         self.assertIn("outbox.dispatch", drill.EXPECTED_PERMISSIONS)
         self.assertIn("task.assignment.authority_reconcile", drill.EXPECTED_PERMISSIONS)
         for name, body in expected.items():
@@ -224,7 +225,7 @@ class ContractTests(unittest.TestCase):
                 with self.subTest(name=name, mutant=mutant), self.assertRaises(drill.ProbeFailure):
                     drill.verify_response(httpx.Response(200, json=mutant), 200, body, exact_fields=body.keys())
         expected["permissions"]["items"].clear()
-        self.assertEqual(len(drill.catalogue_expectations()["permissions"]["items"]), 90)
+        self.assertEqual(len(drill.catalogue_expectations()["permissions"]["items"]), 94)
 
     def test_validation_retryability_is_strict(self):
         expected = {"error.code": "invalid_request", "error.retryable": False}

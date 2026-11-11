@@ -4192,7 +4192,7 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
-        requested_fields=("contact_email",),
+        requested_fields=("display_name",),
     )
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(
@@ -8786,7 +8786,7 @@ async def test_actor_self_update_requires_transaction_revalidation() -> None:
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
-        requested_fields=("contact_email",),
+        requested_fields=("display_name",),
     )
     without_read_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as read_exc_info:
