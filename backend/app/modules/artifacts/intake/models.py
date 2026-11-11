@@ -3,10 +3,10 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, CheckConstraint, DateTime, ForeignKeyConstraint, Index,
+    BigInteger, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Integer,
     String, UniqueConstraint, Uuid, text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -123,3 +123,34 @@ class SubmissionSourceCharge(Base):
     accounted_bytes: Mapped[int] = mapped_column(BigInteger)
     state: Mapped[str] = mapped_column(String(20))
     sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SubmissionSourceUploadReceipt(Base):
+    """Operation-owned initiation and completion facts across provider I/O."""
+
+    __tablename__ = "submission_source_upload_receipts"
+    __table_args__ = (
+        ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
+                             name="fk_submission_source_upload_operation"),
+        CheckConstraint("upload_fence>0 and part_bytes between 5242880 and 16777216 "
+                        "and idle_timeout_seconds>0 and idle_timeout_seconds<'Infinity'::float8",
+                        name="upload_bounds"),
+        CheckConstraint("(provider_upload_id is null and handle_recorded_at is null) or "
+                        "(provider_upload_id is not null and length(provider_upload_id) between 1 and 2048 "
+                        "and handle_recorded_at is not null)", name="handle_shape"),
+        CheckConstraint("(completion_parts is null and completion_recorded_at is null) or "
+                        "(completion_parts is not null and jsonb_typeof(completion_parts)='array' "
+                        "and jsonb_array_length(completion_parts) between 1 and 100 "
+                        "and completion_recorded_at is not null and provider_upload_id is not null)",
+                        name="completion_shape"),
+    )
+
+    operation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    upload_fence: Mapped[int] = mapped_column(BigInteger)
+    part_bytes: Mapped[int] = mapped_column(Integer)
+    idle_timeout_seconds: Mapped[float] = mapped_column(DOUBLE_PRECISION)
+    provider_upload_id: Mapped[str | None] = mapped_column(String(2048))
+    completion_parts: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    handle_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completion_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

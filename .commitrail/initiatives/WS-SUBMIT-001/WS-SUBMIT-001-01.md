@@ -143,6 +143,16 @@ remain required before the public flow can use them.
 
 ## Acceptance criteria
 
+Durable receipt integration next extends the existing intake models/repository,
+migration 0069, registry/reset/identifier catalogues and custody suite. One
+operation-owned row records immutable part/deadline bounds before initiation,
+then its opaque handle before parts, then ordered bounded completion receipts
+with EOF. Fenced owner methods flush only; root transactions commit each external
+I/O boundary. SQL closure must prohibit EOF without matching receipts, malformed
+part sequences and mutation/deletion of recorded custody. Test rollback, stale
+owners, mismatched handles/locations and direct-SQL substitutions on PostgreSQL.
+This does not authorize late foreground callbacks, cleanup charge release or PRE.
+
 - [x] Exact metadata round-trip and identity changes for each command selector.
 - [x] Packet metadata validation preserves empty-text warning semantics.
 - [x] Source keys derive only from UUIDv7; no arbitrary path/URL selection.

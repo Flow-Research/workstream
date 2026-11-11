@@ -19,8 +19,11 @@ from app.core.identifiers import new_record_id
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceLocation,
     SubmissionSourceCapacityLimits,
+    SubmissionSourceCompletion, SubmissionSourceUpload, SubmissionSourceUploadIntent,
 )
-from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+from app.modules.artifacts.intake.models import (
+    SubmissionIntakeOperation, SubmissionSourceCharge, SubmissionSourceUploadReceipt,
+)
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
@@ -107,14 +110,77 @@ class SubmissionIntakeRepository:
             raise IntakeCustodyConflict("intake_owner_stale")
         return row
 
-    async def record_eof(self, operation_id: UUID, lease_id: UUID, generation: int,
-                         *, raw_sha256: str, raw_byte_count: int) -> None:
-        """Persist ingress identity before the adapter may complete the object."""
+    async def _upload_intent(
+        self, row: SubmissionIntakeOperation, receipt: SubmissionSourceUploadReceipt,
+    ) -> SubmissionSourceUploadIntent:
+        """Reconstruct provider bounds only from immutable operation-owned facts."""
+        charge = await self._session.get(SubmissionSourceCharge, row.id)
+        if charge is None:
+            raise IntakeCustodyConflict("intake_source_charge_missing")
+        return SubmissionSourceUploadIntent(
+            location=SubmissionSourceLocation(
+                operation_id=UUID(row.id), namespace_id=row.namespace_id,
+                namespace_fingerprint=row.namespace_fingerprint, provider_profile=row.provider_profile,
+            ),
+            upload_fence=receipt.upload_fence, maximum_raw_bytes=row.maximum_raw_bytes,
+            declared_raw_bytes=charge.declared_raw_bytes, part_bytes=receipt.part_bytes,
+            idle_timeout_seconds=receipt.idle_timeout_seconds, upload_deadline_at=row.upload_deadline_at,
+        )
+
+    async def prepare_upload(
+        self, operation_id: UUID, lease_id: UUID, generation: int, *,
+        part_bytes: int, idle_timeout_seconds: float,
+    ) -> SubmissionSourceUploadIntent:
+        """Record initiation intent once; caller commits it before provider begin."""
         row = await self._owned(operation_id, lease_id, generation)
         if row.state != "receiving" or row.raw_sha256 is not None:
+            raise IntakeCustodyConflict("intake_upload_not_receiving")
+        if await self._session.get(SubmissionSourceUploadReceipt, row.id) is not None:
+            raise IntakeCustodyConflict("intake_upload_already_initiated")
+        receipt = SubmissionSourceUploadReceipt(
+            operation_id=row.id, upload_fence=generation, part_bytes=part_bytes,
+            idle_timeout_seconds=idle_timeout_seconds,
+        )
+        intent = await self._upload_intent(row, receipt)
+        self._session.add(receipt)
+        await self._session.flush()
+        return intent
+
+    async def record_upload(
+        self, operation_id: UUID, lease_id: UUID, generation: int, *, upload: SubmissionSourceUpload,
+    ) -> None:
+        """Persist the exact begun handle before the first part may be sent."""
+        row = await self._owned(operation_id, lease_id, generation)
+        upload = SubmissionSourceUpload.model_validate(upload)
+        receipt = await self._session.get(SubmissionSourceUploadReceipt, row.id)
+        if (row.state != "receiving" or receipt is None
+                or upload.intent != await self._upload_intent(row, receipt)):
+            raise IntakeCustodyConflict("intake_upload_receipt_mismatch")
+        if receipt.provider_upload_id is not None:
+            if receipt.provider_upload_id != upload.provider_upload_id:
+                raise IntakeCustodyConflict("intake_upload_handle_immutable")
+            return
+        receipt.provider_upload_id = upload.provider_upload_id
+        receipt.handle_recorded_at = func.clock_timestamp()
+        await self._session.flush()
+
+    async def record_eof(self, operation_id: UUID, lease_id: UUID, generation: int,
+                         *, completion: SubmissionSourceCompletion) -> None:
+        """Persist raw identity and exact receipts before external completion."""
+        row = await self._owned(operation_id, lease_id, generation)
+        completion = SubmissionSourceCompletion.model_validate(completion)
+        if row.state != "receiving" or row.raw_sha256 is not None:
             raise IntakeCustodyConflict("intake_eof_already_recorded")
-        row.raw_sha256, row.raw_byte_count = raw_sha256, raw_byte_count
+        receipt = await self._session.get(SubmissionSourceUploadReceipt, row.id)
+        if (receipt is None or receipt.provider_upload_id is None
+                or completion.upload.intent != await self._upload_intent(row, receipt)
+                or completion.upload.provider_upload_id != receipt.provider_upload_id):
+            raise IntakeCustodyConflict("intake_completion_receipt_mismatch")
+        row.raw_sha256, row.raw_byte_count = completion.raw_sha256, completion.raw_byte_count
         row.eof_at = func.clock_timestamp()
+        await self._session.flush()
+        receipt.completion_parts = [part.model_dump(mode="json") for part in completion.parts]
+        receipt.completion_recorded_at = func.clock_timestamp()
         await self._session.flush()
 
     async def seal(self, operation_id: UUID, lease_id: UUID, generation: int,

@@ -104,6 +104,139 @@ CREATE TABLE public.submission_source_charges (
 );
 """
 
+UPLOAD_TABLE_SQL = r"""
+CREATE TABLE public.submission_source_upload_receipts (
+    operation_id UUID NOT NULL,
+    upload_fence BIGINT NOT NULL,
+    part_bytes INTEGER NOT NULL,
+    idle_timeout_seconds DOUBLE PRECISION NOT NULL,
+    provider_upload_id VARCHAR(2048),
+    completion_parts JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT clock_timestamp() NOT NULL,
+    handle_recorded_at TIMESTAMP WITH TIME ZONE,
+    completion_recorded_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT pk_submission_source_upload_receipts PRIMARY KEY (operation_id),
+    CONSTRAINT fk_submission_source_upload_operation FOREIGN KEY(operation_id) REFERENCES public.submission_intake_operations (id),
+    CONSTRAINT ck_submission_source_upload_receipts_upload_bounds CHECK (upload_fence>0 and part_bytes between 5242880 and 16777216 and idle_timeout_seconds>0 and idle_timeout_seconds<'Infinity'::float8),
+    CONSTRAINT ck_submission_source_upload_receipts_handle_shape CHECK ((provider_upload_id is null and handle_recorded_at is null) or (provider_upload_id is not null and length(provider_upload_id) between 1 and 2048 and handle_recorded_at is not null)),
+    CONSTRAINT ck_submission_source_upload_receipts_completion_shape CHECK ((completion_parts is null and completion_recorded_at is null) or (completion_parts is not null and jsonb_typeof(completion_parts)='array' and jsonb_array_length(completion_parts) between 1 and 100 and completion_recorded_at is not null and provider_upload_id is not null))
+);
+"""
+
+UPLOAD_GUARDS = r"""
+CREATE FUNCTION public.guard_submission_source_upload_receipt()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE
+    o public.submission_intake_operations;
+BEGIN
+    IF TG_OP IN ('DELETE','TRUNCATE') THEN
+        RAISE EXCEPTION 'submission upload custody cannot be deleted' USING ERRCODE='23514';
+    END IF;
+    SELECT * INTO o FROM public.submission_intake_operations WHERE id=NEW.operation_id FOR UPDATE;
+    IF NOT FOUND OR o.state<>'receiving' OR o.lease_generation<>NEW.upload_fence
+       OR o.lease_expires_at<=clock_timestamp() THEN
+        RAISE EXCEPTION 'submission upload owner is stale' USING ERRCODE='23514';
+    END IF;
+    IF TG_OP='INSERT' THEN
+        IF o.raw_sha256 IS NOT NULL OR NEW.provider_upload_id IS NOT NULL
+           OR NEW.completion_parts IS NOT NULL THEN
+            RAISE EXCEPTION 'invalid initial submission upload intent' USING ERRCODE='23514';
+        END IF;
+        NEW.created_at:=clock_timestamp();
+        RETURN NEW;
+    END IF;
+    IF ROW(NEW.operation_id,NEW.upload_fence,NEW.part_bytes,NEW.idle_timeout_seconds,NEW.created_at)
+       IS DISTINCT FROM ROW(OLD.operation_id,OLD.upload_fence,OLD.part_bytes,OLD.idle_timeout_seconds,OLD.created_at)
+       OR (OLD.provider_upload_id IS NOT NULL AND
+           ROW(NEW.provider_upload_id,NEW.handle_recorded_at) IS DISTINCT FROM
+           ROW(OLD.provider_upload_id,OLD.handle_recorded_at))
+       OR (OLD.completion_parts IS NOT NULL AND
+           ROW(NEW.completion_parts,NEW.completion_recorded_at) IS DISTINCT FROM
+           ROW(OLD.completion_parts,OLD.completion_recorded_at)) THEN
+        RAISE EXCEPTION 'submission upload receipt is immutable' USING ERRCODE='23514';
+    END IF;
+    IF OLD.provider_upload_id IS NULL AND NEW.provider_upload_id IS NOT NULL THEN
+        IF o.raw_sha256 IS NOT NULL OR NEW.completion_parts IS NOT NULL THEN
+            RAISE EXCEPTION 'submission upload handle must precede EOF' USING ERRCODE='23514';
+        END IF;
+        NEW.handle_recorded_at:=clock_timestamp();
+    END IF;
+    IF OLD.completion_parts IS NULL AND NEW.completion_parts IS NOT NULL THEN
+        IF OLD.provider_upload_id IS NULL OR o.raw_sha256 IS NULL THEN
+            RAISE EXCEPTION 'submission completion requires handle and EOF' USING ERRCODE='23514';
+        END IF;
+        NEW.completion_recorded_at:=clock_timestamp();
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER submission_source_upload_receipt_guard
+BEFORE INSERT OR UPDATE OR DELETE ON public.submission_source_upload_receipts
+FOR EACH ROW EXECUTE FUNCTION public.guard_submission_source_upload_receipt();
+CREATE TRIGGER submission_source_upload_receipts_no_truncate
+BEFORE TRUNCATE ON public.submission_source_upload_receipts
+FOR EACH STATEMENT EXECUTE FUNCTION public.guard_submission_source_upload_receipt();
+
+CREATE FUNCTION public.check_submission_source_completion()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE
+    oid uuid;
+    o public.submission_intake_operations;
+    u public.submission_source_upload_receipts;
+    p jsonb;
+    n bigint;
+    total bigint:=0;
+    size bigint;
+BEGIN
+    IF TG_TABLE_NAME='submission_intake_operations' THEN
+        oid:=NEW.id;
+    ELSE
+        oid:=NEW.operation_id;
+    END IF;
+    SELECT * INTO o FROM public.submission_intake_operations WHERE id=oid;
+    SELECT * INTO u FROM public.submission_source_upload_receipts WHERE operation_id=oid;
+    IF o.raw_sha256 IS NULL THEN
+        IF u.completion_parts IS NOT NULL THEN
+            RAISE EXCEPTION 'submission completion has no EOF' USING ERRCODE='23514';
+        END IF;
+        RETURN NULL;
+    END IF;
+    IF u.operation_id IS NULL OR u.provider_upload_id IS NULL OR u.completion_parts IS NULL
+       OR jsonb_typeof(u.completion_parts)<>'array'
+       OR jsonb_array_length(u.completion_parts) NOT BETWEEN 1 AND 100
+       OR (o.sealed_upload_fence IS NOT NULL AND o.sealed_upload_fence<>u.upload_fence) THEN
+        RAISE EXCEPTION 'submission EOF requires exact completion receipts' USING ERRCODE='23514';
+    END IF;
+    FOR p,n IN SELECT value,ordinality FROM jsonb_array_elements(u.completion_parts) WITH ORDINALITY LOOP
+        IF jsonb_typeof(p) IS DISTINCT FROM 'object'
+           OR NOT (p ?& ARRAY['number','byte_count','provider_etag'])
+           OR p-ARRAY['number','byte_count','provider_etag']<>'{}'::jsonb
+           OR jsonb_typeof(p->'number') IS DISTINCT FROM 'number'
+           OR p->>'number' IS DISTINCT FROM n::text
+           OR jsonb_typeof(p->'byte_count') IS DISTINCT FROM 'number'
+           OR (p->>'byte_count') !~ '^[1-9][0-9]{0,7}$'
+           OR jsonb_typeof(p->'provider_etag') IS DISTINCT FROM 'string'
+           OR length(p->>'provider_etag') NOT BETWEEN 1 AND 1024 THEN
+            RAISE EXCEPTION 'invalid submission completion part' USING ERRCODE='23514';
+        END IF;
+        size:=(p->>'byte_count')::bigint;
+        IF size>u.part_bytes OR (n<jsonb_array_length(u.completion_parts) AND size<>u.part_bytes) THEN
+            RAISE EXCEPTION 'invalid submission completion part size' USING ERRCODE='23514';
+        END IF;
+        total:=total+size;
+    END LOOP;
+    IF total IS DISTINCT FROM o.raw_byte_count THEN
+        RAISE EXCEPTION 'submission completion byte count mismatch' USING ERRCODE='23514';
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER submission_intake_completion_closure
+AFTER INSERT OR UPDATE ON public.submission_intake_operations
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submission_source_completion();
+CREATE CONSTRAINT TRIGGER submission_upload_completion_closure
+AFTER INSERT OR UPDATE ON public.submission_source_upload_receipts
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_submission_source_completion();
+"""
+
 GUARDS = r"""
 CREATE FUNCTION public.submission_intake_task_snapshot(t public.workstream_tasks)
 RETURNS jsonb LANGUAGE sql IMMUTABLE STRICT
@@ -407,7 +540,11 @@ def upgrade() -> None:
                          ["id", "task_id"], source_schema="public", referent_schema="public", deferrable=True, initially="DEFERRED")
     for statement in split_sql_statements(CAPACITY_TABLE_SQL):
         op.execute(statement)
+    for statement in split_sql_statements(UPLOAD_TABLE_SQL):
+        op.execute(statement)
     for statement in split_sql_statements(GUARDS):
+        op.execute(statement)
+    for statement in split_sql_statements(UPLOAD_GUARDS):
         op.execute(statement)
 
 

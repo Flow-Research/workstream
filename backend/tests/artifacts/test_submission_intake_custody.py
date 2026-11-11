@@ -1,6 +1,7 @@
 """Real PostgreSQL proof of pre-handoff custody, not upload or acceptance authority."""
 
 import asyncio
+import json
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -13,7 +14,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.tasks import task_submission_context_port
 from app.core.identifiers import new_record_id
-from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
+from app.modules.artifacts.api.submission_intake import (
+    SubmissionIntakeMetadata, SubmissionSourceCapacityLimits, SubmissionSourceCompletion,
+    SubmissionSourcePart, SubmissionSourceUpload,
+)
+from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceUploadReceipt
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 from app.modules.tasks.intake_custody import IntakeTaskCustody
@@ -58,9 +63,9 @@ async def intake(tmp_path, isolated_database_env, capacity_limits):
         await engine.dispose()
 
 
-async def reserve(intake, session, *, key=None, declared_raw_bytes=None):
+async def reserve(intake, session, *, key=None, declared_raw_bytes=None, with_upload=True):
     now = datetime.now(UTC)
-    return await repository(session).reserve(
+    row = await repository(session).reserve(
         metadata=SubmissionIntakeMetadata(task_id=intake.task, assignment_id=intake.assignment),
         actor_id=intake.actor.actor_profile_id, identity_link_id=intake.actor.identity_link_id,
         idempotency_key=key or new_record_id(), maximum_raw_bytes=1024,
@@ -68,6 +73,114 @@ async def reserve(intake, session, *, key=None, declared_raw_bytes=None):
         upload_deadline_at=now + timedelta(minutes=5),
         lease_expires_at=now + timedelta(minutes=1),
     )
+    if not with_upload:
+        return row
+    intent = await repository(session).prepare_upload(
+        UUID(row.id), UUID(row.lease_id), 1, part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0,
+    )
+    await repository(session).record_upload(
+        UUID(row.id), UUID(row.lease_id), 1,
+        upload=SubmissionSourceUpload(intent=intent, provider_upload_id="fixture-upload"),
+    )
+    return row
+
+
+async def record_eof(session, operation, lease, generation, *, raw_sha256, raw_byte_count):
+    """Database-only fixture: build a completed provider receipt, never claim byte I/O."""
+    row = await session.get(SubmissionIntakeOperation, str(operation))
+    receipt = await session.get(SubmissionSourceUploadReceipt, str(operation))
+    repo = repository(session)
+    upload = SubmissionSourceUpload(
+        intent=await repo._upload_intent(row, receipt), provider_upload_id=receipt.provider_upload_id,
+    )
+    await repo.record_eof(operation, lease, generation, completion=SubmissionSourceCompletion(
+        upload=upload, parts=(SubmissionSourcePart(number=1, byte_count=raw_byte_count, provider_etag="part-etag"),),
+        raw_sha256=raw_sha256, raw_byte_count=raw_byte_count,
+    ))
+
+
+async def test_upload_intent_and_handle_commit_before_parts_and_cannot_be_replaced(intake):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    async with intake.factory.begin() as session:
+        intent = await repository(session).prepare_upload(
+            operation, lease, 1, part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0,
+        )
+    with pytest.raises(IntakeCustodyConflict, match="already_initiated"):
+        async with intake.factory.begin() as session:
+            await repository(session).prepare_upload(
+                operation, lease, 1, part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0,
+            )
+    wrong = intent.model_copy(update={"location": intent.location.model_copy(update={"operation_id": new_record_id()})})
+    with pytest.raises(IntakeCustodyConflict, match="receipt_mismatch"):
+        async with intake.factory.begin() as session:
+            await repository(session).record_upload(
+                operation, lease, 1, upload=SubmissionSourceUpload(intent=wrong, provider_upload_id="handle"),
+            )
+    upload = SubmissionSourceUpload(intent=intent, provider_upload_id="handle")
+    for _ in range(2):
+        async with intake.factory.begin() as session:
+            await repository(session).record_upload(operation, lease, 1, upload=upload)
+    with pytest.raises(IntakeCustodyConflict, match="handle_immutable"):
+        async with intake.factory.begin() as session:
+            await repository(session).record_upload(
+                operation, lease, 1, upload=upload.model_copy(update={"provider_upload_id": "replacement"}),
+            )
+    async with intake.factory.begin() as session:
+        await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="upload_failed")
+    with pytest.raises(IntakeCustodyConflict, match="owner_stale"):
+        async with intake.factory.begin() as session:
+            await repository(session).record_upload(operation, lease, 1, upload=upload)
+
+
+async def test_eof_cannot_commit_without_exact_bounded_completion_receipts(intake):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+        operation = UUID(row.id)
+    valid_part = {"number": 1, "byte_count": 100, "provider_etag": "opaque-part"}
+    for parts, error in (
+        (None, "requires exact completion"),
+        ([dict(valid_part, number="1")], "invalid submission completion part"),
+        ([dict(valid_part, number=2)], "invalid submission completion part"),
+        ([dict(valid_part, byte_count=99)], "byte count mismatch"),
+        ([dict(valid_part, provider_etag="")], "invalid submission completion part"),
+        ([dict(valid_part, unexpected="field")], "invalid submission completion part"),
+        ([dict(valid_part, byte_count=50), dict(valid_part, number=2, byte_count=50)], "part size"),
+    ):
+        with pytest.raises(DBAPIError, match=error):
+            async with intake.factory.begin() as session:
+                await session.execute(text(
+                    "UPDATE submission_intake_operations SET raw_sha256=:sha,raw_byte_count=100,"
+                    "eof_at=clock_timestamp() WHERE id=:id"
+                ), {"sha": SHA, "id": operation})
+                if parts is not None:
+                    await session.execute(text(
+                        "UPDATE submission_source_upload_receipts SET completion_parts=CAST(:parts AS jsonb),"
+                        "completion_recorded_at=clock_timestamp() WHERE operation_id=:id"
+                    ), {"parts": json.dumps(parts), "id": operation})
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT raw_sha256 FROM submission_intake_operations")) is None
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges")) == 1024
+
+
+async def test_recorded_upload_and_completion_are_immutable_custody(intake):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    async with intake.factory.begin() as session:
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+    for assignment in (
+        "provider_upload_id='replacement'", "part_bytes=8388608", "idle_timeout_seconds=99",
+        "completion_parts='[]'::jsonb", "completion_recorded_at=clock_timestamp()",
+    ):
+        with pytest.raises(DBAPIError, match="receipt is immutable"):
+            async with intake.factory.begin() as session:
+                await session.execute(text("UPDATE submission_source_upload_receipts SET " + assignment))
+    for statement in ("DELETE FROM submission_source_upload_receipts", "TRUNCATE submission_source_upload_receipts"):
+        with pytest.raises(DBAPIError, match="custody cannot be deleted"):
+            async with intake.factory.begin() as session:
+                await session.execute(text(statement))
 
 
 async def test_foreground_eof_seal_terminal_and_stale_fence(intake):
@@ -75,7 +188,7 @@ async def test_foreground_eof_seal_terminal_and_stale_fence(intake):
         row = await reserve(intake, session)
         operation, lease = UUID(row.id), UUID(row.lease_id)
     async with intake.factory.begin() as session:
-        await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
     async with intake.factory.begin() as session:
         deadline = datetime.now(UTC) + timedelta(minutes=2)
         source = await repository(session).seal(
@@ -105,6 +218,7 @@ async def test_reservation_rollback_leaves_no_pointer_or_operation(intake):
     async with intake.factory() as session:
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 0
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_upload_receipts")) == 0
         assert await session.scalar(text(
             "SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"
         ), {"id": intake.task}) is None
@@ -150,7 +264,7 @@ async def test_expiry_can_only_abandon_and_cannot_resume(intake):
         ), {"id": operation})
     with pytest.raises(IntakeCustodyConflict, match="intake_owner_stale"):
         async with intake.factory.begin() as session:
-            await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+            await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
     async with intake.factory.begin() as session:
         assert await repository(session).abandon_expired(operation)
     async with intake.factory.begin() as session:
@@ -219,7 +333,7 @@ async def test_recorded_source_identity_is_immutable(intake):
         row = await reserve(intake, session)
         operation, lease = UUID(row.id), UUID(row.lease_id)
     async with intake.factory.begin() as session:
-        await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
     with pytest.raises(DBAPIError, match="sealed_identity"):
         async with intake.factory.begin() as session:
             await session.execute(text(
@@ -253,7 +367,8 @@ async def test_intake_model_matches_installed_schema(isolated_database_env):
         async with engine.connect() as connection:
             def compare(sync):
                 inspector = inspect(sync)
-                for owner in (SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge):
+                for owner in (SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge,
+                              SubmissionSourceUploadReceipt):
                     table = owner.__table__
                     assert {
                         (c["name"], str(c["type"].compile(dialect=sync.dialect)), c["nullable"])
@@ -364,7 +479,7 @@ async def test_source_reservation_becomes_exact_bytes_only_after_sealing(intake,
         charge = await session.get(SubmissionSourceCharge, row.id)
         assert charge.accounted_bytes == (1024 if declared is None else 100)
     async with intake.factory.begin() as session:
-        await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
     async with intake.factory.begin() as session:
         deadline = datetime.now(UTC) + timedelta(minutes=2)
         await repository(session).seal(operation, lease, 1, provider_generation="exact-source",
@@ -384,7 +499,10 @@ async def test_declared_length_mismatch_cannot_record_eof_or_free_its_charge(int
         operation, lease = UUID(row.id), UUID(row.lease_id)
     with pytest.raises(DBAPIError, match="declared size mismatch"):
         async with intake.factory.begin() as session:
-            await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+            await session.execute(text(
+                "UPDATE submission_intake_operations SET raw_sha256=:sha,raw_byte_count=100,"
+                "eof_at=clock_timestamp() WHERE id=:id"
+            ), {"sha": SHA, "id": operation})
     async with intake.factory.begin() as session:
         await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="length_mismatch")
     async with intake.factory() as session:
@@ -426,7 +544,7 @@ async def test_equal_content_sources_keep_distinct_physical_charges(intake):
             operation, lease = UUID(row.id), UUID(row.lease_id)
             operations.append(operation)
         async with intake.factory.begin() as session:
-            await repository(session).record_eof(operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+            await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
         async with intake.factory.begin() as session:
             deadline = datetime.now(UTC) + timedelta(minutes=2)
             await repository(session).seal(operation, lease, 1, provider_generation=f"generation-{operation}",
