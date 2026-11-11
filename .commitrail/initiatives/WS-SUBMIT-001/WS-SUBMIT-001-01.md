@@ -108,6 +108,39 @@ provider writes, route or AUTH authority. Proof must cover simultaneous spending
 rollback, same-content distinct operations, declared-size equality, sealed-byte
 conversion and failed/expired charge retention on real PostgreSQL.
 
+## Streaming provider stage
+
+Extend `interfaces/artifacts.py`, the existing S3-compatible and local adapters,
+ART intake values/receipt persistence and their existing focused suites. Keep
+composition through the current ArtifactStore factory. Submission keys remain
+operation-derived; generic committed SHA-object consumers keep their protections.
+Explicit upload bounds and deadline accompany typed handles and ordered part
+receipts. Commit the handle before parts and EOF/completion intent before external
+completion. Provider calls never hold database locks. Receipt values alone grant
+no authorization. No public cutover occurs before root orchestration is complete.
+
+Verification covers bounded backpressure, lost begin/complete acknowledgement,
+conditional completion, exact-version read/delete, scoped handle reconciliation,
+and retained charge until confirmed cleanup. Use real pinned MinIO for protocol
+claims; do not treat existing AWS activation as qualification of new capabilities.
+Update the architecture guard's obsolete blanket multipart ban with exact scoped
+capability restrictions, preserving copy/ACL/bulk-delete prohibitions. This stage
+has the same L0 risk and reviewer routing as the full change.
+
+The receiver holds at most two configured parts plus one 1 MiB ingress chunk,
+separate from SDK/TLS overhead. It awaits each part before reading further and
+enforces explicit idle and immutable aggregate upload deadlines. Part size is an
+explicit 5–16 MiB supported input, with one in flight; neither part size nor idle
+timeout has a deployment default. Provider source methods bind the claimed
+namespace and operation key, require versioning, complete with `IfNoneMatch`,
+and verify raw bytes when resolving uncertain completion. Lost initiation can
+be enumerated only at the already-owned key. Abort acknowledgement never releases
+a charge. Existing AWS activation remains insufficient for this new surface.
+
+The methods are hidden prerequisites. Durable handle/completion persistence,
+local source support, exact cleanup authority/reclamation and AWS qualification
+remain required before the public flow can use them.
+
 ## Acceptance criteria
 
 - [x] Exact metadata round-trip and identity changes for each command selector.
@@ -146,6 +179,7 @@ conversion and failed/expired charge retention on real PostgreSQL.
 | Foreground custody and retained-data upgrade | `pytest tests/artifacts/test_submission_intake_custody.py 'tests/test_alembic.py::test_preceding_head_upgrades_to_current_without_recreation[0068_issuer_profile_email]' tests/test_alembic.py::test_repeated_upgrade_head_preserves_current_database tests/tasks/submission_dispatch/test_migration.py -q` through the isolated PostgreSQL 16 runner | 21 passed; isolated database and role cleanup confirmed | Pre-handoff persistence only; no provider, PRE, acceptance or public-route proof |
 | Physical source accounting | `pytest tests/artifacts/test_submission_intake_custody.py -q` through isolated PostgreSQL 16 | 34 passed on the capacity-stage working tree; cleanup confirmed | No provider bytes written or cleanup/reclamation claim |
 | Capacity-stage static ownership | UUID inventory, behavior partition, semantic lane catalogue and module boundary tests | 254 passed; ruff passed | Final integrated suite still required |
+| Bounded receive | Contract/stream tests including provider backpressure, byte bounds, idle expiry and in-flight cancellation | 70 passed; ruff passed | Transport/server buffers and real provider proof remain separate |
 | Protected target partition | `pytest tests/test_behavior_ownership.py -q` | 170 passed | Exact added paths only; no relaxed selection |
 | Model registration | UUID inventory and protected module-boundary tests | Both passed | No new cross-owner private imports |
 

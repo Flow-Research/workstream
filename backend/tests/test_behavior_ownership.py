@@ -2765,6 +2765,7 @@ def test_submission_intake_partition_addition_is_exact_and_retains_existing_targ
     additions = {
         target, "backend/app/modules/artifacts/intake/models.py",
         "backend/app/modules/artifacts/intake/capacity.py",
+        "backend/app/modules/artifacts/intake/streaming.py",
         "backend/app/modules/artifacts/intake/repository.py",
         "backend/app/modules/tasks/api/intake_custody.py",
         "backend/app/modules/tasks/intake_custody.py",

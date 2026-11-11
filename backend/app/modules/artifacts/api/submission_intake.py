@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
@@ -115,7 +115,7 @@ class SealedSubmissionSource(_IntakeValue):
     """
 
     location: SubmissionSourceLocation
-    provider_generation: str = Field(min_length=1, repr=False)
+    provider_generation: str = Field(min_length=1, max_length=2048, repr=False)
     raw_sha256: Sha256
     raw_byte_count: int = Field(ge=1, le=MAXIMUM_SUBMISSION_ZIP_BYTES)
     sealed_upload_fence: int = Field(ge=1)
@@ -150,3 +150,67 @@ class SubmissionSourceCapacityLimits(_IntakeValue):
             "schema_version": "workstream.submission_source_capacity.v1",
             **self.model_dump(mode="json"),
         })
+
+
+class SubmissionSourceUploadIntent(_IntakeValue):
+    """Durably owned bounds before provider initiation; not write authority.
+
+    The implementation supports one in-flight part of at most 16 MiB, separately
+    from the 1 MiB ingress/read ceiling and bounded SDK transport overhead.
+    Deployment must select a part size and deadline; neither has a default.
+    """
+
+    location: SubmissionSourceLocation
+    upload_fence: int = Field(ge=1)
+    maximum_raw_bytes: int = Field(ge=1, le=MAXIMUM_SUBMISSION_ZIP_BYTES)
+    declared_raw_bytes: int | None = Field(default=None, ge=1)
+    part_bytes: int = Field(ge=5 * 1024 * 1024, le=16 * 1024 * 1024)
+    idle_timeout_seconds: float = Field(gt=0, allow_inf_nan=False)
+    upload_deadline_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def bounded_declaration(self) -> Self:
+        """Reject an impossible declaration before sending provider requests."""
+        if self.declared_raw_bytes is not None and self.declared_raw_bytes > self.maximum_raw_bytes:
+            raise ValueError("declared source length exceeds upload limit")
+        return self
+
+
+class SubmissionSourceUpload(_IntakeValue):
+    """Opaque provider handle that the owner persists before sending parts."""
+
+    intent: SubmissionSourceUploadIntent
+    provider_upload_id: str = Field(min_length=1, max_length=2048, repr=False)
+
+
+class SubmissionSourcePart(_IntakeValue):
+    """One bounded part receipt; ETag is a completion token, never raw SHA."""
+
+    number: int = Field(ge=1, le=100)
+    byte_count: int = Field(ge=1, le=16 * 1024 * 1024)
+    provider_etag: str = Field(min_length=1, max_length=1024, repr=False)
+
+
+class SubmissionSourceCompletion(_IntakeValue):
+    """Exact EOF and ordered receipts committed before provider completion."""
+
+    upload: SubmissionSourceUpload
+    parts: tuple[SubmissionSourcePart, ...] = Field(min_length=1, max_length=100)
+    raw_sha256: Sha256
+    raw_byte_count: int = Field(ge=1, le=MAXIMUM_SUBMISSION_ZIP_BYTES)
+
+    @model_validator(mode="after")
+    def complete_receipt(self) -> Self:
+        """Require a contiguous, bounded multipart sequence and exact EOF count."""
+        intent = self.upload.intent
+        if (
+            self.raw_byte_count > intent.maximum_raw_bytes
+            or (intent.declared_raw_bytes is not None
+                and self.raw_byte_count != intent.declared_raw_bytes)
+            or sum(part.byte_count for part in self.parts) != self.raw_byte_count
+            or any(part.number != number for number, part in enumerate(self.parts, 1))
+            or any(part.byte_count != intent.part_bytes for part in self.parts[:-1])
+            or self.parts[-1].byte_count > intent.part_bytes
+        ):
+            raise ValueError("source completion does not match bounded EOF")
+        return self

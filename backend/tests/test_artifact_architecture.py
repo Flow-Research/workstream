@@ -91,7 +91,9 @@ RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
     "lock_upload_session",
     "_contributor_facts",
 }
-PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
+PROVIDER_METHODS = {"put", "observe_put_result", "open", "head", "begin_source_upload",
+                    "upload_source_part", "complete_source_upload", "open_source",
+                    "observe_source_upload", "discover_source_uploads", "request_source_abort"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
@@ -451,20 +453,18 @@ def test_composition_proof_rejects_aliased_factories_and_concrete_runtimes(
 
 
 def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
-    """Keep list, delete, copy, ACL, and multipart behavior out of the provider."""
-    allowed = {"get_object", "head_object", "put_object"}
+    """Permit multipart only at typed source methods; preserve unrelated objects."""
+    allowed = {"get_object", "head_object", "put_object", "get_bucket_versioning",
+               "create_multipart_upload", "upload_part", "complete_multipart_upload",
+               "list_multipart_uploads", "abort_multipart_upload"}
     forbidden = {
-        "abort_multipart_upload",
-        "complete_multipart_upload",
         "copy_object",
-        "create_multipart_upload",
         "delete_object",
         "delete_objects",
         "list_buckets",
         "list_objects",
         "list_objects_v2",
         "put_object_acl",
-        "upload_part",
         "upload_part_copy",
     }
     called = {
@@ -477,6 +477,29 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
     }
     assert called & forbidden == set()
     assert called & allowed == allowed
+    source_methods = {
+        "begin_source_upload": {"get_bucket_versioning", "create_multipart_upload"},
+        "upload_source_part": {"upload_part"},
+        "complete_source_upload": {"complete_multipart_upload", "head_object"},
+        "open_source": {"get_object"},
+        "observe_source_upload": {"head_object"},
+        "discover_source_uploads": {"list_multipart_uploads"},
+        "request_source_abort": {"abort_multipart_upload"},
+    }
+    source_only = {"get_bucket_versioning", "create_multipart_upload", "upload_part",
+                   "complete_multipart_upload", "list_multipart_uploads", "abort_multipart_upload"}
+    store = next(node for node in _tree(S3_ADAPTER_MODULE).body
+                 if isinstance(node, ast.ClassDef) and node.name == "S3CompatibleArtifactStore")
+    for method in store.body:
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        calls = {node.func.attr for node in ast.walk(method)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                 and isinstance(node.func.value, ast.Name) and node.func.value.id == "client"}
+        if method.name in source_methods:
+            assert calls == source_methods[method.name]
+        else:
+            assert not calls & source_only
 
 
 def test_provider_methods_stay_inside_artifact_orchestration_and_adapters() -> None:

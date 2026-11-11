@@ -610,6 +610,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/streaming.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/metrics.py"
     },
     {
@@ -2617,7 +2621,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "f8f9f1525d11ac23ce78f7dd22ea7258bee8417adece74ca9c205a3b0d901864",
+  "authority_digest": "a2f87870061a79753411f0d4d1ff941e830e00a4168af1f001f4910ba8f131b5",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

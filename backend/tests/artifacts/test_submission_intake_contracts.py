@@ -1,6 +1,8 @@
 """Exact command/source identity proof; no database or provider claims."""
 
 import hashlib
+import asyncio
+from datetime import UTC, datetime, timedelta
 import json
 from uuid import UUID, uuid4
 
@@ -12,7 +14,15 @@ from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource,
     SubmissionIntakeMetadata,
     SubmissionSourceLocation,
+    SubmissionSourceCompletion,
+    SubmissionSourcePart,
+    SubmissionSourceUpload,
+    SubmissionSourceUploadIntent,
 )
+from app.interfaces.artifacts import (
+    ArtifactInputMismatchError, ArtifactLimitExceededError, ArtifactStoreUnavailableError,
+)
+from app.modules.artifacts.intake.streaming import receive_submission_source
 
 
 OPERATION = UUID("019a0000-0000-7000-8000-000000000001")
@@ -209,3 +219,118 @@ def test_source_accepts_existing_art_namespace_and_binds_its_fingerprint(tmp_pat
         namespace_id=namespace.id, namespace_fingerprint="sha256:" + "d" * 64,
         provider_profile=namespace.provider_profile,
     )).source_sha256()
+
+
+def upload_value(**updates):
+    return SubmissionSourceUpload(
+        intent=SubmissionSourceUploadIntent.model_validate({
+            "location": location(), "upload_fence": 1,
+            "maximum_raw_bytes": 6 * 1024 * 1024, "part_bytes": 5 * 1024 * 1024,
+            "idle_timeout_seconds": 20.0,
+            "upload_deadline_at": datetime.now(UTC) + timedelta(minutes=1), **updates,
+        }), provider_upload_id="opaque-upload",
+    )
+
+
+@pytest.mark.asyncio
+async def test_source_stream_backpressures_and_hashes_original_bytes_without_completing():
+    first_part_started, release = asyncio.Event(), asyncio.Event()
+    reads = 0
+    part_sizes = []
+
+    class Store:
+        async def upload_source_part(self, upload, number, data, **kwargs):
+            part_sizes.append(len(data))
+            if number == 1:
+                first_part_started.set()
+                await release.wait()
+            return SubmissionSourcePart(number=number, byte_count=len(data), provider_etag=f"part-{number}")
+
+    async def chunks():
+        nonlocal reads
+        for chunk in [b"a" * (1024 * 1024)] * 5 + [b"end"]:
+            reads += 1
+            yield chunk
+
+    task = asyncio.create_task(receive_submission_source(Store(), upload_value(), chunks()))
+    try:
+        await asyncio.wait_for(first_part_started.wait(), 2)
+        assert reads == 5  # The sixth input chunk cannot outrun a pending provider write.
+        assert not task.done()
+        release.set()
+        completion = await asyncio.wait_for(task, 2)
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    assert reads == 6
+    assert part_sizes == [5 * 1024 * 1024, 3]
+    assert completion.raw_sha256 == "sha256:" + hashlib.sha256(b"a" * (5 * 1024 * 1024) + b"end").hexdigest()
+    assert completion.raw_byte_count == 5 * 1024 * 1024 + 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("updates,chunks,error", [
+    ({}, [], ArtifactInputMismatchError),
+    ({"declared_raw_bytes": 4}, [b"abc"], ArtifactInputMismatchError),
+    ({"declared_raw_bytes": 2}, [b"abc"], ArtifactInputMismatchError),
+    ({"maximum_raw_bytes": 2}, [b"abc"], ArtifactLimitExceededError),
+    ({}, [b"a" * (1024 * 1024 + 1)], ArtifactLimitExceededError),
+])
+async def test_invalid_stream_cannot_send_final_part_or_produce_eof(updates, chunks, error):
+    class NoWrites:
+        async def upload_source_part(self, *args, **kwargs):
+            pytest.fail("invalid small input reached storage")
+
+    async def ingress():
+        for chunk in chunks:
+            yield chunk
+
+    with pytest.raises(error):
+        await receive_submission_source(NoWrites(), upload_value(**updates), ingress())
+
+
+@pytest.mark.parametrize("parts,count", [
+    ((SubmissionSourcePart(number=2, byte_count=1, provider_etag="x"),), 1),
+    ((SubmissionSourcePart(number=1, byte_count=1, provider_etag="x"),), 2),
+    ((SubmissionSourcePart(number=1, byte_count=1, provider_etag="x"),
+      SubmissionSourcePart(number=2, byte_count=1, provider_etag="y")), 2),
+])
+def test_completion_rejects_missing_short_nonfinal_or_count_mismatched_parts(parts, count):
+    with pytest.raises(ValidationError):
+        SubmissionSourceCompletion(upload=upload_value(), parts=parts, raw_sha256=SHA, raw_byte_count=count)
+
+
+@pytest.mark.asyncio
+async def test_source_stream_idle_deadline_stops_without_emitting_completion():
+    stopped = asyncio.Event()
+
+    async def stalled_input():
+        try:
+            await asyncio.Event().wait()
+            yield b"never"
+        finally:
+            stopped.set()
+
+    with pytest.raises(ArtifactStoreUnavailableError):
+        await receive_submission_source(object(), upload_value(idle_timeout_seconds=0.01), stalled_input())
+    assert stopped.is_set()
+
+
+@pytest.mark.asyncio
+async def test_source_stream_total_deadline_cancels_an_inflight_part_without_completion():
+    stopped = asyncio.Event()
+
+    class SlowStore:
+        async def upload_source_part(self, *args, **kwargs):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+
+    async def ingress():
+        yield b"abc"
+
+    upload = upload_value(upload_deadline_at=datetime.now(UTC) + timedelta(seconds=0.2))
+    with pytest.raises(ArtifactStoreUnavailableError):
+        await receive_submission_source(SlowStore(), upload, ingress())
+    assert stopped.is_set()

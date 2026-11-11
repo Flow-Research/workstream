@@ -15,6 +15,13 @@ from app.interfaces.external_services import (
     ExternalServiceAdapterIdentity,
 )
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
+from app.modules.artifacts.api.submission_intake import (
+    SealedSubmissionSource,
+    SubmissionSourceCompletion,
+    SubmissionSourcePart,
+    SubmissionSourceUpload,
+    SubmissionSourceUploadIntent,
+)
 
 
 ARTIFACT_STORE_CAPABILITY_KEY = "artifact_store"
@@ -366,6 +373,48 @@ class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
 
 class ArtifactStore(ExternalServiceAdapter, Protocol):
     """Immutable byte-provider capability used only by artifact orchestration."""
+
+    async def begin_source_upload(
+        self, intent: SubmissionSourceUploadIntent, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SubmissionSourceUpload:
+        """Initiate an owned key; persist returned handle before sending parts."""
+
+    async def upload_source_part(
+        self, upload: SubmissionSourceUpload, number: int, data: bytes, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SubmissionSourcePart:
+        """Send one bounded part; the owner serializes parts and enforces total."""
+
+    async def complete_source_upload(
+        self, completion: SubmissionSourceCompletion, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSubmissionSource:
+        """Conditionally complete a previously persisted EOF/completion intent."""
+
+    def open_source(
+        self, source: SealedSubmissionSource, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> AsyncIterator[bytes]:
+        """Read the exact authorized version with bounded raw identity verification."""
+
+    async def observe_source_upload(
+        self, completion: SubmissionSourceCompletion, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSubmissionSource | None:
+        """Resolve a lost completion acknowledgement by exact provenance and bytes."""
+
+    async def discover_source_uploads(
+        self, intent: SubmissionSourceUploadIntent, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> tuple[SubmissionSourceUpload, ...]:
+        """Find unfinished handles only for one already-owned operation key."""
+
+    async def request_source_abort(
+        self, upload: SubmissionSourceUpload, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> None:
+        """Request scoped abort; acknowledgement alone never releases a charge."""
 
     async def put(
         self,
