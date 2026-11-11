@@ -1,7 +1,7 @@
 # First-login password change and public demo access
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Require a private first-login password change before
   participant access, and support verified public HTTPS identity/API/native MCP.
 
@@ -87,3 +87,6 @@ Assess roadmap and current deployment docs; full hosted checks before readiness.
 Human focus: credential delivery remains private and out-of-band; email is not
 verified; API/MCP require bearer authentication and Workstream authorization;
 public TLS and localhost custody are independently proven.
+
+The [public qualification report](../../docs/reports/public-identity-access-2026-11-11.md)
+records the deployed rotation, trusted TLS and selected CLI/MCP proof.

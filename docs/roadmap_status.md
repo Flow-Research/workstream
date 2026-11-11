@@ -774,8 +774,9 @@ cannot be reused as post-submission review-gate evidence. See the
   now accepts Rust-issued account logins and rejects
   the previous unexpired fixture token after canonical release/AWS verification.
   The [public HTTPS profile](../deploy/hosted/PUBLIC_ACCESS.md) adds identity, API
-  and native bearer MCP routing; public deployment must pass its independent
-  TLS/login/client qualification. Neither the private cutover nor compatibility
+  and native bearer MCP routing. [Public qualification](reports/public-identity-access-2026-11-11.md)
+  passed mandatory first-login rotation, trusted TLS, fresh verifier access and
+  four exact CLI/MCP operations; all-tool live coverage and OAuth remain separate. Neither the private cutover nor compatibility
   tests establish full Flow Identity platform integration.
 - External subject identity resolves through ActorIdentityLink into a stable
   internal ActorProfile.
