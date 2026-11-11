@@ -364,6 +364,17 @@ Selected production request/completion composition and
 supported false-guide activation are implemented. A known pre-effect non-live REV refusal returns bounded OUTBOX retry after rollback; exhaustion dead-letters without automatic reopen. A setup-fault hold is future safety work because no current selected production result emits `task_setup_blocked`. Human review/revision, conditional fulfillment, operations and
 release proof remain later v0.1 work.
 
+The [single-host installation path](../deploy/hosted/SINGLE_HOST.md) includes
+private persistent PostgreSQL/Redis, fresh credential initialization and ordered
+backing-service startup/shutdown alongside the existing hosted owners. Managed
+databases remain supported. A [private single-host MVP drill](reports/mvp-single-host-2026-11-11.md)
+qualified the 2 vCPU/8 GiB deployment for one contributor journey: fresh identity,
+intake failure, verified S3 Submission, external POST failure/correction, automatic
+acceptance, exact contribution/10-point award and replay. Selected CLI/MCP reads
+retained the same facts after host reboot and automatic service reconciliation.
+This is bounded operator-demo evidence, not a concurrency benchmark, all-tool
+coverage or public DNS/TLS qualification.
+
 The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,
 project-participation, guide-metadata, draft-policy, contributor-workspace,

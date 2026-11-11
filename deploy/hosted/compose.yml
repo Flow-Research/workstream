@@ -173,9 +173,14 @@ services:
         gid: "${WORKSTREAM_RUNTIME_GID}"
         mode: 0400
     command:
-      - /bin/sh
-      - -c
-      - python -m alembic upgrade head && exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+      - python
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
     ports:
       - "127.0.0.1:${WORKSTREAM_API_HOST_PORT:-8000}:8000"
     volumes:
@@ -230,7 +235,7 @@ services:
       - app.workers.celery_app
       - worker
       - --pool=prefork
-      - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-2}
+      - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-1}
       - --hostname=worker@%h
       - --pidfile=/tmp/celery-worker.pid
       - --loglevel=INFO

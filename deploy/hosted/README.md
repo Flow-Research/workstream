@@ -4,8 +4,10 @@ This directory prepares the Workstream API, durable Celery worker, Beat,
 fixed guide-document parser and optional trusted model proxy on one dedicated
 Linux amd64 host. Project PRE/POST and trusted ZIP intake use the existing native
 Smol systemd node. Compose does not start a checker controller or grant access
-to its Docker socket. PostgreSQL, Redis, AWS S3, Flow identity and the optional
-OTLP collector remain environment-managed dependencies.
+to its Docker socket. PostgreSQL and Redis are required and may run through the private
+[single-host backing-service overlay](SINGLE_HOST.md) or managed services.
+AWS S3, Flow identity and the optional OTLP collector retain their separate
+configuration and trust boundaries.
 
 The checked-in [release environment template](release.env.example),
 [Compose wrapper](compose.py), [preflight](preflight.py), native node and
@@ -564,7 +566,10 @@ publication or external fulfillment is performed by this operation.
 
 Cold startup has explicit prerequisite stages to avoid a schema/activation/proxy/
 node dependency cycle. `migrate` runs only the existing API image's Alembic command
-with no dependencies. The fixed AWS `proof` sequence and exactly
+with no dependencies. Ordinary API startup launches only the server; it never
+applies migrations. Run `migrate` successfully before first activation or an
+upgrade, and requalify a restored database before enabling host recovery.
+The fixed AWS `proof` sequence and exactly
 `up -d model-proxy` validate static topology and private inputs but require no live
 node and release no API, worker or scheduler. The proof command retains its exact
 credential-separated AWS observations and coordinator; it does not use intake or
@@ -604,6 +609,50 @@ these checks replaces a public authenticated journey, provider proof, resource
 qualification or restart/cleanup evidence. Each Compose service has its existing
 finite restart policy; the native unit retains its own bounded systemd policy.
 
+### Reconcile an installed host after reboot
+
+Docker restart policies do not enforce Compose dependency health ordering at
+host boot. The native node can exhaust its start attempts before the model proxy
+socket is ready, and MCP can retain a stopped API's network namespace. Install
+[workstream-hosted.service](workstream-hosted.service) after the initial schema,
+AWS activation, pinned image installation and public journey have passed. Copy
+the reviewed checkout to `/opt/workstream/source`, or edit both absolute source
+paths in the copied unit to its permanent root-owned location. Keep that checkout
+and `/etc/workstream/release.env` private and writable only by the deployment
+administrator.
+
+```sh
+sudo install -m 0644 deploy/hosted/workstream-hosted.service /etc/systemd/system/workstream-hosted.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now workstream-hosted.service
+sudo systemctl status workstream-hosted.service
+```
+
+The unit runs exactly `compose.py --env-file /etc/workstream/release.env resume`
+after Docker and network startup. This reconciles optional local data and identity
+services, waits for the enabled model proxy, resets the native node's exhausted
+start counter and starts that existing unit. It waits for canonical typed native
+and intake readiness before reconciling API, workers and scheduler. MCP is held
+out of the API health wait, then recreated against the current API namespace and
+verified. An already active native node is preserved. Each attempt has management
+deadlines; systemd retries failed reconciliation after 30 seconds and records
+failures in its journal. Inspect `journalctl -u workstream-hosted.service` and
+`journalctl -u workstream-checker.service` for diagnosis.
+
+Resume uses installed digest-pinned images with `--pull never`; registry login
+and network availability to the registry are unnecessary for reboot. A missing
+image fails recovery. It never initializes accounts, rotates credentials,
+migrates the schema or repeats cloud proof. Upgrades still follow the reviewed
+migration and activation procedure. Container restart can begin independently
+before reconciliation; the unit repairs dependency races and checks readiness,
+not a new runtime health monitor. Record an actual reboot and post-reboot public
+journey before claiming restart qualification.
+
+The hosted unit has no implicit stop action. Use the existing consumer-first
+`compose.py ... stop` before planned maintenance, and disable the hosted unit
+before shutting down a deployment permanently. To rerun reconciliation after an
+operator repair, use `systemctl restart workstream-hosted.service`.
+
 The API binds to host loopback for an environment-owned TLS reverse proxy. Do
 not expose the checker socket, Docker socket, PostgreSQL, Redis or OTLP collector
 as public ports.
@@ -623,7 +672,8 @@ outage does not change product results. Configuration alone is not that proof.
 
 The wrapper's `stop` operation stops Beat and API first so they cannot produce
 new work, gives the prefork worker its configured 7,320-second graceful window,
-then drains the model proxy before stopping the parser. It never stops the
+then drains the model proxy before stopping the parser. If the local backing-service
+overlay is enabled, Redis and PostgreSQL stop last, preserving their data directories. It never stops the
 native systemd node.
 Keeping all socket services alive while the worker drains lets cancellation and
 terminal persistence finish against their original dependencies. Guide inference
@@ -680,9 +730,9 @@ recovery operations. The migration refuses an inferred attempt without
 `adapter_profile` in `compilation_reserved` or `provider_result_accepted`, with
 `old inferred guide attempt requires removed runtime recovery before upgrade`.
 Finish supported recovery under the existing image and its compatible schema
-before retrying the upgrade. API startup applies migrations, so this refusal also
-prevents the new API from starting. If recovery cannot complete, keep the upgrade
-blocked; do not edit the attempt, delete evidence, or redispatch uncertain work
+before retrying the explicit migration. If that command refuses, do not start
+the new API or enable its host recovery unit. If recovery cannot complete, keep
+the upgrade blocked; do not edit the attempt, delete evidence, or redispatch uncertain work
 under the new runtime. The new image preserves retained evidence and exact-ID
 cleanup, not the removed inference implementation.
 
