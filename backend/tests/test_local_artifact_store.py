@@ -1112,3 +1112,39 @@ async def test_local_submission_symlink_cannot_write_outside_owned_source(tmp_pa
         store.close()
     with pytest.raises((ArtifactConfigurationError, ArtifactIntegrityError)):
         initialize_local_store(root=root)
+
+
+@pytest.mark.asyncio
+async def test_local_submission_parent_sync_failure_closes_new_directory(tmp_path, monkeypatch):
+    import errno
+    store = initialize_local_store(root=tmp_path / "store")
+    opened = []
+    original = store._ensure_directory
+
+    def track_directory(parent, name):
+        descriptor = original(parent, name)
+        opened.append(descriptor)
+        return descriptor
+
+    def fail_sync(_descriptor):
+        raise OSError(errno.EIO, "simulated parent directory sync failure")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(store, "_ensure_directory", track_directory)
+            patch.setattr(os, "fsync", fail_sync)
+            with pytest.raises(ArtifactStoreUnavailableError):
+                await store.begin_source_upload(local_source_intent(store))
+        assert opened
+        for descriptor in opened:
+            with pytest.raises(OSError) as failure:
+                os.fstat(descriptor)
+            assert failure.value.errno == errno.EBADF
+    finally:
+        # Close leaked test descriptors if this regression is run against the defect.
+        for descriptor in opened:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        store.close()

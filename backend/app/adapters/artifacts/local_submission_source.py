@@ -70,10 +70,10 @@ class LocalSubmissionSource:
             for name in ("objects", "submission-source", "v1", str(location.operation_id)):
                 method = self.store._ensure_directory if create else self.store._open_existing_directory
                 child = method(parent, name)
+                directories.append(child)
                 if create:
                     os.fsync(parent)
                 parent = child
-                directories.append(parent)
             yield parent
         except TimeoutError:
             raise ArtifactStoreUnavailableError("submission source lock deadline expired") from None

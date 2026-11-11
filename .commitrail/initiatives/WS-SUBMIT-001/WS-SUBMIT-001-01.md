@@ -295,3 +295,9 @@ Metadata publication uses a private temporary file, fsync and rename under the
 operation lock; raw ZIP bytes are never renamed or copied. Every caller uses the
 same operation lock, and existing metadata is rejected before publication.
 New directories are fsynced through their parents before begin acknowledgement.
+
+LOCAL-SOURCE-01: architecture/security fault injection found a child directory
+descriptor leak when parent fsync failed before cleanup registration. The focused
+regression reproduced the open descriptor on that failure. Register the child
+immediately after opening it, before any failing fsync; the failure path must
+close it before releasing the operation lock.
