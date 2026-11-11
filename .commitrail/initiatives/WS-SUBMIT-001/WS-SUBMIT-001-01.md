@@ -24,7 +24,7 @@ operation-based keys before bytes are known and exact durable identity afterward
 - `backend/tests/artifacts/test_submission_intake_contracts.py`: pure contract proof.
 - `docs/spec_submission_execution.md`: user-supplied specification, with technical
   Celery-worker vocabulary qualified for repository documentation checks.
-- `scripts/check_stale_authorization_docs.py` and
+- `scripts/check_stale_authorization_docs.py`, `scripts/check_stale_review_contracts.py` and
   `scripts/test_submission_spec_wording.py`: exact object-key example exemption;
   public API prefix enforcement remains unchanged elsewhere.
 - This initiative, index and capability ledger: target and limited delivered scope.

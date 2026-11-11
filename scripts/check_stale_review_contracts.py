@@ -322,6 +322,14 @@ def scan_text(relative_path: str, text: str) -> list[str]:
     failures: list[str] = []
     for rule in RULES:
         for match in rule.pattern.finditer(text):
+            # This exact line describes a storage key, not an API route.
+            if (
+                relative_path == "docs/spec_submission_execution.md"
+                and rule.code == "NON_CANONICAL_API_PREFIX"
+                and text.splitlines()[line_number(text, match.start()) - 1]
+                == "submission-source/v1/<operation_uuid>/bundle.zip"
+            ):
+                continue
             failures.append(
                 f"{relative_path}:{line_number(text, match.start())}: {rule.code}"
             )

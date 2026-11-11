@@ -3,6 +3,7 @@
 import unittest
 
 from scripts.check_stale_authorization_docs import RULES, exempt_match
+from scripts.check_stale_review_contracts import scan_text
 
 
 class SubmissionSpecWordingTests(unittest.TestCase):
@@ -21,6 +22,8 @@ class SubmissionSpecWordingTests(unittest.TestCase):
                 self.assertTrue(matches)
                 for match in matches:
                     self.assertEqual(exempt_match(path, rule, line, match.start()), expected)
+                failures = scan_text(path, line)
+                self.assertEqual(bool(failures), not expected)
 
 
 if __name__ == "__main__":
