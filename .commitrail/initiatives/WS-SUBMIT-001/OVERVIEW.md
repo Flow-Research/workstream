@@ -10,7 +10,9 @@ authorize merge or production deployment.
 ## Current boundary
 
 [WS-SUBMIT-001-01](WS-SUBMIT-001-01.md) establishes exact command/source value
-contracts. Database ownership and all new orchestration remain to implement.
+contracts. [WS-SUBMIT-001-02](WS-SUBMIT-001-02.md) adds hidden pre-handoff
+database custody and TASK/source/lease guards. Physical capacity, provider I/O,
+accepted authority and orchestration remain to implement.
 The existing public flow stays active until coordinated cutover.
 
 ## Delivery sequence

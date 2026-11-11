@@ -817,6 +817,7 @@ def test_project_role_restore_path_repair_keeps_reference_guards(
         "0063_checker_revision_input",
         "0066_guide_check_specification",
         "0067_canonical_json_restore_path",
+        "0068_issuer_profile_email",
     ],
 )
 def test_preceding_head_upgrades_to_current_without_recreation(

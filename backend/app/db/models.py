@@ -7,6 +7,7 @@ from app.modules.actors.models import (  # noqa: F401
     LegacyWorkflowEligibility,
 )
 from app.modules.api_controls.models import ApiRateControlCounter  # noqa: F401
+from app.modules.artifacts.intake.models import SubmissionIntakeOperation  # noqa: F401
 from app.modules.artifacts.models import (  # noqa: F401
     ArtifactBinding,
     ArtifactContent,

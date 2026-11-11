@@ -109,8 +109,10 @@ bound to issuer/subject, not email; signed email is not proof of mailbox verific
 
 The [single-request submission specification](spec_submission_execution.md) is
 the approved target for [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md).
-Its first boundary defines immutable command/source values only. Durable intake,
-streaming custody, one-session PRE, finalization and client cutover remain planned;
+Its hidden owner boundaries define immutable command/source values and durable
+foreground intake custody with a matching TASK pointer and source/lease fences.
+Physical reservation, streaming custody, one-session PRE, accepted handoff,
+finalization and client cutover remain planned;
 the active API still uses preparation followed by admission-consuming submission.
 
 ## Product Goal
