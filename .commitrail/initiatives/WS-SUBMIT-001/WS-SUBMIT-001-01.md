@@ -1,14 +1,19 @@
-# WS-SUBMIT-001-01 — Immutable intake command and source identities
+# WS-SUBMIT-001-01 — Single-request submission execution
 
 - Initiative: WS-SUBMIT-001
 - Durable disposition: Planned
-- Intended merge outcome: closed immutable ART command/source values with exact canonical identities and rejection tests.
+- Intended merge outcome: the complete single-request submission specification, including durable intake, one-session PRE, accepted handoff, finalization, clients and end-to-end proof.
 
 ## Intent
 
-Give database, upload and execution owners one representation of the original
-command and sealed source, separate from credentials and later manifest facts.
-This is the first portion of specification section 22 step 1.
+Implement the [approved specification](../../../docs/spec_submission_execution.md)
+in one PR with focused commits for each stage. The user explicitly requires the
+complete end-to-end behavior and tests before requesting merge; intermediate
+contract, schema or runtime stages are not separate merge checkpoints.
+
+The first stage gives database, upload and execution owners one representation
+of the original command and sealed source, separate from credentials and later
+manifest facts.
 
 ## Current behavior
 
@@ -32,10 +37,19 @@ operation-based keys before bytes are known and exact durable identity afterward
   public API prefix enforcement remains unchanged elsewhere.
 - This initiative, index and capability ledger: target and limited delivered scope.
 
+- `backend/scripts/behavior_ownership.py`, its existing test module and
+  `.ci/behavior-ownership/partition.v1.json`: register only the new immutable
+  contract target in the protected partition after CI exposed the missing entry.
+
+- Existing ART/TASK/AUTH/CHECKERS owners, composition roots, routes, migrations,
+  storage/runtime adapters, durable continuation, CLI/MCP and their tests and
+  current documentation as required by the specification. Each stage records
+  concrete proof; incomplete stages remain unexposed until coordinated cutover.
+
 ### Not allowed
 
-- Routes, migrations, orchestration, provider I/O or claims of database enforcement.
-- Historical data changes, new authority, runtime changes or deployment defaults.
+- Retained evidence deletion or rewriting, unrelated product changes, fabricated
+  deployment defaults or unsupported storage/runtime qualification claims.
 - Unrelated preparations or another open PR's branch.
 
 ## Design and decisions
@@ -58,9 +72,10 @@ Constructing these internal values grants no authority or provider qualification
 
 ## Risk and review routing
 
-- Risk class: L1
+- Risk class: L0
 - Required reviewers: architecture, security, QA/test_delta, documentation, CI integrity
-- Human review focus: exact identities and limited contract-only scope.
+- Human review focus: authorization, immutable lineage, custody, quota/cleanup,
+  atomic handoff, recovery, client truthfulness and complete end-to-end proof.
 
 ## Evidence
 
@@ -87,5 +102,6 @@ Constructing these internal values grants no authority or provider qualification
 
 - Current-source reconciliation: rebased onto 94334ccf4 (PR #707); preserved issuer
   profile roadmap changes and schema head 0068. Submission owner contracts unchanged.
-- Next usable boundary: durable operation schema and owner commands.
+- Next implementation stage: durable operation schema and owner commands in
+  the same PR, followed by streaming, PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.

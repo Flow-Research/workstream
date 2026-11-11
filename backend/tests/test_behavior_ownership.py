@@ -2757,3 +2757,14 @@ def test_art_operator_ownership_accepts_only_exact_new_modules():
         wrong_group["authority_digest"] = ownership._digest(authority)
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(wrong_group, trusted)
+
+
+def test_submission_intake_partition_addition_is_exact_and_retains_existing_targets() -> None:
+    retained = "backend/app/core/config.py"
+    target = "backend/app/modules/artifacts/api/submission_intake.py"
+    assert ownership.SUBMISSION_INTAKE_TARGETS == {target}
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted([retained, target])), trusted)
+    for targets in ([target], [retained, target, "backend/app/modules/artifacts/api/intake_override.py"]):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)

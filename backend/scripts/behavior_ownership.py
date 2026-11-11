@@ -932,6 +932,9 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/project_catalogue.py",
     "backend/app/modules/authorization/project_catalogue.py",
 })
+SUBMISSION_INTAKE_TARGETS = frozenset({
+    "backend/app/modules/artifacts/api/submission_intake.py",
+})
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",
     "backend/app/interfaces/forge_facts.py",
@@ -1221,6 +1224,7 @@ def _validate_additive_partition_transition(
         | PILOT_02C_BULK_TRANSITION_TARGETS
         | PROJECT_CATALOGUE_TARGETS
         | FORGE_PROOF_FACTS_TARGETS
+        | SUBMISSION_INTAKE_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:
