@@ -242,11 +242,11 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
                 rejected = cli(
                     origin,
                     tokens["cli-manager"],
+                    "-o",
+                    "json",
                     "profile",
                     "update",
                     *flags,
-                    "-o",
-                    "json",
                 )
                 assert rejected.returncode == 2 and rejected.stdout == ""
                 assert (
