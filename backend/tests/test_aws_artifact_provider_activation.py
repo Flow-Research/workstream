@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -22,6 +23,10 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from tests.artifact_store_helpers import minted_source
+from app.modules.artifacts.api.submission_intake import (
+    SubmissionSourceLocation,
+    SubmissionSourceUploadIntent,
+)
 
 
 _ACTIVATION_ID = UUID("0199e648-0b77-7000-8000-000000000001")
@@ -189,6 +194,30 @@ async def test_activation_denial_precedes_session_factory_and_sdk_call() -> None
     with pytest.raises(ArtifactProviderLiveProofRequiredError):
         await store.head(_PROVIDER_REF)
     assert events == [("select", fingerprint)]
+
+
+@pytest.mark.asyncio
+async def test_existing_aws_activation_cannot_authorize_unqualified_submission_sources() -> None:
+    """An existing SHA-object qualification cannot silently authorize new writes."""
+    events: list[object] = []
+    store, fingerprint = _initialized_store(
+        _Guard(events),
+        session_factory=lambda: (_ for _ in ()).throw(AssertionError("unqualified provider I/O")),
+    )
+    intent = SubmissionSourceUploadIntent(
+        location=SubmissionSourceLocation(
+            operation_id=_ACTIVATION_ID, namespace_id="primary",
+            namespace_fingerprint=fingerprint, provider_profile="aws-s3-v1",
+        ),
+        upload_fence=1, maximum_raw_bytes=1024, part_bytes=5 * 1024 * 1024,
+        idle_timeout_seconds=10.0, upload_deadline_at=datetime.now(UTC) + timedelta(seconds=30),
+    )
+    try:
+        with pytest.raises(ArtifactProviderLiveProofRequiredError):
+            await store.begin_source_upload(intent)
+        assert events == []
+    finally:
+        store.close()
 
 
 def _assert_same_activation_immediately_precedes_sdk_calls(

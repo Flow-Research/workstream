@@ -185,6 +185,13 @@ remain required before the public flow can use them.
 
 ## Review findings
 
+- S3-QUAL-001: QA found the deliberate AWS source qualification denial lacked
+  a negative regression. The existing offline AWS activation suite now constructs
+  a real AWS-profile adapter with an allowed SHA-object activation and a provider
+  I/O tripwire. An in-memory removal of the source gate fails that test at the
+  tripwire. The documentation next-stage line now names durable receipt
+  orchestration explicitly. Neither change asserts AWS source qualification.
+
 - Custody review found nullable predecessor/revision selector types and UUID
   shape unchecked in the SQL insert guard. A direct-SQL regression recomputed
   the digest and installed the matching task pointer; it reproduced acceptance
@@ -209,6 +216,6 @@ remain required before the public flow can use them.
 
 - Current-source reconciliation: rebased onto 94334ccf4 (PR #707); preserved issuer
   profile roadmap changes and schema head 0068. Submission owner contracts unchanged.
-- Next implementation stage: bounded streaming and exact cleanup custody in
+- Next implementation stage: durable upload receipt orchestration and exact cleanup custody in
   the same PR, followed by PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.
