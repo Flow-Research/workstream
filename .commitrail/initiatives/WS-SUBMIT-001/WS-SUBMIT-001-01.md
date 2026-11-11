@@ -137,13 +137,13 @@ and verify raw bytes when resolving uncertain completion. Lost initiation can
 be enumerated only at the already-owned key. Abort acknowledgement never releases
 a charge. Existing AWS activation remains insufficient for this new surface.
 
-The methods are hidden prerequisites. Durable handle/completion persistence,
-local source support, exact cleanup authority/reclamation and AWS qualification
-remain required before the public flow can use them.
+The methods are hidden prerequisites. Durable handle/completion persistence is
+implemented. Root orchestration, local source support, exact cleanup authority/
+reclamation and AWS qualification remain required before public use.
 
 ## Acceptance criteria
 
-Durable receipt integration next extends the existing intake models/repository,
+Durable receipt integration extends the existing intake models/repository,
 migration 0069, registry/reset/identifier catalogues and custody suite. One
 operation-owned row records immutable part/deadline bounds before initiation,
 then its opaque handle before parts, then ordered bounded completion receipts
@@ -250,3 +250,14 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
 - Next implementation stage: durable upload receipt orchestration and exact cleanup custody in
   the same PR, followed by PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.
+
+
+Hosted storage CI passed all 121 selected tests but exposed incomplete runner
+cleanup after enabling versioning. The runner must abort remaining multipart
+uploads and delete exact versions and delete markers in its freshly claimed test
+bucket, reject per-object deletion errors, and prove bucket removal. The S3 suite
+must use the runner-provided bucket when supplied. Earlier standalone 47-pass
+runs exercised the real provider but their cleanup metadata covered a different
+empty bucket; they do not prove cleanup of the test objects. This repair changes
+only test-infrastructure disposal, never product cleanup authority or charge
+release. Re-run the real suite and cleanup regression before crediting this proof.

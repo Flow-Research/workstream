@@ -56,7 +56,7 @@ from tests.test_artifact_store_conformance import ArtifactStoreConformanceTests
 
 MINIO_ENDPOINT = os.environ.get("WORKSTREAM_TEST_MINIO_ENDPOINT", "http://localhost:9000")
 MINIO_REGION = "us-east-1"
-MINIO_BUCKET = "workstream-artifacts"
+MINIO_BUCKET = os.environ.get("WORKSTREAM_TEST_MINIO_BUCKET", "workstream-artifacts")
 MINIO_ACCESS_KEY = "workstream-minio"
 MINIO_SECRET_KEY = "workstream-minio-secret-key"
 
