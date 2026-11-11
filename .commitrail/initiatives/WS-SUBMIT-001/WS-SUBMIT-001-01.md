@@ -217,6 +217,11 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
   require the temporary projection to remain null before removing it. Align the
   intake model's UUIDv7 constraint text with the existing canonical guard without
   changing its SQL semantics or weakening the identifier assertion.
+  Register the namespace and operation-owned shared keys in the identifier
+  schema test's closed natural-key list. The historical payment cleanup proof
+  explicitly expects the new TASK pointer to stay null. The shared scale-data
+  fixture validates deferred foreign keys before restoring user triggers;
+  foreign keys remain enabled throughout, and no performance budget is changed.
 
 - Custody review found nullable predecessor/revision selector types and UUID
   shape unchecked in the SQL insert guard. A direct-SQL regression recomputed
