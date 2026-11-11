@@ -85,6 +85,7 @@ RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE
   m jsonb;
   canonical text;
+  selector text;
 BEGIN
   IF TG_OP='DELETE' THEN
     RAISE EXCEPTION 'submission intake custody cannot be deleted' USING ERRCODE='23514';
@@ -116,6 +117,13 @@ BEGIN
            m->>'revision_preparation_sha256' !~ '^sha256:[0-9a-f]{64}$') THEN
       RAISE EXCEPTION 'invalid intake metadata' USING ERRCODE='23514';
     END IF;
+    FOREACH selector IN ARRAY ARRAY['predecessor_submission_id','revision_preparation_id'] LOOP
+      IF m->>selector IS NOT NULL AND (
+           jsonb_typeof(m->selector) IS DISTINCT FROM 'string'
+           OR m->>selector !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') THEN
+        RAISE EXCEPTION 'invalid intake metadata' USING ERRCODE='23514';
+      END IF;
+    END LOOP;
     canonical:=public.project_guide_projection_canonical_json(
       m || jsonb_build_object('schema_version','workstream.submission_intake_metadata.v1'));
     IF NEW.metadata_sha256 IS DISTINCT FROM 'sha256:'||encode(sha256(convert_to(canonical,'UTF8')),'hex')

@@ -120,6 +120,12 @@ ART's `intake/models.py` through the canonical database model registry.
 
 ## Review findings
 
+- Custody review found nullable predecessor/revision selector types and UUID
+  shape unchecked in the SQL insert guard. A direct-SQL regression recomputed
+  the digest and installed the matching task pointer; it reproduced acceptance
+  of a numeric predecessor before the repair. The guard now requires canonical
+  UUID strings for both non-null selectors, matching stored typed commands.
+
 - Hosted CI exposed an unregistered contract file in the protected behavior
   partition. The exact target is now registered; unrelated additions and removal
   of retained targets remain rejected. The 170-test ownership suite passed.
@@ -138,6 +144,6 @@ ART's `intake/models.py` through the canonical database model registry.
 
 - Current-source reconciliation: rebased onto 94334ccf4 (PR #707); preserved issuer
   profile roadmap changes and schema head 0068. Submission owner contracts unchanged.
-- Next implementation stage: durable operation schema and owner commands in
-  the same PR, followed by streaming, PRE, handoff/finalization and clients.
+- Next implementation stage: physical reservation and streaming custody in
+  the same PR, followed by PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.

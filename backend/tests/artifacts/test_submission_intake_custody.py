@@ -303,3 +303,34 @@ async def test_sql_insert_cannot_substitute_bound_parents(intake, field, constra
         async with intake.factory.begin() as session:
             await session.execute(SubmissionIntakeOperation.__table__.insert().values(**values))
             await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+
+
+async def test_sql_rejects_malformed_command_selectors_even_with_matching_digest(intake):
+    from app.core.hashing import canonical_json_hash
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+
+    async with intake.factory() as session:
+        await session.begin()
+        row = await reserve(intake, session)
+        values = {c.name: getattr(row, c.name) for c in row.__table__.columns}
+        await session.rollback()
+    cases = [
+        {"predecessor_submission_id": value}
+        for value in (42, True, {}, [], "not-a-uuid", str(new_record_id()).upper())
+    ] + [
+        {"predecessor_submission_id": str(new_record_id()),
+         "revision_preparation_id": value, "revision_preparation_sha256": SHA}
+        for value in (42, {}, "not-a-uuid")
+    ]
+    for selectors in cases:
+        metadata = {**values["command_metadata"], **selectors}
+        candidate = {**values, "command_metadata": metadata,
+                     "metadata_sha256": canonical_json_hash({
+                         "schema_version": "workstream.submission_intake_metadata.v1", **metadata,
+                     })}
+        with pytest.raises(DBAPIError, match="invalid intake metadata"):
+            async with intake.factory.begin() as session:
+                await session.execute(text(
+                    "UPDATE workstream_tasks SET active_submission_operation_id=:operation WHERE id=:task"
+                ), {"operation": UUID(row.id), "task": intake.task})
+                await session.execute(SubmissionIntakeOperation.__table__.insert().values(**candidate))
