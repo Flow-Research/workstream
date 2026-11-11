@@ -9,7 +9,7 @@ argon2 = "0.5"
 axum = { version = "0.8", features = ["json"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 base64 = "0.22"
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 rand = "0.8"
 rsa = { version = "0.9", features = ["pem", "sha2"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
