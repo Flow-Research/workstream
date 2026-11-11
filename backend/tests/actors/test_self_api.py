@@ -46,6 +46,7 @@ async def test_actors_me_returns_contributor_without_token_role_authority(
 async def test_patch_actors_me_updates_only_display_fields(
     actor_client: AsyncClient,
 ) -> None:
+    """Prove self updates edit display name while preserving issuer-owned email."""
     created = await actor_client.get("/api/v1/actors/me", headers=auth_headers())
     assert created.status_code == 200
     actor_id = created.json()["actor_profile_id"]

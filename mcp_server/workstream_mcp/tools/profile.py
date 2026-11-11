@@ -36,6 +36,7 @@ def get_definition() -> Tool:
 
 
 def update_definition() -> Tool:
+    """Describe the display-name-only tool with its mutation and output contracts."""
     return Tool(
         name=PROFILE_UPDATE_TOOL_NAME,
         description="Update the authenticated caller's display name; issuer email is read-only.",

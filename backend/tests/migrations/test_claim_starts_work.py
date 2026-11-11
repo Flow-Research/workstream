@@ -54,6 +54,7 @@ def _upgrade(connection):
 
 @pytest.fixture
 async def predecessor_client(task_database_env, migration_lock):
+    """Restore exact predecessor evidence before adding temporary current-reader projections."""
     await db_session.dispose_engine()
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
@@ -160,6 +161,7 @@ async def _snapshot(session):
 
 
 async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predecessor_client, monkeypatch):
+    """Upgrade a retained claim while preserving unrelated assignments, receipts and audit rows."""
     tasks, actor = await _setup(predecessor_client, monkeypatch)
     async with db_session.get_session_factory()() as session:
         task, prior = await _claim(session, tasks[0]["id"], actor, started=True)

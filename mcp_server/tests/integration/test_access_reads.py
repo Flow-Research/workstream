@@ -136,6 +136,7 @@ async def _grant(
 async def _exercise_access_reads(
     direct: httpx.AsyncClient, mcp_url: str, env: dict[str, str]
 ) -> None:
+    """Verify public access reads preserve role scope, redaction and response parity."""
     issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     subjects = {

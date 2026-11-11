@@ -262,6 +262,7 @@ def test_profile_patch_is_not_replayed_after_http2_goaway(cli, tmp_path):
 
 
 def test_profile_update_sends_only_selected_fields(cli):
+    """Preserve omitted fields and explicit nulls in the outgoing profile patch."""
     with http_fixture() as (origin, response, requests):
         for flags, expected in (
             (("--display-name", "Ada é"), {"display_name": "Ada é"}),
@@ -278,6 +279,7 @@ def test_profile_update_sends_only_selected_fields(cli):
 
 
 def test_profile_update_bad_arguments_never_write(cli):
+    """Reject invalid or retired profile arguments before any HTTP mutation."""
     with http_fixture() as (origin, response, requests):
         for flags in (
             (),
@@ -298,6 +300,7 @@ def test_profile_update_bad_arguments_never_write(cli):
 
 
 def test_profile_update_uncertainty_and_known_denials(cli):
+    """Distinguish uncertain writes from known API denials without inventing success."""
     with http_fixture() as (origin, response, requests):
         # Record body receipt, then lose the connection before status headers.
         response["drop"] = True

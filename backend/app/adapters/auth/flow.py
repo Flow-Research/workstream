@@ -395,6 +395,7 @@ class FlowAuthVerifier:
         self,
         claims: dict[str, Any],
     ) -> AuthVerificationResult:
+        """Validate verified identity/profile claims and build the bounded authentication result."""
         subject = claims.get("sub")
         token_id = claims.get("jti")
         subject_kind = claims.get("subject_kind")

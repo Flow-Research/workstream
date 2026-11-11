@@ -202,6 +202,7 @@ class AuthorityDrill:
         return result
 
     async def bootstrap(self):
+        """Admit the drill roster and verify administrator bootstrap denial and success paths."""
         for label in ROSTER:
             claims = {"email": "private-candidate@example.invalid"} if label == "outsider" else {}
             self.tokens[label] = self.issuer.issue("admin-drill-" + label, **claims)

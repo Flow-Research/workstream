@@ -381,6 +381,7 @@ async def _audit_validator_custody(database_url: str) -> list[tuple]:
 
 
 def test_v01_graph_has_one_root_and_head() -> None:
+    """Assert one complete linear migration chain from the v0.1 root to the current head."""
     config = _alembic_config()
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())

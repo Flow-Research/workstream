@@ -193,6 +193,7 @@ def _start_processes(
 
 @pytest.mark.asyncio
 async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
+    """Exercise installed MCP profile and lifecycle tools against the real backend."""
     env = api_environment()
     issuer, audience, secret = flow_settings(env)
     tokens = {

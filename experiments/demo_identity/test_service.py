@@ -106,6 +106,7 @@ def service(tmp_path_factory):
 
 
 def test_login_admin_provision_and_real_verifier(service, monkeypatch):
+    """Verify account provisioning, password rotation and issued tokens through the real verifier."""
     issuer, cert, data, _restart = service
     bundle = cert.parent / "trust.pem"
     bundle.write_bytes(Path(certifi.where()).read_bytes() + cert.read_bytes())

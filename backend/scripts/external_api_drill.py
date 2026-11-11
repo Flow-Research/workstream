@@ -527,6 +527,7 @@ async def profile_readback(drill, token, name, expected, previous=None):
 
 
 async def profile_cases(drill, issuer, token):
+    """Exercise display-name edits and issuer-owned email rejection with exact readbacks."""
     route = "/api/v1/actors/me"
     for name, bad in (("missing", None), ("signature", TokenIssuer().issue("outsider")),
                       ("expired", issuer.issue("outsider", exp=int(time.time()) - 60)),

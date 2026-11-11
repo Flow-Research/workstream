@@ -28,6 +28,7 @@ from tests.authentication.support import (
 async def test_asymmetric_token_returns_minimal_canonical_contract(
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
 ) -> None:
+    """Verify signed identity and optional profile metadata map to the canonical token."""
     private_key, jwk = rsa_signing_material
     verifier = FlowAuthVerifier(
         production_verifier_settings(),
@@ -245,6 +246,7 @@ async def test_temporal_claims_honor_configured_skew(
 @pytest.mark.parametrize("field,invalid", [("email", {}), ("email", "x" * 321),
     ("email", "bad\x00value"), ("email", "\ud800"), ("email", " "), ("name", 12), ("name", "x" * 201)])
 async def test_invalid_signed_profile_claim_is_rejected(rsa_signing_material, field, invalid):
+    """Reject invalid signed profile metadata before it reaches persistence."""
     private_key, jwk = rsa_signing_material
     verifier = FlowAuthVerifier(production_verifier_settings(), jwks_transport=jwks_transport(jwk))
     with pytest.raises(AuthVerificationError, match="profile claim"):

@@ -154,6 +154,7 @@ def test_outbound_client_disables_environment_proxy_and_redirects() -> None:
 
 @pytest.mark.asyncio
 async def test_profile_update_uses_one_unkeyed_patch_and_preserves_payload() -> None:
+    """Send one exact profile patch without inventing an idempotency key."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -208,6 +209,7 @@ async def test_profile_update_transport_failure_is_uncertain_and_not_retried() -
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", [201, 204, 302, 500, 502, 503, 504])
 async def test_profile_update_ambiguous_http_response_preserves_uncertainty(status: int) -> None:
+    """Keep an ambiguous profile write outcome uncertain instead of reporting success."""
     applied_updates: list[bytes] = []
     request_id = "664e1ac5-dd97-4a84-9eef-5cb7a001fb2e"
 

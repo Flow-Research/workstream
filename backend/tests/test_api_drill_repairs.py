@@ -135,6 +135,7 @@ def maximum_qualification() -> dict:
 
 @pytest.mark.parametrize("field", ["display_name"])
 async def test_profile_nul_rejected_without_partial_update(project_client: AsyncClient, field: str) -> None:
+    """Reject NUL display-name input without changing either stored profile field."""
     route = "/api/v1/actors/me"
     control = await project_client.patch(route, headers=auth_headers(),
         json={"display_name": "Original 名"})

@@ -72,6 +72,7 @@ def denial(result, status):
 
 
 async def exercise(api, mcp, env):
+    """Exercise caller-token isolation and profile behavior across direct API and MCP calls."""
     issuer, audience, secret = flow_settings(env)
 
     def token(subject, **changes):

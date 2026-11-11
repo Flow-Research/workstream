@@ -75,6 +75,7 @@ async def test_installed_cli_uses_only_public_profile_and_project_context(
 ) -> None:
     # Bootstrap requires an empty authority baseline, not accidental collection
     # order before every other PostgreSQL-backed CLI journey.
+    """Exercise installed CLI self-service through authorized public APIs and retained state."""
     env = api_environment()
     assert env["WORKSTREAM_DATABASE_URL"] == clean_postgres_database
     # Reused canonical activation fixtures arrange identities at this issuer.

@@ -63,14 +63,17 @@ async def test_no_local_auth_routes() -> None:
 
 
 async def test_swagger_uses_pinned_integrity_checked_assets() -> None:
+    """Require exact Swagger asset versions, integrity digests and nonpersistent authorization."""
     from html.parser import HTMLParser
 
     class Assets(HTMLParser):
         def __init__(self):
+            """Collect external asset attributes from the rendered documentation page."""
             super().__init__()
             self.assets = []
 
         def handle_starttag(self, tag, attrs):
+            """Record script and stylesheet sources for integrity assertions."""
             attributes = dict(attrs)
             if tag in {"script", "link"} and ("src" in attributes or "href" in attributes):
                 self.assets.append(attributes)

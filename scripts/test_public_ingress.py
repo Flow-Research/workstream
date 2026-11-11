@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PublicIngressTest(unittest.TestCase):
     def test_exact_hosts_paths_headers_upload_and_identity_tls(self):
+        """Exercise real proxy host/path boundaries, forwarded headers, uploads and identity TLS."""
         binary = os.environ['WORKSTREAM_TEST_CADDY']
         with tempfile.TemporaryDirectory(prefix='ws-ingress-') as directory:
             root = Path(directory)

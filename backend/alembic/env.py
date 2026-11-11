@@ -43,6 +43,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    """Validate the supported database starting state and run configured migrations."""
     version_table_exists = bool(
         connection.scalar(text("select to_regclass('public.alembic_version') is not null"))
     )

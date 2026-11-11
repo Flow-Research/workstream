@@ -25,6 +25,7 @@ from tests.authentication.support import (
 
 
 def _profile_app(database_url, signing_material):
+    """Build the app with an explicit token verifier for isolated profile tests."""
     private_key, jwk = signing_material
     settings = production_verifier_settings(database_url=database_url)
     app = create_app(settings)
@@ -41,6 +42,7 @@ async def test_issuer_email_sync_preserves_identity_and_local_name(
     issued = int(time.time()) - 20
 
     def headers(email, tick, *, subject="email-owner", name="Issuer Name"):
+        """Supply the selected signed email observation through the test verifier."""
         value = issue_asymmetric_token(private_key, claims={
             "sub": subject, "email": email, "name": name, "iat": tick,
         })
@@ -87,10 +89,12 @@ async def test_issuer_email_sync_preserves_identity_and_local_name(
 async def test_issuer_email_sync_does_not_survive_denial_or_failed_update(
     auth_database_env, rsa_signing_material, monkeypatch, blocked,
 ):
+    """Prove denied access and failed writes cannot commit signed-email observations."""
     import time
     private_key, settings, app = _profile_app(auth_database_env, rsa_signing_material)
     issued = int(time.time()) - 20
     def headers(email, tick):
+        """Supply the selected signed email observation through the test verifier."""
         return {"Authorization": "Bearer " + issue_asymmetric_token(private_key,
             claims={"sub": "blocked-email", "email": email, "iat": tick})}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
@@ -113,6 +117,7 @@ async def test_issuer_email_sync_does_not_survive_denial_or_failed_update(
             await session.commit()
         if blocked == "rollback":
             async def fail_update(self, resolved, payload):
+                """Fail after synchronization to prove caller rollback removes the staged observation."""
                 assert resolved.profile.contact_email == "after@example.test"
                 await self._session.flush()
                 raise SQLAlchemyError("injected failure after issuer synchronization")
@@ -137,6 +142,7 @@ async def test_issuer_email_sync_serializes_against_stale_profile_edit(
     private_key, settings, app = _profile_app(auth_database_env, rsa_signing_material)
     issued = int(time.time()) - 20
     async def verified(email, tick):
+        """Build one bounded identity observation for the concurrent refresh proof."""
         return (await app.state.auth_verifier.verify(issue_asymmetric_token(private_key,
             claims={"sub": "racing-email", "email": email, "iat": tick}))).token
     older = await verified("old@example.test", issued)
@@ -155,6 +161,7 @@ async def test_issuer_email_sync_serializes_against_stale_profile_edit(
         waiter_name = "profile-email-waiter"
         await second.execute(text("select set_config('application_name', :name, true)"), {"name": waiter_name})
         async def old_token_patch():
+            """Apply a local name edit with an older token while another refresh holds custody."""
             refreshed = await two.synchronize_identity_email(stale_actor, older)
             await two.update_self(refreshed, ActorProfileUpdateRequest(display_name=None))
             await second.commit()
@@ -180,6 +187,7 @@ async def test_signed_flow_token_authorizes_actor_self_read_and_update(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
 ) -> None:
+    """Exercise real signed self access while keeping identity metadata out of audit evidence."""
     private_key, jwk = rsa_signing_material
     settings = production_verifier_settings(database_url=auth_database_env)
     verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))

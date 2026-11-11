@@ -45,6 +45,7 @@ class ContractTests(unittest.TestCase):
                                           409, {"error.code": code})
 
     def test_fixture_token_survives_rate_pacing_but_expiry_is_still_enforced(self):
+        """Keep paced drill tokens usable while preserving actual expiry verification."""
         issuer = drill.TokenIssuer()
         now = int(drill.time.time())
         with patch.object(drill.time, "time", return_value=now - 901):
@@ -197,6 +198,7 @@ class ContractTests(unittest.TestCase):
                                           set(), 100, "actor_profile_id"))
 
     def test_catalogue_oracle_rejects_nested_changes_and_duplicates(self):
+        """Reject changed or duplicate permission and role facts against independent expectations."""
         expected = drill.catalogue_expectations()
         self.assertEqual(len(drill.EXPECTED_PERMISSIONS), 94)
         self.assertEqual(len(set(drill.EXPECTED_PERMISSIONS)), 94)
@@ -459,6 +461,7 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(report["cases"][0]["result"], "failed")
 
     async def test_profile_email_rejection_proves_unchanged_display_and_contact(self):
+        """Verify email-mutation rejection preserves both profile values on readback."""
         from uuid import uuid4
         for corrupt_rejection in (False, True):
             with self.subTest(corrupt_rejection=corrupt_rejection):
@@ -471,6 +474,7 @@ class ExecutionTests(unittest.IsolatedAsyncioTestCase):
                            "last_seen_at": "2026-01-01T00:00:00Z"}
                 readonly_requests = []
                 def handler(request):
+                    """Model exact profile responses and mutation denial for the drill oracle."""
                     headers = {key: request.headers[key] for key in ("X-Request-ID", "X-Correlation-ID")}
                     # This fixture tests the profile oracle. Exact bearer
                     # matching keeps auth denials independent of JWT clock state;

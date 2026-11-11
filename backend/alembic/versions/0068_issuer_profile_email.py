@@ -9,8 +9,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Add a nullable signed-email observation timestamp without rewriting retained rows."""
     op.add_column("actor_identity_links", sa.Column("email_observed_issued_at", sa.BigInteger(), nullable=True))
 
 
 def downgrade() -> None:
+    """Refuse removal of retained identity-observation custody."""
     raise RuntimeError("Workstream v0.1 migrations cannot be downgraded; recreate the database")

@@ -118,6 +118,7 @@ def test_new_tool_invalid_inputs_do_not_dispatch(
 def test_profile_update_normalizes_text_and_preserves_omission_and_null(
     adapter: tuple[TestClient, list[Any], dict[str, Any]],
 ) -> None:
+    """Normalize editable profile text without conflating omitted and cleared fields."""
     client, received, upstream = adapter
     upstream["json"] = {**upstream["json"], "display_name": "Victor", "contact_email": None}
 
@@ -142,6 +143,7 @@ def test_profile_update_normalizes_text_and_preserves_omission_and_null(
 def test_new_tools_accept_exact_maximum_input_lengths(
     adapter: tuple[TestClient, list[Any], dict[str, Any]],
 ) -> None:
+    """Accept exact contract length limits for the affected tool inputs."""
     client, received, upstream = adapter
     display_name = "d" * 200
     project_id = "p" * 100

@@ -96,3 +96,8 @@ changing limits or dispositions.
 Historical archive restoration remains exact: the shared nullable owner projection
 is added only after archived column validation, checked for null-only values, and
 removed before migration. The archive inventory check is not relaxed.
+
+The final external-review documentation pass adds purpose/failure-boundary
+docstrings to affected functions. AST comparison with function docstrings removed
+proves executable Python structure is unchanged; structural evidence is refreshed
+without changing limits. This does not add a percentage gate.

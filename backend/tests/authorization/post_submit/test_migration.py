@@ -49,6 +49,7 @@ async def test_actual_upgrade_preserves_or_refuses_without_repair(
 async def test_upgrade_excludes_writer_across_receipt_preflight(
     tmp_path, isolated_database_env, migration_lock, monkeypatch
 ):
+    """Prove migration custody blocks an interleaved predecessor receipt writer."""
     import threading
     from alembic.operations import Operations
     from sqlalchemy import text

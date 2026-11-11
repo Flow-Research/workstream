@@ -4167,6 +4167,7 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
 
 @pytest.mark.asyncio
 async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
+    """Reject substituted prepared inputs without consuming the original valid handle."""
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
@@ -8777,6 +8778,7 @@ async def test_authorization_kernel_preserves_lifecycle_denial_precedence(
 
 
 async def test_actor_self_update_requires_transaction_revalidation() -> None:
+    """Require transaction-bound revalidation for self reads and display-name updates."""
     context = _runtime_context()
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
