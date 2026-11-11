@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import ssl
 import subprocess
 import tempfile
@@ -48,6 +49,9 @@ class IssuerContainerProof(unittest.TestCase):
                 "api": {"image": IMAGE, "profiles": ["fixture-api-excluded"]},
                 "demo-identity": {"pull_policy": "never"},
             }}))
+            with socket.socket() as reservation:
+                reservation.bind(("127.0.0.1", 0))
+                port = reservation.getsockname()[1]
             env = {**os.environ, "DEMO_IDENTITY_IMAGE": IMAGE,
                    "DEMO_IDENTITY_ISSUER": "https://identity.example.test",
                    "DEMO_IDENTITY_AUDIENCE": "workstream-demo",
@@ -56,7 +60,7 @@ class IssuerContainerProof(unittest.TestCase):
                    "DEMO_IDENTITY_TLS_CERT_FILE": str(cert),
                    "DEMO_IDENTITY_TLS_KEY_FILE": str(key),
                    "DEMO_IDENTITY_PUBLISHED_BIND": "127.0.0.1",
-                   "DEMO_IDENTITY_PUBLISHED_PORT": "8443"}
+                   "DEMO_IDENTITY_PUBLISHED_PORT": str(port)}
             compose = ["docker", "compose", "--project-name", project, "--file", str(OVERLAY), "--file", str(acquisition)]
             command([*compose, "config", "--quiet"], env=env)
             owner = ["docker", "run", "--rm", "--network", "none", "--user", "0:0", "--entrypoint", "chown",
@@ -70,12 +74,12 @@ class IssuerContainerProof(unittest.TestCase):
                 command([*compose, "up", "--detach", "--no-deps", "--wait", "--wait-timeout", "45", "demo-identity"], env=env)
                 context = ssl.create_default_context(cafile=str(cert))
 
-                def request(path, body=None):
-                    client = http.client.HTTPSConnection("127.0.0.1", 8443, context=context, timeout=10)
+                def request(path, body=None, token=None):
+                    client = http.client.HTTPSConnection("127.0.0.1", port, context=context, timeout=10)
                     try:
                         client.request("GET" if body is None else "POST", path,
                                        None if body is None else json.dumps(body),
-                                       {"Content-Type": "application/json"})
+                                       {"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {})})
                         response = client.getresponse()
                         return response.status, response.read(16384)
                     finally:
@@ -86,10 +90,32 @@ class IssuerContainerProof(unittest.TestCase):
                 self.assertEqual(len(json.loads(jwks)["keys"]), 1)
                 status, body = request("/login", {"email": "admin@example.test", "password": password})
                 self.assertEqual(status, 200)
-                self.assertIn("admin_token", json.loads(body))
+                administrator = json.loads(body)
+                self.assertIn("admin_token", administrator)
+                self.assertFalse(administrator["must_change_password"])
+                initial = secrets.token_urlsafe(32)
+                chosen = secrets.token_urlsafe(32)
+                self.assertEqual(request("/admin/accounts", {"email": "participant@example.test", "password": initial}, administrator["admin_token"])[0], 201)
+                status, body = request("/login", {"email": "participant@example.test", "password": initial})
+                self.assertEqual(status, 200)
+                pending = json.loads(body)
+                self.assertNotIn("access_token", pending)
+                self.assertNotIn("admin_token", pending)
+                self.assertTrue(pending["must_change_password"])
                 command([*compose, "up", "--detach", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "45", "demo-identity"], env=env)
                 self.assertEqual(request("/jwks.json"), (200, jwks))
                 self.assertEqual(request("/login", {"email": "admin@example.test", "password": password})[0], 200)
+                status, body = request("/login", {"email": "participant@example.test", "password": initial})
+                self.assertEqual(status, 200)
+                self.assertTrue(json.loads(body)["must_change_password"])
+                rotation = pending["password_change_token"]
+                self.assertEqual(request("/admin/accounts", {"email": "blocked@example.test", "password": initial}, rotation)[0], 401)
+                self.assertEqual(request("/me/password", {"current_password": initial, "new_password": chosen}, rotation)[0], 204)
+                self.assertEqual(request("/me/password", {"current_password": chosen, "new_password": initial}, rotation)[0], 401)
+                status, body = request("/login", {"email": "participant@example.test", "password": chosen})
+                self.assertEqual(status, 200)
+                self.assertIn("access_token", json.loads(body))
+                self.assertFalse(json.loads(body)["must_change_password"])
             finally:
                 try:
                     command([*compose, "down", "--timeout", "10"], env=env)

@@ -765,6 +765,8 @@ The health probe checks API health and the static MCP catalogue. It does not
 establish a caller's authority: qualification must additionally call tools with
 fresh login tokens and verify both permitted and denied access. API's Docker
 bridge can still reach the listener, so exact Host checks, browser-Origin
-rejection and per-call authentication remain necessary. Public MCP ingress and
-clients requiring OAuth discovery need separate qualification; this private
-profile does not claim that support.
+rejection and per-call authentication remain necessary. For public native bearer
+clients, use the [public HTTPS ingress](PUBLIC_ACCESS.md) and run its external
+login/client checks before sharing the URL. It preserves these private listeners
+and browser-Origin denial. Clients requiring OAuth discovery remain unsupported
+by this profile.
