@@ -1574,3 +1574,30 @@ single-PRE transport cases passed. QA's independent blocked-provider abort probe
 also confirmed cancellation closes both provider and authority. This resolves
 the concurrent-reader and processor-task findings; it does not resolve the
 structural gate, obsolete native fixtures, public cutover or T4 requirements.
+
+The structural-gate repair extracts the five PRE source/SQL/execution tests from
+`test_submission_intake_custody.py` into `test_submission_pre_source.py`. Upload,
+quota and foreground lease tests keep their original module and fixtures; the
+new module imports those exact fixtures rather than creating a second setup.
+Source/request substitution helpers separate setup from SQL assertions without
+changing the tested cases. The assertion map preserves all 23 direct assertions
+from the prior five tests at ancestor `c4949e117`; helper assertions remain on
+the same exercised path. This is a test-only repair within the existing source
+custody scope, with QA/test-delta review required. Acceptance requires the same
+29 collected PRE cases, real PostgreSQL replay, no new structural debt, and
+unchanged ownership partition. No gate limits, product behavior, schema, fixture
+policy or production authorization change is permitted by this repair.
+
+The refreshed structural ledger records only the earlier authorization test
+file's shrinkage and shifted spans of otherwise unchanged functions. It adds no
+oversize exception or new debt entry. The existing remaining oversized AUTH
+files remain explicit debt; this repair does not claim to eliminate them.
+
+The extracted PRE module passed all 29 real PostgreSQL cases in 259.16 seconds;
+its receipt records the pre-freeze worktree base `c4949e117`, so this is compatible
+working-tree proof rather than an exact frozen-head receipt. Combined collection
+retains all 85 cases. AST comparison after expanding the two helper calls and
+ignoring import placement confirms identical executable statements for the five
+moved tests and the existing terminal-guard helper. Structural validation passed,
+as did its 29 regression tests, new-module undefined/unused-name checks, and
+record/link checks. The ownership partition is byte-for-byte unchanged.

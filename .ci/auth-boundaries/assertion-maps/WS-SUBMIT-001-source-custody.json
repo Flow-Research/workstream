@@ -1,0 +1,535 @@
+{
+  "chunk_id": "WS-SUBMIT-001-source-custody",
+  "schema": "workstream.auth-assertion-map.v1",
+  "mappings": [
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:987:987:0975d2e0c5dd11b9e902659d270a97397178e4eb1e9a29154422f3fcb79a1e89",
+      "old_content_sha256": "0975d2e0c5dd11b9e902659d270a97397178e4eb1e9a29154422f3fcb79a1e89",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        987,
+        987
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:988:988:efdaf5aaf01607bb121900048d2d2a387814d7871c285047808185902dfa191c",
+      "old_content_sha256": "efdaf5aaf01607bb121900048d2d2a387814d7871c285047808185902dfa191c",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        988,
+        988
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:984:984:fb30df57f32ce33615700dc3bc4e66efda749aa79c23810e1a2c81ec71ddb7e7",
+      "old_content_sha256": "fb30df57f32ce33615700dc3bc4e66efda749aa79c23810e1a2c81ec71ddb7e7",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        984,
+        984
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:989:989:df0e791086ea0ee72e344d5921dd0a8724ea74acfe74d3fae1ee13c29dfdb1e0",
+      "old_content_sha256": "df0e791086ea0ee72e344d5921dd0a8724ea74acfe74d3fae1ee13c29dfdb1e0",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        989,
+        989
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:985:985:0875bbc9c80ef1b91d88c7c5674663d2173be5bb719e2793d3cbcd8894cc2839",
+      "old_content_sha256": "0875bbc9c80ef1b91d88c7c5674663d2173be5bb719e2793d3cbcd8894cc2839",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        985,
+        985
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:991:991:dd878c60276f22820221cc781814e30f3a24dde651a8a1cd1020fc2abaa01047",
+      "old_content_sha256": "dd878c60276f22820221cc781814e30f3a24dde651a8a1cd1020fc2abaa01047",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        991,
+        991
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:986:986:3ce9e4dd8fed0ea7e88e28da80ad0b9daad31e7eb9a28d3dcce11f65fcc695d2",
+      "old_content_sha256": "3ce9e4dd8fed0ea7e88e28da80ad0b9daad31e7eb9a28d3dcce11f65fcc695d2",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        986,
+        986
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_returns_exact_locked_facts",
+      "old_assertion_id": "assertion:990:990:4548f3d952d65ddb8c074d8206c3897386deeb9547ebaefcefafda41959ad71d",
+      "old_content_sha256": "4548f3d952d65ddb8c074d8206c3897386deeb9547ebaefcefafda41959ad71d",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        990,
+        990
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_returns_exact_locked_facts",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_pre_source_custody_rejects_substitution_or_stale_owner",
+      "old_assertion_id": "assertion:1045:1045:9a3da30e796d070dcec7e7ad51ed4fbc3559dd10ba6bafc72345ebcb40376cca",
+      "old_content_sha256": "9a3da30e796d070dcec7e7ad51ed4fbc3559dd10ba6bafc72345ebcb40376cca",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1045,
+        1045
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_pre_source_custody_rejects_substitution_or_stale_owner",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_requires_exact_live_source",
+      "old_assertion_id": "assertion:1132:1132:abed470232d18b3421d8c467d75f6933874b384212a7981e06b3675af26a3b10",
+      "old_content_sha256": "abed470232d18b3421d8c467d75f6933874b384212a7981e06b3675af26a3b10",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1132,
+        1132
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_requires_exact_live_source",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_requires_exact_live_source",
+      "old_assertion_id": "assertion:1194:1194:7b86638791bf76b428e22c49edd3cd0a47e1bbe16a169b7732c24958c3c7ded8",
+      "old_content_sha256": "7b86638791bf76b428e22c49edd3cd0a47e1bbe16a169b7732c24958c3c7ded8",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1194,
+        1194
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_requires_exact_live_source",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_requires_exact_live_source",
+      "old_assertion_id": "assertion:1111:1111:8775a3037ed0996fbc9c5787472ab900d1641b47d4589714ba84e8c8f1eb6cdb",
+      "old_content_sha256": "8775a3037ed0996fbc9c5787472ab900d1641b47d4589714ba84e8c8f1eb6cdb",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1111,
+        1111
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_requires_exact_live_source",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_requires_exact_live_source",
+      "old_assertion_id": "assertion:1176:1176:7b86638791bf76b428e22c49edd3cd0a47e1bbe16a169b7732c24958c3c7ded8",
+      "old_content_sha256": "7b86638791bf76b428e22c49edd3cd0a47e1bbe16a169b7732c24958c3c7ded8",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1176,
+        1176
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_requires_exact_live_source",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_requires_exact_live_source",
+      "old_assertion_id": "assertion:1123:1123:91fa96159a19f7da98d4c4a551546e2f03aa84b1412f3b074e3c45407115d8bf",
+      "old_content_sha256": "91fa96159a19f7da98d4c4a551546e2f03aa84b1412f3b074e3c45407115d8bf",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1123,
+        1123
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_requires_exact_live_source",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_selected_pre_sql_audit_digest_keeps_versioned_custody",
+      "old_assertion_id": "assertion:1233:1233:f9a0fe10928d2e579c412871119a833ac0b77e53e851ad1e9191448dd12c521b",
+      "old_content_sha256": "f9a0fe10928d2e579c412871119a833ac0b77e53e851ad1e9191448dd12c521b",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1233,
+        1233
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_selected_pre_sql_audit_digest_keeps_versioned_custody",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1383:1383:de345141f129cd6db67614d63eb5a1582c632a74a32c1f8f8683aa652f71733b",
+      "old_content_sha256": "de345141f129cd6db67614d63eb5a1582c632a74a32c1f8f8683aa652f71733b",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1383,
+        1383
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1418:1418:813ef7b28c1efad681560795de061e8340efad897338d62970d5c654676f10e7",
+      "old_content_sha256": "813ef7b28c1efad681560795de061e8340efad897338d62970d5c654676f10e7",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1418,
+        1418
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1382:1382:230107a72101dbd84d2cbf4484b5e196b6bc01545acefc0ec27d043b7c9b5a66",
+      "old_content_sha256": "230107a72101dbd84d2cbf4484b5e196b6bc01545acefc0ec27d043b7c9b5a66",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1382,
+        1382
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1392:1392:b58e0fe7ebe91a7bb46a3fbbfb0f16c0f666440ee7c08ed9733f225363872725",
+      "old_content_sha256": "b58e0fe7ebe91a7bb46a3fbbfb0f16c0f666440ee7c08ed9733f225363872725",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1392,
+        1392
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1419:1421:6217801e8d8d4afeb8e06e2c02240070d10c59e5df82cf337b56c5eb83e515e0",
+      "old_content_sha256": "6217801e8d8d4afeb8e06e2c02240070d10c59e5df82cf337b56c5eb83e515e0",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1419,
+        1421
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1422:1422:9c4d6810813eec30798d7c9f443e743011688d6c7c65c6860dce04e8f3ab07ed",
+      "old_content_sha256": "9c4d6810813eec30798d7c9f443e743011688d6c7c65c6860dce04e8f3ab07ed",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1422,
+        1422
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1393:1395:171121e0f1df392da213114e05c7ed7608782313226b622a77573c4ee78eba72",
+      "old_content_sha256": "171121e0f1df392da213114e05c7ed7608782313226b622a77573c4ee78eba72",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1393,
+        1395
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    },
+    {
+      "invariant_category": "Preserve exact PRE source, authority, lease and SQL custody assertions after test extraction",
+      "new_test_node": "tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "old_assertion_id": "assertion:1404:1404:7a1cbd5c2235092db6a1542d8d8c1701cfcb0aec29dfad09cda6ad0bd5f98681",
+      "old_content_sha256": "7a1cbd5c2235092db6a1542d8d8c1701cfcb0aec29dfad09cda6ad0bd5f98681",
+      "old_revision": "c4949e117bcf81a512e881ba0e578dc08c72aed2",
+      "old_source_span": [
+        1404,
+        1404
+      ],
+      "old_test_node": "tests/artifacts/test_submission_intake_custody.py::test_source_pre_execution_uses_committed_authorized_local_read",
+      "security_dimensions": {
+        "concurrency": "preserved",
+        "lock_order": "preserved",
+        "denial_side_effects": "preserved",
+        "replay": "preserved",
+        "revocation": "preserved",
+        "evidence": "preserved",
+        "transaction_ownership": "preserved",
+        "concealment": "preserved"
+      },
+      "target_layer": "integration"
+    }
+  ]
+}
