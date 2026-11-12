@@ -395,7 +395,7 @@ async def _successor_human_attachments(factory):
     }
 
 
-async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
+async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2", human_review_required=True):
     """Activate a genuine successor guide in the source Submission's project."""
     from uuid import uuid4
 
@@ -453,6 +453,7 @@ async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
     )
     await seed_selected_review_revision_inputs(
         h.factory, finalization, manager, max_revision_rounds=max_revision_rounds,
+        human_review_required=human_review_required,
     )
     _, derived = await prepare_post_policy(
         h.factory,

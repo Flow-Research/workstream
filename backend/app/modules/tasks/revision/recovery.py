@@ -15,9 +15,8 @@ from app.modules.tasks.api.transition_audit import TaskRevisionRepairAuditFacts
 from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.revision.expiry_event import revision_preparation_event
-from app.modules.tasks.revision.exhaustion_recovery import recover_exhausted_assignment
 from app.modules.tasks.revision.models import TaskRevisionPreparation
-from app.modules.tasks.revision.service import RevisionRepairReceipt, candidate_from_packet, head_for_source, prepare_revision, select_candidate
+from app.modules.tasks.revision.service import RevisionRepairReceipt, head_for_source, prepare_revision, select_candidate
 from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
 
@@ -109,15 +108,8 @@ class TaskRevisionRecovery:
             TaskRevisionPreparation.sequence == 1,
         ))
         head = await head_for_source(self._session, manifest_id) if root else None
-        if await recover_exhausted_assignment(
-            self._session, projects=self._projects, authorization=self._authorization,
-            audit=self._audit, outbox=self._outbox, manifest=manifest, task=task,
-            assignment=assignment, source=latest, root=root, head=head,
-        ):
-            return True
-        candidate = await self._retained_pause_candidate(head)
-        predecessor = head if candidate is not None else None
-        if root is not None and candidate is None:
+        candidate = None
+        if root is not None:
             try:
                 await self._outbox.require_existing(None, revision_preparation_event(manifest, root, head))
                 return False
@@ -152,36 +144,21 @@ class TaskRevisionRecovery:
             )
         )
         return await self._publish_recovery(
-            manifest=manifest, root=root, head=head, candidate=candidate, predecessor=predecessor,
+            manifest=manifest, root=root, head=head, candidate=candidate,
             actor_id=actor_id, decision=decision, request_digest=request_digest,
         )
 
-    async def _retained_pause_candidate(self, head):
-        """Pause an old blocked running head once, preserving only unspent time."""
-        if (head is None or head.clock_observed_at is not None or head.deadline_at is None
-                or head.outcome != "blocked"
-                or head.blocked_reason not in {"context_blocked", "revision_limit_reached"}):
-            return None
-        now = await self._session.scalar(select(func.clock_timestamp()))
-        if head.deadline_at <= now:
-            return None
-        candidate = candidate_from_packet(head.packet)
-        # Service recovery cannot adopt a changed active target on the PM's behalf.
-        return candidate.model_copy(update={
-            "target": None, "target_post_policy_json": None, "target_max_revision_rounds": None,
-        })
-
-    async def _publish_recovery(self, *, manifest, root, head, candidate, predecessor,
+    async def _publish_recovery(self, *, manifest, root, head, candidate,
                                 actor_id, decision, request_digest):
         """Commit one preparation or missing head event with exact AUTH/audit custody."""
         audit_event_id = new_record_id()
-        if root is None or predecessor is not None:
+        if root is None:
             head = await prepare_revision(
                 self._session, manifest=manifest, candidate=candidate,
-                audit_event_id=audit_event_id, predecessor=predecessor,
+                audit_event_id=audit_event_id,
                 authorization_decision_id=decision.decision_id,
                 repair_receipt=RevisionRepairReceipt(
-                    actor_id=actor_id, idempotency_key=predecessor.id if predecessor else manifest.id,
+                    actor_id=actor_id, idempotency_key=manifest.id,
                     request_digest=request_digest, reason=RECOVERY_REASON, authority=decision,
                 ),
             )

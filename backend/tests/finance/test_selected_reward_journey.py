@@ -191,7 +191,7 @@ async def test_medium_public_claim_to_selected_automatic_acceptance(
         assert await delivery.deliver(completed, h.request.project_id, "selected-medium-replay") is None
 
 
-async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_env, monkeypatch):
+async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_env, monkeypatch, live_acceptance_lifecycle):
     """A real paid-to-unpaid rebase changes work context, never the original claim result."""
     from app.modules.checkers.models import CheckerRun
     from tests.checkers.execution.support import ControlledSelectedExecution, live_executor, reserve
@@ -212,7 +212,7 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
         h.source = await source_values(h)
         await provision_router(h.factory)
         h.envelope = await invoked_completion(h)
-        await activate_successor_guide(h, version="revised")
+        await activate_successor_guide(h, version="revised", human_review_required=False)
         await _fixture_revision_context(h)
         view = await h.client.get(f"/api/v1/tasks/{h.task_id}/work-context")
         assert view.status_code == 200, view.text
@@ -266,3 +266,66 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
             assert await session.scalar(text("SELECT count(*) FROM public.audit_events WHERE action_id='task.claim' "
                 "AND event_type='SensitiveAuthorizationAllowed' AND actor_id=:actor"),
                 {"actor": str(h.actor_context.actor_profile_id)}) > decisions
+
+        # The acknowledged replacement takes the new selection; original evidence stays exact.
+        from tests.tasks.post_submit_routing.support import revision_archive
+        from app.adapters.outbox import production_outbox_delivery
+        old_submission = h.created.submission_id
+        replacement_data = revision_archive(h.data)
+        headers = {"Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
+            "X-Task-Assignment-Id": str(h.assignment_id),
+            "X-Submission-Summary": "Corrected the failed work under the revised guide.",
+            "X-Contributor-Attestation": h.submission_body["contributor_attestation"],
+            "X-Predecessor-Submission-Id": str(old_submission),
+            "X-Revision-Preparation-Id": revision["preparation_id"],
+            "X-Revision-Preparation-Sha256": revision["preparation_sha256"]}
+        stale = await h.client.post(f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations",
+            headers=headers | {"Idempotency-Key": str(new_record_id()), "X-Revision-Preparation-Sha256": "sha256:"+"0"*64}, content=replacement_data)
+        assert stale.status_code == 409, stale.text
+        prepared = await h.client.post(f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations",
+                                       headers=headers, content=replacement_data)
+        assert prepared.status_code == 202, prepared.text
+        admission = await _verify_put_attempt(h.factory, h.store, h.namespace, h.settings, prepared.json()["put_attempt_id"])
+        submitted = await h.client.post(f"/api/v1/tasks/{h.task_id}/submissions", json={
+            "assignment_id": str(h.assignment_id), "admission_id": str(admission),
+            "predecessor_submission_id": str(old_submission), "summary": headers["X-Submission-Summary"],
+            "contributor_attestation": headers["X-Contributor-Attestation"]})
+        assert submitted.status_code == 201, submitted.text
+        async with h.factory() as session:
+            dispatch = await session.scalar(select(SubmissionDispatch).where(
+                SubmissionDispatch.submission_id == submitted.json()["submission_id"]))
+            h.created = dispatch.result()
+            h.request = (await evaluation_coordinator(session).read_reserved_evaluation(
+                project_id=h.request.project_id, task_id=h.task_id, submission_id=h.created.submission_id,
+                request_id=h.created.evaluation_request_id)).request
+            copied = (await session.execute(text("""SELECT s.task_size,s.contribution_award_definition_id,
+                s.contribution_policy_version_id,a.submitter_task_size,a.submitter_award_definition_id,
+                a.submitter_contribution_policy_version_id,d.task_size,d.contribution_award_definition_id,
+                d.contribution_policy_version_id FROM public.submissions s
+                JOIN public.task_assignments a ON a.id=s.task_assignment_id
+                JOIN public.submission_bundle_admissions d ON d.id=s.submission_bundle_admission_id
+                WHERE s.id=:id"""), {"id": h.created.submission_id})).one()
+            assert copied[0] == copied[3] == copied[6] == "medium"
+            assert copied[1] is copied[4] is copied[7] is None
+            assert copied[2] == copied[5] == copied[8]
+            assert str(copied[2]) != original["contribution_policy_version_id"]
+        await reserve(h)
+        h.result = await live_executor(h, selected_execution=ControlledSelectedExecution(verdict="passed")).evaluate_post_submission(h.request)
+        await delivery_fixture(h)
+        async with h.factory() as session:
+            completion = await session.scalar(text("SELECT completion_event_id FROM public.checker_runs WHERE id=:id"),
+                                              {"id": h.result.attempt_id})
+        delivered = await production_outbox_delivery(h.factory).deliver(completion, h.request.project_id, "revised-unpaid-completion")
+        assert outcome(delivered)["delivery_state"] == "acknowledged", outcome(delivered)
+        async with h.factory() as session:
+            assert await session.scalar(text("SELECT to_jsonb(s) FROM public.submissions s WHERE id=:id"),
+                                        {"id": old_submission}) == original
+            assert await session.scalar(text("SELECT submission_id FROM public.contribution_records")) == h.created.submission_id
+            assert await session.scalar(text("SELECT count(*) FROM public.compensation_awards")) == 0
+            assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
+            assert await session.scalar(text("SELECT status FROM public.workstream_tasks WHERE id=:id"), {"id": h.task_id}) == "accepted"
+        evidence = await h.client.get("/api/v1/actors/me/contributions")
+        assert evidence.status_code == 200, evidence.text
+        (record,) = evidence.json()["items"]
+        assert record["submission_id"] == str(h.created.submission_id)
+        assert record["task_size"] == "medium" and record["awards"] == []

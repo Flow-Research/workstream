@@ -191,7 +191,6 @@ class LifecycleAuditEventType(StrEnum):
     TASK_START_OVERRIDDEN = "TaskStartOverridden"
     TASK_ASSIGNMENT_AUTHORITY_REVOKED = "TaskAssignmentAuthorityRevoked"
     TASK_REVISION_EXPIRED = "TaskRevisionExpired"
-    TASK_REVISION_EXHAUSTED = "TaskRevisionExhausted"
     REVIEW_QUEUE_ENTRY_CREATED = "ReviewQueueEntryCreated"
     REVIEW_ROUTED_TO_PREFERRED_REVIEWER = "ReviewRoutedToPreferredReviewer"
     REVIEWER_PREFERENCE_EXPIRED = "ReviewerPreferenceExpired"
@@ -249,7 +248,6 @@ class LifecycleAuditReferenceKind(StrEnum):
     FINDING_RESOLUTION = "finding_resolution_id"
     SUBMISSION_FINDING_RESPONSE = "submission_finding_response_id"
     REVISION_PREPARATION = "revision_preparation_id"
-    REVISION_EXHAUSTION = "revision_exhaustion_id"
     ROUTING_MANIFEST = "routing_manifest_id"
     FINAL_ACCEPTANCE = "final_acceptance_id"
     CONTRIBUTION_RECORD = "contribution_record_id"
@@ -270,7 +268,6 @@ _LIFECYCLE_EVENT_ENTITY = {
             LifecycleAuditEventType.TASK_START_OVERRIDDEN,
             LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED,
             LifecycleAuditEventType.TASK_REVISION_EXPIRED,
-            LifecycleAuditEventType.TASK_REVISION_EXHAUSTED,
         ),
         LifecycleAuditEntityType.TASK,
     ),
@@ -364,14 +361,6 @@ _LIFECYCLE_EVENT_REQUIRED_REFERENCES = {
         LifecycleAuditReferenceKind.SUBMISSION,
         LifecycleAuditReferenceKind.ROUTING_MANIFEST,
         LifecycleAuditReferenceKind.REVISION_PREPARATION,
-        LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
-        LifecycleAuditReferenceKind.OUTBOX_EVENT,
-    }),
-    LifecycleAuditEventType.TASK_REVISION_EXHAUSTED: frozenset({
-        LifecycleAuditReferenceKind.ASSIGNMENT,
-        LifecycleAuditReferenceKind.SUBMISSION,
-        LifecycleAuditReferenceKind.ROUTING_MANIFEST,
-        LifecycleAuditReferenceKind.REVISION_EXHAUSTION,
         LifecycleAuditReferenceKind.AUTHORIZATION_DECISION,
         LifecycleAuditReferenceKind.OUTBOX_EVENT,
     }),
@@ -469,7 +458,6 @@ class LifecycleAuditEventInput(BaseModel):
         requires_resource_digest = manager or self.event_type in {
             LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED,
             LifecycleAuditEventType.TASK_REVISION_EXPIRED,
-            LifecycleAuditEventType.TASK_REVISION_EXHAUSTED,
             LifecycleAuditEventType.CHECKER_RETRY_REQUESTED,
         }
         optional_recovery_digest = (
@@ -533,7 +521,7 @@ class LifecycleAuditEventInput(BaseModel):
                 )
             if self.event_type is LifecycleAuditEventType.TASK_ASSIGNMENT_AUTHORITY_REVOKED:
                 expected = ("in_progress", "ready")
-            if self.event_type in {LifecycleAuditEventType.TASK_REVISION_EXPIRED, LifecycleAuditEventType.TASK_REVISION_EXHAUSTED}:
+            if self.event_type is LifecycleAuditEventType.TASK_REVISION_EXPIRED:
                 expected = ("needs_revision", "ready")
             if self.event_type is LifecycleAuditEventType.TASK_REVISION_CONTEXT_REPAIRED:
                 expected = (None, None)

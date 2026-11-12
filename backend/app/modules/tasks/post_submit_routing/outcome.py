@@ -421,7 +421,7 @@ def _notice(source, receipt, acceptance_id):
                 "exhaustion_receipt_id": str(source.exhaustion.exhaustion_receipt_id),
                 "assignment_status": "revision_exhausted",
                 "status_reason": "revision_limit_reached",
-            } if source.exhaustion is not None and not source.recovered_exhaustion else {}),
+            } if source.exhaustion is not None else {}),
         },
     )
 

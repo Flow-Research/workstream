@@ -333,21 +333,19 @@ tests additionally compare the committed selection with the Task or immutable
 Submission. No required behavior is replaced with an end-to-end-only assertion.
 
 
-## Remaining command replay and authority hash repair
+## Current command replay and authority hashes
 
-The selected-copy chain is implemented, but TASK authority hashes still enumerate
-only guide/policy fields, and manager receipt replay still requires the present
-Task state. Replace the hash input with one current field set including immutable
-size and exact selected definition; use it in command, invalidation and revision
-recovery owners. Keep non-null policy requirements distinct because an unpaid
-selection legitimately has no definition. No earlier hash reader is retained.
+TASK authority hashes include immutable size and exact selected definition in
+one current field set shared by command, invalidation and revision recovery
+owners. PostgreSQL's revision digest matches that format. Non-null policy
+requirements stay distinct because unpaid selection has no definition. No
+earlier hash reader is retained.
 
-Within the same allowed TASK/AUTH scope, replay original manager create, screen
-and release responses after continuing work advances or rebases, under fresh
-same-actor authority and the exact immutable receipt namespace/request. Validate
-original captured identity, size, operation state and policy coordinates against
-the original immutable source; do not authorize a new transition or rewrite the
-receipt. Creation has its exact unscreened null-policy source. Screen/release use
+The existing TASK/AUTH owners replay original manager create, screen and release
+responses after continuing work advances or rebases, under fresh
+same-actor authority and the exact immutable receipt namespace/request. They validate original captured identity, size, operation state and policy
+coordinates against the original immutable source, preserving the receipt and
+current transition authority. Creation has its exact unscreened null-policy source. Screen/release use
 the immutable original Submission when continuing context differs. Missing or
 substituted source stays a conflict. Add focused hash substitution proof and
 extend the existing public rebase drill to replay recorded manager commands and
@@ -382,3 +380,69 @@ owners against a predecessor schema and attempts to upgrade retained facts to
 head. Its remaining dependency on superseded owner shapes must be replaced with
 bounded migration-data safety proof or current-owner recovery proof before
 full-suite readiness. Do not restore obsolete writers to satisfy that fixture.
+
+
+## Reviewed removal of unreachable development recovery
+
+Current preparations always receive a PostgreSQL-observed clock; current routing
+atomically exhausts at the cap. The old null-clock pause and cap-blocked recovery
+have no current producer, and0069/0071 refuse the retained facts they require.
+Both internal plan reviewers approved removing these affected obsolete paths.
+
+Allowed additional affected files: TASK recovery/exhaustion/replay contracts and
+models, recovery-only audit API/schema/adapter, recovery-only outbox notice and
+registration, their current SQL guards in0071, test clock helpers, obsolete runtime
+fixtures and corresponding CI catalogue/behavior ownership entries; affected
+architecture and roadmap descriptions. Preserve current root/event recovery,
+PM blocked-context repair and clocks, canonical cap exhaustion and exact replay,
+all AUTH/transaction guards, and bounded migration data/backfill proof. Remove
+empty-only persisted recovery machinery only after explicit locked admission
+refuses any retained exhaustion evidence. No data deletion or old reader.
+Acceptance: no obsolete branch/event/flag/column/handler remains in current
+runtime; current exhaustion/recovery/pause/expiry, rollback/races and public
+selected chain pass; schema and test inventory match. Risk stays L0; replay the
+same focused reviewer tracks after batching repairs. Human focus remains
+immutable evidence, current behavior preservation and complete removal.
+
+
+The CI catalogue now registers each new Finance/reward proof in its existing
+semantic lane; obsolete recovery-only modules and residue overrides are removed.
+The behavior partition is regenerated for the six actual new financial owner
+files, with exact additive authorization and neighbor/removal rejection proof;
+no broad deletion permission is added. The complete locked agents environment
+collects 11972 pre-cleanup tests without errors. The admission status-transition
+probe confirms the0036 whole-row guard rejects all selected-field mutations and
+normal public Submission consumption preserves those fields.
+
+
+The distinct0049 assignment-backfill regression is retained as isolated native
+PostgreSQL migration-fragment proof. It reuses0049's exact SQL and0048's exact
+single-sourced terminal guard, checks every row, rejects direct terminal changes
+before/after, and proves a failure after trigger disable rolls back rows and
+restores the guard. It does not reconstruct a predecessor application, claim a
+complete0048 upgrade or assert a valid current product state. Current full-schema
+cap/rollback/race and0071 installation/refusal tests supply their own boundaries.
+The old archive restore failed its exact table-inventory check; no compatibility
+schema was added to force it through. Both planning reviewers approved this
+bounded replacement. Its PostgreSQL development run passed; clean-candidate
+replay remains required. The229 CI catalogue/behavior-authority checks also pass.
+
+
+The current-model cleanup development suite passed14 PostgreSQL cases covering
+normal cap exhaustion, independent-session races, rollback, direct-SQL guards,
+current blocked pause, missing-root recovery and PM pause/resume. The selected
+award native probe passed missing/wrong-tier deferred closure, immediate wrong-
+tier rejection and sole-award uniqueness; its positive control uses real
+acceptance participants and exact replay. The expanded public rebase drill
+passed stale acknowledgement rejection, immutable original command/Submission
+replay, a new acknowledged Submission copying the revised unpaid selection,
+automatic acceptance with one submitter contribution and zero awards/Reviews,
+and the public contribution evidence read. Original Submission rows remain exact.
+These executions used development trees; retain that custody distinction and
+freeze/replay required evidence before a passing implementation verdict.
+
+Remaining selected scope includes the complete read-contract audit (particularly
+management size exposure), higher/lower/instrument-changing replacement proof,
+full-suite and actual durable-worker/S3 qualification. Finance runtime is still
+unfinished. This batch closes obsolete recovery and its distinct retained proof;
+it does not narrow the full goal or claim PR readiness.

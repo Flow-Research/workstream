@@ -132,7 +132,6 @@ class TaskRevisionExhaustion(Base):
         UniqueConstraint("outcome_event_id", name="uq_revision_exhaustion_outcome"),
         CheckConstraint("revision_round >= 0 and max_revision_rounds >= 0 and revision_round = max_revision_rounds", name="rounds"),
         CheckConstraint("revision_policy_generation > 0 and revision_policy_hash ~ '^sha256:[0-9a-f]{64}$'", name="policy"),
-        CheckConstraint("recovery_authority_context IS NULL OR jsonb_typeof(recovery_authority_context) = 'object'", name="recovery_authority_shape"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
@@ -147,7 +146,6 @@ class TaskRevisionExhaustion(Base):
     revision_policy_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("revision_policies.id", ondelete="RESTRICT"), nullable=False)
     revision_policy_generation: Mapped[int] = mapped_column(Integer, nullable=False)
     revision_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    recovery_authority_context: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
     exhausted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     authorization_decision_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False)
     audit_event_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"), nullable=False)

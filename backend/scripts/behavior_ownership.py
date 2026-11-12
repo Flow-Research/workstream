@@ -69,15 +69,19 @@ TASK_CHECKER_CLEANUP_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/submission_history.py",
     "backend/app/modules/authorization/history_authorization.py",
 })
+FINANCE_REWARD_TARGETS = frozenset({
+    "backend/app/core/financial_wire.py",
+    "backend/app/modules/compensation/api/fulfillment_contracts.py",
+    "backend/app/modules/contributions/api/quantities.py",
+    "backend/app/modules/contributions/api/reward_selection.py",
+    "backend/app/modules/finance/api/contract_schema.py",
+    "backend/app/modules/finance/api/fulfillment_contracts.py",
+})
 PILOT_08_REVISION_TARGETS = frozenset({
     "backend/app/modules/tasks/api/assignment_outcome.py",
-    "backend/app/modules/tasks/api/revision_exhaustion.py",
     "backend/app/modules/tasks/post_submit_routing/terminal_replay.py",
     "backend/app/modules/tasks/revision/blocked_notice.py",
-    "backend/app/modules/tasks/revision/exhausted_notice.py",
     "backend/app/modules/tasks/revision/exhaustion.py",
-    "backend/app/modules/tasks/revision/exhaustion_event.py",
-    "backend/app/modules/tasks/revision/exhaustion_recovery.py",
     "backend/app/modules/tasks/revision/terminal_read.py",
     "backend/app/modules/authorization/domain/revision_expiry.py",
     "backend/app/modules/authorization/domain/revision_recovery.py",
@@ -1120,7 +1124,7 @@ def _validate_additive_partition_transition(
     additions = set(current_by_target) - set(trusted_targets)
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
-        | PILOT_08_REVISION_TARGETS
+        | PILOT_08_REVISION_TARGETS | FINANCE_REWARD_TARGETS
         | PILOT_READ_1_TARGETS
         | AWS_ARTIFACT_ACTIVATION_TARGETS
         | AUTH_ART_OPERATOR_TARGETS

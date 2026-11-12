@@ -1437,6 +1437,8 @@ Fields:
 - `locked_revision_policy_generation`
 - `locked_revision_policy_hash`
 - `locked_contribution_policy_version_id`
+- `task_size` (immutable `small`, `medium` or `large`)
+- `locked_submission_award_definition_id` (null before screening or under an unpaid rule)
 - `source_type`
 - `source_ref`
 - `source_payload_hash`
@@ -1514,6 +1516,8 @@ Fields:
 - `contributor_id`
 - `assigned_by`
 - `submitter_contribution_policy_version_id`
+- `submitter_task_size`
+- `submitter_award_definition_id`
 - `assigned_at`
 - `accepted_at`
 - `released_at`
@@ -1528,17 +1532,16 @@ its task is `in_progress` for that contributor. `updated_at` on TaskAssignment a
 WorkstreamTask is PostgreSQL-owned on every committed change, including raw SQL
 updates.
 
-The v0.1 baseline excludes the retired persisted human
-owner to `contributor_id`. The non-null `varchar(36)` value is protected by
-foreign key `fk_task_assignments_contributor_id_actor_profiles`, index
-`ix_task_assignments_contributor_id`, and trigger
-`task_assignments_contributor_human`. The trigger reuses invoker-rights function
+`contributor_id` is a non-null native PostgreSQL UUID reference, protected by
+`fk_task_assignments_contributor_id_actor_profiles`, its index and the
+`task_assignments_contributor_human` trigger. The trigger reuses
 `public.require_human_actor_profile_reference()` to reject service profiles.
 It deliberately permits suspended and deactivated human profiles because this
 column preserves historical attribution rather than current authority.
 
 At initial claim, `submitter_contribution_policy_version_id` must equal the
-Task's locked version. It remains fixed throughout that submission attempt.
+Task's locked version. Size and selected definition copy the same exact Task
+selection. They remain fixed throughout that submission attempt.
 TASK's exact authorized complete-context revision preparation may atomically
 rebase it for the next attempt while retaining prior/next immutable lineage.
 Checker preparation implements this boundary; #554 owns the future genuine
@@ -1552,6 +1555,8 @@ Fields:
 - `id`
 - `task_id`
 - `task_assignment_id`
+- `task_size`
+- `contribution_award_definition_id`
 - `contributor_id`
 - `version`
 - `status`
@@ -2162,8 +2167,8 @@ PostgreSQL `requested_at`, nullable `deadline_at`, nullable
 context packet. The insertion guard computes the clock and packet digest. The packet retains guide activation operation/generation/time custody;
 it does not claim the planned activation-sequence fields above are live.
 `outcome` is `kept`, `rebased` or `blocked`; `blocked_reason` distinguishes
-`context_blocked` and `revision_deadline_expired`. Retained older cap-blocked
-records remain immutable history; new cap exhaustion has its own receipt.
+`context_blocked` and `revision_deadline_expired`. At the cap, routing creates
+its terminal exhaustion receipt atomically without another preparation.
 
 `preparation_sha256` freezes that packet and source/window facts. Exactly one
 root belongs to a routing manifest; `predecessor_id` and consecutive `sequence`
@@ -2198,15 +2203,10 @@ Contributor task detail exposes only that actor's `last_assignment_outcome`,
 while covered PM detail exposes the latest closed assignment. Its `next_action`
 is `none`, even when the task permits a fresh claim under a new assignment.
 
-Retained cap-blocked sources use this same terminal writer under fresh
-`task.revision.recover` authority. Their receipt additionally retains
-`recovery_authority_context`, with its own audit and outcome event references;
-new routing receipts leave it null. The recovery request binds the original
-root, current head and allocated exhaustion receipt. `TaskRevisionExhausted`
-is the durable recovery outcome notice. Original routing manifests,
-preparations, timers and Submission evidence remain unchanged. Exact original
-routing replay validates those original facts and the terminal receipt, including
-after reclaim, without creating a second outcome.
+Exact original routing replay validates the original manifest and its terminal
+receipt under fresh authority, including after reclaim, without creating a
+second outcome. Current recovery restores missing root/event custody; current
+PM repair governs blocked-context changes and pause/resume clocks.
 
 ## TaskRevisionExpiration
 

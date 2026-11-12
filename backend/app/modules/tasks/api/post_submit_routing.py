@@ -216,12 +216,9 @@ class TaskRoutingSourcePreparation(BaseModel):
     source: TaskPostSubmitSourceProposal
     revision_candidate: RevisionCandidate | None = None
     exhaustion: TaskRevisionExhaustionFacts | None = None
-    recovered_exhaustion: bool = False
 
     @model_validator(mode="after")
     def matching_source(self) -> Self:
-        if self.recovered_exhaustion and self.exhaustion is None:
-            raise ValueError("recovered exhaustion requires terminal evidence")
         if self.exhaustion is not None and (
             self.source.routing_recommendation != "needs_revision"
             or self.revision_candidate is not None

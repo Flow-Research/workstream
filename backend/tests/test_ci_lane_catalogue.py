@@ -249,6 +249,9 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
     assert {
         "tests/test_alembic.py",
         "tests/test_checker_evidence_migrations.py",
+        "tests/finance/test_reward_transition.py",
+        "tests/finance/test_selected_reward_migration.py",
+        "tests/migrations/test_assignment_outcome_backfill.py",
         "tests/migrations/test_project_catalogue_read.py",
         "tests/migrations/test_guide_check_specification.py",
         "tests/migrations/test_contribution_export_snapshots.py",
@@ -317,16 +320,16 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            268,
-            "9ff668cabce1f8017f8784bd1233bed7aae0b892cf6aa9da82b3249a06cd819b",
+            273,
+            "dacd87e71f1ab935d775593ad12dc6d3039d926ce12656e43e4feaee31cb6447",
         ),
         "project": (
-            255,
-            "8e8f8155a5e3929613fb81e5b6bc8d5ac858aa2578dab559b8f403de6298d87a",
+            256,
+            "1c9bf2ad828dba621333129436038ae13cedda5eedb95199be579ff93480530f",
         ),
         "task": (
-            94,
-            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
+            96,
+            "9e7536c61a9e93e8711d861fbf7e5cbe932818e9214b589d5e460018d949fd04",
         ),
     }
     actual = {
@@ -357,11 +360,6 @@ def test_project_module_lane_overrides_are_exact_and_bounded() -> None:
             "project_lifecycle_c",
         ),
         "tests/tasks/submission_dispatch/test_revision_clock_sql.py": ("project_lifecycle_f",),
-        "tests/tasks/submission_dispatch/test_revision_retained_pause.py": (
-            "project_lifecycle_a",
-            "project_lifecycle_c",
-            "project_lifecycle_g",
-        ),
         "tests/tasks/submission_dispatch/test_revision_pause_races.py": (
             "project_lifecycle_a",
             "project_lifecycle_c",
@@ -394,9 +392,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 255
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 256
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "3782b6f2df688f48755b50db0295f9660d9960ec7c58e1c1e3659f874f27f909"
+        "a7539d11d3b707590c8fa0beb817e58e93e5a79b073fb5ce66ffce50f1970bb1"
     )
 
 
@@ -413,7 +411,6 @@ def test_project_lane_override_nodes_execute_exactly_once_in_owned_lanes() -> No
     for module, lane_names in catalogue.PROJECT_MODULE_LANE_OVERRIDES.items():
         assert {row["lane"] for row in rows if row["module"] == module} == set(lane_names)
     pause_module = "tests/tasks/submission_dispatch/test_revision_pause_races.py"
-    retained_module = "tests/tasks/submission_dispatch/test_revision_retained_pause.py"
     expected = {
         f"{pause_module}::test_due_old_timer_cannot_expire_paused_or_resumed_head[False]": (
             "project_lifecycle_e"
@@ -423,12 +420,6 @@ def test_project_lane_override_nodes_execute_exactly_once_in_owned_lanes() -> No
         ),
         f"{pause_module}::test_expiry_beats_real_pm_repair_waiting_for_task_past_deadline": (
             "project_lifecycle_f"
-        ),
-        f"{retained_module}::test_retained_blocked_clock_pauses_once_or_stays_due[False]": (
-            "project_lifecycle_a"
-        ),
-        f"{retained_module}::test_retained_blocked_clock_pauses_once_or_stays_due[True]": (
-            "project_lifecycle_g"
         ),
         "tests/tasks/submission_dispatch/test_revision_expiry.py::test_due_expiry_and_ready_final_submission_wait_for_task_lock": (
             "project_lifecycle_b"
@@ -760,11 +751,12 @@ def test_partition_rejects_inexact_ordered_owners(
 def test_partition_rejects_coordinated_duplicate_owners(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = "tests/tasks/submission_dispatch/test_revision_retained_pause.py"
+    module = "tests/tasks/submission_dispatch/test_revision_pause_races.py"
     duplicate_owners = (
         "project_lifecycle_a",
         "project_lifecycle_a",
         "project_lifecycle_c",
+        "project_lifecycle_e",
     )
     changed = tuple(
         replace(

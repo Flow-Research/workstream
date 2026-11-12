@@ -39,11 +39,11 @@ async def exhausted_source(session, manifest, completion):
         and receipt.project_id == manifest.project_id
         and receipt.task_id == manifest.task_id
         and receipt.contributor_id == assignment.contributor_id == submission.contributor_id
-        and (receipt.recovery_authority_context is not None or (
+        and (
             receipt.authorization_decision_id == manifest.authorization_decision_id
             and receipt.audit_event_id == manifest.audit_event_id
             and receipt.outcome_event_id == manifest.outcome_event_id
-        ))
+        )
     ):
         raise TaskRoutingRequestUnavailable("routing terminal source differs")
     if not await session.scalar(select(func.task_revision_exhaustion_complete(receipt.id))):
@@ -77,5 +77,4 @@ async def exhausted_source(session, manifest, completion):
         raise TaskRoutingRequestUnavailable("routing terminal completion differs")
     return TaskRoutingSourcePreparation(
         request=facts, source=source, exhaustion=exhaustion_facts(receipt),
-        recovered_exhaustion=receipt.recovery_authority_context is not None,
     )

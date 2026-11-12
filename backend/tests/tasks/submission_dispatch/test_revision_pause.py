@@ -24,7 +24,7 @@ from app.modules.tasks.revision.service import candidate_from_packet, project_re
 from tests.tasks.post_submit_routing.remediation_support import remediation_source
 from tests.tasks.post_submit_routing.support import activate_successor_guide
 from tests.tasks.submission_dispatch.test_revision_expiry import _provision_expirer
-from tests.tasks.submission_dispatch.test_revision_retained_pause import _historical_manifest_clock
+from tests.tasks.submission_dispatch.clock_fixtures import source_window_clock
 from tests.tasks.test_public_submission_intake import _client
 from tests.test_submission_predecessor_custody import _fixture_revision_context
 
@@ -219,7 +219,7 @@ async def _fixture_historical_missing_root(
             patch.setattr(routing_outcome, "prepare_revision", omit_preparation)
             patch.setattr(routing_outcome, "revision_preparation_event", lambda *_args: None)
             patch.setattr(outcome._outbox, "append", append_except_missing_revision)
-            async with _historical_manifest_clock(session, remaining_seconds) as source_guard:
+            async with source_window_clock(session, remaining_seconds) as source_guard:
                 assert await outcome.observe_delivery_generation(h.envelope) is None
                 result = await outcome.apply(h.envelope, current_generation=None)
                 assert result.routing_recommendation == "needs_revision"

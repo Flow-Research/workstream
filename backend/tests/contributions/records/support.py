@@ -108,10 +108,15 @@ async def insert_record(session, record, **changes):
 
 
 async def award_values(session, record):
-    definitions = (await session.scalars(select(ContributionAwardDefinition).where(
+    statement = select(ContributionAwardDefinition).where(
         ContributionAwardDefinition.contribution_policy_version_id == record.contribution_policy_version_id,
         ContributionAwardDefinition.contribution_type == record.contribution_type,
-    ).order_by(ContributionAwardDefinition.instrument_type))).all()
+    )
+    if record.contribution_type == "accepted_submission":
+        selected = await session.scalar(text("SELECT contribution_award_definition_id FROM public.submissions WHERE id=:id"),
+                                        {"id": record.submission_id})
+        statement = statement.where(ContributionAwardDefinition.id == selected)
+    definitions = (await session.scalars(statement.order_by(ContributionAwardDefinition.instrument_type))).all()
     return [dict(
         id=new_record_id(), project_id=record.project_id, contribution_record_id=record.id,
         contributor_id=record.contributor_id,

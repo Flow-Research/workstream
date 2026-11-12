@@ -30,11 +30,11 @@ async def exhaust_assignment(session, *, manifest, source, replay):
             receipt.routing_manifest_id == manifest.id
             and receipt.assignment_id == str(source.source.assignment_id)
             and receipt.source_submission_id == str(source.source.submission_id)
-            and (receipt.recovery_authority_context is not None if source.recovered_exhaustion else (
+            and (
                 receipt.authorization_decision_id == manifest.authorization_decision_id
                 and receipt.audit_event_id == manifest.audit_event_id
                 and receipt.outcome_event_id == manifest.outcome_event_id
-            ))
+            )
             and exhaustion_facts(receipt) == facts
             and assignment.status == "revision_exhausted"
             and assignment.released_at == receipt.exhausted_at
@@ -68,10 +68,9 @@ async def exhaust_assignment(session, *, manifest, source, replay):
 
 
 async def commit_exhaustion(session, *, receipt, task, assignment):
-    """Stage the same terminal consequence for routing and retained-source recovery."""
-    expected = "needs_revision" if receipt.recovery_authority_context is not None else "evaluation_pending"
+    """Stage the terminal consequence under the original routing authority."""
     if not (
-        task.status == expected and task.id == receipt.task_id
+        task.status == "evaluation_pending" and task.id == receipt.task_id
         and task.assigned_to == assignment.contributor_id == receipt.contributor_id
         and assignment.id == receipt.assignment_id and assignment.status == "active"
         and assignment.released_at is None
