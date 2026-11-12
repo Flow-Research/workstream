@@ -478,12 +478,16 @@ host paths, and rehashed while writing the final bundle.
 Run the module from `backend/` with `--archive`, `--repository`, `--manifest`,
 `--archive-output` and `--config-output` as for the cache command. Also supply
 new `--bundle-output` and `--descriptor-output` paths,
-`--default-behavior-sha256`, `--maximum-layer-bytes`, `--maximum-root-bytes`,
+`--default-behavior-sha256`, `--maximum-archive-bytes`, `--maximum-layer-bytes`, `--maximum-root-bytes`,
 `--maximum-entries`, and `--timeout-seconds`. Bounds and identities are explicit;
-the command does not choose deployment values. The layer byte limit bounds
+the command does not choose deployment values. The archive byte limit bounds
+both the source archive and prepared cache, including zero padding. The layer byte limit bounds
 aggregate expansion per verification pass, including both selected and approved
 layer representations; it also bounds the private content spool. Entry limits
-include replaced layer entries and implicit final directories. Temporary storage
+include replaced layer entries, physical extension headers and implicit final
+directories. A raw-header pass admits only one bounded local PAX path/linkpath
+override before a supported entry; global, stacked, size-changing and
+other extension semantics are refused before the tar parser runs. Temporary storage
 must accommodate the verified cache, one bounded expanded layer, the content
 spool and output bundle. Keep emitted artifacts operator-controlled and pin their
 identities independently before use. Completed cache files may remain if later

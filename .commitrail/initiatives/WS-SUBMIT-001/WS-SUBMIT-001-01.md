@@ -892,3 +892,24 @@ the canonical archive's correct hash rather than the daemon's altered bytes.
 This validates the corrected content source, not native PRE isolation. The
 existing single-request integration, combined supervisor and native runtime
 qualification remain outstanding.
+
+The next review identified two pre-parser bounds gaps. The outer archive scan
+could read an arbitrarily long zero trailer before reaching guarded graph work,
+and `tarfile` consumed PAX headers before the logical entry counter. The root
+command now requires `maximum_archive_bytes` for both original and prepared
+archives; preflight, member reads, cache copy and hashing share the deadline.
+Raw layer preflight charges every physical header before parsing and accepts only
+one local PAX path/linkpath envelope, at most 16 KiB, followed by a supported
+entry. Other attributes, global/stacked/dangling envelopes and oversized payloads
+are refused before `tarfile` interpretation. The real pinned image contains
+579 such local headers, only path/linkpath keys, with a largest payload of
+281 bytes, so this is an exercised restricted profile rather than an assumed one.
+
+The repaired checks passed 264 tests. Updated extension regressions against
+pre-repair `982417ab3` failed all eight unsafe/count cases while retaining the
+ordinary-layer control. Disabling outer bounds made both outer-archive
+regressions fail. A real repaired construction completed in 86.10 seconds and
+retained the same canonical bundle digest and counts; no daemon materialization
+or deployment configuration default was added. The unchanged guest reader and
+in-chroot Python successfully load the canonical urllib3, archive inspector and
+the existing default behavior identity from that root.

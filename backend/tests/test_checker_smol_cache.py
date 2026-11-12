@@ -228,7 +228,7 @@ def test_copy_rehash_rejects_source_mutation_after_validation(tmp_path, monkeypa
     archive, manifest, _ = bundle(tmp_path)
     copy = cache._copy_member
     changed = False
-    def substitute(bundle, source, name, member, expected):
+    def substitute(bundle, source, name, member, expected, deadline=None):
         nonlocal changed
         if not changed:
             with archive.open("r+b") as attacker:
@@ -237,7 +237,7 @@ def test_copy_rehash_rejects_source_mutation_after_validation(tmp_path, monkeypa
                 attacker.seek(member.offset)
                 attacker.write(bytes([original[0] ^ 1]))
             changed = True
-        copy(bundle, source, name, member, expected)
+        copy(bundle, source, name, member, expected, deadline)
     monkeypatch.setattr(cache, "_copy_member", substitute)
     with pytest.raises(ImageError, match="changed during copy"):
         prepare(archive, manifest, tmp_path)
@@ -390,7 +390,7 @@ def test_root_publication_uses_only_approved_layers_and_removes_partial_bundle(t
     monkeypatch.setattr(subprocess, "Popen", no_process)
     kwargs = dict(archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
                   bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
-                  default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=100000,
+                  default_behavior_sha256=sha(b"behavior"), maximum_archive_bytes=1000000, maximum_layer_bytes=100000,
                   maximum_root_bytes=1 if failure else 100, maximum_entries=10, timeout_seconds=5)
     if failure:
         with pytest.raises(ImageError, match="expanded byte limit"):
@@ -425,7 +425,7 @@ def test_verified_root_is_deterministic_and_layer_expansion_is_bounded(tmp_path,
         return provision_root(archive, "trusted/intake", manifest,
                               archive_output=tmp_path / (prefix + ".tar"), config_output=tmp_path / (prefix + ".config"),
                               bundle_output=tmp_path / (prefix + ".bundle"), descriptor_output=tmp_path / (prefix + ".json"),
-                              default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=maximum,
+                              default_behavior_sha256=sha(b"behavior"), maximum_archive_bytes=1000000, maximum_layer_bytes=maximum,
                               maximum_root_bytes=100, maximum_entries=10, timeout_seconds=5)
     first, second = build("one"), build("two")
     assert first == second
@@ -442,7 +442,7 @@ def test_trusted_layer_rejects_content_hidden_after_tar_end_and_missing_trailer(
 
     raw = root_layer([("a", tarfile.REGTYPE, b"data")]).getvalue()
     for changed in [raw + b"hidden", raw[:1024]]:
-        with pytest.raises(ImageError, match="trai|unexpected end"):
+        with pytest.raises(ImageError, match="length|trai|unexpected end"):
             apply_layer(io.BytesIO(changed), io.BytesIO(), {}, maximum_entries=10,
                         remaining_entries=10, deadline=time.monotonic() + 5)
 
@@ -481,7 +481,107 @@ def test_changed_materialization_cannot_be_published_under_the_same_image_identi
         root.provision_root(archive, "trusted/intake", manifest,
                             archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
                             bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
-                            default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=100000,
+                            default_behavior_sha256=sha(b"behavior"), maximum_archive_bytes=1000000, maximum_layer_bytes=100000,
                             maximum_root_bytes=100, maximum_entries=10, timeout_seconds=5)
     assert not (tmp_path / "root.bundle").exists()
     assert not (tmp_path / "root.json").exists()
+
+
+def test_outer_archive_bound_and_deadline_apply_before_zero_trailer_reads(tmp_path):
+    import time
+
+    class Unreadable(io.BytesIO):
+        def read(self, *args):
+            pytest.fail("preflight read beyond its admitted size/deadline")
+    with pytest.raises(ImageError, match="archive byte limit"):
+        cache._preflight(Unreadable(), 1024 * 1024 * 1024, maximum_bytes=1024)
+    with pytest.raises(ImageError, match="preflight deadline"):
+        cache._preflight(Unreadable(), 1024, maximum_bytes=1024, deadline=time.monotonic() - 1)
+    class ExpiringTrailer(io.BytesIO):
+        def read(self, size=-1):
+            result = super().read(size)
+            time.sleep(0.01)
+            return result
+    with pytest.raises(ImageError, match="preflight deadline"):
+        cache._preflight(ExpiringTrailer(b"\0" * 2048), 2048,
+                         maximum_bytes=2048, deadline=time.monotonic() + 0.005)
+
+
+def test_root_outer_bound_rejects_padding_before_any_cache_publication(tmp_path):
+    from scripts.checker_trusted_root import provision_root
+
+    archive, manifest, _ = bundle(tmp_path)
+    original_size = archive.stat().st_size
+    with archive.open("ab") as output:
+        output.write(b"\0" * 10240)
+    with pytest.raises(ImageError, match="archive byte limit"):
+        provision_root(archive, "trusted/intake", manifest,
+                       archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
+                       bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
+                       default_behavior_sha256=sha(b"behavior"), maximum_archive_bytes=original_size,
+                       maximum_layer_bytes=100000, maximum_root_bytes=100, maximum_entries=10, timeout_seconds=5)
+    assert not (tmp_path / "cache.tar").exists()
+    assert not (tmp_path / "root.bundle").exists()
+
+
+def pax_layer(attributes):
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w", format=tarfile.PAX_FORMAT) as archive:
+        item = tarfile.TarInfo("placeholder")
+        item.pax_headers, item.size = attributes, 4
+        archive.addfile(item, io.BytesIO(b"code"))
+    output.seek(0)
+    return output
+
+
+def test_pax_path_override_is_supported_and_each_physical_header_is_charged():
+    import time
+    from scripts.checker_root_layers import apply_layer
+
+    spool, tree = io.BytesIO(), {}
+    count = apply_layer(pax_layer({"path": "usr/é.py"}), spool, tree, maximum_entries=2,
+                        remaining_entries=2, deadline=time.monotonic() + 5)
+    assert count == 2
+    assert root_contents(spool, tree) == {"usr/é.py": b"code"}
+    with pytest.raises(ImageError, match="aggregate entry limit"):
+        apply_layer(pax_layer({"path": "usr/é.py"}), io.BytesIO(), {}, maximum_entries=2,
+                    remaining_entries=1, deadline=time.monotonic() + 5)
+
+
+@pytest.mark.parametrize("attributes", [
+    {"comment": "surprise"}, {"size": "4"}, {"GNU.sparse.name": "a"},
+    {"path": "a" * 17000},
+])
+def test_unsupported_or_oversized_pax_is_refused_before_tarfile_interpretation(monkeypatch, attributes):
+    import time
+    from scripts.checker_root_layers import apply_layer
+
+    source = pax_layer(attributes)
+    def forbidden(*args, **kwargs):
+        pytest.fail("tarfile interpreted unsupported extension metadata")
+    monkeypatch.setattr(tarfile, "open", forbidden)
+    with pytest.raises(ImageError, match="PAX"):
+        apply_layer(source, io.BytesIO(), {}, maximum_entries=10,
+                    remaining_entries=10, deadline=time.monotonic() + 5)
+
+
+@pytest.mark.parametrize("kind", ["stacked", "global", "dangling"])
+def test_pax_envelopes_cannot_stack_or_escape_the_next_entry(monkeypatch, kind):
+    import time
+    from scripts.checker_root_layers import apply_layer
+
+    raw = pax_layer({"path": "renamed"}).getvalue()
+    if kind == "stacked":
+        raw = raw[:1024] + raw
+    elif kind == "dangling":
+        raw = raw[:1024] + b"\0" * 1024
+    else:
+        header = tarfile.TarInfo.frombuf(raw[:512], "utf-8", "strict")
+        header.type = tarfile.XGLTYPE
+        raw = header.tobuf(format=tarfile.USTAR_FORMAT) + raw[512:]
+    def forbidden(*args, **kwargs):
+        pytest.fail("tarfile interpreted an invalid extension envelope")
+    monkeypatch.setattr(tarfile, "open", forbidden)
+    with pytest.raises(ImageError, match="PAX|trailer|header type"):
+        apply_layer(io.BytesIO(raw), io.BytesIO(), {}, maximum_entries=10,
+                    remaining_entries=10, deadline=time.monotonic() + 5)

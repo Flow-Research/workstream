@@ -86,11 +86,11 @@ def pack_root(spool, output, *, tree, identity, maximum_bytes, deadline):
 def provision_root(archive: Path, repository: str, manifest_digest: str, *,
                    archive_output: Path, config_output: Path, bundle_output: Path,
                    descriptor_output: Path, default_behavior_sha256: str,
-                   maximum_layer_bytes: int, maximum_root_bytes: int,
+                   maximum_archive_bytes: int, maximum_layer_bytes: int, maximum_root_bytes: int,
                    maximum_entries: int, timeout_seconds: float):
     """Bind an exclusive sealed runtime bundle to the already verified image graph."""
     if (any(type(value) is not int or value <= 0 for value in
-            (maximum_layer_bytes, maximum_root_bytes, maximum_entries))
+            (maximum_archive_bytes, maximum_layer_bytes, maximum_root_bytes, maximum_entries))
             or not 0 < timeout_seconds <= 7200
             or cache.DIGEST.fullmatch(default_behavior_sha256) is None):
         raise ImageError("trusted root provisioning limits invalid")
@@ -101,7 +101,8 @@ def provision_root(archive: Path, repository: str, manifest_digest: str, *,
     deadline = time.monotonic() + timeout_seconds
     receipt = cache.provision(archive, repository, manifest_digest,
                               archive_output=archive_output, config_output=config_output,
-                              maximum_layer_bytes=maximum_layer_bytes, deadline=deadline)
+                              maximum_layer_bytes=maximum_layer_bytes,
+                              maximum_archive_bytes=maximum_archive_bytes, deadline=deadline)
     identity = {"platform_manifest_digest": manifest_digest,
                 "config_image_id": receipt["config_image_id"],
                 "default_behavior_sha256": default_behavior_sha256}
@@ -112,12 +113,15 @@ def provision_root(archive: Path, repository: str, manifest_digest: str, *,
             metadata = os.fstat(source.fileno())
             if not stat.S_ISREG(metadata.st_mode):
                 raise ImageError("trusted root cache is not regular")
+            if metadata.st_size > maximum_archive_bytes:
+                raise ImageError("trusted root cache byte limit exceeded")
             original = cache._identity(metadata)
             if cache.digest(source, deadline=deadline) != receipt["smol"]["archive_sha256"]:
                 raise ImageError("trusted root source cache changed")
             source.seek(0)
             tree = construct_root(source, spool, manifest_digest=manifest_digest,
                                   config_image_id=receipt["config_image_id"],
+                                  maximum_archive_bytes=maximum_archive_bytes,
                                   maximum_layer_bytes=maximum_layer_bytes,
                                   maximum_entries=maximum_entries, deadline=deadline)
             with cache._output_files(paths[2:], created) as (bundle, descriptor):
@@ -173,7 +177,7 @@ def main():
         parser.add_argument("--" + option, type=Path, required=True)
     for option in ("repository", "manifest", "default-behavior-sha256"):
         parser.add_argument("--" + option, required=True)
-    for option in ("maximum-layer-bytes", "maximum-root-bytes", "maximum-entries"):
+    for option in ("maximum-archive-bytes", "maximum-layer-bytes", "maximum-root-bytes", "maximum-entries"):
         parser.add_argument("--" + option, type=int, required=True)
     parser.add_argument("--timeout-seconds", type=float, required=True)
     args = vars(parser.parse_args())

@@ -16,6 +16,72 @@ import time
 from scripts import checker_smol_cache as cache
 from scripts.checker_image_process import ImageError
 
+MAX_PAX_BYTES = 16384
+
+
+def _pax_paths(payload):
+    """Accept only bounded path overrides needed by the pinned platform image."""
+    offset, keys = 0, set()
+    while offset < len(payload):
+        separator = payload.find(b" ", offset)
+        digits = payload[offset:separator]
+        if separator < 0 or not digits.isdigit() or len(digits) > 5:
+            raise ImageError("trusted layer PAX record invalid")
+        length = int(digits)
+        end = offset + length
+        if str(length).encode() != digits or end > len(payload) or end <= separator + 2:
+            raise ImageError("trusted layer PAX length invalid")
+        record = payload[separator + 1:end]
+        if not record.endswith(b"\n"):
+            raise ImageError("trusted layer PAX record truncated")
+        key, separator_bytes, value = record[:-1].partition(b"=")
+        if key not in {b"path", b"linkpath"} or key in keys or not separator_bytes:
+            raise ImageError("trusted layer PAX attribute unsupported")
+        text = value.decode("utf-8", "strict")
+        if not text or len(value) > 4096 or "\0" in text:
+            raise ImageError("trusted layer PAX path invalid")
+        keys.add(key)
+        offset = end
+
+
+def preflight_layer(source, remaining_entries, deadline):
+    """Bound physical headers and extension payloads before tarfile interprets them."""
+    source.seek(0, os.SEEK_END)
+    length, offset, count, pending = source.tell(), 0, 0, False
+    if not length or length % 512:
+        raise ImageError("trusted layer length invalid")
+    while offset + 512 <= length:
+        available(deadline)
+        source.seek(offset)
+        raw = source.read(512)
+        if not any(raw):
+            if pending or length - offset < 1024:
+                raise ImageError("trusted layer trailer truncated")
+            source.seek(offset)
+            while chunk := source.read(65536):
+                available(deadline)
+                if any(chunk):
+                    raise ImageError("trusted layer trailing content invalid")
+            available(deadline)
+            return count
+        count += 1
+        if count > remaining_entries:
+            raise ImageError("trusted layer aggregate entry limit exceeded")
+        item = tarfile.TarInfo.frombuf(raw, "utf-8", "strict")
+        if item.size < 0 or offset + 512 + ((item.size + 511) // 512) * 512 > length:
+            raise ImageError("trusted layer entry exceeds input")
+        if item.type == tarfile.XHDTYPE:
+            if pending or not 0 < item.size <= MAX_PAX_BYTES:
+                raise ImageError("trusted layer PAX envelope invalid")
+            _pax_paths(source.read(item.size))
+            pending = True
+        elif item.type in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE, tarfile.SYMTYPE, tarfile.LNKTYPE}:
+            pending = False
+        else:
+            raise ImageError("trusted layer header type unsupported")
+        offset += 512 + ((item.size + 511) // 512) * 512
+    raise ImageError("trusted layer trailer missing")
+
 
 def available(deadline):
     if time.monotonic() >= deadline:
@@ -124,8 +190,10 @@ def _layer_entries(layer, remaining_entries, deadline):
 
 def apply_layer(layer_file, spool, tree, *, maximum_entries, remaining_entries, deadline):
     """Apply lower-layer deletion first, then additions in their declared order."""
+    count = preflight_layer(layer_file, remaining_entries, deadline)
+    layer_file.seek(0)
     with tarfile.open(fileobj=layer_file, mode="r:") as layer:
-        entries, whiteouts, count = _layer_entries(layer, remaining_entries, deadline)
+        entries, whiteouts, _ = _layer_entries(layer, remaining_entries, deadline)
         for target, opaque in whiteouts:
             available(deadline)
             _parents(tree, target + "/marker" if opaque and target else target)
@@ -164,9 +232,10 @@ def apply_layer(layer_file, spool, tree, *, maximum_entries, remaining_entries, 
 
 
 def construct_root(source, spool, *, manifest_digest, config_image_id,
-                   maximum_layer_bytes, maximum_entries, deadline):
+                   maximum_archive_bytes, maximum_layer_bytes, maximum_entries, deadline):
     """Reverify the graph and each consumed layer before returning its final inventory."""
-    members = cache._preflight(source, os.fstat(source.fileno()).st_size)
+    members = cache._preflight(source, os.fstat(source.fileno()).st_size,
+                               maximum_bytes=maximum_archive_bytes, deadline=deadline)
     _, config_id, raw_config, wrapper, expected = cache._graph(
         source, members, manifest_digest, maximum_layer_bytes=maximum_layer_bytes, deadline=deadline)
     if config_id != config_image_id:
@@ -176,9 +245,9 @@ def construct_root(source, spool, *, manifest_digest, config_image_id,
     tree, expanded, count = {}, 0, 0
     for name, diff_id in zip(layers, diff_ids, strict=True):
         available(deadline)
-        raw = cache.MemberReader(source, members[name])
+        raw = cache.MemberReader(source, members[name], deadline)
         magic = raw.read(2)
-        raw = cache.MemberReader(source, members[name])
+        raw = cache.MemberReader(source, members[name], deadline)
         reader = gzip.GzipFile(fileobj=raw) if magic == b"\x1f\x8b" else raw
         digest = hashlib.sha256()
         with tempfile.TemporaryFile() as layer:
