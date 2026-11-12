@@ -166,7 +166,7 @@ async def test_task_evidence_pagination(task_client):
         assert exhausted.items == () and exhausted.next_cursor is None
         empty_task = await session.get(WorkstreamTask, sibling["id"])
         # New task fixture has no audit writer call; no retained evidence is deleted.
-        empty = WorkstreamTask(id=str(new_record_id()), project_id=project["id"], title="empty", description="empty",
+        empty = WorkstreamTask(task_size="small", id=str(new_record_id()), project_id=project["id"], title="empty", description="empty",
                               source_type=empty_task.source_type, status="draft", created_by=empty_task.created_by)
         session.add(empty)
         await session.flush()

@@ -97,7 +97,7 @@ async def test_task_key_namespace_is_per_actor(task_client, monkeypatch):
     assert await _counts(first["id"]) == await _counts(second["id"]) == (1, 1, 1)
 
 
-@pytest.mark.parametrize("target", ["task", "assignment", "locked_context", "historical_claimed"])
+@pytest.mark.parametrize("target", ["task", "assignment", "locked_context", "historical_claimed", "task_size"])
 async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, monkeypatch, target):
     _, task, _ = await _setup(task_client, monkeypatch)
     headers = auth_headers()
@@ -112,7 +112,9 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
             set_committed_value(receipt, "locked_context_hash", "sha256:" + "0" * 64)
         else:
             snapshot = deepcopy(receipt.response)
-            if target == "historical_claimed":
+            if target == "task_size":
+                snapshot["task"]["task_size"] = "large"
+            elif target == "historical_claimed":
                 snapshot["task"]["status"] = "claimed"
             else:
                 snapshot[target]["id"] = str(uuid4())

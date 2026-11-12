@@ -1296,6 +1296,7 @@ read does not authorize a later import or other write.
 | `external_task_id` or `source_id` | `external_task_id` | Required exact, case-sensitive source identifier |
 | `title`, `description` | Same names | Required nonblank instruction text, preserved without trimming |
 | `task_type` or `category` | `task_type` | Optional category, preserved |
+| `task_size` | `task_size` | Trim outer whitespace; missing/blank becomes `small`; otherwise `small`, `medium` or `large` |
 | `skill_tags`, `languages`, `tools` | `skill_tags` | Semicolon segments concatenate in this order; trim segments and omit blank segments |
 | `difficulty`, `acceptance_criteria`, `rejection_criteria` | Same names | Optional text, preserved |
 | `estimated_time_minutes` | Same name | Optional whole minutes in 1..525600 |
@@ -1478,8 +1479,11 @@ The input is the public `TaskCreate` JSON, for example:
 }
 ```
 
-All public declaration fields are supported; omitted/null values retain their
-API semantics. Creation requires a canonical hyphenated project UUID, as does
+Task creation accepts `task_size`: `small`, `medium` or `large`. Omission means
+`small`; explicit null, case variants and other values are rejected. Size is
+immutable after creation. It does not accept a price, unit or award override.
+New create/import receipts record size explicitly; archived receipts retain their
+original shape. Other declaration fields retain their API omission/null semantics. Creation requires a canonical hyphenated project UUID, as does
 the backend create route. Inputs are bounded to 1MiB; management responses to
 2MiB. Transition selectors accept supported UUID spellings without changing the
 supplied task selector on the wire. The project selector binds the returned

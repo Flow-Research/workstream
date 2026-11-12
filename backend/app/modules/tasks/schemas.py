@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
+from app.modules.contributions.api import TaskSize
 from app.modules.tasks.api.revision import ContributorRevisionContext
 from app.modules.tasks.api import ReadyTaskSummary, ManagementTaskSummary, OperationalTaskSummary
 
@@ -10,7 +11,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 
 from app.modules.projects.api.guide_activation_context import GuidePolicySelection
 from app.modules.projects.api.locked_policy import GuideDisplayFacts, ProjectDisplayFacts
@@ -82,6 +83,7 @@ class TaskCreate(BaseModel):
 
     title: str
     description: str
+    task_size: TaskSize = "small"
     task_type: str | None = None
     difficulty: str | None = None
     skill_tags: list[str] = Field(default_factory=list)
@@ -165,6 +167,7 @@ class TaskResponse(BaseModel):
 
     id: str
     project_id: str
+    task_size: TaskSize | None = None
     locked_contribution_policy_version_id: UUID | None
     locked_guide_version: str | None
     locked_review_policy_id: str | None
@@ -198,6 +201,14 @@ class TaskResponse(BaseModel):
     assigned_to: str | None
     created_at: datetime
     updated_at: datetime
+
+    @model_serializer(mode="wrap")
+    def recorded_fields(self, handler):
+        """Preserve an old saved response's absent size without rewriting its JSON."""
+        result = handler(self)
+        if "task_size" not in self.model_fields_set:
+            result.pop("task_size", None)
+        return result
 
 
 class ContributorClaimTaskResponse(BaseModel):

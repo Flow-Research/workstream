@@ -229,6 +229,24 @@ real public API/durable-worker drill remain final PR requirements.
 
 ## Acceptance criteria
 
+Task authoring slice within the approved v2 boundary: existing TASK create,
+import/parser/membership/receipt and response owners; task row model; forward
+`0070_task_size` migration; their CLI/MCP contracts, focused tests and current
+authoring docs are allowed. This L3 slice closes the missing create-time size
+and the default-induced historical digest/response gap. It does not yet claim
+screening/assignment/Submission selection, revision rebasing, selected awards or
+financial execution. Acceptance: omitted size stores Small, explicit null or
+unknown sizes fail, size cannot change after insertion, new receipts record size,
+and exact archived omitted-size create/import responses replay unchanged without
+provider/parser access; an explicit size under an old key conflicts. Select the
+closed stored response format before defaults; never retry old hashes after a
+new hash fails. Proof uses pure input/format controls and real signed public
+PostgreSQL/MinIO create/import/history controls, including direct-SQL immutable
+size and missing-size receipt rejection. Review focus is AUTH/replay isolation,
+preserved hashes and complete source/receipt custody; matching security,
+architecture, QA/test-delta, reuse and docs tracks remain required. No new
+writer, resizing endpoint, amount override or altered immutable JSON is allowed.
+
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
 - [ ] Sized public task/submission/revision paths preserve exact locked economic selection.
 - [ ] Acceptance commits the selected award, root and handoff atomically; callbacks cannot create eligibility.
@@ -249,6 +267,9 @@ real public API/durable-worker drill remain final PR requirements.
 
 | Claim | Command or proof | Result | Remaining uncertainty |
 |---|---|---|---|
+| Create-time size and retained replay | `tests/finance/test_task_size_contract.py`; isolated public PostgreSQL/MinIO `test_task_size_postgresql.py` plus genuine archived create/import replay | 25 pure cases and 3 database/provider cases passed during implementation; new/omitted sizes, immutable SQL guard, missing-size receipt refusal and exact old JSON/hash replay covered; owned runner cleanup complete | WIP supporting proof; selection copy chain, revision/acceptance and Finance remain later work in this PR |
+| Size client/schema parity | CLI Go packages; built manager-size and source tests; MCP task contracts/current OpenAPI | Go packages, 35 existing backend import contracts, configured operation drift and all 20 configured execution drift cases pass; client size negatives preserve empty-output/no-request behavior | Focused slice proof; no deployed client or full journey claim |
+
 | Baseline reconciled | fetch origin main; inspect open PRs | Main matches pinned baseline; no open non-draft PR | Draft #708 touches intake and #698 CLI ZIP preparation; neither is implementation authority |
 | Existing acceptance owner inspected | REV acceptance participant and compensation award participant | Existing caller-owned atomic composition confirmed | Full runtime suite not yet executed |
 | Target behavior | Specification sections 20–21 and focused existing owner tests | Required proof defined; implementation pending | No payment/deployment qualification yet |

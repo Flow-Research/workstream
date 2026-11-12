@@ -21,6 +21,7 @@ async def seed_started_task_for_artifact_test(connection, params):
     async with AsyncSession(bind=connection, expire_on_commit=False) as session:
         task = WorkstreamTask(
             id=params["task"],
+            task_size="small",
             project_id=params["project"],
             title="Evidence task",
             description="Complete the work described by the approved guide.",

@@ -70,6 +70,8 @@ async def test_archived_dual_awards_restore_without_losing_decimal_precision(iso
     await db_session.dispose_engine()
     await asyncio.to_thread(command.upgrade, _config(), "head")
     assert await economic_snapshot() == before
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(text("SELECT count(*) FROM workstream_tasks WHERE task_size IS NOT NULL")) == 0
     for table, message in (
         ("contribution_award_definitions", "new reward definitions require exact v2 policy"),
         ("contribution_records", "new contribution and award effects require v2"),
@@ -189,6 +191,14 @@ async def test_archived_omitted_size_create_and_import_replay_exactly_with_fresh
         json=seed["create_request"] | {"title": "Changed historical request"},
     )
     assert changed.status_code == 409, changed.text
+    for size in ("small", "medium"):
+        changed_size = await client.post(
+            f"/api/v1/projects/{seed['project_id']}/tasks", headers=headers,
+            json=seed["create_request"] | {"task_size": size},
+        )
+        assert changed_size.status_code == 409, changed_size.text
+    assert "task_size" not in response.json()
+    assert all("task_size" not in task for task in imported.json()["tasks"])
     assert await command_snapshot() == before
     async with db_session.get_session_factory()() as session:
         assert (

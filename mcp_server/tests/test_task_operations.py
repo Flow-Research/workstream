@@ -497,3 +497,20 @@ def test_source_and_cursor_bounds_are_explicit() -> None:
     Draft202012Validator(
         audit, format_checker=FormatChecker()
     ).validate({"project_id": PROJECT_ID, "task_id": TASK_ID, "cursor": "x" * 512})
+
+
+def test_task_creation_size_is_closed_and_omission_only_defaults() -> None:
+    validator = Draft202012Validator(
+        task_operation_input_schema("management_task_create"),
+        format_checker=FormatChecker(),
+    )
+    arguments = _arguments("management_task_create")
+    for fields in ({}, {"task_size": "small"}, {"task_size": "medium"}, {"task_size": "large"}):
+        validator.validate(arguments | {"body": {"title": "T", "description": "D", **fields}})
+    for fields in (
+        {"task_size": None}, {"task_size": "Small"}, {"task_size": True},
+        {"quantity": "10"}, {"unit_code": "USD"},
+    ):
+        assert list(validator.iter_errors(
+            arguments | {"body": {"title": "T", "description": "D", **fields}}
+        ))

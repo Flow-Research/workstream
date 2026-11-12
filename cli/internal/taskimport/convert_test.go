@@ -141,3 +141,44 @@ func TestExternalIDsAreCaseSensitive(t *testing.T) {
 		t.Fatalf("distinct case-sensitive IDs should survive: %v", err)
 	}
 }
+
+func TestTaskSizeCSVAndJSONContract(t *testing.T) {
+	for _, value := range []string{"", " small ", "medium", "large"} {
+		converted, err := ConvertCSV(strings.NewReader("external_task_id,title,description,task_size\na,T,D,"+value+"\n"), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document document
+		if err := json.Unmarshal(converted.Bytes, &document); err != nil {
+			t.Fatal(err)
+		}
+		want := strings.TrimSpace(value)
+		if want == "" {
+			want = "small"
+		}
+		if document.Tasks[0].TaskSize != want {
+			t.Fatalf("size: got %q, want %q", document.Tasks[0].TaskSize, want)
+		}
+	}
+	omitted, err := ConvertCSV(strings.NewReader("external_task_id,title,description\na,T,D\n"), "")
+	if err != nil || !strings.Contains(string(omitted.Bytes), `"task_size":"small"`) {
+		t.Fatalf("omitted size default: %s %v", omitted.Bytes, err)
+	}
+	for _, invalid := range []string{"null", "Small", "giant"} {
+		if _, err := ConvertCSV(strings.NewReader("external_task_id,title,description,task_size\na,T,D,"+invalid+"\n"), ""); err == nil {
+			t.Fatalf("accepted CSV size %q", invalid)
+		}
+	}
+	for _, field := range []string{``, `,"task_size":"small"`, `,"task_size":"medium"`, `,"task_size":"large"`} {
+		raw := []byte(`{"schema_version":"workstream.task_import.v1","tasks":[{"external_task_id":"a","title":"T","description":"D"` + field + `}]}`)
+		if _, err := ValidateJSON(raw); err != nil {
+			t.Fatalf("valid JSON size %s: %v", field, err)
+		}
+	}
+	for _, field := range []string{`"task_size":null`, `"task_size":"Small"`, `"task_size":"giant"`, `"quantity":"5"`, `"instrument_type":"money"`, `"unit_code":"USD"`} {
+		raw := []byte(`{"schema_version":"workstream.task_import.v1","tasks":[{"external_task_id":"a","title":"T","description":"D",` + field + `}]}`)
+		if _, err := ValidateJSON(raw); err == nil {
+			t.Fatalf("accepted JSON field %s", field)
+		}
+	}
+}

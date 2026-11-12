@@ -81,6 +81,7 @@ class TaskCreationPreparation:
     project_id: UUID
     task_id: UUID
     payload_json: str
+    size_explicit: bool
     receipt: TaskCommandReceipt
     request_digest: str
     reserved: bool
@@ -227,9 +228,12 @@ class AuthorizedTaskCommands:
         if not self._session.in_transaction():
             raise RuntimeError("task creation preparation requires the caller transaction")
         operation = TaskAuthorityOperation.CREATE
+        prior = await self._replay.creation_receipt(self._actor_id, idempotency_key)
+        size_explicit = "task_size" in payload.model_fields_set
+        request_value = self._replay.creation_value(project_id, payload, prior, size_explicit=size_explicit)
         receipt, digest, reserved = await self._replay.reserve(
             self._actor_id, operation, idempotency_key, new_record_id(), None,
-            request_value={"project_id": str(project_id), "payload": payload.model_dump(mode="json")},
+            request_value=request_value,
         )
         current = await self._repo.get_task(receipt.task_id, for_update=True) if not reserved else None
         proposed = WorkstreamTask(id=receipt.task_id, project_id=str(project_id), status="draft",
@@ -241,7 +245,7 @@ class AuthorizedTaskCommands:
             ),
         )
         return TaskCreationPreparation(project_id, UUID(proposed.id), payload.model_dump_json(),
-                                       receipt, digest, reserved, current, facts, self._session.get_transaction())
+                                       size_explicit, receipt, digest, reserved, current, facts, self._session.get_transaction())
 
     async def authorize_creation(self, prepared: TaskCreationPreparation) -> TaskAuthorityDecision:
         """Consume exact current per-Task authority after all caller preparation locks."""
@@ -262,7 +266,9 @@ class AuthorizedTaskCommands:
                 or prepared.facts.actor_profile_id != self._actor_id):
             raise RuntimeError("task creation staging requires its original caller transaction")
         payload = TypeAdapter(TaskCreate | ImportedTaskCreate).validate_json(prepared.payload_json)
-        digest = canonical_json_hash({"project_id": str(prepared.project_id), "payload": payload.model_dump(mode="json")})
+        digest = canonical_json_hash(self._replay.creation_value(
+            prepared.project_id, payload, prepared.receipt, size_explicit=prepared.size_explicit,
+        ))
         if digest != prepared.request_digest or prepared.receipt.task_id != str(prepared.task_id):
             raise TaskValidationError("task creation preparation changed")
         project = await self._contexts._project_contexts.read_project_display(prepared.project_id)

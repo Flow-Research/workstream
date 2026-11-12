@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "e18d0d0558ea634523fa4c3f8f4c1b9066d8222adbfde4c7d6ecf9bfe4453406",
+  "canonical_sha256": "3338b27882b3e79cbeaaca673c72b4732295d3b793a7376697357da5ed0b59c4",
   "components": {
     "schemas": {
       "ApiError": {
@@ -392,6 +392,22 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "task_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Size"
           },
           "task_type": {
             "anyOf": [
@@ -795,7 +811,6 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/tasks/{task_id}/screen",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "path": "/api/v1/tasks/{task_id}/screen"
   }
 }

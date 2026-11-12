@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
+from app.modules.contributions.api import TaskSize
 
 
 TASK_IMPORT_MAXIMUM_BYTES = 8 * 1024 * 1024
@@ -135,6 +136,7 @@ class TaskImportRow(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    task_size: TaskSize = "small"
     external_task_id: str = Field(min_length=1, max_length=200)
     title: str = Field(min_length=1, max_length=255)
     description: str = Field(min_length=1, max_length=50000)

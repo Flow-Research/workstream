@@ -19,17 +19,18 @@ const taskBatchTransitionResponseLimit = 2 * 1024 * 1024
 
 // ImportedTask identifies one original DRAFT creation, even after later advancement.
 type ImportedTask struct {
-	ID                string `json:"id"`
-	ExternalTaskID    string `json:"external_task_id"`
-	Status            string `json:"status"`
-	ProjectID         string `json:"project_id"`
-	SourceType        string `json:"source_type"`
-	SourceRef         string `json:"source_ref"`
-	SourcePayloadHash string `json:"source_payload_hash"`
-	ImportBatchID     string `json:"import_batch_id"`
-	CreatedBy         string `json:"created_by"`
-	CreatedAt         string `json:"created_at"`
-	UpdatedAt         string `json:"updated_at"`
+	TaskSize          *string `json:"task_size,omitempty"`
+	ID                string  `json:"id"`
+	ExternalTaskID    string  `json:"external_task_id"`
+	Status            string  `json:"status"`
+	ProjectID         string  `json:"project_id"`
+	SourceType        string  `json:"source_type"`
+	SourceRef         string  `json:"source_ref"`
+	SourcePayloadHash string  `json:"source_payload_hash"`
+	ImportBatchID     string  `json:"import_batch_id"`
+	CreatedBy         string  `json:"created_by"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 // TaskImportBatch preserves original complete ordered creation custody.
@@ -261,7 +262,14 @@ var originalTaskFields = []string{
 func (c *Client) decodeImportedTask(raw json.RawMessage, batch TaskImportBatch) (ImportedTask, error) {
 	var task ImportedTask
 	var fields map[string]json.RawMessage
-	if err := jsonv2.Unmarshal(raw, &fields); err != nil || len(fields) != len(originalTaskFields) {
+	if err := jsonv2.Unmarshal(raw, &fields); err != nil {
+		return task, &Failure{Code: "invalid_api_response"}
+	}
+	expected := len(originalTaskFields)
+	if _, present := fields["task_size"]; present {
+		expected++
+	}
+	if len(fields) != expected {
 		return task, &Failure{Code: "invalid_api_response"}
 	}
 	for _, field := range originalTaskFields {
@@ -273,7 +281,7 @@ func (c *Client) decodeImportedTask(raw json.RawMessage, batch TaskImportBatch) 
 	// The complete public TaskResponse field set was checked above. Decode only
 	// identities used by CLI output; validate instructions through the canonical
 	// local import parser without retaining a second private Task DTO.
-	if jsonv2.Unmarshal(raw, &task) != nil || !sameUUID(task.ProjectID, batch.ProjectID) || task.Status != "draft" ||
+	if jsonv2.Unmarshal(raw, &task) != nil || !validTaskSizeField(fields, task.TaskSize) || !sameUUID(task.ProjectID, batch.ProjectID) || task.Status != "draft" ||
 		task.SourceType != "json_import" || task.SourceRef != "task-import-source:"+batch.SourceID || task.SourcePayloadHash != batch.SHA256 ||
 		!sameUUID(task.ImportBatchID, batch.BatchID) || !validUUID(task.CreatedBy) || !validTime(task.CreatedAt) || !validTime(task.UpdatedAt) {
 		return task, &Failure{Code: "invalid_api_response"}
@@ -297,6 +305,9 @@ func (c *Client) decodeImportedTask(raw json.RawMessage, batch TaskImportBatch) 
 				return task, &Failure{Code: "invalid_api_response"}
 			}
 		}
+	}
+	if size, present := fields["task_size"]; present {
+		instructions["task_size"] = size
 	}
 	validation, err := json.Marshal(map[string]any{"schema_version": "workstream.task_import.v1", "tasks": []any{instructions}})
 	if err == nil {

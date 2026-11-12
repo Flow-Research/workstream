@@ -64,7 +64,7 @@ async def test_history_pagination_and_privacy(admin_access):
             row = await store_event(session, str(task))
             expected.append(row.id)
         source = await session.get(WorkstreamTask, str(task))
-        empty = WorkstreamTask(id=str(new_record_id()), project_id=str(project), title="empty", description="empty",
+        empty = WorkstreamTask(task_size="small", id=str(new_record_id()), project_id=str(project), title="empty", description="empty",
                               source_type=source.source_type, status="draft", created_by=source.created_by)
         session.add(empty)
         empty_id = empty.id
