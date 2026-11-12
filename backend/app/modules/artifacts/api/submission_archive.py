@@ -96,3 +96,32 @@ class SubmissionArchiveLimits:
             or self.maximum_inspection_seconds <= 0
         ):
             raise ValueError("submission archive deadline is invalid")
+
+
+def validate_submission_manifest(
+    body: object, *, sha256: str, limits: SubmissionArchiveLimits,
+) -> SubmissionArchiveInspectionResult:
+    """Validate reported canonical metadata without claiming observation of bytes.
+
+    Reuse ART's manifest semantics and the invocation's stricter resource limits.
+    Source integrity still requires a trusted loader receipt.
+    """
+    from app.modules.artifacts.submission_manifest import SubmissionManifest
+    from app.modules.artifacts.submission_archive import normalize_submission_archive_path
+
+    manifest = SubmissionManifest.from_dict(body, sha256=sha256)
+    if (manifest.entry_count > limits.maximum_entries
+            or manifest.total_expanded_bytes > limits.maximum_expanded_bytes):
+        raise ValueError("submission manifest exceeds execution limits")
+    for entry in manifest.entries:
+        if entry.byte_count > limits.maximum_entry_bytes:
+            raise ValueError("submission manifest exceeds execution limits")
+        normalize_submission_archive_path(
+            entry.normalized_path, maximum_path_bytes=limits.maximum_path_bytes,
+            maximum_path_depth=limits.maximum_path_depth,
+        )
+    return SubmissionArchiveInspectionResult(
+        entries=manifest.entries, entry_count=manifest.entry_count,
+        file_count=manifest.file_count, directory_count=manifest.directory_count,
+        total_expanded_bytes=manifest.total_expanded_bytes,
+    )

@@ -825,28 +825,44 @@ def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
 
 def _source_completed_execution(reservation):
     """Build structural result evidence; this fixture does not attest a runtime."""
-    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitExecutionFacts, ExternalPreSubmitMemberFacts,
+        ExternalPreSubmitIsolationFacts, derive_selected_pre_submit_input,
+    )
+    from app.modules.checkers.api.default_checker import (
+        WorkstreamDefaultCheckerResult, workstream_default_input_sha256,
+    )
     from app.modules.checkers.api.external import make_external_checker_execution_result
 
-    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(
-        _retained_v1("selected_pre_v1_completed")["terminal"]["execution"]
+    retained = _retained_v1("selected_pre_v1_completed")
+    old = retained["terminal"]["execution"]
+    manifest = retained["request"]["admission_lineage"]["semantic_manifest_body"]
+    manifest_sha256 = canonical_json_hash(manifest)
+    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    value, request = derive_selected_pre_submit_input(
+        lease, manifest_body=manifest, manifest_sha256=manifest_sha256,
     )
     selected = reservation.policy.entries[0]
-    member = execution.external_members[0]
     result = make_external_checker_execution_result(
-        **(member.result.model_dump(exclude={"result_digest"}) | {
-            "registry_entry_id": selected.registry.registry_entry_id,
-            "registry_entry_digest": selected.registry.entry_digest,
-        })
+        request_digest=request.request_digest, registry_entry_id=selected.registry.registry_entry_id,
+        registry_entry_digest=selected.registry.entry_digest, phase="pre_submit",
+        outcome="completed", verdict="passed", findings=(), infrastructure_failure_code=None,
     )
-    return replace(
-        execution, policy_sha256=reservation.policy_sha256,
-        external_members=(replace(
-            member, requirement_id=selected.requirement_id,
+    return SelectedPreSubmitExecutionFacts(
+        request_digest=reservation.request_digest, lease_id=lease.lease_id, lease_generation=1,
+        observed_source=reservation.source, manifest_body=manifest, manifest_sha256=manifest_sha256,
+        default_input_sha256=workstream_default_input_sha256(value),
+        policy_sha256=reservation.policy_sha256,
+        workstream_default=WorkstreamDefaultCheckerResult.model_validate(old["workstream_default"]),
+        required_external_count=1, eligible=True,
+        external_members=(ExternalPreSubmitMemberFacts(
+            order=0, requirement_id=selected.requirement_id,
             registry_entry_id=selected.registry.registry_entry_id,
-            registry_entry_digest=selected.registry.entry_digest, result=result,
-            isolation=replace(member.isolation,
-                              platform_manifest_digest=selected.registry.image_digest),
+            registry_entry_digest=selected.registry.entry_digest, request_digest=request.request_digest,
+            result=result, isolation=ExternalPreSubmitIsolationFacts(**(
+                old["external_members"][0]["isolation"] |
+                {"platform_manifest_digest": selected.registry.image_digest}
+            )),
         ),),
     )
 
@@ -883,7 +899,7 @@ def test_source_first_finalization_binds_actual_selected_member(changed):
         execution = replace(execution, external_members=(), eligible=False)
     now = datetime.now(UTC)
     lease = SelectedPreSubmitLeaseFacts(
-        reservation=reservation, lease_id=new_record_id(), lease_generation=1,
+        reservation=reservation, lease_id=execution.lease_id, lease_generation=execution.lease_generation,
         lease_expires_at=reservation.pre_deadline_at,
     )
     def finalize():
@@ -915,9 +931,10 @@ def test_source_first_default_rejection_does_not_require_project_result():
         workstream_default=evaluate_rejected_archive(
             "submission_archive_malformed", packet=reservation.default_context.packet,
         ), external_members=(), eligible=False,
+        manifest_body=None, manifest_sha256=None, default_input_sha256=None,
     )
     lease = SelectedPreSubmitLeaseFacts(
-        reservation, new_record_id(), 1, reservation.pre_deadline_at,
+        reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
     assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution
 
@@ -932,7 +949,7 @@ def test_source_first_result_digest_revalidated_before_terminal_write(boundary):
     forged = member.result.model_copy(update={"result_digest": "sha256:" + "f" * 64})
     execution = replace(execution, external_members=(replace(member, result=forged),))
     lease = SelectedPreSubmitLeaseFacts(
-        reservation, new_record_id(), 1, reservation.pre_deadline_at,
+        reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
     now = datetime.now(UTC)
     with pytest.raises(ValueError, match="result digest mismatch"):
@@ -940,3 +957,75 @@ def test_source_first_result_digest_revalidated_before_terminal_write(boundary):
             SelectedPreSubmitFinalizeFacts(lease, execution, None)
         else:
             SelectedPreSubmitTerminalFacts(lease, "completed", execution, None, now, now, now)
+
+
+@pytest.mark.parametrize("changed", [
+    "request", "lease_id", "lease_generation", "source_generation", "source_hash",
+    "source_count", "source_operation", "default_input", "manifest", "missing_manifest",
+    "project_request",
+])
+def test_source_first_completed_evidence_rejects_substitution(changed):
+    from copy import deepcopy
+    from app.modules.checkers.api.external import make_external_checker_execution_result
+
+    reservation = _source_reservation()
+    execution = _source_completed_execution(reservation)
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
+    )
+    if changed == "request":
+        execution = replace(execution, request_digest="sha256:" + "f" * 64)
+    elif changed == "lease_id":
+        execution = replace(execution, lease_id=new_record_id())
+    elif changed == "lease_generation":
+        execution = replace(execution, lease_generation=execution.lease_generation + 1)
+    elif changed.startswith("source_"):
+        source = execution.observed_source
+        field, value = {
+            "source_generation": ("provider_generation", "different-generation"),
+            "source_hash": ("raw_sha256", "sha256:" + "f" * 64),
+            "source_count": ("raw_byte_count", source.raw_byte_count + 1),
+            "source_operation": ("location", source.location.model_copy(update={
+                "operation_id": new_record_id(),
+            })),
+        }[changed]
+        execution = replace(execution, observed_source=source.model_copy(update={field: value}))
+    elif changed == "default_input":
+        execution = replace(execution, default_input_sha256="sha256:" + "f" * 64)
+    elif changed == "manifest":
+        body = deepcopy(execution.manifest_body)
+        body["entries"][0]["normalized_path"] = "../escape"
+        execution = replace(execution, manifest_body=body, manifest_sha256=canonical_json_hash(body))
+    elif changed == "missing_manifest":
+        execution = replace(execution, manifest_body=None, manifest_sha256=None, default_input_sha256=None)
+    elif changed == "project_request":
+        member = execution.external_members[0]
+        # Echo agreement plus a valid result digest is insufficient: the owner
+        # reconstructs the request from its frozen context and parsed manifest.
+        result = make_external_checker_execution_result(**(
+            member.result.model_dump(exclude={"result_digest"}) |
+            {"request_digest": "sha256:" + "f" * 64}
+        ))
+        execution = replace(execution, external_members=(replace(
+            member, request_digest=result.request_digest, result=result,
+        ),))
+    with pytest.raises(ValueError):
+        SelectedPreSubmitFinalizeFacts(lease, execution, None)
+
+
+@pytest.mark.parametrize("limit", ["maximum_entries", "maximum_path_bytes", "maximum_entry_bytes"])
+def test_source_first_derived_manifest_obeys_locked_limits(limit):
+    from app.modules.checkers.api.selected_pre_submit import derive_selected_pre_submit_input
+    from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+
+    reservation = _source_reservation()
+    execution = _source_completed_execution(reservation)
+    profile = reservation.runtime_profile.model_copy(update={
+        "archive_limits": SubmissionArchiveLimits(**{limit: 1}, maximum_inspection_seconds=60),
+    })
+    reservation = replace(reservation, runtime_profile=profile)
+    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    with pytest.raises(ValueError):
+        derive_selected_pre_submit_input(
+            lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
+        )

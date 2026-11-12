@@ -362,11 +362,14 @@ def external_checker_registration_request_digest(
 
 
 class PreSubmitExternalCheckerMaterial(ExternalCheckerValue):
-    """Verified prepared bytes that exist before a Submission or ART binding."""
+    """Guest-verified source and tree bound to one PRE execution fence."""
 
     phase: Literal["pre_submit"] = "pre_submit"
     role: Identifier
-    prepared_generation_id: UUID = Field(strict=True)
+    operation_id: UUID = Field(strict=True)
+    source_sha256: Sha256
+    lease_id: UUID = Field(strict=True)
+    lease_generation: Annotated[StrictInt, Field(ge=1)]
     attempt_id: UUID = Field(strict=True)
     attempt_request_digest: Sha256
     archive_sha256: Sha256
@@ -407,13 +410,16 @@ ExternalCheckerMaterial = Annotated[
 
 
 class PreSubmitExternalCheckerIdentity(ExternalCheckerValue):
-    """Existing pre-submit preparation and attempt identity; no Submission exists."""
+    """Sealed source operation and committed PRE lease; no Submission exists."""
 
     phase: Literal["pre_submit"] = "pre_submit"
     project_id: UUID = Field(strict=True)
     task_id: UUID = Field(strict=True)
     assignment_id: UUID = Field(strict=True)
-    prepared_generation_id: UUID = Field(strict=True)
+    operation_id: UUID = Field(strict=True)
+    source_sha256: Sha256
+    lease_id: UUID = Field(strict=True)
+    lease_generation: Annotated[StrictInt, Field(ge=1)]
     attempt_id: UUID = Field(strict=True)
     attempt_request_digest: Sha256
     effective_plan_sha256: Sha256
@@ -469,16 +475,22 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
         if self.identity.phase == "pre_submit":
             for material in self.materials:
                 if not isinstance(material, PreSubmitExternalCheckerMaterial) or (
-                    material.prepared_generation_id,
+                    material.operation_id,
+                    material.source_sha256,
+                    material.lease_id,
+                    material.lease_generation,
                     material.attempt_id,
                     material.attempt_request_digest,
                 ) != (
-                    self.identity.prepared_generation_id,
+                    self.identity.operation_id,
+                    self.identity.source_sha256,
+                    self.identity.lease_id,
+                    self.identity.lease_generation,
                     self.identity.attempt_id,
                     self.identity.attempt_request_digest,
                 ):
                     raise ExternalCheckerContractError(
-                        "external checker prepared material identity mismatch"
+                        "external checker source material identity mismatch"
                     )
         if self.configuration_sha256 != external_checker_json_hash(self.configuration):
             raise ExternalCheckerContractError("external checker configuration digest mismatch")

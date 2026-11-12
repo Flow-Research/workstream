@@ -44,6 +44,10 @@ class ModelAwareExternalExecution:
         """Use the existing external execution health contract."""
         return await self._execution.health()
 
+    async def execute_pre(self, lease, grant):
+        """PRE receives no model authority or paid slot from this POST wrapper."""
+        return await self._execution.execute_pre(lease, grant)
+
     async def locate_forge_change(self, request, grant):
         """Locator gets no model grant, paid slot or trial callback."""
         return await self._execution.locate_forge_change(request, grant)

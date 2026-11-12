@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 import struct
 
 from pydantic import ValidationError
 
+from app.core.cancellation import await_cancellation_resistant
+
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionResponse,
+    ExternalPreSubmitSourceGrant,
     ExternalCheckerForgeLocatorResponse,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
@@ -28,6 +33,11 @@ from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
+)
+
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitInfrastructureUnavailable,
 )
 
 from app.modules.checkers.api.forge_locator import (
@@ -66,6 +76,74 @@ class UnixSocketExternalCheckerAdapter:
     def identity(self) -> ExternalServiceAdapterIdentity:
         """Return the exact explicitly registered provider identity."""
         return self._identity
+
+    async def execute_pre(
+        self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
+    ) -> SelectedPreSubmitExecutionFacts:
+        """Stream authorized source bytes into one PRE call without a host spool."""
+        try:
+            if type(lease) is not SelectedPreSubmitLeaseFacts:
+                raise ValueError("PRE lease is invalid")
+            reservation = lease.reservation
+            payload = json.dumps({
+                "protocol_version": _PROTOCOL, "operation": "execute_pre",
+                "reservation": reservation.canonical_body(),
+                "request_digest": reservation.request_digest,
+                "lease_id": str(lease.lease_id), "lease_generation": lease.lease_generation,
+                "lease_expires_at": lease.lease_expires_at.isoformat(),
+            }, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+            if len(payload) > 2 * 1024 * 1024:
+                raise ValueError("PRE request is too large")
+            remaining = (lease.lease_expires_at - datetime.now(timezone.utc)).total_seconds()
+            timeout = min(remaining, reservation.execution_budget_ms / 1000, self._timeout_seconds)
+            if timeout <= 0:
+                raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
+            async with asyncio.timeout(timeout):
+                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                try:
+                    writer.write(struct.pack(">I", len(payload)) + payload)
+                    await writer.drain()
+                    digest, count = hashlib.sha256(), 0
+                    stream = grant.open_source(lease=lease)
+                    try:
+                        async for chunk in stream:
+                            if type(chunk) is not bytes:
+                                raise ValueError("PRE source chunk is invalid")
+                            count += len(chunk)
+                            if count > reservation.source.raw_byte_count:
+                                raise ValueError("PRE source identity differs")
+                            digest.update(chunk)
+                            for offset in range(0, len(chunk), 64 * 1024):
+                                part = chunk[offset:offset + 64 * 1024]
+                                writer.write(struct.pack(">I", len(part)) + part)
+                                await writer.drain()
+                    finally:
+                        await await_cancellation_resistant(stream.aclose())
+                    if (count != reservation.source.raw_byte_count
+                            or "sha256:" + digest.hexdigest() != reservation.source.raw_sha256):
+                        raise ValueError("PRE source identity differs")
+                    writer.write(struct.pack(">I", 0))
+                    await writer.drain()
+                    size = struct.unpack(">I", await reader.readexactly(4))[0]
+                    if size == 0 or size > 64 * 1024 * 1024:
+                        raise ValueError("PRE response is too large")
+                    raw = await reader.readexactly(size)
+                    if await reader.read(1):
+                        raise ValueError("PRE response contains trailing data")
+                finally:
+                    writer.close()
+                    await await_cancellation_resistant(writer.wait_closed())
+            result = SelectedPreSubmitExecutionFacts.from_canonical_body(json.loads(raw))
+            result.validate_lease(lease)
+            return result
+        except ExternalServiceProtocolError:
+            raise
+        except TimeoutError as exc:
+            raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded") from exc
+        except (OSError, asyncio.IncompleteReadError) as exc:
+            raise ExternalServiceUnavailableError(self._identity) from exc
+        except (TypeError, ValueError, KeyError, UnicodeError) as exc:
+            raise ExternalServiceProtocolError(self._identity) from exc
 
     async def execute(
         self,

@@ -207,7 +207,10 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
                 &[
                     "phase",
                     "role",
-                    "prepared_generation_id",
+                    "operation_id",
+                    "source_sha256",
+                    "lease_id",
+                    "lease_generation",
                     "attempt_id",
                     "attempt_request_digest",
                     "archive_sha256",
@@ -222,8 +225,11 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
             digest(material, "attempt_request_digest")?;
             digest(material, "archive_sha256")?;
             digest(material, "semantic_manifest_sha256")?;
-            if string(material, "prepared_generation_id")?
-                != string(identity, "prepared_generation_id")?
+            if string(material, "operation_id")? != string(identity, "operation_id")?
+                || digest(material, "source_sha256")? != digest(identity, "source_sha256")?
+                || string(material, "lease_id")? != string(identity, "lease_id")?
+                || unsigned(material, "lease_generation")?
+                    != unsigned(identity, "lease_generation")?
                 || string(material, "attempt_id")? != string(identity, "attempt_id")?
                 || digest(material, "attempt_request_digest")?
                     != digest(identity, "attempt_request_digest")?
@@ -581,7 +587,10 @@ fn validate_identity(identity: &Map<String, Value>, phase: &str) -> Result<(), C
             "project_id",
             "task_id",
             "assignment_id",
-            "prepared_generation_id",
+            "operation_id",
+            "source_sha256",
+            "lease_id",
+            "lease_generation",
             "attempt_id",
             "attempt_request_digest",
             "effective_plan_sha256",
@@ -1295,6 +1304,48 @@ mod tests {
         request
     }
 
+    #[test]
+    fn pre_source_identity_and_fence_are_bound_to_material() {
+        let original: Value =
+            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
+        for field in [
+            "operation_id",
+            "source_sha256",
+            "lease_id",
+            "lease_generation",
+            "attempt_id",
+            "attempt_request_digest",
+        ] {
+            let mut request = original.clone();
+            request["materials"][0][field] = if field == "lease_generation" {
+                serde_json::json!(4)
+            } else if field.ends_with("_id") {
+                serde_json::json!("019b0000-0000-7000-8000-000000000003")
+            } else {
+                serde_json::json!(format!("sha256:{}", "f".repeat(64)))
+            };
+            let request = resign_request(request);
+            assert!(
+                parse_request(&serde_json::to_vec(&request).unwrap()).is_err(),
+                "{field}"
+            );
+        }
+        let mut request = original.clone();
+        request["identity"]["prepared_generation_id"] =
+            serde_json::json!("019b0000-0000-7000-8000-000000000003");
+        assert!(parse_request(&serde_json::to_vec(&resign_request(request)).unwrap()).is_err());
+        for generation in [
+            serde_json::json!(0),
+            serde_json::json!(-1),
+            serde_json::json!(true),
+        ] {
+            let mut request = original.clone();
+            request["identity"]["lease_generation"] = generation.clone();
+            request["materials"][0]["lease_generation"] = generation;
+            assert!(parse_request(&serde_json::to_vec(&resign_request(request)).unwrap()).is_err());
+        }
+    }
+
     fn post_context_request(kind: &str, selected_roles: &[&str]) -> Value {
         let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
         let id = |byte: char| format!("{0}{0}{0}{0}{0}{0}{0}{0}-0000-4000-8000-000000000000", byte);
@@ -1555,7 +1606,7 @@ mod tests {
             .expect("Python request fixture must satisfy the Rust contract");
         assert_eq!(
             request.request_digest,
-            "sha256:a06707b14348ffe5ef22a55de8d4ec4845c9029da7180d5731fb2c120b5591f3"
+            "sha256:147cd4a72624caf97ec7ee167d00e1f76d2a9c89d0bda84134b6f1ac01a47a79"
         );
         let result: Value = serde_json::from_slice(include_bytes!("../../fixtures/result.json"))
             .expect("result fixture is JSON");

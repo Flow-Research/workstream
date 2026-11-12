@@ -161,7 +161,8 @@ def test_execution_request_rejects_duplicate_material_roles() -> None:
     identity = execution_identity()
     material = PreSubmitExternalCheckerMaterial(
         role="submission_archive",
-        prepared_generation_id=identity.prepared_generation_id,
+        operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
         attempt_id=identity.attempt_id,
         attempt_request_digest=identity.attempt_request_digest,
         archive_sha256=SHA,
@@ -341,3 +342,27 @@ def test_finding_paths_must_be_safe_relative_archive_paths(path) -> None:
         check_id="paths.check", code="paths.code", level="warning", message="m",
         path="src/naïve/main.rs",
     ).path == "src/naïve/main.rs"
+
+
+@pytest.mark.parametrize("field", [
+    "operation_id", "source_sha256", "lease_id", "lease_generation", "attempt_id", "attempt_request_digest",
+])
+def test_pre_request_binds_source_and_execution_fence(field):
+    identity = execution_identity()
+    material = execution_material(identity)
+    value = (uuid4() if field.endswith("_id") else
+             2 if field == "lease_generation" else "sha256:" + "f" * 64)
+    material = material.model_copy(update={field: value})
+    with pytest.raises(ValueError, match="source material identity mismatch"):
+        make_external_checker_execution_request(
+            registry=registry_entry(), identity=identity, configuration={},
+            configuration_sha256=external_checker_json_hash({}), input={"task_version": "v3"},
+            input_sha256=external_checker_json_hash({"task_version": "v3"}), materials=(material,),
+        )
+
+
+def test_pre_request_refuses_prepared_bundle_identity():
+    identity = execution_identity()
+    value = identity.model_dump() | {"prepared_generation_id": uuid4()}
+    with pytest.raises(ValueError, match="prepared_generation_id"):
+        type(identity).model_validate(value)

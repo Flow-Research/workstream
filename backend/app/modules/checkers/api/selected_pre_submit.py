@@ -274,6 +274,13 @@ class ExternalPreSubmitMemberFacts:
 class SelectedPreSubmitExecutionFacts:
     """Platform defaults and the single selected project PRE result, if run."""
 
+    request_digest: str
+    lease_id: UUID
+    lease_generation: int
+    observed_source: SealedSubmissionSource
+    manifest_body: dict[str, object] | None
+    manifest_sha256: str | None
+    default_input_sha256: str | None
     policy_sha256: str
     workstream_default: WorkstreamDefaultCheckerResult
     required_external_count: int
@@ -282,6 +289,21 @@ class SelectedPreSubmitExecutionFacts:
 
     def __post_init__(self) -> None:
         members = self.external_members
+        if (
+            type(self.lease_id) is not UUID or type(self.lease_generation) is not int
+            or self.lease_generation < 1 or type(self.eligible) is not bool
+            or type(self.external_members) is not tuple
+            or type(self.observed_source) is not SealedSubmissionSource
+            or (self.manifest_body is None) != (self.manifest_sha256 is None)
+            or (self.manifest_body is None) != (self.default_input_sha256 is None)
+        ):
+            raise ValueError("selected PRE observed evidence is invalid")
+        SealedSubmissionSource.model_validate(self.observed_source)
+        for digest in (self.request_digest, self.manifest_sha256, self.default_input_sha256):
+            if digest is not None and (type(digest) is not str or len(digest) != 71
+                    or not digest.startswith("sha256:")
+                    or any(character not in "0123456789abcdef" for character in digest[7:])):
+                raise ValueError("selected PRE observed evidence is invalid")
         if (
             not self.policy_sha256.startswith("sha256:")
             or len(self.policy_sha256) != 71
@@ -303,12 +325,30 @@ class SelectedPreSubmitExecutionFacts:
         ):
             raise ValueError("selected PRE execution continued after a blocker")
 
-    def validate_reservation(self, reservation: SelectedPreSubmitReservationFacts) -> None:
-        """Bind returned policy members to locked selection, independently of echoes.
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+        """Reconstruct expected derived input instead of trusting echoed digests."""
+        from app.modules.checkers.api.default_checker import workstream_default_input_sha256
 
-        This is selection validation only. Source observation and the derived
-        project request must also be verified before accepted custody is issued.
-        """
+        reservation = lease.reservation
+        if (self.request_digest != reservation.request_digest
+                or self.lease_id != lease.lease_id or self.lease_generation != lease.lease_generation
+                or self.observed_source != reservation.source):
+            raise ValueError("selected PRE source or execution fence differs")
+        WorkstreamDefaultCheckerResult.model_validate(self.workstream_default)
+        archive_safe = self.workstream_default.checks[0]
+        if self.manifest_body is None:
+            if (archive_safe.status != "failed" or self.external_members
+                    or any(check.status != "not_run" for check in self.workstream_default.checks[1:])):
+                raise ValueError("selected PRE lacks inspected manifest evidence")
+            request = None
+        else:
+            if archive_safe.status != "passed" or self.workstream_default.checks[1].status != "passed":
+                raise ValueError("selected PRE inspected identity result is invalid")
+            value, request = derive_selected_pre_submit_input(
+                lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
+            )
+            if workstream_default_input_sha256(value) != self.default_input_sha256:
+                raise ValueError("selected PRE derived default input differs")
         if (
             self.policy_sha256 != reservation.policy_sha256
             or self.workstream_default.behavior_sha256 != reservation.default_behavior_sha256
@@ -327,11 +367,19 @@ class SelectedPreSubmitExecutionFacts:
             ):
                 raise ValueError("selected PRE execution selection is invalid")
             member.result.validate_registry(registry)
+            if request is None or member.request_digest != request.request_digest:
+                raise ValueError("selected PRE derived project request differs")
+            member.result.validate_request(request)
 
     def canonical_body(self) -> dict[str, object]:
         """Return the complete bounded result body retained by the durable owner."""
         return {
-            "schema_version": "workstream.selected_pre_submit_execution.v1",
+            "schema_version": "workstream.selected_pre_submit_execution.v2",
+            "request_digest": self.request_digest,
+            "lease_id": str(self.lease_id), "lease_generation": self.lease_generation,
+            "observed_source": self.observed_source.model_dump(mode="json"),
+            "manifest_body": self.manifest_body, "manifest_sha256": self.manifest_sha256,
+            "default_input_sha256": self.default_input_sha256,
             "policy_sha256": self.policy_sha256,
             "workstream_default": self.workstream_default.model_dump(mode="json"),
             "required_external_count": self.required_external_count,
@@ -357,20 +405,26 @@ class SelectedPreSubmitExecutionFacts:
             type(body) is not dict
             or set(body)
             != {
-                "schema_version",
+                "schema_version", "request_digest", "lease_id", "lease_generation",
+                "observed_source", "manifest_body", "manifest_sha256", "default_input_sha256",
                 "policy_sha256",
                 "workstream_default",
                 "required_external_count",
                 "external_members",
                 "eligible",
             }
-            or body["schema_version"] != "workstream.selected_pre_submit_execution.v1"
+            or body["schema_version"] != "workstream.selected_pre_submit_execution.v2"
         ):
             raise ValueError("selected PRE execution facts are invalid")
         members = body["external_members"]
         if type(members) is not list:
             raise ValueError("selected PRE execution facts are invalid")
-        return cls(
+        value = cls(
+            request_digest=body["request_digest"], lease_id=UUID(body["lease_id"]),
+            lease_generation=body["lease_generation"],
+            observed_source=SealedSubmissionSource.model_validate_json(json.dumps(body["observed_source"])),
+            manifest_body=body["manifest_body"], manifest_sha256=body["manifest_sha256"],
+            default_input_sha256=body["default_input_sha256"],
             policy_sha256=body["policy_sha256"],
             workstream_default=WorkstreamDefaultCheckerResult.model_validate(
                 body["workstream_default"]
@@ -393,6 +447,9 @@ class SelectedPreSubmitExecutionFacts:
             ),
             eligible=body["eligible"],
         )
+        if value.canonical_body() != body:
+            raise ValueError("selected PRE execution body is not canonical")
+        return value
 
     @property
     def result_digest(self) -> str:
@@ -585,6 +642,69 @@ class SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE lease facts are invalid")
 
 
+def derive_selected_pre_submit_input(
+    lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
+):
+    """Derive default input and the project request from locked facts and metadata.
+
+    Called independently by the trusted guest and backend verifier. This pure
+    derivation grants no source access and does not attest file observation.
+    """
+    from app.modules.artifacts.api.submission_archive import validate_submission_manifest
+    from app.modules.checkers.api.material import SubmissionMaterialEntry
+    from app.modules.checkers.api.external import (
+        PreSubmitExternalCheckerIdentity, PreSubmitExternalCheckerMaterial,
+        external_checker_json_hash, make_external_checker_execution_request,
+    )
+
+    reservation = lease.reservation
+    source = reservation.source
+    inspection = validate_submission_manifest(
+        manifest_body, sha256=manifest_sha256, limits=reservation.runtime_profile.archive_limits,
+    )
+    value = reservation.default_context.bind_verified_input(
+        archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
+        archive_media_type=source.media_type, semantic_manifest_sha256=manifest_sha256,
+        entries=tuple(SubmissionMaterialEntry(
+            entry.normalized_path, entry.entry_type.value, entry.byte_count,
+            entry.sha256, entry.executable,
+        ) for entry in inspection.entries),
+    )
+    custody = dict(
+        operation_id=source.location.operation_id, source_sha256=source.source_sha256(),
+        attempt_id=reservation.attempt_id, attempt_request_digest=reservation.request_digest,
+        lease_id=lease.lease_id, lease_generation=lease.lease_generation,
+    )
+    identity = PreSubmitExternalCheckerIdentity(
+        project_id=reservation.project_id, task_id=reservation.task_id,
+        assignment_id=reservation.assignment_id,
+        effective_plan_sha256=reservation.admission_lineage.effective_plan_sha256, **custody,
+    )
+    material = PreSubmitExternalCheckerMaterial(
+        role="submission_archive", archive_sha256=source.raw_sha256,
+        archive_byte_count=source.raw_byte_count, semantic_manifest_sha256=manifest_sha256,
+        media_type=source.media_type, **custody,
+    )
+    selected = reservation.policy.entries[0]
+    input_body = {
+        "schema_version": "workstream.external_checker_pre_submit_input.v1",
+        "requirement_id": selected.requirement_id,
+        "project_id": str(reservation.project_id), "task_id": str(reservation.task_id),
+        "assignment_id": str(reservation.assignment_id),
+        "archive_sha256": source.raw_sha256, "archive_byte_count": source.raw_byte_count,
+        "semantic_manifest_sha256": manifest_sha256,
+        "manifest": [asdict(entry) for entry in value.entries],
+        "packet": {"summary": value.packet.summary,
+                   "contributor_attestation": value.packet.contributor_attestation},
+    }
+    request = make_external_checker_execution_request(
+        registry=selected.registry, identity=identity, configuration=selected.configuration,
+        configuration_sha256=selected.configuration_sha256, input=input_body,
+        input_sha256=external_checker_json_hash(input_body), materials=(material,),
+    )
+    return value, request
+
+
 class SelectedPreSubmitExecutionAuthority(Protocol):
     """Process-local capability for one committed durable PRE lease."""
 
@@ -653,7 +773,7 @@ class SelectedPreSubmitFinalizeFacts:
         if self.execution is not None:
             if type(self.execution) is not SelectedPreSubmitExecutionFacts:
                 raise ValueError("selected PRE finalize execution is invalid")
-            self.execution.validate_reservation(self.lease.reservation)
+            self.execution.validate_lease(self.lease)
         else:
             SelectedPreSubmitInfrastructureUnavailable(self.infrastructure_failure_code or "")
 
@@ -802,7 +922,7 @@ class SelectedPreSubmitTerminalFacts:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
-            self.execution.validate_reservation(self.lease.reservation)
+            self.execution.validate_lease(self.lease)
         elif (self.outcome != "infrastructure_failed" or self.execution is not None
               or self.infrastructure_failure_code not in {
             "capacity_exceeded",

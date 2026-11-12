@@ -1441,3 +1441,45 @@ expected, then the helper was restored. Ownership/lane checks passed 229 cases;
 the ownership partition is unchanged, and record/link checks pass. These reviews
 close the selection/digest findings only, not the remaining combined-execution
 or accepted-handoff requirements.
+
+### Source-bound combined-result client and nested request derivation
+
+The CHECKERS PRE processor now invokes one typed `execute_pre` operation instead
+of exporting an ART tree and dispatching a second project invocation. Its existing
+factory and lazy configured adapter use the same external-service capability.
+The Unix client streams an ART grant's exact source in at most 64 KiB frames,
+checks count/SHA before EOF, bounds request/result framing and elapsed time by the
+lease, and closes source/transport on cancellation. The grant is a separate
+process-local port; no token or host path enters immutable request identity.
+
+Live nested Python/Rust PRE identity now binds operation, sealed-source digest,
+run/request and execution lease/fence, with no prepared-generation field. Shared
+wire fixtures were regenerated for this deliberate contract replacement. Live
+execution evidence is v2 and retains observed source, fence, canonical manifest
+and default-input digest. CHECKERS uses ART's existing canonical manifest parser
+with the locked invocation limits and reconstructs default input plus the nested
+project request from the reservation, then validates the returned project result
+against that reconstructed request. Unsafe-archive default rejection may omit
+manifest/project evidence; a passing default cannot. Historical v1 decoding and
+its retained fixtures remain separate read-only data.
+
+The focused contract/transport selection passed 120 cases, including source,
+lease, manifest and mutually rehashed request/result substitutions; source-short,
+source-long and wrong-hash transport; trailing frames; expired lease before source
+open; one invocation only; and cancellation closing source and socket. The Rust
+SDK passed eight tests including rehashed source/fence substitutions. Ownership
+and lane checks passed 229 cases. The entire runtime test module was also run:
+29 passed and one obsolete prepared-ZIP grant test failed because its removed
+prepared-generation identity is correctly refused. That failure is retained,
+not skipped or adapted into a second PRE path.
+
+This is an intermediate local implementation in the coordinated single PR, not
+a completed bounded-change or merge milestone. The actual ART source-grant issuer
+and its materializer AUTH replacement, native service/guest `execute_pre` handler,
+provider invocation/profile/conformance/cleanup envelope, old ART caller/tree-grant
+removal, SQL deep-result guard and T4 remain required. The old ART materializer and
+Rust PRE tree-grant service still refer to the superseded preparation identity;
+they must be removed during the connected replacement, not made into compatibility
+adapters. The current public path remains unfinished and these local commits must
+not be pushed as a publishable cutover. No source grant authority, native guest
+execution, provider qualification or accepted handoff is proved by a socket fake.

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import AsyncGenerator
 import re
 from typing import Protocol
 
 from app.interfaces.external_services import ExternalServiceAdapter
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitExecutionFacts,
+)
 from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
@@ -143,8 +147,24 @@ class ExternalCheckerServiceHealth:
             raise ValueError("external checker service health is invalid")
 
 
+class ExternalPreSubmitSourceGrant(Protocol):
+    """ART-issued expiring read authority, separate from durable request identity.
+
+    The issuer must consume the exact committed lease and authorize the immutable
+    source generation before returning this process-local capability.
+    """
+
+    def open_source(self, *, lease: SelectedPreSubmitLeaseFacts) -> AsyncGenerator[bytes, None]:
+        """Read only the bound source, outside a database transaction."""
+
+
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
     """Execute one normalized request through the trusted checker service."""
+
+    async def execute_pre(
+        self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
+    ) -> SelectedPreSubmitExecutionFacts:
+        """Run source verification, defaults and selected project in one session."""
 
     async def locate_forge_change(
         self,
@@ -169,6 +189,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
 
 __all__ = (
     "ExternalCheckerExecutionAdapter",
+    "ExternalPreSubmitSourceGrant",
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",
