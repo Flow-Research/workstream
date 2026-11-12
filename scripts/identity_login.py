@@ -16,6 +16,7 @@ from contextlib import contextmanager, nullcontext
 import fcntl
 import base64
 import hashlib
+from http.client import HTTPException
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
@@ -26,7 +27,7 @@ import stat
 import subprocess
 import tempfile
 import time
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import HTTPSHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener
 import webbrowser
@@ -74,7 +75,7 @@ def request_json(url: str, context: ssl.SSLContext, data: dict | None = None, *,
     except HTTPError as error:
         error.close()
         raise LoginError(f"Identity request was rejected (HTTP {error.code}); sign in again if renewal expired.") from None
-    except (URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError):
+    except (OSError, HTTPException, json.JSONDecodeError, UnicodeDecodeError):
         raise LoginError("Cannot read a valid response from the trusted identity endpoint.") from None
     if not isinstance(value, dict):
         raise LoginError("Identity returned an invalid response.")

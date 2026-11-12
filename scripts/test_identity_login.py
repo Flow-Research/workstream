@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import base64
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import redirect_stdout
 import hashlib
+from http.client import IncompleteRead
+import io
 import json
 import os
 from pathlib import Path
@@ -14,7 +17,7 @@ import sys
 import time
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
@@ -229,6 +232,32 @@ class IdentityLoginTests(unittest.TestCase):
                 login.logout(self.path, self.issuer, ssl.create_default_context())
         self.assertFalse(self.path.exists())
         self.assertTrue(self.path.with_name(self.path.name + ".lock").exists())
+
+    def test_logout_response_read_failure_removes_credentials_and_reports_uncertainty(self):
+        for error in (ConnectionResetError("private transport detail"),
+                      IncompleteRead(b"private response fragment", 100)):
+            with self.subTest(error=type(error).__name__):
+                self.path = self.root / (type(error).__name__ + ".json")
+                login.save_credentials(self.path, self.issuer, self.tokens, self.claims, replace=False)
+                response = MagicMock()
+                response.__enter__.return_value = response
+                response.read.side_effect = error
+                opener = MagicMock()
+                opener.open.return_value = response
+                output = io.StringIO()
+                with patch.object(sys, "argv", ["identity_login", "--issuer", self.issuer,
+                        "--output", str(self.path), "--logout"]), \
+                        patch.object(login, "endpoints", return_value=("auth", "token")), \
+                        patch.object(login, "build_opener", return_value=opener), redirect_stdout(output):
+                    self.assertEqual(login.main(), 1)
+                self.assertEqual(opener.open.call_args.args[0].full_url,
+                                 self.issuer + "/protocol/openid-connect/revoke")
+                response.read.assert_called_once_with(login.MAX_RESPONSE + 1)
+                self.assertFalse(self.path.exists())
+                self.assertTrue(self.path.with_name(self.path.name + ".lock").exists())
+                self.assertIn("remote revocation is unconfirmed", output.getvalue())
+                self.assertNotIn("private", output.getvalue())
+                self.assertNotIn(self.tokens["refresh_token"], output.getvalue())
 
     def test_refresh_and_logout_processes_cannot_race_or_resurrect_credentials(self):
         login.save_credentials(self.path, self.issuer, self.tokens, self.claims, replace=False)
