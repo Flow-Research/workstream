@@ -2181,3 +2181,16 @@ typed QC semantics remain CHECKERS' responsibility. Shared POST/trial retains
 its original connection predicate. Formatting, diff, record and link checks
 pass. The checker README is also updated to distinguish the now-wired host
 caller from still-required backend receipt retention and native qualification.
+
+At clean `d5a4a9ffb`, QA/test-delta and documentation review passed their scoped
+transport and claim checks. Architecture/security found a concrete host-memory
+accounting defect: stderr retention could grow to a configured multi-GiB log
+allowance despite fixed host overhead, and continuous draining lacked an inner
+deadline check. The repair counts and discards logs with an 8 KiB scratch buffer,
+limits each drain pass to 64 KiB per pipe, and checks deadline/cancellation
+between reads. Control output still has its explicit retained-byte bound. A
+continuous-log child with a u32-maximum allowance expires and is reaped; another
+child writes exactly its 4 MiB allowance and completes successfully. All 52
+selected Smol tests pass after repair. The earlier 42 trial tests and 127-pass/
+five-failure full service run remain compatible prior evidence, not relabeled
+exact-head runs. Backend receipt retention and native qualification remain open.

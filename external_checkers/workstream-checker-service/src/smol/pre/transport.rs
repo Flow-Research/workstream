@@ -21,7 +21,7 @@ struct Session {
     output: ChildStdout,
     errors: ChildStderr,
     stdout: Vec<u8>,
-    stderr: Vec<u8>,
+    stderr_bytes: usize,
     output_eof: bool,
     errors_eof: bool,
     reaped: bool,
@@ -52,7 +52,7 @@ impl Session {
             output,
             errors,
             stdout: Vec::new(),
-            stderr: Vec::new(),
+            stderr_bytes: 0,
             output_eof: false,
             errors_eof: false,
             reaped: false,
@@ -66,15 +66,65 @@ impl Session {
         set_nonblocking(&result.errors)?;
         Ok(result)
     }
-    fn check(&mut self, client: &UnixStream) -> Result<(), String> {
+    fn check_cancelled(&self, client: &UnixStream) -> Result<(), String> {
         if Instant::now() >= self.deadline {
             return Err("deadline_exceeded".into());
         }
         if !connected(client) {
             return Err("cancelled".into());
         }
-        self.output_eof = read_available(&mut self.output, &mut self.stdout, self.maximum_control)?;
-        self.errors_eof = read_available(&mut self.errors, &mut self.stderr, self.maximum_log)?;
+        Ok(())
+    }
+    fn check(&mut self, client: &UnixStream) -> Result<(), String> {
+        // Drain at most 64 KiB per pipe before yielding to input delivery. Logs
+        // are counted and discarded, regardless of the configured allowance.
+        // Check cancellation between reads even under continuous guest output.
+        let mut buffer = [0_u8; 8192];
+        for _ in 0..8 {
+            self.check_cancelled(client)?;
+            let mut progressed = false;
+            if !self.output_eof {
+                match self.output.read(&mut buffer) {
+                    Ok(0) => self.output_eof = true,
+                    Ok(count) => {
+                        self.stdout
+                            .len()
+                            .checked_add(count)
+                            .filter(|total| *total <= self.maximum_control)
+                            .ok_or("PRE output unbounded")?;
+                        self.stdout.extend_from_slice(&buffer[..count]);
+                        progressed = true;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => (),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                        progressed = true
+                    }
+                    Err(_) => return Err("PRE output failed".into()),
+                }
+            }
+            self.check_cancelled(client)?;
+            if !self.errors_eof {
+                match self.errors.read(&mut buffer) {
+                    Ok(0) => self.errors_eof = true,
+                    Ok(count) => {
+                        self.stderr_bytes = self
+                            .stderr_bytes
+                            .checked_add(count)
+                            .filter(|total| *total <= self.maximum_log)
+                            .ok_or("PRE logs unbounded")?;
+                        progressed = true;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => (),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+                        progressed = true
+                    }
+                    Err(_) => return Err("PRE logs failed".into()),
+                }
+            }
+            if !progressed {
+                break;
+            }
+        }
         Ok(())
     }
     fn write(&mut self, client: &UnixStream, mut bytes: &[u8]) -> Result<(), String> {

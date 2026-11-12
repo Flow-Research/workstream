@@ -4,6 +4,8 @@ use serde_json::json;
 const GUEST: &str = r#"
 import hashlib,json,struct,sys,time,os
 mode=sys.argv[1]
+if mode=='log_stall':
+    while True: os.write(2,b'x'*65536)
 if mode=='stall':
     time.sleep(30)
     sys.exit(1)
@@ -20,6 +22,8 @@ root=read(job['root']['bundle_byte_count'])
 source=read(job['startup']['request']['reservation']['source']['raw_byte_count'])
 assert read(4)==b'\0'*4
 assert sys.stdin.buffer.read(1)==b''
+if mode=='permitted_logs':
+    sys.stderr.buffer.write(b'x'*job['limits']['maximum_log_bytes']);sys.stderr.buffer.flush()
 if mode=='logs':
     sys.stderr.buffer.write(b'x'*(job['limits']['maximum_log_bytes']+1));sys.stderr.buffer.flush()
 payload=json.dumps({'root':hashlib.sha256(root).hexdigest(),'source':hashlib.sha256(source).hexdigest(),'bytes':len(source),'pid':os.getpid(),'limits':job['limits']}).encode()
@@ -57,6 +61,15 @@ fn run_case(attack: &str) -> Result<Value, String> {
     header["reservation"]["source_sha256"] = json!(canonical_hash(&Value::Object(body)).unwrap());
     let root_digest = format!("sha256:{:x}", Sha256::digest(vec![0_u8; 1024]));
     let pre = config.pre.as_mut().unwrap();
+    if attack == "log_stall" || attack == "permitted_logs" {
+        let maximum = if attack == "log_stall" {
+            u32::MAX as usize
+        } else {
+            4 * 1024 * 1024
+        };
+        pre.limits.maximum_log_bytes = maximum;
+        pre.profile["maximum_log_bytes"] = json!(maximum);
+    }
     pre.root.bundle_sha256 = root_digest.clone();
     pre.profile["platform_root_sha256"] = json!(root_digest);
     pre.profile_sha256 = canonical_hash(&pre.profile).unwrap();
@@ -193,6 +206,12 @@ fn host_launch_passes_identical_clamped_limits_to_argv_and_job() {
         unsafe { libc::kill(result["pid"].as_u64().unwrap() as i32, 0) },
         -1
     );
+}
+
+#[test]
+fn large_log_allowances_do_not_prevent_deadline_or_successful_completion() {
+    assert_eq!(run_case("log_stall").unwrap_err(), "deadline_exceeded");
+    assert!(run_case("permitted_logs").is_ok());
 }
 
 #[test]
