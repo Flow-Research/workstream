@@ -39,7 +39,7 @@ def continuation_facts(row, lease_id, generation):
 class AcceptedSubmissionFinalization:
     """Keep provider I/O outside TASK locks; finalized replay precedes new claims."""
 
-    def __init__(self, sessions, *, tasks, authorization, submissions, checkers, store, lease_duration):
+    def __init__(self, sessions, *, tasks, authorization, submissions, checkers, store, lease_duration, delivery=None):
         # Match the durable outbox's one-hour structural lease ceiling. This is
         # not a deployment default; composition must still supply its profile.
         if not isinstance(lease_duration, timedelta) or not timedelta(0) < lease_duration <= timedelta(hours=1):
@@ -47,6 +47,7 @@ class AcceptedSubmissionFinalization:
         self._sessions, self._tasks, self._authorization = sessions, tasks, authorization
         self._submissions, self._store, self._duration = submissions, store, lease_duration
         self._checkers = checkers
+        self._delivery = delivery
 
     @asynccontextmanager
     async def _root(self):
@@ -82,14 +83,19 @@ class AcceptedSubmissionFinalization:
             return await self._finalize(operation_id, claim, observation)
         except IntakeCommitUnknown:
             async with self._root() as (session, authority):
-                row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(operation_id)
-                await authority.authorize()
+                row = await self._lock(session, authority, operation_id)
                 return await self._finalized(session, row)
+
+    async def _lock(self, session, authority, operation_id):
+        row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(operation_id)
+        await authority.authorize()
+        if self._delivery is not None:
+            await self._delivery.fence(session, row)
+        return row
 
     async def _claim(self, operation_id, lease_id):
         async with self._root() as (session, authority):
-            row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(operation_id)
-            await authority.authorize()
+            row = await self._lock(session, authority, operation_id)
             if row.state == "finalized":
                 return await self._finalized(session, row)
             if row.state != "finalization_pending":
@@ -106,14 +112,16 @@ class AcceptedSubmissionFinalization:
             if not isinstance(decision, UUID):
                 raise IntakeCustodyConflict("finalization_authority_unavailable")
             row.continuation_lease_id, row.continuation_generation = str(lease_id), generation
-            row.continuation_expires_at, row.continuation_decision_id = now + self._duration, str(decision)
+            expires_at = now + self._duration
+            if self._delivery is not None:
+                expires_at = min(expires_at, self._delivery.envelope.claim.claim_expires_at)
+            row.continuation_expires_at, row.continuation_decision_id = expires_at, str(decision)
             await session.flush()
             return AcceptedContinuation(SubmissionIntakeRepository._sealed_source(row), lease_id, generation)
 
     async def _recover_claim(self, operation_id, lease_id):
         async with self._root() as (session, authority):
-            row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(operation_id)
-            await authority.authorize()
+            row = await self._lock(session, authority, operation_id)
             if row.state == "finalized":
                 return await self._finalized(session, row)
             now = await session.scalar(select(func.clock_timestamp()))
@@ -131,8 +139,7 @@ class AcceptedSubmissionFinalization:
     async def _finalize(self, operation_id: UUID, claim: AcceptedContinuation, observation: SealedSourceObservation):
         async with self._root() as (session, authority):
             tasks = self._tasks(session)
-            row = await SubmissionIntakeRepository(session, tasks)._lock(operation_id)
-            await authority.authorize()
+            row = await self._lock(session, authority, operation_id)
             if row.state == "finalized":
                 return await self._finalized(session, row)
             now = await session.scalar(select(func.clock_timestamp()))

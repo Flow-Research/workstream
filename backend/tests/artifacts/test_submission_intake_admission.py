@@ -848,3 +848,86 @@ def test_finalization_rejects_unbounded_or_empty_lease(duration):
     with pytest.raises(ValueError, match="at most one hour"):
         AcceptedSubmissionFinalization(None, tasks=None, authorization=None, submissions=None,
             checkers=None, store=None, lease_duration=duration)
+
+
+@pytest.mark.parametrize("lost_at", ["after_commit", "during_observation"])
+async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(admission_intake, tmp_path, lost_at):
+    from uuid import UUID
+    from sqlalchemy import select, func
+    from app.adapters.artifacts.finalization import submission_finalization_handler
+    from app.adapters.auth import outbox_dispatch_authorization
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append, outbox_delivery, production_outbox_delivery
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.outbox.api import DeliveryOptions, FinalizationCause, HandlerOutcome
+    from app.modules.outbox.models import OutboxEvent
+    from app.modules.outbox.registry import HandlerRegistry
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import completed_source
+    from tests.checkers.execution.support import provision_post_submit_service
+
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    for identity in (ServiceIdentity.ARTIFACT_BINDING, ServiceIdentity.OUTBOX_DISPATCHER):
+        await provision_post_submit_service(f.factory, identity)
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    observations, invocations = [], []
+    class ObservedStore:
+        async def observe_sealed_source(self, source):
+            observations.append(source)
+            if lost_at == "during_observation" and len(observations) == 1:
+                await delivery.finalize(invocations[0].claim, FinalizationCause.UNKNOWN)
+            assert len(observations) <= (2 if lost_at == "during_observation" else 1)
+            return await store.observe_sealed_source(source)
+    handler = submission_finalization_handler(sessions=f.factory, settings=_settings(tmp_path),
+        store=ObservedStore(), lease_duration=timedelta(seconds=30))
+    async def lose_ack(envelope):
+        invocations.append(envelope)
+        assert await handler(envelope.model_copy(update={"aggregate_id": new_record_id()})) == HandlerOutcome.REJECT
+        result = await handler(envelope)
+        assert result == HandlerOutcome.ACKNOWLEDGE
+        if len(invocations) == 1 and lost_at == "after_commit":
+            raise RuntimeError("worker lost after committed T5")
+        return result
+    event_type = "SubmissionFinalizationRequested"
+    delivery = outbox_delivery(f.factory, authorization_factory=outbox_dispatch_authorization,
+        registry=HandlerRegistry([(event_type, 1, lose_ack)], replay_safe=frozenset({(event_type, 1)})),
+        options=DeliveryOptions(lease_seconds=10, handler_timeout_seconds=9,
+                                retry_base_seconds=1, retry_cap_seconds=1))
+    try:
+        async with f.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+            event_id = UUID(row.finalization_event_id)
+        candidates = await production_outbox_delivery(f.factory).candidates()
+        assert event_id in {item.event_id for item in candidates.items}
+        assert await delivery.deliver(event_id, f.project, "first-worker") is not None
+        async with f.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+            event = await session.get(OutboxEvent, event_id)
+            assert row.state == ("finalized" if lost_at == "after_commit" else "finalization_pending")
+            assert event.delivery_state == "retryable"
+            submission_id = row.finalized_submission_id
+            assert row.continuation_expires_at <= invocations[0].claim.claim_expires_at
+            ready_at = event.next_attempt_at
+            if lost_at == "during_observation":
+                assert submission_id is None
+                ready_at = max(ready_at, row.continuation_expires_at)
+            remaining = (ready_at - await session.scalar(select(func.clock_timestamp()))).total_seconds()
+        await asyncio.sleep(max(0, remaining) + 0.05)
+        assert await delivery.deliver(event_id, f.project, "replacement-worker") is not None
+        async with f.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+            event = await session.get(OutboxEvent, event_id)
+            assert row.state == "finalized"
+            if lost_at == "after_commit":
+                assert row.finalized_submission_id == submission_id and row.continuation_generation == 1
+            else:
+                assert row.finalized_submission_id is not None and row.continuation_generation == 2
+            assert event.delivery_state == "acknowledged" and event.attempt_count == 2
+        assert len(observations) == (1 if lost_at == "after_commit" else 2)
+        assert len(invocations) == 2
+        assert await handler(invocations[0]) == HandlerOutcome.REJECT
+    finally:
+        store.close()

@@ -44,8 +44,9 @@ def outbox_delivery(
 
 
 def production_outbox_delivery(session_factory):
-    """Install exact assignment and selected evaluation handlers."""
+    """Install assignment, accepted finalization and selected evaluation handlers."""
     from app.adapters.artifacts import worker_post_submission_materialization
+    from app.adapters.artifacts.finalization import worker_submission_finalization_handler
     from app.adapters.auth import (
         outbox_dispatch_authorization,
         assignment_invalidation_authorization,
@@ -75,11 +76,19 @@ def production_outbox_delivery(session_factory):
         REVISION_EXPIRY_EVENT, REVISION_EXPIRED_EVENT, REVISION_CONTEXT_BLOCKED_EVENT,
     )
 
+    finalization_options = DeliveryOptions()
     return outbox_delivery(
         session_factory,
         authorization_factory=outbox_dispatch_authorization,
         registry=HandlerRegistry(
             [
+                (
+                    "SubmissionFinalizationRequested",
+                    1,
+                    worker_submission_finalization_handler(
+                        sessions=session_factory, delivery_options=finalization_options,
+                    ),
+                ),
                 (
                     ASSIGNMENT_INVALIDATION_EVENT,
                     1,
@@ -148,10 +157,11 @@ def production_outbox_delivery(session_factory):
                     ),
                 ),
             ],
-            replay_safe=frozenset({(REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
+            replay_safe=frozenset({("SubmissionFinalizationRequested", 1), (REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
         ),
         options=DeliveryOptions(),
         event_options={
+            ("SubmissionFinalizationRequested", 1): finalization_options,
             (REQUEST_EVENT, 1): DeliveryOptions(
                 lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
                 handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,

@@ -2879,3 +2879,42 @@ and replay after committed T5 without another provider observation. Worker routi
 and stalled progress must subsequently be proved through the durable owners.
 This is high-risk workflow/authorization work requiring architecture/security and
 QA review, with human review focused on lock order, expiry and acknowledgement.
+
+The delivery implementation now registers the accepted event with the existing
+production OUTBOX owner. Its handler requires an independently committed current
+invocation. Every finalization claim, effect and unknown-commit recovery locks
+TASK/operation, authorizes the fixed service, validates the exact accepted event
+and acquires the existing OUTBOX invocation fence in that transaction. Continuation
+expiry cannot exceed the delivery claim. Finalized replay validates retained
+associations before provider access; the worker adapter initializes storage lazily
+only for source metadata observation. UNKNOWN delivery uses OUTBOX's existing
+explicit replay-safe registration and bounded retry machinery.
+
+The composition reuses the existing `DeliveryOptions` convention (300-second lease,
+240-second handler timeout, five attempts, 5-second exponential retry base capped
+at 300 seconds) for this bounded metadata/SQL operation. These values are not a
+new measured deployment qualification. Separate finalization capacity, visible
+operation stalls and operator retry authority remain required under C04/C05.
+The focused PostgreSQL test exercises the same adapter through actual OUTBOX
+claim/invoke/finalize, simulates failure after T5 commits, and requires a second
+delivery to acknowledge without another provider observation.
+
+The first integrated run reached committed T5 but SQL refused retry of UNKNOWN
+for this event: Python registration alone did not satisfy the database's closed
+feature list. Migration 0076 extends that exact list only for version-1 submission
+finalization. The public schema fingerprint was updated from the actual migrated
+database; no schema guard was bypassed.
+
+The repaired real PostgreSQL run passed **2 tests** (`/tmp/t5-delivery2.log`, metadata
+`/tmp/t5-delivery2.json`). Loss after T5 commits replays the same Submission with one
+provider observation. Loss during observation fences the first finalizer before
+T5, retains pending custody, and allows generation-2 recovery after lease expiry.
+Both acknowledge only the replacement invocation; stale invocation replay is
+rejected. Production candidate discovery includes the accepted event. The existing
+generic-event SQL refusal test also passed (`/tmp/t5-delivery-negative.log`, matching
+metadata JSON), proving UNKNOWN retry remains closed for unregistered events.
+Earlier ordinary/expired-claim T5 cases passed in `/tmp/t5-delivery1.log`; its new
+delivery case failed before the migration and is not counted as a success.
+Architecture/outbox contracts/topology passed **117 tests**; changed-file Ruff,
+structure and Markdown-link checks passed. These are scoped worktree results,
+not complete durable-worker or public-journey qualification.
