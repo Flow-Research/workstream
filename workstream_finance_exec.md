@@ -2,7 +2,7 @@
 
 ## Implementation specification
 
-**Status:** Consolidated implementation contract reflecting the approved product and module architecture. It specifies the code to implement and the evidence required to call it complete. Production payments, deployment and merge retain the repository’s existing authorization requirements.
+**Status:** Current unreleased v0.1 implementation contract, corrected by the user to require complete replacement of superseded behavior. It specifies the code to implement and the evidence required to call it complete. Production payments, deployment and merge retain the repository’s existing authorization requirements.
 
 **Prepared:** 12 November 2026, Africa/Lagos. **Architecture revision:** Finance is a dedicated Workstream module using existing AUTH/ACTORS, PostgreSQL, migrations, Celery/Redis and OUTBOX. Authenticated HTTP admission and callback remain mandatory. This version supersedes the earlier separate-application, separate-database and Finance-local-human-grants design.
 
@@ -11,6 +11,22 @@
 **Deliverable:** Size-based contribution awards plus a dedicated Finance module at `backend/app/modules/finance/`, serving only Workstream. Finance shares Workstream’s platform but owns its domain records and operations. Workstream-to-Finance admission and Finance-to-Workstream reports use actual authenticated HTTP after local commit. The module has an explicit extraction inventory and replaceable host adapters; extraction later is a controlled runtime/data migration, not a copy-folder standalone guarantee.
 
 **Interpretation:** MUST and MUST NOT are requirements. Defaults below are explicit implementation choices, not claims that the feature already exists. The coding agent must implement these choices consistently. If a newer merged owner conflicts with a requirement, report the concrete conflict and proposed amendment; do not silently substitute a different product rule.
+
+## Required implementation replacement
+
+There is one current implementation within Workstream v0.1. Remove superseded
+reward-model versions, parallel old/new validators, old-response decoders,
+old-hash fallbacks and compatibility-only fixtures/tests. Update affected owners,
+callers, schemas, migrations, CLI/MCP contracts and documentation together.
+Task size does not require a model-version boundary: creation normalizes omitted
+size to Small before current request hashing. Current receipts always record it.
+Actual policy/submission revisions and external protocol identifiers keep their
+business/protocol meaning; they do not select an obsolete implementation.
+
+Removing obsolete code does not authorize deleting retained database rows or
+rewriting immutable financial evidence. Refuse an incompatible data transition
+atomically rather than inventing prices, preserving an obsolete runtime or
+silently discarding evidence. See section 17.
 
 ## Contents
 
@@ -30,7 +46,7 @@
 14. [Receipts, exceptions and reconciliation](#14-receipts-exceptions-and-reconciliation)
 15. [Equivalent values and contributor presentation](#15-equivalent-values-and-contributor-presentation)
 16. [API, CLI, MCP and imports](#16-api-cli-mcp-and-imports)
-17. [Retained data and migration](#17-retained-data-and-migration)
+17. [Data transition and migration](#17-data-transition-and-migration)
 18. [Deployment, operation and extraction](#18-deployment-operation-and-extraction)
 19. [Implementation sequence and file ownership](#19-implementation-sequence-and-file-ownership)
 20. [Acceptance tests and completion](#20-acceptance-tests-and-completion)
@@ -70,10 +86,10 @@ These close details that were not separately selected in the product conversatio
 | I02 | Use the existing backend’s pinned Python/FastAPI/Pydantic/SQLAlchemy/HTTPX stack and dependency lock. Reuse its DB/session, Alembic, API controls, typed AUTH/ACTORS/AUDIT/OUTBOX ports and Celery/Redis. Add an explicit Finance worker profile and queue. | Reuses the existing modular-monolith platform while retaining Finance ownership and effect isolation. |
 | I03 | The first bank-transfer adapter supports Paystack NGN transfers. Other money units may remain valid Workstream award facts, but this Finance adapter cannot execute them. Unsupported currency is a visible block, never implicit FX. | Earlier payment example selected Paystack; first bank-transfer qualification uses NGN. |
 | I04 | Points arrangements support points_credit or points_to_ngn. The real arrangement and rate must be explicitly configured in Finance; neither is inferred from an award or quote. | Covers the two fulfillment meanings discussed without putting conversion in Workstream. |
-| I05 | One eligible finance_authority explicitly authorizes each initial or replacement bank-transfer attempt. The service verifies source evidence and plan eligibility within that operation, then durably stages execution. New points_credit follows its configured arrangement; historical points_credit requires the same manager's prior-fulfillment attestation through the authorization operation. | The user's later clarification supersedes the earlier separate-person default taken from Julian's roadmap. Additional approval policies belong within Finance and are deferred. |
+| I05 | One eligible finance_authority explicitly authorizes each initial or replacement bank-transfer attempt. The service verifies source evidence and plan eligibility within that operation, then durably stages execution. Points credit follows its configured arrangement. | The user's later clarification supersedes the earlier separate-person default taken from Julian's roadmap. Additional approval policies belong within Finance and are deferred. |
 | I06 | Full-award fulfillment only. Finance may perform its internal steps, but Workstream receives a success only for complete fulfillment of the original obligation. | Reuses the planned receipt boundary. |
 | I07 | A verified post-success provider reversal creates a separate immutable fulfillment exception and an attention flag. It never automatically causes another payout. | Required to represent a concrete provider outcome without rewriting an earned award or fulfilled receipt. |
-| I08 | Retained historical awards are not automatically sent to Finance on upgrade. An authorized, explicit per-award enrollment is required. | Prevents accidental payment of historical work whose payment history has not been established. |
+| I08 | Startup and migration create no payouts or financial effects. Current acceptance creates the exact selected award and root through its authorized atomic owner. | No obsolete award-enrollment workflow or automatic migration payments. |
 
 I05 defines the baseline: one eligible Finance manager authorizes execution, and the service performs the technical checks. Admission or planning alone must not initiate a money transfer. A future Finance-only policy may require additional approvals before execution, but this implementation does not add that policy, extra approver roles or intermediate approval states. Such an enhancement must preserve the Workstream award handoff, source-evidence and fulfillment callback contract; Workstream does not enforce Finance's internal approval policy.
 
@@ -226,7 +242,7 @@ Timestamps normalize before digest comparison; producers emit the canonical form
 - Finance obligation PUT uses the award UUID as Idempotency-Key. A retry changes neither path nor body.
 - Fulfillment-report deduplication uses the persisted external_event_id, with an identical Idempotency-Key header. Exception deduplication instead uses exception_event_id, with an identical Idempotency-Key header. Both event identifiers are Finance-generated UUIDv7 strings.
 - Finance admin replay identity is (verified human principal, action, resource, idempotency key); retain request digest and original response. Changed payload with the same key returns 409.
-- All routes use the existing `app.core.api_controls.ApiErrorResponse`, `StructuredHTTPException`, request/correlation IDs, handlers and authorization/concealment conventions. The canonical `error` object has `code`, `message`, `details`, `correlation_id` and `retryable`; the existing optional top-level `detail` compatibility member remains supported. Finance supplies bounded domain error codes through those handlers and adds no competing global middleware or second error envelope. No stack traces, bank data or provider payloads appear in errors.
+- All routes use the existing `app.core.api_controls.ApiErrorResponse`, `StructuredHTTPException`, request/correlation IDs, handlers and authorization/concealment conventions. The canonical `error` object has `code`, `message`, `details`, `correlation_id` and `retryable`; the canonical shared error representation remains in use. Finance supplies bounded domain error codes through those handlers and adds no competing global middleware or second error envelope. No stack traces, bank data or provider payloads appear in errors.
 - HTTP 401 means missing/invalid credentials. Unauthorized resources are concealed with 404. HTTP 409 means an exact state/idempotency conflict; 422 means invalid input; 429/503 are retryable without changing business identity. A successful HTTP response must still pass its response schema and identity/digest checks.
 - 2xx is acknowledgement of the operation described by that route, never generic proof that a bank payment succeeded.
 
@@ -248,7 +264,7 @@ These are operational timing defaults. Changing them cannot change financial ide
 
 ### 4.1 New policy shape
 
-All newly authored graphs are reward_model_version=2. This field is server-owned. Keep the existing draft/update/publication/retirement endpoints and policy aggregate ownership.
+All policy graphs use the single current sized/fixed/unpaid model. Do not add a reward-model version field. Keep the existing draft/update/publication/retirement endpoints and policy aggregate ownership.
 
 The complete replacement draft update is:
 
@@ -295,21 +311,27 @@ Positive equal quantities are allowed. No monotonic relationship between the thr
 
 ### 4.2 Persistence and publication
 
-Extend ContributionPolicyVersion with the common header and reward_model_version. Retain ContributionRule and ContributionAwardDefinition as the canonical owners.
+Extend ContributionPolicyVersion with the common financial header. Retain
+ContributionRule and ContributionAwardDefinition as the canonical owners.
+Accepted-submission definitions have task_size=small|medium|large; completed-review
+definitions have task_size=null. Definitions retain exact immutable instrument,
+unit, quantity and binding facts.
 
-Each v2 accepted-submission definition has task_size=small|medium|large. Each v2 completed-review definition has task_size=null. Definitions retain exact immutable instrument, unit, quantity and binding facts.
+Enforce the current graph directly:
 
-For v2 definitions enforce:
+- UNIQUE(contribution_rule_id, task_size) for non-null sizes.
+- UNIQUE(contribution_rule_id) for null-size reviewer definitions.
+- Replace the superseded per-rule/instrument uniqueness with those constraints.
+- Deferred graph validation requires two rules, exact type/mode/cardinality and
+  equality to the common header. Compensated submitter rules have exactly three
+  sized definitions; compensated reviewer rules exactly one fixed definition;
+  unpaid rules have zero definitions.
+- Keep existing project/policy/binding/unit FKs and immutability protections.
+- No version-gated constraints or old graph-validator branch remain.
 
-- UNIQUE(contribution_rule_id, task_size) WHERE reward_model_version=2 AND task_size IS NOT NULL.
-- UNIQUE(contribution_rule_id) WHERE reward_model_version=2 AND task_size IS NULL.
-- Remove the old global UNIQUE(contribution_rule_id, instrument_type), which would prohibit three tiers. Retained v1 definitions instead use a partial UNIQUE(contribution_rule_id, instrument_type) WHERE reward_model_version=1. The definition's reward_model_version is derived from and constrained to its parent version as specified in section 17; callers cannot select a version to bypass the graph guard.
-- Deferred exact graph validation checks the rule's type, mode, complete cardinality and equality to the version common header.
-- Compensated accepted_submission has exactly three definitions; compensated completed_review exactly one; unpaid has zero.
-- No accepted-submission v2 definition may have null task_size and no completed-review definition may have a non-null size.
-- Existing project/version/binding/unit foreign keys and immutability protections remain.
-
-The publication graph digest includes reward_model_version, common header and every rule/definition with its size and exact amount. Canonical rule order is accepted_submission, completed_review; tier order is small, medium, large.
+The publication graph digest includes the common header and every rule and
+selected-size definition with its exact amount. Canonical rule order is
+accepted_submission, completed_review; tier order is small, medium, large.
 
 Continue current publication locks, enabled-unit checks, binding checks, graph eligibility, authorization consumption and previous-version retirement. Do not add a new publication operation or a second policy store [R02–R05].
 
@@ -361,7 +383,7 @@ Internal RewardSelectionFacts contains policy_version_id, task_size, compensatio
 
 Extend the existing task authority/request digests, operation receipts, import receipts and context validation. Do not let a projection choose a definition that the immutable Submission did not select [R06–R08].
 
-Enforce the selection-copy chain in PostgreSQL as well as through owner code. New v2 task_size is non-null and immutable after task insertion. An assignment insert must copy the task's exact size, policy version and selected definition; a Submission insert must match both its assignment and task at admission. After screening, a null definition is valid if and only if the exact accepted-submission rule is unpaid; the unscreened draft is the sole preselection exception. Every copied RewardSelectionFacts value must equal its exact immutable definition, not merely reference a valid definition UUID. Continuing Task/Assignment changes are permitted only through the existing governed revision operation with matching recorded prior/target selection and current preparation identity. Historical immutable rows and read-only v1 evidence retain the rules in section 17.
+Enforce the selection-copy chain in PostgreSQL as well as through owner code. New current task_size is non-null and immutable after task insertion. An assignment insert must copy the task's exact size, policy version and selected definition; a Submission insert must match both its assignment and task at admission. After screening, a null definition is valid if and only if the exact accepted-submission rule is unpaid; the unscreened draft is the sole preselection exception. Every copied RewardSelectionFacts value must equal its exact immutable definition, not merely reference a valid definition UUID. Continuing Task/Assignment changes are permitted only through the existing governed revision operation with matching recorded prior/target selection and current preparation identity. Data-transition safety follows section 17; no old runtime is retained.
 
 ### 5.3 Governed revision rebasing
 
@@ -414,14 +436,14 @@ External network I/O must not occur in this transaction. Finance unavailability 
 
 The award writer consumes the exact selected definition from the immutable accepted Submission. It must no longer enumerate all three schedule alternatives.
 
-New-write complete-set contracts permit zero or one definition/award. Replay of retained v1 outcomes is separately described in section 17 and is read-only.
+New-write complete-set contracts permit zero or one definition/award. There is no alternate old-model replay path.
 
 Replace completeness rules so PostgreSQL verifies the one selected definition, all exact source facts and cardinality at commit. Protect against:
 
 - Missing, extra or wrong-tier award.
 - Wrong project, policy version, contributor, definition, binding, unit or quantity.
 - A paid award on an unpaid rule.
-- A new v2 contribution with multiple instruments.
+- A new current contribution with multiple instruments.
 - An award without its required root/outbox.
 - A root or delivery event without the exact source award.
 
@@ -431,7 +453,7 @@ Use deferred closure checks and existing immutable evidence guards; application 
 
 Concurrent duplicate acceptance returns the existing complete immutable result only for an exact, currently authorized replay of the same acceptance operation and source identity. A different FinalAcceptance/source or changed facts must conflict. Exact replay must not allocate another award, root, ordinal or event.
 
-A missing required root on a committed v2 result is an integrity error, not permission for an ordinary acceptance replay to create new financial effects. An explicit owner repair procedure requires a separate reviewed change; do not implement silent repair.
+A missing required root on a committed current result is an integrity error, not permission for an ordinary acceptance replay to create new financial effects. An explicit owner repair procedure requires a separate reviewed change; do not implement silent repair.
 
 Native human review remains unavailable until its own owner is implemented. Modeling reviewer compensation does not authorize making reviewer records in the automatic branch.
 
@@ -441,7 +463,7 @@ Native human review remains unavailable until its own owner is implemented. Mode
 
 | Record | Required facts and constraints |
 | --- | --- |
-| CompensationFulfillmentRoot | UUID; unique award_id; immutable increasing ordinal; admission_generation; source_award_digest; admission_kind=acceptance or historical_enrollment; initial outbox event identity; creation and authority references |
+| CompensationFulfillmentRoot | UUID; unique award_id; immutable increasing ordinal; admission_generation; source_award_digest; initial outbox event identity; creation and authority references |
 | Delivery intent/history | Exact root, award, binding, route, envelope digest, invocation/attempt and bounded result; use the current outbox's durable custody |
 | CompensationFulfillmentReceipt | Existing planned closed receipt fields; immutable; UNIQUE(binding_id, external_event_id); at most one fulfilled receipt per award |
 | CompensationFulfillmentException | Immutable exception ID/event, exact root/award/binding, prior fulfilled event/receipt, kind, observed/received times and authority; unique event per binding |
@@ -464,7 +486,7 @@ Workstream external calls have three boundaries: authorize and commit exact disp
 
 Use the existing controller transition edges. On live → draining, persist the outgoing live admission generation and maximum root ordinal as a server-derived cutoff.
 
-- No new Workstream acceptance root, historical enrollment root or handoff outside the captured cutoff may be admitted in draining.
+- No new Workstream acceptance root or handoff outside the captured cutoff may be admitted in draining.
 - Delivery and reconciliation for a captured root may make its first or repeated identical Finance PUT, only for the outgoing admission generation and ordinals at/below the cutoff, with current binding/actor authority. This can create the corresponding Finance obligation for an already admitted Workstream root. Binding suspension still blocks a first PUT.
 - A retry stays on its existing root and original award. Cutoff denial occurs before external I/O.
 - The draining-to-disabled observation is taken under the REV fence. It requires every captured initial handoff to be durably acknowledged or reconciled to the exact stored Finance obligation, with no Workstream pending/claimed/in-flight/retryable/unknown handoff or local reconciliation job. Exhausted unresolved handoffs still count.
@@ -518,13 +540,12 @@ For project Finance actions, require a current `finance_authority` grant whose e
 | `finance.obligation.list`, `finance.obligation.read`, `finance.obligation.plan.request`, `finance.plan.replace`, `finance.fulfillment.authorize`, `finance.reconciliation.request` | FM covering the obligation's immutable project |
 | `finance.transfer.otp.submit` | The original authorization's human, with that recorded grant and identity still current for the exact project and attempt |
 | `compensation.fulfillment.read` | Existing own-contributor or project PM/FM read authority, with existing concealment |
-| `compensation.fulfillment.enroll` | FM covering the original award's project |
 | `compensation.fulfillment.reconcile.request`, `compensation.fulfillment.reconcile.read` | FM covering the project or the existing authorized system Operator path; request/read of the exact root-bound reconciliation operation only, no payment authority |
 | Existing lifecycle activation/drain transitions | Existing system Operator authority; does not grant Finance transfer authorization |
 
 All `finance.*` and `compensation.fulfillment.*` entries above are new actions, not an assertion that today's catalogue already exposes them. Extend the existing AUTH action/permission catalogue and public typed ports. Group permissions where useful, but register each exact action and its concrete resource evaluator; never use a generic `finance.admin` allow flag. Expose each route's exact action in OpenAPI as the current backend does.
 
-One eligible FM may configure a plan and authorize its bank transfer. That same human may enroll historical work and supply Finance's prior-fulfillment attestation. No second human or extra approval state is required. New points-credit obligations retain their configured automatic behavior. Services cannot receive these human grants or manufacture human authorization records.
+One eligible FM may configure a plan and authorize its bank transfer. No second human or extra approval state is required. New points-credit obligations retain their configured automatic behavior. Services cannot receive these human grants or manufacture human authorization records.
 
 ### 8.3 Machine identities and action custody
 
@@ -577,7 +598,7 @@ This extension supplies only machine tokens needed by these HTTP contracts.
 
 The Finance module owns its records, while AUTH owns identities/grants and compensation owns awards, bindings, fulfillment roots and callback receipts. Finance receives dependency-free facts/ports through the application composition root. It must never import another module's ORM/repository, join private tables, update compensation receipts directly or replace either mandatory HTTP handoff with a function call.
 
-For a human transfer/historical-credit authorization, perform initial authenticated checks, read an immutable obligation/plan snapshot, and end that database transaction. Fetch §10.3 source evidence through authenticated HTTP with no open database transaction. Then begin one fresh shared-database transaction: lock/revalidate the same human actor/link and exact qualifying grant through AUTH; obtain compensation-owned locked currentness facts through a new public `FulfillmentSourceCurrentnessPort`; lock and validate Finance's source/binding/project execution, exact obligation/current plan and all pinned payee/arrangement/destination/attempt facts; consume the exact prepared action; and commit authorization, execution intent, operation and audit together. A port failure or any mismatch rolls back all effects. The HTTP evidence and final locked facts must identify the same immutable source, award/root, binding/route and digests. Evaluate current fulfillment and the operation-specific lifecycle predicate from the final locked facts; do not require the current Workstream phase/generation to equal the earlier HTTP snapshot.
+For a human transfer authorization, perform initial authenticated checks, read an immutable obligation/plan snapshot, and end that database transaction. Fetch §10.3 source evidence through authenticated HTTP with no open database transaction. Then begin one fresh shared-database transaction: lock/revalidate the same human actor/link and exact qualifying grant through AUTH; obtain compensation-owned locked currentness facts through a new public `FulfillmentSourceCurrentnessPort`; lock and validate Finance's source/binding/project execution, exact obligation/current plan and all pinned payee/arrangement/destination/attempt facts; consume the exact prepared action; and commit authorization, execution intent, operation and audit together. A port failure or any mismatch rolls back all effects. The HTTP evidence and final locked facts must identify the same immutable source, award/root, binding/route and digests. Evaluate current fulfillment and the operation-specific lifecycle predicate from the final locked facts; do not require the current Workstream phase/generation to equal the earlier HTTP snapshot.
 
 That new compensation public port is read/currentness custody only. It owns canonical source/binding/root locks and returns immutable facts; Finance does not receive ORM objects or a capability to append source evidence. Its server-selected operation is bound into prepared AUTH facts. Use these distinct predicates:
 
@@ -592,7 +613,7 @@ The admission route takes its principal from the verified request, not from the 
 
 Extend the existing owner lock order consistently: AUTH's canonical authority/control and exact actor/link/grant locks; the existing REV fence as required by the operation-specific root predicate; compensation-owned binding/root/receipt currentness; then Finance source/binding/project execution, obligation/plan/attempt and pinned payee configuration. AUTH owns multi-principal lock ordering for the worker plus original authorizer; Finance must not acquire private grant/actor locks itself. Configuration, suspension, revocation and effect commands use the same relevant owner locks. A copied HTTP response, previous decision, saved grant snapshot or unconsumed/expired prepared handle cannot stand in for these current checks.
 
-Record the authorizer's ACTORS profile/link and exact AUTH grant ID in the immutable authorization. Before first dispatch or historical credit, the fixed Finance executor must acquire fresh service authority, call the source-currentness port again, and verify that this recorded human, link and grant remain active and cover that same project, and that the exact source/binding/project execution and plan inputs remain eligible. New automatic points credit omits the human-authorization requirement but uses the same current service/source/binding/execution and owner lock custody. Grant revocation cannot be bypassed by a newly issued grant or by replaying an old authorization: create a fresh authorization through the already specified replacement/cancellation rules. The service checks current authority without impersonating the human or creating a second approval.
+Record the authorizer's ACTORS profile/link and exact AUTH grant ID in the immutable authorization. Before first dispatch, the fixed Finance executor must acquire fresh service authority, call the source-currentness port again, and verify that this recorded human, link and grant remain active and cover that same project, and that the exact source/binding/project execution and plan inputs remain eligible. New automatic points credit omits the human-authorization requirement but uses the same current service/source/binding/execution and owner lock custody. Grant revocation cannot be bypassed by a newly issued grant or by replaying an old authorization: create a fresh authorization through the already specified replacement/cancellation rules. The service checks current authority without impersonating the human or creating a second approval.
 
 The point-credit transaction commits the credit, fulfilled Finance event, callback intent and audit while those currentness locks remain held. The transfer transaction commits `dispatch_started` and the exact provider request/reference/fence while those same relevant locks remain held. These are the effect linearization points: a grant revocation, canonical binding suspension or Finance pause that wins the locks first prevents the new effect; a change that follows the committed dispatch marker cannot promise to cancel a possibly sent transfer. The latter case reconciles that same reference. A Workstream phase transition alone never blocks the already admitted Finance obligation. This rule closes the race after source HTTP without holding a database transaction open across provider I/O.
 
@@ -619,8 +640,6 @@ The body is a closed object with every field below present. Nullable fields must
 | contract_version | Integer 1 |
 | source_instance_id | UUID; must equal the authenticated source registration |
 | fulfillment_root_id | Workstream root UUID |
-| admission_kind | acceptance or historical_enrollment |
-| reward_model_version | 1 or 2; version 1 requires historical_enrollment |
 | award_id | UUID; equals path and idempotency header |
 | project_id | UUID |
 | contributor_id | Workstream actor UUID |
@@ -632,7 +651,7 @@ The body is a closed object with every field below present. Nullable fields must
 | review_id | UUID for completed_review; null for accepted_submission |
 | contribution_policy_version_id | UUID |
 | award_definition_id | UUID |
-| task_size | small, medium or large for v2 accepted_submission; null for historical v1 or fixed completed_review reward |
+| task_size | small, medium or large for current accepted_submission; null for fixed completed_review reward |
 | adapter_binding_id | Original Workstream binding UUID |
 | route_key | Original non-secret route token matching ^[A-Za-z][A-Za-z0-9._:-]{0,119}$; maximum 120 ASCII characters; substring .. is forbidden. Preserve the existing binding-owner rules. |
 | instrument_type | money or project_points |
@@ -810,9 +829,9 @@ Require an existing admitted root and the exact original service binding. Return
 - contract_version and source_instance_id.
 - The immutable source-award fields used by source_award_digest and that digest.
 - contribution_record_id/type, task_id, submission_id, final_acceptance_id or review_id.
-- reward_model_version and historical/selected task_size.
+- Exact selected task_size for submitter work; null for fixed reviewer work.
 - fulfillment_root_id, admission_kind and obligation_digest.
-- The current normalized fulfillment status, attention flag, fulfilled external_event_id if recorded, and enrollment attestation for historical_enrollment.
+- The current normalized fulfillment status, attention flag, fulfilled external_event_id if recorded, and exact receipt evidence.
 
 The enrollment attestation contains only the enrolled Workstream actor ID, operation ID, timestamp and non-secret evidence reference. It does not assert that external payment was impossible.
 
@@ -847,7 +866,7 @@ All ID fields are canonical UUIDs; exception_event_id is a Finance-generated UUI
 
 Persist one immutable exception per binding/exception_event_id, linked to the exact fulfilled receipt, with source authority and normalized digest. Exact replay returns the original acknowledgement; changed replay conflicts.
 
-A first accepted exception returns HTTP 201 with exactly exception_id, award_id, fulfillment_root_id, original_fulfillment_event_id, exception_event_id, exception_digest and replay=false. Exact authorized replay returns HTTP 200 with the same IDs/digest and replay=true; changed replay returns 409 FULFILLMENT_EXCEPTION_CONFLICT. exception_digest hashes the complete closed request body. Recover a lost exception acknowledgement by identical POST; no separate exception-lookup route is required in v1.
+A first accepted exception returns HTTP 201 with exactly exception_id, award_id, fulfillment_root_id, original_fulfillment_event_id, exception_event_id, exception_digest and replay=false. Exact authorized replay returns HTTP 200 with the same IDs/digest and replay=true; changed replay returns 409 FULFILLMENT_EXCEPTION_CONFLICT. exception_digest hashes the complete closed request body. Recover a lost exception acknowledgement by identical POST; no separate exception-lookup route is required.
 
 Set fulfillment_attention_required=true and latest_exception_id in the rebuildable projection. Preserve fulfillment_status=fulfilled as its historical receipt fact. Presentation must take attention precedence over Paid/Fulfilled. This operation creates no new payout, award or contribution and does not erase the original receipt.
 
@@ -882,8 +901,8 @@ Use the existing PostgreSQL database, `public.finance_*` tables and single migra
 | `finance_payee_destination_versions`, `finance_destination_verifications` | Private immutable encrypted recipient identity, NGN currency, verification intent/result and active/revoked state |
 | `finance_rule_versions`, `finance_arrangement_versions` | Draft revisions, immutable published Finance rule, same-profile arrangement/destination/agreement references and active history |
 | `finance_obligations`, `finance_settlement_plans` | Unique source/award envelope/digests; immutable plan inputs/version/hash; rebuildable operational state and current selection |
-| `finance_fulfillment_authorizations` | Exact plan/hash, authorizer ACTORS profile/link and exact AUTH grant/decision IDs, source-evidence digest, agreement/prior-fulfillment attestations, predecessor attempt and linked new attempt or historical credit intent |
-| `finance_point_credit_intents`, `finance_point_credits` | Exact plan/generation and historical authorization where needed, followed by one immutable original-unit credit and fulfillment event per obligation |
+| `finance_fulfillment_authorizations` | Exact plan/hash, authorizer ACTORS profile/link and exact AUTH grant/decision IDs, source-evidence digest, agreement/prior-fulfillment attestations, predecessor attempt and linked new attempt |
+| `finance_point_credit_intents`, `finance_point_credits` | Exact plan/generation, followed by one immutable original-unit credit and fulfillment event per obligation |
 | `finance_transfer_attempts`, `finance_transfer_observations` | Immutable authorization/reference/amount/destination/ordinal intent; append-only dispatch, cancellation and provider facts; rebuildable status and domain generation |
 | `finance_provider_event_inbox` | Deduplicated authenticated normalized provider facts and processing outcome; shared OUTBOX reference supplies delivery custody |
 | `finance_fulfillment_events` | Immutable normalized report/exception body, stable identity/digest, prerequisite success, shared delivery identity and exact callback acknowledgement facts |
@@ -893,7 +912,7 @@ Use the existing PostgreSQL database, `public.finance_*` tables and single migra
 
 Source envelopes, published rules, arrangements, plans, credits, financial authorizations, attempt intents and emitted reports are immutable. Mutable operational projections may be rebuilt. Revoke/replace through new owner operations and append-only observations; do not edit historical authorization or outcome facts. An AUTH decision/grant reference is evidence, not a role copied into Finance.
 
-Enforce unique source/award obligation, obligation/plan version, obligation/attempt ordinal, provider account/reference, one attempt or historical-credit intent per authorization, one point credit per obligation, one fulfilled event per obligation, and at most one unresolved transfer attempt per obligation. Composite Finance foreign keys bind each authorization/attempt/credit intent to the same obligation and plan. A historical points plan has at most one current authorized credit intent.
+Enforce unique source/award obligation, obligation/plan version, obligation/attempt ordinal, provider account/reference, one attempt per authorization, one point credit per obligation, one fulfilled event per obligation, and at most one unresolved transfer attempt per obligation. Composite Finance foreign keys bind each authorization/attempt/credit intent to the same obligation and plan.
 
 Enforce exactly one possible local source row with a unique singleton marker constrained to true and an immutable source UUID equal to deployment configuration. Source or actor identity cannot be rekeyed by PUT. A source/binding creation has `expected_revision=null` and `enabled=false`; an update has the exact positive existing revision. All first project bindings create or retain the same disabled project-execution record without resetting an existing project’s enabled state.
 
@@ -994,7 +1013,7 @@ Source and project come from the path. A bank-transfer destination must belong t
 | GET /api/v1/finance/admin/obligations/{obligation_id} | Scoped finance_authority | Original award, current plan, authorizations, attempts, normalized provider status and callback status |
 | POST /api/v1/finance/admin/obligations/{obligation_id}/planning | Scoped finance_authority | Empty object; idempotently stages planning after configuration is supplied |
 | POST /api/v1/finance/admin/obligations/{obligation_id}/plan-replacements | Scoped finance_authority | expected_plan_hash, reason=destination_change or arrangement_change or finance_rule_change or authority_change; may atomically cancel a provably never-dispatched intent under section 12.6 |
-| POST /api/v1/finance/admin/obligations/{obligation_id}/fulfillment-authorizations | Scoped finance_authority | Complete body below; verify source and current plan, record one manager's authorization, atomically stage one bank-transfer attempt or historical point-credit job |
+| POST /api/v1/finance/admin/obligations/{obligation_id}/fulfillment-authorizations | Scoped finance_authority | Complete body below; verify source and current plan, record one manager's authorization, atomically stage one bank-transfer attempt |
 | POST /api/v1/finance/admin/obligations/{obligation_id}/reconciliation | Scoped finance_authority | Empty object; query the same provider attempt and retry the same pending callback |
 | POST /api/v1/finance/admin/transfer-attempts/{attempt_id}/otp | Original authorizer with current scoped finance_authority grant | expected_attempt_revision, otp; transient provider-finalization input only |
 
@@ -1004,18 +1023,18 @@ The fulfillment-authorizations request is a closed object containing every field
 | --- | --- |
 | expected_plan_hash | Exact current settlement-plan hash |
 | expected_source_award_digest | Exact source-award digest pinned in that plan and admitted envelope |
-| agreement_reference | Exact plan agreement reference for money_ngn or points_to_ngn; null for historical points_credit |
-| agreement_sha256 | Exact plan agreement digest for money_ngn or points_to_ngn; null for historical points_credit |
+| agreement_reference | Exact plan agreement reference for money_ngn or points_to_ngn |
+| agreement_sha256 | Exact plan agreement digest for money_ngn or points_to_ngn |
 | prior_payment_checked | Boolean true |
 | prior_payment_result | Exact token not_fulfilled |
 | verification_reference | Opaque non-secret ASCII token, 1–128 characters, recording the manager's prior-fulfillment check |
-| expected_previous_attempt_id | Null for the first transfer attempt; latest conclusively failed or canceled_before_dispatch transfer-attempt UUID for a replacement; null for historical points_credit |
+| expected_previous_attempt_id | Null for the first transfer attempt; latest conclusively failed or canceled_before_dispatch transfer-attempt UUID for a replacement |
 
-This endpoint is required before money_ngn, points_to_ngn or historical points_credit execution. A new points_credit obligation executes under its configured arrangement and must reject this endpoint with 409 AUTHORIZATION_NOT_REQUIRED; it does not acquire an extra manual approval step.
+This endpoint is required before money_ngn or points_to_ngn execution. A points_credit obligation executes under its configured arrangement and must reject this endpoint with 409 AUTHORIZATION_NOT_REQUIRED; it does not acquire an extra manual approval step.
 
-A successful new authorization returns HTTP 202 with exactly authorization_id, obligation_id, plan_hash, attempt_id, attempt_ordinal, processing_status and replay. The first three are the created authorization UUID, exact obligation UUID and authorized plan hash. For a bank transfer, attempt_id is the atomically created attempt UUID and attempt_ordinal is its positive integer ordinal. For historical points_credit, both attempt members are null. processing_status is ready and replay is false. No response asserts that the transfer or credit is already fulfilled.
+A successful new authorization returns HTTP 202 with exactly authorization_id, obligation_id, plan_hash, attempt_id, attempt_ordinal, processing_status and replay. The first three are the created authorization UUID, exact obligation UUID and authorized plan hash. For a bank transfer, attempt_id is the atomically created attempt UUID and attempt_ordinal is its positive integer ordinal. processing_status is ready and replay is false. No response asserts that the transfer or credit is already fulfilled.
 
-An exact replay by the same currently eligible principal returns HTTP 202 with the same original IDs, plan hash, attempt fields and original ready status, with replay=true. Resolve this committed replay under fresh `finance.fulfillment.authorize` read-of-result custody before performing new-source HTTP, current-plan, prior-attempt or no-fulfilled-effect checks. It remains a valid historical result after fulfillment, plan replacement, pause or replacement of the original grant, provided that same actor currently has a qualifying Finance grant. Do not alter the original recorded grant or resurrect its execution eligibility. If no prior operation exists, the full new-effect branch is mandatory. It does not create a new authorization, attempt, job or provider call. Changed payload under the same operation key returns 409. A different operation key cannot authorize a second unresolved attempt or a second current historical-credit intent; return 409 AUTHORIZATION_CONFLICT. Current status is obtained through the obligation GET.
+An exact replay by the same currently eligible principal returns HTTP 202 with the same original IDs, plan hash, attempt fields and original ready status, with replay=true. Resolve this committed replay under fresh `finance.fulfillment.authorize` read-of-result custody before performing new-source HTTP, current-plan, prior-attempt or no-fulfilled-effect checks. It remains a valid recorded result after fulfillment, plan replacement, pause or replacement of the original grant, provided that same actor currently has a qualifying Finance grant. Do not alter the original recorded grant or resurrect its execution eligibility. If no prior operation exists, the full new-effect branch is mandatory. It does not create a new authorization, attempt, job or provider call. Changed payload under the same operation key returns 409. A different operation key cannot authorize a second unresolved attempt; return 409 AUTHORIZATION_CONFLICT. Current status is obtained through the obligation GET.
 
 All are closed schemas with idempotency and current scope checks. No endpoint accepts an arbitrary replacement award amount, marks a payment successful by user assertion, calls Workstream acceptance, deletes an obligation or chooses a new reference for an uncertain attempt.
 
@@ -1104,23 +1123,22 @@ For a new points_credit obligation, an active arrangement authorizes the worker 
 
 No per-obligation human authorization or Paystack call is involved for new points_credit. The worker checks that the source/project execution configuration and exact payee profile/arrangement remain eligible. The credit entry records external fulfillment of this award; it does not create another Workstream earning, a transferable wallet balance or a redemption right.
 
-Historical enrollment requires one eligible finance_authority to attest to prior-fulfillment checking for the exact plan through fulfillment-authorizations, with null agreement and previous-attempt fields. That same operation records the authorization and stages a durable historical-credit job. Before committing the credit, the worker rechecks the current plan, the authorizer's current grant, active source/project execution and payee profile/arrangement. This prevents automatically crediting a historical obligation whose external history is unknown; it does not require a separate checker. A stale job cannot credit a replaced plan.
 
 ### 12.4 Finance authorization
 
-Bank-transfer plans and historical points-credit plans start awaiting_authorization. One eligible human with finance_authority performs the section-11.6 authorization operation. The source verification below is automated work by Finance within that operation, not a second human approval.
+Bank-transfer plans start awaiting_authorization. One eligible human with finance_authority performs the section-11.6 authorization operation. The source verification below is automated work by Finance within that operation, not a second human approval.
 
 1. Validate the human’s current finance_authority grant for the exact source/project and resolve any committed exact operation replay as §11.6 specifies. The following steps apply only to a new effect-producing authorization. Resolve the existing obligation and current plan; compare expected_plan_hash and expected_source_award_digest. Reject mismatches with 409 PLAN_CONFLICT or SOURCE_EVIDENCE_CONFLICT before creating execution authority.
 2. End the initial database transaction, then read the exact source award/evidence through the authenticated Workstream service API with no open database transaction or retained locks. Compare source instance, award, contribution/source IDs, binding, quantities, source digest and obligation digest with the admitted immutable envelope.
-3. For a bank transfer, require the manager to attest that the plan's referenced signed agreement applies to this payee, amount/arrangement and accepted work. The request's agreement reference and digest must equal the pinned plan. For historical points_credit, both agreement fields must be null.
+3. For a bank transfer, require the manager to attest that the plan's referenced signed agreement applies to this payee, amount/arrangement and accepted work. The request's agreement reference and digest must equal the pinned plan.
 4. Require prior_payment_checked=true, prior_payment_result=not_fulfilled and verification_reference. An already_fulfilled or unknown result returns 422 PRIOR_FULFILLMENT_UNRESOLVED without creating an authorization or execution intent. Performing a check alone is insufficient. These findings must receive this explicit error rather than a generic schema error.
 5. Begin a fresh shared transaction and reacquire canonical AUTH actor/link/grant custody first, compensation source/binding/root currentness second, then Finance’s obligation/current-plan and execution/configuration locks in the documented order. Recheck the expected hash and HTTP source evidence against the current owner-returned facts, the same actor’s exact current grant, source/binding/project execution, payee profile, pinned arrangement and destination eligibility. Recheck fulfillment history and the exact previous attempt under the same lock. No fulfilled credit/transfer, post-success exception, unresolved provider attempt or conflicting authorized credit intent may exist.
 6. For the first transfer attempt, require expected_previous_attempt_id=null. For a replacement, require the UUID of the latest conclusively failed attempt or an attempt conclusively canceled before dispatch under section 12.6; unknown, pending, OTP, successful or reversed attempts never qualify. Historical points_credit always requires null and must not have a prior credit or transfer effect.
-7. Within one local Finance transaction, insert the immutable fulfillment_authorization, operation and audit evidence. For a bank transfer, also allocate the next attempt ordinal, persist its unique provider reference and exact request intent, link it to this authorization and stage its durable execution job. For historical points_credit, link and stage one durable credit intent without a provider attempt. Commit all these records together or none of them, then return the section-11.6 HTTP 202 response.
+7. Within one local Finance transaction, insert the immutable fulfillment_authorization, operation and audit evidence. For a bank transfer, also allocate the next attempt ordinal, persist its unique provider reference and exact request intent, link it to this authorization and stage its durable execution job. Commit all these records together or none of them, then return the section-11.6 HTTP 202 response.
 
 A source-read outage returns a retryable failure without recording authorization or execution intent. A changed plan, lost authority, disabled execution or ineligible destination cannot be bypassed by evidence fetched before the change. Do not retain a database transaction or locks while reading Workstream, and do not call Paystack or commit a point credit in this admin HTTP operation.
 
-The service records the manager's agreement and prior-fulfillment attestations; it does not infer legal validity from a digest or sign an agreement. Historical enrollment's Workstream attestation is input for investigation, not proof of nonpayment. Finance requires its own explicit attestation from an eligible manager, who may be the same person who enrolled the award in Workstream. No second-person requirement crosses the module boundary, and both operations use the same existing AUTH system.
+The service records the manager's agreement and prior-fulfillment attestations; it does not infer legal validity from a digest or sign an agreement. One eligible manager performs the authorization through existing AUTH.
 
 ### 12.5 Transfer execution guards
 
@@ -1146,7 +1164,7 @@ If the latest attempt is queued or blocked before dispatch, the human replacemen
 
 Use reason=authority_change when a new eligible Finance manager must take over a never-dispatched authorization. The existing attempt and its authorizer remain historical; the replacement plan needs its own fresh authorization. This is an explicit recovery operation, not automatic reassignment or a second-human approval. Cancellation emits no failed-payment callback because no provider execution occurred.
 
-It selects current valid Finance rule/arrangement/destination, creates a new immutable plan version and makes earlier authorizations ineligible for future execution. Existing authorizations, immutable attempt intents and plan versions remain intact; cancellation observations are appended and the current-plan projection advances. Any queued historical-credit job must recheck the current plan and cannot execute a replaced version. A bank-transfer or historical-credit replacement plan returns to awaiting_authorization and requires a fresh operation bound to the new hash. A new points_credit plan still follows its configured automatic arrangement.
+It selects current valid Finance rule/arrangement/destination, creates a new immutable plan version and makes earlier authorizations ineligible for future execution. Existing authorizations, immutable attempt intents and plan versions remain intact; cancellation observations are appended and the current-plan projection advances. A bank-transfer replacement plan returns to awaiting_authorization and requires a fresh operation bound to the new hash. A new points_credit plan still follows its configured automatic arrangement.
 
 A conclusive failed attempt may be retried under the same current plan only through a fresh fulfillment-authorizations operation. A never-dispatched cancellation made during plan replacement permits fresh authorization only on the replacement plan. Repeat the exact source, agreement and prior-fulfillment checks and bind expected_previous_attempt_id to the latest failed or canceled_before_dispatch attempt. The same eligible Finance manager may authorize the retry; a different person is not required. An earlier authorization cannot be reused to create a new attempt, and a new idempotency key alone cannot bypass an unresolved attempt.
 
@@ -1161,16 +1179,14 @@ A successful or reversed attempt permanently blocks new automatic attempts for t
 | Valid admission | No source/award obligation | awaiting_configuration; immutable source stored |
 | Valid plan, bank transfer | All configuration valid | awaiting_authorization |
 | Valid plan, new points_credit | Active arrangement | ready |
-| Valid historical points plan | Prior fulfillment not yet checked by Finance | awaiting_authorization |
 | Valid Finance authorization, bank transfer | One eligible manager, exact current plan/source, explicit not_fulfilled attestation and no unresolved attempt | ready with authorization, attempt/reference and execution intent committed together |
-| Valid Finance authorization, historical points_credit | One eligible manager, exact current plan/source, null agreement fields and explicit not_fulfilled attestation | ready with authorization and durable credit intent |
 | Worker begins exact external attempt | Current authorization and all execution guards | processing |
 | External outcome is ambiguous | Request may have reached provider | outcome_unknown |
 | Provider conclusively failed | Exact latest attempt verified failed | failed; normalized failed report may be emitted |
 | Never-dispatched intent canceled during plan replacement | No dispatch marker/provider observation under the same lock/fence | Preserve canceled attempt history; new plan awaits authorization; no failed-payment callback |
 | Unique points credit or exact provider success | No earlier successful fulfillment | fulfilled; success report/outbox committed |
 | Reversal or conflicting terminal provider fact | Existing attempt | attention_required; no new payout |
-| Plan replacement | Exact permitted pre-effect state | New current plan; old authorizations cannot execute it; bank-transfer/historical-credit plans await fresh authorization |
+| Plan replacement | Exact permitted pre-effect state | New current plan; old authorizations cannot execute it; bank-transfer plans await fresh authorization |
 
 Callback-delivery state is separate from financial state. Workstream being unavailable does not undo an actual Finance credit or transfer.
 
@@ -1182,7 +1198,7 @@ Implement one typed Paystack adapter inside Finance. Only Finance knows its API 
 
 The required provider operations are recipient fetch/validation, transfer initiation, transfer verification and OTP finalization when Paystack requires it. Use the current documented API, retain test/live separation and qualify the actual account settings [P01–P04].
 
-A v1 bank-transfer destination is an active NGN recipient. The Finance team must fund the provider account and configure its provider-required transfer settings before live qualification. Any provider OTP requirement applies to the original eligible Finance authorizer; it does not create a second-human requirement in this design. The coding agent must not change dashboard approval settings automatically.
+A bank-transfer destination is an active NGN recipient. The Finance team must fund the provider account and configure its provider-required transfer settings before live qualification. Any provider OTP requirement applies to the original eligible Finance authorizer; it does not create a second-human requirement in this design. The coding agent must not change dashboard approval settings automatically.
 
 ### 13.2 Transfer identity and request
 
@@ -1436,9 +1452,9 @@ The allowed informational fields above are an explicit narrow amendment to the c
 
 The task remains accepted after acceptance; payment failure does not turn it into rejected or needs_revision.
 
-Award/contribution views show original instrument, unit, quantity, selected task size for v2 accepted work, policy identity and bounded fulfillment status. They do not expose external_event_id, external_reference, provider references, internal route keys, bank details, agreement hashes or service credentials.
+Award/contribution views show original instrument, unit, quantity, selected task size for current accepted work, policy identity and bounded fulfillment status. They do not expose external_event_id, external_reference, provider references, internal route keys, bank details, agreement hashes or service credentials.
 
-Earned totals remain grouped by original instrument and unit. Historical mixed instruments remain historical facts; do not total FLOW and NGN together or replace points with a displayed monetary equivalent.
+Earned totals remain grouped by original instrument and unit. Do not total different instruments or units together or replace points with a displayed monetary equivalent.
 
 The equivalent label must say it is a Finance-provided estimate with its as-of time. Display it separately from an actual money payment. Native GUI screens are not required by this backend-contract-first specification; API, CLI and MCP must expose the same meaningful information.
 
@@ -1451,9 +1467,9 @@ The equivalent label must say it is a Finance-provided estimate with its as-of t
 Preserve existing route names and owner operations. Extend:
 
 - Contribution-policy draft update input to section 4.
-- ContributionPolicyView with reward_model_version and common instrument/unit/binding.
-- PolicyDefinitionView with task_size and reward_model_version, retaining definition_id and exact economic facts.
-- Policy reads return definitions in the canonical tier order, with three alternatives for a compensated v2 submitter rule, one fixed reviewer definition or zero unpaid definitions.
+- ContributionPolicyView with the common instrument/unit/binding.
+- PolicyDefinitionView with task_size, definition_id and exact economic facts.
+- Policy reads return definitions in the canonical tier order, with three alternatives for a compensated current submitter rule, one fixed reviewer definition or zero unpaid definitions.
 - Task creation/reads/import models with task_size and exact selected compensation.
 - Assignment/Submission/revision context and immutable evidence with their applicable selection.
 - Contribution/award reads with bounded fulfillment status and optional equivalent-value read.
@@ -1482,7 +1498,6 @@ Extend existing MCP contribution-policy tools and workstream_management_task_cre
 workstream_compensation_fulfillment_get
 workstream_compensation_equivalent_get
 workstream_compensation_reconciliation_create
-workstream_compensation_fulfillment_enroll
 ~~~
 
 Each maps one-to-one to its Workstream HTTP route. The mutation tools require explicit project/award selectors, request body and caller-owned idempotency key. Do not expose Finance bank, rule, authorization or transfer-execution operations through Workstream MCP.
@@ -1497,7 +1512,7 @@ CLI CSV conversion adds one task_size column. A missing column or empty value af
 
 Keep original source verification, external IDs, retained batch membership, command receipts, source hashes and replay behavior. Screen/release of a mixed-size batch resolves each member separately even if all share a policy version.
 
-JSON/CSV contribution evidence adds reward_model_version and recorded task_size where available. v1 historical unknown size remains null/empty, never silently Small. Preserve existing CSV formula-injection protections. Exported financial quantities remain exact strings.
+JSON/CSV contribution evidence records exact task_size for submitter work and null/empty size for fixed reviewer work. Preserve existing CSV formula-injection protections. Exported financial quantities remain exact strings.
 
 ### 16.4 Authorized internal configuration command
 
@@ -1521,94 +1536,48 @@ For money creation, set iso_currency_code=unit_code and validate against the mig
 
 Expose exact non-secret operation IDs/results for replay. Preserve suspended-binding history; never replace an original award route during setup.
 
-## 17. Retained data and migration
+## 17. Data transition and migration
 
-### 17.1 Closed version strategy
+### 17.1 One current implementation
 
-The new writer uses reward_model_version=2. Existing retained business facts are version 1. This is required business-version preservation, not a parallel old implementation or a compatibility alias.
+Replace superseded development code and its affected callers, schemas, tests and
+current docs. Do not add reward-model markers, old/new graph branches, old-format
+response readers, hash fallbacks, dual-award compatibility or an enrollment path
+for obsolete award models. Current compensated outcomes have one exact selected
+award; unpaid outcomes have zero.
 
-Mechanically label existing policy versions, definitions and awards v1 while preserving every existing economic field, ID and graph/receipt digest. Do not recalculate historical publication, command, revision or acceptance hashes using the new format.
+Policy and submission revisions remain immutable business facts within this one
+implementation. Ordinary idempotent replay checks the current canonical request,
+current authority and the operation's immutable result; it creates no new effect.
+No request selects an obsolete decoder or recovers an old-format hash.
 
-All new policies, definitions, selected-task contexts, contributions and awards use v2. The new application cannot originate another v1 award or repair a v1 acceptance into new financial effects.
+### 17.2 Schema and data safety
 
-Read-only historical replay and export continue to support genuine stored v1 zero/one/two-award results. A shared new-write max-one validator must not make those historical facts unreadable.
+Use the existing Alembic chain, Base, engine/session, shared lifecycle fence and
+model registration. Replace this PR's unmerged migration implementations rather
+than adding compatibility for intermediate PR commits. Do not alter unrelated
+baseline migrations or introduce a second migration runner or database.
 
-On a newly generated read/export view of a retained v1 policy, return reward_model_version=1 and null for all three version-level common fields instrument_type, unit_code and adapter_binding_id. Preserve every original per-definition instrument, unit, binding and quantity; each such definition has reward_model_version=1 and task_size=null. Never infer a common header from one v1 definition, and never interpret a null v1 header as an unpaid v2 graph. Stored historical replay payloads are returned in their originally recorded shape; do not rewrite them to add these projection fields.
+Enforce current header/tier/cardinality, selected-award uniqueness and copy-chain
+constraints directly. Remove superseded constraints and marker columns entirely.
+New size is explicit and immutable; current command/import receipts include it.
 
-### 17.2 Preflight and cutover fence
+Before irreversible effects, inspect actual persisted data under the migration's
+owner locks. Incompatible economic facts, incomplete size schedules or immutable
+old command bodies must fail the transition atomically with a bounded concrete
+report. Do not invent Medium/Large quantities, rewrite earned amounts or stored
+evidence, delete retained rows, or retain an obsolete runtime to hide the gap.
+An actual data deletion or financial-evidence rewrite needs explicit authority.
+No predecessor-only export, capture utility, archive fixture or compatibility
+suite is required as a product feature.
 
-Provide a read-only migration preflight command producing bounded counts and IDs for:
+### 17.3 Rollback
 
-- v1 policies by status and open drafts.
-- Tasks/assignments/submissions/revision preparations still capable of v1 acceptance.
-- Retained contributions and awards, including dual awards.
-- Saved operation/import/command/revision responses.
-- Existing authority and source-closure anomalies.
-- Financial roots or receipts if a later deployment has already introduced them.
-
-Before cutover, stop public authoring/claim/release/intake that can create more v1 work, drain relevant existing workers using the current lifecycle ownership and hold the required migration/controller/table locks. Repeat the checks under that fence so a concurrent acceptance cannot race the preflight.
-
-**Do not cut over while v1 work can still produce a new acceptance.** Finish it through the current supported owner before migration. If its current owner cannot finish/reconcile it, report the concrete records and remain blocked; do not delete them, relabel their terms or fabricate a review.
-
-Terminal historical tasks and awards are allowed. New draft tasks without any screened financial context can receive task_size=small deterministically. Historical immutable submissions retain null task_size because the old system did not record it.
-
-### 17.3 Forward schema changes
-
-Use new forward revisions in the existing `backend/alembic/versions/` chain for Finance tables, financial policy changes, AUTH parity and shared runtime custody changes. Register Finance model declarations only through `backend/app/db/models.py`. Use the existing Base, engine/session factory and migration runner; there is no second Finance DSN, Alembic head or auto-migrate process. Do not edit historical migrations to pretend the new design always existed.
-
-- Add reward_model_version with a controlled migration population of 1 for existing financial facts and server/DB-derived value 2 for new writes.
-- Add the version marker to definitions and awards with a composite reference/guard tying it to their exact policy version. Callers cannot choose or forge it.
-- Drop the old global definition UNIQUE(rule_id, instrument_type), which would prevent three same-instrument alternatives.
-- Preserve v1 definition uniqueness by a partial index on (rule_id, instrument_type) WHERE reward_model_version=1.
-- For v2, index (rule_id, task_size) uniquely for non-null sizes and rule_id uniquely for null size, both WHERE reward_model_version=2. The deferred graph guard validates contribution type and full cardinality.
-- Retain historical award uniqueness as required; add UNIQUE(contribution_record_id) WHERE reward_model_version=2.
-- Add selector/copy-chain/revision constraints and new fulfillment tables/closure.
-- Version the graph validator: retained immutable v1 graphs satisfy their original shape; v2 graphs satisfy section 4. Do not normalize v1 dual or mixed-unit facts into v2.
-- New contribution/award inserts require v2. Exact stored v1 acceptance replay is select-only.
-- Keep v1 packet/response readers capable of representing missing size and their original hashes. Do not add fields into stored JSON.
-
-A current open v1 draft must not block all new authoring forever. Permit the existing full-replacement draft update to upgrade that unpublished draft to v2 when the caller supplies the entire new header and rule graph. Change the marker and graph atomically through the authorized draft owner. Do not infer Medium/Large values. Publishing a still-v1 draft is forbidden.
-
-### 17.4 New-work activation
-
-After schema/application upgrade, configure explicit v2 quantities, publish the policy and activate a guide selecting it. No new task screening/release may adopt a v1 policy.
-
-A historical active guide may remain readable during setup; it is not eligible to originate new v2 work until explicit adoption. Failure to configure the new schedule is a clear setup block, not permission to synthesize prices.
-
-Existing immutable v1 evidence stays readable after a new policy becomes current. v1 submissions are not relabeled with v2 Small.
-
-### 17.5 Historical award enrollment
-
-No migration or startup sweep creates Finance roots for retained awards automatically.
-
-**Route:** POST /api/v1/projects/{project_id}/compensation-awards/{award_id}/fulfillment-enrollment  
-**Action:** compensation.fulfillment.enroll; project Finance authority only.  
-**Idempotency-Key:** Caller-owned UUID.
-
-Closed body:
-
-~~~text
-expected_source_award_digest
-prior_fulfillment_checked = true
-prior_fulfillment_result = not_fulfilled
-evidence_reference = opaque non-secret ASCII token, 1–128 characters
-~~~
-
-Require a real stored award with intact source/authority lineage, exact immutable digest, original active valid binding and no existing root. Under the shared live fence and exact binding/resource locks, atomically persist the enrollment operation, human attestation, one root/ordinal and one outbox envelope with admission_kind=historical_enrollment.
-
-This operation creates no contribution or award. A v1 contribution with two historical awards may enroll each separately, preserving each award's instrument, unit and binding. It never chooses one and discards the other.
-
-The evidence reference is a narrow allowed enrollment field, not a bank reference, provider payload, URL, PII or financial proof stored in Workstream. Its meaning is that the authorized Finance person reviewed external history and explicitly found this award unfulfilled. Unknown or already_fulfilled results are rejected with 422 PRIOR_FULFILLMENT_UNRESOLVED and create no root. Finance requires its own explicit prior-fulfillment attestation before execution; this Workstream attestation does not replace its authorization. The same human may perform both operations through their distinct owner actions using the same existing AUTH identity and qualifying Finance grant.
-
-Exact committed replay remains a fresh-authorized read even if the binding has since been suspended. A different enrollment operation for an already rooted award returns 409 with bounded conflict information, not a second root.
-
-Concurrent automatic root creation and historical enrollment are constrained by UNIQUE(award_id). The authority/request/evidence digests, root and outbox must commit or roll back together.
-
-### 17.6 Rollback and retention
-
-Do not downgrade a database containing v2 financial writes into software that cannot represent them. Rollback means restoring a matched application/database backup before new financial effects or deploying a reviewed forward fix. An old image is not a safe rollback after Finance may have paid.
-
-Back up the single Workstream database consistently, including every Finance table and shared OUTBOX/AUDIT record, while also retaining issuer identity state and required encryption/credential recovery material under existing operational custody. Preserve source-instance identity, published rules, plans, provider references, receipts and event IDs together. Do not restore the Finance table subset over live compensation/OUTBOX state as an informal rollback. Never restore a provider-facing database to a point that forgets initiated transfers without a reconciliation plan against the provider.
+Cohesive Git commits make code review and code reversion practical. Data rollback
+requires a matched application/database backup or a reviewed forward fix. Keep
+Finance, compensation, OUTBOX/AUDIT, issuer identity and credential recovery
+material consistent. Never restore a provider-facing database to a point that
+forgets initiated transfers without reconciling against the provider.
 
 ## 18. Deployment, operation and extraction
 
@@ -1664,7 +1633,7 @@ Freeze these exact version-1 event keys under public owner APIs:
 | General | `compensation.fulfillment.reconcile.requested` | Authorized same-root Finance observation and permitted identical admission recovery |
 | Finance | `finance.obligation.plan.requested` | Plan the retained exact obligation after admission/configuration |
 | Finance | `finance.destination.verify.requested` | Verify a pending same-profile provider recipient |
-| Finance | `finance.points.credit.requested` | Perform the exact new or historically authorized credit intent |
+| Finance | `finance.points.credit.requested` | Perform the exact configured credit intent |
 | Finance | `finance.transfer.initiate.requested` | Dispatch/recover the already authorized immutable transfer attempt |
 | Finance | `finance.transfer.reconcile.requested` | Observe the same existing provider reference |
 | Finance | `finance.provider_event.process.requested` | Process a retained normalized webhook inbox observation |
@@ -1713,7 +1682,7 @@ Worker readiness also verifies broker access. General workers and Beat never req
 4. Configure fixed origins/source UUID/route keys, scoped credentials, same-image worker profiles and shared infrastructure. Run the one existing migration job and validate exact queue/registry partition before enabling financial effects.
 5. Provision Workstream units/bindings through §16.4; the binding identifies the existing compensation-adapter reporter. Create the singleton Finance source and execution bindings disabled through §11.2. A system Finance authority configures the singleton once.
 6. Register payees and verified provider destinations; publish Finance rules and arrangements. Enable the source/binding only after identity/configuration validation; keep each project execution flag false during qualification.
-7. Configure v2 contribution quantities, publish policy and activate the appropriate guide. Qualify contract/digest parity without live effects.
+7. Configure current contribution quantities, publish policy and activate the appropriate guide. Qualify contract/digest parity without live effects.
 8. Run real-HTTP/shared-PostgreSQL worker drills with deterministic provider/issuer fixtures, followed by Paystack sandbox qualification. Prove unknown outcomes, callback response loss, current-authority races and both worker profiles.
 9. Activate the reviewed Workstream fulfillment manifest through existing Operator authority.
 10. Enable the selected Finance project after its actual payment setup is complete. Each bank-transfer attempt still requires one eligible Finance human’s explicit authorization. Historical credit retains its distinct attestation gate.
@@ -1729,7 +1698,7 @@ Finance may execute a previously admitted obligation after Workstream disables i
 
 ### 18.5 Operations and observability
 
-Expose bounded counts/ages for undelivered Workstream handoffs, missing Finance configuration/authorization, provider pending/unknown/OTP/failed states, undelivered reports/dependent exceptions, invalid signatures/digest conflicts, revoked grants/bindings/destinations, unresolved historical work and cross-registry rejection. Track worker profile/queue readiness and exhausted/expired custody by exact event family. IDs and closed reasons are sufficient; no bank data, OTP, credentials, agreement contents or raw provider responses enter logs or general audit.
+Expose bounded counts/ages for undelivered Workstream handoffs, missing Finance configuration/authorization, provider pending/unknown/OTP/failed states, undelivered reports/dependent exceptions, invalid signatures/digest conflicts, revoked grants/bindings/destinations, unresolved execution and cross-registry rejection. Track worker profile/queue readiness and exhausted/expired custody by exact event family. IDs and closed reasons are sufficient; no bank data, OTP, credentials, agreement contents or raw provider responses enter logs or general audit.
 
 Provide runbooks for missing payee, provider balance, unknown transfer, OTP, revoked destination/authority, lost callback, expired service credentials, signer rotation, conflicting report, reversal, worker/profile failure, Finance integration outage, Workstream outage, coordinated backup/restore and future extraction. All recovery uses defined owner operations with original award/reference identities; no direct SQL payment correction or generic requeue.
 
@@ -1763,7 +1732,7 @@ Follow current AGENTS.md and CONTRIBUTING.md: bounded changes, declared allowed 
 | Chunk | Required outcome | Completion boundary |
 | --- | --- | --- |
 | 1 | Contract fixtures, source/digest schemas and retained-data preflight | Executable positive/negative contracts; no live financial effects |
-| 2 | v2 policy graph, PM/FM authoring authority, units/bindings, task-size/context/revision propagation | Public sized-task flow with existing higher/lower revision semantics and immutable history |
+| 2 | current policy graph, PM/FM authoring authority, units/bindings, task-size/context/revision propagation | Public sized-task flow with existing higher/lower revision semantics and immutable history |
 | 3 | Atomic selected award/root/outbox, callback/exception owner and exact AUTH | Workstream acceptance/handoff and late-evidence recovery tests; activation closed |
 | 4 | Finance module, shared migration/model registration, existing AUTH/ACTORS actions, minimal machine issuer support, worker profiles and OUTBOX partition fixes | Real authenticated Finance API; shared DB; disjoint custody and artifact-independent Finance worker proven before provider/credit handlers activate |
 | 5 | Finance configuration/plans, credit, one-human transfer authorization, Paystack adapter and currentness | Durable obligation-to-exact-outcome path with source/grant/dispatch races and no duplicate effect |
@@ -1808,7 +1777,7 @@ Use outcomes and failure boundaries. Avoid tests that only assert a field exists
 | T02 | Mixed sizes in one batch/policy | Reads, claim, submissions and awards use each task's exact tier |
 | T03 | Invalid size/null/amount override | Rejected consistently across REST/CLI/MCP/import |
 | T04 | Policy paid/unpaid combinations | Exact three/one/zero definitions; common header nullability correct |
-| T05 | Mixed instruments/units/bindings | Publication and direct SQL cannot violate v2 graph |
+| T05 | Mixed instruments/units/bindings | Publication and direct SQL cannot violate current graph |
 | T06 | Points fractional or excessive money precision | Rejected without rounding; valid exact decimals preserved |
 | T07 | Later publication before first submission | Existing first-attempt context remains; no newest-policy lookup |
 | T08 | Higher and lower revision | Same size resolves new policy; next submission/award uses it; old evidence unchanged |
@@ -1817,17 +1786,17 @@ Use outcomes and failure boundaries. Avoid tests that only assert a field exists
 | T11 | Acceptance rollback | No partial acceptance/contribution/award/root/outbox |
 | T12 | Exact concurrent acceptance replay | One result/set/root/event; conflicting source remains a conflict |
 | T13 | Unpaid automatic acceptance | Contribution only; no Finance handoff or fabricated reviewer |
-| T14 | v1 retained dual facts | Read/export/replay preserve both; v1 new writes fail |
-| T15 | Migration races/live v1 work | Cutover fence blocks race; unresolved work prevents migration |
-| T16 | Old draft upgrade | Explicit full graph moves draft to v2; no inferred size prices |
-| T17 | Historical enrollment | No startup auto-payment; one authorized root per exact award; Finance prior-payment check required |
+| T14 | Single current award model | Reject obsolete reward markers and multiple-award outcomes |
+| T15 | Data transition and races | Owner fence and atomic incompatible-data refusal; no deletion or invented terms |
+| T16 | Complete draft replacement | Explicit current header/tier graph; no inferred size prices |
+| T17 | Current acceptance handoff | No startup auto-payment; one atomic root and handoff per selected award |
 | T18 | Source/award PUT duplicates | One Finance obligation; changed body conflicts |
 | T19 | Admission response loss | Same GET/PUT recovers exact obligation; no second payout |
 | T20 | Finance configuration missing | Durable block; later planning resumes same obligation |
 | T21 | Points credit duplicate worker | One credit, fulfilled event and callback |
 | T22 | Conversion exactness | Once-per-obligation rounding; original points untouched; precision/overflow blocks |
 | T23 | Single-manager Finance authorization | One eligible manager can configure and authorize the plan; no second-human prerequisite; unauthorized/wrong-project callers fail; exact source/plan/attestations checked; concurrent duplicate authorization creates one intent; committed replay after fulfillment/plan replacement returns original response under current scope without new-source/effect gates or revived execution |
-| T24 | Plan replacement | Only permitted no-effect state; cancellation races dispatch under the same lock/fence; dispatch marker blocks cancellation even after a crash; canceled intent cannot execute/accept OTP; fresh plan and authorization required; stale historical-credit job cannot credit a replaced plan |
+| T24 | Plan replacement | Only permitted no-effect state; cancellation races dispatch under the same lock/fence; dispatch marker blocks cancellation even after a crash; canceled intent cannot execute/accept OTP; fresh plan and authorization required; stale credit intent cannot credit a replaced plan |
 | T25 | Provider request uncertainty | Same reference only; not-found/timeout never authorizes replacement |
 | T26 | Safe replacement attempt | Fresh authorization binds latest conclusively failed or canceled_before_dispatch attempt; same eligible manager allowed; same obligation; new reference only after exact failure proof or fenced no-dispatch proof |
 | T27 | Provider amount/recipient/domain mismatch | No fulfillment; retained incident |
@@ -1876,8 +1845,8 @@ Run the following through actual APIs, an isolated real PostgreSQL database shar
 5. Unpaid work and compensated reviewer-policy configuration without fabricating a reviewer.
 6. Response loss at each local-commit/HTTP boundary, including callback-before-ack.
 7. Provider failure, unknown outcome, OTP, duplicate events and reversal after a recorded success.
-8. Migration rehearsal with retained v1 single/dual awards, saved replay outputs and a deliberately blocking live v1 task.
-9. Historical enrollment, including a Finance finding that prior payment is unknown; it must remain held.
+8. Fresh installation and baseline-upgrade rehearsal, current graph constraints and atomic incompatible-data refusal.
+9. Verify that startup, schema migration and unsupported inputs create no financial effects.
 10. Shared-module/DB migration and hosted configuration preflight; exact worker-profile isolation; no private owner bypass; complete extraction manifest.
 11. Wrong principal, revoked grant/service link, binding suspension and phase-change races between source HTTP and final local commit.
 12. Foreign expired OUTBOX claims, same-project mixed event families and actual general/Finance startup; no wrong-registry mutation or accidental Finance drain dependency.
@@ -1888,7 +1857,7 @@ Use test/sandbox credentials. A live-money drill is a distinct authorized activi
 
 For each successful drill, retain bounded non-secret selectors and assertions linking:
 
-Project/policy/size → immutable Submission → FinalAcceptance → ContributionRecord → award → Workstream root/outbox → Finance obligation/plan → single-manager authorization for bank transfer or historical credit, or configured automatic new points credit → exact transfer/credit outcome → normalized report → Workstream receipt/projection.
+Project/policy/size → immutable Submission → FinalAcceptance → ContributionRecord → award → Workstream root/outbox → Finance obligation/plan → single-manager authorization for bank transfer, or configured automatic points credit → exact transfer/credit outcome → normalized report → Workstream receipt/projection.
 
 Retain exact tested commit and image digests, schema revisions, API/worker configuration class and failed/retry scenarios. Do not put credentials, bank details, raw provider responses or signed agreement contents in repository evidence.
 
@@ -1934,13 +1903,12 @@ For revision testing, publish a successor policy whose Medium value is 15 FLOW, 
 The implementing agent must create valid JSON fixtures under backend/app/modules/finance/contracts/fixtures, including:
 
 ~~~text
-policy-points-v2.json
-policy-money-v2.json
-policy-unpaid-v2.json
-policy-review-fixed-v2.json
-obligation-money-v2.json
-obligation-points-v2.json
-obligation-historical-v1.json
+policy-points.json
+policy-money.json
+policy-unpaid.json
+policy-review-fixed.json
+obligation-money.json
+obligation-points.json
 report-money-fulfilled.json
 report-points-fulfilled.json
 report-failed.json
@@ -1966,8 +1934,6 @@ The following is a complete valid new points obligation for schema and digest te
   "contract_version": 1,
   "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
   "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
-  "admission_kind": "acceptance",
-  "reward_model_version": 2,
   "award_id": "019a78b0-0000-7000-8000-000000000011",
   "project_id": "019a78b0-0000-7000-8000-000000000001",
   "contributor_id": "019a78b0-0000-7000-8000-000000000003",
@@ -2091,7 +2057,7 @@ Provider sources were checked on 12 November 2026. Recheck the actual provider a
 
 Update affected current normative documents and client examples in the same bounded changes:
 
-- Contribution/compensation ADR and specification: v2 one-instrument policy, tier alternatives, exact selected award, reviewer default, retained v1 evidence, Finance HTTP boundary, exceptions, late factual evidence and lifecycle custody.
+- Contribution/compensation ADR and specification: current one-instrument policy, tier alternatives, exact selected award, reviewer default, one current model, Finance HTTP boundary, exceptions, late factual evidence and lifecycle custody.
 - Task, guide and revision specs/templates: task_size, current policy adoption and exact acknowledgement facts while preserving existing rebasing.
 - AUTH and operations docs: PM/FM policy scope, internal configuration command, existing finance_authority scope, exact new callback/executor actions, currentness ports and prepared custody. No duplicate Finance human roles.
 - Identity README/deployment docs: unchanged human audience/login plus the two machine clients and credential provisioning, without claiming a complete new OAuth platform.
