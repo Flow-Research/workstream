@@ -68,10 +68,15 @@ First-commit verification: `cd backend && .venv/bin/python -m pytest -q tests/fi
 | Baseline reconciled | fetch origin main; inspect open PRs | Main matches pinned baseline; no open non-draft PR | Draft #708 touches intake and #698 CLI ZIP preparation; neither is implementation authority |
 | Existing acceptance owner inspected | REV acceptance participant and compensation award participant | Existing caller-owned atomic composition confirmed | Full runtime suite not yet executed |
 | Target behavior | Specification sections 20–21 and focused existing owner tests | Required proof defined; implementation pending | No payment/deployment qualification yet |
+| Obligation wire validation | Focused COMP/FIN contract suite and Ruff | 76 cases passed; lint passed | Pure input proof only; no source authority, runtime activation or payment proof |
 
 ## Review findings
 
-Pending plan review and implementation evidence. No readiness claim.
+First contract-boundary plan review passed after narrowing the commit scope,
+requiring raw-byte JSON guards and independent owner validation against one
+portable schema. Preflight is excluded until its exact report/query plan is
+reviewed. The first-stage implementation is subject to code review; broader
+runtime stages remain unreviewed. No readiness claim.
 
 ## Reconciliation
 

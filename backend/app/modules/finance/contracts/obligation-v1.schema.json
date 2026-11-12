@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workstream Finance obligation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "source_instance_id",
+    "fulfillment_root_id",
+    "admission_kind",
+    "reward_model_version",
+    "award_id",
+    "project_id",
+    "contributor_id",
+    "contribution_record_id",
+    "contribution_type",
+    "task_id",
+    "submission_id",
+    "final_acceptance_id",
+    "review_id",
+    "contribution_policy_version_id",
+    "award_definition_id",
+    "task_size",
+    "adapter_binding_id",
+    "route_key",
+    "instrument_type",
+    "unit_code",
+    "quantity",
+    "awarded_at",
+    "correlation_id",
+    "source_award_digest",
+    "obligation_digest"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "source_instance_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "fulfillment_root_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "admission_kind": {
+      "enum": [
+        "acceptance",
+        "historical_enrollment"
+      ]
+    },
+    "reward_model_version": {
+      "type": "integer",
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "award_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "contributor_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "contribution_record_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "contribution_type": {
+      "enum": [
+        "accepted_submission",
+        "completed_review"
+      ]
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "submission_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "final_acceptance_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contribution_policy_version_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "award_definition_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "task_size": {
+      "enum": [
+        "small",
+        "medium",
+        "large",
+        null
+      ]
+    },
+    "adapter_binding_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "route_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,119}$",
+      "not": {
+        "pattern": "\\.\\."
+      }
+    },
+    "instrument_type": {
+      "enum": [
+        "money",
+        "project_points"
+      ]
+    },
+    "unit_code": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,31}$"
+    },
+    "quantity": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]{0,19}|(?:0|[1-9][0-9]{0,19})\\.[0-9]{0,17}[1-9])$"
+    },
+    "awarded_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "source_award_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "obligation_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "reward_model_version": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "admission_kind": {
+            "const": "historical_enrollment"
+          },
+          "task_size": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contribution_type": {
+            "const": "accepted_submission"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "final_acceptance_id": {
+            "type": "string"
+          },
+          "review_id": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "final_acceptance_id": {
+            "type": "null"
+          },
+          "review_id": {
+            "type": "string"
+          },
+          "task_size": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reward_model_version": {
+            "const": 2
+          },
+          "contribution_type": {
+            "const": "accepted_submission"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "instrument_type": {
+            "const": "project_points"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "quantity": {
+            "pattern": "^[1-9][0-9]{0,19}$"
+          }
+        }
+      }
+    }
+  ]
+}

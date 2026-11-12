@@ -1,0 +1,54 @@
+"""Bounded canonical JSON primitives for authenticated financial contracts."""
+
+import json
+from datetime import datetime
+from decimal import Decimal
+import re
+from uuid import UUID
+
+
+def decode_financial_object(body: bytes) -> dict:
+    """Reject ambiguous or oversized wire input before ordinary JSON parsing."""
+    if not isinstance(body, bytes) or len(body) > 65536:
+        raise ValueError("invalid financial envelope")
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("duplicate JSON member")
+            result[key] = value
+        return result
+
+    def invalid_constant(_value):
+        raise ValueError("nonfinite JSON number")
+
+    try:
+        value = json.loads(
+            body.decode("utf-8"), object_pairs_hook=pairs, parse_constant=invalid_constant
+        )
+    except (UnicodeError, RecursionError) as exc:
+        raise ValueError("invalid financial envelope") from exc
+    if type(value) is not dict:
+        raise ValueError("financial envelope must be an object")
+    return value
+
+
+def require_canonical_financial_values(value: dict) -> None:
+    """Validate canonical UUID, UTC timestamp and exact positive quantity strings."""
+    for key, item in value.items():
+        if key.endswith("_id") and item is not None:
+            if str(UUID(item)) != item:
+                raise ValueError("noncanonical UUID")
+        if key.endswith("_at") and item is not None:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", item):
+                raise ValueError("noncanonical timestamp")
+            datetime.fromisoformat(item)
+    quantity = value["quantity"]
+    if not re.fullmatch(r"(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,18})?", quantity):
+        raise ValueError("invalid quantity")
+    amount = Decimal(quantity)
+    if amount <= 0 or ("." in quantity and quantity.endswith("0")):
+        raise ValueError("noncanonical positive quantity")
+    if value["instrument_type"] == "project_points" and "." in quantity:
+        raise ValueError("points must be whole")

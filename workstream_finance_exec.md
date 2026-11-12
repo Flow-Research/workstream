@@ -1788,7 +1788,7 @@ Chunks may be divided into cohesive PRs after the shared contract is fixed. Runt
 | Shared metadata/migrations | `backend/app/db/models.py`, new `backend/alembic/versions/` revisions after current head and existing schema preflight; historical `0015`, `0019`, `0043` remain untouched |
 | Module boundary enforcement | `.ci/module-boundaries/registry.v1.json` and architecture docs; register Finance with no new private debt |
 | API/platform helpers | Existing `api/router.py`, application composition, settings, `core/api_controls.py`, public AUDIT/cursor/identifier/hash capability wiring |
-| Workers | Existing Celery app/general outbox topology plus Finance tasks/profile; explicit queue membership and profile-scoped startup/shutdown |
+| Workers | Existing Celery app/general outbox topology plus Finance tasks/profile; explicit queue membership and startup/shutdown scoped to each worker profile |
 | Identity issuer | `experiments/demo_identity/src/main.rs`, retained-state migration/tests/README and hosted issuer wiring; no changed human audience/login |
 | Clients/import/export | Existing REST/OpenAPI, CLI command/API, MCP schemas/tools/contracts and versioned exports; Finance operations through supported human API |
 | Release/deployment | Local/hosted Compose, backend release entrypoint, hosted preflight/compose validators, release-image verification and tests/docs; same image and DB/Redis with `finance-worker` role |
