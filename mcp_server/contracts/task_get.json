@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "0c8da6fb007f3b0291505668f193d7e0a0b299f630f9a913d98974197534facd",
+  "canonical_sha256": "1e26eb43031152d73ff0e30b0456a6678c1148ca56e48277fb481d57ede6b007",
   "components": {
     "schemas": {
       "ApiError": {
@@ -163,6 +163,15 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -187,6 +196,7 @@
         "required": [
           "task_id",
           "project_id",
+          "task_size",
           "title",
           "description",
           "task_type",

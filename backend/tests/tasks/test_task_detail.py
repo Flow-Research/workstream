@@ -33,7 +33,7 @@ from tests.test_tasks import (
 READS = ("read_contributor_task_detail", "read_management_task_detail")
 STATES = {state for transition in ALLOWED_TASK_TRANSITIONS for state in transition}
 COMMON = {
-    "task_id", "project_id", "title", "description", "task_type", "difficulty", "skill_tags",
+    "task_id", "project_id", "task_size", "title", "description", "task_type", "difficulty", "skill_tags",
     "estimated_time_minutes", "status", "acceptance_criteria", "rejection_criteria",
     "deadline_at", "created_at", "updated_at",
 }
@@ -94,7 +94,7 @@ def test_task_detail_contracts():
                 replace(request, **{field: "bad"})
         with pytest.raises(FrozenInstanceError):
             request.task_id = new_record_id()
-    values = dict(task_id=task, project_id=project, title="Title", description="Instructions", task_type=None,
+    values = dict(task_id=task, project_id=project, task_size="small", title="Title", description="Instructions", task_type=None,
                   difficulty=None, skill_tags=("tag",), estimated_time_minutes=None, status="ready",
                   acceptance_criteria=None, rejection_criteria=None, deadline_at=None, created_at=now, updated_at=now)
     compensation = TaskCompensationTerms(new_record_id(), "small", "unpaid", "unpaid")
@@ -125,6 +125,9 @@ def test_task_detail_contracts():
         with pytest.raises(FrozenInstanceError):
             item.title = "changed"
         assert not hasattr(item, "_sa_instance_state")
+        if isinstance(item, ContributorTaskDetail):
+            with pytest.raises(ValueError, match="facts are invalid"):
+                replace(item, task_size="medium")
 
 
 @pytest.mark.parametrize("method", READS)

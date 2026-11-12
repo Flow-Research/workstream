@@ -302,10 +302,7 @@ def test_revision_projection_preserves_deadline_and_distinguishes_policy_changes
     assert repaired.direction == "forward"
     assert [change.component for change in repaired.changes] == ["guide", "contribution"]
     assert repaired.prior == prior and repaired.target == target
-    row.blocked_reason = "revision_limit_reached"
-    row.next_revision_round = 3
-    row.outcome = "blocked"
-    assert project_revision(row, row.deadline_at).disposition == "revision_limit_reached"
+
 
 
 async def test_rebase_keeps_history_and_requires_exact_acknowledgement(

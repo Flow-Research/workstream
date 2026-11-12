@@ -229,9 +229,7 @@ def project_revision(row, now) -> ContributorRevisionContext:
             if before != after:
                 changes.append(RevisionContextChange(component=component, before=before, after=after))
     disposition = row.blocked_reason or "ready"
-    if disposition == "revision_limit_reached" and row.next_revision_round <= row.max_revision_rounds:
-        disposition = "context_blocked"
-    if disposition != "revision_limit_reached" and row.deadline_at is not None and now >= row.deadline_at:
+    if row.deadline_at is not None and now >= row.deadline_at:
         disposition = "revision_deadline_expired"
     direction = None if target is None else (
         "kept" if prior == target else
@@ -274,9 +272,7 @@ async def project_current_revisions(session, rows) -> dict[UUID, ContributorRevi
     views = {}
     for row in rows:
         view = project_revision(row, now)
-        if current.get(UUID(str(row.id))) is not True and view.disposition not in {
-            "revision_limit_reached", "revision_deadline_expired",
-        }:
+        if current.get(UUID(str(row.id))) is not True and view.disposition != "revision_deadline_expired":
             view = view.model_copy(update={"disposition": "context_blocked"})
         views[UUID(str(row.id))] = view
     return views

@@ -411,8 +411,6 @@ class AuthorizedTaskCommands:
                     or (head := await head_for_source(self._session, manifest.id)) is None
                     or head.id != parent.id):
                 await reject("revision_context_changed")
-            if parent.blocked_reason == "revision_limit_reached":
-                await reject("revision_limit_reached")
             now = await self._session.scalar(select(func.clock_timestamp()))
             if parent.deadline_at is not None and now >= parent.deadline_at:
                 await reject("revision_deadline_expired")
@@ -442,8 +440,6 @@ class AuthorizedTaskCommands:
                 await reject("revision_context_blocked")
             if candidate.prior != original.prior or candidate.prior != snapshot(historical):
                 await reject("revision_context_changed")
-            if parent.next_revision_round > parent.max_revision_rounds:
-                await reject("revision_limit_reached")
             if candidate == original:
                 await reject("revision_context_unchanged")
             decision = await self._authorize_facts(facts)

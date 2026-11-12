@@ -69,6 +69,12 @@ TASK_CHECKER_CLEANUP_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/submission_history.py",
     "backend/app/modules/authorization/history_authorization.py",
 })
+REWARD_RECOVERY_REMOVED_TARGETS = frozenset({
+    "backend/app/modules/tasks/api/revision_exhaustion.py",
+    "backend/app/modules/tasks/revision/exhausted_notice.py",
+    "backend/app/modules/tasks/revision/exhaustion_event.py",
+    "backend/app/modules/tasks/revision/exhaustion_recovery.py",
+})
 FINANCE_REWARD_TARGETS = frozenset({
     "backend/app/core/financial_wire.py",
     "backend/app/modules/compensation/api/fulfillment_contracts.py",
@@ -1116,7 +1122,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
+        or removed - (REWARD_RECOVERY_REMOVED_TARGETS | NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):

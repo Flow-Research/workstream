@@ -79,7 +79,7 @@ def test_paused_projection_never_spends_allowance_as_wall_time_passes():
     assert wire["remaining_microseconds"] == row.remaining_microseconds
 
 
-def test_retained_lower_target_limit_is_setup_blocked_and_respects_running_deadline():
+def test_lower_target_limit_blocks_context_and_respects_running_deadline():
     row = _paused_row()
     candidate = candidate_from_packet(row.packet)
     target = candidate.prior.model_copy(update={
@@ -93,14 +93,12 @@ def test_retained_lower_target_limit_is_setup_blocked_and_respects_running_deadl
         "target": target, "target_reward_selection": candidate.prior_reward_selection, "target_max_revision_rounds": 1, "target_post_policy_json": "{}",
     }).model_dump(mode="json")
     row.next_revision_round = 2
-    row.blocked_reason = "revision_limit_reached"
+    row.blocked_reason = "context_blocked"
     row.deadline_at = row.requested_at + timedelta(hours=24)
     row.remaining_microseconds = None
     before = project_revision(row, row.requested_at)
     assert before.disposition == "context_blocked" and before.clock_state == "running"
     assert project_revision(row, row.deadline_at).disposition == "revision_deadline_expired"
-    row.next_revision_round = row.max_revision_rounds + 1
-    assert project_revision(row, row.deadline_at).disposition == "revision_limit_reached"
 
 
 def test_resumed_timer_keeps_root_identity_but_selects_new_effective_deadline():

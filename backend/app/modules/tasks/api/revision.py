@@ -115,7 +115,7 @@ class ContributorRevisionContext(BaseModel):
     clock_state: Literal["running", "paused"]
     remaining_microseconds: int | None = Field(ge=0)
     outcome: Literal["kept", "rebased", "blocked"]
-    disposition: Literal["ready", "context_blocked", "revision_limit_reached", "revision_deadline_expired"]
+    disposition: Literal["ready", "context_blocked", "revision_deadline_expired"]
     direction: Literal["kept", "forward", "backward"] | None
     prior: RevisionContextSnapshot
     target: RevisionContextSnapshot | None
@@ -126,6 +126,8 @@ class ContributorRevisionContext(BaseModel):
     @model_validator(mode="after")
     def clock_shape(self) -> Self:
         """Expose one running deadline or one frozen paused allowance."""
+        if self.next_revision_round > self.max_revision_rounds:
+            raise ValueError("revision round exceeds the locked allowance")
         if self.clock_state == "running":
             if self.deadline_at is None or self.remaining_microseconds is not None:
                 raise ValueError("running revision requires a deadline")

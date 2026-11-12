@@ -395,7 +395,8 @@ async def _successor_human_attachments(factory):
     }
 
 
-async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2", human_review_required=True):
+async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2", human_review_required=True,
+                                 contribution_awards=(), submission_quantities=None):
     """Activate a genuine successor guide in the source Submission's project."""
     from uuid import uuid4
 
@@ -471,7 +472,10 @@ async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2", hu
         "approve",
         PostPolicyApproval(target=derived.target, idempotency_key=uuid4()),
     )
-    _, contribution_policy = await publish_policy(h.factory, finalization.project_id)
+    _, contribution_policy = await publish_policy(
+        h.factory, finalization.project_id, contribution_awards=contribution_awards,
+        submission_quantities=submission_quantities,
+    )
     command = await activation_command(h.factory, approved, contribution_policy)
     async with h.factory() as session:
         current = await session.scalar(

@@ -89,6 +89,10 @@ async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_rev
                      for row in ready.json()["items"]}
             assert terms == ({"small": "2.125000000000000001", "medium": "4.250000000000000002"}
                              if instrument == "money" else {"small": "7", "medium": "14"})
+            management = await client.get(f"/api/v1/projects/{project}/tasks/{h.task_id}")
+            assert management.status_code == 200 and management.json()["task_size"] == "medium", management.text
+            context = await client.get(f"/api/v1/projects/{project}/tasks/{h.task_id}/work-context")
+            assert context.status_code == 200 and context.json()["task"]["task_size"] == "medium", context.text
             h.claim_headers = {"Idempotency-Key": str(new_record_id())}
             h.claim_body = {"reason": "Start exact Medium work"}
             claim = await client.post(f"/api/v1/tasks/{h.task_id}/claim",
@@ -191,8 +195,12 @@ async def test_medium_public_claim_to_selected_automatic_acceptance(
         assert await delivery.deliver(completed, h.request.project_id, "selected-medium-replay") is None
 
 
-async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_env, monkeypatch, live_acceptance_lifecycle):
-    """A real paid-to-unpaid rebase changes work context, never the original claim result."""
+@pytest.mark.parametrize("target_instrument,target_quantity", [
+    (None, None), ("money", "1"), ("money", "8"), ("project_points", "14"),
+], ids=["unpaid", "lower-money", "higher-money", "points"])
+async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_env, monkeypatch,
+                                               live_acceptance_lifecycle, target_instrument, target_quantity):
+    """Revised terms change the replacement's award, never original command/evidence."""
     from app.modules.checkers.models import CheckerRun
     from tests.checkers.execution.support import ControlledSelectedExecution, live_executor, reserve
     from tests.checkers.external.support import post_registry_spec
@@ -212,7 +220,12 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
         h.source = await source_values(h)
         await provision_router(h.factory)
         h.envelope = await invoked_completion(h)
-        await activate_successor_guide(h, version="revised", human_review_required=False)
+        await activate_successor_guide(
+            h, version="revised", human_review_required=False,
+            contribution_awards=() if target_instrument is None else (target_instrument,),
+            submission_quantities=({"small": "1", "medium": target_quantity, "large": "21"}
+                                   if target_instrument is not None else None),
+        )
         await _fixture_revision_context(h)
         view = await h.client.get(f"/api/v1/tasks/{h.task_id}/work-context")
         assert view.status_code == 200, view.text
@@ -222,8 +235,10 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
             "instrument": "money", "unit": "USD", "quantity": "4.250000000000000002",
         }
         assert revision["target_reward_selection"] == {
-            "compensation_mode": "unpaid", "task_size": "medium",
-            "instrument": None, "unit": None, "quantity": None,
+            "compensation_mode": "unpaid" if target_instrument is None else "compensated",
+            "task_size": "medium", "instrument": target_instrument,
+            "unit": None if target_instrument is None else ("USD" if target_instrument == "money" else "PTS"),
+            "quantity": target_quantity,
         }
         assert "adapter_binding_id" not in view.text
         foreign = _context()
@@ -306,7 +321,9 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
                 JOIN public.submission_bundle_admissions d ON d.id=s.submission_bundle_admission_id
                 WHERE s.id=:id"""), {"id": h.created.submission_id})).one()
             assert copied[0] == copied[3] == copied[6] == "medium"
-            assert copied[1] is copied[4] is copied[7] is None
+            assert copied[1] == copied[4] == copied[7]
+            assert (copied[1] is None) == (target_instrument is None)
+            assert str(copied[1]) != original["contribution_award_definition_id"]
             assert copied[2] == copied[5] == copied[8]
             assert str(copied[2]) != original["contribution_policy_version_id"]
         await reserve(h)
@@ -321,11 +338,24 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
             assert await session.scalar(text("SELECT to_jsonb(s) FROM public.submissions s WHERE id=:id"),
                                         {"id": old_submission}) == original
             assert await session.scalar(text("SELECT submission_id FROM public.contribution_records")) == h.created.submission_id
-            assert await session.scalar(text("SELECT count(*) FROM public.compensation_awards")) == 0
+            awards = (await session.execute(text("SELECT award_definition_id,instrument_type,unit_code,quantity "
+                                                "FROM public.compensation_awards"))).all()
+            if target_instrument is None:
+                assert awards == []
+            else:
+                from decimal import Decimal
+                assert awards == [(copied[1], target_instrument,
+                                   "USD" if target_instrument == "money" else "PTS", Decimal(target_quantity))]
             assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
             assert await session.scalar(text("SELECT status FROM public.workstream_tasks WHERE id=:id"), {"id": h.task_id}) == "accepted"
         evidence = await h.client.get("/api/v1/actors/me/contributions")
         assert evidence.status_code == 200, evidence.text
         (record,) = evidence.json()["items"]
         assert record["submission_id"] == str(h.created.submission_id)
-        assert record["task_size"] == "medium" and record["awards"] == []
+        assert record["task_size"] == "medium"
+        if target_instrument is None:
+            assert record["awards"] == []
+        else:
+            (award,) = record["awards"]
+            assert award["award_definition_id"] == str(copied[1])
+            assert award["quantity"] == target_quantity

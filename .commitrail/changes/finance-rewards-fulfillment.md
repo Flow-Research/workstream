@@ -347,9 +347,8 @@ same-actor authority and the exact immutable receipt namespace/request. They val
 coordinates against the original immutable source, preserving the receipt and
 current transition authority. Creation has its exact unscreened null-policy source. Screen/release use
 the immutable original Submission when continuing context differs. Missing or
-substituted source stays a conflict. Add focused hash substitution proof and
-extend the existing public rebase drill to replay recorded manager commands and
-reject changed bodies. Existing AUTH guards and database receipt immutability
+substituted source stays a conflict. Focused hash substitution proof and the public rebase drill now cover recorded
+manager commands and reject changed bodies. Existing AUTH guards and database receipt immutability
 remain required. Risk and reviewer tracks remain L0 as declared above.
 
 
@@ -446,3 +445,66 @@ management size exposure), higher/lower/instrument-changing replacement proof,
 full-suite and actual durable-worker/S3 qualification. Finance runtime is still
 unfinished. This batch closes obsolete recovery and its distinct retained proof;
 it does not narrow the full goal or claim PR readiness.
+
+
+The frozen cleanup review found one remaining obsolete consumer in the shared
+`test_audit.py`: the recovery-only adapter test/import and canonical enum-matrix
+case still referenced the removed API. Remove those cases, retaining all current
+routed-exhaustion, expiry, repair and shared audit contract proof. A full locked-
+agents collection and focused canonical audit tests must pass before closing
+this finding; do not restore the deleted adapter to satisfy it.
+
+
+## Complete current read contracts and remaining cleanup consumers
+
+Concrete gaps: management detail lacks immutable Task size, and95 review found
+remaining obsolete preparation-only cap tokens, one shared audit test, and stale
+behavior-partition entries. Allowed: existing TASK detail/revision DTOs, their
+repository projection and expiry/repair readers,0071 constraints, exact ownership
+metadata, affected audit/current tests, Go detail/context decoders/renderers and
+fixtures, MCP snapshots and current documentation. No new operation/state,
+financial authority, compatibility alias/default/decoder or parallel response.
+Keep ordinary submission/exhaustion limit errors and all current repair/expiry
+and terminal behavior. Required size is current Task data, including unpaid work;
+contributor terms must agree with it. Update every affected caller together.
+Acceptance: detail/work context expose exact size to both audiences; strict
+current clients reject missing/invalid/mismatched size; current preparation
+states cannot encode obsolete cap holds; audit collection and exact ownership
+validation pass. Verification uses existing DTO/public read/Go/CLI/MCP contract
+proof, current native constraints and full collection. Risk staysL0; affected
+QA/CI/docs/security/product/architecture/reuse reviewers replay the new candidate.
+Human focus is exact read selection, privacy and complete deletion of obsolete
+preparation semantics while current cap exhaustion remains intact.
+
+
+The exact95 actual0070→head test exposed an intermediate-function compilation
+error during recovery cleanup. Fresh installation's baseline transaction had
+masked it with its local function-body validation setting.0071 now reads each
+installed guard once, checks each replacement anchor exactly once, and installs
+only the complete edited body. Actual upgrade validation remains enabled; no
+old reader or weakened check is introduced. Existing installation/upgrade and
+atomic-refusal tests provide the discriminating regression. Frozen95 remains
+blocked evidence, not a passing migration claim.
+
+
+The follow-up development run now passes both actual0070→head installation/
+upgrade and atomic incompatible-data refusal tests (423.47s), with owned database
+and MinIO cleanup verified. The schema fingerprint is
+`5507ad05976f9d8982e241a403a215973b7802314177a8fdd75f3146b6bb1d29`.
+The frozen95 lifecycle run passed21 cases (1692.61s); this is exact95 lifecycle
+proof and does not override its failed upgrade. Current Go package checks,
+16 CLI HTTP contract cases,188 ownership/lane controls,59 catalogue controls,
+module boundaries, Markdown links and stale wording passed. Complete backend
+collection found11971 tests before the replacement matrix parameter expansion.
+The current MCP claim/read/size consumers passed65 tests after replacing the
+stale static replay probe with the current async owner. Its cross-size negative
+probe also passed independently. Broader OpenAPI snapshot checks and clean-head
+replay remain required; development runs are not frozen implementation receipts.
+
+The existing public replacement drill now also covers lower/higher money and a
+money-to-points change through real published policy fixtures, exact preparation
+acknowledgement, replacement Submission and shared automatic acceptance. It
+asserts the exact revised selected award and unchanged original evidence/replay.
+This matrix is running; its outcome is not yet claimed. The affected fixture
+parameters supply exact authored quantities through the existing policy owner,
+without bypassing publication or adding an application behavior.

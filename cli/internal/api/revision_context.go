@@ -86,7 +86,7 @@ func validateRevisionContext(raw json.RawMessage, value *RevisionContext) error 
 	}, nil)
 	if err != nil || !validUUID(value.PreparationID) || !contextPolicyDigest.MatchString(value.PreparationSHA256) ||
 		!validUUID(value.SourceSubmissionID) || !validUUID(value.SourceRoutingManifestID) ||
-		value.Sequence <= 0 || value.NextRevisionRound < 0 || value.MaxRevisionRounds < 0 ||
+		value.Sequence <= 0 || value.NextRevisionRound < 0 || value.MaxRevisionRounds < 0 || value.NextRevisionRound > value.MaxRevisionRounds ||
 		!validTime(value.RequestedAt) || value.Changes == nil || len(value.Changes) > 8 {
 		return revisionInvalid()
 	}
@@ -116,7 +116,7 @@ func validateRevisionContext(raw json.RawMessage, value *RevisionContext) error 
 		return revisionInvalid()
 	}
 	switch value.Disposition {
-	case "ready", "context_blocked", "revision_limit_reached", "revision_deadline_expired":
+	case "ready", "context_blocked", "revision_deadline_expired":
 	default:
 		return revisionInvalid()
 	}

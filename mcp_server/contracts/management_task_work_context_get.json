@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "7903ae99c0ae95da555d25bd6af9277abd11dd3bdb872beb70a07430bb1324bb",
+  "canonical_sha256": "c839b446530c456fd3a05acb0edda140c1743c9426eb0f45e1ae3f7f26217c8d",
   "components": {
     "schemas": {
       "ApiError": {
@@ -113,7 +113,6 @@
             "enum": [
               "ready",
               "context_blocked",
-              "revision_limit_reached",
               "revision_deadline_expired"
             ],
             "title": "Disposition",
@@ -576,6 +575,15 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -600,6 +608,7 @@
         "required": [
           "task_id",
           "project_id",
+          "task_size",
           "title",
           "description",
           "task_type",

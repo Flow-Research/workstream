@@ -43,7 +43,8 @@ class PolicyWorld:
             session, read_authorization=auth, mutation_authorization=auth
         )
 
-    def request(self, operation, prior=None, *, compensated=False, financial_header=None):
+    def request(self, operation, prior=None, *, compensated=False, financial_header=None,
+                submission_quantities=None):
         """Prepare a valid caller request from a previous immutable result."""
         common = dict(actor_profile_id=self.context.actor_profile_id, project_id=self.project)
         if operation == "create_draft":
@@ -70,7 +71,7 @@ class PolicyWorld:
                         {
                             "contribution_type": "accepted_submission",
                             "compensation_mode": "compensated",
-                            "quantities": {
+                            "quantities": submission_quantities if submission_quantities is not None else {
                                 "small": quantity,
                                 "medium": "4.250000000000000002" if instrument == "money" else "14",
                                 "large": "6.375000000000000003" if instrument == "money" else "21",

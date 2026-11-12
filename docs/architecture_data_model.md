@@ -1437,7 +1437,7 @@ Fields:
 - `locked_revision_policy_generation`
 - `locked_revision_policy_hash`
 - `locked_contribution_policy_version_id`
-- `task_size` (immutable `small`, `medium` or `large`)
+- `task_size` (immutable `small`, `medium` or `large`; required in contributor and management detail and their work contexts, including unpaid tasks)
 - `locked_submission_award_definition_id` (null before screening or under an unpaid rule)
 - `source_type`
 - `source_ref`

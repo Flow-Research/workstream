@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "2244e31975a8b2c14c320dac086edafbc4cec881a5b3910a5f1e438a219887b7",
+  "canonical_sha256": "8e94e00f65f4e1ee162c099fdc7533ebfbbbb58eb180fd55ab76ae97c55700a0",
   "components": {
     "schemas": {
       "ApiError": {
@@ -183,7 +183,6 @@
             "enum": [
               "ready",
               "context_blocked",
-              "revision_limit_reached",
               "revision_deadline_expired"
             ],
             "title": "Disposition",

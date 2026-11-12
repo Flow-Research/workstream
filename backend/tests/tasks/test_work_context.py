@@ -45,7 +45,7 @@ from tests.test_tasks import (
     admit_and_grant_project_submitter, set_dev_actor, auth_headers,
 )
 
-COMMON = {"task_id", "project_id", "title", "description", "task_type", "difficulty", "skill_tags",
+COMMON = {"task_id", "project_id", "task_size", "title", "description", "task_type", "difficulty", "skill_tags",
           "estimated_time_minutes", "status", "acceptance_criteria", "rejection_criteria",
           "deadline_at", "created_at", "updated_at"}
 MANAGEMENT = {"source_type", "source_ref", "source_payload_hash", "import_batch_id", "external_task_id",
@@ -58,7 +58,7 @@ ACTIONS = ("task.work_context.read", "project.task.work_context.read")
 def context_values():
     project_id, now = new_record_id(), datetime.now(UTC)
     task = ContributorTaskDetail(
-        new_record_id(), project_id, "Title", "Work", None, None, ("tag",), None,
+        new_record_id(), project_id, "small", "Title", "Work", None, None, ("tag",), None,
         "in_progress", None, None, None, now, now,
         TaskCompensationTerms(new_record_id(), "small", "unpaid", "unpaid"),
     )
@@ -492,7 +492,6 @@ def test_revision_repair_decodes_serialized_strict_source_lineage():
     ("ready", "context_blocked"),
     ("context_blocked", "context_blocked"),
     ("revision_deadline_expired", "revision_deadline_expired"),
-    ("revision_limit_reached", "revision_limit_reached"),
 ])
 async def test_revision_projection_stale_source_preserves_deadline_and_limit_priority(
     monkeypatch, disposition, expected,

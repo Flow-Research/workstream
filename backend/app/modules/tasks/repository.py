@@ -80,6 +80,7 @@ def _task_detail_columns():
     return (
         task.id.label("task_id"),
         task.project_id,
+        task.task_size,
         task.title,
         task.description,
         task.task_type,
@@ -402,13 +403,13 @@ class TaskRepository:
             )
         )
         statement = statement.add_columns(task.locked_contribution_policy_version_id,
-                                          task.task_size, task.locked_submission_award_definition_id)
+                                          task.locked_submission_award_definition_id)
         values = await self._read_task_detail_values(request, statement)
         if values is None:
             return None
         version_id = values.pop("locked_contribution_policy_version_id")
         selection = LockedCompensationSelection(
-            version_id, values.pop("task_size"), values.pop("locked_submission_award_definition_id")
+            version_id, values["task_size"], values.pop("locked_submission_award_definition_id")
         )
         compensation = await self.locked_compensation(request.project_id, (selection,))
         from app.modules.tasks.revision.terminal_read import latest_assignment_outcome

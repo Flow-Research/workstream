@@ -1587,7 +1587,15 @@ class WorkstreamGateway:
                 data,
                 {"task_id": task_id, "preparation_id": arguments["preparation_id"]},
             )
-        if name in {"task_get", "task_submission_requirements_get"}:
+        if name == "task_get":
+            terms = data.get("compensation")
+            return (
+                cls._same_uuid(data.get("task_id"), task_id)
+                and isinstance(terms, dict)
+                and data.get("task_size") in ("small", "medium", "large")
+                and data["task_size"] == terms.get("task_size")
+            )
+        if name == "task_submission_requirements_get":
             return cls._same_uuid(data.get("task_id"), task_id)
         if name in {"task_screen", "task_release"}:
             return cls._same_uuid(data.get("id"), task_id)
@@ -1603,6 +1611,12 @@ class WorkstreamGateway:
         if name in {"task_work_context_get", "management_task_work_context_get"}:
             task = data.get("task")
             project = data.get("project")
+            if name == "task_work_context_get":
+                terms = task.get("compensation") if isinstance(task, dict) else None
+                if (not isinstance(terms, dict)
+                        or task.get("task_size") not in ("small", "medium", "large")
+                        or task["task_size"] != terms.get("task_size")):
+                    return False
             return (
                 isinstance(task, dict)
                 and cls._same_uuid(task.get("task_id"), task_id)

@@ -236,7 +236,8 @@ async def activation_command(factory, approved, policy):
     )
 
 
-async def publish_policy(factory, project_id, *, compensated=False, contribution_awards=()):
+async def publish_policy(factory, project_id, *, compensated=False, contribution_awards=(),
+                         submission_quantities=None):
     """Publish complete rules with real scoped Finance authority."""
     from app.modules.authorization.runtime import (
         HumanAuthorizationContext,
@@ -274,7 +275,8 @@ async def publish_policy(factory, project_id, *, compensated=False, contribution
         async with factory() as session, session.begin():
             policy = await getattr(world.service(session), operation)(
                 world.request(
-                    operation, policy, compensated=compensated, financial_header=financial_header
+                    operation, policy, compensated=compensated, financial_header=financial_header,
+                    submission_quantities=submission_quantities,
                 )
             )
     return world, policy

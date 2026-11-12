@@ -2166,10 +2166,6 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/api/revision_exhaustion.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/revision_expiry.py"
     },
     {
@@ -2302,19 +2298,7 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhausted_notice.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/revision/exhaustion.py"
-    },
-    {
-      "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhaustion_event.py"
-    },
-    {
-      "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhaustion_recovery.py"
     },
     {
       "group": "lifecycle",
@@ -2617,7 +2601,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "1f6913fcbdcc6c79330cf31a4a23928b22c18c60f123bfedb418860e61847a9f",
+  "authority_digest": "ee610c0f0a91e8bf5001c90d68d851b955e0d2bfcc069e104aab28a88dc2b53b",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

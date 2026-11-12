@@ -36,6 +36,15 @@ def upgrade() -> None:
 
     _remove_obsolete_recovery()
 
+    op.execute("""ALTER TABLE public.task_revision_preparations
+        DROP CONSTRAINT ck_task_revision_preparations_blocked_reason,
+        ADD CONSTRAINT ck_task_revision_preparations_blocked_reason CHECK (
+          blocked_reason IS NULL OR blocked_reason IN ('context_blocked','revision_deadline_expired')),
+        DROP CONSTRAINT ck_task_revision_preparations_positive_rounds,
+        ADD CONSTRAINT ck_task_revision_preparations_positive_rounds CHECK (
+          sequence>0 AND source_submission_version>0 AND next_revision_round>=0
+          AND max_revision_rounds>=0 AND next_revision_round<=max_revision_rounds)""")
+
     op.execute("""ALTER TABLE public.workstream_tasks
         ADD COLUMN locked_submission_award_definition_id uuid CONSTRAINT fk_task_selected_reward
         REFERENCES public.contribution_award_definitions(id)""")
@@ -311,23 +320,37 @@ $$;
 
 def _remove_obsolete_recovery() -> None:
     """Remove excluded development recovery while preserving current installed guards."""
-    _replace_function('public.guard_task_revision_exhaustion()', ' expected_status text;\n', '')
-    _replace_function('public.guard_task_revision_exhaustion()', " expected_status:=CASE WHEN NEW.recovery_authority_context IS NULL THEN 'evaluation_pending'\n  ELSE 'needs_revision' END;\n", '')
-    _replace_function('public.guard_task_revision_exhaustion()', 't.status<>expected_status', "t.status<>'evaluation_pending'")
-    _replace_function('public.guard_task_revision_exhaustion()', 'OR (NEW.recovery_authority_context IS NULL AND (', 'OR (')
-    _replace_function('public.guard_task_revision_exhaustion()', "'max_revision_rounds',NEW.max_revision_rounds)))", "'max_revision_rounds',NEW.max_revision_rounds))")
-    _replace_function('public.guard_task_revision_exhaustion()', '  OR (NEW.recovery_authority_context IS NOT NULL AND\n      NOT public.revision_exhaustion_recovery_authorized(NEW))\n', '')
-    _replace_function('public.guard_task_revision_exhaustion()', '(NEW.recovery_authority_context IS NULL AND\n      EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id))', 'EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id)')
-    _replace_function('public.guard_task_revision_exhaustion()', "(NEW.recovery_authority_context IS NULL AND EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text))", "EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text)")
-    _replace_function('public.guard_task_revision_exhaustion_closure()', '(NEW.recovery_authority_context IS NULL AND\n      EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id))', 'EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id)')
-    _replace_function('public.guard_task_revision_exhaustion_closure()', "(NEW.recovery_authority_context IS NULL AND EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text))", "EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text)")
-    _replace_function('public.guard_task_revision_exhaustion_closure()', '(NEW.recovery_authority_context IS NULL AND NOT public.task_routing_outcome_complete(m))', 'NOT public.task_routing_outcome_complete(m)')
-    _replace_function('public.task_revision_exhaustion_complete(uuid)', ' IF e.recovery_authority_context IS NOT NULL THEN\n  RETURN public.revision_recovered_exhaustion_evidence(e); END IF;\n', '')
-    _replace_function('public.guard_task_revision_expiration_transition()', '\n      AND NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions exhausted\n        WHERE exhausted.task_id=OLD.id AND exhausted.project_id=OLD.project_id\n          AND exhausted.contributor_id=OLD.assigned_to\n          AND exhausted.recovery_authority_context IS NOT NULL\n          AND exhausted.creation_xid=pg_current_xact_id()::text)', '')
-    _replace_function('public.guard_revision_preparation()', "(c IS NOT DISTINCT FROM prior.packet->'candidate'\n      AND NOT (prior.clock_observed_at IS NULL AND prior.deadline_at IS NOT NULL\n        AND prior.outcome='blocked' AND prior.blocked_reason IN ('context_blocked','revision_limit_reached')\n        AND NEW.deadline_at IS NULL AND NEW.outcome='blocked'\n        AND NEW.repair_actor_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.audit_events decision\n          WHERE decision.id=NEW.authorization_decision_id AND decision.action_id='task.revision.recover')))", "(c IS NOT DISTINCT FROM prior.packet->'candidate')")
-    _replace_function('public.guard_revision_preparation()', "((NEW.predecessor_id IS NULL AND NEW.outcome IN ('kept','blocked'))\n          OR (NEW.predecessor_id IS NOT NULL AND prior.clock_observed_at IS NULL\n            AND prior.deadline_at IS NOT NULL AND prior.outcome='blocked'\n            AND prior.blocked_reason IN ('context_blocked','revision_limit_reached')\n            AND prior.next_revision_round<=prior.max_revision_rounds\n            AND NEW.deadline_at IS NULL AND NEW.outcome='blocked'\n            AND NEW.blocked_reason='context_blocked'\n            AND NEW.packet#>'{candidate,target}'='null'::jsonb\n            AND NEW.packet#>'{candidate,target_max_revision_rounds}'='null'::jsonb\n            AND NEW.packet#>'{candidate,target_post_policy_json}'='null'::jsonb))", "NEW.predecessor_id IS NULL AND NEW.outcome IN ('kept','blocked')")
-    _replace_function('public.guard_revision_preparation()', 'NEW.repair_idempotency_key=coalesce(prior.id,NEW.routing_manifest_id)', 'NEW.repair_idempotency_key=NEW.routing_manifest_id')
-    _replace_function('public.guard_revision_preparation()', "'preparation_id',(SELECT root.id::text FROM public.task_revision_preparations root\n                  WHERE root.routing_manifest_id=NEW.routing_manifest_id AND root.sequence=1),\n                'preparation_sha256',(SELECT root.preparation_sha256 FROM public.task_revision_preparations root\n                  WHERE root.routing_manifest_id=NEW.routing_manifest_id AND root.sequence=1),\n                'head_preparation_id',prior.id::text,'head_preparation_sha256',prior.preparation_sha256,", "'preparation_id',NULL,'preparation_sha256',NULL,\n                'head_preparation_id',NULL,'head_preparation_sha256',NULL,")
+    # Install only complete definitions: actual upgrades compile every CREATE.
+    replacements = (
+        ('public.guard_task_revision_exhaustion()', ' expected_status text;\n', ''),
+        ('public.guard_task_revision_exhaustion()', " expected_status:=CASE WHEN NEW.recovery_authority_context IS NULL THEN 'evaluation_pending'\n  ELSE 'needs_revision' END;\n", ''),
+        ('public.guard_task_revision_exhaustion()', 't.status<>expected_status', "t.status<>'evaluation_pending'"),
+        ('public.guard_task_revision_exhaustion()', 'OR (NEW.recovery_authority_context IS NULL AND (', 'OR ('),
+        ('public.guard_task_revision_exhaustion()', "'max_revision_rounds',NEW.max_revision_rounds)))", "'max_revision_rounds',NEW.max_revision_rounds))"),
+        ('public.guard_task_revision_exhaustion()', '  OR (NEW.recovery_authority_context IS NOT NULL AND\n      NOT public.revision_exhaustion_recovery_authorized(NEW))\n', ''),
+        ('public.guard_task_revision_exhaustion()', '(NEW.recovery_authority_context IS NULL AND\n      EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id))', 'EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id)'),
+        ('public.guard_task_revision_exhaustion()', "(NEW.recovery_authority_context IS NULL AND EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text))", "EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text)"),
+        ('public.guard_task_revision_exhaustion_closure()', '(NEW.recovery_authority_context IS NULL AND\n      EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id))', 'EXISTS(SELECT 1 FROM public.task_revision_preparations WHERE routing_manifest_id=m.id)'),
+        ('public.guard_task_revision_exhaustion_closure()', "(NEW.recovery_authority_context IS NULL AND EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text))", "EXISTS(SELECT 1 FROM public.outbox_events WHERE\n    idempotency_key='task.revision.expire:'||m.id::text)"),
+        ('public.guard_task_revision_exhaustion_closure()', '(NEW.recovery_authority_context IS NULL AND NOT public.task_routing_outcome_complete(m))', 'NOT public.task_routing_outcome_complete(m)'),
+        ('public.task_revision_exhaustion_complete(uuid)', ' IF e.recovery_authority_context IS NOT NULL THEN\n  RETURN public.revision_recovered_exhaustion_evidence(e); END IF;\n', ''),
+        ('public.guard_task_revision_expiration_transition()', '\n      AND NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions exhausted\n        WHERE exhausted.task_id=OLD.id AND exhausted.project_id=OLD.project_id\n          AND exhausted.contributor_id=OLD.assigned_to\n          AND exhausted.recovery_authority_context IS NOT NULL\n          AND exhausted.creation_xid=pg_current_xact_id()::text)', ''),
+        ('public.guard_revision_preparation()', "(c IS NOT DISTINCT FROM prior.packet->'candidate'\n      AND NOT (prior.clock_observed_at IS NULL AND prior.deadline_at IS NOT NULL\n        AND prior.outcome='blocked' AND prior.blocked_reason IN ('context_blocked','revision_limit_reached')\n        AND NEW.deadline_at IS NULL AND NEW.outcome='blocked'\n        AND NEW.repair_actor_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.audit_events decision\n          WHERE decision.id=NEW.authorization_decision_id AND decision.action_id='task.revision.recover')))", "(c IS NOT DISTINCT FROM prior.packet->'candidate')"),
+        ('public.guard_revision_preparation()', "((NEW.predecessor_id IS NULL AND NEW.outcome IN ('kept','blocked'))\n          OR (NEW.predecessor_id IS NOT NULL AND prior.clock_observed_at IS NULL\n            AND prior.deadline_at IS NOT NULL AND prior.outcome='blocked'\n            AND prior.blocked_reason IN ('context_blocked','revision_limit_reached')\n            AND prior.next_revision_round<=prior.max_revision_rounds\n            AND NEW.deadline_at IS NULL AND NEW.outcome='blocked'\n            AND NEW.blocked_reason='context_blocked'\n            AND NEW.packet#>'{candidate,target}'='null'::jsonb\n            AND NEW.packet#>'{candidate,target_max_revision_rounds}'='null'::jsonb\n            AND NEW.packet#>'{candidate,target_post_policy_json}'='null'::jsonb))", "NEW.predecessor_id IS NULL AND NEW.outcome IN ('kept','blocked')"),
+        ('public.guard_revision_preparation()', 'NEW.repair_idempotency_key=coalesce(prior.id,NEW.routing_manifest_id)', 'NEW.repair_idempotency_key=NEW.routing_manifest_id'),
+        ('public.guard_revision_preparation()', "'preparation_id',(SELECT root.id::text FROM public.task_revision_preparations root\n                  WHERE root.routing_manifest_id=NEW.routing_manifest_id AND root.sequence=1),\n                'preparation_sha256',(SELECT root.preparation_sha256 FROM public.task_revision_preparations root\n                  WHERE root.routing_manifest_id=NEW.routing_manifest_id AND root.sequence=1),\n                'head_preparation_id',prior.id::text,'head_preparation_sha256',prior.preparation_sha256,", "'preparation_id',NULL,'preparation_sha256',NULL,\n                'head_preparation_id',NULL,'head_preparation_sha256',NULL,"),
+    )
+    bodies = {}
+    for signature, old, new in replacements:
+        if signature not in bodies:
+            bodies[signature] = op.get_bind().execute(text(
+                "SELECT pg_get_functiondef(to_regprocedure(:signature))"
+            ), {"signature": signature}).scalar_one()
+        if bodies[signature].count(old) != 1:
+            raise RuntimeError(f"selected reward guard owner changed: {signature}")
+        bodies[signature] = bodies[signature].replace(old, new)
+    for body in bodies.values():
+        op.execute(body)
     op.execute("DROP FUNCTION public.revision_exhaustion_recovery_authorized(public.task_revision_exhaustions)")
     op.execute("DROP FUNCTION public.revision_recovered_exhaustion_evidence(public.task_revision_exhaustions)")
     op.execute("ALTER TABLE public.task_revision_exhaustions DROP CONSTRAINT ck_task_revision_exhaustions_recovery_authority_shape, DROP COLUMN recovery_authority_context")

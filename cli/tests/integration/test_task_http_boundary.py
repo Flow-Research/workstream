@@ -28,6 +28,7 @@ SUMMARY = {
     "updated_at": "2026-10-02T00:00:00Z",
 }
 DETAIL = SUMMARY | {
+    "task_size": "small",
     "description": "Instructions\n\x1b[32m",
     "acceptance_criteria": "Accurate",
     "rejection_criteria": "Missing",
@@ -110,7 +111,7 @@ def test_manager_task_reads_preserve_fields_and_wire(cli):
         text = cli(origin, TOKEN, "project", "task", PROJECT, TASK)
         assert text.returncode == 0 and text.stderr == ""
         assert text.stdout == SUMMARY_TEXT + (
-            "Description: Instructions\\u000A\\u001B[32m\nAcceptance criteria: Accurate\n"
+            "Task size: small\nDescription: Instructions\\u000A\\u001B[32m\nAcceptance criteria: Accurate\n"
             "Rejection criteria: Missing\nSource type: manual\nSource reference: reference\n"
             f"Source hash: hash\nImport batch: batch\nExternal task: external\nCreated by: {ACTOR}\nAssigned to: {ACTOR}\n"
         )
@@ -121,6 +122,7 @@ def test_manager_task_reads_preserve_fields_and_wire(cli):
             in {
                 "task_id",
                 "project_id",
+                "task_size",
                 "title",
                 "status",
                 "skill_tags",
@@ -145,7 +147,7 @@ def test_manager_task_reads_preserve_fields_and_wire(cli):
                 f"Task: {TASK}\nProject: {PROJECT}\nTitle: Work é\\u000A\\u001B[31m\n"
                 "Status: draft\nType: —\nDifficulty: —\nSkills: analysis, tag\\u000A\n"
                 "Estimated minutes: —\nDeadline: —\nCreated: 2026-10-01T00:00:00Z\n"
-                "Updated: 2026-10-02T00:00:00Z\nDescription: Instructions\\u000A\\u001B[32m\n"
+                "Updated: 2026-10-02T00:00:00Z\nTask size: small\nDescription: Instructions\\u000A\\u001B[32m\n"
                 "Acceptance criteria: —\nRejection criteria: —\nSource type: manual\n"
                 "Source reference: —\nSource hash: —\nImport batch: —\nExternal task: —\n"
                 f"Created by: {ACTOR}\nAssigned to: —\n"

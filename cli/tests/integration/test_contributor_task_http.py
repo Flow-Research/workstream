@@ -302,6 +302,8 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
             {},
             CONTRIBUTOR | {"task_id": ACTOR},
             CONTRIBUTOR | {"project_id": "bad"},
+            CONTRIBUTOR | {"task_size": "medium"},
+            CONTRIBUTOR | {"task_size": "extra_large"},
             CONTRIBUTOR | {"deadline_at": "bad"},
             CONTRIBUTOR | {"skill_tags": [None]},
             CONTRIBUTOR | {"compensation": COMPENSATION | {"binding_status": "active"}},
@@ -309,6 +311,7 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
         required = (
             "task_id",
             "project_id",
+            "task_size",
             "title",
             "description",
             "status",
