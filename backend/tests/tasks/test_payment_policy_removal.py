@@ -33,7 +33,8 @@ def _command_receipt(operation, status):
         task.assigned_to = str(contributor)
         assignment = TaskAssignment(id=str(new_record_id()), task_id=task.id, project_id=task.project_id,
             contributor_id=str(contributor), assigned_by=str(actor), assigned_at=now, status="active",
-            submitter_contribution_policy_version_id=new_record_id())
+            submitter_contribution_policy_version_id=new_record_id(),
+            submitter_task_size=task.task_size, submitter_award_definition_id=None)
     facts = TaskAuthorityFacts(operation, task_id, project_id, actor, status,
         contributor if assignment else None, UUID(assignment.id) if assignment else None,
         contributor if assignment else None, "sha256:" + "a" * 64)

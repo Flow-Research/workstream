@@ -324,3 +324,10 @@ chain through `0071_selected_task_reward`; unsupported starting states still
 refuse. The new migration tests use actual Alembic installation and upgrade,
 exact retained row snapshots and the existing full schema manifest collector.
 They assert that incompatible screened work refuses before changing data or DDL.
+
+Affected current read/authorization fixtures now supply explicit selection facts.
+The task-detail tests retain exact public result/privacy, scope, transaction and
+nonlocking proof; assertions tied to the superseded scalar reward query and its
+query count are removed. Existing independent-session claim and acceptance race
+tests additionally compare the committed selection with the Task or immutable
+Submission. No required behavior is replaced with an end-to-end-only assertion.

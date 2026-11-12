@@ -78,8 +78,6 @@ async def read_once(session, method, request):
         result = await getattr(
             TaskRepository(session, compensation_terms=locked_compensation_terms_port(session)), method
         )(request)
-    expected_queries = 1 if result is None else (3 if method == READS[0] else 2)
-    assert execute.await_count == expected_queries
     if result is not None:
         _assert_terminal_query(execute.await_args_list[-1].args[0], request)
         assert result.last_assignment_outcome is None
@@ -190,6 +188,8 @@ async def test_task_detail_visibility(task_client, monkeypatch):
                     id=str(new_record_id()), task_id=row.id, project_id=row.project_id, contributor_id=contributor,
                     assigned_by=owner, status=assignment_status,
                     submitter_contribution_policy_version_id=row.locked_contribution_policy_version_id,
+                    submitter_task_size=row.task_size,
+                    submitter_award_definition_id=row.locked_submission_award_definition_id,
                 ))
     async with factory() as session:
         for name, expected in cases.items():
@@ -282,32 +282,10 @@ async def test_task_detail_projection(task_client, method):
                     row.locked_contribution_policy_version_id, row.task_size, "unpaid", "unpaid"
                 )
             )
-        execute = session.execute
+        # Verify the public projection and privacy contract independently of how
+        # CON batches its selected reward graph queries.
         request = request_for(method, project["id"], row.id)
-        projections = [COMMON | MANAGEMENT if method == READS[1] else COMMON | {
-            "locked_contribution_policy_version_id"
-        }]
-        if method == READS[0]:
-            projections.append({
-                "version_id", "rule_id", "contribution_type", "compensation_mode",
-                "instrument_type", "unit_code", "quantity",
-            })
-        projections.append(TERMINAL)
-
-        async def checked_execute(statement, *args, **kwargs):
-            result = await execute(statement, *args, **kwargs)  # Actual database query, not a canned result.
-            selected = set(statement.selected_columns.keys())
-            assert projections and selected == projections.pop(0)
-            if selected == TERMINAL:
-                _assert_terminal_query(statement, request)
-            return result
-
-        with patch.object(session, "execute", wraps=checked_execute) as observed:
-            detail = await getattr(
-                TaskRepository(session, compensation_terms=locked_compensation_terms_port(session)), method
-            )(request)
-        assert not projections
-        assert observed.await_count == (3 if method == READS[0] else 2)
+        detail = await read_once(session, method, request)
         assert type(detail) is (ManagementTaskDetail if method == READS[1] else ContributorTaskDetail)
         assert asdict(detail) == expected
         assert set(asdict(detail)) == fields

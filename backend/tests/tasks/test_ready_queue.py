@@ -62,6 +62,8 @@ def _assignment(task, *, status="active"):
         id=str(new_record_id()), task_id=task.id, project_id=task.project_id,
         contributor_id=task.created_by, assigned_by=task.created_by, status=status,
         submitter_contribution_policy_version_id=task.locked_contribution_policy_version_id,
+                    submitter_task_size=task.task_size,
+                    submitter_award_definition_id=task.locked_submission_award_definition_id,
     )
 
 

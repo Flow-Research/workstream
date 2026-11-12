@@ -98,6 +98,13 @@ async def test_concurrent_shared_acceptance_converges_on_committed_winner_ids(
             assert set(
                 await session.scalars(text("SELECT id FROM public.compensation_awards"))
             ) == set(winner.economic.award_ids)
+            selected = await session.scalar(text(
+                "SELECT contribution_award_definition_id FROM public.submissions WHERE id=:id"
+            ), {"id": h.request.submission_id})
+            assert selected is not None
+            assert list(await session.scalars(text(
+                "SELECT award_definition_id FROM public.compensation_awards"
+            ))) == [selected]
 
 
 @pytest.mark.parametrize("target", ["task", "assignment"])
