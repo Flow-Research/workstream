@@ -9,7 +9,9 @@ from app.adapters.outbox import production_outbox_delivery
 from app.db.session import get_database_url
 from app.workers.async_runner import run_async_task
 from app.workers.celery_app import celery_app
-from app.workers.outbox_topology import require_outbox_worker, OUTBOX_HARD_LIMIT_SECONDS
+from app.workers.outbox_topology import (
+    require_outbox_worker, OUTBOX_HARD_LIMIT_SECONDS, FINALIZATION_HARD_LIMIT_SECONDS,
+)
 
 logger = get_task_logger(__name__)
 
@@ -30,13 +32,26 @@ def _uuid(value):
 )
 def deliver_event(self, event_id, project_id):
     """Run under prefork: its hard limit also bounds async shutdown after UNKNOWN."""
-    require_outbox_worker(self)
+    return _run_delivery(self, event_id, project_id, finalization=False)
+
+
+@celery_app.task(
+    name="workstream.outbox.finalize_submission", bind=True, acks_late=True,
+    reject_on_worker_lost=True, acks_on_failure_or_timeout=True, time_limit=FINALIZATION_HARD_LIMIT_SECONDS,
+)
+def finalize_submission(self, event_id, project_id):
+    """Use reserved finalization workers and the same durable delivery owner."""
+    return _run_delivery(self, event_id, project_id, finalization=True)
+
+
+def _run_delivery(self, event_id, project_id, *, finalization):
+    require_outbox_worker(self, finalization=finalization)
     try:
         event, project, task = _uuid(event_id), _uuid(project_id), _uuid(self.request.id)
     except (TypeError, ValueError):
         return {"status": "delivery_rejected"}
     try:
-        return run_async_task(lambda: _deliver(event, project, task))
+        return run_async_task(lambda: _deliver(event, project, task, finalization))
     except Exception:
         logger.warning("outbox delivery unavailable")
         raise self.retry(
@@ -46,13 +61,13 @@ def deliver_event(self, event_id, project_id):
         ) from None
 
 
-async def _deliver(event_id, project_id, task_id):
+async def _deliver(event_id, project_id, task_id, finalization=False):
     """Compose once; shared delivery owns short transactions and invocation custody."""
     engine = create_async_engine(get_database_url(), pool_pre_ping=True)
     try:
         receipt = await production_outbox_delivery(
-            async_sessionmaker(engine, expire_on_commit=False)
-        ).deliver(event_id, project_id, "celery:" + str(task_id))
+            async_sessionmaker(engine, expire_on_commit=False), finalization_worker=finalization,
+        ).deliver(event_id, project_id, "celery:" + str(task_id), registered_only=True)
         return {"status": "delivery_recorded" if receipt is not None else "delivery_unavailable"}
     finally:
         await engine.dispose()
@@ -77,7 +92,8 @@ def scan_pending(self, after=None):
     published = 0
     for candidate in page.items:
         try:
-            deliver_event.apply_async(args=(str(candidate.event_id), str(candidate.project_id)))
+            task = finalize_submission if candidate.event_type == "SubmissionFinalizationRequested" else deliver_event
+            task.apply_async(args=(str(candidate.event_id), str(candidate.project_id)))
             published += 1
         except Exception:
             logger.warning("outbox publication unavailable")

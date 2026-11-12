@@ -237,6 +237,7 @@ services:
       - --pool=prefork
       - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-1}
       - --hostname=worker@%h
+      - --queues=celery,workstream.outbox
       - --pidfile=/tmp/celery-worker.pid
       - --loglevel=INFO
     volumes:

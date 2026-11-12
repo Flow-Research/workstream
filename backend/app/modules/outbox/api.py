@@ -182,6 +182,7 @@ class DeliveryCandidate(DeliveryValue):
 
     event_id: UUID
     project_id: UUID
+    event_type: str
 
 
 class DeliveryCandidatePage(DeliveryValue):

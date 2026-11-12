@@ -576,6 +576,19 @@ class HostedReleaseConfigTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_worker_cannot_consume_finalization_or_omit_its_queue_selection(self) -> None:
+        rendered = preflight.render_compose(self.environment_path, self.environment)
+        for selection in (None, "--queues=celery", "-Qworkstream.submission_finalization",
+                          "--queues=celery,workstream.outbox,workstream.submission_finalization"):
+            with self.subTest(selection=selection):
+                changed = copy.deepcopy(rendered)
+                command = changed["services"]["worker"]["command"]
+                command.remove("--queues=celery,workstream.outbox")
+                if selection:
+                    command.append(selection)
+                with self.assertRaisesRegex(preflight.PreflightError, "worker delivery profile"):
+                    preflight.validate_compose(changed, self.environment)
+
     def test_valid_configuration_and_rendered_topology(self) -> None:
         self.assertEqual(
             str(preflight.deployment_paths(self.environment).socket_root),

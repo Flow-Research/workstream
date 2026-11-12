@@ -2943,3 +2943,51 @@ passed **2 tests** (`/tmp/t5-delivery3.log`, metadata `/tmp/t5-delivery3.json`),
 database cleanup confirmed. This remains controlled-store handler proof through
 real OUTBOX; production composition is exercised for discovery, not native Celery
 execution or lazy provider startup. No scope expansion follows from the review.
+
+### Finalization worker capacity boundary
+
+Route accepted finalization selectors to a separate static Celery task/queue while
+retaining the same OUTBOX claim/invoke/finalize owner. Discovery carries event type
+only as a routing hint; worker composition independently limits registered handlers
+to its assigned event group. A finalization consumer must be prefork and must not
+consume other queues. Existing general workers explicitly select their current
+queues, so adding the finalization queue cannot silently share their capacity.
+No deployment concurrency default is introduced: enabling the separate consumer
+and qualifying its resource allocation remains C04 work before public cutover.
+
+Allowed changes are OUTBOX candidate projection/composition, Celery routes and thin
+entrypoints/topology, affected Compose queue selectors and existing worker tests.
+No new lifecycle/retry owner, broad retry authority or broker-owned business truth.
+Acceptance requires routing tests, real worker topology rejection, wrong-group
+delivery refusal and retained scan/publication recovery behavior. Workflow risk
+requires architecture/security and QA review; human focus is actual queue/pool
+selection and preservation of the database dispatch barrier.
+
+The queue split uses `workstream.submission_finalization` and a thin bounded
+`workstream.outbox.finalize_submission` entrypoint. Discovery selects its queue by
+stored event type; delivery rechecks the immutable stored type against the worker's
+filtered registry before even recovering an expired claim. The same OUTBOX owner
+still owns all receipts and backoff. Finalization workers reject mixed queues;
+general and finalization entrypoints reject the opposite worker group. The existing
+300-second lease is shared through ART's public contract with a 360-second process
+bound; no direct OUTBOX import was added to topology code.
+
+Local Compose has an opt-in consumer profile with required positive concurrency;
+no value is chosen by the implementation. A rendered-config check caught `extends`
+merging the general backend profile into that consumer; explicit YAML mapping
+inheritance now keeps the consumer out of ordinary backend startup. General hosted
+workers also select their queues explicitly, and hosted preflight permits only
+that exact selection. Hosted finalization consumer provisioning through the release
+wrapper, measured capacity/saturation proof and operational recovery remain work.
+
+Verification: **30 PostgreSQL worker/recovery tests passed**
+(`/tmp/t5-queues-pg.log`, metadata `/tmp/t5-queues-pg.json`, cleanup confirmed),
+including wrong-group refusal for pending and expired POST work and the existing
+real prefork cancellation-resistant process bound. Static topology/contracts/
+observability checks passed **81 tests**, with the existing real-Redis observability
+test skipped because no test broker was supplied (`/tmp/t5-queues-static2.log`).
+Local Compose tests passed **6**, hosted configuration tests passed **2**, and the
+expanded short-queue-option refusal passed a further focused rerun. These prove
+configuration/owner boundaries, not finalization saturation or live broker delivery.
+Changed-file Ruff and Markdown links passed; structure validation is recorded with
+the candidate checks. All test receipts are worktree evidence based on `cc38dc34f`.

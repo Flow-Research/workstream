@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
+# Existing durable OUTBOX lease convention, shared with the worker hard bound.
+# Deployment qualification and independent admission sizing remain separate.
+SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS = 300
+
 
 @dataclass(frozen=True, slots=True)
 class SubmissionFinalizationAuthorityFacts:

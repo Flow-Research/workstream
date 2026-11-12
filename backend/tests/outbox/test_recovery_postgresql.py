@@ -75,11 +75,11 @@ def _configure_recovery_worker(h, monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
     from app.workers import outbox as worker
 
-    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task: None)
+    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task, **_kwargs: None)
     monkeypatch.setattr(worker, "get_database_url", lambda: h.factory.kw["bind"].url)
     worker_factories = []
 
-    def compose_delivery(factory):
+    def compose_delivery(factory, **_kwargs):
         worker_factories.append(factory)
         return outbox_delivery(
             factory,

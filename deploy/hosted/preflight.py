@@ -2156,10 +2156,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         worker.get("stop_grace_period") not in {"7320s", "2h2m0s"}
         or not isinstance(worker_command, list)
         or "--pool=prefork" not in worker_command
-        or any(
-            value == "-Q" or str(value).startswith("--queues")
-            for value in worker_command
-        )
+        or [value for value in worker_command
+            if str(value).startswith(("-Q", "--queues"))]
+        != ["--queues=celery,workstream.outbox"]
     ):
         raise PreflightError("project guide worker delivery profile is invalid")
     if model_proxy_enabled:
