@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
-from app.modules.checkers.api.default_checker import WorkstreamDefaultContext
+from app.modules.checkers.api.default_checker import WorkstreamDefaultContext, WorkstreamDefaultCheckerInput
 from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
 from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerResult
-from app.modules.checkers.api.external import ExternalCheckerExecutionResult
+from app.modules.checkers.api.external import ExternalCheckerExecutionResult, ExternalCheckerExecutionRequest
 from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
 
 
@@ -344,9 +344,15 @@ class SelectedPreSubmitExecutionFacts:
         else:
             if archive_safe.status != "passed" or self.workstream_default.checks[1].status != "passed":
                 raise ValueError("selected PRE inspected identity result is invalid")
-            value, request = derive_selected_pre_submit_input(
-                lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
-            )
+            if self.workstream_default.eligible:
+                value, request = derive_selected_pre_submit_input(
+                    lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
+                )
+            else:
+                value = derive_selected_pre_submit_default_input(
+                    lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
+                )
+                request = None
             if workstream_default_input_sha256(value) != self.default_input_sha256:
                 raise ValueError("selected PRE derived default input differs")
         if (
@@ -642,27 +648,20 @@ class SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE lease facts are invalid")
 
 
-def derive_selected_pre_submit_input(
+def derive_selected_pre_submit_default_input(
     lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
-):
-    """Derive default input and the project request from locked facts and metadata.
-
-    Called independently by the trusted guest and backend verifier. This pure
-    derivation grants no source access and does not attest file observation.
-    """
+) -> WorkstreamDefaultCheckerInput:
+    """Derive platform input without consulting an unrun project input schema."""
     from app.modules.artifacts.api.submission_archive import validate_submission_manifest
     from app.modules.checkers.api.material import SubmissionMaterialEntry
-    from app.modules.checkers.api.external import (
-        PreSubmitExternalCheckerIdentity, PreSubmitExternalCheckerMaterial,
-        external_checker_json_hash, make_external_checker_execution_request,
-    )
+
 
     reservation = lease.reservation
     source = reservation.source
     inspection = validate_submission_manifest(
         manifest_body, sha256=manifest_sha256, limits=reservation.runtime_profile.archive_limits,
     )
-    value = reservation.default_context.bind_verified_input(
+    return reservation.default_context.bind_verified_input(
         archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
         archive_media_type=source.media_type, semantic_manifest_sha256=manifest_sha256,
         entries=tuple(SubmissionMaterialEntry(
@@ -670,6 +669,25 @@ def derive_selected_pre_submit_input(
             entry.sha256, entry.executable,
         ) for entry in inspection.entries),
     )
+
+
+def derive_selected_pre_submit_input(
+    lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
+) -> tuple[WorkstreamDefaultCheckerInput, ExternalCheckerExecutionRequest]:
+    """Reconstruct the project request only after the platform defaults pass.
+
+    This pure derivation grants no source access and does not attest observation.
+    """
+    from app.modules.checkers.api.external import (
+        PreSubmitExternalCheckerIdentity, PreSubmitExternalCheckerMaterial,
+        external_checker_json_hash, make_external_checker_execution_request,
+    )
+
+    value = derive_selected_pre_submit_default_input(
+        lease, manifest_body=manifest_body, manifest_sha256=manifest_sha256,
+    )
+    reservation = lease.reservation
+    source = reservation.source
     custody = dict(
         operation_id=source.location.operation_id, source_sha256=source.source_sha256(),
         attempt_id=reservation.attempt_id, attempt_request_digest=reservation.request_digest,
@@ -1109,6 +1127,8 @@ class SelectedPreSubmitRunReadPort(Protocol):
 
 
 __all__ = (
+    "derive_selected_pre_submit_default_input",
+    "derive_selected_pre_submit_input",
     "ExternalPreSubmitIsolationFacts",
     "ExternalPreSubmitMemberFacts",
     "PreparedSelectedPreSubmitExecution",

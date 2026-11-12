@@ -20,6 +20,9 @@ from app.modules.checkers.api.external import (
 )
 
 
+MAXIMUM_PRE_SOURCE_CHUNK_BYTES = 64 * 1024
+
+
 _REPOSITORY = re.compile(
     r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?::[0-9]+)?"
     r"(?:/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*"
@@ -155,7 +158,7 @@ class ExternalPreSubmitSourceGrant(Protocol):
     """
 
     def open_source(self, *, lease: SelectedPreSubmitLeaseFacts) -> AsyncGenerator[bytes, None]:
-        """Read only the bound source, outside a database transaction."""
+        """Yield nonempty chunks up to MAXIMUM_PRE_SOURCE_CHUNK_BYTES outside DB roots."""
 
 
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
@@ -190,6 +193,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
 __all__ = (
     "ExternalCheckerExecutionAdapter",
     "ExternalPreSubmitSourceGrant",
+    "MAXIMUM_PRE_SOURCE_CHUNK_BYTES",
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",

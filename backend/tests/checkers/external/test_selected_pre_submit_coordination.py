@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -1029,3 +1031,63 @@ def test_source_first_derived_manifest_obeys_locked_limits(limit):
         derive_selected_pre_submit_input(
             lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
         )
+
+
+@pytest.mark.parametrize("failure", ["high_confidence_secret_detected", "submission_archive_unchanged"])
+def test_source_first_default_blocker_does_not_validate_unrun_project_schema(failure):
+    from app.modules.checkers.api.default_checker import (
+        WorkstreamDefaultCheckerResult, workstream_default_input_sha256,
+    )
+    from app.modules.checkers.api.external import external_checker_json_hash
+    from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
+    from app.modules.checkers.api.selected_pre_submit import (
+        derive_selected_pre_submit_default_input, derive_selected_pre_submit_input,
+    )
+    from tests.checkers.external.support import registry_entry
+
+    reservation = _source_reservation()
+    execution = _source_completed_execution(reservation)
+    # This registered schema requires task_version, which the PRE input does not
+    # contain. Its incompatibility matters only if the selected project runs.
+    binding = reservation.policy.entries[0].model_copy(update={"registry": registry_entry()})
+    body = reservation.policy.model_dump(mode="json", exclude={"policy_sha256"})
+    body["entries"] = [binding.model_dump(mode="json")]
+    policy = LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(
+        body | {"policy_sha256": external_checker_json_hash(body)}
+    ))
+    reservation = replace(reservation, policy=policy, admission_lineage=replace(
+        reservation.admission_lineage, effective_plan_sha256=policy.policy_sha256,
+    ))
+    if failure == "submission_archive_unchanged":
+        from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
+        predecessor = WorkstreamDefaultPredecessor(
+            new_record_id(), 1, reservation.source.raw_sha256, execution.manifest_sha256,
+        )
+        reservation = replace(
+            reservation, default_context=replace(
+                reservation.default_context, predecessor=predecessor, current_predecessor=predecessor,
+                predecessor_exists=True, predecessor_rules_sha256=reservation.default_context.current_rules_sha256,
+            ), admission_lineage=replace(
+                reservation.admission_lineage, predecessor_submission_id=predecessor.submission_id,
+                predecessor_submission_version=1, checker_remediation_manifest_id=new_record_id(),
+            ),
+        )
+    lease = SelectedPreSubmitLeaseFacts(reservation, execution.lease_id, 1, reservation.pre_deadline_at)
+    default_input = derive_selected_pre_submit_default_input(
+        lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
+    )
+    with pytest.raises(ValueError):
+        derive_selected_pre_submit_input(
+            lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
+        )
+    default = execution.workstream_default.model_dump()
+    checks = list(default["checks"])
+    index = 2 if failure == "high_confidence_secret_detected" else 3
+    checks[index] = checks[index] | {"status": "failed", "failure_code": failure, "finding_count": 1}
+    default.update(checks=tuple(checks), eligible=False)
+    execution = replace(
+        execution, request_digest=reservation.request_digest, policy_sha256=policy.policy_sha256,
+        workstream_default=WorkstreamDefaultCheckerResult.model_validate(default),
+        default_input_sha256=workstream_default_input_sha256(default_input), external_members=(), eligible=False,
+    )
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution

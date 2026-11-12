@@ -1448,8 +1448,8 @@ The CHECKERS PRE processor now invokes one typed `execute_pre` operation instead
 of exporting an ART tree and dispatching a second project invocation. Its existing
 factory and lazy configured adapter use the same external-service capability.
 The Unix client streams an ART grant's exact source in at most 64 KiB frames,
-checks count/SHA before EOF, bounds request/result framing and elapsed time by the
-lease, and closes source/transport on cancellation. The grant is a separate
+checks count/SHA before EOF, bounds request/result framing, refuses success after
+the lease/configured deadline, and closes source/transport on cancellation. The grant is a separate
 process-local port; no token or host path enters immutable request identity.
 
 Live nested Python/Rust PRE identity now binds operation, sealed-source digest,
@@ -1483,3 +1483,23 @@ they must be removed during the connected replacement, not made into compatibili
 adapters. The current public path remains unfinished and these local commits must
 not be pushed as a publishable cutover. No source grant authority, native guest
 execution, provider qualification or accepted handoff is proved by a socket fake.
+
+
+The first combined-client review found three defects: manifest-present default
+rejection incorrectly validated an unrun project input schema; synchronous
+response decoding could return success after the timeout; and upstream source
+chunks had no byte ceiling before socket framing. The repair separates default
+input derivation from conditional project request construction, checks monotonic
+and lease deadlines after decode/validation, and requires nonempty source chunks
+of at most 64 KiB before hashing or forwarding. The source-grant port declares
+that ceiling for the forthcoming issuer. Synchronous bounded JSON parsing is
+not physically preempted; its late result is refused.
+
+New regression cases use a real incompatible registered input schema for both
+secret and unchanged-work default rejection (the latter with matching predecessor
+and current-rule facts), slow decode after successful wire receipt, and a source
+chunk larger than the cap. Removing each corresponding guard made the intended
+controls fail: two default-blocker cases, one late-decode case and one oversized
+chunk case. Production code was restored after each probe. The expanded focused
+suite passes 124 cases; renewed review of these repairs remains pending. The
+broader native/ART/T4 integration and the retained old-path failure are unchanged.

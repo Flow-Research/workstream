@@ -16,6 +16,7 @@ from app.core.cancellation import await_cancellation_resistant
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionResponse,
     ExternalPreSubmitSourceGrant,
+    MAXIMUM_PRE_SOURCE_CHUNK_BYTES,
     ExternalCheckerForgeLocatorResponse,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
@@ -98,7 +99,8 @@ class UnixSocketExternalCheckerAdapter:
             timeout = min(remaining, reservation.execution_budget_ms / 1000, self._timeout_seconds)
             if timeout <= 0:
                 raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
-            async with asyncio.timeout(timeout):
+            deadline = asyncio.get_running_loop().time() + timeout
+            async with asyncio.timeout_at(deadline):
                 reader, writer = await asyncio.open_unix_connection(self._socket_path)
                 try:
                     writer.write(struct.pack(">I", len(payload)) + payload)
@@ -107,16 +109,14 @@ class UnixSocketExternalCheckerAdapter:
                     stream = grant.open_source(lease=lease)
                     try:
                         async for chunk in stream:
-                            if type(chunk) is not bytes:
+                            if type(chunk) is not bytes or not 0 < len(chunk) <= MAXIMUM_PRE_SOURCE_CHUNK_BYTES:
                                 raise ValueError("PRE source chunk is invalid")
                             count += len(chunk)
                             if count > reservation.source.raw_byte_count:
                                 raise ValueError("PRE source identity differs")
                             digest.update(chunk)
-                            for offset in range(0, len(chunk), 64 * 1024):
-                                part = chunk[offset:offset + 64 * 1024]
-                                writer.write(struct.pack(">I", len(part)) + part)
-                                await writer.drain()
+                            writer.write(struct.pack(">I", len(chunk)) + chunk)
+                            await writer.drain()
                     finally:
                         await await_cancellation_resistant(stream.aclose())
                     if (count != reservation.source.raw_byte_count
@@ -135,6 +135,9 @@ class UnixSocketExternalCheckerAdapter:
                     await await_cancellation_resistant(writer.wait_closed())
             result = SelectedPreSubmitExecutionFacts.from_canonical_body(json.loads(raw))
             result.validate_lease(lease)
+            if (asyncio.get_running_loop().time() >= deadline
+                    or datetime.now(timezone.utc) >= lease.lease_expires_at):
+                raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
             return result
         except ExternalServiceProtocolError:
             raise
@@ -142,7 +145,7 @@ class UnixSocketExternalCheckerAdapter:
             raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded") from exc
         except (OSError, asyncio.IncompleteReadError) as exc:
             raise ExternalServiceUnavailableError(self._identity) from exc
-        except (TypeError, ValueError, KeyError, UnicodeError) as exc:
+        except (TypeError, ValueError, KeyError, UnicodeError, RecursionError) as exc:
             raise ExternalServiceProtocolError(self._identity) from exc
 
     async def execute(

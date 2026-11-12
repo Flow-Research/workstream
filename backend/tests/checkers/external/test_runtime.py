@@ -1120,8 +1120,8 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing"])
-async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, changed):
+@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode"])
+async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, monkeypatch, changed):
     from dataclasses import replace
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
@@ -1178,17 +1178,34 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
             assert lease == expected_lease
             self.calls += 1
             try:
-                yield (payload[:-1] if changed == "source_short" else
-                       payload + b"!" if changed == "source_long" else
-                       b"x" * len(payload) if changed == "source_hash" else payload)
+                data = (payload[:-1] if changed == "source_short" else
+                        payload + b"!" if changed == "source_long" else
+                        b"x" * len(payload) if changed == "source_hash" else payload)
+                if changed == "chunk_oversized":
+                    yield data
+                else:
+                    for offset in range(0, len(data), 16 * 1024):
+                        yield data[offset:offset + 16 * 1024]
             finally:
                 self.closed = True
 
+    decode_called = []
+    if changed == "slow_decode":
+        import time
+        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+        decode = SelectedPreSubmitExecutionFacts.from_canonical_body
+        def delayed_decode(cls, value):
+            decode_called.append(True)
+            time.sleep(0.3)
+            return decode(value)
+        monkeypatch.setattr(SelectedPreSubmitExecutionFacts, "from_canonical_body", classmethod(delayed_decode))
     expected_lease = lease
     grant = Grant()
     socket = tmp_path / "pre.sock"
     server = await asyncio.start_unix_server(handle, socket)
-    adapter = UnixSocketExternalCheckerAdapter(socket_path=socket, timeout_seconds=5.0)
+    adapter = UnixSocketExternalCheckerAdapter(
+        socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
+    )
     processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
     try:
         if changed is None:
@@ -1198,8 +1215,13 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
             with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
                 await processor.process(grant)
         else:
-            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="invalid_output"):
+            code = "deadline_exceeded" if changed == "slow_decode" else "invalid_output"
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match=code):
                 await processor.process(grant)
+        if changed == "slow_decode":
+            assert decode_called == [True]
+        if changed == "chunk_oversized":
+            assert not sizes
         await asyncio.wait_for(finished.wait(), 2)
         assert grant.closed and grant.calls == 1
         assert len(requests) == 1 and requests[0]["operation"] == "execute_pre"
