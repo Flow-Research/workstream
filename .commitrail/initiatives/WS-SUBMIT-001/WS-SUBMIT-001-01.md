@@ -1503,3 +1503,14 @@ controls fail: two default-blocker cases, one late-decode case and one oversized
 chunk case. Production code was restored after each probe. The expanded focused
 suite passes 124 cases; renewed review of these repairs remains pending. The
 broader native/ART/T4 integration and the retained old-path failure are unchanged.
+
+Architecture/security and QA/test-delta passed the repaired client scope at clean
+`e29c637ae`. The targeted mutations discriminate all three repaired defects;
+late synchronous decode is refused, not physically interrupted. The full runtime
+module rerun at this candidate reports 31 passed and the same one obsolete
+prepared-grant identity failure. Record/link checks pass and the ownership
+partition remains unchanged. The combined native execution boundary is still
+unfinished; the next work is the exact ART source-read grant/AUTH issuer and the
+native single-session handler, followed by removing their obsolete prepared
+callers and completing SQL/T4 custody. This evidence does not authorize a push
+or readiness claim for the incomplete public cutover.
