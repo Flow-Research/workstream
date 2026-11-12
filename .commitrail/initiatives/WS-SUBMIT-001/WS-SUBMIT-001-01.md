@@ -2491,3 +2491,23 @@ T4 authorization implementation checkpoint:
   TASK transition, CHECKERS terminal consumption, atomic outbox/migration and
   acceptance race/rollback proofs remain T4 work. It is not proof of public
   exposure, T5 continuation, native qualification or end-to-end completion.
+
+T4 CHECKERS participation checkpoint:
+
+- Added `lock_acceptance` on the existing coordinator: exact run/request/terminal,
+  completed eligible execution, invocation receipt and persisted execute/finalize
+  decision references under the existing live TASK/source/run locks. Actor/key
+  replay normalization cannot substitute another run for acceptance. ART must
+  still atomically consume the immutable reference in the accepted transaction.
+- Current and retained reads share indexed terminal/lease/timing validation.
+  Actual upload/PRE fixtures exercise eligible acceptance and reject infrastructure
+  outcomes, substituted run/request identities and terminal digests.
+- Final source/receipt verification: 79 passed in `/tmp/t4-pre-final.log`, metadata
+  `/tmp/t4-pre-final.json`; structure and diff checks passed. The simulated runtime
+  remains portable evidence, not native provider qualification.
+- Wider coordination regression: 115 passed and seven failed in
+  `/tmp/t4-pre-record-regression.log`; failures construct obsolete prepared
+  admission lineage with `semantic_manifest_id`. Those fixtures must be converted
+  to source contracts during the cutover; the wider suite is not green.
+- Accepted-state persistence, composed TASK/ART/outbox commit and T4 race/rollback
+  proof remain unfinished. No public acceptance or continuation is exposed here.

@@ -14,7 +14,7 @@ from app.modules.checkers.api.historical_selected_pre_submit import (
     HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
 )
 from app.modules.checkers.models import SelectedPreSubmitRun
-from app.modules.checkers.selected_pre_submit_records import matches_source_request
+from app.modules.checkers.selected_pre_submit_records import matches_source_request, matches_terminal
 
 
 def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSubmitReservation) -> bool:
@@ -38,41 +38,6 @@ def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSu
     )
 
 
-def _terminal_matches(row: SelectedPreSubmitRun, request, terminal) -> bool:
-    """Check retained outcome/lease/timing without conferring current liveness."""
-    if terminal is None:
-        if type(request) is SelectedPreSubmitReservationFacts:
-            if row.finalize_evidence_id is not None:
-                return False
-            if row.status == "queued":
-                if (row.lease_id is not None or row.lease_generation != 0
-                        or row.lease_expires_at is not None or row.started_at is not None
-                        or row.execute_evidence_id is not None):
-                    return False
-            elif row.status == "running":
-                SelectedPreSubmitLeaseFacts(request, UUID(str(row.lease_id)),
-                                            row.lease_generation, row.lease_expires_at)
-                if (row.execute_evidence_id is None or row.started_at is None
-                        or not row.queued_at <= row.started_at <= row.lease_expires_at):
-                    return False
-        return (
-            row.status in {"queued", "running"} and row.terminal_digest is None
-            and row.eligible is None and row.completed_at is None
-        )
-    return (
-        terminal.lease.reservation == request
-        and terminal.terminal_digest == row.terminal_digest
-        and terminal.outcome == row.status
-        and str(terminal.lease.lease_id) == str(row.lease_id)
-        and terminal.lease.lease_generation == row.lease_generation
-        and terminal.lease.lease_expires_at == row.lease_expires_at
-        and terminal.queued_at == row.queued_at
-        and terminal.started_at == row.started_at
-        and terminal.completed_at == row.completed_at
-        and (terminal.execution.eligible if terminal.execution is not None else None) is row.eligible
-    )
-
-
 def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
     """Decode each retained schema and bind it to the indexed row without issuing authority."""
     try:
@@ -92,7 +57,7 @@ def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
             else:
                 terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
             request_matches = matches_source_request(row, request)
-        if not request_matches or not _terminal_matches(row, request, terminal):
+        if not request_matches or not matches_terminal(row, request, terminal):
             raise ValueError("retained PRE columns differ")
     except (KeyError, TypeError, ValueError):
         raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid") from None

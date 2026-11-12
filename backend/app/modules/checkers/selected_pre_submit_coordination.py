@@ -30,7 +30,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitUnavailable,
 )
 from app.modules.checkers.models import SelectedPreSubmitRun
-from app.modules.checkers.selected_pre_submit_records import matches_source_request
+from app.modules.checkers.selected_pre_submit_records import matches_source_request, matches_terminal
 
 
 class SelectedPreSubmitTaskGuard(Protocol):
@@ -241,6 +241,7 @@ class SelectedPreSubmitCoordinator:
                 if row.terminal_json is not None
                 else None
             )
+            terminal_matches = matches_terminal(row, stored, terminal)
         except (TypeError, ValueError):
             raise SelectedPreSubmitUnavailable(
                 "selected_pre_submit_stored_facts_invalid"
@@ -249,15 +250,7 @@ class SelectedPreSubmitCoordinator:
             normalized != stored
             or not matches_source_request(row, stored)
             or row.request_digest != stored.request_digest
-            or (
-                terminal is not None
-                and (
-                    terminal.terminal_digest != row.terminal_digest
-                    or terminal.lease.reservation != stored
-                    or terminal.execution is not None
-                    and terminal.execution.eligible != row.eligible
-                )
-            )
+            or not terminal_matches
         ):
             raise SelectedPreSubmitRequestConflict(
                 "selected_pre_submit_request_conflict"
@@ -268,6 +261,29 @@ class SelectedPreSubmitCoordinator:
             status=row.status,
             terminal=terminal,
         )
+
+    async def lock_acceptance(
+        self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts, terminal_digest: str,
+    ) -> SelectedPreSubmitTerminalFacts:
+        """Lock an exact current eligible terminal for the caller's T4 transaction.
+
+        Unlike ordinary actor/key replay, acceptance cannot normalize another run
+        identity. The ART accepted reference consumes this evidence atomically;
+        this read neither mutates immutable PRE facts nor issues a capability.
+        """
+        if type(facts) is not SelectedPreSubmitReservationFacts or facts.attempt_id != run_id:
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
+        current = await self.read_current(facts)
+        if (current is None or current.run_id != run_id or current.reservation != facts
+                or current.status != "completed" or current.terminal is None
+                or current.terminal.terminal_digest != terminal_digest
+                or current.terminal.execution is None or current.terminal.execution.eligible is not True
+                or current.terminal.invocation_receipt is None):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_acceptance_unavailable")
+        row = await self._session.get(SelectedPreSubmitRun, str(run_id))
+        if row.execute_evidence_id is None or row.finalize_evidence_id is None:
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_acceptance_unavailable")
+        return current.terminal
 
     async def reserve(self, facts: SelectedPreSubmitReservationFacts) -> UUID:
         """Acquire TASK custody before the CHECKERS key and exact request row."""

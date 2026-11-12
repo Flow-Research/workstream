@@ -468,6 +468,47 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
     return SourceRuntime(), runtime_errors
 
 
+async def _upload_pre_source(intake, payload):
+    from tests.artifact_store_helpers import initialize_local_store
+    async def upload_bytes():
+        yield payload
+
+    store = initialize_local_store(root=intake.durable_root, buffer_bytes=256 * 1024)
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation, foreground_lease = UUID(row.id), UUID(row.lease_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        key = UUID(row.idempotency_key)
+    source = await foreground_upload(intake, store).receive(
+        operation, foreground_lease, 1, upload_bytes(), **foreground_limits(),
+    )
+    return store, operation, foreground_lease, metadata, key, source
+
+
+async def _assert_acceptance_terminal(factory, request, terminal):
+    """Use real source/TASK/run locks; a detached pass cannot select another run."""
+    from dataclasses import replace
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitUnavailable, SelectedPreSubmitRequestConflict,
+    )
+    eligible = terminal.execution is not None and terminal.execution.eligible
+    async with factory.begin() as session:
+        coordinator = selected_pre_submit_coordinator(session)
+        args = dict(run_id=request.attempt_id, facts=request, terminal_digest=terminal.terminal_digest)
+        if eligible:
+            assert await coordinator.lock_acceptance(**args) == terminal
+        else:
+            with pytest.raises(SelectedPreSubmitUnavailable):
+                await coordinator.lock_acceptance(**args)
+        with pytest.raises(SelectedPreSubmitRequestConflict):
+            await coordinator.lock_acceptance(**(args | {"run_id": new_record_id()}))
+        with pytest.raises(SelectedPreSubmitRequestConflict):
+            await coordinator.lock_acceptance(**(args | {"facts": replace(request, attempt_id=new_record_id())}))
+        with pytest.raises(SelectedPreSubmitUnavailable):
+            await coordinator.lock_acceptance(**(args | {"terminal_digest": "sha256:" + "f" * 64}))
+
+
 @pytest.mark.parametrize("intake", [True], indirect=True)
 @pytest.mark.parametrize("materializer_enabled", [True, False])
 @pytest.mark.parametrize("runtime_outcome", ["transport_failure", "completed", "received_failure"])
@@ -490,7 +531,6 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
     from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
     from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextRequest
     from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
-    from tests.artifact_store_helpers import initialize_local_store
     from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
@@ -498,18 +538,7 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
     from tests.test_trusted_intake import _archive
 
     payload = _archive() if runtime_outcome == "completed" else b"original source bytes"
-    async def upload_bytes():
-        yield payload
-
-    store = initialize_local_store(root=intake.durable_root, buffer_bytes=256 * 1024)
-    async with intake.factory.begin() as session:
-        row = await reserve(intake, session, with_upload=False)
-        operation, foreground_lease = UUID(row.id), UUID(row.lease_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
-        key = UUID(row.idempotency_key)
-    source = await foreground_upload(intake, store).receive(
-        operation, foreground_lease, 1, upload_bytes(), **foreground_limits(),
-    )
+    store, operation, foreground_lease, metadata, key, source = await _upload_pre_source(intake, payload)
     async with intake.factory.begin() as session:
         task = await task_submission_context_port(session).lock_submission_context(
             TaskSubmissionContextRequest(intake.task, intake.assignment, intake.actor.actor_profile_id, None),
@@ -589,6 +618,7 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
             if runtime_outcome == "received_failure" and materializer_enabled:
                 assert result.terminal.invocation_receipt.cleanup.disposition == "pending"
                 await _assert_stored_receipt(intake.factory, request.attempt_id, result.terminal)
+    await _assert_acceptance_terminal(intake.factory, request, result.terminal)
     assert bool(observed) == materializer_enabled
     store.close()
 
