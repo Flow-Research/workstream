@@ -41,17 +41,32 @@ def require_canonical_obligation_values(value: dict) -> None:
             raise ValueError("version must be an integer wire value")
     for key, item in value.items():
         if key.endswith("_id") and item is not None:
-            if str(UUID(item)) != item:
-                raise ValueError("noncanonical UUID")
+            require_canonical_uuid(item)
         if key.endswith("_at") and item is not None:
-            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z", item):
-                raise ValueError("noncanonical timestamp")
-            datetime.fromisoformat(item)
-    quantity = value["quantity"]
+            canonical_utc_timestamp(item)
+    require_canonical_quantity(value["quantity"], value["instrument_type"])
+
+
+def require_canonical_uuid(value: str, *, version: int | None = None) -> None:
+    """Reject alternate UUID spellings and, when required, wrong UUID versions."""
+    parsed = UUID(value)
+    if str(parsed) != value or (version is not None and parsed.version != version):
+        raise ValueError("noncanonical UUID")
+
+
+def canonical_utc_timestamp(value: str) -> datetime:
+    """Parse a canonical six-fractional-digit UTC contract timestamp."""
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z", value):
+        raise ValueError("noncanonical timestamp")
+    return datetime.fromisoformat(value)
+
+
+def require_canonical_quantity(quantity: str, instrument_type: str) -> None:
+    """Require an exact positive canonical award-unit quantity without rounding."""
     if not re.fullmatch(r"(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,18})?", quantity):
         raise ValueError("invalid quantity")
     amount = Decimal(quantity)
     if amount <= 0 or ("." in quantity and quantity.endswith("0")):
         raise ValueError("noncanonical positive quantity")
-    if value["instrument_type"] == "project_points" and "." in quantity:
+    if instrument_type == "project_points" and "." in quantity:
         raise ValueError("points must be whole")

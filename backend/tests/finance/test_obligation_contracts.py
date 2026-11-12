@@ -42,7 +42,11 @@ def test_known_vector(decode):
     assert decode(encode(vector())) == vector()
 
 
-@pytest.mark.parametrize("fixture", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "fixture",
+    sorted([*FIXTURES.glob("obligation-*.json"), *FIXTURES.glob("invalid-obligation-*.json")]),
+    ids=lambda p: p.name,
+)
 def test_portable_fixture_corpus(decode, fixture):
     if fixture.name.startswith("invalid-"):
         with pytest.raises(ValueError):
