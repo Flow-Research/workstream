@@ -547,3 +547,10 @@ non-authority-cause native run passed4 cases (88.16s), with cleanup verified.
 Both c655 reviewer sessions are closed: earlier three recovery defects are
 closed; remaining type/clock-fixture cleanup is repaired in the working tree;
 the full financial replacement matrix remains unqualified.
+
+
+The points-only diagnostic control passed (97.82s) with native guards intact.
+It does not explain or erase the earlier four-case no-receipt failure. Rerun the
+complete matrix from a clean candidate with bounded no-receipt state diagnostics;
+keep the matrix unqualified until that result is examined. Do not add a delivery
+retry or fallback merely to make the assertion pass.
