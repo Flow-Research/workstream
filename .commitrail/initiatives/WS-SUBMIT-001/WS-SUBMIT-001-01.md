@@ -1136,3 +1136,21 @@ two seconds for finalization after cancellation was observed. This is unresolved
 failure evidence, not a passed run or grounds to relax the assertion. Exact
 job 131093141927 and its lane artifact were inspected; diagnosis/reproduction
 remains required. Other jobs were still running at that observation.
+
+### Bounded CI failure diagnosis: cancellation versus database finalization
+
+Allowed test-only repair: `backend/tests/outbox/test_recovery_postgresql.py`
+and this record. The failed test waits two seconds after observing cancellation
+for all of real `finalize`, which includes multiple database roots and AUTH.
+`invoke` explicitly cancels without awaiting the handler, then awaits durable
+finalization. The test currently conflates those separate waits. Preserve the
+prompt non-wait assertion with a two-second event at entry to real finalization,
+while the uncooperative handler is still blocked. Gate that finalization in the
+test to make ordering explicit, then allow a bounded ten-second database
+observation and retain every UNKNOWN/replay/no-ack assertion. No production
+outbox code, timeouts, authority or retry policy may change. QA must verify an
+implementation that awaits the uncooperative handler before finalizing still
+fails, and that the original CI timeout is not called a confirmed production
+root cause merely because this scheduling defect is reproducible. The original
+focused test is already running unchanged in the full custody command; do not
+restart it or misattribute its eventual result to the repair.
