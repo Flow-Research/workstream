@@ -1329,3 +1329,18 @@ review tracks confirmed the prior code findings repaired but held proof pending
 this fixture correction. The positive case now provisions only
 `CHECKER_PRE_SUBMIT` through the existing real service-principal fixture helper,
 without altering production authorization or resetting an existing principal.
+
+The corrected positive PostgreSQL lifecycle case passed at exact clean
+`15f3cd372`, with cleanup confirmed. It provisions the fixed principal, claims
+through real AUTH/coordinator composition, rejects ten committed-claim/terminal
+substitutions and commits one valid infrastructure finalization. The 13 source,
+digest and repeat-upgrade passes remain attributed to `2910cdef5`; production
+code did not change between those heads. Both architecture/security and
+QA/test-delta/CI passed the bounded SQL custody stage at `15f3cd372` with that
+provenance distinction. Forty-nine contract tests, 229 ownership/lane checks,
+Commitrail and changed Markdown links passed; the protected partition is unchanged.
+These checks do not establish completed-result eligibility, a real revision
+predecessor upgrade, the retained-row migration round trip or the public source
+submission journey. The next implementation remains the live source-first
+producer/result path and removal of its prepared-bundle consumers, followed by
+the single-session runtime and the rest of the original end-to-end objective.
